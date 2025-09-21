@@ -300,14 +300,63 @@ describe('Content Loader AST patterns', () => {
     expect(results[0]?.file).toBeUndefined();
   });
 
-  it.skip('includes file path for glob patterns', async () => {
+  it('supports ruby definitions', async () => {
+    const filePath = path.join(process.cwd(), 'service.rb');
+    await fileSystem.writeFile(filePath, [
+      'module Billing',
+      '  class Service',
+      '    API_VERSION = 1',
+      '    def create_user(user)',
+      '      logger.info(user)',
+      '      helper(user)',
+      '    end',
+      '  end',
+      'end',
+      '',
+      'def helper(input)',
+      '  input',
+      'end'
+    ].join('\n'));
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'definition', name: 'Billing::Service' },
+        { type: 'definition', name: 'API_VERSION' },
+        { type: 'definition', name: 'helper' }
+      ]
+    };
+
+    const results = await processContentLoader(node as any, env);
+    expect(Array.isArray(results)).toBe(true);
+    const names = (results as any[]).filter(Boolean).map(r => (r as any).name);
+    expect(names).toEqual([
+      'Billing::Service',
+      'helper'
+    ]);
+
+    const constantNode = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'definition', name: 'API_VERSION' }
+      ]
+    };
+
+    const constantResults = await processContentLoader(constantNode as any, env);
+    const constantNames = (constantResults as any[]).filter(Boolean).map(r => (r as any).name);
+    expect(constantNames).toEqual(['API_VERSION']);
+  });
+
+  it('includes file path for glob patterns', async () => {
     const dir = path.join(process.cwd(), 'src');
     const fileA = path.join(dir, 'a.ts');
     const fileB = path.join(dir, 'b.ts');
     await fileSystem.writeFile(fileA, 'export function a() { return 1; }');
     await fileSystem.writeFile(fileB, 'export function b() { return 2; }');
 
-    const globPath = path.join(dir, '*.ts');
+    const globPath = path.join('src', '*.ts');
     const node = {
       type: 'load-content',
       source: { type: 'path', raw: globPath, segments: [{ type: 'Text', content: globPath }] },
@@ -318,8 +367,118 @@ describe('Content Loader AST patterns', () => {
     };
 
     const results = await processContentLoader(node as any, env);
-    expect(results.length).toBe(2);
-    const files = results.map(r => r?.file).sort();
+    expect(Array.isArray(results)).toBe(true);
+    const files = (results as any[])
+      .filter(Boolean)
+      .map(r => (r as any).file)
+      .sort();
     expect(files).toEqual([fileA, fileB].sort());
+  });
+
+  it('returns null entries for missing definitions', async () => {
+    const filePath = path.join(process.cwd(), 'missing.ts');
+    await fileSystem.writeFile(filePath, 'export function present() { return 1; }');
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'definition', name: 'present' },
+        { type: 'definition', name: 'absent' }
+      ]
+    };
+
+    const results = await processContentLoader(node as any, env);
+    expect(results.length).toBe(2);
+    expect(results[0]).toBeTruthy();
+    expect(results[1]).toBeNull();
+  });
+
+  it('applies transform templates to AST results', async () => {
+    const filePath = path.join(process.cwd(), 'templated.ts');
+    await fileSystem.writeFile(filePath, [
+      'export function createUser() {',
+      '  return 1;',
+      '}'
+    ].join('\n'));
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [{ type: 'definition', name: 'createUser' }],
+      options: {
+        transform: {
+          type: 'template',
+          parts: [
+            { type: 'Text', content: 'Name: ' },
+            { type: 'placeholder', fields: [{ type: 'Field', value: 'name' }] },
+            { type: 'Text', content: '\nCode:\n' },
+            { type: 'placeholder' }
+          ]
+        }
+      }
+    };
+
+    const results = await processContentLoader(node as any, env);
+    expect(Array.isArray(results)).toBe(true);
+    expect(results).toEqual([
+      'Name: createUser\nCode:\nexport function createUser() {\n  return 1;\n}'
+    ]);
+  });
+
+  it('runs pipelines against AST results', async () => {
+    const filePath = path.join(process.cwd(), 'piped.ts');
+    await fileSystem.writeFile(filePath, [
+      'export function createUser() {',
+      '  return 1;',
+      '}',
+      'export function updateProfile() {',
+      '  return 2;',
+      '}'
+    ].join('\n'));
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'definition', name: 'createUser' },
+        { type: 'definition', name: 'updateProfile' }
+      ],
+      pipes: [
+        {
+          type: 'CondensedPipe',
+          transform: 'json',
+          hasAt: true,
+          args: [],
+          location: null
+        }
+      ]
+    };
+
+    const result = await processContentLoader(node as any, env);
+    expect(typeof result).toBe('string');
+    const parsed = JSON.parse(result as string);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.length).toBe(2);
+    expect(parsed[0].name).toBe('createUser');
+    expect(parsed[1].name).toBe('updateProfile');
+  });
+
+  it('keeps sibling declarations from shared statements', async () => {
+    const filePath = path.join(process.cwd(), 'shared.ts');
+    await fileSystem.writeFile(filePath, 'const foo = 1, bar = 2;');
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'definition', name: 'foo' },
+        { type: 'definition', name: 'bar' }
+      ]
+    };
+
+    const results = await processContentLoader(node as any, env);
+    const names = (results as any[]).filter(Boolean).map(r => (r as any).name).sort();
+    expect(names).toEqual(['bar', 'foo']);
   });
 });

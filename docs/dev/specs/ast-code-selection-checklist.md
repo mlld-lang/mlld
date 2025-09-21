@@ -9,7 +9,7 @@
 - [x] C#
 - [x] Java
 - [x] C/C++
-- [ ] Ruby
+- [x] Ruby
 - [ ] PHP
 
 ## FEATURES

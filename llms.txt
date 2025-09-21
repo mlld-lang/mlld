@@ -388,6 +388,17 @@ Angle brackets load, quotes store literal paths. Field access and globs are supp
 /var @md = <docs/*.md> as "# <>.filename"
 ```
 
+AST selection: add `{ ... }` inside the angle brackets to pull specific definitions or usages.
+
+```mlld
+/var @handlers = <src/service.ts { handleRequest, (logger.warn) }>
+/var @templated = <src/**/*.py { fetch_user }> as "## <>.name\n<>.code"
+```
+
+- Bare identifiers return matching definitions; parentheses return definitions that reference the name.
+- Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
+- Glob matches add a `file` property so you can trace the source path.
+
 Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
 
 File metadata fields: `content` (default), `filename`, `relative`, `absolute`, `tokens`, `tokest`, `fm` (frontmatter), `json` (for .json files)

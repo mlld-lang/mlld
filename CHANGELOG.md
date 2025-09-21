@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.0.0-rc61]
+### Added
+- AST selectors in alligator expressions `<file.ext { methodName (variable) }>` covering JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Solidity, C, and C++.
+- Ruby support for AST selectors in alligator expressions.
 ## [2.0.0-rc54]
 ### Added
 - Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.
@@ -18,7 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Supported in backticks and `::…::` templates; line-start only for both `/for` and `/end` within the template body
   - Not supported in `:::…:::` or `[[…]]` templates
   - Interpreter uses existing TemplateForBlock evaluation; no changes to runtime semantics outside template contexts
-- Add ast-grep selectors to alligators `<file.ext { methodName (variable) }>` - supports JavaScript, Python, Rust, Go, Solidity, Java, C#, C, C++
 
 ### Fixed
 - Foreach templates now keep long numeric strings intact during interpolation
@@ -35,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc52]
 ### Fixed
 - `::: {{var}} :::` template syntax had issues with <alligators>. 
->>>>>>> modules
 
 ## [2.0.0-rc51]
 ### Fixed

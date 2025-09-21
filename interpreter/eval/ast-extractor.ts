@@ -24,12 +24,14 @@ interface Definition {
   search: string;
 }
 
-export function extractAst(content: string, filePath: string, patterns: AstPattern[]): AstResult[] {
+export function extractAst(content: string, filePath: string, patterns: AstPattern[]): Array<AstResult | null> {
   const ext = path.extname(filePath).toLowerCase();
   let definitions: Definition[] = [];
 
   if (['.py', '.pyi'].includes(ext)) {
     definitions = extractPythonDefinitions(content);
+  } else if (ext === '.rb') {
+    definitions = extractRubyDefinitions(content);
   } else if (ext === '.go') {
     definitions = extractGoDefinitions(content);
   } else if (ext === '.rs') {
@@ -47,41 +49,75 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
   }
 
 
-  const results: AstResult[] = [];
-  const ranges: Array<{ start: number; end: number }> = [];
+  type FinalEntry = { kind: 'definition'; def: Definition; result: AstResult } | { kind: 'null' };
+  const finalEntries: FinalEntry[] = [];
 
-  function add(def: Definition): void {
-    if (ranges.some(r => r.start <= def.start && r.end >= def.end)) {
-      return;
-    }
+  function toResult(def: Definition): AstResult {
+    return { name: def.name, code: def.code, type: def.type, line: def.line };
+  }
 
-    for (let i = ranges.length - 1; i >= 0; i--) {
-      const r = ranges[i];
-      if (def.start <= r.start && def.end >= r.end) {
-        ranges.splice(i, 1);
-        results.splice(i, 1);
+  function contains(container: Definition, child: Definition): boolean {
+    return (
+      container.start <= child.start &&
+      container.end >= child.end &&
+      (container.start < child.start || container.end > child.end)
+    );
+  }
+
+  function sameDefinition(a: Definition, b: Definition): boolean {
+    return a.start === b.start && a.end === b.end && a.name === b.name;
+  }
+
+  function pushDefinition(def: Definition): boolean {
+    for (const entry of finalEntries) {
+      if (entry.kind === 'definition' && sameDefinition(entry.def, def)) {
+        return false;
       }
     }
 
-    ranges.push({ start: def.start, end: def.end });
-    results.push({ name: def.name, code: def.code, type: def.type, line: def.line });
+    for (const entry of finalEntries) {
+      if (entry.kind === 'definition' && contains(entry.def, def)) {
+        return false;
+      }
+    }
+
+    for (let i = finalEntries.length - 1; i >= 0; i--) {
+      const entry = finalEntries[i];
+      if (entry.kind === 'definition' && contains(def, entry.def)) {
+        finalEntries.splice(i, 1);
+      }
+    }
+
+    finalEntries.push({ kind: 'definition', def, result: toResult(def) });
+    return true;
   }
 
   for (const pattern of patterns) {
     if (pattern.type === 'definition') {
       const def = definitions.find(d => d.name === pattern.name);
-      if (def) add(def);
+      if (def) {
+        pushDefinition(def);
+      } else {
+        finalEntries.push({ kind: 'null' });
+      }
     } else {
       const regex = new RegExp(`\\b${escapeRegExp(pattern.name)}\\b`);
       const matches = definitions.filter(def => def.type !== 'variable' && regex.test(def.search));
-      for (const def of matches) {
-        const contained = matches.some(other => other !== def && other.start >= def.start && other.end <= def.end);
-        if (!contained) add(def);
+      const filteredMatches = matches.filter(def =>
+        !matches.some(other => other !== def && contains(def, other))
+      );
+      let matched = false;
+      for (const def of filteredMatches) {
+        matched = true;
+        pushDefinition(def);
+      }
+      if (!matched) {
+        finalEntries.push({ kind: 'null' });
       }
     }
   }
 
-  return results;
+  return finalEntries.map(entry => (entry.kind === 'definition' ? entry.result : null));
 }
 
 function extractTsDefinitions(content: string, filePath: string): Definition[] {
@@ -98,6 +134,12 @@ function extractTsDefinitions(content: string, filePath: string): Definition[] {
           defs.push(makeTsDefinition(member.name.text, 'method', member, sourceFile, content));
         }
       }
+    } else if (ts.isInterfaceDeclaration(stmt) && stmt.name) {
+      defs.push(makeTsDefinition(stmt.name.text, 'interface', stmt, sourceFile, content));
+    } else if (ts.isEnumDeclaration(stmt) && stmt.name) {
+      defs.push(makeTsDefinition(stmt.name.text, 'enum', stmt, sourceFile, content));
+    } else if (ts.isTypeAliasDeclaration(stmt) && ts.isIdentifier(stmt.name)) {
+      defs.push(makeTsDefinition(stmt.name.text, 'type-alias', stmt, sourceFile, content));
     } else if (ts.isVariableStatement(stmt)) {
       for (const decl of stmt.declarationList.declarations) {
         if (ts.isIdentifier(decl.name)) {
@@ -188,6 +230,123 @@ function extractPythonDefinitions(content: string): Definition[] {
       const code = content.slice(start, end);
       const search = code;
       defs.push({ name, type: 'variable', start, end, line: i + 1, code, search });
+    }
+  }
+
+  return defs;
+}
+
+function extractRubyDefinitions(content: string): Definition[] {
+  const lines = content.split(/\r?\n/);
+  const offsets: number[] = [];
+  let pos = 0;
+  for (const line of lines) {
+    offsets.push(pos);
+    pos += line.length + 1;
+  }
+
+  const defs: Definition[] = [];
+  const contextStack: Array<{ endLine: number; segments: string[]; kind: 'module' | 'class' }> = [];
+
+  function sanitized(line: string): string {
+    return line.replace(/#.*$/, '');
+  }
+
+  function blockEnd(startLine: number): number {
+    let depth = 0;
+    for (let line = startLine; line < lines.length; line++) {
+      const clean = sanitized(lines[line]);
+      if (!clean.trim()) {
+        continue;
+      }
+
+      if (line === startLine) {
+        depth += 1;
+      } else {
+        const openers = clean.match(/\b(class|module|def|if|unless|case|begin|for|while|until|loop)\b/g);
+        if (openers) {
+          depth += openers.length;
+        }
+        const doMatches = clean.match(/\bdo\b/g);
+        if (doMatches) {
+          depth += doMatches.length;
+        }
+      }
+
+      const endMatches = clean.match(/\bend\b/g);
+      if (endMatches) {
+        depth -= endMatches.length;
+        if (depth <= 0) {
+          return line + 1;
+        }
+      }
+    }
+    return lines.length;
+  }
+
+  function makeDefinition(name: string, type: string, startLine: number, endLine: number, overrideName?: string): void {
+    const finalName = overrideName ?? name;
+    const start = offsets[startLine];
+    const end = offsets[endLine] ?? content.length;
+    const code = content.slice(start, end);
+    const search = code.split(/\r?\n/).slice(1).join('\n');
+    defs.push({ name: finalName, type, start, end, line: startLine + 1, code, search });
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const clean = sanitized(rawLine);
+    const trimmed = clean.trim();
+
+    while (contextStack.length > 0 && i >= contextStack[contextStack.length - 1].endLine) {
+      contextStack.pop();
+    }
+
+    if (!trimmed) {
+      continue;
+    }
+
+    const classMatch = /^class\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/.exec(trimmed);
+    if (classMatch) {
+      const endLine = blockEnd(i);
+      const parentSegments = contextStack.length > 0 ? contextStack[contextStack.length - 1].segments : [];
+      const classSegments = classMatch[1].split('::');
+      const segments = [...parentSegments, ...classSegments];
+      const qualified = segments.join('::');
+      makeDefinition(classMatch[1], 'class', i, endLine, qualified);
+      contextStack.push({ endLine, segments, kind: 'class' });
+      continue;
+    }
+
+    const moduleMatch = /^module\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/.exec(trimmed);
+    if (moduleMatch) {
+      const endLine = blockEnd(i);
+      const parentSegments = contextStack.length > 0 ? contextStack[contextStack.length - 1].segments : [];
+      const moduleSegments = moduleMatch[1].split('::');
+      const segments = [...parentSegments, ...moduleSegments];
+      const qualified = segments.join('::');
+      makeDefinition(moduleMatch[1], 'module', i, endLine, qualified);
+      contextStack.push({ endLine, segments, kind: 'module' });
+      continue;
+    }
+
+    const defMatch = /^def\s+([A-Za-z_]\w*[!?=]?|(?:self|[A-Za-z_]\w*)\.[A-Za-z_]\w*[!?=]?)/.exec(trimmed);
+    if (defMatch) {
+      const endLine = blockEnd(i);
+      const name = defMatch[1];
+      const insideClass = contextStack.some(ctx => ctx.kind === 'class');
+      const type = insideClass ? 'method' : 'function';
+      makeDefinition(name, type, i, endLine);
+      i = endLine - 1;
+      continue;
+    }
+
+    const constMatch = /^([A-Z][A-Za-z0-9_]*)\s*=/.exec(trimmed);
+    if (constMatch) {
+      const start = offsets[i];
+      const end = start + rawLine.length;
+      const code = content.slice(start, end);
+      defs.push({ name: constMatch[1], type: 'constant', start, end, line: i + 1, code, search: code });
     }
   }
 
@@ -709,7 +868,7 @@ function extractSolidityDefinitions(content: string): Definition[] {
 }
 
 function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function extractJavaDefinitions(content: string): Definition[] {
@@ -1005,4 +1164,3 @@ function extractCSharpDefinitions(content: string): Definition[] {
 
   return defs;
 }
-

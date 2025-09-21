@@ -1,11 +1,12 @@
->> Files
-# templates/welcome.att   -> Hello @name! Title: @title
-# templates/note.mtt      -> Note: {{body}}
+/var @name = "Alice"
+/var @user = {"role": "admin", "id": 123}
 
->> Define executables from files
-/exe @welcome(name, title) = template "./templates/welcome.att"
-/exe @note(body)           = template "./templates/note.mtt"
+>> Backticks (primary template syntax)
+/var @msg1 = `Hello @name!`
+/var @msg2 = `User @user.role has ID @user.id`
 
->> Invoke with parameters
-/show @welcome("Alice", "Engineer")
-/show @note("Bring snacks")
+>> Double colon for escaping backticks
+/var @code = ::Use `mlld run` with user @name::
+
+>> Triple colon for many @ symbols (use {{}} syntax)
+/var @social = :::Hey @{{name}}, check out {{user.role}}!:::

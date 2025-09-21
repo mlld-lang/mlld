@@ -1,28 +1,17 @@
-/var @text = "Hello World"
-/var @phrase = "  JavaScript rocks!  "
+/var @fruits = ["apple", "banana", "cherry"]
+/var @numbers = [1, 2, 3, 4, 5]
 
->> Check if string contains substring
-/show @text.includes("World")            >> true
-/show @text.includes("world")            >> false
+>> Check if array contains value
+/show @fruits.includes("banana")         >> true
+/show @fruits.includes("orange")         >> false
 
->> Find substring position
-/show @text.indexOf("W")                 >> 6
-/show @text.indexOf("xyz")               >> -1
+>> Find index of value
+/show @fruits.indexOf("cherry")          >> 2
+/show @fruits.indexOf("missing")         >> -1
 
->> Get string length
-/show @text.length()                     >> 11
+>> Get array length
+/show @fruits.length()                   >> 3
 
->> Change case
-/show @text.toLowerCase()                >> "hello world"
-/show @text.toUpperCase()                >> "HELLO WORLD"
-
->> Trim whitespace
-/show @phrase.trim()                     >> "JavaScript rocks!"
-
->> Check start/end
-/show @text.startsWith("Hello")          >> true
-/show @text.endsWith("World")            >> true
-
->> Split into array
-/show @text.split(" ")                   >> ["Hello", "World"]
-/show @text.split("")                    >> ["H", "e", "l", "l", "o", " ", "W", "o", "r", "l", "d"]
+>> Join array elements
+/show @fruits.join(", ")                 >> "apple, banana, cherry"
+/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"

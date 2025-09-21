@@ -5,7 +5,7 @@ import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl } from './load-content';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
-import { extractAst } from './ast-extractor';
+import { extractAst, type AstResult } from './ast-extractor';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
@@ -25,7 +25,7 @@ function isGlobPattern(path: string): boolean {
  * Loads content from files or URLs and optionally extracts sections
  * Now supports glob patterns and returns metadata-rich results
  */
-export async function processContentLoader(node: any, env: Environment): Promise<string | LoadContentResult | LoadContentResult[]> {
+export async function processContentLoader(node: any, env: Environment): Promise<string | LoadContentResult | LoadContentResult[] | Array<AstResult | null> | string[]> {
   if (!node || node.type !== 'load-content') {
     throw new MlldError('Invalid content loader node', {
       node: node ? node.type : 'null',
@@ -71,31 +71,53 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // AST extraction takes precedence for local files
   if (ast && actualSource.type === 'path') {
-    if (isGlob) {
-      const baseDir = env.getBasePath();
-      const matches = await glob(pathOrUrl, {
-        cwd: baseDir,
-        absolute: true,
-        followSymlinks: true,
-        ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
-      });
-      const results: any[] = [];
-      for (const filePath of matches) {
-        try {
-          const content = await env.readFile(filePath);
-          const extracted = extractAst(content, filePath, ast);
-          for (const item of extracted) {
-            results.push({ ...item, file: filePath });
+    const loadAstResults = async (): Promise<Array<AstResult | null>> => {
+      if (isGlob) {
+        const baseDir = env.getBasePath();
+        const matches = await glob(pathOrUrl, {
+          cwd: baseDir,
+          absolute: true,
+          followSymlinks: true,
+          ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
+        });
+        const aggregated: Array<AstResult | null> = [];
+        for (const filePath of matches) {
+          try {
+            const content = await env.readFile(filePath);
+            const extracted = extractAst(content, filePath, ast);
+            for (const entry of extracted) {
+              if (entry) {
+                aggregated.push({ ...entry, file: filePath });
+              } else {
+                aggregated.push(null);
+              }
+            }
+          } catch {
+            // skip unreadable files
           }
-        } catch {
-          // skip unreadable files
         }
+        return aggregated;
       }
-      return results;
-    } else {
+
       const content = await env.readFile(pathOrUrl);
       return extractAst(content, pathOrUrl, ast);
+    };
+
+    const astResults = await loadAstResults();
+
+    if (hasTransform && options?.transform) {
+      return await applyTemplateToAstResults(astResults, options.transform, env);
     }
+
+    if (hasPipes) {
+      return await processPipeline({
+        value: astResults,
+        env,
+        node: { pipes }
+      });
+    }
+
+    return astResults;
   }
 
   try {
@@ -881,5 +903,57 @@ async function applyTransformToResults(
     transformed.push(transformedContent);
   }
   
+  return transformed;
+}
+
+async function applyTemplateToAstResults(
+  results: Array<AstResult | null>,
+  transform: any,
+  env: Environment
+): Promise<string[]> {
+  const { interpolate } = await import('../core/interpreter');
+  const transformed: string[] = [];
+
+  for (const result of results) {
+    const templateParts = transform.parts || [];
+    const processedParts: any[] = [];
+
+    for (const part of templateParts) {
+      if (part.type === 'placeholder') {
+        if (!result) {
+          processedParts.push({ type: 'Text', content: '' });
+          continue;
+        }
+
+        if (part.fields && part.fields.length > 0) {
+          let value: any = result;
+          for (const field of part.fields) {
+            if (value && typeof value === 'object') {
+              value = value[field.value];
+            } else {
+              value = undefined;
+              break;
+            }
+          }
+          processedParts.push({
+            type: 'Text',
+            content: value !== undefined && value !== null ? String(value) : ''
+          });
+        } else {
+          processedParts.push({
+            type: 'Text',
+            content: result.code ?? ''
+          });
+        }
+      } else {
+        processedParts.push(part);
+      }
+    }
+
+    const childEnv = env.createChild();
+    const transformedContent = await interpolate(processedParts, childEnv);
+    transformed.push(transformedContent);
+  }
+
   return transformed;
 }

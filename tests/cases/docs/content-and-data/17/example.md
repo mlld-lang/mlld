@@ -1,12 +1,13 @@
-/var @name = "Alice"
-/var @user = {"role": "admin", "id": 123}
+>> Format JSON with indentation
+/var @data = <file.csv>
+/var @tojson = @data | @json
+/show @tojson
 
->> Backticks (primary template syntax)
-/var @msg1 = `Hello @name!`
-/var @msg2 = `User @user.role has ID @user.id`
+>> Convert to XML (SCREAMING_SNAKE_CASE)
+/var @toxml = @data | @XML
+/show @toxml
 
->> Double colon for escaping backticks
-/var @code = ::Use `mlld run` with user @name::
-
->> Triple colon for many @ symbols (use {{}} syntax)
-/var @social = :::Hey @{{name}}, check out {{user.role}}!:::
+>> Convert arrays to CSV
+/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+/var @tocsv = @users | @CSV
+/show @tocsv

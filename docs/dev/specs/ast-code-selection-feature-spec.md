@@ -49,6 +49,8 @@ Array<{
 }>
 ```
 
+- Missing patterns return `null` to preserve the pattern order.
+
 ### EXAMPLE RETURN VALUE
 
 ```mlld
@@ -231,4 +233,3 @@ Optional flags in `mlld.lock.json`:
 - Template system integration
 - Caching and performance tuning
 - Extended language support
-

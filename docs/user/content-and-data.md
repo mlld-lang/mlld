@@ -64,6 +64,20 @@ Extract specific sections from markdown files:
 
 The `<>` placeholder in `as` templates represents each file's metadata.
 
+### AST-Based Code Selection
+
+Use curly braces after a file path to pull specific definitions or usages from source files.
+
+```mlld
+/var @handlers = <src/service.ts { createUser, (logger.info) }>
+/var @templated = <src/**/*.py { create_user }> as ::## <>.name\n```\n<>.code\n```::
+```
+
+- Plain identifiers match top-level definitions by name.
+- Parentheses match definitions that reference the identifier anywhere in their body.
+- Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
+- Glob patterns return `file` metadata so you can tell which match came from which file.
+
 ## File Metadata
 
 Every loaded file provides metadata through properties:

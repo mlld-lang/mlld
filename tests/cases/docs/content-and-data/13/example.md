@@ -1,17 +1,11 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
+/var @items = ["first", "second", "third", "fourth", "last"]
 
->> Check if array contains value
-/show @fruits.includes("banana")         >> true
-/show @fruits.includes("orange")         >> false
+>> Basic slicing
+/show @items[0:3]                        >> ["first", "second", "third"]
+/show @items[2:]                         >> ["third", "fourth", "last"]
+/show @items[:3]                         >> ["first", "second", "third"]
 
->> Find index of value
-/show @fruits.indexOf("cherry")          >> 2
-/show @fruits.indexOf("missing")         >> -1
-
->> Get array length
-/show @fruits.length()                   >> 3
-
->> Join array elements
-/show @fruits.join(", ")                 >> "apple, banana, cherry"
-/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"
+>> Negative indices
+/show @items[-2:]                        >> ["fourth", "last"]
+/show @items[:-1]                        >> ["first", "second", "third", "fourth"]
+/show @items[1:-1]                       >> ["second", "third", "fourth"]

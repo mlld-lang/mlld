@@ -1,15 +1,11 @@
->> Primitives
-/var @name = "Alice"
-/var @age = 30
-/var @active = true
+/var @page = <https://example.com/data.json>
 
->> Arrays
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
+>> URL-specific metadata
+/show @page.url                          >> Full URL
+/show @page.domain                       >> "example.com"
+/show @page.status                       >> HTTP status code
+/show @page.title                        >> Page title (if HTML)
 
->> Objects
-/var @user = {"name": "Alice", "role": "admin"}
-/var @config = {
-  "database": {"host": "localhost", "port": 5432},
-  "features": ["auth", "api"]
-}
+>> HTML is converted to markdown
+/show @page.content                      >> Markdown version
+/show @page.html                         >> Original HTML
