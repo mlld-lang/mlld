@@ -3,6 +3,7 @@ import type { Environment } from '../../env/Environment';
 import { ImportResolution } from './ImportSecurityValidator';
 import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { VariableImporter } from './VariableImporter';
+import { ExportManifest } from './ExportManifest';
 import { parse } from '@grammar/parser';
 import { interpolate, evaluate } from '../../core/interpreter';
 import { MlldError } from '@core/errors';
@@ -370,6 +371,15 @@ export class ModuleContentProcessor {
     // Create child environment for evaluation
     const childEnv = this.createChildEnvironment(resolvedPath, isURL);
 
+    if (this.containsExportDirective(ast)) {
+      // Seed the child environment with an empty manifest so subsequent
+      // /export directives can accumulate entries during evaluation.
+      childEnv.setExportManifest(new ExportManifest());
+    } else {
+      // Use `null` to signal the auto-export fallback (no explicit manifest).
+      childEnv.setExportManifest(null);
+    }
+
     // Evaluate AST in child environment
     const evalResult = await this.evaluateInChildEnvironment(ast, childEnv, resolvedPath);
 
@@ -383,9 +393,12 @@ export class ModuleContentProcessor {
         evalResult: evalResult?.value ? 'has value' : 'no value'
       });
     }
+    const exportManifest = childEnv.getExportManifest();
     const { moduleObject, frontmatter } = this.variableImporter.processModuleExports(
-      childVars, 
-      { frontmatter: frontmatterData }
+      childVars,
+      { frontmatter: frontmatterData },
+      undefined,
+      exportManifest
     );
 
     // Add __meta__ property with frontmatter if available
@@ -549,14 +562,21 @@ export class ModuleContentProcessor {
     return childEnv;
   }
 
+  private containsExportDirective(ast: any[]): boolean {
+    return ast.some((node) => node?.type === 'Directive' && node.kind === 'export');
+  }
+
   /**
    * Evaluate AST in child environment with error handling
    */
   private async evaluateInChildEnvironment(
-    ast: any[], 
-    childEnv: Environment, 
+    ast: any[],
+    childEnv: Environment,
     resolvedPath: string
   ): Promise<any> {
+    // Set the importing flag to prevent directive side effects
+    childEnv.setImporting(true);
+
     try {
       // Pass isExpression: true to prevent markdown content from being emitted as effects
       // Imports should only process directives and create variables, not emit document content
@@ -565,6 +585,9 @@ export class ModuleContentProcessor {
       throw new Error(
         `Error evaluating imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`
       );
+    } finally {
+      // Always clear the importing flag, even if evaluation fails
+      childEnv.setImporting(false);
     }
   }
 }

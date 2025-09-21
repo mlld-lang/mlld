@@ -414,7 +414,8 @@ QuotedPath
 // Module reference: @namespace/path/to/module@hash
 ModuleReference
   = "@" id:ModuleIdentifier {
-      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${id.hash ? '@' + id.hash : ''}`;
+      const extension = id.extension ? `.${id.extension}` : '';
+      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${extension}${id.hash ? '@' + id.hash : ''}`;
       return {
         type: 'module',
         subtype: 'moduleReference',
@@ -429,6 +430,7 @@ ModuleReference
           namespace: id.namespace,
           path: id.path,
           name: id.name,
+          ...(id.extension ? { extension: `.${id.extension}` } : {}),
           ...(id.hash ? { hash: id.hash } : {})
         }
       };
@@ -441,17 +443,24 @@ ModuleIdentifier
         namespace,
         path: pathAndName.path,
         name: pathAndName.name,
+        ...(pathAndName.extension ? { extension: pathAndName.extension } : {}),
         ...(hash ? { hash } : {})
       };
     }
 
 // Module path and name - handles both @namespace/name and @namespace/path/to/name
 ModulePathAndName
-  = segments:(segment:ModulePath "/" { return segment; })* name:ModuleName {
+  = segments:(segment:ModulePath "/" { return segment; })* name:ModuleName extension:ModuleExtension? {
       return {
         path: segments,
-        name: name
+        name: name,
+        ...(extension ? { extension } : {})
       };
+    }
+
+ModuleExtension "Module extension"
+  = "." base:('mld' / 'mlld' / 'md') suffix:('.md')? {
+      return base + (suffix || '');
     }
 
 // Module namespace (user or organization name) - allows hyphens

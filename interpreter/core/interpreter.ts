@@ -1310,6 +1310,84 @@ export async function interpolate(
       // Handle file reference interpolation
       const result = await interpolateFileReference(node as any, env, context);
       parts.push(result);
+    } else if (node.type === 'TemplateForBlock') {
+      // Inline template for-loop expansion
+      // Evaluate the source collection in expression context
+      const sourceEval = await evaluate(node.source, env, { isExpression: true });
+      const { toIterable } = await import('../eval/for-utils');
+      const iterable = toIterable(sourceEval.value);
+      if (!iterable) {
+        // Non-iterable: skip silently in template context
+        continue;
+      }
+      // Variable importer for proper Variable wrapping
+      const { VariableImporter } = await import('../eval/import/VariableImporter');
+      const importer = new VariableImporter();
+      for (const [key, value] of iterable as Iterable<[string | null, unknown]>) {
+        const childEnv = env.createChildEnvironment();
+        const varName = (node as any).variable?.identifier || (node as any).variable?.name || 'item';
+        const iterationVar = importer.createVariableFromValue(varName, value, 'template-for');
+        childEnv.setVariable(varName, iterationVar);
+        if (key !== null && key !== undefined) {
+          const keyVar = importer.createVariableFromValue(`${varName}_key`, key, 'template-for');
+          childEnv.setVariable(`${varName}_key`, keyVar);
+        }
+        const bodyStr = await interpolate((node as any).body as any[], childEnv, InterpolationContext.Template);
+        parts.push(bodyStr);
+      }
+    } else if (node.type === 'TemplateInlineShow') {
+      // Build a synthetic show directive and evaluate in capture mode
+      const directive: any = {
+        type: 'Directive',
+        kind: 'show',
+        subtype: undefined,
+        values: {},
+        raw: {},
+        meta: { applyTailPipeline: !!(node as any).tail },
+        location: (node as any).location
+      };
+      const n: any = node as any;
+      switch (n.showKind) {
+        case 'command':
+          directive.subtype = 'showCommand';
+          directive.values.command = n.content?.values?.command || n.content?.values || n.content;
+          directive.meta = { ...(directive.meta || {}), ...(n.content?.meta || {}) };
+          if (n.tail) directive.values.withClause = n.tail;
+          break;
+        case 'code':
+          directive.subtype = 'showCode';
+          directive.values.lang = n.lang || [];
+          directive.values.code = n.code || [];
+          directive.meta = { ...(directive.meta || {}), ...(n.meta || {}) };
+          if (n.tail) directive.values.withClause = n.tail;
+          break;
+        case 'template':
+          directive.subtype = 'showTemplate';
+          directive.values.content = n.template?.values?.content ? [{ content: n.template.values.content }] : (n.template?.values ? [n.template.values] : []);
+          directive.meta = { ...(directive.meta || {}), ...(n.template?.meta || {}), isTemplateContent: true };
+          if (n.tail) directive.values.withClause = n.tail;
+          break;
+        case 'load':
+          directive.subtype = 'showLoadContent';
+          directive.values.loadContent = n.loadContent;
+          if (n.tail) directive.values.withClause = n.tail;
+          break;
+        case 'reference':
+          // Distinguish variable vs exec invocation by node type
+          if (n.reference?.type === 'VariableReference' || n.reference?.type === 'VariableReferenceWithTail' || n.reference?.type === 'TemplateVariable') {
+            directive.subtype = 'showVariable';
+            directive.values.variable = n.reference;
+          } else {
+            directive.subtype = 'showExecInvocation';
+            directive.values.execInvocation = n.reference;
+          }
+          break;
+        default:
+          break;
+      }
+      const { evaluateShow } = await import('../eval/show');
+      const res = await evaluateShow(directive, env, { isExpression: true });
+      parts.push(String(res.value ?? ''));
     } else if (node.type === 'Literal') {
       // Handle literal nodes from expressions
       const { LiteralNode } = await import('@core/types');

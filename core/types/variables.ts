@@ -12,6 +12,7 @@ export enum VariableValueType {
   PATH = 'path',
   EXEC = 'exec',
   IMPORT = 'import',
+  EXPORT = 'export',
   
   // New universal variable syntax types
   VAR_INTERPOLATION = 'varInterpolation',
@@ -29,6 +30,7 @@ export const VALID_VARIABLE_TYPES = [
   'path',
   'exec',
   'import',
+  'export',
   
   // New universal types
   'varInterpolation',

@@ -35,6 +35,7 @@ export interface VariableManagerDependencies {
   getCurrentFilePath(): string | undefined;
   getReservedNames(): Set<string>;
   getParent(): VariableManagerContext | undefined;
+  getCapturedModuleEnv(): Map<string, Variable> | undefined;
   getResolverManager(): ResolverManager | undefined;
   createDebugObject(format: number): string;
   getEnvironmentVariables(): Record<string, string>;
@@ -99,6 +100,9 @@ export class VariableManager implements IVariableManager {
         const newIsImported = Boolean(variable.metadata?.isImported);
         
         if (existingIsImported !== newIsImported) {
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.error(`[setVariable] import conflict name=${name}, existingIsImported=${existingIsImported}, newIsImported=${newIsImported}`);
+          }
           // Import vs local conflict
           const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
           throw VariableRedefinitionError.forImportConflict(
@@ -249,6 +253,13 @@ export class VariableManager implements IVariableManager {
         }
       }
       return variable;
+    }
+
+    if (!variable) {
+      const capturedEnv = this.deps.getCapturedModuleEnv();
+      if (capturedEnv && capturedEnv.has(name)) {
+        variable = capturedEnv.get(name);
+      }
     }
     
     // Check parent scope for regular variables

@@ -207,6 +207,7 @@ Directive
     / SlashRun      // Run directives (commands, code)
     / SlashPath     // Path directives (path variables)
     / SlashImport   // Import directives (from other files)
+    / SlashExport   // Export directives (explicit exports)
     / SlashOutput   // Output directives (output routing)
     / SlashWhen     // When directives (conditional execution)
     // NO AtText, AtData, AtAdd, AtExec - deleted!

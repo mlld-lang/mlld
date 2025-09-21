@@ -1,0 +1,4 @@
+/export { * }
+
+/var @first = "First"
+/var @second = "Second"

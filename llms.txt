@@ -347,6 +347,36 @@ When-expressions are first-class:
 ```
 ```
 
+Inline template control:
+
+- `/for … /end` is available in backticks and `::…::` templates.
+- `:::…:::` templates do not support loops; they support `{{var}}` interpolation and inline `/show` only.
+
+Examples:
+
+```mlld
+# Backtick wrapper
+/var @tpl = `
+/for @x in ["A","B"]
+- @x
+/end
+`
+/show @tpl
+
+# Double-colon wrapper
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg
+```
+
+Notes:
+- Line-start only: `/for` and `/end` must begin at a line start inside the template body.
+- No loops in `[[...]]` or `:::...:::` templates.
+
 </TEMPLATES>
 
 <FILE_LOADING>
@@ -357,6 +387,18 @@ Angle brackets load, quotes store literal paths. Field access and globs are supp
 /var @firstEmail = <data.json>.users[0].email
 /var @md = <docs/*.md> as "# <>.filename"
 ```
+
+AST selection: add `{ ... }` inside the angle brackets to pull specific definitions or usages.
+
+```mlld
+/var @handlers = <src/service.ts { handleRequest, (logger.warn) }>
+/var @templated = <src/**/*.py { fetch_user }> as "## <>.name\n<>.code"
+```
+
+- Bare identifiers return matching definitions; parentheses return definitions that reference the name.
+- Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
+- Glob matches add a `file` property so you can trace the source path.
+- Patterns that miss return `null`, preserving the request order.
 
 Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
 
@@ -742,6 +784,7 @@ Module-first philosophy: keep `.mld` files readable; move complexity into focuse
 * Create helpers via `/exe`, expose with shadow envs (per language, per module)
 * JS and Node have separate shadow environments; no cross-pollution
 * Prefer clear namespaces: `/import @corp/utils as utils`
+* Declare module APIs explicitly: `/export { publicFn, helper }`; auto-export sticks around only as a compatibility fallback for modules that have not been updated yet
 
 ```mlld
 ---
@@ -749,6 +792,7 @@ module: @myorg/github-utils
 description: GitHub operations
 ---
 
+/export { getPR, listIssues, createRelease }
 /exe @getPR(number, repo) = run {gh pr view ...}
 /exe @listIssues(repo) = run {gh issue list ...}
 /exe @createRelease(tag, notes) = run {gh release create ...}

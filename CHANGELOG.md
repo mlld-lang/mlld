@@ -5,6 +5,36 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc54]
+### Added
+- Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.
+- Imported executables and templates now capture their module environment so command references resolve sibling functions consistently.
+- Registry module imports now enforce `mlld.lock` versions, failing fast on mismatches while remaining backward-compatible with legacy lock entries.
+- Explicit `/export { ... }` manifests for modules: grammar, AST, evaluation, and import pipeline honour declared bindings while falling back to auto-export for manifest-less files.
+- Import collision protection surfaces `IMPORT_NAME_CONFLICT` with precise locations when multiple directives bind the same name, covering both namespace and selective imports.
+- End-to-end fixture ensures exported shadow-environment helpers retain access to nested helpers and mlld functions across module boundaries.
+- Inline template loops: `/for … /end` inside templates
+  - Supported in backticks and `::…::` templates; line-start only for both `/for` and `/end` within the template body
+  - Not supported in `:::…:::` or `[[…]]` templates
+  - Interpreter uses existing TemplateForBlock evaluation; no changes to runtime semantics outside template contexts
+- AST selectors in alligator expressions `<file.ext { methodName (variable) }>` covering JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Solidity, C, and C++.
+-
+### Fixed
+- Foreach templates now keep long numeric strings intact during interpolation
+- Command-reference executables now preserve array and object types when passing arguments to nested functions (previously JSON.stringify'd them)
+- Imported arrays preserve array behaviour after module import, so `.length` and `/for` iteration no longer fail after crossing module boundaries
+- Triple-colon template exports keep their template metadata, rendering `{{ }}` placeholders and leaving `<@...>` markers unaltered when imported
+- JavaScript `@` syntax misuse surfaces the educational guidance even when V8 reports "Unexpected token", keeping the fix-it copy visible
+- Regression fixtures cover imported arrays, triple-colon imports, triple alligator literals, and JS `@` misuse to prevent regressions
+
+## [2.0.0-rc53]
+### Fixed
+- Large integers were getting wrongly rounded by js auto-parsing
+
+## [2.0.0-rc52]
+### Fixed
+- `::: {{var}} :::` template syntax had issues with <alligators>. 
+
 ## [2.0.0-rc51]
 ### Fixed
 - Language Server transport defaults to stdio when no explicit flag is provided

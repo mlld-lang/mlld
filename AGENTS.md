@@ -194,7 +194,7 @@ Tips and flags:
 Add/modify a directive:
 - Update grammar (patterns/core/directives), sync types in core/types, rebuild grammar.
 - Implement evaluator in interpreter/eval/*; wire into interpreter/core.
-- Add fixtures (valid/invalid/exceptions) and token tests if applicable.
+- Add fixtures (tests/cases/* for valid, subdirs for invalid/exceptions/warnings) and token tests if applicable.
 - Update docs (user + dev) and llms.txt if user-facing.
 
 Add pipeline parallel semantics or transformer:

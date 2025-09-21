@@ -28,6 +28,14 @@ export interface ImportMeta extends DirectiveMeta {
 }
 
 /**
+ * Export directive metadata
+ */
+export interface ExportMeta extends DirectiveMeta {
+  exportCount: number; // Number of exports in the directive
+  isWildcard: boolean; // True if exports contain '*'
+}
+
+/**
  * Text directive metadata
  */
 export interface TextMeta extends DirectiveMeta {

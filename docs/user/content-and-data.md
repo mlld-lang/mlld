@@ -40,7 +40,7 @@ Use standard glob patterns to load multiple files:
 /var @markdown = <*.md>                  >> All .md in current dir
 /var @tests = <**/*.test.js>             >> All test files recursively
 /var @docs = <docs/**/*.md>              >> All markdown in docs tree
-/var @source = <{src,lib}/**/*.ts>       >> Multiple directories
+/var @source = <src/**/*.ts>             >> All TypeScript in src
 
 >> Access individual files
 /show @docs[0].content                    >> First file's content
@@ -63,6 +63,20 @@ Extract specific sections from markdown files:
 ```
 
 The `<>` placeholder in `as` templates represents each file's metadata.
+
+### AST-Based Code Selection
+
+Use curly braces after a file path to pull specific definitions or usages from source files.
+
+```mlld
+/var @handlers = <src/service.ts { createUser, (logger.info) }>
+/var @templated = <src/**/*.py { create_user }> as ::## <>.name\n```\n<>.code\n```::
+```
+
+- Plain identifiers match top-level definitions by name.
+- Parentheses match definitions that reference the identifier anywhere in their body.
+- Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
+- Glob patterns return `file` metadata so you can tell which match came from which file; missing patterns yield `null` so the output order stays aligned with your request.
 
 ## File Metadata
 

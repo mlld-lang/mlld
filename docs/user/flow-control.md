@@ -239,6 +239,37 @@ Use a `when [...]` expression as the right-hand side in collection form. Combine
 /show @filtered   # => ["1","2","3"]
 ```
 
+### Template Loops (backticks and ::)
+
+Write inline `/for` loops inside templates for simple rendering tasks. The loop header and `/end` must start at line begins inside the template.
+
+Backticks:
+
+```mlld
+/var @tpl = `
+/for @v in ["x","y"]
+- @v
+/end
+`
+/show @tpl
+```
+
+Double-colon:
+
+```mlld
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg
+```
+
+Notes:
+- Loops are supported in backticks and `::…::` templates.
+- `:::…:::` and `[[…]]` templates do not support loops.
+
 ## Pipelines
 
 ### Basic Pipelines

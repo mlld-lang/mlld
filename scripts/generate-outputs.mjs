@@ -58,7 +58,7 @@ async function main() {
         processed++;
         
         // Also update the fixture with the actual output
-        const fixturePath = path.join(FIXTURES_DIR, 'valid', 'examples', `${file.replace('.mld', '.generated-fixture.json')}`);
+        const fixturePath = path.join(FIXTURES_DIR, 'examples', `${file.replace('.mld', '.generated-fixture.json')}`);
         try {
           const fixtureContent = await fs.readFile(fixturePath, 'utf-8');
           const fixture = JSON.parse(fixtureContent);

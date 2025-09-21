@@ -77,10 +77,10 @@ export class ObjectReferenceResolver {
       const result = this.resolveExecutableReference(referencedVar);
       
       // If the result is an object that might contain more AST nodes, recursively resolve it
-      if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result)) {
+      if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result) && !(result as any).__arraySnapshot) {
         return this.resolveObjectReferences(result, variableMap);
       }
-      
+
       return result;
     } else {
       if (process.env.DEBUG_EXEC) {
@@ -106,6 +106,13 @@ export class ObjectReferenceResolver {
           capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
         };
       }
+      // Serialize module environment if present
+      if (serializedMetadata?.capturedModuleEnv) {
+        serializedMetadata = {
+          ...serializedMetadata,
+          capturedModuleEnv: this.serializeModuleEnv(serializedMetadata.capturedModuleEnv)
+        };
+      }
       
       const result = {
         __executable: true,
@@ -116,6 +123,15 @@ export class ObjectReferenceResolver {
       };
       return result;
     } else {
+      if (referencedVar.type === 'array') {
+        return {
+          __arraySnapshot: true,
+          value: referencedVar.value,
+          metadata: referencedVar.metadata,
+          isComplex: (referencedVar as any).isComplex === true,
+          name: referencedVar.name
+        };
+      }
       // For other variable types, return the value directly
       return referencedVar.value;
     }
@@ -139,6 +155,42 @@ export class ObjectReferenceResolver {
       }
     }
     
+    return result;
+  }
+
+  /**
+   * Serialize module environment for export (Map to object)
+   * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
+   * IMPORTANT: Delegate to VariableImporter to ensure consistent serialization
+   */
+  private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
+    // Use a simpler approach: serialize each variable individually using the same logic as resolveExecutableReference
+    const result: Record<string, any> = {};
+    for (const [name, variable] of moduleEnv) {
+      if (variable.type === 'executable') {
+        const execVar = variable as ExecutableVariable;
+        let serializedMetadata = { ...execVar.metadata };
+        if (serializedMetadata.capturedShadowEnvs) {
+          serializedMetadata = {
+            ...serializedMetadata,
+            capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+          };
+        }
+        // Skip capturedModuleEnv only for items IN the module env to avoid recursion
+        delete serializedMetadata.capturedModuleEnv;
+
+        result[name] = {
+          __executable: true,
+          value: execVar.value,
+          paramNames: execVar.paramNames,
+          executableDef: execVar.metadata?.executableDef,
+          metadata: serializedMetadata
+        };
+      } else {
+        // For other variables, export the value directly
+        result[name] = variable.value;
+      }
+    }
     return result;
   }
 

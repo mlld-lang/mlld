@@ -57,6 +57,20 @@ export interface ImportReferenceNode extends VariableReferenceNode {
 }
 
 /**
+ * Export directive values
+ */
+export interface ExportValues {
+  exports: ExportReferenceNode[];
+}
+
+// Member exported from the current module
+export interface ExportReferenceNode extends VariableReferenceNode {
+  identifier: string;
+  valueType: 'export';
+  alias?: string;
+}
+
+/**
  * Text directive values
  */
 export interface TextValues {

@@ -25,15 +25,35 @@ No ambiguity with arrays or strings.
 
 // Main alligator expression
 AlligatorExpression "alligator expression"
-  = "<" !"!" _ source:AlligatorSource options:AlligatorOptions? _ ">" pipes:SpacedOrCondensedPipeChain? {
-      helpers.debug('AlligatorExpression matched', { source, options, pipes });
+  = "<" !"!" _ source:AlligatorSource ast:AlligatorAstPatterns? options:AlligatorOptions? _ ">" pipes:SpacedOrCondensedPipeChain? {
+      helpers.debug('AlligatorExpression matched', { source, ast, options, pipes });
       return {
         type: 'load-content',
         source: source,
+        ...(ast ? { ast } : {}),
         ...(options ? { options } : {}),
         ...(pipes && pipes.length > 0 ? { pipes } : {}),
         location: location()
       };
+    }
+
+// Optional AST pattern clause
+AlligatorAstPatterns "AST pattern list"
+  = _ "{" _ first:AlligatorAstPattern rest:(_ "," _ AlligatorAstPattern)* _ "}" {
+      return [first, ...rest.map(r => r[3])];
+    }
+
+AlligatorAstPattern "AST pattern"
+  = "(" _ id:AlligatorAstIdentifier _ ")" {
+      return { type: 'usage', name: id };
+    }
+  / id:AlligatorAstIdentifier {
+      return { type: 'definition', name: id };
+    }
+
+AlligatorAstIdentifier "AST identifier"
+  = $(BaseIdentifier ("." BaseIdentifier)*) {
+      return text();
     }
 
 // Source types - what we're loading from
@@ -119,7 +139,7 @@ AlligatorPathSegment "alligator path segment"
 
 // Valid characters in path segments (inside alligators)
 AlligatorPathChar
-  = !">" !"#" !"@" !" as " !PathSeparator char:. { return char; }
+  = !">" !"#" !"@" !" as " !"{" !PathSeparator char:. { return char; }
 
 // Options for alligator expressions
 AlligatorOptions
@@ -188,7 +208,10 @@ AsRename "section rename"
 // Parse the content of a quoted or backtick string as a template for section rename
 // Supports both "..." and `...` with <> placeholder interpolation
 AsSectionRenameString "section rename string template"
-  = '"' parts:RenameStringPart* '"' {
+  = '::' parts:DoubleColonTemplatePart* '::' {
+      return parts;
+    }
+  / '"' parts:RenameStringPart* '"' {
       return parts;
     }
   / '`' parts:RenameBacktickPart* '`' {
@@ -232,7 +255,13 @@ AsTransform "as transform"
 
 // Backtick template for transformations
 AlligatorTransformTemplate "alligator transform template"
-  = "`" parts:BacktickTransformPart* "`" {
+  = "::" parts:DoubleColonTemplatePart* "::" {
+      return {
+        type: 'template',
+        parts: parts
+      };
+    }
+  / "`" parts:BacktickTransformPart* "`" {
       return {
         type: 'template',
         parts: parts
@@ -263,6 +292,23 @@ BacktickTransformPart
       });
     }
 
+DoubleColonTemplatePart
+  = "<>" fields:TransformFieldChain? {
+      return {
+        type: 'placeholder',
+        fields: fields
+      };
+    }
+  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / segment:UnifiedDoubleColonTextSegment {
+      return segment;
+    }
+
 // Field access for transform placeholders
 TransformFieldChain
   = "." first:TransformField rest:("." field:TransformField { return field; })* {
@@ -284,4 +330,3 @@ URLHost
 
 URLPath  
   = "/" chars:[^> ]* { return '/' + chars.join(''); }
-

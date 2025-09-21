@@ -279,11 +279,11 @@ The context variable `@ctx` is always hanging around to get you context
 
 Your main mlld file should be clean and readable, focused on working like a logical router.
 
-`/import` lets you bring values in other files into this one. You can import _everything_ or just select what you need.
+`/import` lets you bring values in other files into this one. Author modules with explicit `/export { ... }` declarations so the public API is clear; the interpreter still auto-exports files that have not adopted manifests yet.
 
 ```mlld
-/import "file.mld"                             << everything
-/import { somevar, somexe } from "file.mld"    << selective
+/import "file.mld"                             << everything (only for files without `/export`)
+/import { somevar, somexe } from "file.mld"    << selective (preferred)
 /import @author/module                         << public modules
 /import @company/module                        << private modules
 /import @local/module                          << local modules
@@ -292,12 +292,13 @@ Your main mlld file should be clean and readable, focused on working like a logi
 
 
 
-Values defined as `exe` and `var` in other files can be imported with `/import` so you can keep the complexity in separate files and have your main mlld script 
+Values defined as `exe` and `var` in other files can be imported with `/import` so you can keep the complexity in separate files and have your main mlld script.
 
-Hide the hard stuff. Expose the simple API:
+Hide the hard stuff. Expose the simple API by declaring it explicitly:
 
 ```mlld
 # In @company/ai-tools.mld
+/export { smartExtract, validate }
 /exe @smartExtract(doc) = js { /* 100 lines of parsing */ }
 /exe @validate(data) = js { /* schema validation */ }
 
