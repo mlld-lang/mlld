@@ -31,7 +31,7 @@ The alligator syntax (`<file>` or `<pattern>`) in mlld provides powerful content
 ```
 
 The clause inside `{}` selects top-level definitions or definitions that use a name. Parentheses mark usage patterns.
-Currently supports JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Solidity, and C/C++ files. Results include file paths only when using glob patterns.
+Currently supports JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Solidity, and C/C++ files. Results include file paths only when using glob patterns, and unmatched patterns yield `null` entries so array ordering matches the original request.
 
 ### Detection and Interpolation Rules
 

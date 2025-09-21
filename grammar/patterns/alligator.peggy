@@ -208,7 +208,10 @@ AsRename "section rename"
 // Parse the content of a quoted or backtick string as a template for section rename
 // Supports both "..." and `...` with <> placeholder interpolation
 AsSectionRenameString "section rename string template"
-  = '"' parts:RenameStringPart* '"' {
+  = '::' parts:DoubleColonTemplatePart* '::' {
+      return parts;
+    }
+  / '"' parts:RenameStringPart* '"' {
       return parts;
     }
   / '`' parts:RenameBacktickPart* '`' {
@@ -252,7 +255,13 @@ AsTransform "as transform"
 
 // Backtick template for transformations
 AlligatorTransformTemplate "alligator transform template"
-  = "`" parts:BacktickTransformPart* "`" {
+  = "::" parts:DoubleColonTemplatePart* "::" {
+      return {
+        type: 'template',
+        parts: parts
+      };
+    }
+  / "`" parts:BacktickTransformPart* "`" {
       return {
         type: 'template',
         parts: parts
@@ -283,6 +292,23 @@ BacktickTransformPart
       });
     }
 
+DoubleColonTemplatePart
+  = "<>" fields:TransformFieldChain? {
+      return {
+        type: 'placeholder',
+        fields: fields
+      };
+    }
+  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / segment:UnifiedDoubleColonTextSegment {
+      return segment;
+    }
+
 // Field access for transform placeholders
 TransformFieldChain
   = "." first:TransformField rest:("." field:TransformField { return field; })* {
@@ -304,4 +330,3 @@ URLHost
 
 URLPath  
   = "/" chars:[^> ]* { return '/' + chars.join(''); }
-

@@ -76,7 +76,7 @@ Use curly braces after a file path to pull specific definitions or usages from s
 - Plain identifiers match top-level definitions by name.
 - Parentheses match definitions that reference the identifier anywhere in their body.
 - Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
-- Glob patterns return `file` metadata so you can tell which match came from which file.
+- Glob patterns return `file` metadata so you can tell which match came from which file; missing patterns yield `null` so the output order stays aligned with your request.
 
 ## File Metadata
 

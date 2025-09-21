@@ -49,6 +49,8 @@ Array<{
 }>
 ```
 
+- Missing patterns return `null` entries so the result order stays aligned with requested patterns.
+
 - Missing patterns return `null` to preserve the pattern order.
 
 ### EXAMPLE RETURN VALUE

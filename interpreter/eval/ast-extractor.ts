@@ -24,6 +24,8 @@ interface Definition {
   search: string;
 }
 
+type SequenceEntry = { kind: 'definition'; key: string } | { kind: 'null' };
+
 export function extractAst(content: string, filePath: string, patterns: AstPattern[]): Array<AstResult | null> {
   const ext = path.extname(filePath).toLowerCase();
   let definitions: Definition[] = [];
@@ -49,11 +51,15 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
   }
 
 
-  type FinalEntry = { kind: 'definition'; def: Definition; result: AstResult } | { kind: 'null' };
-  const finalEntries: FinalEntry[] = [];
+  const definitionMap = new Map<string, Definition>();
+  const sequence: SequenceEntry[] = [];
 
   function toResult(def: Definition): AstResult {
     return { name: def.name, code: def.code, type: def.type, line: def.line };
+  }
+
+  function keyOf(def: Definition): string {
+    return `${def.start}:${def.end}:${def.name}`;
   }
 
   function contains(container: Definition, child: Definition): boolean {
@@ -64,32 +70,30 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
     );
   }
 
-  function sameDefinition(a: Definition, b: Definition): boolean {
-    return a.start === b.start && a.end === b.end && a.name === b.name;
-  }
+  function pushDefinition(def: Definition): void {
+    const key = keyOf(def);
+    if (definitionMap.has(key)) {
+      return;
+    }
 
-  function pushDefinition(def: Definition): boolean {
-    for (const entry of finalEntries) {
-      if (entry.kind === 'definition' && sameDefinition(entry.def, def)) {
-        return false;
+    for (const existing of definitionMap.values()) {
+      if (contains(existing, def)) {
+        return;
       }
     }
 
-    for (const entry of finalEntries) {
-      if (entry.kind === 'definition' && contains(entry.def, def)) {
-        return false;
+    for (const [existingKey, existing] of definitionMap) {
+      if (contains(def, existing)) {
+        definitionMap.delete(existingKey);
+        const index = sequence.findIndex(entry => entry.kind === 'definition' && entry.key === existingKey);
+        if (index !== -1) {
+          sequence.splice(index, 1);
+        }
       }
     }
 
-    for (let i = finalEntries.length - 1; i >= 0; i--) {
-      const entry = finalEntries[i];
-      if (entry.kind === 'definition' && contains(def, entry.def)) {
-        finalEntries.splice(i, 1);
-      }
-    }
-
-    finalEntries.push({ kind: 'definition', def, result: toResult(def) });
-    return true;
+    definitionMap.set(key, def);
+    sequence.push({ kind: 'definition', key });
   }
 
   for (const pattern of patterns) {
@@ -98,7 +102,7 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
       if (def) {
         pushDefinition(def);
       } else {
-        finalEntries.push({ kind: 'null' });
+        sequence.push({ kind: 'null' });
       }
     } else {
       const regex = new RegExp(`\\b${escapeRegExp(pattern.name)}\\b`);
@@ -106,18 +110,24 @@ export function extractAst(content: string, filePath: string, patterns: AstPatte
       const filteredMatches = matches.filter(def =>
         !matches.some(other => other !== def && contains(def, other))
       );
-      let matched = false;
-      for (const def of filteredMatches) {
-        matched = true;
-        pushDefinition(def);
+      if (filteredMatches.length === 0) {
+        sequence.push({ kind: 'null' });
+        continue;
       }
-      if (!matched) {
-        finalEntries.push({ kind: 'null' });
+
+      for (const def of filteredMatches) {
+        pushDefinition(def);
       }
     }
   }
 
-  return finalEntries.map(entry => (entry.kind === 'definition' ? entry.result : null));
+  return sequence.map(entry => {
+    if (entry.kind === 'null') {
+      return null;
+    }
+    const def = definitionMap.get(entry.key);
+    return def ? toResult(def) : null;
+  });
 }
 
 function extractTsDefinitions(content: string, filePath: string): Definition[] {

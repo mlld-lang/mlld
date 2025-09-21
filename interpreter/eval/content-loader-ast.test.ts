@@ -1,9 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { processContentLoader } from './content-loader';
 import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import * as path from 'path';
+import minimatch from 'minimatch';
+import { glob } from 'tinyglobby';
+
+vi.mock('tinyglobby', () => ({
+  glob: vi.fn()
+}));
 
 describe('Content Loader AST patterns', () => {
   let env: Environment;
@@ -12,6 +18,49 @@ describe('Content Loader AST patterns', () => {
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     env = new Environment(fileSystem, new PathService(), process.cwd());
+
+    vi.mocked(glob).mockImplementation(async (pattern: string, options: any) => {
+      const { cwd = '/', absolute = false, ignore = [] } = options || {};
+
+      const allFiles: string[] = [];
+      const walkDir = async (dir: string) => {
+        try {
+          const entries = await fileSystem.readdir(dir);
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry);
+            try {
+              const stat = await fileSystem.stat(fullPath);
+              if (stat.isDirectory()) {
+                await walkDir(fullPath);
+              } else if (stat.isFile()) {
+                allFiles.push(fullPath);
+              }
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore
+        }
+      };
+
+      await walkDir(cwd);
+
+      const matches = allFiles.filter(file => {
+        const relativePath = path.relative(cwd, file);
+        if (!minimatch(relativePath, pattern)) {
+          return false;
+        }
+        for (const ignorePattern of ignore) {
+          if (minimatch(relativePath, ignorePattern)) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      return absolute ? matches : matches.map(file => path.relative(cwd, file));
+    });
   });
 
   it('extracts definitions and usage matches', async () => {
@@ -60,6 +109,30 @@ describe('Content Loader AST patterns', () => {
     const results = await processContentLoader(node as any, env);
     expect(results.length).toBe(1);
     expect(results[0]?.name).toBe('User');
+  });
+
+  it('captures interfaces, enums, and type aliases in javascript files', async () => {
+    const filePath = path.join(process.cwd(), 'model.ts');
+    await fileSystem.writeFile(filePath, [
+      'export interface User { id: string; name: string; }',
+      'export type UserId = string;',
+      'export enum Role { Admin = 0, User = 1 }'
+    ].join('\n'));
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'definition', name: 'User' },
+        { type: 'definition', name: 'UserId' },
+        { type: 'definition', name: 'Role' }
+      ]
+    };
+
+    const results = await processContentLoader(node as any, env);
+    expect(Array.isArray(results)).toBe(true);
+    expect(results.map(r => (r as any)?.name ?? null)).toEqual(['User', 'UserId', 'Role']);
+    expect(results.map(r => (r as any)?.type ?? null)).toEqual(['interface', 'type-alias', 'enum']);
   });
 
   it('supports python definitions', async () => {
@@ -391,6 +464,31 @@ describe('Content Loader AST patterns', () => {
     const results = await processContentLoader(node as any, env);
     expect(results.length).toBe(2);
     expect(results[0]).toBeTruthy();
+    expect(results[1]).toBeNull();
+  });
+
+  it('returns null when python usage pattern misses', async () => {
+    const filePath = path.join(process.cwd(), 'usage.py');
+    await fileSystem.writeFile(filePath, [
+      'def helper():',
+      '    return 1',
+      '',
+      'def create_user():',
+      '    helper()'
+    ].join('\n'));
+
+    const node = {
+      type: 'load-content',
+      source: { type: 'path', raw: filePath, segments: [{ type: 'Text', content: filePath }] },
+      ast: [
+        { type: 'usage', name: 'helper' },
+        { type: 'usage', name: 'missing_call' }
+      ]
+    };
+
+    const results = await processContentLoader(node as any, env);
+    expect(results.length).toBe(2);
+    expect(results[0]).not.toBeNull();
     expect(results[1]).toBeNull();
   });
 

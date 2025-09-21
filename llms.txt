@@ -398,6 +398,7 @@ AST selection: add `{ ... }` inside the angle brackets to pull specific definiti
 - Bare identifiers return matching definitions; parentheses return definitions that reference the name.
 - Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
 - Glob matches add a `file` property so you can trace the source path.
+- Patterns that miss return `null`, preserving the request order.
 
 Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
 
