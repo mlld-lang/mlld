@@ -36,6 +36,10 @@ const EXAMPLES_MD = path.join(CASES_DIR, 'EXAMPLES.md');
 
 const CASE_DIRECTORY_HELPERS = new Set(['files']);
 
+/**
+ * @param {string} name
+ * @returns {boolean}
+ */
 function isHelperCaseDirectory(name) {
   if (!name) return false;
   if (CASE_DIRECTORY_HELPERS.has(name)) return true;

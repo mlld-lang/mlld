@@ -26,6 +26,17 @@ interface Definition {
 
 type SequenceEntry = { kind: 'definition'; key: string } | { kind: 'null' };
 
+function getLinesAndOffsets(content: string): { lines: string[]; offsets: number[] } {
+  const lines = content.split(/\r?\n/);
+  const offsets: number[] = [];
+  let pos = 0;
+  for (const line of lines) {
+    offsets.push(pos);
+    pos += line.length + 1;
+  }
+  return { lines, offsets };
+}
+
 export function extractAst(content: string, filePath: string, patterns: AstPattern[]): Array<AstResult | null> {
   const ext = path.extname(filePath).toLowerCase();
   let definitions: Definition[] = [];
@@ -173,13 +184,7 @@ function makeTsDefinition(name: string, type: string, node: ts.Node, sf: ts.Sour
 }
 
 function extractPythonDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
 
@@ -247,13 +252,7 @@ function extractPythonDefinitions(content: string): Definition[] {
 }
 
 function extractRubyDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
   const contextStack: Array<{ endLine: number; segments: string[]; kind: 'module' | 'class' }> = [];
@@ -364,13 +363,7 @@ function extractRubyDefinitions(content: string): Definition[] {
 }
 
 function extractRustDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
 
@@ -478,13 +471,7 @@ function extractRustDefinitions(content: string): Definition[] {
 }
 
 function extractGoDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
 
@@ -548,13 +535,7 @@ function extractGoDefinitions(content: string): Definition[] {
 }
 
 function extractCppDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
 
@@ -741,13 +722,7 @@ function extractCppDefinitions(content: string): Definition[] {
 }
 
 function extractSolidityDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
 
@@ -882,13 +857,7 @@ function escapeRegExp(str: string): string {
 }
 
 function extractJavaDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
 
@@ -989,13 +958,7 @@ function extractJavaDefinitions(content: string): Definition[] {
 }
 
 function extractCSharpDefinitions(content: string): Definition[] {
-  const lines = content.split(/\r?\n/);
-  const offsets: number[] = [];
-  let pos = 0;
-  for (const line of lines) {
-    offsets.push(pos);
-    pos += line.length + 1;
-  }
+  const { lines, offsets } = getLinesAndOffsets(content);
 
   const defs: Definition[] = [];
 
