@@ -92,7 +92,7 @@ export async function evaluateForeachCommand(
   
   for (let i = 0; i < tuples.length; i++) {
     const tuple = tuples[i];
-    
+
     try {
       // Create an ExecInvocation node with the current tuple values as arguments
       const execInvocationNode = {

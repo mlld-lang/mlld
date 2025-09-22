@@ -79,7 +79,7 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       );
 
       // Merge shadow environment with provided parameters
-      const allParams = { ...(params || {}) };
+      const allParams = params ? { ...params } : {};
       const allParamNames: string[] = Object.keys(allParams);
       const allParamValues: any[] = Object.values(allParams);
 

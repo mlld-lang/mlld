@@ -182,7 +182,7 @@ The semantic tokens understand mlld's complex interpolation rules:
 - `@var` in templates is highlighted as interpolation
 - `@var` outside templates is highlighted as variable reference
 - Single quotes never interpolate
-- Command contexts (`/run {echo "@name"}`) support interpolation
+- Command contexts (`/run @name | { cat }`) support interpolation
 - Objects and arrays preserve mlld constructs as full AST nodes
 
 #### Implementation Details

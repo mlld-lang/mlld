@@ -50,7 +50,8 @@ Execute shell commands:
 ```mlld
 /run {echo "Hello World"}
 /run {ls -la}
-/run {echo "@name"}                # interpolates variables
+/run @data | { cat | jq '.[]' }       << stdin pipe sugar
+/run { cat | jq '.[]' } with { stdin: @data }  << explicit stdin
 ```
 
 Multi-line commands with `run sh`:
@@ -69,6 +70,7 @@ Define reusable functions and templates:
 ```mlld
 # Shell commands
 /exe @greet(name) = run {echo "Hello @name"}
+/exe @processJson(data) = run @data | { cat | jq '.[]' }  << stdin support
 /exe @deploy() = sh {
   npm test && npm run build
   ./deploy.sh

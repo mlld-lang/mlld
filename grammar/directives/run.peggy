@@ -111,6 +111,39 @@ SlashRun
         content.type
       );
     }
+  / DirectiveContext "/run" _ security:(SecurityOptions _)? stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
+      // Pipe sugar: /run <expr> | { command }
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, securityOptions, tail });
+
+      const meta = {
+        ...content.meta,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+
+      const values = content.values;
+      const raw = content.raw;
+
+      const withClause = {
+        stdin: stdinExpr,
+        ...(tail || {})
+      };
+
+      values.withClause = withClause;
+      raw.withClause = withClause;
+      meta.withClause = withClause;
+
+      return helpers.createStructuredDirective(
+        'run',
+        content.subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        content.type
+      );
+    }
   / DirectiveContext "/run" _ security:(SecurityOptions _)? codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
       // Language + code syntax: /run language {code} or /run language (args) {code}
       const securityOptions = security ? security[0] : null;

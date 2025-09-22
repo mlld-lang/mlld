@@ -48,7 +48,7 @@ When processing LLM outputs through pipelines, consider the output potentially h
 ```mlld
 >> LLM output could be crafted to exploit downstream functions
 /var @llmResponse = /run {call-llm "@userPrompt"}
-/run {echo "@llmResponse"} | @processResponse
+/run @llmResponse | { cat } | @processResponse
 ```
 
 **Mitigation Pattern**: Use LLMs to validate LLM outputs:

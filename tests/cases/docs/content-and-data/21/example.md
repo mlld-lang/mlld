@@ -1,10 +1,13 @@
->> Import specific variables
-/import { API_KEY, NODE_ENV } from @input
-/show `Deploying to @NODE_ENV with key @API_KEY`
+>> Format JSON with indentation
+/var @data = <file.csv>
+/var @tojson = @data | @json
+/show @tojson
 
->> Import and use in objects
-/var @config = {
-  "apiKey": @API_KEY,
-  "environment": @NODE_ENV,
-  "timestamp": @now
-}
+>> Convert to XML (SCREAMING_SNAKE_CASE)
+/var @toxml = @data | @XML
+/show @toxml
+
+>> Convert arrays to CSV
+/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+/var @tocsv = @users | @CSV
+/show @tocsv

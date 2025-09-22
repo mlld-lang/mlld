@@ -6,6 +6,8 @@ ExeRHSContent "exe assignment value"
   = WhenExpression              // when: [...] expressions for conditional execution
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
+  / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
+  / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
@@ -98,6 +100,58 @@ ExeUnifiedReference "exe unified reference"
         },
         subtype: 'exeCommand',
         source: 'reference'
+      };
+    }
+
+// Run command with stdin pattern for exe context - handles "run {command} with { stdin: @var }"
+ExeRunCommandWithStdin "exe run command with stdin"
+  = "run" _ content:UnifiedCommandBrackets _ withClause:WithClause {
+      // Only allow with clauses that have stdin
+      if (!withClause || !('stdin' in withClause)) {
+        return null; // Let other patterns handle this
+      }
+
+      return {
+        subtype: 'exeCommand',
+        source: 'command',
+        values: {
+          command: content.values.command,
+          commandBases: content.values.commandBases,
+          withClause: withClause
+        },
+        raw: {
+          command: content.raw.command,
+          commandBases: content.raw.commandBases,
+          withClause: withClause
+        },
+        meta: {
+          ...content.meta,
+          hasStdin: true
+        }
+      };
+    }
+
+// Run command pipe stdin pattern for exe context - handles "run @var | {command}"
+ExeRunCommandPipeStdin "exe run command pipe stdin"
+  = "run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets {
+      return {
+        subtype: 'exeCommand',
+        source: 'command',
+        values: {
+          command: content.values.command,
+          commandBases: content.values.commandBases,
+          withClause: { stdin: stdinExpr }
+        },
+        raw: {
+          command: content.raw.command,
+          commandBases: content.raw.commandBases,
+          stdinExpr: stdinExpr.type === 'VariableReference' ? '@' + stdinExpr.identifier : 'expression'
+        },
+        meta: {
+          ...content.meta,
+          hasStdin: true,
+          isPipeSugar: true
+        }
       };
     }
 

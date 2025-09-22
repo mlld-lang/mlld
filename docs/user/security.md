@@ -78,7 +78,7 @@ When processing LLM outputs, treat them as potentially hostile:
 ```mlld
 >> Dangerous: Direct execution of LLM output
 /var @llmResponse = run {llm "@userPrompt"}
-/run {echo "@llmResponse"} | @processResponse
+/run @llmResponse | { cat } | @processResponse
 ```
 
 **Mitigation Pattern**: Use LLMs to validate LLM outputs:
