@@ -26,6 +26,7 @@ export interface BaseExecutable {
 export interface CommandExecutable extends BaseExecutable {
   type: 'command';
   commandTemplate: MlldNode[];
+  withClause?: any; // Stdin and other with-clause options
   sourceDirective: 'exec';
 }
 

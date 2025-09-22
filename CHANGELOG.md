@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 2.0.0-rc55
 
 ### Added
-- Stdin support for `/run` directive:
+- Stdin support for `/run` directive and `/exe` definitions:
   - New syntax: `/run { command } with { stdin: @variable }` passes data directly via stdin without shell escaping
   - Pipe sugar: `/run @data | { command }` normalizes to `with { stdin: @data }` for cleaner syntax
+  - Works in executable definitions: `/exe @func(data) = run { command } with { stdin: @data }`
+  - Pipe sugar in executables: `/exe @func(data) = run @data | { command }`
   - Eliminates JSON double-stringification when passing structured data to commands like `jq`, `cat`, etc.
   - Preserves shell safety while enabling proper JSON/CSV/XML data flow through pipelines
 
