@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Eliminates JSON double-stringification when passing structured data to commands like `jq`, `cat`, etc.
   - Preserves shell safety while enabling proper JSON/CSV/XML data flow through pipelines
 
+- JSON data access pattern for JavaScript functions (addresses #428):
+  - `.data` and `.json` accessors parse JSON strings during variable evaluation before passing to functions
+  - `.text` and `.content` accessors preserve original string content
+  - Eliminates need for manual `JSON.parse()` calls in JavaScript functions
+  - Works consistently across files, variables, and command output
+  - Example: `/var @json = '{"items": []}'; /run @process(@json.data)` passes parsed array to function
+
+- Native mlld functions in pipelines:
+  - `/exe` functions using `for` and `foreach` constructs now work as pipeline stages
+  - Fixes "Unsupported code language: mlld-foreach" errors
+  - Enables seamless composition: `/var @result = @data.data | @filterNative | @transformJS | @json`
+  - Mixed pipelines with native mlld, JavaScript, and shell commands all work together
+
 ## [2.0.0-rc54]
 
 ### Added
