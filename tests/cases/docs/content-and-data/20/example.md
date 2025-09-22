@@ -1,14 +1,9 @@
->> In directives
-/show @name
+>> Load and transform files
+/var @config = <config.json> | @json
+/var @uppercase = <readme.txt> | @upper
 
->> In double quotes
-/var @greeting = "Hello @name"
-
->> In command braces
-/run {echo "Welcome @name"}
-
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
-
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Chain transformations
+/exe @first(text, n) = js { 
+  return text.split('\n').slice(0, n).join('\n');
+}
+/var @summary = <docs.md> | @first(3) | @upper

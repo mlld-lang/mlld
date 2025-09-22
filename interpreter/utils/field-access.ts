@@ -10,6 +10,9 @@ import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
 
+const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
+const STRING_TEXT_ACCESSORS = new Set(['text', 'content']);
+
 /**
  * Result of field access that preserves context
  */
@@ -54,7 +57,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // CRITICAL: Variable metadata properties whitelist
   // Only these properties access the Variable itself, not its value
   const VARIABLE_METADATA_PROPS = ['type', 'isComplex', 'source', 'metadata'];
-  
+
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
   
@@ -104,7 +107,29 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'bracketAccess': {
       // All handle string-based property access
       const name = String(fieldValue);
-      
+      if (typeof rawValue === 'string') {
+        if (STRING_JSON_ACCESSORS.has(name)) {
+          const trimmed = rawValue.trim();
+          try {
+            accessedValue = JSON.parse(trimmed);
+            break;
+          } catch {
+            const chain = [...(options?.parentPath || []), name];
+            throw new FieldAccessError(`String value for field "${name}" is not valid JSON`, {
+              baseValue: rawValue,
+              fieldAccessChain: [],
+              failedAtIndex: Math.max(0, chain.length - 1),
+              failedKey: name
+            }, { sourceLocation: options?.sourceLocation, env: options?.env });
+          }
+        }
+
+        if (STRING_TEXT_ACCESSORS.has(name)) {
+          accessedValue = rawValue;
+          break;
+        }
+      }
+
       if (typeof rawValue !== 'object' || rawValue === null) {
         const chain = [...(options?.parentPath || []), name];
         const msg = `Cannot access field "${name}" on non-object value (${typeof rawValue})`;

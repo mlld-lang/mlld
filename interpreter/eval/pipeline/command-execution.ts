@@ -1,9 +1,118 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
-import { createPipelineInputVariable, createSimpleTextVariable } from '@core/types/variable';
+import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
+import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
+
+const STRUCTURED_PIPELINE_LANGUAGES = new Set([
+  'mlld-for',
+  'mlld-foreach',
+  'js',
+  'javascript',
+  'node',
+  'nodejs',
+  'python'
+]);
+
+function shouldAutoParsePipelineInput(language?: string | null): boolean {
+  if (!language) return false;
+  return STRUCTURED_PIPELINE_LANGUAGES.has(language.toLowerCase());
+}
+
+function parseStructuredJson(text: string): any | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const firstChar = trimmed[0];
+  if (firstChar !== '{' && firstChar !== '[') {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function attachOriginalTextHooks(target: any, original: string): void {
+  if (!target || (typeof target !== 'object' && typeof target !== 'function')) {
+    return;
+  }
+  try {
+    Object.defineProperty(target, 'text', {
+      value: original,
+      enumerable: false,
+      configurable: true
+    });
+  } catch {}
+  try {
+    Object.defineProperty(target, 'toString', {
+      value: () => original,
+      enumerable: false,
+      configurable: true
+    });
+  } catch {}
+}
+
+function createTypedPipelineVariable(
+  paramName: string,
+  parsedValue: any,
+  originalText: string
+): Variable {
+  const pipelineSource: VariableSource = {
+    directive: 'var',
+    syntax: 'pipeline',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  const metadata: Record<string, any> = {
+    isPipelineParameter: true,
+    pipelineOriginal: originalText,
+    pipelineFormat: 'json'
+  };
+
+  if (Array.isArray(parsedValue)) {
+    attachOriginalTextHooks(parsedValue, originalText);
+    metadata.pipelineType = 'array';
+    metadata.customToString = () => originalText;
+    return createArrayVariable(paramName, parsedValue, false, pipelineSource, metadata);
+  }
+
+  if (parsedValue && typeof parsedValue === 'object') {
+    attachOriginalTextHooks(parsedValue, originalText);
+    metadata.pipelineType = 'object';
+    metadata.customToString = () => originalText;
+    return createObjectVariable(paramName, parsedValue as Record<string, any>, false, pipelineSource, metadata);
+  }
+
+  const textSource: VariableSource = {
+    directive: 'var',
+    syntax: 'quoted',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  return createSimpleTextVariable(paramName, originalText, textSource, { isPipelineParameter: true });
+}
+
+function resolveExecutableLanguage(commandVar: any, execDef: any): string | undefined {
+  if (execDef?.language) return String(execDef.language);
+  if (commandVar?.metadata?.executableDef?.language) {
+    return String(commandVar.metadata.executableDef.language);
+  }
+  if (commandVar?.value?.language) {
+    return String(commandVar.value.language);
+  }
+  if (commandVar?.language) {
+    return String(commandVar.language);
+  }
+  return undefined;
+}
 
 /**
  * Resolve a command reference to an executable variable
@@ -177,6 +286,7 @@ export async function executeCommandVariable(
   // Get the format from the pipeline context
   const pipelineCtx = env.getPipelineContext();
   const format = pipelineCtx?.format;
+  const stageLanguage = resolveExecutableLanguage(commandVar, execDef);
   
   // Parameter binding for executable functions
   if (execDef.paramNames) {
@@ -197,6 +307,15 @@ export async function executeCommandVariable(
         const textValue = unwrappedStdin || '';
         
         if (!format) {
+          const shouldParse = shouldAutoParsePipelineInput(stageLanguage);
+          if (shouldParse) {
+            const parsed = parseStructuredJson(textValue);
+            if (parsed !== null) {
+              const typedVar = createTypedPipelineVariable(paramName, parsed, textValue);
+              execEnv.setParameterVariable(paramName, typedVar);
+              continue;
+            }
+          }
           // Create a simple text variable instead of PipelineInput
           const textSource: VariableSource = {
             directive: 'var',
@@ -352,6 +471,29 @@ export async function executeCommandVariable(
       
       // Return the result as string
       return String(resultValue || '');
+    } else if (execDef.language === 'mlld-foreach') {
+      const foreachNode = execDef.codeTemplate[0];
+      const { evaluateForeachCommand } = await import('../foreach');
+      const results = await evaluateForeachCommand(foreachNode, execEnv);
+      const normalized = results.map(item => {
+        if (typeof item === 'string' || item instanceof String) {
+          const strValue = item instanceof String ? item.valueOf() : item;
+          try {
+            return JSON.parse(strValue as string);
+          } catch {
+            return strValue;
+          }
+        }
+        return item;
+      });
+      return JSON.stringify(normalized);
+    } else if (execDef.language === 'mlld-for') {
+      const forNode = execDef.codeTemplate[0];
+      const { evaluateForExpression } = await import('../for');
+      const arrayVar = await evaluateForExpression(forNode, execEnv);
+      const { extractVariableValue } = await import('../../utils/variable-resolution');
+      const value = await extractVariableValue(arrayVar, execEnv);
+      return JSON.stringify(value);
     }
     
     // Regular JavaScript/code execution

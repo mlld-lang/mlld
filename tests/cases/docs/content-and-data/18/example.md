@@ -1,12 +1,17 @@
-/var @name = "Alice"
-/var @user = {"role": "admin", "id": 123}
+/var @fruits = ["apple", "banana", "cherry"]
+/var @numbers = [1, 2, 3, 4, 5]
 
->> Backticks (primary template syntax)
-/var @msg1 = `Hello @name!`
-/var @msg2 = `User @user.role has ID @user.id`
+>> Check if array contains value
+/show @fruits.includes("banana")         >> true
+/show @fruits.includes("orange")         >> false
 
->> Double colon for escaping backticks
-/var @code = ::Use `mlld run` with user @name::
+>> Find index of value
+/show @fruits.indexOf("cherry")          >> 2
+/show @fruits.indexOf("missing")         >> -1
 
->> Triple colon for many @ symbols (use {{}} syntax)
-/var @social = :::Hey @{{name}}, check out {{user.role}}!:::
+>> Get array length
+/show @fruits.length()                   >> 3
+
+>> Join array elements
+/show @fruits.join(", ")                 >> "apple, banana, cherry"
+/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"

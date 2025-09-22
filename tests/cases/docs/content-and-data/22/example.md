@@ -1,7 +1,12 @@
->> Access piped JSON data
-/import { version, author } from @input
-/show `Release @version by @author`
+/var @name = "Alice"
+/var @user = {"role": "admin", "id": 123}
 
->> Access piped text (becomes 'content' field)
-/import { content } from @input
-/show `Received: @content`
+>> Backticks (primary template syntax)
+/var @msg1 = `Hello @name!`
+/var @msg2 = `User @user.role has ID @user.id`
+
+>> Double colon for escaping backticks
+/var @code = ::Use `mlld run` with user @name::
+
+>> Triple colon for many @ symbols (use {{}} syntax)
+/var @social = :::Hey @{{name}}, check out {{user.role}}!:::
