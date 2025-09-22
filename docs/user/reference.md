@@ -50,7 +50,7 @@ Execute shell commands:
 ```mlld
 /run {echo "Hello World"}
 /run {ls -la}
-/run {echo "@name"}                # interpolates variables
+/run @name | { cat }                 # interpolates variables
 ```
 
 Multi-line commands with `run sh`:

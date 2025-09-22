@@ -16,6 +16,7 @@ mlld uses context-aware escaping during interpolation. Variables store raw value
 - **Context determines strategy**: `InterpolationContext.ShellCommand` vs `Template` vs `Default`
 - **No round-trip escaping**: Values stay raw until used
 - **Critical bug**: Some paths skip `interpolate()` and concatenate raw values
+- **Use stdin for raw payloads**: `/run { cmd } with { stdin: @data }` and `/run @data | { cmd }` send unescaped content
 
 ## Principles
 

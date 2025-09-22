@@ -18,6 +18,7 @@ run [cmd] | @filter @formatter           # → with { pipeline: [@filter, @forma
 
 # Multiple properties require with object
 run [cmd] with { trust: always, pipeline: [@transform] }
+run [cmd] with { stdin: @payload, pipeline: [@transform] }
 
 # Exec-defined command invocations
 @exec process(data) = run [(python process.py @data)]
@@ -35,6 +36,7 @@ run [cmd] with { trust: always, pipeline: [@transform] }
 - `pipeline` or `|` - Chain of transformations
 - `needs` - Dependency validation
 - `with` - Object containing any combination of the above
+- `stdin` (within `with { ... }`) - Expression evaluated to raw stdin for `/run`
 
 ### Key Features
 

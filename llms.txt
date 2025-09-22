@@ -1017,7 +1017,7 @@ mlld publish my-module.mld.md --private --path lib/modules --pr
 }
 
 ✅ /var @r = @helper("x")
-/run {echo "@r"}
+/run @r | { cat }
 ```
 
 </MISTAKE_NESTED_FUNC_CALLS>

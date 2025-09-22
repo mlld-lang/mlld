@@ -319,21 +319,55 @@ export async function evaluateVar(
     // Infer variable type from result
     
   } else if (valueNode.type === 'command') {
-    // Shell command: run { echo "hello" }
-    
-    // Check if we have parsed command nodes (new) or raw string (legacy)
-    if (Array.isArray(valueNode.command)) {
-      // New: command is an array of AST nodes that need interpolation
-      const interpolatedCommand = await interpolate(valueNode.command, env, InterpolationContext.ShellCommand);
-      resolvedValue = await env.executeCommand(interpolatedCommand);
+    // Shell command: run { ... }
+    // If a withClause is present on the /var directive (e.g., stdin/pipeline),
+    // delegate to evaluateRun so that stdin and pipelines are applied correctly.
+    const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
+    const hasWithClause = !!withClause;
+    let handledByRunEvaluator = false;
+
+    if (hasWithClause) {
+      const { evaluateRun } = await import('./run');
+      const runDirective: any = {
+        type: 'Directive',
+        nodeId: (directive as any).nodeId ? `${(directive as any).nodeId}-run` : undefined,
+        location: directive.location,
+        kind: 'run',
+        subtype: 'runCommand',
+        source: 'command',
+        values: {
+          command: valueNode.command,
+          withClause
+        },
+        raw: {
+          command: Array.isArray(valueNode.command)
+            ? (valueNode.meta?.raw || '')
+            : String(valueNode.command),
+          withClause
+        },
+        meta: {
+          // Mark as data value so evaluateRun does not emit document output
+          isDataValue: true
+        }
+      };
+      const result = await evaluateRun(runDirective, env);
+      resolvedValue = result.value;
+      handledByRunEvaluator = true;
     } else {
-      // Legacy: command is a raw string (for backward compatibility)
-      resolvedValue = await env.executeCommand(valueNode.command);
+      // Regular command without withClause: execute directly
+      if (Array.isArray(valueNode.command)) {
+        // New: command is an array of AST nodes that need interpolation
+        const interpolatedCommand = await interpolate(valueNode.command, env, InterpolationContext.ShellCommand);
+        resolvedValue = await env.executeCommand(interpolatedCommand);
+      } else {
+        // Legacy: command is a raw string (for backward compatibility)
+        resolvedValue = await env.executeCommand(valueNode.command);
+      }
+
+      // Apply automatic JSON parsing for shell command output
+      const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
+      resolvedValue = processCommandOutput(resolvedValue);
     }
-    
-    // Apply automatic JSON parsing for shell command output
-    const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
-    resolvedValue = processCommandOutput(resolvedValue);
     
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar
@@ -863,8 +897,11 @@ export async function evaluateVar(
   const skipPipeline = (valueNode && valueNode.type === 'ExecInvocation' && valueNode.withClause) ||
                        (valueNode && valueNode.type === 'VariableReference' && valueNode.pipes) ||
                        (valueNode && valueNode.type === 'load-content' && valueNode.pipes);
+  // If the command was executed via evaluateRun (stdin/pipeline already applied),
+  // do not run pipeline processing again.
+  const handledByRun = (valueNode && valueNode.type === 'command') && !!(directive.values?.withClause);
   
-  if (!skipPipeline) {
+  if (!skipPipeline && !handledByRun) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[var.ts] Calling processPipeline:', {
         identifier,

@@ -5,7 +5,17 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0-rc55
+
+### Added
+- Stdin support for `/run` directive:
+  - New syntax: `/run { command } with { stdin: @variable }` passes data directly via stdin without shell escaping
+  - Pipe sugar: `/run @data | { command }` normalizes to `with { stdin: @data }` for cleaner syntax
+  - Eliminates JSON double-stringification when passing structured data to commands like `jq`, `cat`, etc.
+  - Preserves shell safety while enabling proper JSON/CSV/XML data flow through pipelines
+
 ## [2.0.0-rc54]
+
 ### Added
 - Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.
 - Imported executables and templates now capture their module environment so command references resolve sibling functions consistently.
@@ -18,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Not supported in `:::…:::` or `[[…]]` templates
   - Interpreter uses existing TemplateForBlock evaluation; no changes to runtime semantics outside template contexts
 - AST selectors in alligator expressions `<file.ext { methodName (variable) }>` covering JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Solidity, C, and C++.
--
+
 ### Fixed
 - Foreach templates now keep long numeric strings intact during interpolation
 - Command-reference executables now preserve array and object types when passing arguments to nested functions (previously JSON.stringify'd them)
