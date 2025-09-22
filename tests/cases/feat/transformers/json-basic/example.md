@@ -9,7 +9,7 @@
 age: 30
 city: NYC`
 
-/var @converted = run {echo "@mdContent"} with { pipeline: [@JSON] }
+/var @converted = run { cat } with { stdin: @mdContent, pipeline: [@JSON] }
 /show @converted
 
 ## Chain with other transformers

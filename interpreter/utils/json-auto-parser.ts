@@ -98,11 +98,11 @@ export function shouldAutoParseJson(): boolean {
  */
 export function processCommandOutput(output: string, enableAutoParse?: boolean): any {
   const shouldParse = enableAutoParse ?? shouldAutoParseJson();
-  
+
   if (!shouldParse) {
     return output;
   }
-  
+
   const result = tryParseJson(output);
   return result.value;
 }

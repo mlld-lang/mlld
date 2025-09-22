@@ -209,6 +209,88 @@ Extract subsets of arrays using `[start:end]` syntax:
 /show @items[1:-1]                       >> ["second", "third", "fourth"]
 ```
 
+## Working with JSON in JavaScript Functions
+
+Use `.data` or `.json` to parse JSON strings before passing to functions. Use `.text` or `.content` to preserve strings.
+
+### JSON Parsing
+
+```mlld
+/var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
+
+>> Parse inside function
+/exe @filter1(users) = js {
+  const data = JSON.parse(users);
+  return data.filter(u => u.age > 25);
+}
+/run @filter1(@users)
+
+>> Parse before passing
+/exe @filter2(users) = js {
+  return users.filter(u => u.age > 25);
+}
+/run @filter2(@users.data)   >> .data parses JSON
+/run @filter2(@users.json)   >> .json is alias
+```
+
+### String Preservation
+
+```mlld
+/var @jsonStr = '{"name": "Alice", "active": true}'
+
+/exe @length(str) = js {
+  return str.length;
+}
+
+/run @length(@jsonStr)          >> Default: string
+/run @length(@jsonStr.text)     >> Explicit string
+/run @length(@jsonStr.content)  >> Alias for .text
+```
+
+### Common Use Cases
+
+```mlld
+>> Filter JSON array from command
+/var @json = run {./mkjson.sh}
+/exe @filterHigh(entries) = js {
+  return entries.filter(e => e.finding.startsWith("High"));
+}
+/var @result = @filterHigh(@json.data)
+
+>> Process API response
+/var @response = run {curl -s api.example.com/data}
+/exe @getActive(data) = js {
+  return data.users.filter(u => u.active);
+}
+/var @active = @getActive(@response.data)
+```
+
+### Accessor Reference
+
+```mlld
+>> Files
+/var @config = <settings.json>
+@config.json              >> Parsed JSON object
+@config.data              >> Alias for .json
+@config.content           >> Raw string
+@config.text              >> Alias for .content
+
+>> Variables
+/var @str = '{"status": "ok"}'
+@str.data                 >> Parsed JSON object
+@str.json                 >> Alias for .data
+@str.text                 >> Original string
+@str.content              >> Alias for .text
+@str                      >> Original string (default)
+
+>> Command output
+/var @result = run {curl api.com/data}
+@result.data              >> Parse as JSON
+@result.json              >> Alias for .data
+@result.text              >> Keep as string
+@result.content           >> Alias for .text
+```
+
 ## Built-in Methods
 
 Variables support built-in methods for common operations:

@@ -15,7 +15,7 @@ This is    a paragraph with     irregular spacing.
 |A|B|C|
 ::
 
-/var @prettyMd = run {echo "@uglyMd"} with { pipeline: [@md] }
+/var @prettyMd = run { cat } with { stdin: @uglyMd, pipeline: [@md] }
 /show @prettyMd
 
 ## Using uppercase alias

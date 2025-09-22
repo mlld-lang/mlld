@@ -1,9 +1,13 @@
->> Load and transform files
-/var @config = <config.json> | @json
-/var @uppercase = <readme.txt> | @upper
-
->> Chain transformations
-/exe @first(text, n) = js { 
-  return text.split('\n').slice(0, n).join('\n');
+>> Filter JSON array from command
+/var @json = run {./mkjson.sh}
+/exe @filterHigh(entries) = js {
+  return entries.filter(e => e.finding.startsWith("High"));
 }
-/var @summary = <docs.md> | @first(3) | @upper
+/var @result = @filterHigh(@json.data)
+
+>> Process API response
+/var @response = run {curl -s api.example.com/data}
+/exe @getActive(data) = js {
+  return data.users.filter(u => u.active);
+}
+/var @active = @getActive(@response.data)

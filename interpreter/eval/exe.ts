@@ -248,10 +248,14 @@ export async function evaluateExe(
       
       // Parameters are allowed to shadow outer scope variables
       
+      // Get withClause if present (for stdin support)
+      const withClause = directive.values?.withClause;
+
       // Store the command template (not interpolated yet)
       executableDef = {
         type: 'command',
         commandTemplate: commandNodes,
+        withClause,
         paramNames,
         sourceDirective: 'exec'
       } satisfies CommandExecutable;

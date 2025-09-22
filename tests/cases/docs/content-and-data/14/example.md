@@ -1,17 +1,15 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
+/var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
 
->> Check if array contains value
-/show @fruits.includes("banana")         >> true
-/show @fruits.includes("orange")         >> false
+>> Parse inside function
+/exe @filter1(users) = js {
+  const data = JSON.parse(users);
+  return data.filter(u => u.age > 25);
+}
+/run @filter1(@users)
 
->> Find index of value
-/show @fruits.indexOf("cherry")          >> 2
-/show @fruits.indexOf("missing")         >> -1
-
->> Get array length
-/show @fruits.length()                   >> 3
-
->> Join array elements
-/show @fruits.join(", ")                 >> "apple, banana, cherry"
-/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"
+>> Parse before passing
+/exe @filter2(users) = js {
+  return users.filter(u => u.age > 25);
+}
+/run @filter2(@users.data)   >> .data parses JSON
+/run @filter2(@users.json)   >> .json is alias

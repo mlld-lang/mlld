@@ -17,6 +17,51 @@ import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 
 /**
+ * Coerce a value to a string for stdin input
+ * Copied from run.ts to avoid export dependencies
+ */
+function coerceStdinString(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+/**
+ * Resolve stdin input from expression
+ * Copied from run.ts to avoid export dependencies
+ */
+async function resolveStdinInput(stdinSource: unknown, env: Environment): Promise<string> {
+  if (stdinSource === null || stdinSource === undefined) {
+    return '';
+  }
+
+  const { evaluate } = await import('../core/interpreter');
+  const result = await evaluate(stdinSource as any, env, { isExpression: true });
+  let value = result.value;
+
+  const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+  if (isVariable(value)) {
+    value = await resolveValue(value, env, ResolutionContext.CommandExecution);
+  }
+
+  return coerceStdinString(value);
+}
+
+/**
  * Simple metadata shelf for preserving LoadContentResult metadata
  * This is a module-level implementation that works for synchronous operations
  */
@@ -649,31 +694,13 @@ export async function evaluateExecInvocation(
             
             // Handle field access (e.g., @user.name)
             if (varRef.fields && varRef.fields.length > 0) {
-              for (const field of varRef.fields) {
-                if (value && typeof value === 'object' && (
-                  field.type === 'field' ||
-                  field.type === 'stringIndex' ||
-                  field.type === 'bracketAccess' ||
-                  field.type === 'numericField'
-                )) {
-                  value = (value as any)[field.value];
-                } else if (Array.isArray(value) && (field.type === 'index' || field.type === 'arrayIndex')) {
-                  const index = parseInt(field.value, 10);
-                  value = isNaN(index) ? undefined : value[index];
-                } else if (field.type === 'variableIndex') {
-                  const idxVar = env.getVariable(field.value);
-                  if (!idxVar) {
-                    value = undefined;
-                    break;
-                  }
-                  const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-                  const idxValue = await resolveValue(idxVar, env, ResolutionContext.StringInterpolation);
-                  value = (value as any)?.[idxValue as any];
-                } else {
-                  value = undefined;
-                  break;
-                }
-              }
+              const { accessFields } = await import('../utils/field-access');
+              const accessed = await accessFields(value, varRef.fields, {
+                env,
+                preserveContext: false,
+                sourceLocation: (varRef as any).location
+              });
+              value = accessed;
             }
             
             // Preserve the type of the final value
@@ -1079,8 +1106,16 @@ export async function evaluateExecInvocation(
         result = commandOutput;
       }
     } else {
-      // Execute the command with environment variables
-      const commandOutput = await execEnv.executeCommand(command, { env: envVars });
+      // Check for stdin support in withClause
+      let stdinInput: string | undefined;
+      if (definition.withClause && 'stdin' in definition.withClause) {
+        // Resolve stdin input similar to run.ts
+        stdinInput = await resolveStdinInput(definition.withClause.stdin, execEnv);
+      }
+
+      // Execute the command with environment variables and optional stdin
+      const commandOptions = stdinInput !== undefined ? { env: envVars, input: stdinInput } : { env: envVars };
+      const commandOutput = await execEnv.executeCommand(command, commandOptions);
       
       // Try to parse as JSON if it looks like JSON
       if (typeof commandOutput === 'string' && commandOutput.trim()) {

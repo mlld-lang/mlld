@@ -201,7 +201,9 @@ export class CommandExecutorFactory {
         return this.bashExecutor;
       
       case 'mlld-when':
-        // Special case: mlld-when is handled elsewhere, not by a code executor
+      case 'mlld-foreach':
+      case 'mlld-for':
+        // Special case: mlld-native executables are handled elsewhere, not by a code executor
         // This shouldn't reach here, but return null to trigger special handling
         return null;
       

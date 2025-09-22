@@ -1,14 +1,14 @@
->> Collect all module documentation
-/var @modules = <modules/**/*.md>
+>> In directives
+/show @name
 
->> Build README with metadata
-/var @readme = `# Project Modules
+>> In double quotes
+/var @greeting = "Hello @name"
 
-Total modules: @modules.length
-Last updated: @now
+>> In command braces
+/run {echo "Welcome @name"}
 
-@modules
+>> NOT in single quotes (literal)
+/var @literal = 'Hello @name'               >> Outputs: Hello @name
 
-`
-
-/output @readme to "README.md"
+>> NOT in plain markdown lines
+Hello @name                                 >> Plain text, no interpolation

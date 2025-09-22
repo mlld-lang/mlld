@@ -1,4 +1,4 @@
-<MLLD_GUIDE version="2.0.0-rc43">
+<MLLD_GUIDE version="2.0.0-rc55">
 <TOC>
 <OVERVIEW> ......................... Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.
 <CORE_RULES>
@@ -7,7 +7,7 @@
   <RULE_3_COMMANDS_NEED_BRACES> .... All commands use braces; language specifiers; /exe shortcuts.
   <RULE_4_OUTPUT_SOURCES> .......... Only /show, /run, /output emit output.
   <RULE_5_INTERPOLATION_CONTEXTS> .. Backticks/double-colon/triple-colon, quotes, and command contexts.
-  <RULE_6_FIELD_ACCESS> ............ Dot + index access for objects/arrays; array slicing [start:end].
+  <RULE_6_FIELD_ACCESS> ............ Dot + index access for objects/arrays; array slicing [start:end]; .data/.json parse JSON strings.
   <RULE_7_PARAMETERIZED_CONTENT> ... Reusable templates and functions via /exe.
   <RULE_8_FILE_LOADING> ............ Angle brackets load file contents; globs; metadata fields; safety.
   <RULE_9_IMPORTS> ................. Modules, paths, registries; "as namespace."
@@ -176,17 +176,23 @@ Objects/arrays use dot+index in directives and `{{ }}` in ::: templates only. Ar
 /show @arr[:-1]             # [1,2,3,4] - all except last
 /show @arr[2:]              # [3,4,5] - from index 2
 
-# Builtin methods on arrays/strings:
+>> JSON string accessors:
+/var @jsonStr = '[{"name":"Alice"},{"name":"Bob"}]'
+/exe @process(items) = js { return items.filter(u => u.name === "Alice") }
+/var @result = @process(@jsonStr.data)    << .data/.json parse JSON
+/var @length = @jsonStr.text.length       << .text/.content preserve strings
+
+>> Builtin methods on arrays/strings:
 /var @list = ["apple", "banana", "cherry"]
 /var @text = "Hello World"
-/show @list.includes("banana")      # true
-/show @list.indexOf("cherry")       # 2
-/show @list.join(", ")              # "apple, banana, cherry"
-/show @text.toLowerCase()           # "hello world"
-/show @text.split(" ")              # ["Hello", "World"]
-/show @text.includes("World")       # true
+/show @list.includes("banana")      << true
+/show @list.indexOf("cherry")       << 2
+/show @list.join(", ")              << "apple, banana, cherry"
+/show @text.toLowerCase()           << "hello world"
+/show @text.split(" ")              << ["Hello", "World"]
+/show @text.includes("World")       << true
 
-# Double-colon templates:
+>> Double-colon templates:
 /show ::@user.name has @user.scores.0::
 ```
 
@@ -450,12 +456,20 @@ Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and
 </BUILTIN_METHODS>
 
 <PIPELINES>
-Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). Stages access context via `@ctx` and pipeline history via `@p`.
+Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). All `/exe` functions work in pipelines (native mlld, JS, shell). Stages access context via `@ctx` and pipeline history via `@p`.
 
 ```mlld
 /var @users = run {cat users.json} | @json | @csv
 /exe @double(n) = js {(@n*2)}
 /var @x = run {echo "5"} | @double
+
+# Native mlld functions in pipelines
+/exe @filterHigh(items) = for @item in @items => when [
+  @item.priority == "high" => @item
+  none => skip
+]
+/var @data = '[{"priority":"high"},{"priority":"low"}]'
+/var @filtered = @data.data | @filterHigh | @json
 
 # Retry with hints
 /exe @validator(input) = when [
@@ -544,15 +558,22 @@ Parameter syntax:
 # run (pipes only)
 /run {echo Hello | tr '[:lower:]' '[:upper:]'}
 
+# run with stdin (avoids shell escaping)
+/var @data = '[{"name":"Alice"},{"name":"Bob"}]'
+/run { cat | jq '.[] | select(.name == "Alice")' } with { stdin: @data }
+>> OR pipe sugar:
+/run @data | { cat | jq '.[] | select(.name == "Alice")' }
+
 # run sh (multi-line/conditionals)
 /run sh {
   npm test && npm run build || echo "Build failed"
 }
 
-# Executable wrappers
+# Executable wrappers (with stdin support)
 /exe @safeDeploy(env) = run sh {
   npm test && npm run deploy:$env
 }
+/exe @processJson(data) = run @data | { cat | jq '.[]' }
 ```
 
 Security: `run` forbids `&&`/`||` to reduce injection risk; escalate to `run sh` when necessary.
@@ -1017,7 +1038,7 @@ mlld publish my-module.mld.md --private --path lib/modules --pr
 }
 
 ✅ /var @r = @helper("x")
-/run {echo "@r"}
+/run @r | { cat }
 ```
 
 </MISTAKE_NESTED_FUNC_CALLS>

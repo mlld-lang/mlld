@@ -1,17 +1,10 @@
->> Load files and check context limits
-/var @files = <src/**/*.ts>
+>> Import specific variables
+/import { API_KEY, NODE_ENV } from @input
+/show `Deploying to @NODE_ENV with key @API_KEY`
 
->> Define filter for large files (over 2000 tokens)
-/exe @filterLarge(files) = js {
-  return files.filter(f => f.tokest > 2000)
+>> Import and use in objects
+/var @config = {
+  "apiKey": @API_KEY,
+  "environment": @NODE_ENV,
+  "timestamp": @now
 }
-/var @large = @filterLarge(@files)
-
->> Calculate total tokens
-/exe @sumTokens(files) = js {
-  return files.reduce((sum, f) => sum + (f.tokest || 0), 0)
-}
-/var @totalTokens = @sumTokens(@files)
-
-/show `Found @large.length files over 2000 tokens`
-/show `Total estimated tokens: @totalTokens`
