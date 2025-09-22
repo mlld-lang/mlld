@@ -52,12 +52,149 @@ function attachOriginalTextHooks(target: any, original: string): void {
     });
   } catch {}
   try {
+    Object.defineProperty(target, 'raw', {
+      value: original,
+      enumerable: false,
+      configurable: true
+    });
+  } catch {}
+  try {
+    Object.defineProperty(target, 'data', {
+      get: () => target,
+      enumerable: false,
+      configurable: true
+    });
+  } catch {}
+  try {
     Object.defineProperty(target, 'toString', {
       value: () => original,
       enumerable: false,
       configurable: true
     });
   } catch {}
+  try {
+    Object.defineProperty(target, 'valueOf', {
+      value: () => original,
+      enumerable: false,
+      configurable: true
+    });
+  } catch {}
+  try {
+    Object.defineProperty(target, Symbol.toPrimitive, {
+      value: (hint: string) => {
+        if (hint === 'number') {
+          const coerced = Number(original);
+          return Number.isNaN(coerced) ? original : coerced;
+        }
+        return original;
+      },
+      enumerable: false,
+      configurable: true
+    });
+  } catch {}
+}
+
+function wrapPipelineStructuredValue<T extends object>(parsedValue: T, original: string): T {
+  if (!parsedValue || typeof parsedValue !== 'object') {
+    return parsedValue;
+  }
+
+  attachOriginalTextHooks(parsedValue, original);
+
+  const stringPrototype = String.prototype as Record<PropertyKey, any>;
+
+  const proxy = new Proxy(parsedValue as Record<PropertyKey, any>, {
+    get(target, prop, receiver) {
+      if (prop === 'text' || prop === 'raw' || prop === 'data') {
+        return Reflect.get(target, prop, receiver);
+      }
+      if (prop === Symbol.toPrimitive) {
+        const primitive = Reflect.get(target, prop, receiver);
+        if (typeof primitive === 'function') {
+          return primitive;
+        }
+        return (hint: string) => {
+          if (hint === 'number') {
+            const numeric = Number(original);
+            return Number.isNaN(numeric) ? original : numeric;
+          }
+          return original;
+        };
+      }
+
+      if (prop === 'toString' || prop === 'valueOf') {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      if (prop === 'length' && !Reflect.has(target, prop) && typeof original === 'string') {
+        return original.length;
+      }
+
+      if (Reflect.has(target, prop)) {
+        const value = Reflect.get(target, prop, receiver);
+        if (typeof value === 'function') {
+          return value.bind(target);
+        }
+        return value;
+      }
+
+      if (typeof original === 'string') {
+        if (prop in stringPrototype) {
+          const candidate = stringPrototype[prop];
+          if (typeof candidate === 'function') {
+            return candidate.bind(original);
+          }
+          return candidate;
+        }
+        if (prop === Symbol.iterator) {
+          const iterator = stringPrototype[Symbol.iterator];
+          if (typeof iterator === 'function') {
+            return iterator.bind(original);
+          }
+        }
+      }
+
+      return undefined;
+    },
+    has(target, prop) {
+      if (prop === 'text' || prop === 'raw' || prop === 'data') {
+        return true;
+      }
+      if (typeof original === 'string' && (prop in stringPrototype)) {
+        return true;
+      }
+      return Reflect.has(target, prop);
+    },
+    ownKeys(target) {
+      const keys = new Set<PropertyKey>(Reflect.ownKeys(target));
+      keys.add('text');
+      keys.add('raw');
+      keys.add('data');
+      return Array.from(keys);
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      if (prop === 'text' || prop === 'raw') {
+        return {
+          configurable: true,
+          enumerable: false,
+          value: original
+        };
+      }
+      if (prop === 'data') {
+        return {
+          configurable: true,
+          enumerable: false,
+          value: target
+        };
+      }
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
+    set(target, prop, value, receiver) {
+      return Reflect.set(target, prop, value, receiver);
+    }
+  });
+
+  return proxy as T;
 }
 
 function createTypedPipelineVariable(
@@ -78,17 +215,17 @@ function createTypedPipelineVariable(
   };
 
   if (Array.isArray(parsedValue)) {
-    attachOriginalTextHooks(parsedValue, originalText);
+    const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
     metadata.pipelineType = 'array';
     metadata.customToString = () => originalText;
-    return createArrayVariable(paramName, parsedValue, false, pipelineSource, metadata);
+    return createArrayVariable(paramName, bridged, false, pipelineSource, metadata);
   }
 
   if (parsedValue && typeof parsedValue === 'object') {
-    attachOriginalTextHooks(parsedValue, originalText);
+    const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
     metadata.pipelineType = 'object';
     metadata.customToString = () => originalText;
-    return createObjectVariable(paramName, parsedValue as Record<string, any>, false, pipelineSource, metadata);
+    return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, metadata);
   }
 
   const textSource: VariableSource = {
