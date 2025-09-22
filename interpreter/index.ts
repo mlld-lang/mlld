@@ -49,6 +49,12 @@ export interface InterpretOptions {
   captureErrors?: boolean; // Capture parse errors for pattern development
   ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
   effectHandler?: EffectHandler; // Optional custom effect handler (tests/CI)
+  // Streaming scaffolding (Phase 0): parsed but unused
+  streaming?: {
+    mode?: 'off' | 'full' | 'progress';
+    dest?: 'stdout' | 'stderr' | 'auto';
+    noTty?: boolean;
+  };
   allowAbsolutePaths?: boolean; // Allow absolute paths outside project root
 }
 
@@ -248,6 +254,10 @@ export async function interpret(
   if (options.urlConfig) {
     env.setURLConfig(options.urlConfig);
   }
+  // Configure streaming options (Phase 0/1 plumbing)
+  if (options.streaming) {
+    env.setStreamingOptions(options.streaming);
+  }
   
   // Set output options if provided
   if (options.outputOptions) {
@@ -297,7 +307,28 @@ export async function interpret(
   }
   
   // Evaluate the AST
-  await evaluate(ast, env);
+  // Attach sinks when requested
+  let progressDetach: (() => void) | undefined;
+  let terminalDetach: (() => void) | undefined;
+  if (options.streaming?.mode === 'progress') {
+    const { ProgressOnlySink } = await import('./eval/pipeline/stream-sinks/progress');
+    const sink = new ProgressOnlySink();
+    sink.attach();
+    progressDetach = () => sink.detach();
+  } else if (options.streaming?.mode === 'full') {
+    const { TerminalSink } = await import('./eval/pipeline/stream-sinks/terminal');
+    const dest = options.streaming?.dest || 'auto';
+    const sink = new TerminalSink(dest);
+    sink.attach();
+    terminalDetach = () => sink.detach();
+  }
+
+  try {
+    await evaluate(ast, env);
+  } finally {
+    if (progressDetach) progressDetach();
+    if (terminalDetach) terminalDetach();
+  }
   
   // Display collected errors with rich formatting if enabled
   if (options.outputOptions?.collectErrors) {
