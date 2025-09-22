@@ -56,7 +56,11 @@ describe('Data handling accessors', () => {
 /show @result`;
 
     const output = await interpret(input, { fileSystem, pathService });
-    expect(output.trim()).toBe('[{"finding":"High-1","flagged":true},{"finding":"High-2","flagged":true}]');
+    const parsed = JSON.parse(output.trim());
+    expect(parsed).toEqual([
+      { finding: 'High-1', flagged: true },
+      { finding: 'High-2', flagged: true }
+    ]);
   });
 
   it('passes parsed arrays between native and JS pipeline stages automatically', async () => {

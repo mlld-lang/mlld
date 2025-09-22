@@ -219,6 +219,17 @@ export async function evaluateForExpression(
         } else {
           exprResult = result.value;
         }
+        if (typeof exprResult === 'string') {
+          const trimmed = exprResult.trim();
+          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+              (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+              exprResult = JSON.parse(trimmed);
+            } catch {
+              // keep original string if parsing fails
+            }
+          }
+        }
       }
       return exprResult as any;
     } catch (error) {
