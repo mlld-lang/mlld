@@ -22,6 +22,13 @@ export interface StructuredValueOptions {
   allowPrimaries?: boolean;
 }
 
+/**
+ * Wrap raw text that resembles structured data (JSON, CSV, XML, etc.).
+ * WHY: Callers need both the original string and lazy parsed forms without
+ *      duplicating detection logic at every access site.
+ * CONTEXT: Instances primarily originate from command output, pipeline
+ *          stages, or content loaders where eager parsing is expensive.
+ */
 export class StructuredValue {
   readonly raw: string;
   readonly format: StructuredValueFormat;

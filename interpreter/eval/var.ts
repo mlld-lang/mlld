@@ -899,7 +899,8 @@ export async function evaluateVar(
                        (valueNode && valueNode.type === 'load-content' && valueNode.pipes);
   // If the command was executed via evaluateRun (stdin/pipeline already applied),
   // do not run pipeline processing again.
-  const handledByRun = (valueNode && valueNode.type === 'command') && !!(directive.values?.withClause);
+  const handledByRun = (valueNode && valueNode.type === 'command')
+    && !!(directive.values?.withClause || directive.meta?.withClause);
   
   if (!skipPipeline && !handledByRun) {
     if (process.env.MLLD_DEBUG === 'true') {

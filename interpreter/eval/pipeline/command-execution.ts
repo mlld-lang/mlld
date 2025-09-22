@@ -40,6 +40,13 @@ function parseStructuredJson(text: string): any | null {
   return null;
 }
 
+/**
+ * Maintain text/data duality on parsed pipeline values.
+ * WHY: Pipelines auto-parse JSON for native stages but downstream
+ *      string-based transformers still expect the original text view.
+ * CONTEXT: Hooks stay non-enumerable to avoid leaking helper props
+ *          into user iteration or JSON serialization.
+ */
 function attachOriginalTextHooks(target: any, original: string): void {
   if (!target || (typeof target !== 'object' && typeof target !== 'function')) {
     return;
@@ -94,6 +101,13 @@ function attachOriginalTextHooks(target: any, original: string): void {
   } catch {}
 }
 
+/**
+ * Provide string fallbacks for structured pipeline data via Proxy.
+ * WHY: Stage chaining mixes native mlld (object/array access) with
+ *      transformers that call string helpers like `.trim()`.
+ * CONTEXT: Delegates unknown properties to String.prototype so the
+ *          proxy behaves like the original text when requested.
+ */
 function wrapPipelineStructuredValue<T extends object>(parsedValue: T, original: string): T {
   if (!parsedValue || typeof parsedValue !== 'object') {
     return parsedValue;

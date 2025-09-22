@@ -53,6 +53,12 @@ function dedentCommonIndent(src: string): string {
   return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
 }
 
+/**
+ * Convert arbitrary evaluated values into stdin-ready text.
+ * WHY: Shell executors only accept strings, yet upstream evaluation may
+ *      produce structured values, buffers, or loader results.
+ * CONTEXT: Called after variables and expressions resolve for /run stdin.
+ */
 function coerceStdinString(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
@@ -88,6 +94,13 @@ function coerceStdinString(value: unknown): string {
   return String(value);
 }
 
+/**
+ * Evaluate a stdin expression and coerce it into text for command execution.
+ * WHY: /run supports expressions in the `with { stdin: ... }` slot that can
+ *      reference variables or pipelines; those must resolve before coercion.
+ * CONTEXT: Delegates final conversion to coerceStdinString once evaluation
+ *          finishes in the command execution resolution context.
+ */
 async function resolveStdinInput(stdinSource: unknown, env: Environment): Promise<string> {
   if (stdinSource === null || stdinSource === undefined) {
     return '';

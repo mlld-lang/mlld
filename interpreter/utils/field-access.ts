@@ -115,7 +115,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             break;
           } catch {
             const chain = [...(options?.parentPath || []), name];
-            throw new FieldAccessError(`String value for field "${name}" is not valid JSON`, {
+            throw new FieldAccessError(`String value cannot be parsed as JSON for accessor "${name}"`, {
               baseValue: rawValue,
               fieldAccessChain: [],
               failedAtIndex: Math.max(0, chain.length - 1),
