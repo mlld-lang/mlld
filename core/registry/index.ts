@@ -1,5 +1,10 @@
 export { LockFile } from './LockFile';
-export type { LockEntry, LockFileData } from './LockFile';
+export type { LockFileData, ModuleLockEntry } from './LockFile';
+
+export { ConfigFile } from './ConfigFile';
+export type { ConfigFileData } from './ConfigFile';
+
+export { ProjectConfig } from './ProjectConfig';
 
 export { Cache } from './Cache';
 export type { CacheMetadata } from './Cache';

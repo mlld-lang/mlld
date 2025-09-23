@@ -9,7 +9,7 @@ import * as readline from 'readline/promises';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
-import { LockFile } from '@core/registry/LockFile';
+import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { GitHubResolver } from '@core/resolvers/GitHubResolver';
 import { LocalResolver } from '@core/resolvers/LocalResolver';
 import { existsSync } from 'fs';
@@ -44,11 +44,12 @@ export class SetupCommand {
 
     console.log(chalk.blue('mlld Setup - Project Configuration Wizard\n'));
 
-    const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
-    const lockFile = new LockFile(lockFilePath);
+    const projectRoot = process.cwd();
+    const projectConfig = new ProjectConfig(projectRoot);
 
     // Check for existing configuration
-    const hasExistingConfig = existsSync(lockFilePath);
+    const configPath = path.join(projectRoot, 'mlld-config.json');
+    const hasExistingConfig = existsSync(configPath);
     if (hasExistingConfig && !options.force) {
       const shouldUpdate = await this.promptYesNo(
         'mlld.lock.json already exists. Update resolver configuration?',

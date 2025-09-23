@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
-import { LockFile } from '@core/registry/LockFile';
+import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { existsSync } from 'fs';
 
 export interface AliasOptions {
@@ -66,23 +66,22 @@ export class AliasCommand {
       });
     }
     
-    // Determine lock file path
-    let lockFilePath: string;
+    // Determine project root
+    let projectRoot: string;
     let resolvedPath: string;
-    
+
     if (options.global) {
       // Global alias - use absolute path
-      const globalConfigDir = path.join(os.homedir(), '.config', 'mlld');
-      lockFilePath = path.join(globalConfigDir, 'mlld.lock.json');
+      projectRoot = path.join(os.homedir(), '.config', 'mlld');
       resolvedPath = absolutePath;
-      
+
       // Ensure global config directory exists
-      if (!existsSync(globalConfigDir)) {
-        await fs.mkdir(globalConfigDir, { recursive: true });
+      if (!existsSync(projectRoot)) {
+        await fs.mkdir(projectRoot, { recursive: true });
       }
     } else {
       // Local alias - use relative path
-      lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
+      projectRoot = process.cwd();
       // Make sure we get a clean relative path without ./ prefix unless needed
       resolvedPath = path.relative(process.cwd(), absolutePath);
       // If the path is outside the current directory, use absolute path
@@ -92,8 +91,8 @@ export class AliasCommand {
       }
     }
 
-    // Load or create lock file
-    const lockFile = new LockFile(lockFilePath);
+    // Load or create project config
+    const projectConfig = new ProjectConfig(projectRoot);
     
     // Create prefix configuration entry with normalized name
     const prefix = `@${normalizedName}/`;
@@ -106,8 +105,8 @@ export class AliasCommand {
     };
 
     // Get existing prefixes
-    const existingPrefixes = lockFile.getResolverPrefixes();
-    
+    const existingPrefixes = projectConfig.getResolverPrefixes();
+
     // Check for duplicate prefix
     const existingIndex = existingPrefixes.findIndex(r => r.prefix === prefix);
     if (existingIndex >= 0) {
@@ -120,7 +119,7 @@ export class AliasCommand {
     }
 
     // Save configuration
-    await lockFile.setResolverPrefixes(existingPrefixes);
+    await projectConfig.setResolverPrefixes(existingPrefixes);
 
     // Success message
     const scope = options.global ? 'global' : 'local';
@@ -131,10 +130,10 @@ export class AliasCommand {
     
     if (!options.global) {
       console.log(chalk.gray(`\nThis alias is only available in this project.`));
-      console.log(chalk.gray(`Lock file: ${path.relative(process.cwd(), lockFilePath)}`));
+      console.log(chalk.gray(`Config file: ${path.relative(process.cwd(), path.join(projectRoot, 'mlld-config.json'))}`))
     } else {
       console.log(chalk.gray(`\nThis alias is available globally to all mlld projects.`));
-      console.log(chalk.gray(`Lock file: ${lockFilePath}`));
+      console.log(chalk.gray(`Config file: ${path.join(projectRoot, 'mlld-config.json')}`));
     }
   }
 }

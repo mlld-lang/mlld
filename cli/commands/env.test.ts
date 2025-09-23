@@ -3,16 +3,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { envCommand } from './env';
-import { LockFile } from '@core/registry/LockFile';
+import { ProjectConfig } from '@core/registry/ProjectConfig';
 
 describe('env command', () => {
   let tempDir: string;
+  let configFilePath: string;
   let lockFilePath: string;
 
   beforeEach(() => {
     // Create a temporary directory for test files
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-env-test-'));
-    lockFilePath = path.join(tempDir, 'mlld.lock.json');
+    configFilePath = path.join(tempDir, 'mlld-config.json');
+    lockFilePath = path.join(tempDir, 'mlld-lock.json');
   });
 
   afterEach(() => {
@@ -31,10 +33,10 @@ describe('env command', () => {
     });
 
     it('should list allowed variables', async () => {
-      // Create lock file with allowed vars
-      const lockFile = new LockFile(lockFilePath);
-      await lockFile.addAllowedEnvVar('API_KEY');
-      await lockFile.addAllowedEnvVar('DATABASE_URL');
+      // Create project config with allowed vars
+      const projectConfig = new ProjectConfig(tempDir);
+      await projectConfig.addAllowedEnvVar('API_KEY');
+      await projectConfig.addAllowedEnvVar('DATABASE_URL');
       
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
@@ -50,12 +52,12 @@ describe('env command', () => {
   describe('env allow', () => {
     it('should add single environment variable', async () => {
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       await envCommand({ _: ['allow', 'API_KEY'], cwd: tempDir });
-      
-      // Verify lock file was created and contains the variable
-      const lockFile = new LockFile(lockFilePath);
-      const allowedVars = lockFile.getAllowedEnvVars();
+
+      // Verify config file was created and contains the variable
+      const projectConfig = new ProjectConfig(tempDir);
+      const allowedVars = projectConfig.getAllowedEnvVars();
       expect(allowedVars).toContain('API_KEY');
       
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Added 1 environment variable'));
@@ -64,11 +66,11 @@ describe('env command', () => {
 
     it('should add multiple environment variables', async () => {
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       await envCommand({ _: ['allow', 'API_KEY', 'DATABASE_URL', 'SECRET_KEY'], cwd: tempDir });
-      
-      const lockFile = new LockFile(lockFilePath);
-      const allowedVars = lockFile.getAllowedEnvVars();
+
+      const projectConfig = new ProjectConfig(tempDir);
+      const allowedVars = projectConfig.getAllowedEnvVars();
       expect(allowedVars).toContain('API_KEY');
       expect(allowedVars).toContain('DATABASE_URL');
       expect(allowedVars).toContain('SECRET_KEY');
@@ -79,8 +81,8 @@ describe('env command', () => {
 
     it('should handle already allowed variables', async () => {
       // Pre-add a variable
-      const lockFile = new LockFile(lockFilePath);
-      await lockFile.addAllowedEnvVar('API_KEY');
+      const projectConfig = new ProjectConfig(tempDir);
+      await projectConfig.addAllowedEnvVar('API_KEY');
       
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
@@ -95,17 +97,17 @@ describe('env command', () => {
   describe('env remove', () => {
     it('should remove environment variable', async () => {
       // Pre-add variables
-      const lockFile = new LockFile(lockFilePath);
-      await lockFile.addAllowedEnvVar('API_KEY');
-      await lockFile.addAllowedEnvVar('DATABASE_URL');
+      const projectConfig = new ProjectConfig(tempDir);
+      await projectConfig.addAllowedEnvVar('API_KEY');
+      await projectConfig.addAllowedEnvVar('DATABASE_URL');
       
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
       await envCommand({ _: ['remove', 'API_KEY'], cwd: tempDir });
-      
-      // Reload lock file to get updated values
-      const updatedLockFile = new LockFile(lockFilePath);
-      const updatedVars = updatedLockFile.getAllowedEnvVars();
+
+      // Reload config to get updated values
+      const updatedConfig = new ProjectConfig(tempDir);
+      const updatedVars = updatedConfig.getAllowedEnvVars();
       expect(updatedVars).not.toContain('API_KEY');
       expect(updatedVars).toContain('DATABASE_URL');
       
@@ -126,18 +128,18 @@ describe('env command', () => {
   describe('env clear', () => {
     it('should clear all allowed variables', async () => {
       // Pre-add variables
-      const lockFile = new LockFile(lockFilePath);
-      await lockFile.addAllowedEnvVar('API_KEY');
-      await lockFile.addAllowedEnvVar('DATABASE_URL');
-      await lockFile.addAllowedEnvVar('SECRET_KEY');
+      const projectConfig = new ProjectConfig(tempDir);
+      await projectConfig.addAllowedEnvVar('API_KEY');
+      await projectConfig.addAllowedEnvVar('DATABASE_URL');
+      await projectConfig.addAllowedEnvVar('SECRET_KEY');
       
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
       await envCommand({ _: ['clear'], cwd: tempDir });
-      
-      // Reload lock file to get updated values
-      const updatedLockFile = new LockFile(lockFilePath);
-      const updatedVars = updatedLockFile.getAllowedEnvVars();
+
+      // Reload config to get updated values
+      const updatedConfig = new ProjectConfig(tempDir);
+      const updatedVars = updatedConfig.getAllowedEnvVars();
       expect(updatedVars).toHaveLength(0);
       
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Cleared all 3 allowed environment variables'));

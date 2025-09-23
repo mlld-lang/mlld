@@ -3,59 +3,26 @@ import * as path from 'path';
 import { MlldError } from '@core/errors';
 import type { PrefixConfig } from '@core/resolvers/types';
 
-export interface LockEntry {
-  resolved: string;           // The resolved path (gist URL or registry path)
-  gistRevision?: string;      // For gist imports
-  integrity: string;          // SHA256 hash of content
-  registryVersion?: string;   // Registry version when resolved
-  approvedAt: string;         // ISO timestamp
-  approvedBy?: string;        // User who approved
+export interface ModuleLockEntry {
+  version: string;           // The resolved version
+  resolved: string;          // SHA-256 hash of content
+  source: string;           // The source URL (gist or github)
+  integrity: string;        // SRI integrity hash
+  fetchedAt: string;        // ISO timestamp when fetched
+  registryVersion?: string; // Version from registry when resolved
 }
 
 export interface LockFileData {
-  version: string;
-  imports: Record<string, LockEntry>;
-  modules: Record<string, any>;
-  cache: Record<string, any>;
+  lockfileVersion: number;  // Lock file format version
+  modules: Record<string, ModuleLockEntry>;
   metadata?: {
     mlldVersion?: string;
     createdAt?: string;
     updatedAt?: string;
   };
-  config?: {
-    resolvers?: {
-      prefixes?: PrefixConfig[];
-      registries?: any[];
-    };
-    security?: {
-      allowedDomains?: string[];
-      trustedDomains?: string[];
-      blockedPatterns?: string[];
-      allowedEnv?: string[];
-    };
-    scriptDir?: string;
-    mode?: string; // 'development', 'production', or undefined (default user mode)
-  };
-  security?: {
-    registries?: Record<string, RegistryEntry>;
-    policies?: any;
-    approvedImports?: Record<string, any>;
-    blockedPatterns?: string[];
-    trustedDomains?: string[];
-    allowedEnv?: string[];
-    allowAbsolutePaths?: boolean;
-    allowedEnvVars?: string[];
-  };
 }
 
-export interface RegistryEntry {
-  url?: string;
-  resolver?: string;
-  type?: 'input' | 'output' | 'io';
-  priority?: number;
-  patterns?: string[];
-  config?: any;
-}
+// RegistryEntry interface removed - now handled by ConfigFile
 
 export class LockFile {
   private data: LockFileData | null = null;
@@ -68,40 +35,39 @@ export class LockFile {
 
   private ensureLoaded(): void {
     if (this.loaded) return;
-    
+
     try {
       if (fs.existsSync(this.filePath)) {
         const content = fs.readFileSync(this.filePath, 'utf8');
         const parsed = JSON.parse(content);
+
         this.data = {
-          version: parsed.version || '1.0.0',
-          imports: parsed.imports || {},
+          lockfileVersion: parsed.lockfileVersion || 1,
           modules: parsed.modules || {},
-          cache: parsed.cache || {},
-          metadata: parsed.metadata,
-          config: parsed.config,
-          security: parsed.security
+          metadata: parsed.metadata
         };
       } else {
         // Initialize with empty lock file
         this.data = {
-          version: '1.0.0',
-          imports: {},
+          lockfileVersion: 1,
           modules: {},
-          cache: {}
+          metadata: {
+            createdAt: new Date().toISOString()
+          }
         };
       }
     } catch (error) {
       console.warn(`Failed to load lock file: ${error.message}`);
       // Initialize with empty lock file on error
       this.data = {
-        version: '1.0.0',
-        imports: {},
+        lockfileVersion: 1,
         modules: {},
-        cache: {}
+        metadata: {
+          createdAt: new Date().toISOString()
+        }
       };
     }
-    
+
     this.loaded = true;
   }
 
@@ -120,49 +86,6 @@ export class LockFile {
     this.isDirty = false;
   }
 
-  getImport(importPath: string): LockEntry | undefined {
-    this.ensureLoaded();
-    return this.data!.imports[importPath];
-  }
-
-  async addImport(importPath: string, entry: LockEntry): Promise<void> {
-    this.ensureLoaded();
-    this.data!.imports[importPath] = entry;
-    this.isDirty = true;
-    await this.save();
-  }
-
-  async updateImport(importPath: string, entry: Partial<LockEntry>): Promise<void> {
-    this.ensureLoaded();
-    const existing = this.data!.imports[importPath];
-    if (!existing) {
-      throw new MlldError(`No lock entry found for ${importPath}`);
-    }
-    
-    this.data!.imports[importPath] = { ...existing, ...entry };
-    this.isDirty = true;
-    await this.save();
-  }
-
-  async removeImport(importPath: string): Promise<void> {
-    this.ensureLoaded();
-    delete this.data!.imports[importPath];
-    this.isDirty = true;
-    await this.save();
-  }
-
-  getAllImports(): Record<string, LockEntry> {
-    this.ensureLoaded();
-    return { ...this.data!.imports };
-  }
-
-  async verifyIntegrity(importPath: string, content: string): Promise<boolean> {
-    const entry = this.getImport(importPath);
-    if (!entry) return true; // No lock entry to verify against
-    
-    const hash = await this.calculateIntegrity(content);
-    return hash === entry.integrity;
-  }
 
   async calculateIntegrity(content: string): Promise<string> {
     // Use Node.js crypto for SHA256
@@ -172,201 +95,78 @@ export class LockFile {
     return `sha256:${hash.digest('hex')}`;
   }
 
-  // Check if any imports are outdated (for mlld outdated command)
+  // Check if any modules are outdated (for mlld outdated command)
   async checkOutdated(
-    checkFn: (importPath: string, entry: LockEntry) => Promise<boolean>
-  ): Promise<Array<{ importPath: string; entry: LockEntry }>> {
+    checkFn: (moduleName: string, entry: ModuleLockEntry) => Promise<boolean>
+  ): Promise<Array<{ moduleName: string; entry: ModuleLockEntry }>> {
     this.ensureLoaded();
-    const outdated: Array<{ importPath: string; entry: LockEntry }> = [];
+    const outdated: Array<{ moduleName: string; entry: ModuleLockEntry }> = [];
     
-    for (const [importPath, entry] of Object.entries(this.data!.imports)) {
-      if (await checkFn(importPath, entry)) {
-        outdated.push({ importPath, entry });
+    for (const [moduleName, entry] of Object.entries(this.data!.modules)) {
+      if (await checkFn(moduleName, entry)) {
+        outdated.push({ moduleName, entry });
       }
     }
     
     return outdated;
   }
 
-  // Registry/Resolver configuration methods
-  getRegistries(): Record<string, RegistryEntry> {
+  // Module management methods
+  getModule(moduleName: string): ModuleLockEntry | undefined {
     this.ensureLoaded();
-    return this.data!.security?.registries || {};
+    return this.data!.modules[moduleName];
   }
 
-  getRegistryConfig(name: string): RegistryEntry | undefined {
+  async addModule(moduleName: string, entry: ModuleLockEntry): Promise<void> {
     this.ensureLoaded();
-    return this.data!.security?.registries?.[name];
-  }
-
-  async setRegistry(name: string, config: RegistryEntry): Promise<void> {
-    this.ensureLoaded();
-    if (!this.data!.security) {
-      this.data!.security = {};
-    }
-    if (!this.data!.security.registries) {
-      this.data!.security.registries = {};
-    }
-    
-    this.data!.security.registries[name] = config;
+    this.data!.modules[moduleName] = entry;
+    this.data!.metadata = {
+      ...this.data!.metadata,
+      updatedAt: new Date().toISOString()
+    };
     this.isDirty = true;
     await this.save();
   }
 
-  async removeRegistry(name: string): Promise<void> {
+  async updateModule(moduleName: string, entry: Partial<ModuleLockEntry>): Promise<void> {
     this.ensureLoaded();
-    if (this.data!.security?.registries) {
-      delete this.data!.security.registries[name];
-      this.isDirty = true;
-      await this.save();
+    const existing = this.data!.modules[moduleName];
+    if (!existing) {
+      throw new MlldError(`No lock entry found for module ${moduleName}`);
     }
-  }
 
-  // Get all resolver configurations sorted by priority
-  getResolverConfigs(): Array<{ name: string; config: RegistryEntry }> {
-    const registries = this.getRegistries();
-    const configs = Object.entries(registries).map(([name, config]) => ({
-      name,
-      config
-    }));
-
-    // Sort by priority (lower number = higher priority)
-    return configs.sort((a, b) => {
-      const priorityA = a.config.priority ?? 999;
-      const priorityB = b.config.priority ?? 999;
-      return priorityA - priorityB;
-    });
-  }
-
-  // Security policy methods
-  getSecurityPolicy(): any {
-    this.ensureLoaded();
-    return this.data!.security?.policies || {};
-  }
-
-  getTrustedDomains(): string[] {
-    this.ensureLoaded();
-    return this.data!.security?.trustedDomains || [];
-  }
-
-  async setTrustedDomains(domains: string[]): Promise<void> {
-    this.ensureLoaded();
-    if (!this.data!.security) {
-      this.data!.security = {};
-    }
-    this.data!.security.trustedDomains = domains;
+    this.data!.modules[moduleName] = { ...existing, ...entry };
+    this.data!.metadata = {
+      ...this.data!.metadata,
+      updatedAt: new Date().toISOString()
+    };
     this.isDirty = true;
     await this.save();
   }
 
-  getBlockedPatterns(): string[] {
+  async removeModule(moduleName: string): Promise<void> {
     this.ensureLoaded();
-    return this.data!.security?.blockedPatterns || [];
-  }
-
-  async setSecurityPolicy(policy: any): Promise<void> {
-    this.ensureLoaded();
-    if (!this.data!.security) {
-      this.data!.security = {};
-    }
-    
-    this.data!.security.policies = policy;
+    delete this.data!.modules[moduleName];
+    this.data!.metadata = {
+      ...this.data!.metadata,
+      updatedAt: new Date().toISOString()
+    };
     this.isDirty = true;
     await this.save();
   }
 
-  getAllowAbsolutePaths(): boolean {
+  getAllModules(): Record<string, ModuleLockEntry> {
     this.ensureLoaded();
-    return this.data!.security?.allowAbsolutePaths === true;
+    return { ...this.data!.modules };
   }
 
-  // Environment variable management methods
-  getAllowedEnvVars(): string[] {
-    this.ensureLoaded();
-    return this.data!.security?.allowedEnvVars || [];
-  }
+  // Check module integrity
+  async verifyModuleIntegrity(moduleName: string, content: string): Promise<boolean> {
+    const entry = this.getModule(moduleName);
+    if (!entry) return true; // No lock entry to verify against
 
-  async addAllowedEnvVar(varName: string): Promise<void> {
-    this.ensureLoaded();
-    if (!this.data!.security) {
-      this.data!.security = {};
-    }
-    if (!this.data!.security.allowedEnvVars) {
-      this.data!.security.allowedEnvVars = [];
-    }
-    
-    // Only add if not already present
-    if (!this.data!.security.allowedEnvVars.includes(varName)) {
-      this.data!.security.allowedEnvVars.push(varName);
-      this.isDirty = true;
-      await this.save();
-    }
-  }
-
-  async removeAllowedEnvVar(varName: string): Promise<void> {
-    this.ensureLoaded();
-    if (this.data!.security?.allowedEnvVars) {
-      const index = this.data!.security.allowedEnvVars.indexOf(varName);
-      if (index !== -1) {
-        this.data!.security.allowedEnvVars.splice(index, 1);
-        this.isDirty = true;
-        await this.save();
-      }
-    }
-  }
-
-  async clearAllowedEnvVars(): Promise<void> {
-    this.ensureLoaded();
-    if (this.data!.security?.allowedEnvVars) {
-      this.data!.security.allowedEnvVars = [];
-      this.isDirty = true;
-      await this.save();
-    }
-  }
-
-  hasAllowedEnvVarsConfigured(): boolean {
-    this.ensureLoaded();
-    return (this.data!.security?.allowedEnvVars && this.data!.security.allowedEnvVars.length > 0) || false;
-  }
-
-  // Prefix configuration management methods
-  getResolverPrefixes(): PrefixConfig[] {
-    this.ensureLoaded();
-    if (!this.data!.config?.resolvers?.prefixes) {
-      return [];
-    }
-    return this.data!.config.resolvers.prefixes;
-  }
-
-  async setResolverPrefixes(prefixes: PrefixConfig[]): Promise<void> {
-    this.ensureLoaded();
-    if (!this.data!.config) {
-      this.data!.config = {};
-    }
-    if (!this.data!.config.resolvers) {
-      this.data!.config.resolvers = {};
-    }
-    
-    this.data!.config.resolvers.prefixes = prefixes;
-    this.isDirty = true;
-    await this.save();
-  }
-  
-  // Get the script directory configuration
-  getScriptDir(): string | undefined {
-    this.ensureLoaded();
-    return this.data!.config?.scriptDir;
-  }
-  
-  // Set the script directory configuration
-  async setScriptDir(scriptDir: string): Promise<void> {
-    this.ensureLoaded();
-    if (!this.data!.config) {
-      this.data!.config = {};
-    }
-    this.data!.config.scriptDir = scriptDir;
-    this.isDirty = true;
-    await this.save();
+    const hash = await this.calculateIntegrity(content);
+    return hash === entry.integrity;
   }
   
   // Update the lock file path (for project root discovery)

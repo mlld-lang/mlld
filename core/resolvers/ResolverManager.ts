@@ -278,7 +278,9 @@ export class ResolverManager {
     // 1. Check if we have a hash for this module in lock file (skip for local files)
     const isLocal = ref.startsWith('@local/') || ref.startsWith('local://');
     if (this.lockFile && this.moduleCache && !isLocal) {
-      const lockEntry = this.lockFile.getImport(ref);
+      // Convert reference to module name format
+      const moduleName = this.refToModuleName(ref);
+      const lockEntry = this.lockFile.getModule(moduleName);
       if (lockEntry?.integrity) {
         // Extract hash from integrity (format: "sha256:hash")
         const hash = lockEntry.integrity.split(':')[1];
@@ -289,7 +291,7 @@ export class ResolverManager {
             if (cached) {
               logger.debug(`Cache hit for ${ref} (hash: ${hash})`);
               const resolutionTime = Date.now() - startTime;
-              
+
               return {
                 content: {
                   content: cached.content,
@@ -311,7 +313,7 @@ export class ResolverManager {
             logger.warn(`Cache error for ${ref}: ${cacheError.message}`);
             // If it's a corruption error, we should clear the lock entry
             if (cacheError.message.includes('Cache corruption detected')) {
-              await this.lockFile.removeImport(ref);
+              await this.lockFile.removeModule(moduleName);
               logger.info(`Cleared corrupted cache entry for ${ref}`);
             }
           }
@@ -415,10 +417,13 @@ export class ResolverManager {
           
           // 5. Update lock file with new hash
           if (this.lockFile) {
-            await this.lockFile.addImport(ref, {
-              resolved: content.metadata.source || ref,
+            const moduleName = this.refToModuleName(ref);
+            await this.lockFile.addModule(moduleName, {
+              version: 'latest', // TODO: Get actual version from resolver
+              resolved: cacheEntry.hash,
+              source: content.metadata.source || ref,
               integrity: `sha256:${cacheEntry.hash}`,
-              approvedAt: new Date().toISOString()
+              fetchedAt: new Date().toISOString()
             });
           }
           
@@ -786,5 +791,23 @@ export class ResolverManager {
     });
 
     return Promise.race([promise, timeoutPromise]);
+  }
+
+  /**
+   * Convert a reference to a module name format
+   * @param ref Reference like @author/module, mlld://author/module, etc.
+   * @returns Module name in @author/module format
+   */
+  private refToModuleName(ref: string): string {
+    // Remove mlld:// prefix if present
+    if (ref.startsWith('mlld://')) {
+      return ref.replace('mlld://', '@');
+    }
+    // Already in @author/module format
+    if (ref.startsWith('@')) {
+      return ref;
+    }
+    // Assume it's author/module format
+    return `@${ref}`;
   }
 }

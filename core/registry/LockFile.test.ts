@@ -22,31 +22,19 @@ describe('LockFile', () => {
     }
   });
 
-  it('provides empty maps when lock file omits imports/modules/cache', () => {
+  it('provides empty maps when lock file omits modules', () => {
     fs.writeFileSync(
       lockPath,
       JSON.stringify({
         version: '1.0',
-        config: {
-          resolvers: {
-            prefixes: [
-              {
-                prefix: '@context/',
-                resolver: 'LOCAL',
-                config: {
-                  basePath: './modules'
-                }
-              }
-            ]
-          }
-        }
+        lockfileVersion: 1
       })
     );
 
     const lockFile = new LockFile(lockPath);
 
-    expect(lockFile.getImport('@context/agents')).toBeUndefined();
-    expect(lockFile.getAllImports()).toEqual({});
+    expect(lockFile.getModule('@context/agents')).toBeUndefined();
+    expect(lockFile.getAllModules()).toEqual({});
   });
 });
 

@@ -98,7 +98,7 @@ describe('ResolverManager with Cache Integration', () => {
       expect(result1.content.metadata?.hash).toBeDefined();
       
       // Verify lock file was updated
-      const lockEntry = lockFile.getImport('@test/module1');
+      const lockEntry = lockFile.getModule('@test/module1');
       expect(lockEntry).toBeDefined();
       expect(lockEntry?.integrity).toMatch(/^sha256:/);
     });
@@ -123,10 +123,12 @@ describe('ResolverManager with Cache Integration', () => {
     
     it('should handle cache miss gracefully', async () => {
       // Manually add a lock entry with non-existent hash
-      await lockFile.addImport('@test/module2', {
-        resolved: 'test://@test/module2',
+      await lockFile.addModule('@test/module2', {
+        version: '1.0.0',
+        resolved: 'sha256:nonexistenthash123',
+        source: 'test://@test/module2',
         integrity: 'sha256:nonexistenthash123',
-        approvedAt: new Date().toISOString()
+        fetchedAt: new Date().toISOString()
       });
       
       // Resolution should fall back to resolver
@@ -135,7 +137,7 @@ describe('ResolverManager with Cache Integration', () => {
       expect(result.resolverName).toBe('test');
       
       // Lock file should be updated with correct hash
-      const lockEntry = lockFile.getImport('@test/module2');
+      const lockEntry = lockFile.getModule('@test/module2');
       expect(lockEntry?.integrity).not.toBe('sha256:nonexistenthash123');
     });
     
@@ -192,7 +194,7 @@ describe('ResolverManager with Cache Integration', () => {
       expect(testResolver.getCallCount()).toBe(1); // No new call
       
       // Remove lock entry to invalidate cache
-      await lockFile.removeImport('@test/module1');
+      await lockFile.removeModule('@test/module1');
       
       // Third resolution should re-resolve since no lock entry
       const result3 = await manager.resolve('@test/module1');

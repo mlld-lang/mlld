@@ -19,7 +19,7 @@ import * as path from 'path';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
-import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
+import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { URLCache } from '../cache/URLCache';
 import { astLocationToSourceLocation } from '@core/types';
 import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver } from '@core/resolvers';
@@ -70,7 +70,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private pathContext?: PathContext;
   // Legacy basePath for backward compatibility
   private basePath: string;
-  
+  // Project configuration (replaces direct LockFile usage)
+  private projectConfig?: ProjectConfig;
+
   // Utility managers
   private cacheManager: CacheManager;
   private errorUtils: ErrorUtils;
@@ -220,16 +222,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         console.warn('RegistryManager not available:', error);
       }
       
-      // Initialize module cache and lock file
+      // Initialize module cache and project config
       let moduleCache: ModuleCache | undefined;
+      let projectConfig: ProjectConfig | undefined;
       let lockFile: LockFile | undefined;
-      
+
       try {
         moduleCache = new ModuleCache();
-        // Create lock file instance - it will load lazily when accessed
-        const lockFilePath = path.join(this.getProjectRoot(), 'mlld.lock.json');
+        // Create project config instance
+        projectConfig = new ProjectConfig(this.getProjectRoot());
+        this.projectConfig = projectConfig;
+        // We need the actual LockFile for some legacy uses (ResolverManager, URLCache)
+        const lockFilePath = path.join(this.getProjectRoot(), 'mlld-lock.json');
         lockFile = new LockFile(lockFilePath);
-        this.allowAbsolutePaths = lockFile.getAllowAbsolutePaths();
+        this.allowAbsolutePaths = projectConfig.getAllowAbsolutePaths();
         
         // Initialize URL cache manager with a simple cache adapter and lock file
         if (moduleCache && lockFile) {
@@ -287,12 +293,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
           }
         ], this.basePath);
         
-        // Load resolver configs from lock file if available
-        if (lockFile) {
-          // Try new config location first
-          const resolverPrefixes = lockFile.getResolverPrefixes();
+        // Load resolver configs from project config if available
+        if (projectConfig) {
+          const resolverPrefixes = projectConfig.getResolverPrefixes();
           if (resolverPrefixes.length > 0) {
-            logger.debug(`Configuring ${resolverPrefixes.length} resolver prefixes from lock file`);
+            logger.debug(`Configuring ${resolverPrefixes.length} resolver prefixes from config`);
             this.resolverManager.configurePrefixes(resolverPrefixes, this.basePath);
             logger.debug(`Total prefixes after configuration: ${this.resolverManager.getPrefixConfigs().length}`);
           }
@@ -1203,32 +1208,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Get environment variables if enabled
    */
   private getEnvironmentVariables(): Record<string, string> {
-    // Get lock file from root environment
-    let lockFile: LockFile | undefined;
+    // Get project config from root environment
+    let projectConfig: ProjectConfig | undefined;
     let currentEnv: Environment | undefined = this;
-    
-    // Walk up to root environment to find lock file
+
+    // Walk up to root environment to find project config
     while (currentEnv) {
-      if (!currentEnv.parent && currentEnv.resolverManager) {
-        // Try to get lock file from resolver manager (root environment)
-        const resolver = currentEnv.resolverManager as any;
-        if (resolver.lockFile) {
-          lockFile = resolver.lockFile as LockFile;
-          break;
-        }
+      if (currentEnv.projectConfig) {
+        projectConfig = currentEnv.projectConfig;
+        break;
       }
       currentEnv = currentEnv.parent;
     }
-    
-    // If no lock file or no allowed vars configured, return empty
-    if (!lockFile || !lockFile.hasAllowedEnvVarsConfigured()) {
+
+    // If no project config or no allowed vars configured, return empty
+    if (!projectConfig) {
       return {};
     }
-    
+
     // Get allowed environment variable names
-    const allowedVars = lockFile.getAllowedEnvVars();
+    const allowedVars = projectConfig.getAllowedEnvVars();
+    if (allowedVars.length === 0) {
+      return {};
+    }
+
     const envVars: Record<string, string> = {};
-    
+
     // Only include allowed environment variables
     for (const varName of allowedVars) {
       const value = process.env[varName];
@@ -1236,7 +1241,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         envVars[varName] = value;
       }
     }
-    
+
     return envVars;
   }
 
