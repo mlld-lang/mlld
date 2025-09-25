@@ -51,6 +51,7 @@ export async function evaluateShow(
   }
 
   let content = '';
+  let preserveOriginalJsonFormatting = false; // Track if content should preserve original JSON formatting
   
   if (directive.subtype === 'showVariable') {
     // Handle variable reference - supports both unified AST and legacy structure
@@ -165,6 +166,11 @@ export async function evaluateShow(
       if (!variable) {
         throw new Error(`Variable not found: ${varName}`);
       }
+      
+      // Check if this variable came from a shell command - if so, preserve original JSON formatting
+      if (isCommandResult(variable)) {
+        preserveOriginalJsonFormatting = true;
+      }
     }
     
     // Handle all variable types using the new type guards (skip if we already have a value from template literal)
@@ -172,6 +178,29 @@ export async function evaluateShow(
       if (isTextLike(variable)) {
       // All text-producing types: simple, interpolated, template, file, section, command result
       value = variable.value;
+      
+      // For command result variables, check if the value has original JSON formatting preserved
+      if (isCommandResult(variable) && typeof value === 'object' && value !== null && value.__originalJsonString) {
+        // Use the original JSON string for display purposes to preserve formatting
+        content = value.__originalJsonString;
+        // Skip the rest of variable processing since we have our final content
+        // But still handle pipeline if present
+        if ((directive as any).values?.withClause?.pipeline && (directive as any).meta?.applyTailPipeline) {
+          const { executePipeline } = await import('./pipeline');
+          const pipeline = (directive as any).values.withClause.pipeline;
+          content = await executePipeline(content, pipeline, env);
+        }
+        
+        if (!content.endsWith('\n')) {
+          content += '\n';
+        }
+        
+        if (!context?.isExpression) {
+          env.emitEffect('both', content, { source: directive.location });
+        }
+        
+        return { value: content, env };
+      }
       
       // For template variables (like ::{{var}}::), we need to interpolate the template content
       if (isTemplate(variable)) {
@@ -1023,16 +1052,19 @@ export async function evaluateShow(
     }
   } else if (typeof content === 'string') {
     // Check if content is a JSON string that should be pretty-printed
-    try {
-      // Only attempt to parse if it looks like JSON (starts with { or [)
-      const trimmed = content.trim();
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        const parsed = JSON.parse(content);
-        content = JSONFormatter.stringify(parsed, { pretty: true });
+    // Skip reformatting if content came from a shell command to preserve original formatting
+    if (!preserveOriginalJsonFormatting) {
+      try {
+        // Only attempt to parse if it looks like JSON (starts with { or [)
+        const trimmed = content.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          const parsed = JSON.parse(content);
+          content = JSONFormatter.stringify(parsed, { pretty: true });
+        }
+      } catch {
+        // Not valid JSON, keep original string
       }
-    } catch {
-      // Not valid JSON, keep original string
     }
   }
 
