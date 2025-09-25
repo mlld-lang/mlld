@@ -9,7 +9,8 @@ Test that JSON output from shell scripts preserves its original formatting.
 }
 
 ## Complex object - should remain pretty printed
-   
+
+
 {
   "name": "Alice",
   "details": {
