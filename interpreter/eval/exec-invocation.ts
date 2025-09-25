@@ -1095,7 +1095,17 @@ export async function evaluateExecInvocation(
         if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
             (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
           try {
-            result = JSON.parse(trimmed);
+            const parsed = JSON.parse(trimmed);
+            // Create an object that preserves both the parsed data and original string
+            result = parsed;
+            // Store original formatting in a special property that can be accessed later
+            if (typeof result === 'object' && result !== null) {
+              Object.defineProperty(result, '__originalJsonString', {
+                value: commandOutput, // Keep original with whitespace
+                enumerable: false,
+                configurable: true
+              });
+            }
           } catch {
             result = commandOutput;
           }
@@ -1123,7 +1133,17 @@ export async function evaluateExecInvocation(
         if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
             (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
           try {
-            result = JSON.parse(trimmed);
+            const parsed = JSON.parse(trimmed);
+            // Create an object that preserves both the parsed data and original string
+            result = parsed;
+            // Store original formatting in a special property that can be accessed later
+            if (typeof result === 'object' && result !== null) {
+              Object.defineProperty(result, '__originalJsonString', {
+                value: commandOutput, // Keep original with whitespace
+                enumerable: false,
+                configurable: true
+              });
+            }
           } catch {
             // Not valid JSON, use as-is
             result = commandOutput;

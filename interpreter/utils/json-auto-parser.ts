@@ -104,5 +104,16 @@ export function processCommandOutput(output: string, enableAutoParse?: boolean):
   }
 
   const result = tryParseJson(output);
+  
+  // If we successfully parsed JSON and the result is an object or array,
+  // attach the original string as a non-enumerable property for display purposes
+  if (result.isJson && typeof result.value === 'object' && result.value !== null) {
+    Object.defineProperty(result.value, '__originalJsonString', {
+      value: result.originalValue,
+      enumerable: false,
+      configurable: true
+    });
+  }
+  
   return result.value;
 }
