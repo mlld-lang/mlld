@@ -26,6 +26,8 @@ export class PipelineExecutor {
   private isRetryable: boolean;
   private sourceFunction?: () => Promise<string>; // Store source function for retries
   private hasSyntheticSource: boolean;
+  private parallelCap?: number;
+  private delayMs?: number;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
   private initialInput: string = ''; // Store initial input for synthetic source
   private allRetryHistory: Map<string, string[]> = new Map();
@@ -37,7 +39,9 @@ export class PipelineExecutor {
     format?: string,
     isRetryable: boolean = false,
     sourceFunction?: () => Promise<string>,
-    hasSyntheticSource: boolean = false
+    hasSyntheticSource: boolean = false,
+    parallelCap?: number,
+    delayMs?: number
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor:', {
@@ -57,6 +61,8 @@ export class PipelineExecutor {
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
     this.hasSyntheticSource = hasSyntheticSource;
+    this.parallelCap = parallelCap;
+    this.delayMs = delayMs;
   }
 
   /**
@@ -551,7 +557,7 @@ export class PipelineExecutor {
     try {
       const results = await runWithConcurrency(
         commands,
-        Math.min(getParallelLimit(), commands.length),
+        Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
         async (cmd, i) => {
           const res = await this.executeStage(cmd, input, context);
           if (res.type !== 'success') {
@@ -559,7 +565,7 @@ export class PipelineExecutor {
           }
           return res.output;
         },
-        { ordered: true }
+        { ordered: true, paceMs: this.delayMs }
       );
       return { type: 'success', output: JSON.stringify(results) };
     } catch (err) {

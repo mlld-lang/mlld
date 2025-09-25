@@ -28,8 +28,10 @@ export async function executePipeline(
   format?: string,
   isRetryable: boolean = false,
   sourceFunction?: () => Promise<string>,
-  hasSyntheticSource: boolean = false
+  hasSyntheticSource: boolean = false,
+  parallelCap?: number,
+  delayMs?: number
 ): Promise<string> {
-  const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction, hasSyntheticSource);
+  const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction, hasSyntheticSource, parallelCap, delayMs);
   return await executor.execute(baseOutput);
 }

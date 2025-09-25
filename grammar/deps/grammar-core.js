@@ -1109,23 +1109,19 @@ export const helpers = {
     processPipelineEnding(values, raw, meta, ending) {
         // Add pipeline from ending if present
         if (ending.tail) {
-            values.pipeline = ending.tail.pipeline;
-            raw.pipeline = ending.tail.pipeline.map((cmd) => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(' | ');
+            const pipeline = ending.tail.pipeline;
+            raw.pipeline = pipeline.map((cmd) => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(' | ');
             meta.hasPipeline = true;
+            if (ending.parallel) {
+                values.withClause = { pipeline, ...ending.parallel };
+                meta.withClause = { ...(meta.withClause || {}), ...ending.parallel };
+            }
+            else {
+                values.pipeline = pipeline;
+            }
         }
-        // Add comment from ending if present
         if (ending.comment) {
             meta.comment = ending.comment;
         }
     },
-    /**
-     * Throw a clear error when a parallel group appears as the first pipeline stage.
-     * '||' runs a stage in parallel with the previous stage; the source stage has no previous stage.
-     */
-    throwParallelLeadingError(location) {
-        const msg = "Parallel group cannot be the first pipeline stage. '||' runs a stage in parallel with the previous stage, which is not possible for the source stage. Start with a single '|' stage, then add '||' peers.";
-        const err = new Error(msg);
-        err.location = location;
-        throw err;
-    }
 };

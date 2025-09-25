@@ -170,7 +170,9 @@ export async function processPipeline(
       detected.format,
       detected.isRetryable,
       sourceFunction,
-      hasSyntheticSource
+      hasSyntheticSource,
+      detected.parallelCap,
+      detected.delayMs
     );
     
     // TODO: Type preservation - convert string result back to appropriate type

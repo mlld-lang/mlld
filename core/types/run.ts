@@ -14,6 +14,8 @@ export interface WithClause {
   pipeline?: PipelineStage[];
   needs?: DependencyMap;
   trust?: TrustLevel;
+  parallel?: number;
+  delayMs?: number;
   [key: string]: any; // For other with clause properties
 }
 

@@ -18,6 +18,8 @@ export interface DetectedPipeline {
   source: 'node-pipes' | 'node-withClause' | 'directive-values' | 'directive-meta';
   format?: string;
   isRetryable?: boolean;
+  parallelCap?: number;
+  delayMs?: number;
 }
 
 /**
@@ -53,7 +55,9 @@ export function detectPipeline(
       pipeline: node.withClause.pipeline,
       source: 'node-withClause',
       format: node.withClause.format,
-      isRetryable: node.type === 'ExecInvocation' // Functions can be retried
+      isRetryable: node.type === 'ExecInvocation',
+      parallelCap: node.withClause.parallel,
+      delayMs: node.withClause.delayMs
     };
   }
   
@@ -63,7 +67,9 @@ export function detectPipeline(
       pipeline: directive.values.withClause.pipeline,
       source: 'directive-values',
       format: directive.values.withClause.format,
-      isRetryable: false // Literal values are not retryable by default
+      isRetryable: false,
+      parallelCap: directive.values.withClause.parallel,
+      delayMs: directive.values.withClause.delayMs
     };
   }
   
@@ -73,7 +79,9 @@ export function detectPipeline(
       pipeline: directive.meta.withClause.pipeline,
       source: 'directive-meta',
       format: directive.meta.withClause.format,
-      isRetryable: false
+      isRetryable: false,
+      parallelCap: directive.meta.withClause.parallel,
+      delayMs: directive.meta.withClause.delayMs
     };
   }
   
