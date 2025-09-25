@@ -487,9 +487,9 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   ): Promise<string> {
     const urlCache = this.getURLCache();
     
-    if (urlCache && security) {
-      // Use the new URL cache with security options
-      return urlCache.fetchURL(url, security, configuredBy);
+    if (urlCache) {
+      // Use the URL cache; fall back to default security behavior when options are absent
+      return urlCache.fetchURL(url, security ?? {}, configuredBy);
     }
     
     // Fall back to existing fetchURL method

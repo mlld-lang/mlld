@@ -80,6 +80,7 @@ export class URLCache {
     security?: SecurityOptions, 
     configuredBy: string = 'unknown'
   ): Promise<string> {
+    // TODO: Replace trust/TTL usage with capability-aware caching semantics.
     const ttl = security?.ttl || this.getDefaultTTL();
     const trust = security?.trust || 'verify';
 

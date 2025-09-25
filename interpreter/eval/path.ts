@@ -3,7 +3,6 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
-import type { SecurityOptions } from '@core/types/primitives';
 import { createPathVariable, type VariableSource } from '@core/types/variable';
 
 /**
@@ -47,12 +46,6 @@ export async function evaluatePath(
   
   // Interpolate the path (resolve variables)
   const interpolatedPath = await interpolate(pathNodes, env);
-  
-  // Extract security options from the directive meta
-  const security: SecurityOptions | undefined = directive.meta ? {
-    ttl: directive.meta.ttl,
-    trust: directive.meta.trust
-  } : undefined;
   
   // Handle special path variables and absolute paths
   let resolvedPath = interpolatedPath;
@@ -120,7 +113,7 @@ export async function evaluatePath(
     isURL || env.isURL(resolvedPath),
     resolvedPath.startsWith('/'), // Is absolute
     source,
-    security,
+    undefined,
     { definedAt: location }
   );
   

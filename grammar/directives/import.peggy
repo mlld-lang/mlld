@@ -111,8 +111,8 @@ SlashImport
 
 // Shorthand import: /import "path" or /import @input or /import "path" as name
 SlashImportShorthand
-  = DirectiveContext "/import" _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImportShorthand matched', { path, alias, ttl, tail });
+  = DirectiveContext "/import" _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportShorthand matched', { path, alias, tail });
       
       // NEW: Derive namespace from path if no alias provided
       let namespace = alias;
@@ -138,11 +138,6 @@ SlashImportShorthand
         namespace: [helpers.createNode(NodeType.Text, { content: namespace, location: location() })],  // Store namespace as array for consistency
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
-      
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
-      }
       
       // Add withClause if tail modifiers present
       if (tail) {
@@ -173,8 +168,8 @@ SlashImportShorthand
 
 // Full import with explicit imports list
 SlashImportFull
-  = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImport matched', { imports, path, ttl, tail });
+  = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImport matched', { imports, path, tail });
       
       // Get the raw imports text
       const importsRaw = imports.map(item => {
@@ -225,11 +220,6 @@ SlashImportFull
         }),
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle file, module, and URL paths
       };
-      
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
-      }
       
       // Add withClause if tail modifiers present
       if (tail) {

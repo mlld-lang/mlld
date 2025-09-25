@@ -25,6 +25,7 @@ export class ImportDirectiveEvaluator {
   private contentProcessor: ModuleContentProcessor;
   private variableImporter: VariableImporter;
   private objectResolver: ObjectReferenceResolver;
+  // TODO: Integrate capability context construction when import types and security descriptors land.
 
   constructor(env: Environment) {
     this.objectResolver = new ObjectReferenceResolver();

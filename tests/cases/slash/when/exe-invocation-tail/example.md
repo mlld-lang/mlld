@@ -1,6 +1,6 @@
 # When Directive with Exec Invocation and Tail Modifiers
 
-Test that @when actions support exec invocations with tail modifiers like trust.
+Test that @when actions support exec invocations with optional tail modifiers.
 
 /var @isTrue = "true"
 /exe @transform(text) = {echo "@text" | tr '[:lower:]' '[:upper:]'}
@@ -10,6 +10,6 @@ Test that @when actions support exec invocations with tail modifiers like trust.
 ## Test basic exec invocation
 /when @hasData => run @transform("hello world")
 
-## Test trust modifier
+## Test exec invocation without extra modifiers
 /exe @sensitiveOp() = {echo "sensitive data"}
-/when @isTrue => run @sensitiveOp() trust always
+/when @isTrue => run @sensitiveOp()

@@ -478,6 +478,7 @@ export class VariableFactory {
     security?: { trust?: 'high' | 'medium' | 'low'; ttl?: number },
     metadata?: VariableMetadata
   ): PathVariable {
+    // TODO: Replace legacy security payload with SecurityDescriptor metadata.
     return {
       type: 'path',
       name,

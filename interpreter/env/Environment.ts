@@ -161,6 +161,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
+  // TODO: Introduce guard registration and evaluation using capability contexts.
 
   // Constructor overloads
   constructor(

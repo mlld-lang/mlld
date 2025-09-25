@@ -17,6 +17,7 @@ export * from './values';
 export * from './raw';
 export * from './guards';
 export * from './errors';
+export * from './security';
 
 // Re-export directive types
 export * from './import';
