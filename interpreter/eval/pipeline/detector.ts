@@ -125,7 +125,7 @@ export function hasPipeline(node: any, directive?: DirectiveNode): boolean {
  * Extract all pipeline-related metadata from various sources
  * 
  * This includes not just the pipeline commands but also format,
- * trust levels, dependencies, etc.
+ * dependencies, etc.
  */
 export function extractPipelineMetadata(
   node: any,
@@ -133,7 +133,6 @@ export function extractPipelineMetadata(
 ): {
   pipeline?: PipelineStage[];
   format?: string;
-  trust?: string;
   needs?: any;
   asSection?: string;
 } | null {
@@ -147,7 +146,6 @@ export function extractPipelineMetadata(
     return {
       pipeline: withClause.pipeline,
       format: withClause.format,
-      trust: withClause.trust,
       needs: withClause.needs,
       asSection: withClause.asSection
     };

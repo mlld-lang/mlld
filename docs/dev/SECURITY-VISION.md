@@ -2,6 +2,8 @@
 
 ## Executive Summary
 
+> **NOTE:** This vision document predates the import/security refactor and references the legacy trust/TTL syntax that has now been removed. The core resolver/taint concepts still apply, but trust annotations will be reintroduced using the new capability model.
+
 mlld's security and module system is designed around a revolutionary insight: **resolvers are the security boundary**. By controlling what resolvers are available and how they work, we can create completely sandboxed environments while maintaining the flexibility developers need. The system uses content-addressed storage (like Git), progressive trust models, and a decentralized registry built on GitHub infrastructure.
 
 ### Current Implementation Status

@@ -20,7 +20,6 @@ import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionErro
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
-import { URLCache } from '../cache/URLCache';
 import { astLocationToSourceLocation } from '@core/types';
 import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
@@ -62,7 +61,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
-  private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
   
@@ -233,26 +231,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // Create project config instance
         projectConfig = new ProjectConfig(this.getProjectRoot());
         this.projectConfig = projectConfig;
-        // We need the actual LockFile for some legacy uses (ResolverManager, URLCache)
+        // We need the actual LockFile for resolver management and immutable caching
         const lockFilePath = path.join(this.getProjectRoot(), 'mlld-lock.json');
         lockFile = new LockFile(lockFilePath);
         this.allowAbsolutePaths = projectConfig.getAllowAbsolutePaths();
         
-        // Initialize URL cache manager with a simple cache adapter and lock file
-        if (moduleCache && lockFile) {
-          // Create a cache adapter that URLCache can use
-          const cacheAdapter = {
-            async set(content: string, metadata: { source: string }): Promise<string> {
-              const entry = await moduleCache!.store(content, metadata.source as string);
-              return entry.hash;
-            },
-            async get(hash: string): Promise<string | null> {
-              const result = await moduleCache!.get(hash);
-              return result ? result.content : null;
-            }
-          };
-          this.urlCacheManager = new URLCache(cacheAdapter as any, lockFile);
-        }
       } catch (error) {
         console.warn('Failed to initialize cache/lock file:', error);
       }
@@ -316,7 +299,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     
     // Initialize utility managers
-    this.cacheManager = new CacheManager(this.urlCacheManager, this.immutableCache, this.urlConfig);
+    this.cacheManager = new CacheManager(this.immutableCache, this.urlConfig);
     this.errorUtils = new ErrorUtils();
     
     // Initialize variable manager with dependencies
@@ -459,7 +442,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
               hasInterpolation: false,
               isMultiLine: false
             },
-            undefined, // No security metadata
             {
               isReserved: true,
               isPrefixPath: true,
@@ -1485,21 +1467,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   /**
    * Get URLCache manager
    */
-  getURLCache(): URLCache | undefined {
-    return this.importResolver.getURLCache();
-  }
-
-  /**
-   * Fetch URL with security options from @path directive
-   */
-  async fetchURLWithSecurity(
-    url: string, 
-    security?: import('@core/types/primitives').SecurityOptions,
-    configuredBy?: string
-  ): Promise<string> {
-    return this.importResolver.fetchURLWithSecurity(url, security, configuredBy);
-  }
-  
   /**
    * Fetch URL with full response metadata for content loading
    */
@@ -1608,7 +1575,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       }
     };
     
-    this.urlCacheManager = new URLCache(cacheAdapter, lockFile);
     
     // Re-initialize registry manager with ephemeral components
     if (this.registryManager) {

@@ -10,7 +10,6 @@ import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
 import { SecurityManager } from '@security';
 import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
-import { URLCache } from '../cache/URLCache';
 import { 
   ResolverManager, 
   RegistryResolver,
@@ -57,7 +56,6 @@ export interface ImportResolverContext {
   isImporting(path: string): boolean;
   getImportApproval(): ImportApproval | undefined;
   getImmutableCache(): ImmutableCache | undefined;
-  getURLCache(): URLCache | undefined;
 }
 
 /**
@@ -81,11 +79,6 @@ export interface IImportResolver {
   areURLsEnabled(): boolean;
   validateURL(url: string): Promise<void>;
   fetchURL(url: string, forImport?: boolean): Promise<string>;
-  fetchURLWithSecurity(
-    url: string, 
-    security?: import('@core/types/primitives').SecurityOptions,
-    configuredBy?: string
-  ): Promise<string>;
   fetchURLWithMetadata(url: string): Promise<{
     content: string;
     headers: Record<string, string>;
@@ -109,7 +102,6 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   private pathMatcher?: PathMatcher;
   private importApproval?: ImportApproval;
   private immutableCache?: ImmutableCache;
-  private urlCacheManager?: URLCache;
   
   constructor(private dependencies: ImportResolverDependencies) {
     // Initialize PathMatcher for fuzzy file matching
@@ -478,25 +470,6 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   }
   
   /**
-   * Fetch URL with security options from @path directive
-   */
-  async fetchURLWithSecurity(
-    url: string, 
-    security?: import('@core/types/primitives').SecurityOptions,
-    configuredBy?: string
-  ): Promise<string> {
-    const urlCache = this.getURLCache();
-    
-    if (urlCache) {
-      // Use the URL cache; fall back to default security behavior when options are absent
-      return urlCache.fetchURL(url, security ?? {}, configuredBy);
-    }
-    
-    // Fall back to existing fetchURL method
-    return this.fetchURL(url);
-  }
-  
-  /**
    * Fetch URL with full response metadata for content loading
    */
   async fetchURLWithMetadata(url: string): Promise<{
@@ -585,14 +558,6 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     const parent = this.dependencies.getParent();
     if (parent) return parent.getImmutableCache();
     return undefined;
-  }
-  
-  getURLCache(): URLCache | undefined {
-    const parent = this.dependencies.getParent();
-    if (parent) {
-      return parent.getURLCache();
-    }
-    return this.dependencies.cacheManager.getURLCacheManager();
   }
   
   // --- Child Creation ---

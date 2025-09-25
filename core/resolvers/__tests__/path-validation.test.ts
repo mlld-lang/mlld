@@ -214,8 +214,8 @@ describe('Path Content Type Validation', () => {
 
   describe('URL Paths', () => {
     beforeEach(() => {
-      // Mock fetch for URLs
-      global.fetch = async (url: string) => {
+      // Mock fetch for URLs via override hook
+      (globalThis as any).__mlldFetchOverride = async (url: string) => {
         if (url.includes('/data.txt')) {
           return {
             ok: true,
@@ -236,6 +236,10 @@ describe('Path Content Type Validation', () => {
         }
         throw new Error('Not found');
       };
+    });
+
+    afterEach(() => {
+      delete (globalThis as any).__mlldFetchOverride;
     });
 
     it('should accept text URLs in path directives', async () => {

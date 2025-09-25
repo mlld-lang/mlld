@@ -174,6 +174,8 @@ class NowResolver implements MCPResolver {
 
 ### TTL and Caching
 
+> Legacy note: user-facing TTL syntax has been removed. The resolver cache still uses TTL internally and will be revisited alongside the new capability system.
+
 mlld's resolver system uses a generic TTL service with pluggable cache strategies:
 
 ```typescript

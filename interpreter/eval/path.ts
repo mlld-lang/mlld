@@ -104,7 +104,7 @@ export async function evaluatePath(
     isMultiLine: false
   };
   
-  // Create and store the variable with security metadata
+  // Create and store the variable
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
   const variable = createPathVariable(
     identifier,
@@ -113,7 +113,6 @@ export async function evaluatePath(
     isURL || env.isURL(resolvedPath),
     resolvedPath.startsWith('/'), // Is absolute
     source,
-    undefined,
     { definedAt: location }
   );
   

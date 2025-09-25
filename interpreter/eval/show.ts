@@ -246,15 +246,9 @@ export async function evaluateShow(
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
       const isURL = variable.value.isURL || /^https?:\/\//.test(pathValue);
-      const security = variable.value.security;
       
       try {
-        if (isURL) {
-          value = await env.fetchURLWithSecurity(pathValue, security, varName);
-        } else {
-          // Regular file path
-          value = await env.readFile(pathValue);
-        }
+        value = await env.readFile(pathValue);
       } catch (error) {
         // Try test hook override if available
         try {

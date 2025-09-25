@@ -162,10 +162,9 @@ export function createPathVariable(
   isURL: boolean,
   isAbsolute: boolean,
   source: VariableSource,
-  security?: { trust?: 'high' | 'medium' | 'low'; ttl?: number },
   metadata?: VariableMetadata
 ): PathVariable {
-  return VariableFactory.createPath(name, resolvedPath, originalPath, isURL, isAbsolute, source, security, metadata);
+  return VariableFactory.createPath(name, resolvedPath, originalPath, isURL, isAbsolute, source, metadata);
 }
 
 /**
@@ -475,10 +474,8 @@ export class VariableFactory {
     isURL: boolean,
     isAbsolute: boolean,
     source: VariableSource,
-    security?: { trust?: 'high' | 'medium' | 'low'; ttl?: number },
     metadata?: VariableMetadata
   ): PathVariable {
-    // TODO: Replace legacy security payload with SecurityDescriptor metadata.
     return {
       type: 'path',
       name,
@@ -486,8 +483,7 @@ export class VariableFactory {
         resolvedPath,
         originalPath,
         isURL,
-        isAbsolute,
-        security
+        isAbsolute
       },
       source,
       createdAt: Date.now(),
