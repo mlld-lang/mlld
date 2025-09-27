@@ -27,6 +27,15 @@ The mlld registry is a decentralized module repository hosted on GitHub that pro
                            Direct publish for updates
 ```
 
+
+## CLI Workflows
+
+- `mlld install` reads `mlld-lock.json` (falling back to legacy `mlld.lock.json`) and prefetches registry modules using the shared module installer.
+- `mlld update` refreshes entries in `mlld-lock.json` and the content-addressed cache, respecting pinned versions when provided.
+- `mlld outdated` inspects the registry for newer versions without mutating the lock file.
+- Lock files are written to `mlld-lock.json`; the CLI migrates existing `.mlld/mlld.lock.json` files when present.
+
+
 ## Repository Structure
 
 ### Registry Repository (`github.com/mlld-lang/registry`)

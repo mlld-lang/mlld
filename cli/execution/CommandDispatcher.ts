@@ -17,6 +17,8 @@ import { createDevCommand } from '../commands/dev';
 import { createModeCommand } from '../commands/mode';
 import { createCleanCommand } from '../commands/clean';
 import { createNvimSetupCommand } from '../commands/nvim-setup';
+import { createUpdateCommand } from '../commands/update';
+import { createOutdatedCommand } from '../commands/outdated';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -53,6 +55,8 @@ export class CommandDispatcher {
     this.commandMap.set('dev', createDevCommand());
     this.commandMap.set('mode', createModeCommand());
     this.commandMap.set('clean', createCleanCommand());
+    this.commandMap.set('update', createUpdateCommand());
+    this.commandMap.set('outdated', createOutdatedCommand());
     this.commandMap.set('nvim-setup', createNvimSetupCommand());
     this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
   }
@@ -182,7 +186,9 @@ export class CommandDispatcher {
       'test': 'Run mlld tests',
       'run': 'Run mlld scripts',
       'error-test': 'Test error handling',
-      'clean': 'Remove modules from lock file and cache'
+      'clean': 'Remove modules from lock file and cache',
+      'update': 'Update installed modules to latest versions',
+      'outdated': 'List modules with available updates'
     };
     
     return descriptions[command] || 'No description available';

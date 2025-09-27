@@ -1,5 +1,5 @@
-/output @content to "output.txt"
-/output @data to "config.json"
-/output @message to stdout
-/output @error to stderr
-/output @config to "settings.yaml" as yaml
+/import module { env } from @mlld/env
+/import static <./templates/system.mld> as systemTemplates
+/import live { value } from @input
+/import cached(5m) "https://api.example.com/status" as statusSnapshot
+/import local { helper } from @local/dev-tools

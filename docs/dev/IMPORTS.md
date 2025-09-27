@@ -33,6 +33,30 @@ The mlld import system provides a flexible, secure way to share code between mod
 
 ### Key Features
 - **Module isolation**: Each module evaluates in its own environment
+
+### Import Types
+
+mlld supports the following keywords (or inferred defaults when omitted):
+
+```
+/import module { feature } from @corp/package
+/import static <./file.mld> as systemTemplates
+/import live { value } from @input
+/import cached(5m) "https://api.example.com/data" as statusSnapshot
+/import local { helper } from @local/dev-module
+```
+
+If no keyword is provided, mlld infers a type based on the source. The identifier after `as` is the namespace alias (no `@` prefix and independent of type names).
+
+
+- Registry modules (`@user/module`) → `module`
+- Local files (`"./file.mld"`) → `static`
+- URLs → `cached`
+- Resolvers such as `@local` or `@base` → `local` and `static` respectively
+- `@input` → `live`
+
+Type mismatch errors surface when a keyword conflicts with the resolved source (e.g., `cached` on a file path).
+
 - **Explicit export manifests**: Modules declare public bindings with `/export { ... }`; files that have not been updated yet still auto-export as a temporary compatibility fallback.
 - **Shadow environment preservation**: Functions maintain access to their original context
 - **Type preservation**: Variable types are maintained through import/export
@@ -625,3 +649,18 @@ Run 'mlld install' to update the lock file or specify the locked version explici
 2. **Complex Content Detection**: Could benefit from memoization
 3. **Shadow Environment Capture**: Only captured when needed
 4. **Field Access**: Direct object traversal, no string parsing
+
+
+## Import Types and Inference
+
+The five supported keywords map to distinct resolver behaviours. When a directive omits a keyword, the evaluator infers a conservative default:
+
+| Keyword | Behaviour | Typical Sources | Notes |
+|---------|-----------|-----------------|-------|
+| `module` | Load through registry manager | `@user/module` | Fails if path is not a registry module |
+| `static` | Embed content once | Relative files, `@base/...` | Works with `<path>` and quoted strings |
+| `live` | Fetch on every evaluation | `@input`, `@resolver` | Skips caching/autocache |
+| `cached(ttl)` | Cache-first with TTL | Absolute URLs | TTL uses `Xs`, `Xm`, `Xh`, `Xd`, `Xw` (seconds/minutes/hours/days/weeks) |
+| `local` | Read from dev modules | `@local/...` | Bypasses registry locking |
+
+Inference defaults: registry modules → `module`, files → `static`, URLs → `cached`, `@input` → `live`, `@local` → `local`, `@base/@project` → `static`. Any mismatch raises an `IMPORT_TYPE_MISMATCH` error before evaluation.

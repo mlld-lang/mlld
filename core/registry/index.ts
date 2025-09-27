@@ -23,3 +23,4 @@ export type { StatsEvent, AggregatedStats } from './StatsCollector';
 
 export { RegistryManager } from './RegistryManager';
 export type { RegistryConfig } from './RegistryManager';
+export { ModuleInstaller, ModuleWorkspace, type ModuleSpecifier, type ModuleInstallResult, type InstallStatus, type ModuleInstallerEvent, type InstallOptions, type ModuleUpdateResult, type ModuleOutdatedResult } from './ModuleInstaller';
