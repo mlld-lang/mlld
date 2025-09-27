@@ -2,6 +2,8 @@
  * Metadata type definitions for Mlld directives
  */
 
+import type { ImportType } from './security';
+
 /**
  * Base metadata interface with optional categories
  */
@@ -25,6 +27,7 @@ export interface PathMeta {
  */
 export interface ImportMeta extends DirectiveMeta {
   path: PathMeta; // Path metadata is required for import directives
+  importType?: ImportType;
 }
 
 /**

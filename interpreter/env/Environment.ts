@@ -33,7 +33,7 @@ import { DebugUtils } from './DebugUtils';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
 import { VariableManager, type IVariableManager, type VariableManagerDependencies, type VariableManagerContext } from './VariableManager';
-import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext } from './ImportResolver';
+import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext, type FetchURLOptions } from './ImportResolver';
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
@@ -1454,8 +1454,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.importResolver.validateURL(url);
   }
   
-  async fetchURL(url: string, forImport: boolean = false): Promise<string> {
-    return this.importResolver.fetchURL(url, forImport);
+  async fetchURL(url: string, options?: FetchURLOptions): Promise<string> {
+    return this.importResolver.fetchURL(url, options);
   }
   
   // Note: getURLCacheTTL is now handled by ImportResolver via CacheManager

@@ -2,12 +2,16 @@
  * Type definitions for directive values arrays
  */
 import {
+  ImportType
+} from './security';
+
+import {
   TextNode,
   VariableReferenceNode,
   DotSeparatorNode,
   PathSeparatorNode,
   BaseMlldNode,
-  TTLValue,
+  TimeDurationNode,
   ExecInvocation
 } from './primitives';
 import { WithClause } from './run';
@@ -36,7 +40,8 @@ export type ContentNodeArray = Array<TextNode | VariableReferenceNode | ExecInvo
 export interface ImportValues {
   imports: ImportNodeArray;
   path: PathNodeArray;
-  ttl?: TTLValue;
+  importType?: ImportType;
+  cachedDuration?: TimeDurationNode;
   withClause?: WithClause;
 }
 

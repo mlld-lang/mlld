@@ -1,4 +1,5 @@
 import type { DirectiveNode, ContentNode } from '@core/types';
+import type { ImportType } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import { interpolate } from '../../core/interpreter';
 
@@ -9,6 +10,8 @@ export interface ImportResolution {
   resolverName?: string;
   sectionName?: string;
   moduleExtension?: string;
+  importType?: ImportType;
+  cacheDurationMs?: number;
 }
 
 type ContentNodeArray = ContentNode[];

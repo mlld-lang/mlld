@@ -5,6 +5,7 @@ import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import * as path from 'path';
+import type { ImportType } from '@core/types/security';
 import { ImportApproval } from '@core/security/ImportApproval';
 import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
@@ -49,6 +50,13 @@ export interface ImportResolverDependencies {
   getAllowAbsolutePaths: () => boolean;
 }
 
+
+export interface FetchURLOptions {
+  forImport?: boolean;
+  importType?: ImportType;
+  cacheDurationMs?: number;
+}
+
 /**
  * Context interface for parent environments in the import resolution chain
  */
@@ -78,7 +86,7 @@ export interface IImportResolver {
   isURL(path: string): boolean;
   areURLsEnabled(): boolean;
   validateURL(url: string): Promise<void>;
-  fetchURL(url: string, forImport?: boolean): Promise<string>;
+  fetchURL(url: string, options?: FetchURLOptions): Promise<string>;
   fetchURLWithMetadata(url: string): Promise<{
     content: string;
     headers: Record<string, string>;
@@ -367,98 +375,93 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     }
   }
   
-  async fetchURL(url: string, forImport: boolean = false): Promise<string> {
+  async fetchURL(url: string, options: FetchURLOptions = {}): Promise<string> {
+    const { forImport = false, importType, cacheDurationMs } = options;
+    const effectiveImportType: ImportType | undefined = importType ?? (forImport ? 'static' : undefined);
+    const isImport = Boolean(effectiveImportType);
+
     // Transform Gist URLs to raw URLs
     if (GistTransformer.isGistUrl(url)) {
       url = await GistTransformer.transformToRaw(url);
     }
-    
-    // For imports, check immutable cache first
-    if (forImport && this.getImmutableCache()) {
+
+    const urlConfig = this.dependencies.getURLConfig();
+    const cacheEnabled = urlConfig?.cache.enabled ?? true;
+
+    if (isImport && effectiveImportType === 'cached' && cacheEnabled) {
+      const cached = this.dependencies.cacheManager.getURLCacheEntry(url);
+      if (cached) {
+        const ttl = cacheDurationMs ?? cached.ttl ?? this.getURLCacheTTL(url);
+        if (Date.now() - cached.timestamp < ttl) {
+          return cached.content;
+        }
+      }
+    } else if (isImport && effectiveImportType !== 'live' && this.getImmutableCache()) {
       const cached = await this.getImmutableCache()!.get(url);
       if (cached) {
         return cached;
       }
-    }
-    
-    // Check if caching is enabled
-    const urlConfig = this.dependencies.getURLConfig();
-    const cacheEnabled = urlConfig?.cache.enabled ?? true;
-    
-    if (cacheEnabled && !forImport) {
-      // Check runtime cache for non-imports
+    } else if (!isImport && cacheEnabled) {
       const cached = this.dependencies.cacheManager.getURLCacheEntry(url);
       if (cached && this.dependencies.cacheManager.isURLCacheEntryValid(url)) {
         return cached.content;
       }
     }
-    
+
     // Validate URL
     await this.validateURL(url);
-    
+
     // Get timeout and max size from config
     const defaultOptions = this.dependencies.getDefaultUrlOptions();
     const timeout = urlConfig?.timeout || defaultOptions.timeout;
     const maxSize = urlConfig?.maxSize || defaultOptions.maxResponseSize;
-    
+
     // Fetch with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
+
     try {
       // Test hook: allow override of fetch for unit tests
       const override = (globalThis as any).__mlldFetchOverride as (u: string) => Promise<any> | undefined;
       const response = override ? await override(url) : await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);
       }
-      
+
       // Check content size
       const content = await response.text();
       if (content.length > maxSize) {
         throw new Error(`Response too large: ${content.length} bytes`);
       }
-      
-      /**
-       * Import approval security check
-       * WHY: Remote imports can introduce malicious code. Users must review and
-       * approve content before it executes in their environment.
-       * SECURITY: Content hash-based approval ensures imported code cannot change
-       * after review. Immutable cache prevents TOCTOU attacks where content
-       * changes between approval and execution.
-       * GOTCHA: Approval happens on first import only. Subsequent imports use
-       * the immutable cache, even if remote content has changed.
-       * CONTEXT: Can be bypassed with --approve-all flag for trusted environments.
-       */
+
       const approveAllImports = this.dependencies.getApproveAllImports();
-      if (forImport && this.getImportApproval() && !approveAllImports) {
+      if (isImport && this.getImportApproval() && !approveAllImports) {
         const approved = await this.getImportApproval()!.checkApproval(url, content);
         if (!approved) {
           throw new Error('Import not approved by user');
         }
-        
-        // Store in immutable cache
-        if (this.getImmutableCache()) {
+        if (effectiveImportType !== 'cached' && effectiveImportType !== 'live' && this.getImmutableCache()) {
           await this.getImmutableCache()!.set(url, content);
         }
-      } else if (forImport && approveAllImports) {
-        // Auto-approved, just store in immutable cache
-        if (this.getImmutableCache()) {
-          await this.getImmutableCache()!.set(url, content);
-        }
+      } else if (isImport && approveAllImports && effectiveImportType !== 'cached' && effectiveImportType !== 'live' && this.getImmutableCache()) {
+        await this.getImmutableCache()!.set(url, content);
       }
-      
-      // Cache the response with URL-specific TTL for non-imports
-      if (cacheEnabled && !forImport) {
+
+      if (isImport) {
+        if (effectiveImportType === 'cached' && cacheEnabled) {
+          const ttl = cacheDurationMs ?? this.getURLCacheTTL(url);
+          this.dependencies.cacheManager.setURLCacheEntry(url, content, ttl);
+        }
+      } else if (cacheEnabled) {
         const ttl = this.getURLCacheTTL(url);
         this.dependencies.cacheManager.setURLCacheEntry(url, content, ttl);
       }
-      
+
       return content;
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error?.name === 'AbortError') {
         throw new Error(`Request timed out after ${timeout}ms`);
       }
       throw error;

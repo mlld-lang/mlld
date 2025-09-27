@@ -111,8 +111,8 @@ SlashImport
 
 // Shorthand import: /import "path" or /import @input or /import "path" as name
 SlashImportShorthand
-  = DirectiveContext "/import" _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImportShorthand matched', { path, alias, tail });
+  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportShorthand matched', { path, alias, tail, importType: typeInfo?.type });
       
       // NEW: Derive namespace from path if no alias provided
       let namespace = alias;
@@ -139,6 +139,13 @@ SlashImportShorthand
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       
+      if (typeInfo) {
+        values.importType = typeInfo.type;
+        if (typeInfo.cachedDuration) {
+          values.cachedDuration = typeInfo.cachedDuration;
+        }
+      }
+      
       // Add withClause if tail modifiers present
       if (tail) {
         values.withClause = tail;
@@ -149,11 +156,17 @@ SlashImportShorthand
         namespace: namespace,  // Store namespace in raw as well
         path: path.raw?.path || path.raw?.module || path // Handle string paths like @input
       };
+      if (typeInfo) {
+        raw.importType = typeInfo.raw;
+      }
       
       // Create meta object with path metadata
       const meta = {
         path: path.meta || {}
       };
+      if (typeInfo) {
+        meta.importType = typeInfo.type;
+      }
       
       return helpers.createStructuredDirective(
         'import',
@@ -166,10 +179,11 @@ SlashImportShorthand
       );
     }
 
+
 // Full import with explicit imports list
 SlashImportFull
-  = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImport matched', { imports, path, tail });
+  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImport matched', { imports, path, tail, importType: typeInfo?.type });
       
       // Get the raw imports text
       const importsRaw = imports.map(item => {
@@ -182,7 +196,7 @@ SlashImportFull
           // Simple import with new location-aware format
           return item.name;
         }
-      }).join(", ");
+      }).join(", " );
       
       // Determine subtype (importAll, importNamespace, or importSelected)
       let subtype;
@@ -221,6 +235,13 @@ SlashImportFull
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle file, module, and URL paths
       };
       
+      if (typeInfo) {
+        values.importType = typeInfo.type;
+        if (typeInfo.cachedDuration) {
+          values.cachedDuration = typeInfo.cachedDuration;
+        }
+      }
+      
       // Add withClause if tail modifiers present
       if (tail) {
         values.withClause = tail;
@@ -231,6 +252,9 @@ SlashImportFull
         imports: importsRaw,
         path: path.raw?.path || path.raw?.module || path.raw?.url || path // Handle file, module, and URL paths
       };
+      if (typeInfo) {
+        raw.importType = typeInfo.raw;
+      }
       
       // Create meta object with path metadata
       const meta = {
@@ -239,6 +263,9 @@ SlashImportFull
           pathSubtype: path.subtype 
         }
       };
+      if (typeInfo) {
+        meta.importType = typeInfo.type;
+      }
       
       return helpers.createStructuredDirective(
         'import',
@@ -249,6 +276,38 @@ SlashImportFull
         location(),
         'path'  // Source parameter
       );
+    }
+
+
+// Import type clause supporting optional cached duration
+ImportTypeClause
+  = CachedImportType
+  / BasicImportType
+
+BasicImportType
+  = type:("module" / "static" / "live" / "local") ![a-zA-Z0-9_] {
+      const raw = text();
+      return {
+        type,
+        raw
+      };
+    }
+
+CachedImportType
+  = "cached" HWS "(" HWS duration:TimeDurationLiteral HWS ")" {
+      const raw = text();
+      return {
+        type: 'cached',
+        cachedDuration: duration,
+        raw
+      };
+    }
+  / "cached" ![a-zA-Z0-9_] {
+      const raw = text();
+      return {
+        type: 'cached',
+        raw
+      };
     }
 
 // -------------------------------------------------------------
