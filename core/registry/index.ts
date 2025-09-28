@@ -15,6 +15,27 @@ export type { CacheEntry, ModuleCacheMetadata } from './ModuleCache';
 export { HashUtils } from './utils/HashUtils';
 export type { ModuleContent } from './utils/HashUtils';
 
+export type {
+  ModuleNeeds,
+  ModuleNeedsNormalized,
+  ModuleDependencyMap,
+  PackageRequirement,
+  PackageRequirementMap,
+  RuntimeRequirement,
+  ToolRequirement,
+  VersionSpecifier
+} from './types';
+
+export {
+  normalizeModuleNeeds,
+  moduleNeedsToRuntimeNames,
+  parseVersionSpecifier,
+  formatVersionSpecifier,
+  moduleNeedsToSerializable,
+  stringifyRequirementList,
+  stringifyPackageMap
+} from './utils/ModuleNeeds';
+
 export { RegistryResolver } from './RegistryResolver';
 export type { RegistryModule, Registry, Advisory, AdvisoryFile } from './RegistryResolver';
 
