@@ -292,7 +292,6 @@ async function runTestFile(file: string): Promise<TestResult> {
         captureEnvironment: (env) => { capturedEnv = env; },
         useMarkdownFormatter: false,
         approveAllImports: true,
-        devMode: true,
         strict: false,
         returnEnvironment: true,
         normalizeBlankLines: true,

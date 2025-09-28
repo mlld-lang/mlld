@@ -417,31 +417,32 @@ export class LocalResolver implements Resolver {
    */
   validateConfig(config: any): string[] {
     const errors: string[] = [];
+    const cfg = config ?? {};
 
-    if (!config?.basePath) {
+    if (!cfg.basePath) {
       errors.push('basePath is required');
-    } else if (typeof config.basePath !== 'string') {
+    } else if (typeof cfg.basePath !== 'string') {
       errors.push('basePath must be a string');
     }
 
-    if (config.readonly !== undefined && typeof config.readonly !== 'boolean') {
+    if (cfg.readonly !== undefined && typeof cfg.readonly !== 'boolean') {
       errors.push('readonly must be a boolean');
     }
 
-    if (config.allowedExtensions !== undefined) {
-      if (!Array.isArray(config.allowedExtensions)) {
+    if (cfg.allowedExtensions !== undefined) {
+      if (!Array.isArray(cfg.allowedExtensions)) {
         errors.push('allowedExtensions must be an array');
-      } else if (!config.allowedExtensions.every(ext => typeof ext === 'string')) {
+      } else if (!cfg.allowedExtensions.every((ext: unknown) => typeof ext === 'string')) {
         errors.push('allowedExtensions must contain only strings');
       }
     }
 
-    if (config.followSymlinks !== undefined && typeof config.followSymlinks !== 'boolean') {
+    if (cfg.followSymlinks !== undefined && typeof cfg.followSymlinks !== 'boolean') {
       errors.push('followSymlinks must be a boolean');
     }
 
-    if (config.maxDepth !== undefined) {
-      if (typeof config.maxDepth !== 'number' || config.maxDepth < 0) {
+    if (cfg.maxDepth !== undefined) {
+      if (typeof cfg.maxDepth !== 'number' || cfg.maxDepth < 0) {
         errors.push('maxDepth must be a non-negative number');
       }
     }

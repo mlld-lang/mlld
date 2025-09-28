@@ -7,7 +7,7 @@ import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { ModuleContentProcessor } from './ModuleContentProcessor';
 import { VariableImporter } from './VariableImporter';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
-import { MlldImportError } from '@core/errors';
+import { MlldImportError, ErrorSeverity } from '@core/errors';
 // createVariableFromValue is now part of VariableImporter
 import { interpolate } from '../../core/interpreter';
 
@@ -105,6 +105,10 @@ export class ImportDirectiveEvaluator {
       this.validateDeclaredImportType(declaredType, resolution);
     }
 
+    if (declaredType === 'local' && resolution.type === 'module') {
+      resolution.preferLocal = true;
+    }
+
     const resolvedType = declaredType ?? this.inferImportType(resolution);
     const cacheDurationMs = resolvedType === 'cached'
       ? this.durationToMilliseconds(cachedDuration)
@@ -173,6 +177,10 @@ export class ImportDirectiveEvaluator {
         return;
 
       case 'local':
+        if (resolution.type === 'module') {
+          resolution.preferLocal = true;
+          return;
+        }
         if (resolution.type !== 'resolver' || resolverName !== 'local') {
           throw new MlldImportError("Import type 'local' expects an @local/... module.", {
             code: 'IMPORT_TYPE_MISMATCH',
@@ -321,6 +329,17 @@ export class ImportDirectiveEvaluator {
     directive: DirectiveNode,
     env: Environment
   ): Promise<EvalResult> {
+    if (resolution.preferLocal) {
+      const resolverManager = env.getResolverManager();
+      if (!resolverManager || !resolverManager.hasLocalModule(resolution.resolvedPath)) {
+        throw new MlldImportError(`Local module not found for ${resolution.resolvedPath}`, {
+          code: 'LOCAL_MODULE_NOT_FOUND',
+          severity: ErrorSeverity.Fatal,
+          details: { reference: resolution.resolvedPath }
+        });
+      }
+    }
+
     const candidates = this.buildModuleCandidates(resolution);
     let lastError: unknown = undefined;
 

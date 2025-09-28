@@ -86,8 +86,6 @@ export interface CLIOptions {
   y?: boolean;
   // Blank line normalization
   noNormalizeBlankLines?: boolean;
-  // Development mode
-  devMode?: boolean;
   // Disable prettier formatting
   noFormat?: boolean;
   // Error capture for pattern development
@@ -100,6 +98,13 @@ export interface CLIOptions {
   allowAbsolute?: boolean;
   _?: string[]; // Remaining args after command
 }
+const globalErrorHandler = new ErrorHandler();
+
+async function handleError(error: unknown, options: CLIOptions): Promise<void> {
+  await globalErrorHandler.handleError(error, options);
+  process.exit(1);
+}
+
 
 /**
  * Normalize format string to supported output format
@@ -143,6 +148,9 @@ async function readStdinIfAvailable(): Promise<string | undefined> {
       process.stdin.pause();
       process.stdin.removeAllListeners('data');
       process.stdin.removeAllListeners('end');
+      if (typeof process.stdin.unref === 'function') {
+        process.stdin.unref();
+      }
       resolve(undefined);
     }, 100);
     
@@ -154,6 +162,9 @@ async function readStdinIfAvailable(): Promise<string | undefined> {
     process.stdin.on('end', () => {
       clearTimeout(timeout);
       const content = Buffer.concat(chunks).toString('utf8');
+      if (typeof process.stdin.unref === 'function') {
+        process.stdin.unref();
+      }
       resolve(content);
     });
     
@@ -261,7 +272,6 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
-      devMode: cliOptions.devMode,
       enableTrace: true, // Enable directive trace for better error debugging
       useMarkdownFormatter: !cliOptions.noFormat,
       captureErrors: cliOptions.captureErrors

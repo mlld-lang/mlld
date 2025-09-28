@@ -5,6 +5,52 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0-rc56
+
+### Added
+- **Import Types System**: Explicit import type declarations for precise resolution control
+  - `module` imports: Registry modules cached locally (no runtime network access)
+  - `static` imports: Content embedded at parse time for zero-runtime cost
+  - `live` imports: Always fresh, fetched on every execution
+  - `cached(TTL)` imports: Time-based caching with explicit TTL (5m, 1h, 7d, etc.)
+  - `local` imports: Development mode filesystem access bypassing package management
+  - Backward compatible: Old syntax infers appropriate import types automatically
+  - Example: `/import module { api } from @corp/tools`, `/import cached(1h) <https://api.example.com> as @data`
+
+- **Unified Configuration Architecture**: Split configuration into user-editable and auto-generated files
+  - `mlld-config.json`: User dependencies, resolver prefixes, security settings, dev mode configuration
+  - `mlld-lock.json`: Auto-generated module locks with versions, hashes, and source URLs
+  - `ProjectConfig` class provides unified API for both files
+  - Automatic migration from legacy `mlld.lock.json` format
+
+- **Complete Module Management Commands**:
+  - `mlld install @author/module`: Fetch modules from registry CDN and cache locally
+  - `mlld update`: Update modules to latest versions matching constraints
+  - `mlld outdated`: Show available updates for installed modules
+  - `mlld ls`: Enhanced display with install status and cache information
+  - Public registry integration with `https://cdn.jsdelivr.net/gh/mlld-lang/registry@main/modules.json`
+
+- **Development Mode Overhaul**:
+  - `local` import type replaces `--dev` flags and `MLLD_DEV` environment variable
+  - Automatic detection of modules in `llm/modules/` directory
+  - No special flags needed - just use `/import local { helper } from @author/module`
+
+- **Import Type Inference**: Defaults based on import sources
+  - Registry modules (`@author/module`) → `module`
+  - Local files (`./file.mld`) → `static`
+  - URLs (`https://...`) → `cached(5m)`
+  - Built-in resolvers (`@input`) → `live`
+  - Local prefix (`@local/...`) → `local`
+
+### Changed
+- Lock file format updated
+- Dev mode simplified to single `local` import type instead of multiple activation methods
+
+### Fixed
+- Version resolution with "latest" tag as default
+- Lock file version enforcement prevents drift in team environments
+- Module integrity verification using SHA-256 hashes
+
 ## 2.0.0-rc55
 
 ### Added

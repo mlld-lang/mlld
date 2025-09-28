@@ -36,8 +36,6 @@ export class OptionProcessor {
       riskyApproveAll: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       // Blank line normalization
       noNormalizeBlankLines: cliOptions.noNormalizeBlankLines,
-      // Development mode
-      dev: cliOptions.devMode,
       // Disable prettier formatting
       noFormat: cliOptions.noFormat,
       // Error capture for pattern development

@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs/promises';
 import { ResolverManager } from './ResolverManager';
 import { LocalResolver } from './LocalResolver';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { RegistryResolver } from './RegistryResolver';
 import { Resolver, ResolverContent, PrefixConfig } from './types';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -304,6 +308,52 @@ describe('ResolverManager', () => {
     });
   });
   
+  describe('local module resolution', () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'resolver-local-'));
+    });
+
+    afterEach(async () => {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    });
+
+    it('prefers local modules when author matches current user', async () => {
+      const manager = new ResolverManager();
+      manager.registerResolver(new LocalResolver(new NodeFileSystem()));
+
+      const modulePath = path.join(tempDir, 'tools.mlld.md');
+      await fs.writeFile(modulePath, `---
+name: tools
+author: testuser
+---
+# Tools
+`, 'utf8');
+
+      await manager.configureLocalModules(tempDir, { currentUser: 'testuser' });
+
+      const result = await manager.resolve('@testuser/tools');
+      expect(result.resolverName).toBe('LOCAL');
+      expect(result.content.content).toContain('# Tools');
+    });
+
+    it('throws when local module is requested without access', async () => {
+      const manager = new ResolverManager();
+      manager.registerResolver(new LocalResolver(new NodeFileSystem()));
+
+      const modulePath = path.join(tempDir, 'tools.mlld.md');
+      await fs.writeFile(modulePath, `---
+name: tools
+author: testuser
+---
+`, 'utf8');
+
+      await manager.configureLocalModules(tempDir, { currentUser: 'someoneelse' });
+      await expect(manager.resolve('@testuser/tools')).rejects.toThrow();
+    });
+  });
+
   describe('custom resolver validation', () => {
     it('should prevent custom resolvers when not allowed', () => {
       const secureManager = new ResolverManager({

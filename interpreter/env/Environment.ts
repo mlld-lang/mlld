@@ -20,6 +20,7 @@ import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionErro
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
+import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
 import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
@@ -114,7 +115,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private normalizeBlankLines: boolean = true;
   
   // Development mode flag
-  private devMode: boolean = false;
+  private localModulePath?: string;
+  private configuredLocalModules: boolean = false;
   
   // Source cache for error reporting
   private sourceCache: Map<string, string> = new Map();
@@ -231,6 +233,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // Create project config instance
         projectConfig = new ProjectConfig(this.getProjectRoot());
         this.projectConfig = projectConfig;
+        const localModulesRelative = projectConfig.getLocalModulesPath?.() ?? path.join('llm', 'modules');
+        this.localModulePath = path.isAbsolute(localModulesRelative)
+          ? localModulesRelative
+          : path.join(this.getProjectRoot(), localModulesRelative);
         // We need the actual LockFile for resolver management and immutable caching
         const lockFilePath = path.join(this.getProjectRoot(), 'mlld-lock.json');
         lockFile = new LockFile(lockFilePath);
@@ -238,6 +244,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         
       } catch (error) {
         console.warn('Failed to initialize cache/lock file:', error);
+      }
+      if (!this.localModulePath) {
+        this.localModulePath = path.join(this.getProjectRoot(), 'llm', 'modules');
       }
       
       // Initialize resolver manager
@@ -1663,30 +1672,43 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   /**
-   * Set development mode flag
+   * Configure local module support once resolvers are ready
    */
-  async setDevMode(devMode: boolean): Promise<void> {
-    this.devMode = devMode;
-    // Pass to resolver manager if it exists
-    if (this.resolverManager) {
-      this.resolverManager.setDevMode(devMode);
-      
-      // Initialize dev mode prefixes if enabling
-      if (devMode) {
-        // Check for local modules directory
-        const localModulePath = this.pathService.join(this.basePath, 'llm', 'modules');
-        if (await this.fileSystem.exists(localModulePath)) {
-          await this.resolverManager.initializeDevMode(localModulePath);
-        }
-      }
+  async configureLocalModules(): Promise<void> {
+    if (!this.resolverManager) return;
+
+    const localPath = this.localModulePath;
+    if (!localPath) return;
+
+    let exists = false;
+    try {
+      exists = await this.fileSystem.exists(localPath);
+    } catch {
+      exists = false;
     }
-  }
-  
-  /**
-   * Get development mode flag
-   */
-  getDevMode(): boolean {
-    return this.devMode;
+
+    if (!exists) {
+      logger.debug(`Local modules path not found: ${localPath}`);
+      return;
+    }
+
+    let currentUser: string | undefined;
+    try {
+      const user = await GitHubAuthService.getInstance().getGitHubUser();
+      currentUser = user?.login?.toLowerCase();
+    } catch {
+      currentUser = undefined;
+    }
+
+    const prefixes = this.projectConfig?.getResolverPrefixes() ?? [];
+    const allowedAuthors = prefixes
+      .filter(prefixConfig => prefixConfig.prefix && prefixConfig.prefix.startsWith('@') && prefixConfig.resolver !== 'REGISTRY')
+      .map(prefixConfig => prefixConfig.prefix.replace(/^@/, '').replace(/\/$/, '').toLowerCase());
+
+    await this.resolverManager.configureLocalModules(localPath, {
+      currentUser,
+      allowedAuthors
+    });
   }
   
   private collectError(

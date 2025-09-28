@@ -14,7 +14,6 @@ import { testCommand } from '../commands/test';
 import { createRunCommand } from '../commands/run';
 import { errorTestCommand } from '../commands/error-test';
 import { createDevCommand } from '../commands/dev';
-import { createModeCommand } from '../commands/mode';
 import { createCleanCommand } from '../commands/clean';
 import { createNvimSetupCommand } from '../commands/nvim-setup';
 import { createUpdateCommand } from '../commands/update';
@@ -53,7 +52,6 @@ export class CommandDispatcher {
     this.commandMap.set('run', createRunCommand());
     this.commandMap.set('error-test', errorTestCommand);
     this.commandMap.set('dev', createDevCommand());
-    this.commandMap.set('mode', createModeCommand());
     this.commandMap.set('clean', createCleanCommand());
     this.commandMap.set('update', createUpdateCommand());
     this.commandMap.set('outdated', createOutdatedCommand());
@@ -180,8 +178,7 @@ export class CommandDispatcher {
       'setup': 'Configure mlld project',
       'alias': 'Create path aliases',
       'env': 'Manage environment variables',
-      'dev': 'Manage dev mode for local module development',
-      'mode': 'Set mlld execution mode',
+      'dev': 'Inspect local module discovery',
       'language-server': 'Start language server',
       'test': 'Run mlld tests',
       'run': 'Run mlld scripts',

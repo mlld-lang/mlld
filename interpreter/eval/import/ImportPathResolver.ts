@@ -12,6 +12,7 @@ export interface ImportResolution {
   moduleExtension?: string;
   importType?: ImportType;
   cacheDurationMs?: number;
+  preferLocal?: boolean;
 }
 
 type ContentNodeArray = ContentNode[];
