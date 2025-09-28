@@ -287,7 +287,7 @@ describe('Location Tracking', () => {
     });
     
     test('aliased import specifiers should have location', () => {
-      const input = '/import { data as myData } from "./file.mld"';
+      const input = '/import { data as @myData } from "./file.mld"';
       const ast = parse(input);
       
       const directive = ast[0];
@@ -300,7 +300,7 @@ describe('Location Tracking', () => {
     });
     
     test('multiple import specifiers should each have location', () => {
-      const input = '/import { foo, bar as baz, qux } from "./file.mld"';
+      const input = '/import { foo, bar as @baz, qux } from "./file.mld"';
       const ast = parse(input);
       
       const directive = ast[0];
@@ -321,7 +321,7 @@ describe('Location Tracking', () => {
     });
     
     test('wildcard imports with alias should have location', () => {
-      const input = '/import { * as utils } from "./file.mld"';
+      const input = '/import { * as @utils } from "./file.mld"';
       const ast = parse(input);
       
       const directive = ast[0];

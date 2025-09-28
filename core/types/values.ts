@@ -51,7 +51,7 @@ export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;
 export interface ImportWildcardNode extends VariableReferenceNode {
   identifier: '*';
   valueType: 'import';
-  alias?: string; // For namespace imports: @import { * as namespace } from "path"
+  alias?: string; // For namespace imports: @import { * as @namespace } from "path"
 }
 
 // Type for specific imports

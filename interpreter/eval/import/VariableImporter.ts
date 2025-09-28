@@ -453,7 +453,7 @@ export class VariableImporter {
   }
 
   /**
-   * Create a namespace variable for imports with aliased wildcards (e.g., * as config)
+   * Create a namespace variable for imports with aliased wildcards (e.g., * as @config)
    */
   createNamespaceVariable(
     alias: string, 
@@ -496,7 +496,7 @@ export class VariableImporter {
     if (directive.subtype === 'importAll') {
       throw new MlldImportError(
         'Wildcard imports \'/import { * }\' are no longer supported. ' +
-        'Use namespace imports instead: \'/import "file"\' or \'/import "file" as name\'',
+        'Use namespace imports instead: \'/import "file"\' or \'/import "file" as @name\'',
         directive.location,
         {
           suggestion: 'Change \'/import { * } from "file"\' to \'/import "file"\''

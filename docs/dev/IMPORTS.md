@@ -39,14 +39,14 @@ The mlld import system provides a flexible, secure way to share code between mod
 mlld supports the following keywords (or inferred defaults when omitted):
 
 ```
-/import module { feature } from @corp/package
-/import static <./file.mld> as systemTemplates
-/import live { value } from @input
-/import cached(5m) "https://api.example.com/data" as statusSnapshot
-/import local { helper } from @local/dev-module
+/import module { @feature } from @corp/package
+/import static <./file.mld> as @systemTemplates
+/import live { @value } from @input
+/import cached(5m) "https://api.example.com/data" as @statusSnapshot
+/import local { @helper } from @local/dev-module
 ```
 
-If no keyword is provided, mlld infers a type based on the source. The identifier after `as` is the namespace alias (no `@` prefix and independent of type names).
+If no keyword is provided, mlld infers a type based on the source. Identifiers inside the braces and after `as` should include the `@` prefix for consistency; mlld stores the alias without the prefix internally.
 
 
 - Registry modules (`@user/module`) → `module`
@@ -69,13 +69,13 @@ mlld supports three main import patterns:
 ### 1. Selected Imports
 Import specific variables from a module:
 ```mlld
-/import { helper, user } from @mlld/github
+/import { @helper, @user } from @mlld/github
 ```
 
 ### 2. Namespace Imports
 Import all exports under a namespace:
 ```mlld
-/import @mlld/github as gh
+/import @mlld/github as @gh
 ```
 
 ### 3. Simple Imports
@@ -234,7 +234,7 @@ A namespace object contains all exported variables at the top level:
 
 Field access traverses the namespace structure:
 ```mlld
-/import @mlld/github as gh
+/import @mlld/github as @gh
 /run @gh.pr.review("123", "repo", "approve", "LGTM")
 ```
 

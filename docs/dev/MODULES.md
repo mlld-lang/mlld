@@ -218,7 +218,7 @@ When a module defines a named data object (not called `module`), it creates a hy
 This allows importers to choose their preferred style:
 - `@import { http } from @user/http-client` → `http.get()`
 - `@import { get } from @user/http-client` → `get()`
-- `@import { * as client } from @user/http-client` → `client.http.get()` or `client.get()`
+- `@import { * as @client } from @user/http-client` → `client.http.get()` or `client.get()`
 
 ### Module Structure
 

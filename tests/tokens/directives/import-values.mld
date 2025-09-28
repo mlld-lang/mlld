@@ -1,34 +1,34 @@
-/import { greeting, config } from "shared.mld"
-/import { helper } from "./utils.mld"
-/import { fetchData, parseJSON } from @corp/utils
+/import { @greeting, @config } from "shared.mld"
+/import { @helper } from "./utils.mld"
+/import { @fetchData, @parseJSON } from @corp/utils
 /import @corp/utils
-/import @corp/utils as corpUtils
+/import @corp/utils as @corpUtils
 /import { API_KEY, NODE_ENV } from @input
 
 === START PARTIAL TOKENS ===
 { --> operator
-greeting --> variable
+@greeting --> variable
 , --> operator
-config --> variable
+@config --> variable
 } --> operator
 from --> keyword
 "shared.mld" --> string
 { --> operator
-helper --> variable
+@helper --> variable
 } --> operator
 from --> keyword
 "./utils.mld" --> string
 { --> operator
-fetchData --> variable
+@fetchData --> variable
 , --> operator
-parseJSON --> variable
+@parseJSON --> variable
 } --> operator
 from --> keyword
 @corp/utils --> variable[defaultLibrary]
 @corp/utils --> variable[defaultLibrary]
 @corp/utils --> variable[defaultLibrary]
 as --> keyword
-corpUtils --> variable
+@corpUtils --> variable
 { --> operator
 API_KEY --> variable
 , --> operator

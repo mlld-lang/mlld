@@ -243,13 +243,17 @@ Module imports and path imports.
 
 ```mlld
 # Modules (no quotes)
-/import { parallel, retry } from @mlld/core
-/import @corp/utils as corp
+/import { @parallel, @retry } from @mlld/core
+/import @corp/utils as @corp
 
 # Paths (quote & resolver via <> when needed)
-/import { readme } from "@base/README.md"
-/import { helper } from "./utils.mld"
+/import { @readme } from "@base/README.md"
+/import { @helper } from "./utils.mld"
 ```
+
+- Prefix identifiers in the braces with `@` so imported names match runtime variable syntax (e.g., `{ @helper }`).
+- Aliases after `as` must include `@` (e.g., `as @utils`), and wildcard imports require `* as @alias`.
+- Keywords (`module`, `static`, `live`, `cached`, `local`) can precede `/import` for explicit type hints; when omitted mlld infers the safest option.
 
 </RULE_9_IMPORTS>
 
@@ -804,7 +808,7 @@ Module-first philosophy: keep `.mld` files readable; move complexity into focuse
 * Use `/import` to compose capabilities
 * Create helpers via `/exe`, expose with shadow envs (per language, per module)
 * JS and Node have separate shadow environments; no cross-pollution
-* Prefer clear namespaces: `/import @corp/utils as utils`
+* Prefer clear namespaces: `/import @corp/utils as @utils`
 * Declare module APIs explicitly: `/export { publicFn, helper }`; auto-export sticks around only as a compatibility fallback for modules that have not been updated yet
 
 ```mlld
@@ -837,7 +841,7 @@ Tool orchestration:
 Data pipeline:
 
 ```mlld
-/import { fetchData, validate, transform } from @data/pipeline
+/import { @fetchData, @validate, @transform } from @data/pipeline
 /var @raw = @fetchData("https://api.example.com/users")
 /var @valid = @validate(@raw, { schema: "user" })
 /var @report = @transform(@valid, { format: "report" })
@@ -847,7 +851,7 @@ Data pipeline:
 Conditional workflows:
 
 ```mlld
-/import { getPR, commentOnPR } from @company/github
+/import { @getPR, @commentOnPR } from @company/github
 /var @pr = @getPR(@MLLD_PR_NUMBER)
 /when first [
   @pr.mergeable => @status = "ready"
@@ -884,7 +888,7 @@ Allow environment variables in `mlld.lock.json` (prefix `MLLD_`), then import vi
 ```
 
 ```mlld
-/import { MLLD_NODE_ENV, MLLD_API_KEY } from @input
+/import { @MLLD_NODE_ENV, @MLLD_API_KEY } from @input
 /show `Running in @MLLD_NODE_ENV`
 ```
 

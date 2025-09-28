@@ -730,7 +730,7 @@ Examples:
 
 Examples:
 - /import { x, y } from [path/to/file.mld]
-- /import { x as X } from @author/module
+- /import { x as @X } from @author/module
 - /import [file.mld] (10d) trust always
 - /import { data } from @INPUT
 - /import { utils } from "./utils.mld"    # Traditional

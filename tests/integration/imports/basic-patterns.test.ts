@@ -200,7 +200,7 @@ author: tester
 describe('Import Pattern: Namespace Imports', () => {
   it('should import entire file as namespace', async () => {
     const result = await testImport(`
-/import "./utils.mld" as utils
+/import "./utils.mld" as @utils
 /show @utils.greeting
 /show @utils.farewell`, {
       files: {
@@ -232,7 +232,7 @@ Goodbye`
   
   it('should handle nested access in namespace imports', async () => {
     const result = await testImport(`
-/import "./api.mld" as myApi
+/import "./api.mld" as @myApi
 /var @result = @myApi.users.getCount()
 /show @result`, {
       files: {

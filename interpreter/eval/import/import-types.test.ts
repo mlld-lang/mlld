@@ -37,7 +37,7 @@ describe('Import type handling', () => {
       '/var @value = "static import"'
     );
 
-    const source = `/import static <./import-types-static.mld> as staticSource\n/show @staticSource.value`;
+    const source = `/import static <./import-types-static.mld> as @staticSource\n/show @staticSource.value`;
     const output = await interpret(source, {
       fileSystem,
       pathService,
@@ -54,7 +54,7 @@ describe('Import type handling', () => {
       .spyOn(Environment.prototype, 'fetchURL')
       .mockResolvedValue('/var @value = "cached import"');
 
-    const source = `/import cached(10s) "https://example.com/cached.mld" as cached\n/show @cached.value`;
+    const source = `/import cached(10s) "https://example.com/cached.mld" as @cached\n/show @cached.value`;
     const output = await interpret(source, {
       fileSystem,
       pathService,
@@ -75,7 +75,7 @@ describe('Import type handling', () => {
       .spyOn(Environment.prototype, 'fetchURL')
       .mockResolvedValue('/var @value = "inferred cached"');
 
-    const source = `/import "https://example.com/inferred.mld" as inferred\n/show @inferred.value`;
+    const source = `/import "https://example.com/inferred.mld" as @inferred\n/show @inferred.value`;
     const output = await interpret(source, {
       fileSystem,
       pathService,
@@ -96,7 +96,7 @@ describe('Import type handling', () => {
       '/var @value = "inferred static"'
     );
 
-    const source = `/import "./import-types-file.mld" as helper\n/show @helper.value`;
+    const source = `/import "./import-types-file.mld" as @helper\n/show @helper.value`;
     const output = await interpret(source, {
       fileSystem,
       pathService,

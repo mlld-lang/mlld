@@ -76,7 +76,7 @@ SlashImport
     
   // Error: Invalid wildcard syntax (missing alias)
   / DirectiveContext "/import" _ "{" _ "*" _ "}" {
-      helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as name } from \"path\"", "as", location());
+      helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as @name } from \"path\"", "as", location());
     }
     
   // Error: Missing content after /import
@@ -109,9 +109,16 @@ SlashImport
       helpers.mlldError("Invalid /import syntax. Expected: /import \"path\", /import @module, or /import { items } from \"path\"", "\"", location());
     }
 
-// Shorthand import: /import "path" or /import @input or /import "path" as name
+// Shorthand import alias must include @ prefix when provided
 SlashImportShorthand
-  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+      helpers.mlldError(
+        `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
+        '@',
+        location()
+      );
+    }
+  / DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath alias:(_ "as" _ name:ImportAliasIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImportShorthand matched', { path, alias, tail, importType: typeInfo?.type });
       
       // NEW: Derive namespace from path if no alias provided
@@ -153,7 +160,7 @@ SlashImportShorthand
       
       // Create raw object with text segments
       const raw = {
-        namespace: namespace,  // Store namespace in raw as well
+        namespace: alias ? `@${namespace}` : namespace,  // Preserve explicit alias prefix in raw output
         path: path.raw?.path || path.raw?.module || path // Handle string paths like @input
       };
       if (typeInfo) {
@@ -191,10 +198,11 @@ SlashImportFull
           return item;
         } else if (item.original) {
           // Aliased import
-          return `${item.original} as ${item.alias}`;
+          const originalRaw = item.rawOriginal || item.original;
+          return `${originalRaw} as @${item.alias}`;
         } else {
           // Simple import with new location-aware format
-          return item.name;
+          return item.rawName || item.name;
         }
       }).join(", " );
       
@@ -535,13 +543,13 @@ ShortHash
 
 // Using standard list pattern from patterns/lists.peggy
 ImportsList
-  = "*" _ "as" _ aliasName:BaseIdentifier {
+  = "*" _ "as" _ aliasName:ImportAliasIdentifier {
       // Only allow * with explicit alias
       return [{ original: "*", alias: aliasName }];
     }
   / "*" _ &{ return input[peg$currPos] === String.fromCharCode(125); } {
       // Provide helpful error for wildcard imports without alias
-      helpers.mlldError(`Wildcard imports must have an alias. Use '/import { * as name }' or the shorthand '/import "path/to/file.mld" as name'`, "as", location());
+      helpers.mlldError(`Wildcard imports must have an alias. Use '/import { * as @name }' or the shorthand '/import "path/to/file.mld" as @name'`, "as", location());
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];
@@ -552,18 +560,41 @@ ImportsList
 
 // Individual import item with optional alias
 ImportItem
-  = name:BaseIdentifier alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
-      if (alias) {
-        return { 
-          original: name, 
-          alias: alias,
-          location: location()
-        };
-      }
+  = identifier:ImportIdentifier _ "as" _ aliasName:ImportAliasIdentifier {
       return {
-        name: name,
+        original: identifier.name,
+        alias: aliasName,
+        location: location(),
+        rawOriginal: identifier.raw
+      };
+    }
+  / identifier:ImportIdentifier _ "as" _ invalidAlias:BaseIdentifier {
+      helpers.mlldError(
+        `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
+        '@',
+        location()
+      );
+    }
+  / identifier:ImportIdentifier {
+      return {
+        name: identifier.name,
+        rawName: identifier.raw,
         location: location()
       };
+    }
+
+ImportIdentifier
+  = "@" name:BaseIdentifier {
+      return { name, raw: '@' + name };
+    }
+  / name:BaseIdentifier {
+      return { name, raw: name };
+    }
+
+// Identifier for import aliases (requires @ prefix in source)
+ImportAliasIdentifier
+  = "@" name:BaseIdentifier {
+      return name;
     }
 
 // Path parts for import context - allows @var interpolation

@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Publishing validation requires explicit `/export { ... }` manifests and records structured import metadata so later stages avoid re-parsing.
 
+- Import alias syntax: `/import` selections now accept identifiers prefixed with `@` (e.g., `@helper`), and shorthand aliases must include `@` (`as @alias`). Attempts to use bare aliases surface a targeted parser error.
+
 - **Import Type Inference**: Defaults based on import sources
   - Registry modules (`@author/module`) → `module`
   - Local files (`./file.mld`) → `static`
@@ -699,7 +701,7 @@ This release allows mlld to function as a logical router
 ### Fixed
 - **Namespace import structure for better ergonomics**
   - Namespace imports intelligently unwrap single-export modules
-  - `/import @mlld/env as environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
+- `/import @mlld/env as @environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
   - Modules exporting a single main object matching common patterns (module name, 'main', 'default', 'exports') are automatically unwrapped
   - Multiple-export modules remain unchanged, preserving full namespace structure
 
@@ -1050,7 +1052,7 @@ The `/` command approach creates clear disambiguiation between commands and vari
 ### Added:
 - **Namespace Imports**: Import entire files or modules as namespaced objects
   - File imports: `/import [./file.mld]` creates namespace from filename (e.g., `@file`)
-  - Custom alias: `/import [./file.mld] as myname` creates `@myname` namespace
+- Custom alias: `/import [./file.mld] as @myname` creates `@myname` namespace
   - Module imports: `/import @author/module` creates `@module` namespace
   - Access fields: `@namespace.field` to access imported variables
   - Replaces deprecated wildcard syntax `/import { * } from [file]`
@@ -1175,7 +1177,7 @@ The `/` command approach creates clear disambiguiation between commands and vari
   - Stack traces included for debugging
   - Works in pipelines and shows full execution context
 - **Namespace Imports**: Support for importing all variables from a file under a namespace alias (#264)
-  - Import .mld files: `@import { * as utils } from "utils.mld"` - access as `{{utils.helper}}`
+  - Import .mld files: `@import { * as @utils } from "utils.mld"` - access as `{{utils.helper}}`
   - Import JSON files: `@import { * as config } from "config.json"` - access as `{{config.name}}`
   - Nested object access: `{{config.database.host}}` for deep properties
   - Works in templates with dot notation for clean, organized variable access

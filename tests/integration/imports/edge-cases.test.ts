@@ -21,8 +21,8 @@ describe('Import Edge Cases and Error Scenarios', () => {
     
     it('should allow same name in different namespaces', async () => {
       const result = await testImport(`
-/import "./module1.mld" as m1
-/import "./module2.mld" as m2
+/import "./module1.mld" as @m1
+/import "./module2.mld" as @m2
 /show @m1.helper
 /show @m2.helper`, {
         files: {
@@ -126,7 +126,7 @@ Second`
   describe('Empty and Minimal Modules', () => {
     it('should handle import from empty module', async () => {
       const result = await testImport(`
-/import "./empty.mld" as empty
+/import "./empty.mld" as @empty
 /exe @hasVars(@obj) = js { return Object.keys(obj).length; }
 /var @count = @hasVars(@empty)
 /show @count`, {

@@ -2,7 +2,7 @@
 
 This tests accessing module frontmatter via __meta__.
 
-/import { * as utils } from "./metadata-test-module.mld"
+/import { * as @utils } from "./metadata-test-module.mld"
 /show :::Module author: {{utils.__meta__.author}}:::
 /show :::Module version: {{utils.__meta__.version}}:::
 /show :::Module description: {{utils.__meta__.description}}:::

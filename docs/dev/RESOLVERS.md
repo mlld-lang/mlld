@@ -844,7 +844,7 @@ The liberal parsing is implemented surgically in the import path evaluator:
 3. **Preserves Semantics**: Variable references in import paths still work correctly:
    ```mlld
    /path @configPath = [config.mld]
-   /import [@configPath] as config    // @configPath resolved as variable
+   /import [@configPath] as @config    // @configPath resolves to a variable
    ```
 
 ### Benefits

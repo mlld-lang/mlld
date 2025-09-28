@@ -58,7 +58,7 @@ describe.skip('Registry Module Import Tests', () => {
     
     it('should support namespace import from registry', async () => {
       const result = await testImport(`
-/import @mlld/env as environment
+/import @mlld/env as @environment
 /var @path = @environment.get("PATH")
 /show @path`, {
         env: { PATH: '/usr/bin:/bin' },
