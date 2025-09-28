@@ -16,24 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `local` imports: Development mode filesystem access bypassing package management
   - Backward compatible: Old syntax infers appropriate import types automatically
   - Example: `/import module { api } from @corp/tools`, `/import cached(1h) <https://api.example.com> as @data`
-
 - **Unified Configuration Architecture**: Split configuration into user-editable and auto-generated files
   - `mlld-config.json`: User dependencies, resolver prefixes, security settings, dev mode configuration
   - `mlld-lock.json`: Auto-generated module locks with versions, hashes, and source URLs
   - `ProjectConfig` class provides unified API for both files
   - Automatic migration from legacy `mlld.lock.json` format
-
 - **Complete Module Management Commands**:
   - `mlld install @author/module`: Fetch modules from registry CDN and cache locally
   - `mlld update`: Update modules to latest versions matching constraints
   - `mlld outdated`: Show available updates for installed modules
   - `mlld ls`: Enhanced display with install status and cache information
   - Public registry integration with `https://cdn.jsdelivr.net/gh/mlld-lang/registry@main/modules.json`
-
 - **Development Mode Overhaul**:
   - `local` import type replaces `--dev` flags and `MLLD_DEV` environment variable
   - Automatic detection of modules in `llm/modules/` directory
   - No special flags needed - just use `/import local { helper } from @author/module`
+
+### Changed
+- Publishing validation requires explicit `/export { ... }` manifests and records structured import metadata so later stages avoid re-parsing.
 
 - **Import Type Inference**: Defaults based on import sources
   - Registry modules (`@author/module`) → `module`

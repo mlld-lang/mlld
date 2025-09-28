@@ -2,6 +2,10 @@
  * Core types and interfaces for the mlld module publishing system
  */
 
+import type { MlldNode, SourceLocation } from '@core/types';
+import type { ImportType } from '@core/types';
+import type { Octokit } from '@octokit/rest';
+
 export interface PublishOptions {
   verbose?: boolean;
   dryRun?: boolean;
@@ -28,8 +32,8 @@ export interface ModuleMetadata {
   name: string;
   author: string;
   version?: string;
-  about: string;  // Renamed from description
-  needs: string[];  // Required, empty array for pure mlld
+  about: string; // Renamed from description
+  needs: string[]; // Required, empty array for pure mlld
   needsJs?: RuntimeDependencies;
   needsNode?: RuntimeDependencies;
   needsPy?: RuntimeDependencies;
@@ -38,7 +42,7 @@ export interface ModuleMetadata {
   repo?: string;
   keywords?: string[];
   homepage?: string;
-  license: string;  // Always CC0, required
+  license: string; // Always CC0, required
   mlldVersion?: string;
 }
 
@@ -60,14 +64,52 @@ export interface ModuleData {
   content: string;
   filePath: string;
   gitInfo: GitInfo;
+  ast: MlldNode[];
+}
+
+export interface ExportBinding {
+  name: string;
+  alias?: string;
+  location?: SourceLocation;
+}
+
+export type ImportSourceKind =
+  | 'registry'
+  | 'local'
+  | 'resolver'
+  | 'file'
+  | 'url'
+  | 'input'
+  | 'unknown';
+
+export interface ImportBinding {
+  name: string;
+  alias?: string;
+  location?: SourceLocation;
+}
+
+export interface ImportRecord {
+  source: ImportSourceKind;
+  importType?: ImportType;
+  path: string;
+  author?: string;
+  module?: string;
+  namespace?: string;
+  resolverName?: string;
+  preferLocal?: boolean;
+  cachedDuration?: string;
+  bindings: ImportBinding[];
+  location?: SourceLocation;
 }
 
 export interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
   warnings: ValidationWarning[];
-  updatedMetadata?: ModuleMetadata;
+  updatedMetadata?: Partial<ModuleMetadata>;
   updatedContent?: string;
+  exports?: ExportBinding[];
+  imports?: ImportRecord[];
 }
 
 export interface ValidationError {
@@ -86,16 +128,16 @@ export interface PublishContext {
   module: ModuleData;
   options: PublishOptions;
   user: GitHubUser;
-  octokit: any; // Octokit instance
-  
+  octokit: Octokit;
+
   // Validation results
   validationResult?: ValidationResult;
-  
+
   // State tracking
   changes: StateChange[];
   checkpoints: Checkpoint[];
   shouldCommitMetadata?: boolean;
-  
+
   // Methods
   rollback(): Promise<void>;
   checkpoint(name: string): void;
@@ -145,7 +187,7 @@ export interface PublishTarget {
 
 export enum PublishingMethod {
   GIST = 'gist',
-  REPOSITORY = 'repository', 
+  REPOSITORY = 'repository',
   PRIVATE = 'private'
 }
 
@@ -153,4 +195,10 @@ export interface DecisionPointResult<T = any> {
   choice: T;
   shouldContinue: boolean;
   context?: any;
+}
+
+export interface ValidationContext {
+  user: GitHubUser;
+  octokit: Octokit;
+  dryRun?: boolean;
 }

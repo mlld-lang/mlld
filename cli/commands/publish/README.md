@@ -82,9 +82,12 @@ interface PublishingStrategy {
 Modular validation with clear separation of concerns:
 
 - **SyntaxValidator**: AST parsing and reserved word checking
+- **ExportValidator**: Enforces explicit `/export { ... }` manifests and verifies exported bindings
 - **MetadataEnhancer**: Required field validation and auto-population
-- **ImportValidator**: Registry module import validation
+- **ImportValidator**: Registry, local, and resolver import policy validation
 - **DependencyValidator**: Runtime dependency consistency checking
+
+Modules must describe their public API with `/export { ... }`. The validation pipeline rejects wildcard manifests and exports that do not correspond to `/var`, `/path`, or `/exe` declarations. Import validation now records structured import metadata so later stages can enforce registry policies without re-parsing the module.
 
 ### 4. Interactive Decision System
 

@@ -2,59 +2,48 @@
  * Syntax validation for mlld modules
  */
 
-import { parseSync } from '@grammar/parser';
-import { MlldError, ErrorSeverity } from '@core/errors';
 import { ValidationStep } from '../types/PublishingStrategy';
-import { ModuleMetadata, ValidationResult } from '../types/PublishingTypes';
+import type { ModuleData, ValidationResult, ValidationError, ValidationWarning, ValidationContext } from '../types/PublishingTypes';
+import type { MlldNode } from '@core/types';
 import reservedWords from '@core/reserved.json';
-
-interface ModuleData {
-  metadata: ModuleMetadata;
-  content: string;
-  filePath: string;
-}
 
 export class SyntaxValidator implements ValidationStep {
   name = 'syntax';
 
-  async validate(module: ModuleData): Promise<ValidationResult> {
-    const errors: any[] = [];
-    
-    try {
-      const ast = parseSync(module.content);
-      
-      // Check for reserved word conflicts
-      const conflicts = this.checkReservedWordConflicts(ast);
-      if (conflicts.length > 0) {
-        errors.push({
-          field: 'content',
-          message: `Module exports variables that conflict with mlld reserved words:\n` +
-                  `    Conflicting variables: ${conflicts.join(', ')}\n` +
-                  `    Reserved words cannot be used as variable names.\n` +
-                  `    Please rename these variables to avoid conflicts.`,
-          severity: 'error' as const
-        });
-      }
-    } catch (parseError: any) {
-      const errorMessage = parseError.message || 'Unknown parse error';
-      const location = parseError.location ? 
-        ` at line ${parseError.location.start.line}, column ${parseError.location.start.column}` : '';
-      
+  async validate(module: ModuleData, _context: ValidationContext): Promise<ValidationResult> {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+    const ast = module.ast;
+
+    if (!Array.isArray(ast)) {
       errors.push({
         field: 'content',
-        message: `Invalid mlld syntax${location}: ${errorMessage}`,
-        severity: 'error' as const
+        message: 'Module parser output is unavailable. Rebuild grammar before publishing.',
+        severity: 'error'
+      });
+      return { valid: false, errors, warnings };
+    }
+
+    const conflicts = this.checkReservedWordConflicts(ast);
+    if (conflicts.length > 0) {
+      errors.push({
+        field: 'content',
+        message: `Module exports variables that conflict with mlld reserved words:\n` +
+                `    Conflicting variables: ${conflicts.join(', ')}\n` +
+                '    Reserved words cannot be used as variable names.\n' +
+                '    Rename the variables listed above to continue.',
+        severity: 'error'
       });
     }
 
     return {
       valid: errors.length === 0,
       errors,
-      warnings: []
+      warnings
     };
   }
 
-  private checkReservedWordConflicts(ast: any[]): string[] {
+  private checkReservedWordConflicts(ast: MlldNode[]): string[] {
     const exportedVariables = new Set<string>();
     
     for (const node of ast) {

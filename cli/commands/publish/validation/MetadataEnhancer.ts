@@ -3,29 +3,17 @@
  */
 
 import { ValidationStep } from '../types/PublishingStrategy';
-import { ModuleMetadata, ValidationResult, GitInfo } from '../types/PublishingTypes';
+import type { ModuleMetadata, ValidationResult, ModuleData, ValidationError, ValidationWarning, ValidationContext } from '../types/PublishingTypes';
+import type { GitInfo } from '../types/PublishingTypes';
 import { version as currentMlldVersion } from '@core/version';
 import { Octokit } from '@octokit/rest';
-
-interface ModuleData {
-  metadata: ModuleMetadata;
-  content: string;
-  filePath: string;
-  gitInfo?: GitInfo;
-}
-
-interface ValidationContext {
-  user: any;
-  octokit: Octokit;
-  dryRun?: boolean;
-}
 
 export class MetadataEnhancer implements ValidationStep {
   name = 'metadata';
 
-  async validate(module: ModuleData): Promise<ValidationResult> {
-    const errors: any[] = [];
-    const warnings: any[] = [];
+  async validate(module: ModuleData, _context: ValidationContext): Promise<ValidationResult> {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
     const updatedMetadata: Partial<ModuleMetadata> = {};
     let needsUpdate = false;
 
@@ -33,22 +21,19 @@ export class MetadataEnhancer implements ValidationStep {
     if (!module.metadata.name) {
       errors.push({
         field: 'name',
-        message: 'Missing required field: name',
-        severity: 'error' as const
+        message: 'Missing required field: name'
       });
     } else if (!module.metadata.name.match(/^[a-z0-9-]+$/)) {
       errors.push({
         field: 'name',
-        message: `Invalid module name '${module.metadata.name}'. Must be lowercase alphanumeric with hyphens.`,
-        severity: 'error' as const
+        message: `Invalid module name '${module.metadata.name}'. Must be lowercase alphanumeric with hyphens.`
       });
     }
 
     if (!module.metadata.about) {
       errors.push({
         field: 'about',
-        message: 'Missing required field: about',
-        severity: 'error' as const
+        message: 'Missing required field: about'
       });
     }
 
@@ -57,8 +42,7 @@ export class MetadataEnhancer implements ValidationStep {
         field: 'needs',
         message: 'Missing required field: needs\n' +
                 'Add to your frontmatter: needs: [] for pure mlld modules\n' +
-                'Or specify runtime dependencies: needs: ["js", "node", "py", "sh"]',
-        severity: 'error' as const
+                'Or specify runtime dependencies: needs: ["js", "node", "py", "sh"]'
       });
     } else {
       // Validate needs values
@@ -78,8 +62,7 @@ export class MetadataEnhancer implements ValidationStep {
       errors.push({
         field: 'license',
         message: `Invalid license '${module.metadata.license}'. All modules must be CC0 licensed.\n` +
-                `Please update your frontmatter to: license: CC0`,
-        severity: 'error' as const
+                `Please update your frontmatter to: license: CC0`
       });
     } else if (!module.metadata.license) {
       // Auto-add CC0 if missing
@@ -95,7 +78,7 @@ export class MetadataEnhancer implements ValidationStep {
     };
   }
 
-  async enhance(module: ModuleData): Promise<ModuleData> {
+  async enhance(module: ModuleData, _context: ValidationContext): Promise<ModuleData> {
     const updatedMetadata: Partial<ModuleMetadata> = {};
     let needsUpdate = false;
 
@@ -131,8 +114,8 @@ export class MetadataEnhancer implements ValidationStep {
     metadata: ModuleMetadata,
     user: any,
     octokit: Octokit
-  ): Promise<{ valid: boolean; errors: any[] }> {
-    const errors: any[] = [];
+  ): Promise<{ valid: boolean; errors: ValidationError[] }> {
+    const errors: ValidationError[] = [];
 
     if (metadata.author && metadata.author !== user.login) {
       // Check if the author is an organization the user belongs to

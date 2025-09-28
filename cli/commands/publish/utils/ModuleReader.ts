@@ -9,6 +9,7 @@ import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import { parseSync } from '@grammar/parser';
+import type { MlldNode } from '@core/types';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { ModuleMetadata, ModuleData, GitInfo } from '../types/PublishingTypes';
 
@@ -27,6 +28,7 @@ export class ModuleReader {
     metadata: ModuleMetadata; 
     filename: string; 
     filePath: string;
+    ast: MlldNode[];
   }> {
     // Check if path is a directory or file
     const stat = await fs.stat(modulePath);
@@ -98,8 +100,9 @@ export class ModuleReader {
     }
     
     // Parse and validate basic syntax early
+    let ast: MlldNode[];
     try {
-      parseSync(content);
+      ast = parseSync(content);
     } catch (parseError: any) {
       console.log(chalk.red('✘ Invalid mlld syntax'));
       
@@ -119,7 +122,7 @@ export class ModuleReader {
       );
     }
     
-    return { content, metadata, filename, filePath };
+    return { content, metadata, filename, filePath, ast };
   }
 
   /**
