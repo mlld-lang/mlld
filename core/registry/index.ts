@@ -10,7 +10,7 @@ export { Cache } from './Cache';
 export type { CacheMetadata } from './Cache';
 
 export { ModuleCache } from './ModuleCache';
-export type { CacheEntry, ModuleCacheMetadata } from './ModuleCache';
+export type { CacheEntry, ModuleCacheMetadata, ModuleCacheStoreOptions } from './ModuleCache';
 
 export { HashUtils } from './utils/HashUtils';
 export type { ModuleContent } from './utils/HashUtils';

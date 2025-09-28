@@ -5,6 +5,16 @@
 import type { MlldNode, SourceLocation } from '@core/types';
 import type { ImportType } from '@core/types';
 import type { Octokit } from '@octokit/rest';
+import type { ModuleNeedsNormalized, ModuleDependencyMap } from '@core/registry';
+
+export interface RuntimeDependencies {
+  node?: string;
+  python?: string;
+  shell?: string;
+  packages?: string[];
+  commands?: string[];
+}
+
 
 export interface PublishOptions {
   verbose?: boolean;
@@ -20,24 +30,19 @@ export interface PublishOptions {
   path?: string; // Custom path for private publish (default: mlld/modules/)
 }
 
-export interface RuntimeDependencies {
-  node?: string;
-  python?: string;
-  shell?: string;
-  packages?: string[];
-  commands?: string[];
-}
-
 export interface ModuleMetadata {
   name: string;
   author: string;
   version?: string;
   about: string; // Renamed from description
   needs: string[]; // Required, empty array for pure mlld
-  needsJs?: RuntimeDependencies;
-  needsNode?: RuntimeDependencies;
-  needsPy?: RuntimeDependencies;
-  needsSh?: RuntimeDependencies;
+  moduleNeeds?: ModuleNeedsNormalized; // Structured needs per spec
+  needsJs?: RuntimeDependencies; // Legacy detailed fields
+  needsNode?: RuntimeDependencies; // Legacy detailed fields
+  needsPy?: RuntimeDependencies; // Legacy detailed fields
+  needsSh?: RuntimeDependencies; // Legacy detailed fields
+  dependencies?: ModuleDependencyMap;
+  devDependencies?: ModuleDependencyMap;
   bugs?: string;
   repo?: string;
   keywords?: string[];

@@ -19,6 +19,8 @@ import { MetadataEnhancer } from './MetadataEnhancer';
 import { ImportValidator } from './ImportValidator';
 import { DependencyValidator } from './DependencyValidator';
 
+import { normalizeModuleNeeds, stringifyPackageMap, stringifyRequirementList } from '@core/registry';
+
 export class ModuleValidator {
   private readonly steps: ValidationStep[];
   private readonly enhancer: MetadataEnhancer;
@@ -135,7 +137,11 @@ export class ModuleValidator {
       'repo',
       'bugs',
       'homepage',
-      'mlldVersion'
+      'mlldVersion',
+      'needs',
+      'moduleNeeds',
+      'dependencies',
+      'devDependencies'
     ];
 
     for (const field of fieldsToCheck) {
@@ -166,29 +172,43 @@ export class ModuleValidator {
     if (metadata.version) lines.push(`version: ${metadata.version}`);
     lines.push(`about: ${metadata.about}`);
 
-    if (metadata.needs) {
-      lines.push(`needs: [${metadata.needs.map(n => `"${n}"`).join(', ')}]`);
+    const moduleNeeds = metadata.moduleNeeds ?? normalizeModuleNeeds(metadata.needs ?? []);
+    const runtimeStrings = stringifyRequirementList(moduleNeeds.runtimes);
+    const toolStrings = stringifyRequirementList(moduleNeeds.tools);
+    const packageStrings = stringifyPackageMap(moduleNeeds.packages);
+    const hasNeedsData = runtimeStrings.length > 0 || toolStrings.length > 0 || Object.keys(packageStrings).length > 0;
+
+    if (hasNeedsData) {
+      lines.push('needs:');
+      if (runtimeStrings.length > 0) {
+        lines.push(`  runtimes: [${runtimeStrings.map(value => `"${value}"`).join(', ')}]`);
+      }
+      if (toolStrings.length > 0) {
+        lines.push(`  tools: [${toolStrings.map(value => `"${value}"`).join(', ')}]`);
+      }
+      if (Object.keys(packageStrings).length > 0) {
+        lines.push('  packages:');
+        for (const ecosystem of Object.keys(packageStrings).sort()) {
+          const values = packageStrings[ecosystem];
+          lines.push(`    ${ecosystem}: [${values.map(value => `"${value}"`).join(', ')}]`);
+        }
+      }
+    } else {
+      lines.push('needs: {}');
     }
 
-    if (metadata.needs?.includes('js') && metadata.needsJs) {
-      lines.push('needs-js:');
-      if (metadata.needsJs.node) lines.push(`  node: "${metadata.needsJs.node}"`);
-      if (metadata.needsJs.packages) lines.push(`  packages: [${metadata.needsJs.packages.map(p => `"${p}"`).join(', ')}]`);
+    if (metadata.dependencies && Object.keys(metadata.dependencies).length > 0) {
+      lines.push('dependencies:');
+      for (const [depName, version] of Object.entries(metadata.dependencies)) {
+        lines.push(`  "${depName}": "${version}"`);
+      }
     }
-    if (metadata.needs?.includes('node') && metadata.needsNode) {
-      lines.push('needs-node:');
-      if (metadata.needsNode.node) lines.push(`  node: "${metadata.needsNode.node}"`);
-      if (metadata.needsNode.packages) lines.push(`  packages: [${metadata.needsNode.packages.map(p => `"${p}"`).join(', ')}]`);
-    }
-    if (metadata.needs?.includes('py') && metadata.needsPy) {
-      lines.push('needs-py:');
-      if (metadata.needsPy.python) lines.push(`  python: "${metadata.needsPy.python}"`);
-      if (metadata.needsPy.packages) lines.push(`  packages: [${metadata.needsPy.packages.map(p => `"${p}"`).join(', ')}]`);
-    }
-    if (metadata.needs?.includes('sh') && metadata.needsSh) {
-      lines.push('needs-sh:');
-      if (metadata.needsSh.shell) lines.push(`  shell: "${metadata.needsSh.shell}"`);
-      if (metadata.needsSh.commands) lines.push(`  commands: [${metadata.needsSh.commands.map(c => `"${c}"`).join(', ')}]`);
+
+    if (metadata.devDependencies && Object.keys(metadata.devDependencies).length > 0) {
+      lines.push('devDependencies:');
+      for (const [depName, version] of Object.entries(metadata.devDependencies)) {
+        lines.push(`  "${depName}": "${version}"`);
+      }
     }
 
     if (metadata.bugs) lines.push(`bugs: ${metadata.bugs}`);

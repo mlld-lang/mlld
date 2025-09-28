@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { MlldError } from '@core/errors';
-import type { ModuleCache, CacheEntry, ModuleCacheMetadata } from './ModuleCache';
+import type { ModuleCache, CacheEntry, ModuleCacheMetadata, ModuleCacheStoreOptions } from './ModuleCache';
+import { moduleNeedsToSerializable } from './utils/ModuleNeeds';
 
 /**
  * In-memory implementation of ModuleCache for ephemeral/CI environments
@@ -21,7 +22,8 @@ export class InMemoryModuleCache implements ModuleCache {
   async store(
     content: string, 
     source: string, 
-    importPath?: string
+    importPath?: string,
+    options?: ModuleCacheStoreOptions
   ): Promise<CacheEntry> {
     const hash = createHash('sha256').update(content, 'utf8').digest('hex');
     const timestamp = Date.now();
@@ -34,6 +36,14 @@ export class InMemoryModuleCache implements ModuleCache {
       size: Buffer.byteLength(content, 'utf8'),
       importPath
     };
+
+    if (options?.dependencies) {
+      metadata.dependencies = { ...options.dependencies };
+    }
+
+    if (options?.moduleNeeds) {
+      metadata.moduleNeeds = moduleNeedsToSerializable(options.moduleNeeds);
+    }
     
     // Store in cache
     this.cache.set(hash, {

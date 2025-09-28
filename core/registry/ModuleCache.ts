@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { HashUtils, ModuleContent } from './utils/HashUtils';
 import { MlldError } from '@core/errors';
+import type { ModuleNeeds, ModuleNeedsNormalized } from './types';
+import { moduleNeedsToSerializable } from './utils/ModuleNeeds';
 
 /**
  * Cache entry metadata
@@ -24,6 +26,12 @@ export interface ModuleCacheMetadata {
   size: number;
   importPath?: string;
   dependencies?: Record<string, string>; // dependency name -> hash
+  moduleNeeds?: ModuleNeeds;
+}
+
+export interface ModuleCacheStoreOptions {
+  dependencies?: Record<string, string>;
+  moduleNeeds?: ModuleNeedsNormalized;
 }
 
 /**
@@ -50,7 +58,7 @@ export class ModuleCache {
     content: string, 
     source: string, 
     importPath?: string,
-    dependencies?: Record<string, string>
+    options?: ModuleCacheStoreOptions
   ): Promise<CacheEntry> {
     const moduleContent = HashUtils.createModuleContent(content, source);
     const { prefix, rest } = HashUtils.getCachePathComponents(moduleContent.hash);
@@ -70,9 +78,16 @@ export class ModuleCache {
       source,
       cachedAt: moduleContent.metadata!.timestamp.toISOString(),
       size: moduleContent.metadata!.size,
-      importPath,
-      dependencies
+      importPath
     };
+
+    if (options?.dependencies) {
+      metadata.dependencies = { ...options.dependencies };
+    }
+
+    if (options?.moduleNeeds) {
+      metadata.moduleNeeds = moduleNeedsToSerializable(options.moduleNeeds);
+    }
     
     const metadataPath = path.join(hashDir, 'metadata.json');
     await fs.promises.writeFile(
