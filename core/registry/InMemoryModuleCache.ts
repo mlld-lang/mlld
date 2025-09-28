@@ -41,6 +41,10 @@ export class InMemoryModuleCache implements ModuleCache {
       metadata.dependencies = { ...options.dependencies };
     }
 
+    if (options?.devDependencies) {
+      metadata.devDependencies = { ...options.devDependencies };
+    }
+
     if (options?.moduleNeeds) {
       metadata.moduleNeeds = moduleNeedsToSerializable(options.moduleNeeds);
     }

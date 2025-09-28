@@ -36,6 +36,9 @@ export {
   stringifyPackageMap
 } from './utils/ModuleNeeds';
 
+export { DependencyResolver } from './DependencyResolver';
+export type { DependencyResolverOptions } from './DependencyResolver';
+
 export { RegistryResolver } from './RegistryResolver';
 export type { RegistryModule, Registry, Advisory, AdvisoryFile } from './RegistryResolver';
 

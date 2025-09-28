@@ -115,6 +115,16 @@ describe('InMemoryModuleCache', () => {
     expect(retrieved).toBe(content);
   });
 
+  it('should store devDependencies metadata', async () => {
+    const content = 'export const value = 2;';
+    const devDependencies = { '@acme/util': '2.3.4' };
+
+    const entry = await cache.store(content, 'dev-source', '@test/dev-meta', { devDependencies });
+
+    const metadata = await cache.getMetadata(entry.hash);
+    expect(metadata?.devDependencies).toEqual(devDependencies);
+  });
+
   it('should store structured module needs metadata', async () => {
     const content = 'export const value = 1;';
     const moduleNeeds = normalizeModuleNeeds({

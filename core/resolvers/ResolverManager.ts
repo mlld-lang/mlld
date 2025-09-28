@@ -12,8 +12,9 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { MlldResolutionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
-import { ModuleCache, LockFile } from '@core/registry';
+import { ModuleCache, LockFile, type ModuleCacheStoreOptions } from '@core/registry';
 import { HashUtils } from '@core/registry/utils/HashUtils';
+import { parseModuleMetadata, formatDependencyMap } from '@core/registry/utils/ModuleMetadata';
 import { hasUncommittedChanges, getGitStatus } from '@core/utils/gitStatus';
 
 /**
@@ -448,10 +449,12 @@ export class ResolverManager {
       // 4. Cache the content if cache is available (but skip local files)
       if (this.moduleCache && content.content && resolver.name !== 'LOCAL') {
         try {
+          const storeOptions = this.buildModuleCacheOptions(content);
           const cacheEntry = await this.moduleCache.store(
             content.content,
             content.metadata?.source || ref,
-            ref
+            ref,
+            storeOptions
           );
           
           // Add hash to metadata
@@ -824,6 +827,25 @@ export class ResolverManager {
    * @param ref Reference like @author/module, mlld://author/module, etc.
    * @returns Module name in @author/module format
    */
+  private buildModuleCacheOptions(content: ResolverContent): ModuleCacheStoreOptions | undefined {
+    if (content.contentType !== 'module') {
+      return undefined;
+    }
+
+    try {
+      const parsed = parseModuleMetadata(content.content);
+      return {
+        dependencies: formatDependencyMap(parsed.dependencies),
+        devDependencies: formatDependencyMap(parsed.devDependencies),
+        moduleNeeds: parsed.needs
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.debug(`Failed to parse module metadata for cache: ${message}`);
+      return undefined;
+    }
+  }
+
   private refToModuleName(ref: string): string {
     // Remove mlld:// prefix if present
     if (ref.startsWith('mlld://')) {

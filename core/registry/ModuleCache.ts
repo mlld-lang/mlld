@@ -26,11 +26,13 @@ export interface ModuleCacheMetadata {
   size: number;
   importPath?: string;
   dependencies?: Record<string, string>; // dependency name -> hash
+  devDependencies?: Record<string, string>;
   moduleNeeds?: ModuleNeeds;
 }
 
 export interface ModuleCacheStoreOptions {
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   moduleNeeds?: ModuleNeedsNormalized;
 }
 
@@ -83,6 +85,10 @@ export class ModuleCache {
 
     if (options?.dependencies) {
       metadata.dependencies = { ...options.dependencies };
+    }
+
+    if (options?.devDependencies) {
+      metadata.devDependencies = { ...options.devDependencies };
     }
 
     if (options?.moduleNeeds) {
