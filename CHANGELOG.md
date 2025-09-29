@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Module publishing requires explicit `/export { ... }` manifests
 - Import failures now stop execution (exit code 1) instead of continuing
 - Smart import type inference based on source patterns
+- Pipelines can now begin with parallel groups (e.g., `| @a || @b || @c | @d`)
+- Pipeline concurrency controls: `(n, wait)` shorthand syntax and `with { parallel, delay }` for caps
 
 ### Fixed
 - Module installation fetches from real registry instead of placeholders
