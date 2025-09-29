@@ -3,11 +3,14 @@ import { ModuleCache } from './ModuleCache';
 import { LockFile, type ModuleLockEntry, type LockFileOptions } from './LockFile';
 import { ProjectConfig } from './ProjectConfig';
 import { HashUtils } from './utils/HashUtils';
+import { DependencyResolver } from './DependencyResolver';
 import { ResolverManager, ProjectPathResolver, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, type ResolverOptions } from '@core/resolvers';
 import type { Resolver } from '@core/resolvers/types';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parseSemVer, compareSemVer } from '@core/utils/version-checker';
+
+import type { DependencyResolution } from './types';
 
 export interface ModuleSpecifier {
   name: string;
@@ -160,6 +163,16 @@ export class ModuleWorkspace {
       return `${name}@${spec.version}`;
     }
     return name;
+  async resolveDependencies(
+    specs: ModuleSpecifier[],
+    options: { includeDevDependencies?: boolean } = {}
+  ): Promise<DependencyResolution> {
+    const resolver = new DependencyResolver(this.workspace.resolverManager, this.workspace.moduleCache);
+    return resolver.resolve(specs, {
+      includeDevDependencies: options.includeDevDependencies ?? false
+    });
+  }
+
   }
 }
 
@@ -462,5 +475,15 @@ export class ModuleInstaller {
   private isRegistryEntry(entry: ModuleLockEntry): boolean {
     const source = entry.sourceUrl ?? entry.source ?? '';
     return source.startsWith('registry://') || source.includes('gist.githubusercontent.com') || source.includes('github.com');
+  async resolveDependencies(
+    specs: ModuleSpecifier[],
+    options: { includeDevDependencies?: boolean } = {}
+  ): Promise<DependencyResolution> {
+    const resolver = new DependencyResolver(this.workspace.resolverManager, this.workspace.moduleCache);
+    return resolver.resolve(specs, {
+      includeDevDependencies: options.includeDevDependencies ?? false
+    });
+  }
+
   }
 }

@@ -42,10 +42,12 @@ class OutdatedCommand {
     this.printSummary(results);
 
     if (options.verbose) {
+      const includeDev = options.includeDevDependencies ?? false;
+      const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: includeDev });
       await renderDependencySummary(this.workspace, specs, {
         verbose: options.verbose,
-        includeDevDependencies: false
-      });
+        includeDevDependencies: includeDev
+      }, resolution);
     }
   }
 
@@ -144,7 +146,8 @@ export function createOutdatedCommand() {
       const options: OutdatedOptions = {
         verbose: flags.verbose || flags.v,
         basePath: flags['base-path'] || process.cwd(),
-        format: flags.format
+        format: flags.format,
+        includeDevDependencies: flags.dev || flags['include-dev']
       };
 
       try {

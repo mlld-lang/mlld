@@ -78,6 +78,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mixed pipelines with native mlld, JavaScript, and shell commands all work together
 
 ## [2.0.0-rc54]
+### Added
+- Expose structured module dependency resolution with `ModuleInstaller.resolveDependencies` so CLI flows reuse aggregated metadata.
+- Add dependency summaries across install/update/outdated/info commands via shared helper, with optional dev-dependency inclusion.
+- Introduce `cli/utils/dependency-summary.ts` to normalize runtime/tool/package output and conflict warnings.
+### Changed
+- Cache modules with structured needs/dependency metadata to avoid re-parsing frontmatter.
+- `ResolverManager` persists structured metadata when fetching modules, enabling downstream analysis.
+
 
 ### Added
 - Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.

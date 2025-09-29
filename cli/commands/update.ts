@@ -9,6 +9,7 @@ export interface UpdateOptions {
   verbose?: boolean;
   basePath?: string;
   dryRun?: boolean;
+  includeDevDependencies?: boolean;
 }
 
 class UpdateCommand {
@@ -139,10 +140,12 @@ class UpdateCommand {
 
     const succeeded = results.filter(r => r.status !== 'failed').length;
     if (specs.length > 0 && succeeded > 0) {
+      const includeDev = options.includeDevDependencies ?? false;
+      const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: includeDev });
       await renderDependencySummary(this.workspace, specs, {
         verbose: options.verbose,
-        includeDevDependencies: false
-      });
+        includeDevDependencies: includeDev
+      }, resolution);
     }
   }
 }
@@ -162,7 +165,8 @@ export function createUpdateCommand() {
       const options: UpdateOptions = {
         verbose: flags.verbose || flags.v,
         basePath: flags['base-path'] || process.cwd(),
-        dryRun: flags['dry-run']
+        dryRun: flags['dry-run'],
+        includeDevDependencies: flags.dev || flags['include-dev']
       };
 
       try {

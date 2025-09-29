@@ -16,13 +16,19 @@ export interface DependencySummaryOptions {
 export async function renderDependencySummary(
   workspace: ModuleWorkspace,
   specs: ModuleSpecifier[],
-  options: DependencySummaryOptions = {}
+  options: DependencySummaryOptions = {},
+  precomputed?: DependencyResolution
 ): Promise<void> {
   if (specs.length === 0) {
     return;
   }
 
   try {
+    if (precomputed) {
+      printAggregatedNeeds(precomputed, options);
+      return;
+    }
+
     const resolver = new DependencyResolver(workspace.resolverManager, workspace.moduleCache);
     const resolution = await resolver.resolve(specs, {
       includeDevDependencies: options.includeDevDependencies ?? false
