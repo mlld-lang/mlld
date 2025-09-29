@@ -156,11 +156,18 @@ export class InstallCommand {
     }
 
     if (specs.length > 0 && results.every(result => result.status !== 'failed')) {
-      const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: false });
-      await renderDependencySummary(this.workspace, specs, {
-        verbose: options.verbose,
-        includeDevDependencies: false
-      }, resolution);
+      try {
+        const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: false });
+        await renderDependencySummary(this.workspace, specs, {
+          verbose: options.verbose,
+          includeDevDependencies: false
+        }, resolution);
+      } catch (error) {
+        if (options.verbose) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.log(chalk.yellow(`\nWarning: unable to analyze external dependencies (${message})`));
+        }
+      }
     }
   }
 }

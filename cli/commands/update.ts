@@ -103,6 +103,7 @@ class UpdateCommand {
     for (const result of outdated) {
       console.log(`  ${result.module}: ${result.currentVersion || 'unknown'} → ${result.latestVersion}`);
     }
+  }
 
   private async report(
     results: ModuleUpdateResult[],
@@ -140,12 +141,19 @@ class UpdateCommand {
 
     const succeeded = results.filter(r => r.status !== 'failed').length;
     if (specs.length > 0 && succeeded > 0) {
-      const includeDev = options.includeDevDependencies ?? false;
-      const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: includeDev });
-      await renderDependencySummary(this.workspace, specs, {
-        verbose: options.verbose,
-        includeDevDependencies: includeDev
-      }, resolution);
+      try {
+        const includeDev = options.includeDevDependencies ?? false;
+        const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: includeDev });
+        await renderDependencySummary(this.workspace, specs, {
+          verbose: options.verbose,
+          includeDevDependencies: includeDev
+        }, resolution);
+      } catch (error) {
+        if (options.verbose) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.log(chalk.yellow(`\nWarning: unable to analyze external dependencies (${message})`));
+        }
+      }
     }
   }
 }

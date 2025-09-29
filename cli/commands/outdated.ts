@@ -42,12 +42,17 @@ class OutdatedCommand {
     this.printSummary(results);
 
     if (options.verbose) {
-      const includeDev = options.includeDevDependencies ?? false;
-      const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: includeDev });
-      await renderDependencySummary(this.workspace, specs, {
-        verbose: options.verbose,
-        includeDevDependencies: includeDev
-      }, resolution);
+      try {
+        const includeDev = options.includeDevDependencies ?? false;
+        const resolution = await this.installer.resolveDependencies(specs, { includeDevDependencies: includeDev });
+        await renderDependencySummary(this.workspace, specs, {
+          verbose: options.verbose,
+          includeDevDependencies: includeDev
+        }, resolution);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.yellow(`\nWarning: unable to analyze external dependencies (${message})`));
+      }
     }
   }
 

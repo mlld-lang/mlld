@@ -163,6 +163,8 @@ export class ModuleWorkspace {
       return `${name}@${spec.version}`;
     }
     return name;
+  }
+
   async resolveDependencies(
     specs: ModuleSpecifier[],
     options: { includeDevDependencies?: boolean } = {}
@@ -171,8 +173,6 @@ export class ModuleWorkspace {
     return resolver.resolve(specs, {
       includeDevDependencies: options.includeDevDependencies ?? false
     });
-  }
-
   }
 }
 
@@ -475,6 +475,8 @@ export class ModuleInstaller {
   private isRegistryEntry(entry: ModuleLockEntry): boolean {
     const source = entry.sourceUrl ?? entry.source ?? '';
     return source.startsWith('registry://') || source.includes('gist.githubusercontent.com') || source.includes('github.com');
+  }
+
   async resolveDependencies(
     specs: ModuleSpecifier[],
     options: { includeDevDependencies?: boolean } = {}
@@ -485,5 +487,4 @@ export class ModuleInstaller {
     });
   }
 
-  }
 }
