@@ -362,10 +362,28 @@ Run multiple transforms concurrently within a single pipeline stage using `||`.
 /show @out
 ```
 
+Pipelines can also start with a leading `||` to run parallel stages immediately:
+
+```mlld
+/exe @fetchA() = "A"
+/exe @fetchB() = "B"
+/exe @fetchC() = "C"
+
+# Leading || runs all three in parallel
+/var @results = || @fetchA() || @fetchB() || @fetchC()
+/show @results
+```
+
+Output:
+```
+["A","B","C"]
+```
+
 Notes:
 - Results preserve order of commands in the group.
 - The next stage receives a JSON array string (parse it or accept as text).
 - Concurrency is capped by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Leading `||` syntax avoids ambiguity with boolean OR expressions.
 - Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
 - Inline effects attached to grouped commands run after each command completes.
 

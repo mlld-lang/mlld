@@ -36,8 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Module publishing requires explicit `/export { ... }` manifests
 - Import failures now stop execution (exit code 1) instead of continuing
 - Smart import type inference based on source patterns
-- Pipelines can now begin with parallel groups (e.g., `| @a || @b || @c | @d`)
-- Pipeline concurrency controls: `(n, wait)` shorthand syntax and `with { parallel, delay }` for caps
+- Pipelines support leading `||` operator for immediate parallel execution: `/var @result = || @a() || @b() || @c()` runs all three functions concurrently
+- Leading parallel syntax works in `/var`, `/run`, and `/exe` definitions
+- Pipeline concurrency controls: `(n, wait)` shorthand syntax and `with { parallel: n, delay: wait }` for caps and pacing
 
 ### Fixed
 - Module installation fetches from real registry instead of placeholders

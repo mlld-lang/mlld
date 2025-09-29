@@ -2,7 +2,7 @@ import type { ExecInvocation, WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
-import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
+import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
@@ -937,6 +937,20 @@ export async function evaluateExecInvocation(
   if (isTemplateExecutable(definition)) {
     // Interpolate the template with the bound parameters
     result = await interpolate(definition.template, execEnv);
+  }
+  // Handle pipeline executables
+  else if (isPipelineExecutable(definition)) {
+    const { processPipeline } = await import('./pipeline/unified-processor');
+    const pipelineResult = await processPipeline({
+      value: '',
+      env: execEnv,
+      pipeline: definition.pipeline,
+      format: definition.format,
+      identifier: commandName,
+      location: node.location,
+      isRetryable: false
+    });
+    result = typeof pipelineResult === 'string' ? pipelineResult : String(pipelineResult ?? '');
   }
   // Handle command executables
   else if (isCommandExecutable(definition)) {

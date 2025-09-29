@@ -200,7 +200,11 @@ Pipeline stages run in parallel when grouped with `||`.
 
 - Grouping: `A || B || C` forms one stage that executes `A`, `B`, and `C` concurrently; results preserve command order.
 - With-clause parity: Nested arrays in `with { pipeline: [...] }` represent a parallel stage. Example: `with { pipeline: [ [@left, @right], @combine ] }` is equivalent to `| @left || @right | @combine`.
-- Leading groups: A pipeline may start with a parallel group (`@a || @b`) without a preceding stage.
+- Leading groups: Pipelines can start with a leading `||` operator to execute parallel stages immediately. Examples:
+  - `/var @result = || @a() || @b() || @c()` runs all three in parallel, returns `["resultA", "resultB", "resultC"]`
+  - `/var @out = || @func1() || @func2() | @combine` parallel group followed by combiner
+  - `/exe @composed() = || @helper1() || @helper2() | @merge` works in exe definitions
+- Leading `||` syntax: The double-bar prefix explicitly enters pipeline mode with parallel execution, avoiding ambiguity with boolean OR (`||`) expressions.
 - Output: The next stage receives a JSON array string of the group’s outputs.
 - Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 - Caps and pacing: `(n, wait)` after the pipeline sets a per-pipeline concurrency cap and delay between starts, equivalent to `with { parallel: n, delay: wait }`.

@@ -3,7 +3,32 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 ExeRHSContent "exe assignment value"
-  = WhenExpression              // when: [...] expressions for conditional execution
+  = leading:LeadingParallelPipeline {
+      const pipeline = leading.withClause.pipeline || [];
+      const pipelineSummary = pipeline.map(stage => {
+        if (Array.isArray(stage)) {
+          return `[${stage.map(cmd => `@${cmd.rawIdentifier}`).join(', ')}]`;
+        }
+        return `@${stage.rawIdentifier}`;
+      }).join(' | ');
+      return {
+        type: 'exePipelineLeading',
+        subtype: 'exeCommand',
+        source: 'pipeline',
+        values: {
+          withClause: leading.withClause
+        },
+        raw: {
+          pipeline: pipelineSummary
+        },
+        meta: {
+          hasPipeline: true,
+          isPipelineOnly: true,
+          pipelineSource: 'leadingParallel'
+        }
+      };
+    }
+  / WhenExpression              // when: [...] expressions for conditional execution
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
