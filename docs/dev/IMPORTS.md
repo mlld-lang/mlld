@@ -33,25 +33,85 @@ The mlld import system provides a flexible, secure way to share code between mod
 
 ### Key Features
 - **Module isolation**: Each module evaluates in its own environment
-- **Automatic exports**: All top-level variables are exported by default
+
+### Import Types
+
+mlld supports five import types that control resolution behavior:
+
+#### 1. `module` - Registry Modules
+```mlld
+/import module { @api, @utils } from @corp/toolkit
+```
+- Pre-installed from registry via `mlld install`
+- Cached locally, no runtime network access
+- Version-locked for reproducibility
+- Fails if module not installed
+
+#### 2. `static` - Parse-Time Embedding
+```mlld
+/import static <./prompts/system.md> as @prompt
+/import static <./config.json> as @config
+```
+- Content embedded in AST at parse time
+- Zero runtime cost
+- Perfect for templates and configuration
+
+#### 3. `live` - Always Fresh
+```mlld
+/import live { @timestamp } from @now
+/import live <https://api.status.com> as @status
+```
+- Fetched on every execution
+- Never cached
+- Use for real-time data
+
+#### 4. `cached(TTL)` - Time-Based Caching
+```mlld
+/import cached(5m) <https://api.github.com/rate_limit> as @limits
+/import cached(1h) <https://cdn.example.com/data> as @assets
+```
+- Cache-first with explicit TTL
+- Network access only when cache expired
+- TTL units: s/m/h/d/w
+
+#### 5. `local` - Development Mode
+```mlld
+/import local { @helper } from @alice/dev-module
+```
+- Direct filesystem access to `llm/modules/`
+- Bypasses package management
+- Only works if user is `@alice` or has resolver configured
+
+### Import Type Inference
+
+When no type specified, mlld infers based on source:
+- Registry modules (`@author/module`) → `module`
+- Local files (`./file.mld`) → `static`
+- URLs (`https://...`) → `cached(5m)`
+- Built-in resolvers (`@input`) → `live`
+- Local prefix (`@local/`) → `local`
+
+### Key Features
+- **Module isolation**: Each module evaluates in its own environment
+- **Explicit export manifests**: Modules declare public bindings with `/export { ... }`
 - **Shadow environment preservation**: Functions maintain access to their original context
 - **Type preservation**: Variable types are maintained through import/export
-- **Flexible resolution**: Support for local files, registry modules, and URLs
+- **Import type routing**: Five distinct resolution strategies for different use cases
 
-## Import Types
+## Import Patterns
 
 mlld supports three main import patterns:
 
 ### 1. Selected Imports
 Import specific variables from a module:
 ```mlld
-/import { helper, user } from @mlld/github
+/import { @helper, @user } from @mlld/github
 ```
 
 ### 2. Namespace Imports
 Import all exports under a namespace:
 ```mlld
-/import @mlld/github as gh
+/import @mlld/github as @gh
 ```
 
 ### 3. Simple Imports
@@ -144,11 +204,19 @@ Import Directive → Path Resolution → Content Fetching → Module Evaluation 
    // Create isolated environment
    const childEnv = env.createChild(importDir);
    
-   // Evaluate module AST
+   // Evaluate module AST (directives run with importing guard enabled)
    const result = await evaluate(ast, childEnv);
-   
-   // Extract exports
-   const exports = processModuleExports(childEnv.getCurrentVariables());
+   const frontmatterData = extractFrontmatter(ast);
+
+   // Capture manifest declared via /export; fallback to auto-export otherwise
+   const manifest = childEnv.getExportManifest();
+   const parseResult = { frontmatter: frontmatterData };
+   const exports = processModuleExports(
+     childEnv.getCurrentVariables(),
+     parseResult,
+     false,
+     manifest
+   );
    ```
 
 5. **Variable Import**
@@ -202,7 +270,7 @@ A namespace object contains all exported variables at the top level:
 
 Field access traverses the namespace structure:
 ```mlld
-/import @mlld/github as gh
+/import @mlld/github as @gh
 /run @gh.pr.review("123", "repo", "approve", "LGTM")
 ```
 
@@ -348,21 +416,41 @@ The registry provides metadata including:
 
 ## Variable Import and Export
 
-### Automatic Export
+### Explicit Export Manifest
 
-All top-level variables are exported except:
-- System variables (marked with `isSystem: true`)
-- Variables starting with underscore (future convention)
+- Modules declare their public API with `/export { name, other }`.
+- `evaluateExport` records identifiers and directive locations in `ExportManifest` stored on the module child environment.
+- `/export { * }` clears the manifest to retain the compatibility auto-export semantics.
+- After evaluation, `processModuleExports` receives the manifest and filters `childVars` to the declared names.
+- Missing names raise `MlldImportError (EXPORTED_NAME_NOT_FOUND)` with the original `/export` location for debugging.
 
 ```typescript
-function isLegitimateVariableForExport(variable: Variable): boolean {
-  // System variables (like @fm) should not be exported
-  if (variable.metadata?.isSystem) {
-    return false;
+const manifest = childEnv.getExportManifest();
+const explicitNames = manifest?.getNames();
+if (explicitNames) {
+  for (const name of explicitNames) {
+    if (!childVars.has(name)) {
+      throw new MlldImportError(
+        `Exported name '${name}' is not defined in this module`,
+        {
+          code: 'EXPORTED_NAME_NOT_FOUND',
+          context: { exportName: name, location: manifest?.getLocation(name) }
+        }
+      );
+    }
   }
-  return true;
 }
 ```
+
+### Auto-Export Fallback
+
+Modules without explicit `/export` manifest auto-export all legitimate variables (system variables remain hidden).
+
+### Import Alias Collision Protection
+
+- `Environment` tracks imported binding names per file.
+- `ensureImportBindingAvailable` raises `IMPORT_NAME_CONFLICT` before setting the variable if another import already claimed the alias, reporting both source paths and locations.
+- `setVariableWithImportBinding` persists the binding only after `setVariable` succeeds so failed imports never leave stale reservations behind.
 
 ### Type Preservation
 
@@ -543,11 +631,52 @@ childEnv.setCurrentFilePath(resolvedPath);
 const result = await evaluate(ast, childEnv);
 ```
 
+### Import Directive Guard
+
+- `ModuleContentProcessor` sets `childEnv.setImporting(true)` before invoking `evaluate` and clears the flag in a `finally` block.
+- `/run`, `/output`, and `/show` check `env.getIsImporting()` and become no-ops during import evaluation, preventing module-level side effects.
+- Cached module loads reuse the guard so long-running imports do not leak the flag into normal execution.
+
+### Captured Module Scope
+
+- Executables and templates defined during import capture the module's variable map and shadow environments in their metadata.
+- `VariableImporter.processModuleExports()` serializes those captures, and `exec-invocation` rehydrates them so imported command references resolve siblings exactly as they did in the source module.
+- Shadow environments follow the same capture → serialize → rehydrate workflow, ensuring helpers remain callable across module boundaries.
+
 ### Variable Scoping
 
-- Child environment variables don't pollute parent
-- Explicit export/import creates controlled sharing
-- Shadow environments use lexical + dynamic scoping hybrid
+- Child environment variables do not pollute the parent.
+- Explicit export/import creates controlled sharing.
+- Shadow environments use a lexical + dynamic hybrid (captured first, then current environment).
+
+### Lock File Version Enforcement
+
+**Overview**: Registry imports are validated against the lock file to ensure reproducible builds.
+
+**Implementation**: In `ImportDirectiveEvaluator.evaluateModuleImport()`, after module resolution but before content processing:
+
+```typescript
+// Validate version against lock file for registry modules
+await this.validateLockFileVersion(candidate, resolverContent, env);
+```
+
+**Validation Logic**:
+- **Registry modules only**: Only validates modules with `metadata.source` starting with `registry://`
+- **Version comparison**: Compares `registryVersion` from lock file with resolved version
+- **Legacy support**: Gracefully handles lock entries without `registryVersion` field
+- **New modules**: Allows imports when no lock entry exists
+
+**Error Handling**:
+```
+Locked version mismatch for @user/module:
+lock file has version 1.1.0, but resolved to version 1.2.0.
+Run 'mlld install' to update the lock file or specify the locked version explicitly.
+```
+
+**Interaction with Hash Validation**:
+- Version enforcement runs **before** hash validation
+- Both checks must pass for successful import
+- Version enforcement is an additional layer on top of existing integrity checks
 
 ### Performance Considerations
 
@@ -555,3 +684,18 @@ const result = await evaluate(ast, childEnv);
 2. **Complex Content Detection**: Could benefit from memoization
 3. **Shadow Environment Capture**: Only captured when needed
 4. **Field Access**: Direct object traversal, no string parsing
+
+
+## Import Types and Inference
+
+The five supported keywords map to distinct resolver behaviours. When a directive omits a keyword, the evaluator infers a conservative default:
+
+| Keyword | Behaviour | Typical Sources | Notes |
+|---------|-----------|-----------------|-------|
+| `module` | Load through registry manager | `@user/module` | Fails if path is not a registry module |
+| `static` | Embed content once | Relative files, `@base/...` | Works with `<path>` and quoted strings |
+| `live` | Fetch on every evaluation | `@input`, `@resolver` | Skips caching/autocache |
+| `cached(ttl)` | Cache-first with TTL | Absolute URLs | TTL uses `Xs`, `Xm`, `Xh`, `Xd`, `Xw` (seconds/minutes/hours/days/weeks) |
+| `local` | Read from dev modules | `@local/...` | Bypasses registry locking |
+
+Inference defaults: registry modules → `module`, files → `static`, URLs → `cached`, `@input` → `live`, `@local` → `local`, `@base/@project` → `static`. Any mismatch raises an `IMPORT_TYPE_MISMATCH` error before evaluation.

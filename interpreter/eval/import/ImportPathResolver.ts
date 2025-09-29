@@ -1,4 +1,5 @@
 import type { DirectiveNode, ContentNode } from '@core/types';
+import type { ImportType } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import { interpolate } from '../../core/interpreter';
 
@@ -8,6 +9,10 @@ export interface ImportResolution {
   expectedHash?: string;
   resolverName?: string;
   sectionName?: string;
+  moduleExtension?: string;
+  importType?: ImportType;
+  cacheDurationMs?: number;
+  preferLocal?: boolean;
 }
 
 type ContentNodeArray = ContentNode[];
@@ -201,13 +206,14 @@ export class ImportPathResolver {
     }
 
     // Extract hash from the module reference if present
-    const { moduleRef, expectedHash } = this.extractHashFromPath(importPath, directive);
+    const { moduleRef, expectedHash, extension } = this.extractHashFromPath(importPath, directive);
 
     return {
       type: 'module',
       resolvedPath: moduleRef,
       expectedHash,
-      sectionName
+      sectionName,
+      moduleExtension: extension
     };
   }
 
@@ -260,22 +266,29 @@ export class ImportPathResolver {
   private extractHashFromPath(
     importPath: string, 
     directive: DirectiveNode
-  ): { moduleRef: string; expectedHash?: string } {
+  ): { moduleRef: string; expectedHash?: string; extension?: string } {
     let moduleRef = importPath;
     let expectedHash: string | undefined;
-    
-    // Check if the directive has hash information in metadata
+    let extension: string | undefined;
+
     const pathMeta = directive.meta?.path;
+
     if (pathMeta && pathMeta.hash) {
       expectedHash = pathMeta.hash;
-      // Remove hash from module reference for resolution
-      const hashIndex = importPath.lastIndexOf('@');
+      const hashIndex = moduleRef.lastIndexOf('@');
       if (hashIndex > 0) {
-        moduleRef = importPath.substring(0, hashIndex);
+        moduleRef = moduleRef.substring(0, hashIndex);
       }
     }
 
-    return { moduleRef, expectedHash };
+    if (pathMeta && pathMeta.extension) {
+      extension = pathMeta.extension;
+      if (moduleRef.endsWith(extension)) {
+        moduleRef = moduleRef.substring(0, moduleRef.length - extension.length);
+      }
+    }
+
+    return { moduleRef, expectedHash, extension };
   }
 
   /**

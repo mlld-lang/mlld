@@ -76,7 +76,7 @@ SlashImport
     
   // Error: Invalid wildcard syntax (missing alias)
   / DirectiveContext "/import" _ "{" _ "*" _ "}" {
-      helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as name } from \"path\"", "as", location());
+      helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as @name } from \"path\"", "as", location());
     }
     
   // Error: Missing content after /import
@@ -109,10 +109,17 @@ SlashImport
       helpers.mlldError("Invalid /import syntax. Expected: /import \"path\", /import @module, or /import { items } from \"path\"", "\"", location());
     }
 
-// Shorthand import: /import "path" or /import @input or /import "path" as name
+// Shorthand import alias must include @ prefix when provided
 SlashImportShorthand
-  = DirectiveContext "/import" _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImportShorthand matched', { path, alias, ttl, tail });
+  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+      helpers.mlldError(
+        `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
+        '@',
+        location()
+      );
+    }
+  / DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath alias:(_ "as" _ name:ImportAliasIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportShorthand matched', { path, alias, tail, importType: typeInfo?.type });
       
       // NEW: Derive namespace from path if no alias provided
       let namespace = alias;
@@ -139,9 +146,11 @@ SlashImportShorthand
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
+      if (typeInfo) {
+        values.importType = typeInfo.type;
+        if (typeInfo.cachedDuration) {
+          values.cachedDuration = typeInfo.cachedDuration;
+        }
       }
       
       // Add withClause if tail modifiers present
@@ -151,14 +160,20 @@ SlashImportShorthand
       
       // Create raw object with text segments
       const raw = {
-        namespace: namespace,  // Store namespace in raw as well
+        namespace: alias ? `@${namespace}` : namespace,  // Preserve explicit alias prefix in raw output
         path: path.raw?.path || path.raw?.module || path // Handle string paths like @input
       };
+      if (typeInfo) {
+        raw.importType = typeInfo.raw;
+      }
       
       // Create meta object with path metadata
       const meta = {
         path: path.meta || {}
       };
+      if (typeInfo) {
+        meta.importType = typeInfo.type;
+      }
       
       return helpers.createStructuredDirective(
         'import',
@@ -171,10 +186,11 @@ SlashImportShorthand
       );
     }
 
+
 // Full import with explicit imports list
 SlashImportFull
-  = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImport matched', { imports, path, ttl, tail });
+  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImport matched', { imports, path, tail, importType: typeInfo?.type });
       
       // Get the raw imports text
       const importsRaw = imports.map(item => {
@@ -182,12 +198,13 @@ SlashImportFull
           return item;
         } else if (item.original) {
           // Aliased import
-          return `${item.original} as ${item.alias}`;
+          const originalRaw = item.rawOriginal || item.original;
+          return `${originalRaw} as @${item.alias}`;
         } else {
           // Simple import with new location-aware format
-          return item.name;
+          return item.rawName || item.name;
         }
-      }).join(", ");
+      }).join(", " );
       
       // Determine subtype (importAll, importNamespace, or importSelected)
       let subtype;
@@ -226,9 +243,11 @@ SlashImportFull
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle file, module, and URL paths
       };
       
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
+      if (typeInfo) {
+        values.importType = typeInfo.type;
+        if (typeInfo.cachedDuration) {
+          values.cachedDuration = typeInfo.cachedDuration;
+        }
       }
       
       // Add withClause if tail modifiers present
@@ -241,6 +260,9 @@ SlashImportFull
         imports: importsRaw,
         path: path.raw?.path || path.raw?.module || path.raw?.url || path // Handle file, module, and URL paths
       };
+      if (typeInfo) {
+        raw.importType = typeInfo.raw;
+      }
       
       // Create meta object with path metadata
       const meta = {
@@ -249,6 +271,9 @@ SlashImportFull
           pathSubtype: path.subtype 
         }
       };
+      if (typeInfo) {
+        meta.importType = typeInfo.type;
+      }
       
       return helpers.createStructuredDirective(
         'import',
@@ -259,6 +284,38 @@ SlashImportFull
         location(),
         'path'  // Source parameter
       );
+    }
+
+
+// Import type clause supporting optional cached duration
+ImportTypeClause
+  = CachedImportType
+  / BasicImportType
+
+BasicImportType
+  = type:("module" / "static" / "live" / "local") ![a-zA-Z0-9_] {
+      const raw = text();
+      return {
+        type,
+        raw
+      };
+    }
+
+CachedImportType
+  = "cached" HWS "(" HWS duration:TimeDurationLiteral HWS ")" {
+      const raw = text();
+      return {
+        type: 'cached',
+        cachedDuration: duration,
+        raw
+      };
+    }
+  / "cached" ![a-zA-Z0-9_] {
+      const raw = text();
+      return {
+        type: 'cached',
+        raw
+      };
     }
 
 // -------------------------------------------------------------
@@ -414,7 +471,8 @@ QuotedPath
 // Module reference: @namespace/path/to/module@hash
 ModuleReference
   = "@" id:ModuleIdentifier {
-      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${id.hash ? '@' + id.hash : ''}`;
+      const extension = id.extension ? `.${id.extension}` : '';
+      const rawModule = `@${id.namespace}${id.path.length > 0 ? '/' + id.path.join('/') : ''}/${id.name}${extension}${id.hash ? '@' + id.hash : ''}`;
       return {
         type: 'module',
         subtype: 'moduleReference',
@@ -429,6 +487,7 @@ ModuleReference
           namespace: id.namespace,
           path: id.path,
           name: id.name,
+          ...(id.extension ? { extension: `.${id.extension}` } : {}),
           ...(id.hash ? { hash: id.hash } : {})
         }
       };
@@ -441,17 +500,24 @@ ModuleIdentifier
         namespace,
         path: pathAndName.path,
         name: pathAndName.name,
+        ...(pathAndName.extension ? { extension: pathAndName.extension } : {}),
         ...(hash ? { hash } : {})
       };
     }
 
 // Module path and name - handles both @namespace/name and @namespace/path/to/name
 ModulePathAndName
-  = segments:(segment:ModulePath "/" { return segment; })* name:ModuleName {
+  = segments:(segment:ModulePath "/" { return segment; })* name:ModuleName extension:ModuleExtension? {
       return {
         path: segments,
-        name: name
+        name: name,
+        ...(extension ? { extension } : {})
       };
+    }
+
+ModuleExtension "Module extension"
+  = "." base:('mld' / 'mlld' / 'md') suffix:('.md')? {
+      return base + (suffix || '');
     }
 
 // Module namespace (user or organization name) - allows hyphens
@@ -477,13 +543,13 @@ ShortHash
 
 // Using standard list pattern from patterns/lists.peggy
 ImportsList
-  = "*" _ "as" _ aliasName:BaseIdentifier {
+  = "*" _ "as" _ aliasName:ImportAliasIdentifier {
       // Only allow * with explicit alias
       return [{ original: "*", alias: aliasName }];
     }
   / "*" _ &{ return input[peg$currPos] === String.fromCharCode(125); } {
       // Provide helpful error for wildcard imports without alias
-      helpers.mlldError(`Wildcard imports must have an alias. Use '/import { * as name }' or the shorthand '/import "path/to/file.mld" as name'`, "as", location());
+      helpers.mlldError(`Wildcard imports must have an alias. Use '/import { * as @name }' or the shorthand '/import "path/to/file.mld" as @name'`, "as", location());
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];
@@ -494,18 +560,41 @@ ImportsList
 
 // Individual import item with optional alias
 ImportItem
-  = name:BaseIdentifier alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
-      if (alias) {
-        return { 
-          original: name, 
-          alias: alias,
-          location: location()
-        };
-      }
+  = identifier:ImportIdentifier _ "as" _ aliasName:ImportAliasIdentifier {
       return {
-        name: name,
+        original: identifier.name,
+        alias: aliasName,
+        location: location(),
+        rawOriginal: identifier.raw
+      };
+    }
+  / identifier:ImportIdentifier _ "as" _ invalidAlias:BaseIdentifier {
+      helpers.mlldError(
+        `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
+        '@',
+        location()
+      );
+    }
+  / identifier:ImportIdentifier {
+      return {
+        name: identifier.name,
+        rawName: identifier.raw,
         location: location()
       };
+    }
+
+ImportIdentifier
+  = "@" name:BaseIdentifier {
+      return { name, raw: '@' + name };
+    }
+  / name:BaseIdentifier {
+      return { name, raw: name };
+    }
+
+// Identifier for import aliases (requires @ prefix in source)
+ImportAliasIdentifier
+  = "@" name:BaseIdentifier {
+      return name;
     }
 
 // Path parts for import context - allows @var interpolation

@@ -42,10 +42,14 @@ export async function evaluateShow(
   env: Environment,
   context?: any
 ): Promise<EvalResult> {
-  
+  // Check if we're importing - skip execution if so
+  if (env.getIsImporting()) {
+    return { value: null, env };
+  }
+
   if (process.env.MLLD_DEBUG === 'true') {
   }
-  
+
   let content = '';
   
   if (directive.subtype === 'showVariable') {
@@ -241,20 +245,32 @@ export async function evaluateShow(
     } else if (isPath(variable)) {
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
-      const isURL = variable.value.isURL;
-      const security = variable.value.security;
+      const isURL = variable.value.isURL || /^https?:\/\//.test(pathValue);
       
       try {
-        if (isURL && security) {
-          // Use URL cache with security options
-          value = await env.fetchURLWithSecurity(pathValue, security, varName);
-        } else {
-          // Regular file or URL without security options
-          value = await env.readFile(pathValue);
-        }
+        value = await env.readFile(pathValue);
       } catch (error) {
-        // If it's not a file or can't be read, use the path itself
-        value = pathValue;
+        // Try test hook override if available
+        try {
+          if (isURL) {
+            const override = (globalThis as any).__mlldFetchOverride as (u: string) => Promise<any> | undefined;
+            if (override) {
+              const resp = await override(pathValue);
+              if (resp && typeof resp.text === 'function') {
+                value = await resp.text();
+              } else {
+                value = String(resp);
+              }
+            } else {
+              value = pathValue;
+            }
+          } else {
+            value = pathValue;
+          }
+        } catch {
+          // Fallback to the path itself on any unexpected errors
+          value = pathValue;
+        }
       }
     } else if (isExecutable(variable)) {
       // Show a representation of the executable
@@ -463,15 +479,9 @@ export async function evaluateShow(
       throw new Error('Add path directive resolved to empty path');
     }
     
-    // Check if this directive has security options
-    const security = directive.meta ? {
-      ttl: directive.meta.ttl,
-      trust: directive.meta.trust
-    } : undefined;
-    
-    // Read the file content or fetch URL with security options if URL
-    if (env.isURL(resolvedPath) && security) {
-      content = await env.fetchURLWithSecurity(resolvedPath, security, 'add-directive');
+    // Read the file content or fetch URL when path is remote
+    if (env.isURL(resolvedPath)) {
+      content = await env.fetchURL(resolvedPath);
     } else {
       content = await env.readFile(resolvedPath);
     }
@@ -500,16 +510,10 @@ export async function evaluateShow(
       throw new Error('Invalid path type in add section directive');
     }
     
-    // Check if this directive has security options
-    const security = directive.meta ? {
-      ttl: directive.meta.ttl,
-      trust: directive.meta.trust
-    } : undefined;
-    
-    // Read the file content or fetch URL with security options if URL
+    // Read the file content or fetch URL when path is remote
     let fileContent: string;
-    if (env.isURL(resolvedPath) && security) {
-      fileContent = await env.fetchURLWithSecurity(resolvedPath, security, 'add-section-directive');
+    if (env.isURL(resolvedPath)) {
+      fileContent = await env.fetchURL(resolvedPath);
     } else {
       fileContent = await env.readFile(resolvedPath);
     }
@@ -964,6 +968,13 @@ export async function evaluateShow(
     
   } else {
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
+  }
+
+  // Apply tail pipeline when requested (used by inline /show in templates)
+  if ((directive as any).values?.withClause?.pipeline && (directive as any).meta?.applyTailPipeline) {
+    const { executePipeline } = await import('./pipeline');
+    const pipeline = (directive as any).values.withClause.pipeline;
+    content = await executePipeline(typeof content === 'string' ? content : String(content ?? ''), pipeline, env);
   }
   
   // Output directives always end with a newline

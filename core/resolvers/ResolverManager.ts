@@ -12,8 +12,9 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { MlldResolutionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
-import { ModuleCache, LockFile } from '@core/registry';
+import { ModuleCache, LockFile, type ModuleCacheStoreOptions } from '@core/registry';
 import { HashUtils } from '@core/registry/utils/HashUtils';
+import { parseModuleMetadata, formatDependencyMap } from '@core/registry/utils/ModuleMetadata';
 import { hasUncommittedChanges, getGitStatus } from '@core/utils/gitStatus';
 
 /**
@@ -37,9 +38,8 @@ export class ResolverManager {
   private moduleCache?: ModuleCache;
   private lockFile?: LockFile;
   private offlineMode: boolean = false;
-  private devMode: boolean = false;
-  private devPrefixes: Map<string, PrefixConfig> = new Map(); // Dynamic dev mode prefixes
-  private devModulesByAuthor: Map<string, string[]> = new Map(); // Track modules by author for dev mode
+  private localModulePrefixes: Map<string, PrefixConfig> = new Map(); // Local module prefixes discovered on disk
+  private localModulesByAuthor: Map<string, string[]> = new Map(); // Track modules by author for local modules
 
   constructor(
     securityPolicy?: ResolverSecurityPolicy,
@@ -81,9 +81,8 @@ export class ResolverManager {
   /**
    * Set development mode - enables local fallback
    */
-  setDevMode(devMode: boolean): void {
-    this.devMode = devMode;
-    logger.debug(`Development mode: ${devMode}`);
+  setDevMode(_devMode: boolean): void {
+    logger.debug('setDevMode is deprecated. Local modules are managed automatically.');
   }
 
   /**
@@ -118,13 +117,21 @@ export class ResolverManager {
    * Configure prefixes from lock file or config
    */
   configurePrefixes(prefixes: PrefixConfig[], projectRoot?: string): void {
+    const usablePrefixes = prefixes.filter(prefixConfig => {
+      if (prefixConfig.resolver === 'LOCAL' && !prefixConfig.config?.basePath) {
+        logger.debug(`Skipping LOCAL prefix ${prefixConfig.prefix} without basePath (managed via llm/modules discovery)`);
+        return false;
+      }
+      return true;
+    });
+
     // Validate all prefixes first
-    for (const prefix of prefixes) {
+    for (const prefix of usablePrefixes) {
       this.validatePrefixConfig(prefix);
     }
 
     // If projectRoot is provided, resolve relative basePaths in prefix configs
-    const processedPrefixes = projectRoot ? prefixes.map(prefixConfig => {
+    const processedPrefixes = projectRoot ? usablePrefixes.map(prefixConfig => {
       if (prefixConfig.config?.basePath && !path.isAbsolute(prefixConfig.config.basePath)) {
         // Resolve relative basePath relative to project root
         const resolvedPath = path.resolve(projectRoot, prefixConfig.config.basePath);
@@ -137,53 +144,55 @@ export class ResolverManager {
         };
       }
       return prefixConfig;
-    }) : prefixes;
+    }) : usablePrefixes;
 
     // Sort by prefix length (longest first) for proper matching
     this.prefixConfigs = processedPrefixes.sort((a, b) => b.prefix.length - a.prefix.length);
-    logger.debug(`Configured ${prefixes.length} prefixes`);
+    logger.debug(`Configured ${processedPrefixes.length} prefixes`);
   }
 
   /**
-   * Initialize dev mode by scanning local modules
+   * Discover local modules and configure prefixes for authors with access
    */
-  async initializeDevMode(localModulePath: string): Promise<void> {
-    if (!this.devMode) return;
-    
+  async configureLocalModules(localModulePath: string, options: { currentUser?: string; allowedAuthors?: Iterable<string> } = {}): Promise<void> {
     try {
       const modules = await this.scanLocalModules(localModulePath);
       const authorModules = this.groupModulesByAuthor(modules);
-      
-      // Clear existing dev prefixes and modules
-      this.devPrefixes.clear();
-      this.devModulesByAuthor.clear();
-      
-      // Store modules by author for debugging
+      const allowedAuthorSet = new Set<string>(options.allowedAuthors ? Array.from(options.allowedAuthors, a => a.toLowerCase()) : []);
+      const currentUser = options.currentUser?.toLowerCase();
+
+      this.localModulePrefixes.clear();
+      this.localModulesByAuthor.clear();
+
       for (const [author, moduleNames] of authorModules) {
-        this.devModulesByAuthor.set(author, moduleNames);
-      }
-      
-      // Create dev prefix for each author
-      for (const [author, moduleNames] of authorModules) {
-        const devPrefix: PrefixConfig = {
+        const normalizedAuthor = author.toLowerCase();
+        const isAllowed = normalizedAuthor === currentUser || allowedAuthorSet.has(normalizedAuthor);
+        if (!isAllowed) {
+          logger.debug(`Skipping local modules for @${author} (no access)`);
+          continue;
+        }
+
+        this.localModulesByAuthor.set(author, moduleNames);
+        const prefix: PrefixConfig = {
           prefix: `@${author}/`,
           resolver: 'LOCAL',
           type: 'input',
-          priority: 5, // Higher priority than registry (10)
+          priority: 5,
           config: {
             basePath: localModulePath,
-            devMode: true,
-            moduleFilter: (name: string) => moduleNames.includes(name)
+            moduleFilter: (name: string) => moduleNames.includes(this.stripModuleExtension(name))
           }
         };
-        
-        this.devPrefixes.set(devPrefix.prefix, devPrefix);
-        logger.debug(`Dev mode: Added prefix ${devPrefix.prefix} for modules: ${moduleNames.join(', ')}`);
+
+        this.localModulePrefixes.set(prefix.prefix, prefix);
+        logger.debug(`Local modules: Added prefix ${prefix.prefix} for modules: ${moduleNames.join(', ')}`);
       }
-      
-      logger.debug(`Dev mode initialized with ${this.devPrefixes.size} author prefixes`);
+
+      if (this.localModulePrefixes.size === 0) {
+        logger.debug('No local module prefixes configured');
+      }
     } catch (error) {
-      logger.warn('Failed to initialize dev mode:', error);
+      logger.warn('Failed to configure local modules:', error);
     }
   }
 
@@ -263,10 +272,47 @@ export class ResolverManager {
   }
 
   /**
-   * Get dev prefixes for debugging
+   * Get local module prefixes for debugging
    */
-  getDevPrefixes(): Array<[string, string[]]> {
-    return Array.from(this.devModulesByAuthor.entries());
+  getLocalPrefixes(): Array<[string, string[]]> {
+    return Array.from(this.localModulesByAuthor.entries());
+  }
+
+  hasLocalModule(reference: string): boolean {
+    const normalized = this.normalizeModuleReference(reference);
+    const [authorWithPrefix, moduleName] = normalized.split('/');
+    const author = authorWithPrefix.replace(/^@/, '');
+    const modules = this.localModulesByAuthor.get(author);
+    return modules ? modules.includes(moduleName) : false;
+  }
+
+  private normalizeModuleReference(ref: string): string {
+    const cleaned = ref.replace(/^@/, '');
+    const [author, rawModule = ''] = cleaned.split('/');
+    const module = this.stripModuleExtension(rawModule);
+    return `@${author}/${module}`;
+  }
+
+  private stripModuleExtension(module: string): string {
+    const extensions = ['.mlld.md', '.mld.md', '.mlld', '.mld', '.md'];
+    for (const ext of extensions) {
+      if (module.endsWith(ext)) {
+        return module.slice(0, -ext.length);
+      }
+    }
+    return module;
+  }
+
+  private findLocalPrefix(ref: string): PrefixConfig | undefined {
+    for (const [prefix, config] of this.localModulePrefixes) {
+      if (ref.startsWith(prefix)) {
+        const moduleRef = ref.slice(prefix.length);
+        if (!config.config?.moduleFilter || config.config.moduleFilter(moduleRef)) {
+          return config;
+        }
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -278,7 +324,9 @@ export class ResolverManager {
     // 1. Check if we have a hash for this module in lock file (skip for local files)
     const isLocal = ref.startsWith('@local/') || ref.startsWith('local://');
     if (this.lockFile && this.moduleCache && !isLocal) {
-      const lockEntry = this.lockFile.getImport(ref);
+      // Convert reference to module name format
+      const moduleName = this.refToModuleName(ref);
+      const lockEntry = this.lockFile.getModule(moduleName);
       if (lockEntry?.integrity) {
         // Extract hash from integrity (format: "sha256:hash")
         const hash = lockEntry.integrity.split(':')[1];
@@ -289,7 +337,7 @@ export class ResolverManager {
             if (cached) {
               logger.debug(`Cache hit for ${ref} (hash: ${hash})`);
               const resolutionTime = Date.now() - startTime;
-              
+
               return {
                 content: {
                   content: cached.content,
@@ -311,7 +359,7 @@ export class ResolverManager {
             logger.warn(`Cache error for ${ref}: ${cacheError.message}`);
             // If it's a corruption error, we should clear the lock entry
             if (cacheError.message.includes('Cache corruption detected')) {
-              await this.lockFile.removeImport(ref);
+              await this.lockFile.removeModule(moduleName);
               logger.info(`Cleared corrupted cache entry for ${ref}`);
             }
           }
@@ -401,10 +449,12 @@ export class ResolverManager {
       // 4. Cache the content if cache is available (but skip local files)
       if (this.moduleCache && content.content && resolver.name !== 'LOCAL') {
         try {
+          const storeOptions = this.buildModuleCacheOptions(content);
           const cacheEntry = await this.moduleCache.store(
             content.content,
             content.metadata?.source || ref,
-            ref
+            ref,
+            storeOptions
           );
           
           // Add hash to metadata
@@ -415,10 +465,13 @@ export class ResolverManager {
           
           // 5. Update lock file with new hash
           if (this.lockFile) {
-            await this.lockFile.addImport(ref, {
-              resolved: content.metadata.source || ref,
+            const moduleName = this.refToModuleName(ref);
+            await this.lockFile.addModule(moduleName, {
+              version: 'latest', // TODO: Get actual version from resolver
+              resolved: cacheEntry.hash,
+              source: content.metadata.source || ref,
               integrity: `sha256:${cacheEntry.hash}`,
-              approvedAt: new Date().toISOString()
+              fetchedAt: new Date().toISOString()
             });
           }
           
@@ -449,8 +502,8 @@ export class ResolverManager {
           logger.warn(`${statusEmoji} Local ${statusText} version detected for ${prefixConfig.prefix}${resolverRef}`);
           logger.warn(`   Remote: Using ${resolver.name} resolver`);
           logger.warn(`   Local:  ${localPath}`);
-          logger.warn(`   Hint:   Use --dev flag to test with local version`);
-          logger.warn(`           mlld run myfile.mld --dev`);
+          logger.warn(`   Hint:   Use '/import local' to load from llm/modules`);
+          logger.warn(`           Local path: ${localPath}`);
         }
       }
 
@@ -461,47 +514,29 @@ export class ResolverManager {
         resolutionTime
       };
     } catch (error) {
-      // In dev mode, if the error indicates a local file exists, try LOCAL resolver
-      if (this.devMode && error instanceof MlldResolutionError) {
-        const errorDetails = (error as any).details;
-        logger.debug(`Dev mode check: devMode=${this.devMode}, hasLocal=${errorDetails?.hasLocal}, error=${error.message}`);
-        if (errorDetails?.hasLocal) {
-          logger.info(`Dev mode: Falling back to local version of ${ref}`);
-          
-          // Find LOCAL resolver
-          const localResolver = this.resolvers.get('LOCAL');
+      if (error instanceof MlldResolutionError) {
+        const localPrefixConfig = this.findLocalPrefix(ref);
+        if (localPrefixConfig) {
+          const localResolver = this.resolvers.get(localPrefixConfig.resolver);
           if (localResolver) {
+            const moduleRef = ref.slice(localPrefixConfig.prefix.length);
             try {
-              // Extract the module name from the reference
-              const moduleName = resolverRef;
-              
-              // Try to resolve using LOCAL resolver
-              const localContent = await localResolver.resolve(moduleName, {
-                basePath: prefixConfig?.config?.basePath || process.cwd()
+              const localContent = await localResolver.resolve(moduleRef, {
+                basePath: localPrefixConfig.config?.basePath || process.cwd()
               });
-              
-              // Log warning about using local version
-              console.warn(`⚠️  Using local version of ${ref} (not yet published)`);
-              console.warn(`   Local: ${errorDetails.localPath || errorDetails.path || moduleName}`);
-              console.warn(`   To publish: mlld publish ${errorDetails.localPath || errorDetails.path || moduleName}`);
-              
               const resolutionTime = Date.now() - startTime;
-              
+
               return {
                 content: localContent,
-                resolverName: 'LOCAL (dev fallback)',
-                matchedPrefix: prefixConfig?.prefix,
+                resolverName: 'LOCAL',
+                matchedPrefix: localPrefixConfig.prefix,
                 resolutionTime
               };
             } catch (localError) {
-              // If local resolution also fails, throw the original error
-              logger.debug(`Local fallback failed: ${localError.message}`);
+              logger.debug(`Local fallback failed: ${(localError as Error).message}`);
             }
           }
         }
-      }
-      
-      if (error instanceof MlldResolutionError) {
         throw error;
       }
       throw new MlldResolutionError(
@@ -679,16 +714,15 @@ export class ResolverManager {
    * Find the appropriate resolver for a reference
    */
   private async findResolver(ref: string, context?: ResolutionContext): Promise<{ resolver?: Resolver, prefixConfig?: PrefixConfig }> {
-    // Check dev prefixes first when in dev mode
-    if (this.devMode) {
-      for (const [prefix, config] of this.devPrefixes) {
+    // Check local module prefixes first
+    if (this.localModulePrefixes.size > 0) {
+      for (const [prefix, config] of this.localModulePrefixes) {
         if (ref.startsWith(prefix)) {
           const resolver = this.resolvers.get(config.resolver);
           if (resolver) {
             const moduleRef = ref.slice(prefix.length);
-            // Verify module exists locally via the filter
             if (config.config?.moduleFilter?.(moduleRef)) {
-              logger.debug(`Dev mode: Resolved ${ref} to local module`);
+              logger.debug(`Local modules: Resolved ${ref} to local module`);
               return { resolver, prefixConfig: config };
             }
           }
@@ -786,5 +820,42 @@ export class ResolverManager {
     });
 
     return Promise.race([promise, timeoutPromise]);
+  }
+
+  /**
+   * Convert a reference to a module name format
+   * @param ref Reference like @author/module, mlld://author/module, etc.
+   * @returns Module name in @author/module format
+   */
+  private buildModuleCacheOptions(content: ResolverContent): ModuleCacheStoreOptions | undefined {
+    if (content.contentType !== 'module') {
+      return undefined;
+    }
+
+    try {
+      const parsed = parseModuleMetadata(content.content);
+      return {
+        dependencies: formatDependencyMap(parsed.dependencies),
+        devDependencies: formatDependencyMap(parsed.devDependencies),
+        moduleNeeds: parsed.needs
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.debug(`Failed to parse module metadata for cache: ${message}`);
+      return undefined;
+    }
+  }
+
+  private refToModuleName(ref: string): string {
+    // Remove mlld:// prefix if present
+    if (ref.startsWith('mlld://')) {
+      return ref.replace('mlld://', '@');
+    }
+    // Already in @author/module format
+    if (ref.startsWith('@')) {
+      return ref;
+    }
+    // Assume it's author/module format
+    return `@${ref}`;
   }
 }

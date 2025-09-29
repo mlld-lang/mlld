@@ -1,5 +1,5 @@
 import type { DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable } from '@core/types/variable';
+import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, TemplateVariable } from '@core/types/variable';
 import { 
   createImportedVariable, 
   createObjectVariable,
@@ -17,6 +17,9 @@ import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
 import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
+import { ExportManifest } from './ExportManifest';
+import { astLocationToSourceLocation } from '@core/types';
+import type { SourceLocation } from '@core/types';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -53,12 +56,12 @@ export class VariableImporter {
   }
   
   /**
-   * Deserialize shadow environments after import (objects to Maps)  
+   * Deserialize shadow environments after import (objects to Maps)
    * WHY: Shadow environments are expected as Maps internally
    */
   private deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
     const result: ShadowEnvironmentCapture = {};
-    
+
     for (const [lang, shadowObj] of Object.entries(envs)) {
       if (shadowObj && typeof shadowObj === 'object') {
         // Convert object to Map
@@ -69,7 +72,98 @@ export class VariableImporter {
         result[lang as keyof ShadowEnvironmentCapture] = map;
       }
     }
-    
+
+    return result;
+  }
+
+  /**
+   * Checks whether the requested alias has already been claimed during the
+   * current import pass and throws a detailed error when a collision exists.
+   */
+  private ensureImportBindingAvailable(
+    targetEnv: Environment,
+    name: string,
+    importSource: string,
+    location?: SourceLocation
+  ): void {
+    if (!name || name.trim().length === 0) return;
+    const existingBinding = targetEnv.getImportBinding(name);
+    if (!existingBinding) {
+      return;
+    }
+
+    throw new MlldImportError(
+      `Import collision - '${name}' already imported from ${existingBinding.source}. Alias one of the imports.`,
+      {
+        code: 'IMPORT_NAME_CONFLICT',
+        context: {
+          name,
+          existingSource: existingBinding.source,
+          attemptedSource: importSource,
+          existingLocation: existingBinding.location,
+          newLocation: location,
+          suggestion: "Use 'as' to alias one of the imports"
+        },
+        details: {
+          filePath: location?.filePath || existingBinding.location?.filePath,
+          variableName: name
+        }
+      }
+    );
+  }
+
+  /**
+   * Writes the variable and persists the associated binding only after the
+   * assignment succeeds, preventing partially-applied imports from polluting
+   * the collision tracking map.
+   */
+  private setVariableWithImportBinding(
+    targetEnv: Environment,
+    alias: string,
+    variable: Variable,
+    binding: { source: string; location?: SourceLocation }
+  ): void {
+    let shouldPersistBinding = false;
+    try {
+      targetEnv.setVariable(alias, variable);
+      shouldPersistBinding = true;
+    } finally {
+      if (shouldPersistBinding) {
+        targetEnv.setImportBinding(alias, binding);
+      }
+    }
+  }
+
+  /**
+   * Serialize module environment for export (Map to object)
+   * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
+   * IMPORTANT: Use the exact same serialization as processModuleExports to ensure compatibility
+   */
+  private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
+    // Create a temporary childVars map and reuse processModuleExports logic
+    // Skip module env serialization to prevent infinite recursion
+    const tempResult = this.processModuleExports(moduleEnv, {}, true);
+    return tempResult.moduleObject;
+  }
+
+  /**
+   * Deserialize module environment after import (object to Map)
+   * IMPORTANT: Reuse createVariableFromValue to ensure proper Variable reconstruction
+   */
+  deserializeModuleEnv(moduleEnv: any): Map<string, Variable> {
+    const result = new Map<string, Variable>();
+    if (moduleEnv && typeof moduleEnv === 'object') {
+      for (const [name, varData] of Object.entries(moduleEnv)) {
+        // Reuse the existing variable creation logic
+        const variable = this.createVariableFromValue(
+          name,
+          varData,
+          'module-env', // Use a special import path to indicate this is from module env
+          name
+        );
+        result.set(name, variable);
+      }
+    }
     return result;
   }
 
@@ -92,13 +186,48 @@ export class VariableImporter {
    */
   processModuleExports(
     childVars: Map<string, Variable>,
-    parseResult: any
+    parseResult: any,
+    skipModuleEnvSerialization?: boolean,
+    manifest?: ExportManifest | null
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
-    
+
     // Always start with auto-export of all top-level variables
     const moduleObject: Record<string, any> = {};
+    const explicitNames = manifest?.hasEntries() ? manifest.getNames() : null;
+    const explicitExports = explicitNames ? new Set(explicitNames) : null;
+    if (explicitNames && explicitNames.length > 0) {
+      // Fail fast if the manifest references names that never materialised in
+      // the child environment so authors receive a precise directive pointer.
+      for (const name of explicitNames) {
+        if (!childVars.has(name)) {
+          const location = manifest?.getLocation(name);
+          throw new MlldImportError(
+            `Exported name '${name}' is not defined in this module`,
+            {
+              code: 'EXPORTED_NAME_NOT_FOUND',
+              context: {
+                exportName: name,
+                location
+              },
+              details: {
+                filePath: location?.filePath,
+                variableName: name
+              }
+            }
+          );
+        }
+      }
+    }
+    const shouldSerializeModuleEnv = !skipModuleEnvSerialization;
+    let moduleEnvSnapshot: Map<string, Variable> | null = null;
+    const getModuleEnvSnapshot = () => {
+      if (!moduleEnvSnapshot) {
+        moduleEnvSnapshot = new Map(childVars);
+      }
+      return moduleEnvSnapshot;
+    };
     
     // Export all top-level variables directly (except system variables)
     if (process.env.MLLD_DEBUG === 'true') {
@@ -107,6 +236,9 @@ export class VariableImporter {
     }
     
     for (const [name, variable] of childVars) {
+      if (explicitExports && !explicitExports.has(name)) {
+        continue;
+      }
       // Only export legitimate mlld variables - this automatically excludes
       // system variables like frontmatter (@fm) that don't have valid mlld types
       if (!this.isLegitimateVariableForExport(variable)) {
@@ -118,7 +250,7 @@ export class VariableImporter {
       // For executable variables, we need to preserve the full structure
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
-        
+
         // Serialize shadow environments if present (Maps don't serialize to JSON)
         let serializedMetadata = { ...execVar.metadata };
         if (serializedMetadata.capturedShadowEnvs) {
@@ -126,6 +258,19 @@ export class VariableImporter {
             ...serializedMetadata,
             capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
           };
+        }
+        // Serialize module environment if present
+        if (shouldSerializeModuleEnv) {
+          const capturedEnv = serializedMetadata.capturedModuleEnv instanceof Map
+            ? serializedMetadata.capturedModuleEnv
+            : getModuleEnvSnapshot();
+          serializedMetadata = {
+            ...serializedMetadata,
+            capturedModuleEnv: this.serializeModuleEnv(capturedEnv)
+          };
+        } else {
+          // Remove capturedModuleEnv to avoid recursion
+          delete serializedMetadata.capturedModuleEnv;
         }
         
         // Export executable with all necessary metadata
@@ -135,6 +280,16 @@ export class VariableImporter {
           // paramNames removed - they're already in executableDef and shouldn't be exposed as imports
           executableDef: execVar.metadata?.executableDef,
           metadata: serializedMetadata
+        };
+      } else if (variable.type === 'template') {
+        const templateVar = variable as TemplateVariable;
+
+        moduleObject[name] = {
+          __template: true,
+          content: templateVar.value,
+          templateSyntax: templateVar.templateSyntax,
+          parameters: templateVar.parameters,
+          templateAst: templateVar.metadata?.templateAst || (Array.isArray(templateVar.value) ? templateVar.value : undefined)
         };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
@@ -193,30 +348,49 @@ export class VariableImporter {
       return createTemplateVariable(
         name,
         (value as any).content,
-        undefined,
+        (value as any).parameters,
         (value as any).templateSyntax === 'tripleColon' ? 'tripleColon' : 'doubleColon',
         templateSource,
         tmplMetadata
       );
     }
-    
+
     // Infer the variable type from the value
     const originalType = this.inferVariableType(value);
-    
+
     // Convert non-string primitives to strings
     let processedValue = value;
     if (typeof value === 'number' || typeof value === 'boolean') {
       processedValue = String(value);
     }
     
+    // For array types, create an ArrayVariable to preserve array behaviors
+    if (originalType === 'array' && Array.isArray(processedValue)) {
+      const isComplexArray = this.hasComplexContent(processedValue);
+
+      return createArrayVariable(
+        name,
+        processedValue,
+        isComplexArray,
+        source,
+        {
+          ...metadata,
+          isImported: true,
+          importPath,
+          originalName: originalName !== name ? originalName : undefined
+        }
+      );
+    }
+
     // For object types, create an ObjectVariable to preserve field access capability
     if (originalType === 'object') {
+      const normalizedObject = this.unwrapArraySnapshots(processedValue, importPath);
       // Check if the object contains complex AST nodes that need evaluation
-      const isComplex = this.hasComplexContent(processedValue);
+      const isComplex = this.hasComplexContent(normalizedObject);
       
       return createObjectVariable(
         name,
-        processedValue,
+        normalizedObject,
         isComplex, // Mark as complex if it contains AST nodes
         source,
         {
@@ -241,8 +415,45 @@ export class VariableImporter {
     );
   }
 
+  private unwrapArraySnapshots(value: any, importPath: string): any {
+    if (Array.isArray(value)) {
+      return value.map(item => this.unwrapArraySnapshots(item, importPath));
+    }
+
+    if (value && typeof value === 'object') {
+      if ((value as any).__arraySnapshot) {
+        const snapshot = value as { value: any[]; metadata?: Record<string, any>; isComplex?: boolean; name?: string };
+        const source: VariableSource = {
+          directive: 'var',
+          syntax: 'array',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        const arrayMetadata = {
+          ...(snapshot.metadata || {}),
+          isImported: true,
+          importPath,
+          originalName: snapshot.name
+        };
+        const normalizedElements = Array.isArray(snapshot.value)
+          ? snapshot.value.map(item => this.unwrapArraySnapshots(item, importPath))
+          : [];
+        const arrayName = snapshot.name || 'imported_array';
+        return createArrayVariable(arrayName, normalizedElements, snapshot.isComplex === true, source, arrayMetadata);
+      }
+
+      const result: Record<string, any> = {};
+      for (const [key, entry] of Object.entries(value)) {
+        result[key] = this.unwrapArraySnapshots(entry, importPath);
+      }
+      return result;
+    }
+
+    return value;
+  }
+
   /**
-   * Create a namespace variable for imports with aliased wildcards (e.g., * as config)
+   * Create a namespace variable for imports with aliased wildcards (e.g., * as @config)
    */
   createNamespaceVariable(
     alias: string, 
@@ -285,7 +496,7 @@ export class VariableImporter {
     if (directive.subtype === 'importAll') {
       throw new MlldImportError(
         'Wildcard imports \'/import { * }\' are no longer supported. ' +
-        'Use namespace imports instead: \'/import "file"\' or \'/import "file" as name\'',
+        'Use namespace imports instead: \'/import "file"\' or \'/import "file" as @name\'',
         directive.location,
         {
           suggestion: 'Change \'/import { * } from "file"\' to \'/import "file"\''
@@ -314,11 +525,17 @@ export class VariableImporter {
     const alias = (namespaceNodes && Array.isArray(namespaceNodes) && namespaceNodes[0]?.content) 
       ? namespaceNodes[0].content 
       : directive.values?.imports?.[0]?.alias;
-    
+
     if (!alias) {
       throw new Error('Namespace import missing alias');
     }
-    
+
+    const importerFilePath = targetEnv.getCurrentFilePath();
+    const aliasLocationNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
+    const aliasLocation = aliasLocationNode?.location
+      ? astLocationToSourceLocation(aliasLocationNode.location, importerFilePath)
+      : astLocationToSourceLocation(directive.location, importerFilePath);
+
     // Smart namespace unwrapping: If the module exports a single main object
     // with a conventional name, unwrap it for better ergonomics
     let namespaceObject = moduleObject;
@@ -353,11 +570,15 @@ export class VariableImporter {
     }
     
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
+    const importDisplay = this.getImportDisplayPath(directive, importPath);
+    const bindingInfo = { source: importDisplay, location: aliasLocation };
+
+    this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, aliasLocation);
 
     // If the unwrapped object is a template export, create a template variable instead
     if (namespaceObject && typeof namespaceObject === 'object' && (namespaceObject as any).__template) {
       const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath);
-      targetEnv.setVariable(alias, templateVar);
+      this.setVariableWithImportBinding(targetEnv, alias, templateVar, bindingInfo);
       return;
     }
 
@@ -367,7 +588,7 @@ export class VariableImporter {
       namespaceObject,
       importPath
     );
-    targetEnv.setVariable(alias, namespaceVar);
+    this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
   }
 
   /**
@@ -381,21 +602,42 @@ export class VariableImporter {
   ): Promise<void> {
     const imports = directive.values?.imports || [];
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
-    
+    const importDisplay = this.getImportDisplayPath(directive, importPath);
+    const importerFilePath = targetEnv.getCurrentFilePath();
+
     for (const importItem of imports) {
       const importName = importItem.identifier;
       const alias = importItem.alias || importName;
-      
+
       if (!(importName in moduleObject)) {
         throw new Error(`Import '${importName}' not found in module`);
       }
-      
+
+      const bindingLocation = importItem?.location
+        ? astLocationToSourceLocation(importItem.location, importerFilePath)
+        : astLocationToSourceLocation(directive.location, importerFilePath);
+      const bindingInfo = { source: importDisplay, location: bindingLocation };
+
+      this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
+
       const importedValue = moduleObject[importName];
       const variable = this.createVariableFromValue(alias, importedValue, importPath, importName);
-      
-      
-      targetEnv.setVariable(alias, variable);
+
+      this.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
     }
+  }
+
+  /**
+   * Produces a human-readable source string for error messages, stripping any
+   * quotes that appeared in the original directive.
+   */
+  private getImportDisplayPath(directive: DirectiveNode, fallback: string): string {
+    const raw = (directive as any)?.raw;
+    if (raw && typeof raw.path === 'string' && raw.path.trim().length > 0) {
+      const trimmed = raw.path.trim();
+      return trimmed.replace(/^['"]|['"]$/g, '');
+    }
+    return fallback;
   }
 
   /**
@@ -437,6 +679,25 @@ export class VariableImporter {
         capturedShadowEnvs: this.deserializeShadowEnvs(originalMetadata.capturedShadowEnvs)
       };
     }
+
+    // Deserialize module environment if present
+    if (originalMetadata.capturedModuleEnv) {
+      const deserializedEnv = this.deserializeModuleEnv(originalMetadata.capturedModuleEnv);
+
+      // IMPORTANT: Each executable in the module env needs to have access to the full env
+      // This allows command-refs to find their siblings
+      for (const [_, variable] of deserializedEnv) {
+        if (variable.type === 'executable' && variable.metadata) {
+          // Give each executable in the module env access to all siblings
+          variable.metadata.capturedModuleEnv = deserializedEnv;
+        }
+      }
+
+      originalMetadata = {
+        ...originalMetadata,
+        capturedModuleEnv: deserializedEnv
+      };
+    }
     
     const enhancedMetadata = {
       ...metadata,
@@ -466,7 +727,12 @@ export class VariableImporter {
     if (value === null || typeof value !== 'object') {
       return false;
     }
-    
+
+    // Imported variables already hold evaluated content; do not treat them as complex
+    if (this.isVariableLike(value)) {
+      return false;
+    }
+
     // Check if this is an AST node with a type
     if (value.type) {
       return true;
@@ -490,6 +756,17 @@ export class VariableImporter {
     }
     
     return false;
+  }
+
+  private isVariableLike(value: any): boolean {
+    return value &&
+      typeof value === 'object' &&
+      typeof value.type === 'string' &&
+      'name' in value &&
+      'value' in value &&
+      'source' in value &&
+      'createdAt' in value &&
+      'modifiedAt' in value;
   }
 
   /**

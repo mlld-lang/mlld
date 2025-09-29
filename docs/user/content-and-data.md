@@ -40,7 +40,7 @@ Use standard glob patterns to load multiple files:
 /var @markdown = <*.md>                  >> All .md in current dir
 /var @tests = <**/*.test.js>             >> All test files recursively
 /var @docs = <docs/**/*.md>              >> All markdown in docs tree
-/var @source = <{src,lib}/**/*.ts>       >> Multiple directories
+/var @source = <src/**/*.ts>             >> All TypeScript in src
 
 >> Access individual files
 /show @docs[0].content                    >> First file's content
@@ -63,6 +63,20 @@ Extract specific sections from markdown files:
 ```
 
 The `<>` placeholder in `as` templates represents each file's metadata.
+
+### AST-Based Code Selection
+
+Use curly braces after a file path to pull specific definitions or usages from source files.
+
+```mlld
+/var @handlers = <src/service.ts { createUser, (logger.info) }>
+/var @templated = <src/**/*.py { create_user }> as ::## <>.name\n```\n<>.code\n```::
+```
+
+- Plain identifiers match top-level definitions by name.
+- Parentheses match definitions that reference the identifier anywhere in their body.
+- Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
+- Glob patterns return `file` metadata so you can tell which match came from which file; missing patterns yield `null` so the output order stays aligned with your request.
 
 ## File Metadata
 
@@ -193,6 +207,88 @@ Extract subsets of arrays using `[start:end]` syntax:
 /show @items[-2:]                        >> ["fourth", "last"]
 /show @items[:-1]                        >> ["first", "second", "third", "fourth"]
 /show @items[1:-1]                       >> ["second", "third", "fourth"]
+```
+
+## Working with JSON in JavaScript Functions
+
+Use `.data` or `.json` to parse JSON strings before passing to functions. Use `.text` or `.content` to preserve strings.
+
+### JSON Parsing
+
+```mlld
+/var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
+
+>> Parse inside function
+/exe @filter1(users) = js {
+  const data = JSON.parse(users);
+  return data.filter(u => u.age > 25);
+}
+/run @filter1(@users)
+
+>> Parse before passing
+/exe @filter2(users) = js {
+  return users.filter(u => u.age > 25);
+}
+/run @filter2(@users.data)   >> .data parses JSON
+/run @filter2(@users.json)   >> .json is alias
+```
+
+### String Preservation
+
+```mlld
+/var @jsonStr = '{"name": "Alice", "active": true}'
+
+/exe @length(str) = js {
+  return str.length;
+}
+
+/run @length(@jsonStr)          >> Default: string
+/run @length(@jsonStr.text)     >> Explicit string
+/run @length(@jsonStr.content)  >> Alias for .text
+```
+
+### Common Use Cases
+
+```mlld
+>> Filter JSON array from command
+/var @json = run {./mkjson.sh}
+/exe @filterHigh(entries) = js {
+  return entries.filter(e => e.finding.startsWith("High"));
+}
+/var @result = @filterHigh(@json.data)
+
+>> Process API response
+/var @response = run {curl -s api.example.com/data}
+/exe @getActive(data) = js {
+  return data.users.filter(u => u.active);
+}
+/var @active = @getActive(@response.data)
+```
+
+### Accessor Reference
+
+```mlld
+>> Files
+/var @config = <settings.json>
+@config.json              >> Parsed JSON object
+@config.data              >> Alias for .json
+@config.content           >> Raw string
+@config.text              >> Alias for .content
+
+>> Variables
+/var @str = '{"status": "ok"}'
+@str.data                 >> Parsed JSON object
+@str.json                 >> Alias for .data
+@str.text                 >> Original string
+@str.content              >> Alias for .text
+@str                      >> Original string (default)
+
+>> Command output
+/var @result = run {curl api.com/data}
+@result.data              >> Parse as JSON
+@result.json              >> Alias for .data
+@result.text              >> Keep as string
+@result.content           >> Alias for .text
 ```
 
 ## Built-in Methods

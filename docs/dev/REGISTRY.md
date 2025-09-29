@@ -27,6 +27,15 @@ The mlld registry is a decentralized module repository hosted on GitHub that pro
                            Direct publish for updates
 ```
 
+
+## CLI Workflows
+
+- `mlld install` reads dependencies from `mlld-config.json` and fetches registry modules using the module installer
+- `mlld update` refreshes entries in `mlld-lock.json` and content cache, respecting version constraints
+- `mlld outdated` inspects the registry for newer versions without modifying lock files
+- Configuration stored in `mlld-config.json` (user settings), locks stored in `mlld-lock.json` (resolved versions)
+
+
 ## Repository Structure
 
 ### Registry Repository (`github.com/mlld-lang/registry`)
@@ -257,19 +266,18 @@ On merge to main:
 
 ## Module Resolution
 
-When code uses `@import { util } from @author/module` or `@author/module@version`:
+When code uses `/import module { util } from @author/module` or `@author/module@version`:
 
-1. RegistryResolver fetches `modules.json` from CDN
-2. Parses version requirement (if specified)
-3. Looks up `@author/module` entry
-4. Resolves version:
-   - No version → uses latest
+1. Import type `module` routes to cached module resolver
+2. Checks `mlld-lock.json` for existing installation
+3. If not cached, RegistryResolver fetches `modules.json` from CDN
+4. Parses version requirement (if specified):
+   - No version → uses latest tag
    - Tag (e.g., `@beta`) → resolves via tags
    - Semver range → finds best match
-5. For non-latest versions, fetches version-specific data
-6. Returns `source.url` for the resolved version
-7. Module content is fetched and cached locally
-8. Lock file records URL, version, and content hash
+5. Fetches module content from source URL
+6. Stores in content-addressed cache with integrity hash
+7. Updates `mlld-lock.json` with resolved version and metadata
 
 ## Security Model
 

@@ -46,11 +46,20 @@ export function tryParseJson(value: string): JsonParseResult {
     trimmed === 'null' ||
     // Number (simple check)
     /^-?\d+\.?\d*$/.test(trimmed);
-  
+
   if (!looksLikeJson) {
     return { isJson: false, value: trimmed, originalValue: value };
   }
-  
+
+  // Prevent auto-parsing integers that exceed Number's safe range
+  const integerPattern = /^-?\d+$/;
+  if (integerPattern.test(trimmed)) {
+    const parsedInt = Number(trimmed);
+    if (!Number.isSafeInteger(parsedInt)) {
+      return { isJson: false, value: trimmed, originalValue: value };
+    }
+  }
+
   try {
     const parsed = JSON.parse(trimmed);
     return { isJson: true, value: parsed, originalValue: value };
@@ -89,12 +98,11 @@ export function shouldAutoParseJson(): boolean {
  */
 export function processCommandOutput(output: string, enableAutoParse?: boolean): any {
   const shouldParse = enableAutoParse ?? shouldAutoParseJson();
-  
+
   if (!shouldParse) {
     return output;
   }
-  
+
   const result = tryParseJson(output);
   return result.value;
 }
-

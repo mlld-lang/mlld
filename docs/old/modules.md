@@ -600,7 +600,7 @@ The `/var @module = { ... }` pattern gives you complete control over exports:
 
 **Import options:**
 - `/import { get, post } from @user/api` - Direct function access
-- `/import { * as api } from @user/api` - Namespace import: `api.get()`, `api.post()`
+- `/import { * as @api } from @user/api` - Namespace import: `api.get()`, `api.post()`
 
 ##### 2. Named Export Object Pattern
 
@@ -623,7 +623,7 @@ Create a named object alongside individual exports for maximum flexibility:
 **Import options:**
 - `/import { http } from @user/http-client` - Use as `http.get()`, `http.post()`
 - `/import { get, post } from @user/http-client` - Use functions directly
-- `/import { * as client } from @user/http-client` - Access both: `client.http.get()` or `client.get()`
+- `/import { * as @client } from @user/http-client` - Access both: `client.http.get()` or `client.get()`
 
 This pattern is ideal when you want to provide both:
 - A convenient grouped interface (`http.get()`)

@@ -77,10 +77,11 @@ export class NodeExecutor extends BaseCommandExecutor {
       }
       
       // Prepare parameters with Variable proxies
-      let shadowParams = params;
-      
-      if (params) {
-        shadowParams = prepareParamsForShadow(params);
+      const sanitizedParams = params ? { ...params } : undefined;
+      let shadowParams = sanitizedParams;
+
+      if (sanitizedParams) {
+        shadowParams = prepareParamsForShadow(sanitizedParams);
         // Also add mlld helpers with metadata
         if (!shadowParams.mlld) {
           shadowParams.mlld = createMlldHelpers(metadata);

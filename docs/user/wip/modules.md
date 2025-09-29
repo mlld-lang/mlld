@@ -11,7 +11,7 @@ mlld install @community/string-utils
 ```
 
 ```mlld
-/import { slugify, truncate } from @community/string-utils
+/import { @slugify, @truncate } from @community/string-utils
 
 /var @title = "My Blog Post Title!"
 /var @slug = @slugify(@title)
@@ -45,10 +45,10 @@ mlld info @alice/utils
 
 ## Using Modules
 
-Import functions and variables from installed modules:
+Import functions and variables from installed modules. Modules should spell out their public API with `/export { ... }`; the runtime still auto-exports files that lack manifests, but new modules should always declare their manifest.
 
 ```mlld
-/import { formatDate, capitalize } from @alice/utils
+/import { @formatDate, @capitalize } from @alice/utils
 
 /var @greeting = @capitalize("world")
 /var @today = @formatDate(@now)
@@ -59,17 +59,17 @@ Import functions and variables from installed modules:
 
 **Selective imports:**
 ```mlld
-/import { func1, func2 } from @author/module
+/import { @func1, @func2 } from @author/module
 ```
 
 **Import with aliases:**
 ```mlld
-/import { longFunctionName as short, data } from @author/module
+/import { longFunctionName as @short, data } from @author/module
 ```
 
 **Namespace imports:**
 ```mlld
-/import { * as utils } from @author/module
+/import { * as @utils } from @author/module
 /var @result = @utils.formatDate(@now)
 ```
 
@@ -98,6 +98,7 @@ version: 1.0.0
 license: CC0
 ---
 
+/export { formatDate, capitalize, module }
 /exe @formatDate(dateStr) = js {
   return new Date(@dateStr).toISOString().split('T')[0];
 }
@@ -124,7 +125,7 @@ Utility functions for text formatting and dates.
 ## tldr
 
 ```mlld-run
-/import { formatDate, capitalize } from @alice/utils
+/import { @formatDate, @capitalize } from @alice/utils
 /var @today = @formatDate(@now)
 /show `Today is @today`
 ```
@@ -132,6 +133,7 @@ Utility functions for text formatting and dates.
 ## export
 
 ```mlld-run
+/export { formatDate, module }
 /exe @formatDate(dateStr) = js {
   return new Date(@dateStr).toISOString().split('T')[0];
 }
@@ -161,6 +163,7 @@ Output: `2024-01-15`
 
 **Explicit exports (recommended):**
 ```mlld
+/export { get, post }
 /exe @get(url) = run {curl -s "@url"}
 /exe @post(url, data) = run {curl -X POST -d "@data" "@url"}
 
@@ -172,6 +175,7 @@ Output: `2024-01-15`
 
 **Named export objects:**
 ```mlld
+/export { auth, login, logout }
 /exe @login(user, pass) = run {...}
 /exe @logout(token) = run {...}
 
@@ -183,12 +187,12 @@ Output: `2024-01-15`
 // Both @auth and individual functions are exported
 ```
 
-**Auto-generated exports:**
+**Auto-export fallback (for files without `/export`):**
 ```mlld
 // Without explicit @module, all top-level variables are exported
 /var @hello = "world"
 /exe @greet(name) = `Hello @name!`
-// Automatically creates: { hello: @hello, greet: @greet }
+// Automatically creates: { hello: @hello, greet: @greet } (for files that have not declared an export manifest yet)
 ```
 
 ## Publishing Modules

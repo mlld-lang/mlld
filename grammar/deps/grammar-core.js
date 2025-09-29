@@ -370,18 +370,6 @@ export const helpers = {
         };
         return value * (multipliers[unit] || 1);
     },
-    createSecurityMeta(options) {
-        if (!options)
-            return {};
-        const meta = {};
-        if (options.ttl) {
-            meta.ttl = options.ttl;
-        }
-        if (options.trust) {
-            meta.trust = options.trust;
-        }
-        return meta;
-    },
     detectFormatFromPath(path) {
         const ext = path.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase();
         if (!ext)

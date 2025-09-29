@@ -5,6 +5,7 @@ import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl } from './load-content';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
+import { extractAst, type AstResult } from './ast-extractor';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
@@ -24,7 +25,7 @@ function isGlobPattern(path: string): boolean {
  * Loads content from files or URLs and optionally extracts sections
  * Now supports glob patterns and returns metadata-rich results
  */
-export async function processContentLoader(node: any, env: Environment): Promise<string | LoadContentResult | LoadContentResult[]> {
+export async function processContentLoader(node: any, env: Environment): Promise<string | LoadContentResult | LoadContentResult[] | Array<AstResult | null> | string[]> {
   if (!node || node.type !== 'load-content') {
     throw new MlldError('Invalid content loader node', {
       node: node ? node.type : 'null',
@@ -32,7 +33,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
   }
 
-  const { source, options, pipes } = node;
+  const { source, options, pipes, ast } = node;
 
   if (!source) {
     throw new MlldError('Content loader expression missing source', {
@@ -67,6 +68,59 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // Detect glob pattern from the path
   const isGlob = isGlobPattern(pathOrUrl);
+
+  // AST extraction takes precedence for local files
+  if (ast && actualSource.type === 'path') {
+    const loadAstResults = async (): Promise<Array<AstResult | null>> => {
+      if (isGlob) {
+        const baseDir = env.getFileDirectory();
+        const matches = await glob(pathOrUrl, {
+          cwd: baseDir,
+          absolute: true,
+          followSymlinks: true,
+          ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
+        });
+        const aggregated: Array<AstResult | null> = [];
+        const fileList = Array.isArray(matches) ? matches : [];
+        for (const filePath of fileList) {
+          try {
+            const content = await env.readFile(filePath);
+            const extracted = extractAst(content, filePath, ast);
+            for (const entry of extracted) {
+              if (entry) {
+                aggregated.push({ ...entry, file: filePath });
+              } else {
+                aggregated.push(null);
+              }
+            }
+          } catch {
+            // skip unreadable files
+          }
+        }
+        return aggregated;
+      }
+
+      const content = await env.readFile(pathOrUrl);
+      return extractAst(content, pathOrUrl, ast);
+    };
+
+    const astResults = await loadAstResults();
+
+    if (hasTransform && options?.transform) {
+      const transformed = await applyTemplateToAstResults(astResults, options.transform, env);
+      return isGlob ? transformed : transformed[0] ?? '';
+    }
+
+    if (hasPipes) {
+      return await processPipeline({
+        value: astResults,
+        env,
+        node: { pipes }
+      });
+    }
+
+    return astResults;
+  }
 
   try {
     // URLs can't be globs
@@ -341,7 +395,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
  */
 async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[] | string[]> {
   // Resolve the pattern relative to current directory
-  const baseDir = env.getBasePath();
+  const baseDir = env.getFileDirectory();
   
   
   // Use tinyglobby to find matching files
@@ -851,5 +905,57 @@ async function applyTransformToResults(
     transformed.push(transformedContent);
   }
   
+  return transformed;
+}
+
+async function applyTemplateToAstResults(
+  results: Array<AstResult | null>,
+  transform: any,
+  env: Environment
+): Promise<string[]> {
+  const { interpolate } = await import('../core/interpreter');
+  const transformed: string[] = [];
+
+  for (const result of results) {
+    const templateParts = transform.parts || [];
+    const processedParts: any[] = [];
+
+    for (const part of templateParts) {
+      if (part.type === 'placeholder') {
+        if (!result) {
+          processedParts.push({ type: 'Text', content: '' });
+          continue;
+        }
+
+        if (part.fields && part.fields.length > 0) {
+          let value: any = result;
+          for (const field of part.fields) {
+            if (value && typeof value === 'object') {
+              value = value[field.value];
+            } else {
+              value = undefined;
+              break;
+            }
+          }
+          processedParts.push({
+            type: 'Text',
+            content: value !== undefined && value !== null ? String(value) : ''
+          });
+        } else {
+          processedParts.push({
+            type: 'Text',
+            content: result.code ?? ''
+          });
+        }
+      } else {
+        processedParts.push(part);
+      }
+    }
+
+    const childEnv = env.createChild();
+    const transformedContent = await interpolate(processedParts, childEnv);
+    transformed.push(transformedContent);
+  }
+
   return transformed;
 }

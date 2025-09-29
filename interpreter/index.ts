@@ -39,10 +39,11 @@ export interface InterpretOptions {
   returnEnvironment?: boolean; // Return environment with result
   approveAllImports?: boolean; // Bypass interactive import approval
   normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
-  devMode?: boolean; // Enable development mode with local fallback
   enableTrace?: boolean; // Enable directive trace for debugging (default: true)
   useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
   localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
+  // Test injection: provide a resolverManager with fetchURL stub to override global fetch in tests
+  resolverManager?: any;
   captureEnvironment?: (env: Environment) => void; // Callback to capture environment after execution
   captureErrors?: boolean; // Capture parse errors for pattern development
   ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
@@ -216,8 +217,29 @@ export async function interpret(
     env.setAllowAbsolutePaths(options.allowAbsolutePaths);
   }
   
+  // Test-only hook: if a resolverManager with fetchURL is provided, shim global fetch
+  if ((options as any).resolverManager && typeof (options as any).resolverManager.fetchURL === 'function') {
+    const rm = (options as any).resolverManager;
+    (globalThis as any).__mlldFetchOverride = rm.fetchURL.bind(rm);
+    (globalThis as any).fetch = async (url: string, _init?: any) => {
+      const response = await rm.fetchURL(url);
+      // If response already resembles a fetch Response, return it as-is
+      if (response && typeof response.ok === 'boolean' && typeof response.text === 'function') {
+        return response;
+      }
+      // Otherwise, wrap as a minimal Response-like object
+      return {
+        ok: true,
+        text: async () => String(response)
+      } as any;
+    };
+  }
+
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();
+
+  // Configure local modules after resolvers are ready
+  await env.configureLocalModules();
   
   // Set the current file path if provided (for error reporting)
   if (options.filePath) {
@@ -249,10 +271,6 @@ export async function interpret(
     env.setNormalizeBlankLines(options.normalizeBlankLines);
   }
   
-  // Set dev mode if provided
-  if (options.devMode) {
-    await env.setDevMode(options.devMode);
-  }
   
   // Set trace enabled (default: true)
   if (options.enableTrace !== undefined) {

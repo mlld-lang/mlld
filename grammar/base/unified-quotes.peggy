@@ -123,7 +123,9 @@ UnifiedInterpolationContent "Shared interpolation content"
 
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 UnifiedBacktickInterpolation "Backtick interpolation content"
-  = UnifiedInterpolationContent      // Use shared interpolation
+  = TemplateSlashForBlockBacktick    // Inline for-block
+  / TemplateInlineShow               // Inline /show
+  / UnifiedInterpolationContent      // Use shared interpolation
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -164,7 +166,7 @@ UnifiedBacktickTextSegment
 UnifiedBacktickChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / ![`@<] char:. { return char; }
+  / !("`" / "@" / "<" / "/for" / "/end") char:. { return char; }
 
 // Text inside double quotes (supports newlines)
 UnifiedDoubleQuotedText
@@ -177,6 +179,34 @@ UnifiedDoubleQuotedChar
   = StringEscapeSequence  // Handle \n, \t, etc.
   / EscapeSequence       // Handle \@, \", etc.
   / !["@\n\r] char:. { return char; }  // Allow < characters, rely on semantic lookahead
+
+// Backtick slash-style for block
+TemplateSlashForBlockBacktick "slash for-block (backtick)"
+  = &{
+      const pos = offset();
+      if (pos === 0) return true;
+      const prev = input[pos - 1];
+      return prev === '\n' || prev === '\r';
+    }
+    "/for" _ pattern:ForIterationPattern _ parts:(
+      TemplateSlashForBlockBacktick
+      / TemplateInlineShow
+      / UnifiedInterpolationContent
+      / UnifiedBacktickTextSegment
+    )* _ &{
+      const pos = offset();
+      if (pos === 0) return true;
+      const prev = input[pos - 1];
+      return prev === '\n' || prev === '\r';
+    } "/end" {
+      return {
+        type: 'TemplateForBlock',
+        variable: pattern.variable,
+        source: pattern.source,
+        body: parts,
+        style: 'slash'
+      };
+    }
 
 // -------------------------------------------------------------
 // DEPENDENCIES (defined elsewhere but referenced here)

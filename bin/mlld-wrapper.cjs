@@ -20,3 +20,7 @@ const child = spawn(process.execPath, [cliPath, ...args], {
 child.on('exit', (code) => {
   process.exit(code || 0);
 }); 
+
+child.on('close', (code) => {
+  process.exit(code ?? 0);
+}); 

@@ -20,17 +20,13 @@ StandardDirectiveEnding "standard directive ending"
 
 // Directive ending with security options (for /var, /exe, etc.)
 SecuredDirectiveEnding "secured directive ending"
-  = tail:TailModifiers? caps:PipelineParallelSpec? security:(_ s:SecurityOptions { return s; })? comment:InlineComment? {
+  = tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SecuredDirectiveEnding matched', {
         hasTail: !!tail,
-        hasCaps: !!caps,
-        hasSecurity: !!security,
         hasComment: !!comment
       });
       return {
         tail: tail || null,
-        parallel: caps || null,
-        security: security || null,
         comment: comment || null
       };
     }

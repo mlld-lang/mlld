@@ -30,7 +30,7 @@ describe('Import Directive Syntax Tests', () => {
     });
     
     it('should parse a namespace import with explicit alias', async () => {
-      const input = '/import "path/to/file.mlld" as myModule';
+      const input = '/import "path/to/file.mlld" as @myModule';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -40,11 +40,11 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check values
       expect(result.values.path).toBeDefined();
-      expect(result.values.namespace[0].content).toBe('myModule'); // Explicit alias
+      expect(result.values.namespace[0].content).toBe('myModule'); // Explicit alias (stored without prefix)
       
       // Check raw
       expect(result.raw.path).toBeDefined();
-      expect(result.raw.namespace).toBe('myModule');
+      expect(result.raw.namespace).toBe('@myModule');
       
       // Check meta
       expect(result.meta.path).toBeDefined();
@@ -52,7 +52,7 @@ describe('Import Directive Syntax Tests', () => {
     });
     
     it('should parse a namespace import with path variable and alias', async () => {
-      const input = '/import "@pathVar" as config';
+      const input = '/import "@pathVar" as @config';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -67,6 +67,26 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check meta
       expect(result.meta.path.hasVariables).toBe(true);
+    });
+
+    it('should parse a module reference with explicit extension', async () => {
+      const input = '/import @context/agents.mld as @ctx';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importNamespace');
+      expect(result.values.namespace[0].content).toBe('ctx');
+      expect(result.raw.path).toBe('@context/agents.mld');
+      expect(result.meta?.path?.extension).toBe('.mld');
+      expect(result.meta?.path?.name).toBe('agents');
+    });
+
+    it('should reject shorthand alias without @ prefix', async () => {
+      const input = '/import "path/to/file.mlld" as module';
+      const result = await parse(input);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain("Import aliases must include '@'. Use 'as @module'");
     });
   });
   
@@ -95,7 +115,25 @@ describe('Import Directive Syntax Tests', () => {
       // Check type guard
       expect(isImportSelectedDirective(result)).toBe(true);
     });
-    
+
+    it('should support @-prefixed selected imports', async () => {
+      const input = '/import {@this, @that} from @author/module';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.subtype).toBe('importSelected');
+      expect(result.values.imports[0].identifier).toBe('this');
+      expect(result.values.imports[1].identifier).toBe('that');
+      expect(result.raw.imports).toBe('@this, @that');
+    });
+
+    it('should reject selected import aliases without @ prefix', async () => {
+      const input = '/import { helper as alias } from "./file.mld"';
+      const result = await parse(input);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain("Import aliases must include '@'. Use 'as @alias'");
+    });
+  
     // Alias support has been removed from the grammar
     // The test for aliases has been removed as this syntax is no longer supported
     

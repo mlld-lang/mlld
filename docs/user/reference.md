@@ -50,7 +50,8 @@ Execute shell commands:
 ```mlld
 /run {echo "Hello World"}
 /run {ls -la}
-/run {echo "@name"}                # interpolates variables
+/run @data | { cat | jq '.[]' }       << stdin pipe sugar
+/run { cat | jq '.[]' } with { stdin: @data }  << explicit stdin
 ```
 
 Multi-line commands with `run sh`:
@@ -69,6 +70,7 @@ Define reusable functions and templates:
 ```mlld
 # Shell commands
 /exe @greet(name) = run {echo "Hello @name"}
+/exe @processJson(data) = run @data | { cat | jq '.[]' }  << stdin support
 /exe @deploy() = sh {
   npm test && npm run build
   ./deploy.sh
@@ -201,6 +203,37 @@ When-expressions in `for` RHS with filtering:
 ```
 ```
 
+### Template loops (backticks and ::)
+
+Render loops inline inside templates. The `/for` header and `/end` must start at line begins inside the template body.
+
+Backticks:
+
+```mlld
+/var @tpl = `
+/for @v in ["x","y"]
+- @v
+/end
+`
+/show @tpl
+```
+
+Double-colon:
+
+```mlld
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg
+```
+
+Limits:
+- Supported in backticks and `::…::` templates.
+- Not supported in `:::…:::` or `[[…]]` templates.
+
 ### File Operations
 
 Load file contents with angle brackets:
@@ -228,19 +261,33 @@ Glob patterns:
 
 ### Imports (`/import`)
 
-Import from modules:
+Import from modules (modules should declare `/export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
 
 ```mlld
-/import { parallel, retry } from @mlld/core
-/import @company/utils as utils
+/import { @parallel, @retry } from @mlld/core
+/import @company/utils as @utils
 ```
 
 Import from files:
 
 ```mlld
-/import { helper } from "./utils.mld"
-/import { config } from "@base/config.mld"
+/import { @helper } from "./utils.mld"
+/import { @config } from "@base/config.mld"
 ```
+
+Import types help declare how a source is resolved. You can prefix the directive with a keyword, or rely on inference:
+
+```mlld
+/import module { @env } from @mlld/env
+/import static <./templates/system.mld> as @systemTemplates
+/import live { @value } from @input
+/import cached(5m) "https://api.example.com/status" as @statusSnapshot
+/import local { @helper } from @local/dev-tools
+```
+
+When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@base`/`@project` as `static`, and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
+
+TTL durations use suffixes like 30s, 5m, 1h, 1d, or 1w (seconds, minutes, hours, days, weeks).
 
 ### Output (`/output`)
 

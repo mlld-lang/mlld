@@ -2,8 +2,8 @@
  * Run directive type definitions
  */
 import { DirectiveNode, TypedDirectiveNode } from './base';
+import type { Expression } from './primitives';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
-import { TrustLevel } from './primitives';
 
 /**
  * With clause for pipeline and dependency management
@@ -16,6 +16,7 @@ export interface WithClause {
   trust?: TrustLevel;
   parallel?: number;
   delayMs?: number;
+  stdin?: Expression;
   [key: string]: any; // For other with clause properties
 }
 

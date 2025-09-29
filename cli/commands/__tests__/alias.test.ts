@@ -4,13 +4,13 @@ import * as path from 'path';
 import * as os from 'os';
 import { AliasCommand } from '../alias';
 import { existsSync } from 'fs';
-import { LockFile } from '@core/registry/LockFile';
+import { ProjectConfig } from '@core/registry/ProjectConfig';
 
 // Mock modules
 vi.mock('fs/promises');
 vi.mock('fs');
 vi.mock('os');
-vi.mock('@core/registry/LockFile');
+vi.mock('@core/registry/ProjectConfig');
 
 describe('AliasCommand', () => {
   let command: AliasCommand;
@@ -99,13 +99,13 @@ describe('AliasCommand', () => {
   });
 
   it('should create a local alias', async () => {
-    const mockLockFile = {
+    const mockProjectConfig = {
       getResolverPrefixes: vi.fn().mockReturnValue([]),
       setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
     };
-    
+
     // Set up the mock implementation
-    vi.mocked(LockFile).mockImplementation(() => mockLockFile as any);
+    vi.mocked(ProjectConfig).mockImplementation(() => mockProjectConfig as any);
 
     await command.createAlias({
       name: 'shared',
@@ -113,7 +113,7 @@ describe('AliasCommand', () => {
       global: false
     });
 
-    expect(mockLockFile.setResolverPrefixes).toHaveBeenCalledWith([
+    expect(mockProjectConfig.setResolverPrefixes).toHaveBeenCalledWith([
       {
         prefix: '@shared/',
         resolver: 'LOCAL',
@@ -127,13 +127,13 @@ describe('AliasCommand', () => {
   });
 
   it('should create a global alias', async () => {
-    const mockLockFile = {
+    const mockProjectConfig = {
       getResolverPrefixes: vi.fn().mockReturnValue([]),
       setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
     };
-    
+
     // Set up the mock implementation
-    vi.mocked(LockFile).mockImplementation(() => mockLockFile as any);
+    vi.mocked(ProjectConfig).mockImplementation(() => mockProjectConfig as any);
 
     await command.createAlias({
       name: 'desktop',
@@ -141,7 +141,7 @@ describe('AliasCommand', () => {
       global: true
     });
 
-    expect(mockLockFile.setResolverPrefixes).toHaveBeenCalledWith([
+    expect(mockProjectConfig.setResolverPrefixes).toHaveBeenCalledWith([
       {
         prefix: '@desktop/',
         resolver: 'LOCAL',
@@ -155,12 +155,12 @@ describe('AliasCommand', () => {
   });
 
   it('should validate alias name format', async () => {
-    // Mock LockFile for this test
-    const mockLockFile = {
+    // Mock ProjectConfig for this test
+    const mockProjectConfig = {
       getResolverPrefixes: vi.fn().mockReturnValue([]),
       setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(LockFile).mockImplementation(() => mockLockFile as any);
+    vi.mocked(ProjectConfig).mockImplementation(() => mockProjectConfig as any);
 
     await expect(command.createAlias({
       name: 'invalid_name',  // Underscore is not allowed
@@ -194,13 +194,13 @@ describe('AliasCommand', () => {
       }
     };
 
-    const mockLockFile = {
+    const mockProjectConfig = {
       getResolverPrefixes: vi.fn().mockReturnValue([existingRegistry]),
       setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
     };
-    
+
     // Set up the mock implementation
-    vi.mocked(LockFile).mockImplementation(() => mockLockFile as any);
+    vi.mocked(ProjectConfig).mockImplementation(() => mockProjectConfig as any);
 
     await command.createAlias({
       name: 'shared',
@@ -208,7 +208,7 @@ describe('AliasCommand', () => {
       global: false
     });
 
-    expect(mockLockFile.setResolverPrefixes).toHaveBeenCalledWith([
+    expect(mockProjectConfig.setResolverPrefixes).toHaveBeenCalledWith([
       {
         prefix: '@shared/',
         resolver: 'LOCAL',

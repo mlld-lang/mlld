@@ -1,0 +1,4 @@
+/export { publicVar }
+
+/var @publicVar = "Exported value"
+/var @hidden = "Hidden value"

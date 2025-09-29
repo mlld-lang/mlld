@@ -1,0 +1,11 @@
+# Module with interdependent command-reference functions
+/exe @getData() = js { return ["apple", "banana", "cherry"]; }
+/exe @formatData(items) = js { return items.join(" | "); }
+/exe @processData() = @formatData(@getData())
+
+# Export functions for testing
+/var @exports = {
+  getData: @getData,
+  formatData: @formatData,
+  processData: @processData
+}

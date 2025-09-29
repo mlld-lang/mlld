@@ -2,7 +2,7 @@ import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause }
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
-import { interpolate } from '../core/interpreter';
+import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint';
@@ -14,6 +14,7 @@ import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { StructuredValue } from '@core/types/structured-value';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -50,6 +51,85 @@ function dedentCommonIndent(src: string): string {
   }
   if (!minIndent) return src;
   return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
+}
+
+/**
+ * Convert arbitrary evaluated values into stdin-ready text.
+ * WHY: Shell executors only accept strings, yet upstream evaluation may
+ *      produce structured values, buffers, or loader results.
+ * CONTEXT: Called after variables and expressions resolve for /run stdin.
+ */
+function coerceStdinString(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+
+  if (Buffer.isBuffer(value)) {
+    return value.toString('utf8');
+  }
+
+  if (StructuredValue.isStructuredValue(value)) {
+    return value.toString();
+  }
+
+  if (isLoadContentResult(value)) {
+    return value.content ?? '';
+  }
+
+  if (Array.isArray(value)) {
+    if (isLoadContentResultArray(value)) {
+      return value.map(item => item.content ?? '').join('\n');
+    }
+    return value.map(item => coerceStdinString(item)).join('\n');
+  }
+
+  return String(value);
+}
+
+/**
+ * Evaluate a stdin expression and coerce it into text for command execution.
+ * WHY: /run supports expressions in the `with { stdin: ... }` slot that can
+ *      reference variables or pipelines; those must resolve before coercion.
+ * CONTEXT: Delegates final conversion to coerceStdinString once evaluation
+ *          finishes in the command execution resolution context.
+ */
+async function resolveStdinInput(stdinSource: unknown, env: Environment): Promise<string> {
+  if (stdinSource === null || stdinSource === undefined) {
+    return '';
+  }
+
+  const result = await evaluate(stdinSource as MlldNode | MlldNode[], env, { isExpression: true });
+  let value = result.value;
+
+  if (process.env.MLLD_DEBUG_STDIN === 'true') {
+    try {
+      console.error('[mlld] stdin evaluate result', JSON.stringify(value));
+    } catch {
+      console.error('[mlld] stdin evaluate result', value);
+    }
+  }
+
+  const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+  if (isVariable(value)) {
+    value = await resolveValue(value, env, ResolutionContext.CommandExecution);
+    if (process.env.MLLD_DEBUG_STDIN === 'true') {
+      try {
+        console.error('[mlld] stdin resolved variable', JSON.stringify(value));
+      } catch {
+        console.error('[mlld] stdin resolved variable', value);
+      }
+    }
+  }
+
+  return coerceStdinString(value);
 }
 
 /**
@@ -95,10 +175,15 @@ export async function evaluateRun(
   env: Environment,
   callStack: string[] = []
 ): Promise<EvalResult> {
+  // Check if we're importing - skip execution if so
+  if (env.getIsImporting()) {
+    return { value: null, env };
+  }
+
   let output = '';
   // Track source node to optionally enable stage-0 retry
   let sourceNodeForPipeline: any | undefined;
-  
+
   // Create execution context with source information
   const executionContext = {
     sourceLocation: directive.location,
@@ -106,6 +191,17 @@ export async function evaluateRun(
     filePath: env.getCurrentFilePath(),
     directiveType: directive.meta?.directiveType as string || 'run'
   };
+  
+  let withClause = (directive.meta?.withClause || directive.values?.withClause) as WithClause | undefined;
+  if (process.env.MLLD_DEBUG_STDIN === 'true') {
+    try {
+      console.error('[mlld] directive meta withClause', JSON.stringify(directive.meta?.withClause));
+      console.error('[mlld] directive values withClause', JSON.stringify(directive.values?.withClause));
+    } catch {
+      console.error('[mlld] directive meta withClause', directive.meta?.withClause);
+      console.error('[mlld] directive values withClause', directive.values?.withClause);
+    }
+  }
   
   if (directive.subtype === 'runCommand') {
     // Handle command execution
@@ -232,7 +328,13 @@ export async function evaluateRun(
     }
     
     // Execute the command with context for rich error reporting
-    output = await env.executeCommand(command, undefined, executionContext);
+    let stdinInput: string | undefined;
+    if (withClause && 'stdin' in withClause) {
+      stdinInput = await resolveStdinInput(withClause.stdin, env);
+    }
+
+    const commandOptions = stdinInput !== undefined ? { input: stdinInput } : undefined;
+    output = await env.executeCommand(command, commandOptions, executionContext);
     
   } else if (directive.subtype === 'runCode') {
     // Handle code execution
@@ -628,8 +730,14 @@ export async function evaluateRun(
   }
   
   // Handle with clause if present
-  const withClause = (directive.meta?.withClause || directive.values?.withClause) as WithClause | undefined;
   if (withClause) {
+    if (process.env.MLLD_DEBUG_STDIN === 'true') {
+      try {
+        console.error('[mlld] withClause', JSON.stringify(withClause, null, 2));
+      } catch {
+        console.error('[mlld] withClause', withClause);
+      }
+    }
     // Check dependencies first if specified
     if (withClause.needs) {
       const checker = new DefaultDependencyChecker();
@@ -684,10 +792,8 @@ export async function evaluateRun(
     env.addNode(replacementNode);
   }
   
-  // TEMPORARY: Emit effect for /run output to fix tests
-  // TODO: Remove this when /show handles command execution
-  // This is a temporary fix - the final design will have /run execute silently
-  if (output) {
+  // Emit effect only for top-level run directives (not data/RHS contexts)
+  if (output && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef) {
     env.emitEffect('both', output);
   }
   

@@ -38,6 +38,9 @@ WithProperty
   / "needs" _ ":" _ needs:NeedsObject {
       return ["needs", needs];
     }
+  / "stdin" _ ":" _ stdin:Expression {
+      return ["stdin", stdin];
+    }
   / "format" _ ":" _ format:DataString {
       return ["format", format];
     }

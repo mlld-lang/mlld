@@ -2,12 +2,16 @@
  * Type definitions for directive values arrays
  */
 import {
+  ImportType
+} from './security';
+
+import {
   TextNode,
   VariableReferenceNode,
   DotSeparatorNode,
   PathSeparatorNode,
   BaseMlldNode,
-  TTLValue,
+  TimeDurationNode,
   ExecInvocation
 } from './primitives';
 import { WithClause } from './run';
@@ -36,7 +40,8 @@ export type ContentNodeArray = Array<TextNode | VariableReferenceNode | ExecInvo
 export interface ImportValues {
   imports: ImportNodeArray;
   path: PathNodeArray;
-  ttl?: TTLValue;
+  importType?: ImportType;
+  cachedDuration?: TimeDurationNode;
   withClause?: WithClause;
 }
 
@@ -46,7 +51,7 @@ export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;
 export interface ImportWildcardNode extends VariableReferenceNode {
   identifier: '*';
   valueType: 'import';
-  alias?: string; // For namespace imports: @import { * as namespace } from "path"
+  alias?: string; // For namespace imports: @import { * as @namespace } from "path"
 }
 
 // Type for specific imports
@@ -54,6 +59,20 @@ export interface ImportReferenceNode extends VariableReferenceNode {
   identifier: string; // Any name except '*'
   valueType: 'import';
   alias?: string; // For aliased imports: @import { name as alias } from "path"
+}
+
+/**
+ * Export directive values
+ */
+export interface ExportValues {
+  exports: ExportReferenceNode[];
+}
+
+// Member exported from the current module
+export interface ExportReferenceNode extends VariableReferenceNode {
+  identifier: string;
+  valueType: 'export';
+  alias?: string;
 }
 
 /**

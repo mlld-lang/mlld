@@ -5,6 +5,106 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0-rc56
+
+### Added
+- **Import Types System**: Control how modules and resources are resolved
+  - `module` imports: Pre-installed registry modules (offline after install)
+  - `static` imports: Content embedded at parse time (zero runtime cost)
+  - `live` imports: Always fresh data (fetched every execution)
+  - `cached(TTL)` imports: Smart caching with time limits (5m, 1h, 7d, etc.)
+  - `local` imports: Direct access to development modules in `llm/modules/`
+  - Example: `/import module { api } from @corp/tools`, `/import cached(1h) <https://api.example.com> as @data`
+
+- **Module management**:
+  - `mlld install @author/module`: Install modules from public registry
+  - `mlld update`: Update modules to latest compatible versions
+  - `mlld outdated`: Check for available updates
+  - `mlld ls`: View installed modules with status and sizes
+  - Registry integration with CDN-distributed module catalog
+
+- **Configuration Files**:
+  - `mlld-config.json`: Your project settings (dependencies, preferences)
+  - `mlld-lock.json`: Auto-generated locks (versions, hashes, sources)
+
+- **Simplified Development Workflow**:
+  - Use `/import local { helper } from @author/module` to access modules in `llm/modules/` using published name (if you are @author or can publish to private @author registry)
+  - Useful for iterating on modules before publishing
+
+### Changed
+- Import syntax now requires `@` prefix on imported names: `/import { @helper } from module`
+- Module publishing requires explicit `/export { ... }` manifests
+- Import failures now stop execution (exit code 1) instead of continuing
+- Smart import type inference based on source patterns
+
+### Fixed
+- Module installation fetches from real registry instead of placeholders
+- Version resolution respects "latest" tags and semantic versioning
+- Module integrity verified with SHA-256 hashes
+
+## 2.0.0-rc55
+
+### Added
+- Stdin support for `/run` directive and `/exe` definitions:
+  - New syntax: `/run { command } with { stdin: @variable }` passes data directly via stdin without shell escaping
+  - Pipe sugar: `/run @data | { command }` normalizes to `with { stdin: @data }` for cleaner syntax
+  - Works in executable definitions: `/exe @func(data) = run { command } with { stdin: @data }`
+  - Pipe sugar in executables: `/exe @func(data) = run @data | { command }`
+  - Eliminates JSON double-stringification when passing structured data to commands like `jq`, `cat`, etc.
+  - Preserves shell safety while enabling proper JSON/CSV/XML data flow through pipelines
+
+- JSON data access pattern for JavaScript functions (addresses #428):
+  - `.data` and `.json` accessors parse JSON strings during variable evaluation before passing to functions
+  - `.text` and `.content` accessors preserve original string content
+  - Eliminates need for manual `JSON.parse()` calls in JavaScript functions
+  - Works consistently across files, variables, and command output
+  - Example: `/var @json = '{"items": []}'; /run @process(@json.data)` passes parsed array to function
+
+- Native mlld functions in pipelines:
+  - `/exe` functions using `for` and `foreach` constructs now work as pipeline stages
+  - Fixes "Unsupported code language: mlld-foreach" errors
+  - Enables seamless composition: `/var @result = @data.data | @filterNative | @transformJS | @json`
+  - Mixed pipelines with native mlld, JavaScript, and shell commands all work together
+
+## [2.0.0-rc54]
+### Added
+- Expose structured module dependency resolution with `ModuleInstaller.resolveDependencies` so CLI flows reuse aggregated metadata.
+- Add dependency summaries across install/update/outdated/info commands via shared helper, with optional dev-dependency inclusion.
+- Introduce `cli/utils/dependency-summary.ts` to normalize runtime/tool/package output and conflict warnings.
+### Changed
+- Cache modules with structured needs/dependency metadata to avoid re-parsing frontmatter.
+- `ResolverManager` persists structured metadata when fetching modules, enabling downstream analysis.
+
+
+### Added
+- Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.
+- Imported executables and templates now capture their module environment so command references resolve sibling functions consistently.
+- Registry module imports now enforce `mlld.lock` versions, failing fast on mismatches while remaining backward-compatible with legacy lock entries.
+- Explicit `/export { ... }` manifests for modules: grammar, AST, evaluation, and import pipeline honour declared bindings while falling back to auto-export for manifest-less files.
+- Import collision protection surfaces `IMPORT_NAME_CONFLICT` with precise locations when multiple directives bind the same name, covering both namespace and selective imports.
+- End-to-end fixture ensures exported shadow-environment helpers retain access to nested helpers and mlld functions across module boundaries.
+- Inline template loops: `/for … /end` inside templates
+  - Supported in backticks and `::…::` templates; line-start only for both `/for` and `/end` within the template body
+  - Not supported in `:::…:::` or `[[…]]` templates
+  - Interpreter uses existing TemplateForBlock evaluation; no changes to runtime semantics outside template contexts
+- AST selectors in alligator expressions `<file.ext { methodName (variable) }>` covering JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Solidity, C, and C++.
+
+### Fixed
+- Foreach templates now keep long numeric strings intact during interpolation
+- Command-reference executables now preserve array and object types when passing arguments to nested functions (previously JSON.stringify'd them)
+- Imported arrays preserve array behaviour after module import, so `.length` and `/for` iteration no longer fail after crossing module boundaries
+- Triple-colon template exports keep their template metadata, rendering `{{ }}` placeholders and leaving `<@...>` markers unaltered when imported
+- JavaScript `@` syntax misuse surfaces the educational guidance even when V8 reports "Unexpected token", keeping the fix-it copy visible
+- Regression fixtures cover imported arrays, triple-colon imports, triple alligator literals, and JS `@` misuse to prevent regressions
+
+## [2.0.0-rc53]
+### Fixed
+- Large integers were getting wrongly rounded by js auto-parsing
+
+## [2.0.0-rc52]
+### Fixed
+- `::: {{var}} :::` template syntax had issues with <alligators>. 
+
 ## [2.0.0-rc51]
 ### Fixed
 - Language Server transport defaults to stdio when no explicit flag is provided
@@ -598,7 +698,7 @@ This release allows mlld to function as a logical router
 ### Fixed
 - **Namespace import structure for better ergonomics**
   - Namespace imports intelligently unwrap single-export modules
-  - `/import @mlld/env as environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
+- `/import @mlld/env as @environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
   - Modules exporting a single main object matching common patterns (module name, 'main', 'default', 'exports') are automatically unwrapped
   - Multiple-export modules remain unchanged, preserving full namespace structure
 
@@ -949,7 +1049,7 @@ The `/` command approach creates clear disambiguiation between commands and vari
 ### Added:
 - **Namespace Imports**: Import entire files or modules as namespaced objects
   - File imports: `/import [./file.mld]` creates namespace from filename (e.g., `@file`)
-  - Custom alias: `/import [./file.mld] as myname` creates `@myname` namespace
+- Custom alias: `/import [./file.mld] as @myname` creates `@myname` namespace
   - Module imports: `/import @author/module` creates `@module` namespace
   - Access fields: `@namespace.field` to access imported variables
   - Replaces deprecated wildcard syntax `/import { * } from [file]`
@@ -1074,7 +1174,7 @@ The `/` command approach creates clear disambiguiation between commands and vari
   - Stack traces included for debugging
   - Works in pipelines and shows full execution context
 - **Namespace Imports**: Support for importing all variables from a file under a namespace alias (#264)
-  - Import .mld files: `@import { * as utils } from "utils.mld"` - access as `{{utils.helper}}`
+  - Import .mld files: `@import { * as @utils } from "utils.mld"` - access as `{{utils.helper}}`
   - Import JSON files: `@import { * as config } from "config.json"` - access as `{{config.name}}`
   - Nested object access: `{{config.database.host}}` for deep properties
   - Works in templates with dot notation for clean, organized variable access

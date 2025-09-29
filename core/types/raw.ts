@@ -6,8 +6,17 @@
  * Import directive raw values
  */
 export interface ImportRaw {
-  imports: string;
+  imports?: string;
+  namespace?: string;
   path: string;
+  importType?: string;
+}
+
+/**
+ * Export directive raw values
+ */
+export interface ExportRaw {
+  exports: string;
 }
 
 /**

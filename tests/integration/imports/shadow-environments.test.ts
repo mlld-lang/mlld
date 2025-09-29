@@ -32,7 +32,7 @@ describe('Shadow Environment Import Tests', () => {
     
     it('should preserve shadow functions through namespace import', async () => {
       const result = await testImport(`
-/import "./string-utils.mld" as utils
+/import "./string-utils.mld" as @utils
 /var @result = @utils.process.format("hello", "world")
 /show @result`, {
         files: {
