@@ -38,7 +38,8 @@ TailValue
   / deps:NeedsObject { return deps; }                        // for 'needs'
   / title:AsSectionRenameString { return title; }            // for 'as'
 
-// Support parallel groups with `||` inside pipeline shorthand
+// Support parallel groups with `||` inside pipeline shorthand.
+// Leading parallel groups are now allowed.
 // Example: | @a || @b || @c | @d  -> [[a,b,c], d]
 PipelineShorthand
   = first:PipelineStageFirst rest:PipelineRest* {
