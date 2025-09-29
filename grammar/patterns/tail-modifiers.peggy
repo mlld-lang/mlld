@@ -57,7 +57,11 @@ PipelineShorthand
 // Example: || @a() || @b() || @c() -> pipeline parallel
 // Example: @a || @b -> boolean OR (not matched here)
 LeadingParallelPipeline
-  = "||" _ &("@" BaseIdentifier _ "(") group:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {
+  = "||" _
+    // Lookahead: only match if next token is a function call (@func()), not a boolean OR expression.
+    // This ensures parallel pipeline syntax only applies to function calls.
+    &("@" BaseIdentifier _ "(")
+    group:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {
       helpers.debug('LeadingParallelPipeline matched', {
         groupSize: group.length,
         restCount: rest.length,
