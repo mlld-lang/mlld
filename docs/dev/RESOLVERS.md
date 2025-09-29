@@ -174,7 +174,7 @@ class NowResolver implements MCPResolver {
 
 ### TTL and Caching
 
-> Legacy note: user-facing TTL syntax has been removed. The resolver cache still uses TTL internally and will be revisited alongside the new capability system.
+The `cached(TTL)` import type provides explicit caching control via time-to-live specifications.
 
 mlld's resolver system uses a generic TTL service with pluggable cache strategies:
 
@@ -233,38 +233,39 @@ class ResolverCacheKeyStrategy implements CacheKeyStrategy {
 
 ### Resolution Architecture
 
-mlld uses a three-tier resolution approach, checked in order:
+mlld uses import types to route to specific resolvers:
 
-1. **Prefix-Based Lookup** (Highest Priority) - For configured prefixes
-   - Checks mlld.lock.json prefix configurations first
+1. **Import Type Routing** (Primary) - Based on explicit type declarations
+   - `module` → CachedModuleResolver (registry modules from cache)
+   - `static` → StaticResolver (parse-time embedding)
+   - `live` → RuntimeResolver (always fresh)
+   - `cached(TTL)` → TTLResolver (time-based caching)
+   - `local` → LocalDevResolver (direct filesystem)
+
+2. **Prefix-Based Lookup** - For configured prefixes
+   - Checks mlld-config.json prefix configurations
    - Maps prefixes like `@company/`, `@local/`, `@docs/` to resolver types
-   - Multiple prefixes can use the same resolver type (e.g., both `@.` and `@PROJECTPATH` are built-in prefixes for the PROJECTPATH resolver)
    - Each prefix has its own configuration (basePath, authentication, etc.)
-   - Sorted by prefix length for correct matching (longest first)
 
-2. **Built-in Resolver Lookup** - For built-in resolvers
-   - Checks if the reference matches a built-in resolver directly (now, debug, input, base)
-   - These don't use prefixes - they ARE the resolver (e.g., @now, not @time/)
+3. **Built-in Resolver Lookup** - For built-in resolvers
+   - Direct resolver matching (now, debug, input, base)
+   - These don't use prefixes - they ARE the resolver
 
-3. **Priority-Based Fallback** - For unmatched references
-   - Iterates through all resolvers by priority
-   - Each resolver's `canResolve()` method determines if it can handle the reference
-   - REGISTRY resolver (priority 10) handles `@user/module` patterns by looking them up in module registries
+This design provides explicit control over resolution behavior while maintaining flexible configuration.
 
-This design ensures explicit prefix configurations take precedence while maintaining backward compatibility.
+### Import Type Resolver Priority
 
-### Resolver Types and Priorities
-
-Each resolver type has a default priority (lower number = higher priority):
+Import types define explicit resolver routing, eliminating priority-based fallback:
 
 ```
-Priority 1:  Function resolvers (now, debug, input)
-Priority 1:  Path resolvers (base)
-Priority 10: Module resolvers (REGISTRY)
-Priority 20: File resolvers (LOCAL, GITHUB, HTTP)
+module     → CachedModuleResolver (cache-only)
+static     → StaticResolver (parse-time)
+live       → RuntimeResolver (always fresh)
+cached(TTL) → TTLResolver (time-based)
+local      → LocalDevResolver (filesystem)
 ```
 
-Note: The actual resolution order is prefix-first, then built-in resolver lookup, then priority-based as described above.
+When no import type specified, inference rules determine the appropriate resolver based on source patterns.
 
 **Resolution Algorithm:**
 ```typescript

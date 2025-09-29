@@ -8,50 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 2.0.0-rc56
 
 ### Added
-- **Import Types System**: Explicit import type declarations for precise resolution control
-  - `module` imports: Registry modules cached locally (no runtime network access)
-  - `static` imports: Content embedded at parse time for zero-runtime cost
-  - `live` imports: Always fresh, fetched on every execution
-  - `cached(TTL)` imports: Time-based caching with explicit TTL (5m, 1h, 7d, etc.)
-  - `local` imports: Development mode filesystem access bypassing package management
-  - Backward compatible: Old syntax infers appropriate import types automatically
+- **Import Types System**: Control how modules and resources are resolved
+  - `module` imports: Pre-installed registry modules (offline after install)
+  - `static` imports: Content embedded at parse time (zero runtime cost)
+  - `live` imports: Always fresh data (fetched every execution)
+  - `cached(TTL)` imports: Smart caching with time limits (5m, 1h, 7d, etc.)
+  - `local` imports: Direct access to development modules in `llm/modules/`
   - Example: `/import module { api } from @corp/tools`, `/import cached(1h) <https://api.example.com> as @data`
-- **Unified Configuration Architecture**: Split configuration into user-editable and auto-generated files
-  - `mlld-config.json`: User dependencies, resolver prefixes, security settings, dev mode configuration
-  - `mlld-lock.json`: Auto-generated module locks with versions, hashes, and source URLs
-  - `ProjectConfig` class provides unified API for both files
-  - Automatic migration from legacy `mlld.lock.json` format
-- **Complete Module Management Commands**:
-  - `mlld install @author/module`: Fetch modules from registry CDN and cache locally
-  - `mlld update`: Update modules to latest versions matching constraints
-  - `mlld outdated`: Show available updates for installed modules
-  - `mlld ls`: Enhanced display with install status and cache information
-  - Public registry integration with `https://cdn.jsdelivr.net/gh/mlld-lang/registry@main/modules.json`
-- **Development Mode Overhaul**:
-  - `local` import type replaces `--dev` flags and `MLLD_DEV` environment variable
-  - Automatic detection of modules in `llm/modules/` directory
-  - No special flags needed - just use `/import local { helper } from @author/module`
+
+- **Module management**:
+  - `mlld install @author/module`: Install modules from public registry
+  - `mlld update`: Update modules to latest compatible versions
+  - `mlld outdated`: Check for available updates
+  - `mlld ls`: View installed modules with status and sizes
+  - Registry integration with CDN-distributed module catalog
+
+- **Configuration Files**:
+  - `mlld-config.json`: Your project settings (dependencies, preferences)
+  - `mlld-lock.json`: Auto-generated locks (versions, hashes, sources)
+
+- **Simplified Development Workflow**:
+  - Use `/import local { helper } from @author/module` to access modules in `llm/modules/` using published name (if you are @author or can publish to private @author registry)
+  - Useful for iterating on modules before publishing
 
 ### Changed
-- Publishing validation requires explicit `/export { ... }` manifests and records structured import metadata so later stages avoid re-parsing.
-
-- Import alias syntax: `/import` selections now accept identifiers prefixed with `@` (e.g., `@helper`), and shorthand aliases must include `@` (`as @alias`). Attempts to use bare aliases surface a targeted parser error.
-
-- **Import Type Inference**: Defaults based on import sources
-  - Registry modules (`@author/module`) → `module`
-  - Local files (`./file.mld`) → `static`
-  - URLs (`https://...`) → `cached(5m)`
-  - Built-in resolvers (`@input`) → `live`
-  - Local prefix (`@local/...`) → `local`
-
-### Changed
-- Lock file format updated
-- Dev mode simplified to single `local` import type instead of multiple activation methods
+- Import syntax now requires `@` prefix on imported names: `/import { @helper } from module`
+- Module publishing requires explicit `/export { ... }` manifests
+- Import failures now stop execution (exit code 1) instead of continuing
+- Smart import type inference based on source patterns
 
 ### Fixed
-- Version resolution with "latest" tag as default
-- Lock file version enforcement prevents drift in team environments
-- Module integrity verification using SHA-256 hashes
+- Module installation fetches from real registry instead of placeholders
+- Version resolution respects "latest" tags and semantic versioning
+- Module integrity verified with SHA-256 hashes
 
 ## 2.0.0-rc55
 

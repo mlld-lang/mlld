@@ -36,33 +36,69 @@ The mlld import system provides a flexible, secure way to share code between mod
 
 ### Import Types
 
-mlld supports the following keywords (or inferred defaults when omitted):
+mlld supports five import types that control resolution behavior:
 
+#### 1. `module` - Registry Modules
+```mlld
+/import module { @api, @utils } from @corp/toolkit
 ```
-/import module { @feature } from @corp/package
-/import static <./file.mld> as @systemTemplates
-/import live { @value } from @input
-/import cached(5m) "https://api.example.com/data" as @statusSnapshot
-/import local { @helper } from @local/dev-module
+- Pre-installed from registry via `mlld install`
+- Cached locally, no runtime network access
+- Version-locked for reproducibility
+- Fails if module not installed
+
+#### 2. `static` - Parse-Time Embedding
+```mlld
+/import static <./prompts/system.md> as @prompt
+/import static <./config.json> as @config
 ```
+- Content embedded in AST at parse time
+- Zero runtime cost
+- Perfect for templates and configuration
 
-If no keyword is provided, mlld infers a type based on the source. Identifiers inside the braces and after `as` should include the `@` prefix for consistency; mlld stores the alias without the prefix internally.
+#### 3. `live` - Always Fresh
+```mlld
+/import live { @timestamp } from @now
+/import live <https://api.status.com> as @status
+```
+- Fetched on every execution
+- Never cached
+- Use for real-time data
 
+#### 4. `cached(TTL)` - Time-Based Caching
+```mlld
+/import cached(5m) <https://api.github.com/rate_limit> as @limits
+/import cached(1h) <https://cdn.example.com/data> as @assets
+```
+- Cache-first with explicit TTL
+- Network access only when cache expired
+- TTL units: s/m/h/d/w
 
-- Registry modules (`@user/module`) → `module`
-- Local files (`"./file.mld"`) → `static`
-- URLs → `cached`
-- Resolvers such as `@local` or `@base` → `local` and `static` respectively
-- `@input` → `live`
+#### 5. `local` - Development Mode
+```mlld
+/import local { @helper } from @alice/dev-module
+```
+- Direct filesystem access to `llm/modules/`
+- Bypasses package management
+- Only works if user is `@alice` or has resolver configured
 
-Type mismatch errors surface when a keyword conflicts with the resolved source (e.g., `cached` on a file path).
+### Import Type Inference
 
-- **Explicit export manifests**: Modules declare public bindings with `/export { ... }`; files that have not been updated yet still auto-export as a temporary compatibility fallback.
+When no type specified, mlld infers based on source:
+- Registry modules (`@author/module`) → `module`
+- Local files (`./file.mld`) → `static`
+- URLs (`https://...`) → `cached(5m)`
+- Built-in resolvers (`@input`) → `live`
+- Local prefix (`@local/`) → `local`
+
+### Key Features
+- **Module isolation**: Each module evaluates in its own environment
+- **Explicit export manifests**: Modules declare public bindings with `/export { ... }`
 - **Shadow environment preservation**: Functions maintain access to their original context
 - **Type preservation**: Variable types are maintained through import/export
-- **Flexible resolution**: Support for local files, registry modules, and URLs
+- **Import type routing**: Five distinct resolution strategies for different use cases
 
-## Import Types
+## Import Patterns
 
 mlld supports three main import patterns:
 
@@ -408,8 +444,7 @@ if (explicitNames) {
 
 ### Auto-Export Fallback
 
-- Legacy modules without a manifest continue to export every top-level variable that passes `isLegitimateVariableForExport` (system variables remain hidden).
-- The fallback path allows gradual migration; new docs and samples should always include `/export`.
+Modules without explicit `/export` manifest auto-export all legitimate variables (system variables remain hidden).
 
 ### Import Alias Collision Protection
 
