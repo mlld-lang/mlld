@@ -515,12 +515,17 @@ Parallel groups (`||`): run multiple commands as one stage in parallel.
 
 # Leading || runs parallel stages immediately
 /var @results = || @fetchA() || @fetchB() || @fetchC()
-/show @results   # → ["A", "B", "C"]
+/run || @fetchA() || @fetchB() || @fetchC()  # also works in /run
+/exe @parallel() = || @helper1() || @helper2() | @combine  # and /exe
+
+# With concurrency caps: (n, delay)
+/var @capped = || @a() || @b() || @c() || @d() (2, 100ms)  # cap=2, 100ms pacing
 ```
 
 Semantics:
 * Grouping: `A || B || C` forms a single stage executed concurrently with a global cap.
-* Leading `||`: Start pipeline with parallel execution, avoiding ambiguity with boolean OR.
+* Leading `||`: Start pipeline with parallel execution, avoiding ambiguity with boolean OR. Only matches function calls `@func()`, not plain variables.
+* Equivalence: `|| @a() || @b()` produces same AST as `"" with { pipeline: [[@a, @b]] }`
 * Ordering: Results preserve command order; next stage receives a JSON array string.
 * Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 * Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.

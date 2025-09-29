@@ -21,7 +21,45 @@ It can be used in three main forms:
 // Primary /run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 SlashRun
-  = DirectiveContext "/run" _ "\"" command:$([^"]*) "\"" tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext "/run" _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? comment:InlineComment? {
+      // Leading parallel pipeline: /run || @a() || @b() || @c()
+      helpers.debug('SlashRun matched leading parallel pipeline', { leading, caps });
+
+      const pipeline = leading.withClause.pipeline || [];
+      const withClause = {
+        pipeline: pipeline,
+        ...(caps ? { parallel: caps.parallel, delayMs: caps.delayMs } : {})
+      };
+
+      const values = {
+        withClause: withClause
+      };
+
+      const raw = {
+        pipeline: pipeline.map(p => Array.isArray(p) ?
+          `[${p.map(c => c.rawIdentifier).join(' || ')}]` :
+          p.rawIdentifier
+        ).join(' | ')
+      };
+
+      const meta = {
+        isPipeline: true,
+        hasLeadingParallel: true,
+        stageCount: pipeline.length,
+        ...(comment ? { comment } : {})
+      };
+
+      return helpers.createStructuredDirective(
+        'run',
+        'runPipeline',
+        values,
+        raw,
+        meta,
+        location(),
+        'pipeline'
+      );
+    }
+  / DirectiveContext "/run" _ "\"" command:$([^"]*) "\"" tail:TailModifiers? comment:InlineComment? {
       // Quoted command syntax: /run "echo hello"
       helpers.debug('SlashRun matched quoted command', { command, tail });
       

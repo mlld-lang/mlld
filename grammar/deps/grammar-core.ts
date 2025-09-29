@@ -387,6 +387,7 @@ export const helpers = {
 
   ttlToSeconds(value: number, unit: string): number {
     const multipliers: Record<string, number> = {
+      'milliseconds': 1 / 1000,
       'seconds': 1,
       'minutes': 60,
       'hours': 3600,

@@ -57,13 +57,18 @@ PipelineShorthand
 // Example: || @a() || @b() || @c() -> pipeline parallel
 // Example: @a || @b -> boolean OR (not matched here)
 LeadingParallelPipeline
-  = "||" _ &("@" BaseIdentifier _ "(") group:ParallelSequence rest:PipelineRest* {
+  = "||" _ &("@" BaseIdentifier _ "(") group:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {
       helpers.debug('LeadingParallelPipeline matched', {
         groupSize: group.length,
-        restCount: rest.length
+        restCount: rest.length,
+        hasCaps: !!caps
       });
       // Leading || creates a parallel group as first stage
       const pipeline = [group, ...rest];
+      const withClause = {
+        pipeline,
+        ...(caps ? { parallel: caps.parallel, delayMs: caps.delayMs } : {})
+      };
       // Provide a placeholder text node so directives can supply an initial value
       const placeholder = helpers.createNode(NodeType.Text, {
         content: '',
@@ -72,7 +77,7 @@ LeadingParallelPipeline
       return {
         type: 'LeadingParallelPipeline',
         placeholder,
-        withClause: { pipeline }
+        withClause
       };
     }
 

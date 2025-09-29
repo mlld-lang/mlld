@@ -362,6 +362,7 @@ export const helpers = {
     },
     ttlToSeconds(value, unit) {
         const multipliers = {
+            'milliseconds': 1 / 1000,
             'seconds': 1,
             'minutes': 60,
             'hours': 3600,
