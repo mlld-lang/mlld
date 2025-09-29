@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { ModuleInstaller, ModuleWorkspace, type ModuleSpecifier, type ModuleOutdatedResult } from '@core/registry';
+import { renderDependencySummary } from '../utils/dependency-summary';
 import { OutputFormatter, formatModuleReference } from '../utils/output';
 import { getCommandContext } from '../utils/command-context';
 
@@ -39,6 +40,13 @@ class OutdatedCommand {
     }
 
     this.printSummary(results);
+
+    if (options.verbose) {
+      await renderDependencySummary(this.workspace, specs, {
+        verbose: options.verbose,
+        includeDevDependencies: false
+      });
+    }
   }
 
   private resolveSpecs(args: string[]): ModuleSpecifier[] {

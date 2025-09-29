@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { ModuleInstaller, ModuleWorkspace, type ModuleSpecifier, type ModuleUpdateResult } from '@core/registry';
+import { renderDependencySummary } from '../utils/dependency-summary';
 import { ProgressIndicator } from '../utils/progress';
 import { OutputFormatter, formatModuleReference } from '../utils/output';
 import { getCommandContext } from '../utils/command-context';
@@ -62,7 +63,7 @@ class UpdateCommand {
     }
 
     this.progress.finish();
-    this.report(results, options);
+    await this.report(results, options, specs);
   }
 
   private resolveSpecs(args: string[]): ModuleSpecifier[] {
@@ -101,9 +102,12 @@ class UpdateCommand {
     for (const result of outdated) {
       console.log(`  ${result.module}: ${result.currentVersion || 'unknown'} → ${result.latestVersion}`);
     }
-  }
 
-  private report(results: ModuleUpdateResult[], options: UpdateOptions): void {
+  private async report(
+    results: ModuleUpdateResult[],
+    options: UpdateOptions,
+    specs: ModuleSpecifier[]
+  ): Promise<void> {
     const updated = results.filter(r => r.status === 'updated');
     const unchanged = results.filter(r => r.status === 'unchanged');
     const failed = results.filter(r => r.status === 'failed');
@@ -131,6 +135,14 @@ class UpdateCommand {
           console.error(failure.error);
         }
       }
+    }
+
+    const succeeded = results.filter(r => r.status !== 'failed').length;
+    if (specs.length > 0 && succeeded > 0) {
+      await renderDependencySummary(this.workspace, specs, {
+        verbose: options.verbose,
+        includeDevDependencies: false
+      });
     }
   }
 }
