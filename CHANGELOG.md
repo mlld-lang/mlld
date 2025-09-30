@@ -5,7 +5,7 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 2.0.0-rc56
+## [2.0.0-rc56]
 
 ### Added
 - **Import Types System**: Control how modules and resources are resolved
@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Version resolution respects "latest" tags and semantic versioning
 - Module integrity verified with SHA-256 hashes
 
-## 2.0.0-rc55
+## [2.0.0-rc55]
 
 ### Added
 - Stdin support for `/run` directive and `/exe` definitions:
