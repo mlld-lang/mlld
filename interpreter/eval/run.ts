@@ -718,13 +718,19 @@ export async function evaluateRun(
     if (!execRef) {
       throw new Error('Run exec reference directive missing exec reference');
     }
-    
+
     // Evaluate the exec invocation
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execRef, env);
     output = String(result.value);
     sourceNodeForPipeline = execRef;
-    
+
+  } else if (directive.subtype === 'runPipeline') {
+    // Handle leading parallel pipeline: /run || @a() || @b()
+    // Pipeline is already in withClause, initial input is empty string
+    output = '';
+    withClause = directive.values.withClause;
+
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
   }

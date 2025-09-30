@@ -1,18 +1,11 @@
 import type { Environment } from '../../env/Environment';
+import type { ImportResolution } from './ImportPathResolver';
 import { HashUtils } from '@core/registry/utils/HashUtils';
 import { checkMlldVersion, formatVersionError } from '@core/utils/version-checker';
 import { version as currentMlldVersion } from '@core/version';
 import { MlldError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
-
-export interface ImportResolution {
-  type: 'file' | 'url' | 'module' | 'resolver' | 'input';
-  resolvedPath: string;
-  expectedHash?: string;
-  resolverName?: string;
-  sectionName?: string;
-}
 
 export interface SecurityValidation {
   approved: boolean;

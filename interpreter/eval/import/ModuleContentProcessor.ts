@@ -1,6 +1,6 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../../env/Environment';
-import { ImportResolution } from './ImportSecurityValidator';
+import type { ImportResolution } from './ImportPathResolver';
 import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { VariableImporter } from './VariableImporter';
 import { ExportManifest } from './ExportManifest';
@@ -34,7 +34,7 @@ export class ModuleContentProcessor {
     directive: DirectiveNode
   ): Promise<ModuleProcessingResult> {
     const { resolvedPath } = resolution;
-    const isURL = this.env.isURL(resolvedPath);
+    const isURL = resolution.type === 'url';
 
     // Begin import tracking for security
     this.securityValidator.beginImport(resolvedPath);
@@ -68,7 +68,7 @@ export class ModuleContentProcessor {
       }
 
       // Read content from source
-      const content = await this.readContentFromSource(resolvedPath, isURL);
+      const content = await this.readContentFromSource(resolution);
 
       // Cache the source content for error reporting
       this.env.cacheSource(resolvedPath, content);
@@ -195,11 +195,17 @@ export class ModuleContentProcessor {
   /**
    * Read content from file or URL
    */
-  private async readContentFromSource(resolvedPath: string, isURL: boolean): Promise<string> {
+  private async readContentFromSource(resolution: ImportResolution): Promise<string> {
+    const { resolvedPath, type, importType, cacheDurationMs } = resolution;
     try {
-      return isURL
-        ? await this.env.fetchURL(resolvedPath, true) // true = forImport
-        : await this.env.readFile(resolvedPath);
+      if (type === 'url') {
+        return await this.env.fetchURL(resolvedPath, {
+          forImport: true,
+          importType: importType,
+          cacheDurationMs
+        });
+      }
+      return await this.env.readFile(resolvedPath);
     } catch (error) {
       throw new Error(`Failed to read imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`);
     }

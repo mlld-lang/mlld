@@ -130,16 +130,6 @@ export interface ModuleReference {
   path?: string[];
   name: string;
   hash?: string;
-  security?: SecurityOptions;
-}
-
-/**
- * Security options for module references
- */
-export interface SecurityOptions {
-  ttl?: number;
-  trust?: 'high' | 'medium' | 'low';
-  requireHash?: boolean;
 }
 
 /**

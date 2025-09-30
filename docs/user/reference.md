@@ -264,16 +264,30 @@ Glob patterns:
 Import from modules (modules should declare `/export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
 
 ```mlld
-/import { parallel, retry } from @mlld/core
-/import @company/utils as utils
+/import { @parallel, @retry } from @mlld/core
+/import @company/utils as @utils
 ```
 
 Import from files:
 
 ```mlld
-/import { helper } from "./utils.mld"
-/import { config } from "@base/config.mld"
+/import { @helper } from "./utils.mld"
+/import { @config } from "@base/config.mld"
 ```
+
+Import types help declare how a source is resolved. You can prefix the directive with a keyword, or rely on inference:
+
+```mlld
+/import module { @env } from @mlld/env
+/import static <./templates/system.mld> as @systemTemplates
+/import live { @value } from @input
+/import cached(5m) "https://api.example.com/status" as @statusSnapshot
+/import local { @helper } from @local/dev-tools
+```
+
+When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@base`/`@project` as `static`, and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
+
+TTL durations use suffixes like 30s, 5m, 1h, 1d, or 1w (seconds, minutes, hours, days, weeks).
 
 ### Output (`/output`)
 

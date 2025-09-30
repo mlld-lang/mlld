@@ -21,10 +21,47 @@ It can be used in three main forms:
 // Primary /run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 SlashRun
-  = DirectiveContext "/run" _ security:(SecurityOptions _)? "\"" command:$([^"]*) "\"" tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext "/run" _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? comment:InlineComment? {
+      // Leading parallel pipeline: /run || @a() || @b() || @c()
+      helpers.debug('SlashRun matched leading parallel pipeline', { leading, caps });
+
+      const pipeline = leading.withClause.pipeline || [];
+      const withClause = {
+        pipeline: pipeline,
+        ...(caps ? { parallel: caps.parallel, delayMs: caps.delayMs } : {})
+      };
+
+      const values = {
+        withClause: withClause
+      };
+
+      const raw = {
+        pipeline: pipeline.map(p => Array.isArray(p) ?
+          `[${p.map(c => c.rawIdentifier).join(' || ')}]` :
+          p.rawIdentifier
+        ).join(' | ')
+      };
+
+      const meta = {
+        isPipeline: true,
+        hasLeadingParallel: true,
+        stageCount: pipeline.length,
+        ...(comment ? { comment } : {})
+      };
+
+      return helpers.createStructuredDirective(
+        'run',
+        'runPipeline',
+        values,
+        raw,
+        meta,
+        location(),
+        'pipeline'
+      );
+    }
+  / DirectiveContext "/run" _ "\"" command:$([^"]*) "\"" tail:TailModifiers? comment:InlineComment? {
       // Quoted command syntax: /run "echo hello"
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashRun matched quoted command', { command, securityOptions, tail });
+      helpers.debug('SlashRun matched quoted command', { command, tail });
       
       // Parse the command string to extract parts with proper location
       const commandLocation = location();
@@ -49,7 +86,6 @@ SlashRun
         isMultiLine: false,
         commandCount: commandBases.length,
         hasScriptRunner: false,
-        ...helpers.createSecurityMeta(securityOptions),
         ...(comment ? { comment } : {})
       };
       
@@ -80,14 +116,12 @@ SlashRun
         'command'
       );
     }
-  / DirectiveContext "/run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext "/run" _ content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
       // Command syntax: /run {command}
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashRun matched command', { content, securityOptions, tail });
-      
+      helpers.debug('SlashRun matched command', { content, tail });
+
       const meta = {
         ...content.meta,
-        ...helpers.createSecurityMeta(securityOptions),
         ...(comment ? { comment } : {})
       };
       
@@ -111,14 +145,12 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext "/run" _ security:(SecurityOptions _)? stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext "/run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
       // Pipe sugar: /run <expr> | { command }
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, securityOptions, tail });
+      helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, tail });
 
       const meta = {
         ...content.meta,
-        ...helpers.createSecurityMeta(securityOptions),
         ...(comment ? { comment } : {})
       };
 
@@ -144,10 +176,9 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext "/run" _ security:(SecurityOptions _)? codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext "/run" _ codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
       // Language + code syntax: /run language {code} or /run language (args) {code}
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashRun matched with language code pattern', { codeCore, securityOptions, tail });
+      helpers.debug('SlashRun matched with language code pattern', { codeCore, tail });
       
       // Use values and raw from the core pattern
       const values = codeCore.values;
@@ -156,7 +187,6 @@ SlashRun
       // Merge metadata
       const meta = {
         ...codeCore.meta,
-        ...helpers.createSecurityMeta(securityOptions),
         ...(comment ? { comment } : {})
       };
       
@@ -177,10 +207,9 @@ SlashRun
         'code'
       );
     }
-  / DirectiveContext "/run" _ security:(SecurityOptions _)? commandRef:UnifiedReferenceWithTail comment:InlineComment? {
+  / DirectiveContext "/run" _ commandRef:UnifiedReferenceWithTail comment:InlineComment? {
       // @ detected -> Command reference (exec)
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashRun matched unified command reference', { commandRef, securityOptions });
+      helpers.debug('SlashRun matched unified command reference', { commandRef });
       
       // Handle both ExecInvocation and VariableReference types from unified patterns
       let values, raw, meta;
@@ -222,7 +251,6 @@ SlashRun
         };
         meta = {
           argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
-          ...helpers.createSecurityMeta(securityOptions),
           ...(comment ? { comment } : {})
         };
         
@@ -244,7 +272,6 @@ SlashRun
         };
         meta = {
           argumentCount: 0,
-          ...helpers.createSecurityMeta(securityOptions),
           ...(comment ? { comment } : {})
         };
         
@@ -265,7 +292,6 @@ SlashRun
         };
         meta = {
           argumentCount: 0,
-          ...helpers.createSecurityMeta(securityOptions),
           ...(comment ? { comment } : {})
         };
       }

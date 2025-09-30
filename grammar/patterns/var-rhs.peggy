@@ -3,7 +3,8 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 VarRHSContent "var assignment value"
-  = ExpressionWithOperator      // Try expressions FIRST but only if operators present
+  = LeadingParallelPipeline     // Leading || for parallel pipeline execution
+  / ExpressionWithOperator      // Try expressions FIRST but only if operators present
   / WhenExpression              // Allow value-returning when-expressions
   / ForExpression               // for @var in @collection => expression
   / ForeachCommandExpression    // foreach @command(@arrays)

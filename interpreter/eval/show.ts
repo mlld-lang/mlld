@@ -246,21 +246,9 @@ export async function evaluateShow(
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
       const isURL = variable.value.isURL || /^https?:\/\//.test(pathValue);
-      const security = variable.value.security;
       
       try {
-        if (isURL) {
-          if (security) {
-            // Use URL cache with security options when available
-            value = await env.fetchURLWithSecurity(pathValue, security, varName);
-          } else {
-            // Fetch URL content directly when no additional security metadata is provided
-            value = await env.fetchURL(pathValue);
-          }
-        } else {
-          // Regular file path
-          value = await env.readFile(pathValue);
-        }
+        value = await env.readFile(pathValue);
       } catch (error) {
         // Try test hook override if available
         try {
@@ -491,15 +479,9 @@ export async function evaluateShow(
       throw new Error('Add path directive resolved to empty path');
     }
     
-    // Check if this directive has security options
-    const security = directive.meta ? {
-      ttl: directive.meta.ttl,
-      trust: directive.meta.trust
-    } : undefined;
-    
-    // Read the file content or fetch URL with security options if URL
-    if (env.isURL(resolvedPath) && security) {
-      content = await env.fetchURLWithSecurity(resolvedPath, security, 'add-directive');
+    // Read the file content or fetch URL when path is remote
+    if (env.isURL(resolvedPath)) {
+      content = await env.fetchURL(resolvedPath);
     } else {
       content = await env.readFile(resolvedPath);
     }
@@ -528,16 +510,10 @@ export async function evaluateShow(
       throw new Error('Invalid path type in add section directive');
     }
     
-    // Check if this directive has security options
-    const security = directive.meta ? {
-      ttl: directive.meta.ttl,
-      trust: directive.meta.trust
-    } : undefined;
-    
-    // Read the file content or fetch URL with security options if URL
+    // Read the file content or fetch URL when path is remote
     let fileContent: string;
-    if (env.isURL(resolvedPath) && security) {
-      fileContent = await env.fetchURLWithSecurity(resolvedPath, security, 'add-section-directive');
+    if (env.isURL(resolvedPath)) {
+      fileContent = await env.fetchURL(resolvedPath);
     } else {
       fileContent = await env.readFile(resolvedPath);
     }

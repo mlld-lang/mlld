@@ -23,17 +23,15 @@ It can be used in these forms:
 // Primary /show directive with all variants
 SlashShow
   // Command execution syntax: /show {echo "test"}
-  = DirectiveContext "/show" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+  = DirectiveContext "/show" _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
       // Command syntax for display: /show {command}
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashShow matched command for display', { content, securityOptions, tail });
-      
+      helpers.debug('SlashShow matched command for display', { content, tail });
+
       const meta = {
         ...content.meta,
         executionMode: 'display',  // Key difference from /run
         executionType: 'command',
         isExecutionContent: true,
-        ...helpers.createSecurityMeta(securityOptions)
       };
       
       // Apply unified pipeline processing
@@ -254,8 +252,7 @@ SlashShow
         'load-content'
       );
     }
-  / DirectiveContext "/show" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
-      const securityOptions = security ? security[0] : null;
+  / DirectiveContext "/show" _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched template content', { template, headerLevel, underHeader, ending });
       
       // Extract header level and under header if provided
@@ -301,8 +298,7 @@ SlashShow
       // Create meta object with isTemplateContent flag and security
       const meta = {
         isTemplateContent: true,
-        ...template.meta,
-        ...helpers.createSecurityMeta(securityOptions)
+        ...template.meta
       };
       
       // Apply unified pipeline processing (consolidates with when.peggy)
@@ -319,8 +315,7 @@ SlashShow
       );
     }
   // Variable reference MUST come before exec invocation to match simple @varname first
-  / DirectiveContext "/show" _ security:(SecurityOptions _)? "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
-      const securityOptions = security ? security[0] : null;
+  / DirectiveContext "/show" _ "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched variable reference', { varRef, headerLevel, underHeader, ending });
       
       // Extract variable reference information
@@ -366,10 +361,8 @@ SlashShow
         raw.underHeader = underHeaderValue;
       }
       
-      // Create meta object with security options
-      const meta = {
-        ...helpers.createSecurityMeta(securityOptions)
-      };
+      // Create meta object placeholder
+      const meta = {};
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -472,9 +465,8 @@ SlashShow
         'invocation'
       );
     }
-  / DirectiveContext "/show" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashShow matched quoted string', { content, headerLevel, underHeader, securityOptions, ending });
+  / DirectiveContext "/show" _ "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+      helpers.debug('SlashShow matched quoted string', { content, headerLevel, underHeader, ending });
       
       // Create path structure
       const path = {
@@ -531,8 +523,7 @@ SlashShow
       
       // Create meta object with path metadata and security
       const meta = {
-        path: path.meta,
-        ...helpers.createSecurityMeta(securityOptions)
+        path: path.meta
       };
       
       // Add comment from ending if present
@@ -550,8 +541,8 @@ SlashShow
         'path'
       );
     }
-  / DirectiveContext "/show" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
-      helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, security, ending });
+  / DirectiveContext "/show" _ path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+      helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, ending });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -598,8 +589,7 @@ SlashShow
         path: {
           ...path.meta,
           pathSubtype: path.subtype // Preserve the specific path type
-        },
-        ...helpers.createSecurityMeta(security)
+        }
       };
       
       // Add comment from ending if present

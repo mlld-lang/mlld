@@ -243,13 +243,17 @@ Module imports and path imports.
 
 ```mlld
 # Modules (no quotes)
-/import { parallel, retry } from @mlld/core
-/import @corp/utils as corp
+/import { @parallel, @retry } from @mlld/core
+/import @corp/utils as @corp
 
 # Paths (quote & resolver via <> when needed)
-/import { readme } from "@base/README.md"
-/import { helper } from "./utils.mld"
+/import { @readme } from "@base/README.md"
+/import { @helper } from "./utils.mld"
 ```
+
+- Prefix identifiers in the braces with `@` so imported names match runtime variable syntax (e.g., `{ @helper }`).
+- Aliases after `as` must include `@` (e.g., `as @utils`), and wildcard imports require `* as @alias`.
+- Keywords (`module`, `static`, `live`, `cached`, `local`) can precede `/import` for explicit type hints; when omitted mlld infers the safest option.
 
 </RULE_9_IMPORTS>
 
@@ -508,14 +512,24 @@ Parallel groups (`||`): run multiple commands as one stage in parallel.
 
 /var @out = "x" with { pipeline: [ @left || @right, @combine ] }
 /show @out   # → "L:x + R:x"
+
+# Leading || runs parallel stages immediately
+/var @results = || @fetchA() || @fetchB() || @fetchC()
+/run || @fetchA() || @fetchB() || @fetchC()  # also works in /run
+/exe @parallel() = || @helper1() || @helper2() | @combine  # and /exe
+
+# With concurrency caps: (n, delay)
+/var @capped = || @a() || @b() || @c() || @d() (2, 100ms)  # cap=2, 100ms pacing
 ```
 
 Semantics:
 * Grouping: `A || B || C` forms a single stage executed concurrently with a global cap.
+* Leading `||`: Start pipeline with parallel execution, avoiding ambiguity with boolean OR. Only matches function calls `@func()`, not plain variables.
+* Equivalence: `|| @a() || @b()` produces same AST as `"" with { pipeline: [[@a, @b]] }`
 * Ordering: Results preserve command order; next stage receives a JSON array string.
 * Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 * Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.
-* Rate limits: 429/“rate limit” errors trigger per-command exponential backoff.
+* Rate limits: 429/"rate limit" errors trigger per-command exponential backoff.
 * Inline effects: Effects attached to commands in the group run after each command succeeds.
 
 </PIPELINES>
@@ -804,7 +818,7 @@ Module-first philosophy: keep `.mld` files readable; move complexity into focuse
 * Use `/import` to compose capabilities
 * Create helpers via `/exe`, expose with shadow envs (per language, per module)
 * JS and Node have separate shadow environments; no cross-pollution
-* Prefer clear namespaces: `/import @corp/utils as utils`
+* Prefer clear namespaces: `/import @corp/utils as @utils`
 * Declare module APIs explicitly: `/export { publicFn, helper }`; auto-export sticks around only as a compatibility fallback for modules that have not been updated yet
 
 ```mlld
@@ -837,7 +851,7 @@ Tool orchestration:
 Data pipeline:
 
 ```mlld
-/import { fetchData, validate, transform } from @data/pipeline
+/import { @fetchData, @validate, @transform } from @data/pipeline
 /var @raw = @fetchData("https://api.example.com/users")
 /var @valid = @validate(@raw, { schema: "user" })
 /var @report = @transform(@valid, { format: "report" })
@@ -847,7 +861,7 @@ Data pipeline:
 Conditional workflows:
 
 ```mlld
-/import { getPR, commentOnPR } from @company/github
+/import { @getPR, @commentOnPR } from @company/github
 /var @pr = @getPR(@MLLD_PR_NUMBER)
 /when first [
   @pr.mergeable => @status = "ready"
@@ -884,7 +898,7 @@ Allow environment variables in `mlld.lock.json` (prefix `MLLD_`), then import vi
 ```
 
 ```mlld
-/import { MLLD_NODE_ENV, MLLD_API_KEY } from @input
+/import { @MLLD_NODE_ENV, @MLLD_API_KEY } from @input
 /show `Running in @MLLD_NODE_ENV`
 ```
 

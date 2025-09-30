@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { InMemoryModuleCache } from './InMemoryModuleCache';
+import { normalizeModuleNeeds, moduleNeedsToSerializable } from './utils/ModuleNeeds';
 
 describe('InMemoryModuleCache', () => {
   let cache: InMemoryModuleCache;
@@ -112,5 +113,31 @@ describe('InMemoryModuleCache', () => {
     // Verify the metadata was stored (implementation detail)
     const retrieved = await cache.retrieve(entry.hash);
     expect(retrieved).toBe(content);
+  });
+
+  it('should store devDependencies metadata', async () => {
+    const content = 'export const value = 2;';
+    const devDependencies = { '@acme/util': '2.3.4' };
+
+    const entry = await cache.store(content, 'dev-source', '@test/dev-meta', { devDependencies });
+
+    const metadata = await cache.getMetadata(entry.hash);
+    expect(metadata?.devDependencies).toEqual(devDependencies);
+  });
+
+  it('should store structured module needs metadata', async () => {
+    const content = 'export const value = 1;';
+    const moduleNeeds = normalizeModuleNeeds({
+      runtimes: ['python@3.11'],
+      tools: ['curl'],
+      packages: {
+        node: ['axios@1.6.0']
+      }
+    });
+
+    const entry = await cache.store(content, 'needs-source', '@test/needs', { moduleNeeds });
+
+    const metadata = await cache.getMetadata(entry.hash);
+    expect(metadata?.moduleNeeds).toEqual(moduleNeedsToSerializable(moduleNeeds));
   });
 });

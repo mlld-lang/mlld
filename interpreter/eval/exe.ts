@@ -1,7 +1,7 @@
 import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable } from '@core/types/executable';
+import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import { createExecutableVariable, createSimpleTextVariable, type VariableSource } from '@core/types/variable';
@@ -176,89 +176,79 @@ export async function evaluateExe(
   
   
   if (directive.subtype === 'exeCommand') {
-    // Check if this is a command reference
-    const commandRef = directive.values?.commandRef;
-    if (commandRef) {
-      /**
-       * Handle executable defined as a reference to another symbol
-       * WHY: The RHS may be a simple variable reference (identity), or a true command reference.
-       *      We preserve identity bodies as templates at compile-time to avoid runtime ambiguity.
-       */
-      let refName: string | undefined;
-      try {
-        if (commandRef && typeof commandRef === 'object') {
-          // Extract identifier from VariableReference node when present
-          if ('type' in commandRef && (commandRef as any).type === 'VariableReference' && 'identifier' in (commandRef as any)) {
-            refName = (commandRef as any).identifier as string;
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    const withClause = directive.values?.withClause;
+
+    if (directive.meta?.isPipelineOnly && withClause?.pipeline) {
+      executableDef = {
+        type: 'pipeline',
+        pipeline: withClause.pipeline,
+        format: withClause.format,
+        parallelCap: withClause.parallel,
+        delayMs: withClause.delayMs,
+        paramNames,
+        sourceDirective: 'exec'
+      } satisfies PipelineExecutable;
+    } else {
+      const commandRef = directive.values?.commandRef;
+      if (commandRef) {
+        /**
+         * Handle executable defined as a reference to another symbol
+         * WHY: The RHS may be a simple variable reference (identity), or a true command reference.
+         *      We preserve identity bodies as templates at compile-time to avoid runtime ambiguity.
+         */
+        let refName: string | undefined;
+        try {
+          if (commandRef && typeof commandRef === 'object') {
+            if ('type' in commandRef && (commandRef as any).type === 'VariableReference' && 'identifier' in (commandRef as any)) {
+              refName = (commandRef as any).identifier as string;
+            } else if ('name' in commandRef && typeof (commandRef as any).name === 'string') {
+              refName = (commandRef as any).name as string;
+            }
           }
-          // Some AST shapes surface a { name } property
-          else if ('name' in commandRef && typeof (commandRef as any).name === 'string') {
-            refName = (commandRef as any).name as string;
-          }
+        } catch {}
+
+        if (!refName) {
+          refName = await interpolate(commandRef as any, env);
         }
-      } catch {}
-      // Fallback: interpolate to string (legacy behavior)
-      if (!refName) {
-        refName = await interpolate(commandRef as any, env);
-      }
-      const args = directive.values?.args || [];
-      
-      // Get parameter names if any
-      const params = directive.values?.params || [];
-      const paramNames = extractParamNames(params);
-      
-      // COMPILE-TIME IDENTITY NORMALIZATION
-      // If RHS is a bare reference to the first parameter and no extra args are present,
-      // compile as a template executable instead of a commandRef.
-      // WHY: Identity bodies should not be treated as command references at runtime.
-      const isIdentity = paramNames.length >= 1 && args.length === 0 && typeof refName === 'string' && refName.length > 0 && refName === paramNames[0];
-      if (isIdentity) {
-        executableDef = {
-          type: 'template',
-          template: [
-            { type: 'VariableReference', identifier: refName }
-          ],
-          paramNames,
-          sourceDirective: 'exec'
-        } satisfies TemplateExecutable;
+
+        const args = directive.values?.args || [];
+        const isIdentity = paramNames.length >= 1 && args.length === 0 && typeof refName === 'string' && refName.length > 0 && refName === paramNames[0];
+
+        if (isIdentity) {
+          executableDef = {
+            type: 'template',
+            template: [
+              { type: 'VariableReference', identifier: refName }
+            ],
+            paramNames,
+            sourceDirective: 'exec'
+          } satisfies TemplateExecutable;
+        } else {
+          executableDef = {
+            type: 'commandRef',
+            commandRef: refName,
+            commandArgs: args,
+            withClause,
+            paramNames,
+            sourceDirective: 'exec'
+          } satisfies CommandRefExecutable;
+        }
       } else {
-        // Store the reference definition (true command reference)
-        const withClause = directive.values?.withClause;
+        const commandNodes = directive.values?.command;
+        if (!commandNodes) {
+          throw new Error('Exec command directive missing command');
+        }
+
         executableDef = {
-          type: 'commandRef',
-          commandRef: refName,
-          commandArgs: args,
+          type: 'command',
+          commandTemplate: commandNodes,
           withClause,
           paramNames,
           sourceDirective: 'exec'
-        } satisfies CommandRefExecutable;
+        } satisfies CommandExecutable;
       }
-    } else {
-      // Handle regular command definition
-      const commandNodes = directive.values?.command;
-      if (!commandNodes) {
-        throw new Error('Exec command directive missing command');
-      }
-      
-      // Command template is properly parsed with variable interpolation
-      
-      // Get parameter names if any
-      const params = directive.values?.params || [];
-      const paramNames = extractParamNames(params);
-      
-      // Parameters are allowed to shadow outer scope variables
-      
-      // Get withClause if present (for stdin support)
-      const withClause = directive.values?.withClause;
-
-      // Store the command template (not interpolated yet)
-      executableDef = {
-        type: 'command',
-        commandTemplate: commandNodes,
-        withClause,
-        paramNames,
-        sourceDirective: 'exec'
-      } satisfies CommandExecutable;
     }
     
   } else if (directive.subtype === 'exeCode') {
@@ -552,7 +542,7 @@ export async function evaluateExe(
   };
   
   // Adjust syntax based on executable type
-  if (executableDef.type === 'command' || executableDef.type === 'commandRef') {
+  if (executableDef.type === 'command' || executableDef.type === 'commandRef' || executableDef.type === 'pipeline') {
     source.syntax = 'command';
   } else if (executableDef.type === 'template') {
     source.syntax = 'template';
@@ -590,16 +580,18 @@ export async function evaluateExe(
     metadata.capturedModuleEnv = env.captureModuleEnvironment();
   }
 
+  const executableTypeForVariable = executableDef.type === 'code' ? 'code' : 'command';
+
   const variable = createExecutableVariable(
     identifier,
-    executableDef.type,
+    executableTypeForVariable,
     '', // Template will be filled from executableDef
     executableDef.paramNames || [],
     language,
     source,
-    metadata
-  );
-  
+        metadata
+    );
+
   // Set the actual template/command content
   if (executableDef.type === 'command') {
     variable.value.template = executableDef.commandTemplate;

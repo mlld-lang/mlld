@@ -243,24 +243,6 @@ export interface DirectiveNode extends BaseMlldNode {
   meta: { [key: string]: unknown };
 }
 
-// Security-related types
-export interface SecurityOptions {
-  ttl?: TTLOption;
-  trust?: TrustLevel;
-}
-
-export interface TTLOption {
-  type: 'duration' | 'special';
-  value?: number;
-  unit?: string;
-  seconds?: number;
-}
-
-// TTLValue is an alias for TTLOption for consistency with grammar
-export type TTLValue = TTLOption;
-
-export type TrustLevel = 'always' | 'verify' | 'never';
-
 // Module reference types
 export interface ModuleReference {
   namespace: string;

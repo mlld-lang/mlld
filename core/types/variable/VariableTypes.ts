@@ -227,10 +227,6 @@ export interface PathVariable extends BaseVariable {
     originalPath: string;
     isURL: boolean;
     isAbsolute: boolean;
-    security?: {
-      trust?: 'high' | 'medium' | 'low';
-      ttl?: number;
-    };
   };
   metadata?: VariableMetadata;
 }

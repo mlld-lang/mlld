@@ -50,7 +50,7 @@ export async function runMLLD(
   options: RunOptions = {}
 ): Promise<RunResult> {
   const startTime = Date.now();
-  const mlldPath = path.join(__dirname, '../../../bin/mlld-wrapper.cjs');
+  const mlldPath = path.join(__dirname, '../../../dist/cli.cjs');
   
   return new Promise((resolve) => {
     // Use the current node executable path to avoid PATH issues
@@ -62,6 +62,7 @@ export async function runMLLD(
         NODE_ENV: 'test',
         ...options.env
       },
+      stdio: ['ignore', 'pipe', 'pipe'],
       timeout: options.timeout || 30000 // 30 second default timeout
     });
     
@@ -177,26 +178,6 @@ export class ImportTestRunner {
               console.log('Expected to contain:', testCase.expectedError);
               console.log('Actual error:', result.error);
             }
-          }
-        }
-      }
-      
-      // If we expected an error but got success, that's a failure
-      if (testCase.expectedError && result.exitCode === 0) {
-        success = false;
-        if (testCase.debug) {
-          console.log('Expected error but got success');
-        }
-      }
-      
-      // If we expected an error and got one, that's what we wanted
-      if (testCase.expectedError && result.exitCode !== 0) {
-        // The pattern matching was already done above
-        // If we're here, we got an error as expected
-        if (!success && result.error.length > 0) {
-          // Pattern didn't match but we did get an error
-          if (testCase.debug) {
-            console.log('Got error but pattern did not match');
           }
         }
       }

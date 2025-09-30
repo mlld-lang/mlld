@@ -1,4 +1,4 @@
-import type { WithClause, PipelineCommand, TrustLevel } from '@core/types';
+import type { WithClause, PipelineCommand } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { MlldInterpreterError } from '@core/errors';
@@ -27,11 +27,6 @@ export async function applyWithClause(
     });
   }
   
-  // Apply trust validation
-  if (withClause.trust) {
-    validateTrust(result, withClause.trust);
-  }
-  
   // Check dependencies if specified
   if (withClause.needs) {
     await checkDependencies(withClause.needs, env);
@@ -44,20 +39,6 @@ export async function applyWithClause(
     stderr: '',
     exitCode: 0
   };
-}
-
-/**
- * Validate trust level
- */
-function validateTrust(result: string, trustLevel: TrustLevel): void {
-  // TODO: Implement trust validation
-  // For now, just log a warning
-  if (trustLevel === 'never') {
-    throw new MlldInterpreterError('Trust level "never" not yet implemented');
-  }
-  
-  // 'always' means no validation needed
-  // 'verify' would prompt user for confirmation (not implemented)
 }
 
 /**

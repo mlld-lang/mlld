@@ -2,7 +2,7 @@
  * Publishing strategy pattern interface
  */
 
-import { PublishContext, PublishResult } from './PublishingTypes';
+import type { PublishContext, PublishResult, ModuleData, ValidationResult, ValidationContext } from './PublishingTypes';
 
 export interface PublishingStrategy {
   name: string;
@@ -34,12 +34,12 @@ export interface ValidationStep {
   /**
    * Validates the module data
    */
-  validate(module: any): Promise<any>; // Will be properly typed once we extract ModuleData
+  validate(module: ModuleData, context: ValidationContext): Promise<ValidationResult>;
   
   /**
    * Enhances the module data if validation passes
    */
-  enhance?(module: any): Promise<any>;
+  enhance?(module: ModuleData, context: ValidationContext): Promise<ModuleData>;
 }
 
 export interface DecisionPoint<T = any> {

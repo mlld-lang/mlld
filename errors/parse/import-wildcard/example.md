@@ -10,7 +10,7 @@ This pattern handles wildcard imports without an alias. The error is already gen
 
 ## Current Error (Grammar)
 ```
-Wildcard imports must have an alias. Use '/import { * as name }' or the shorthand '/import "path/to/file.mld" as name'
+Wildcard imports must have an alias. Use '/import { * as @name }' or the shorthand '/import "path/to/file.mld" as @name'
 ```
 
 ## Enhanced Error (Pattern)
@@ -20,12 +20,12 @@ Same as above - the grammar already provides a helpful error message.
 
 ### Option 1: Explicit alias
 ```mld
-/import { * as utils } from "utils.mld"
+/import { * as @utils } from "utils.mld"
 ```
 
 ### Option 2: Shorthand with alias
 ```mld
-/import "utils.mld" as utils
+/import "utils.mld" as @utils
 ```
 
 ### Option 3: Shorthand without alias (creates implicit namespace)

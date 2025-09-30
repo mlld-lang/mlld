@@ -1,8 +1,7 @@
-import { RegistryManager } from '@core/registry/RegistryManager';
-import { OutputFormatter, type ModuleDisplayInfo } from '../utils/output';
-import { lockFileManager } from '../utils/lock-file';
-import { getCommandContext } from '../utils/command-context';
 import chalk from 'chalk';
+import { ModuleWorkspace } from '@core/registry';
+import { OutputFormatter, type ModuleDisplayInfo } from '../utils/output';
+import { getCommandContext } from '../utils/command-context';
 
 export interface LsOptions {
   verbose?: boolean;
@@ -14,94 +13,78 @@ export interface LsOptions {
 }
 
 export class LsCommand {
-  private registryManager: RegistryManager;
-  
+  private readonly workspace: ModuleWorkspace;
+
   constructor(basePath: string) {
-    this.registryManager = new RegistryManager(basePath, {
-      enabled: true,
-      telemetry: { enabled: false }
-    });
+    this.workspace = new ModuleWorkspace({ projectRoot: basePath });
   }
 
   async list(options: LsOptions = {}): Promise<void> {
     if (options.cached) {
-      await this.listCachedModules(options);
-    } else {
-      await this.listLockedModules(options);
+      console.log(chalk.gray('Listing cache status for locked modules...'));
     }
+    await this.listLockedModules(options);
   }
 
   private async listLockedModules(options: LsOptions): Promise<void> {
-    const lockFile = this.registryManager.getLockFile();
-    const imports = lockFile.getAllImports();
-    
-    if (Object.keys(imports).length === 0) {
+    const modulesMap = this.workspace.lockFile.getAllModules();
+
+    if (Object.keys(modulesMap).length === 0) {
       console.log(chalk.gray('No modules in lock file'));
-      console.log(chalk.gray('Run \'mlld install @username/module\' to install modules'));
+      console.log(chalk.gray("Run 'mlld install @username/module' to install modules"));
       return;
     }
-    
+
     const modules: ModuleDisplayInfo[] = [];
-    const cache = this.registryManager.getCache();
-    
-    for (const [importPath, entry] of Object.entries(imports)) {
-      const moduleName = this.extractModuleName(importPath);
-      
+
+    for (const [moduleName, entry] of Object.entries(modulesMap)) {
       try {
-        // Check cache status
-        const cached = await cache.get(entry.resolved, entry.gistRevision);
-        const size = cached ? await this.estimateSize(cached) : undefined;
-        
+        const cached = entry.resolved
+          ? await this.workspace.moduleCache.has(entry.resolved)
+          : false;
+        const metadata = entry.resolved
+          ? await this.workspace.moduleCache.getMetadata(entry.resolved)
+          : null;
+
         modules.push({
           name: moduleName,
-          hash: entry.gistRevision || entry.integrity?.split(':')[1],
-          size,
-          registry: this.extractRegistry(entry.resolved),
-          cached: !!cached,
+          hash: entry.resolved,
+          size: metadata?.size,
+          registry: this.extractRegistry(entry),
+          cached,
           missing: !cached
         });
       } catch (error) {
         modules.push({
           name: moduleName,
-          hash: entry.gistRevision || entry.integrity?.split(':')[1],
-          registry: this.extractRegistry(entry.resolved),
+          hash: entry.resolved,
+          registry: this.extractRegistry(entry),
           cached: false,
           missing: true,
           error: (error as Error).message
         });
       }
     }
-    
-    // Filter based on options
+
     let filteredModules = modules;
     if (options.missing) {
       filteredModules = modules.filter(m => m.missing);
     }
-    
-    // Sort modules by name
+
     filteredModules.sort((a, b) => a.name.localeCompare(b.name));
-    
-    // Output based on format
+
     if (options.format === 'json') {
       console.log(JSON.stringify(filteredModules, null, 2));
       return;
     }
-    
+
     if (options.format === 'table') {
       this.outputAsTable(filteredModules, options);
     } else {
       this.outputAsList(filteredModules, options);
     }
-    
-    // Summary
-    this.outputSummary(modules, options);
-  }
 
-  private async listCachedModules(options: LsOptions): Promise<void> {
-    // This would require the Cache class to expose a list method
-    // For now, we'll list from lock file and show cache status
-    console.log(chalk.gray('Listing cache status for locked modules...'));
-    await this.listLockedModules({ ...options, cached: false });
+    this.outputSummary(modules, options);
   }
 
   private outputAsList(modules: ModuleDisplayInfo[], options: LsOptions): void {
@@ -109,8 +92,8 @@ export class LsCommand {
       console.log(chalk.gray('No modules match the filter criteria'));
       return;
     }
-    
-    console.log(chalk.bold('Modules in mlld.lock.json:'));
+
+    console.log(chalk.bold('Modules in mlld-lock.json:'));
     console.log(OutputFormatter.formatModuleList(modules, { verbose: options.verbose }));
   }
 
@@ -119,24 +102,24 @@ export class LsCommand {
       console.log(chalk.gray('No modules match the filter criteria'));
       return;
     }
-    
-    const headers = options.verbose 
-      ? ['Module', 'Version', 'Status', 'Size', 'Registry']
-      : ['Module', 'Status', 'Size', 'Registry'];
-    
+
+    const headers = options.verbose
+      ? ['Module', 'Hash', 'Status', 'Size', 'Source']
+      : ['Module', 'Status', 'Size', 'Source'];
+
     const rows = modules.map(module => {
       const status = this.getStatusText(module);
       const size = module.size ? this.formatSize(module.size) : '-';
-      const registry = module.registry || '-';
-      
+      const source = module.registry || '-';
+
       if (options.verbose) {
-        const version = module.hash ? module.hash.slice(0, 8) : '-';
-        return [module.name, version, status, size, registry];
-      } else {
-        return [module.name, status, size, registry];
+        const hash = module.hash ? module.hash.slice(0, 8) : '-';
+        return [module.name, hash, status, size, source];
       }
+
+      return [module.name, status, size, source];
     });
-    
+
     console.log(OutputFormatter.formatTable(headers, rows));
   }
 
@@ -145,52 +128,52 @@ export class LsCommand {
     const cached = modules.filter(m => m.cached).length;
     const missing = modules.filter(m => m.missing).length;
     const errors = modules.filter(m => m.error).length;
-    
+
     console.log('');
-    
+
     if (total === 0) {
       return;
     }
-    
+
     const parts: string[] = [];
     parts.push(`${total} module${total !== 1 ? 's' : ''}`);
-    
+
     if (cached > 0) {
       parts.push(chalk.green(`${cached} cached`));
     }
-    
+
     if (missing > 0) {
       parts.push(chalk.yellow(`${missing} missing`));
     }
-    
+
     if (errors > 0) {
       parts.push(chalk.red(`${errors} error${errors !== 1 ? 's' : ''}`));
     }
-    
+
     console.log(parts.join(', '));
-    
+
     if (missing > 0 && !options.missing) {
-      console.log(chalk.gray('Run \'mlld install\' to fetch missing modules'));
+      console.log(chalk.gray("Run 'mlld install' to fetch missing modules"));
     }
   }
 
-  private extractModuleName(importPath: string): string {
-    // Convert "mlld://username/module" to "@username/module"
-    const cleaned = importPath.replace('mlld://', '');
-    return `@${cleaned}`;
-  }
-
-  private extractRegistry(resolved: string): string {
-    if (resolved.includes('gist.githubusercontent.com')) {
+  private extractRegistry(entry: ModuleLockEntry): string {
+    const source = entry.sourceUrl ?? entry.source ?? '';
+    if (source.startsWith('registry://')) {
+      return 'registry';
+    }
+    if (source.includes('gist.githubusercontent.com')) {
       return 'gist';
-    } else if (resolved.includes('github.com')) {
+    }
+    if (source.includes('github.com')) {
       return 'github';
-    } else if (resolved.startsWith('https://')) {
+    }
+    if (source.startsWith('https://')) {
       try {
-        const url = new URL(resolved);
+        const url = new URL(source);
         return url.hostname;
       } catch {
-        return 'unknown';
+        return 'remote';
       }
     }
     return 'local';
@@ -199,66 +182,49 @@ export class LsCommand {
   private getStatusText(module: ModuleDisplayInfo): string {
     if (module.error) {
       return chalk.red('error');
-    } else if (module.missing) {
-      return chalk.yellow('missing');
-    } else if (module.cached) {
-      return chalk.green('cached');
-    } else {
-      return chalk.gray('unknown');
     }
-  }
-
-  private async estimateSize(content: string): Promise<number> {
-    // Estimate size of module content in bytes
-    return Buffer.byteLength(content, 'utf8');
+    if (module.missing) {
+      return chalk.yellow('missing');
+    }
+    if (module.cached) {
+      return chalk.green('cached');
+    }
+    return chalk.gray('unknown');
   }
 
   private formatSize(bytes: number): string {
     if (bytes < 1024) {
       return `${bytes}b`;
-    } else if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)}kb`;
-    } else {
-      return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
     }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)}kb`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
   }
 }
 
 export async function lsCommand(options: LsOptions = {}): Promise<void> {
-  // Get command context to find project root
   const context = await getCommandContext({ startPath: options.basePath });
-  const basePath = context.projectRoot;
-  
-  // Ensure we have a lock file
-  await lockFileManager.ensureLockFile(basePath);
-  
-  const lister = new LsCommand(basePath);
+  const lister = new LsCommand(context.projectRoot);
   await lister.list(options);
 }
 
-// CLI interface
 export function createLsCommand() {
   return {
     name: 'ls',
     aliases: ['list'],
-    description: 'List installed mlld modules',
-    
-    async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
+    description: 'List modules recorded in the lock file',
+
+    async execute(_args: string[], flags: Record<string, any> = {}): Promise<void> {
       const options: LsOptions = {
         verbose: flags.verbose || flags.v,
         lock: flags.lock,
         cached: flags.cached,
         missing: flags.missing,
         basePath: flags['base-path'] || process.cwd(),
-        format: flags.format || 'list'
+        format: flags.format
       };
-      
-      // Validate format
-      if (options.format && !['table', 'list', 'json'].includes(options.format)) {
-        console.error(chalk.red('Invalid format. Must be: table, list, or json'));
-        process.exit(1);
-      }
-      
+
       try {
         await lsCommand(options);
       } catch (error) {

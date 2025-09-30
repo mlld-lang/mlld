@@ -1,14 +1,13 @@
-/exe @randomQuality(input) = js {
-  const values = [0.3, 0.7, 0.95, 0.2, 0.85];
-  return values[ctx.try - 1] || 0.1;
-}
+/exe @fetchA() = "A"
+/exe @fetchB() = "B"
+/exe @fetchC() = "C"
 
-/exe @validateQuality(score) = when first [
-  @score > 0.9 => `excellent: @score`
-  @score > 0.8 => `good: @score`
-  @ctx.try < 5 => retry
-  none => `failed: best was @score`
-]
+>> Leading || runs all three in parallel
+/var @results = || @fetchA() || @fetchB() || @fetchC()
+/show @results
 
-/var @result = @randomQuality | @validateQuality
-/show @result
+>> Works in /run directive too
+/run || @fetchA() || @fetchB() || @fetchC()
+
+>> Control concurrency with (cap, delay) syntax
+/var @limited = || @fetchA() || @fetchB() || @fetchC() (2, 100ms)

@@ -3,68 +3,57 @@
  */
 
 import { ValidationStep } from '../types/PublishingStrategy';
-import { ModuleMetadata, ValidationResult } from '../types/PublishingTypes';
+import type {
+  ModuleMetadata,
+  ModuleData,
+  ValidationResult,
+  ValidationError,
+  ValidationWarning,
+  ExportBinding,
+  ImportRecord,
+  ValidationContext
+} from '../types/PublishingTypes';
 import { SyntaxValidator } from './SyntaxValidator';
+import { ExportValidator } from './ExportValidator';
 import { MetadataEnhancer } from './MetadataEnhancer';
 import { ImportValidator } from './ImportValidator';
 import { DependencyValidator } from './DependencyValidator';
-import { Octokit } from '@octokit/rest';
-import chalk from 'chalk';
 
-interface ModuleData {
-  metadata: ModuleMetadata;
-  content: string;
-  filePath: string;
-  gitInfo?: any;
-}
-
-interface ValidationContext {
-  user: any;
-  octokit: Octokit;
-  dryRun?: boolean;
-}
+import { normalizeModuleNeeds, stringifyPackageMap, stringifyRequirementList } from '@core/registry';
 
 export class ModuleValidator {
-  private steps: ValidationStep[];
-  private enhancer: MetadataEnhancer;
+  private readonly steps: ValidationStep[];
+  private readonly enhancer: MetadataEnhancer;
 
   constructor() {
     this.steps = [
       new SyntaxValidator(),
+      new ExportValidator(),
       new ImportValidator(),
       new DependencyValidator()
     ];
     this.enhancer = new MetadataEnhancer();
   }
 
-  async validate(
-    module: ModuleData,
-    context: ValidationContext
-  ): Promise<{
-    valid: boolean;
-    errors: string[];
-    warnings?: string[];
-    updatedMetadata?: Partial<ModuleMetadata>;
-    updatedContent?: string;
-  }> {
-    const allErrors: string[] = [];
-    const allWarnings: string[] = [];
-    let updatedMetadata: Partial<ModuleMetadata> = {};
-    let needsUpdate = false;
+  async validate(module: ModuleData, context: ValidationContext): Promise<ValidationResult> {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+    const exportBindings: ExportBinding[] = [];
+    const importRecords: ImportRecord[] = [];
 
-    // Run metadata validation first (includes required fields)
-    const metadataResult = await this.enhancer.validate(module);
-    if (!metadataResult.valid) {
-      allErrors.push(...metadataResult.errors.map(e => e.message));
-    }
-    allWarnings.push(...metadataResult.warnings.map(w => w.message));
-    
+    let metadataUpdates: Partial<ModuleMetadata> = {};
+    let needsMetadataRewrite = false;
+
+    // Base metadata validation covers required fields and defaults
+    const metadataResult = await this.enhancer.validate(module, context);
+    this.mergeValidationResult(metadataResult, errors, warnings, exportBindings, importRecords);
+
     if (metadataResult.updatedMetadata) {
-      updatedMetadata = { ...updatedMetadata, ...metadataResult.updatedMetadata };
-      needsUpdate = true;
+      metadataUpdates = { ...metadataUpdates, ...metadataResult.updatedMetadata };
+      needsMetadataRewrite = true;
     }
 
-    // Run author permission validation
+    // Ensure the publisher has permission to publish for the declared author
     if (module.metadata.author && context.user) {
       const authorResult = await this.enhancer.validateAuthorPermissions(
         module.metadata,
@@ -72,132 +61,165 @@ export class ModuleValidator {
         context.octokit
       );
       if (!authorResult.valid) {
-        allErrors.push(...authorResult.errors.map(e => e.message));
+        errors.push(...authorResult.errors);
       }
     } else if (!module.metadata.author && context.user) {
-      // Auto-set author if missing
-      updatedMetadata.author = context.user.login;
-      needsUpdate = true;
+      metadataUpdates.author = context.user.login;
+      needsMetadataRewrite = true;
     }
 
-    // Run enhancement (auto-populate fields) if not in dry run
+    // Enrich metadata when not in dry-run mode
     if (!context.dryRun) {
-      const enhancedModule = await this.enhancer.enhance(module);
+      const enhancedModule = await this.enhancer.enhance(module, context);
       if (enhancedModule !== module) {
-        // Module was enhanced, merge the changes
-        const changes = this.getDifferences(module.metadata, enhancedModule.metadata);
-        updatedMetadata = { ...updatedMetadata, ...changes };
-        needsUpdate = true;
+        const differences = this.getDifferences(module.metadata, enhancedModule.metadata);
+        if (Object.keys(differences).length > 0) {
+          metadataUpdates = { ...metadataUpdates, ...differences };
+          needsMetadataRewrite = true;
+        }
       }
     }
 
-    // Run all validation steps
+    // Execute remaining validation steps
     for (const step of this.steps) {
-      const result = await step.validate(module);
-      
-      if (!result.valid) {
-        allErrors.push(...result.errors.map(e => e.message));
-      }
-      allWarnings.push(...result.warnings.map(w => w.message));
+      const result = await step.validate(module, context);
+      this.mergeValidationResult(result, errors, warnings, exportBindings, importRecords);
     }
 
-    // Display warnings if any
-    if (allWarnings.length > 0) {
-      console.log(chalk.yellow('\nWarning:  Validation warnings:'));
-      allWarnings.forEach(w => console.log(chalk.yellow(`   ${w}`)));
-    }
-
-    // Generate updated content if metadata changed
+    // Generate updated content when metadata changed
     let updatedContent: string | undefined;
-    if (needsUpdate) {
-      const mergedMetadata = { ...module.metadata, ...updatedMetadata };
+    if (needsMetadataRewrite) {
+      const mergedMetadata = { ...module.metadata, ...metadataUpdates };
       updatedContent = this.updateFrontmatter(module.content, mergedMetadata);
     }
 
     return {
-      valid: allErrors.length === 0,
-      errors: allErrors,
-      warnings: allWarnings.length > 0 ? allWarnings : undefined,
-      updatedMetadata: needsUpdate ? updatedMetadata : undefined,
-      updatedContent
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      updatedMetadata: needsMetadataRewrite ? metadataUpdates : undefined,
+      updatedContent,
+      exports: exportBindings.length > 0 ? exportBindings : undefined,
+      imports: importRecords.length > 0 ? importRecords : undefined
     };
+  }
+
+  private mergeValidationResult(
+    result: ValidationResult,
+    errors: ValidationError[],
+    warnings: ValidationWarning[],
+    exports: ExportBinding[],
+    imports: ImportRecord[]
+  ): void {
+    if (!result) return;
+    if (result.errors?.length) {
+      errors.push(...result.errors);
+    }
+    if (result.warnings?.length) {
+      warnings.push(...result.warnings);
+    }
+    if (result.exports?.length) {
+      exports.push(...result.exports);
+    }
+    if (result.imports?.length) {
+      imports.push(...result.imports);
+    }
   }
 
   private getDifferences(original: ModuleMetadata, enhanced: ModuleMetadata): Partial<ModuleMetadata> {
     const differences: Partial<ModuleMetadata> = {};
-    
-    // Check each field for differences
     const fieldsToCheck: (keyof ModuleMetadata)[] = [
-      'name', 'author', 'version', 'about', 'license', 'repo', 'bugs', 'homepage', 'mlldVersion'
+      'name',
+      'author',
+      'version',
+      'about',
+      'license',
+      'repo',
+      'bugs',
+      'homepage',
+      'mlldVersion',
+      'needs',
+      'moduleNeeds',
+      'dependencies',
+      'devDependencies'
     ];
-    
+
     for (const field of fieldsToCheck) {
       if (original[field] !== enhanced[field]) {
-        (differences as any)[field] = enhanced[field];
+        (differences as Record<string, unknown>)[field as string] = enhanced[field];
       }
     }
-    
+
     return differences;
   }
 
   private updateFrontmatter(content: string, metadata: ModuleMetadata): string {
     const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-    
+
     if (!frontmatterMatch) {
-      // No frontmatter, add it
       return this.formatFrontmatter(metadata) + '\n\n' + content;
     }
-    
-    // Replace existing frontmatter
+
     const afterFrontmatter = content.substring(frontmatterMatch[0].length);
     return this.formatFrontmatter(metadata) + afterFrontmatter;
   }
 
   private formatFrontmatter(metadata: ModuleMetadata): string {
     const lines = ['---'];
-    
-    // Canonical field ordering
+
     lines.push(`name: ${metadata.name}`);
     lines.push(`author: ${metadata.author}`);
     if (metadata.version) lines.push(`version: ${metadata.version}`);
     lines.push(`about: ${metadata.about}`);
-    
-    // Always include needs (it's required)
-    if (metadata.needs) {
-      lines.push(`needs: [${metadata.needs.map(n => `"${n}"`).join(', ')}]`);
+
+    const moduleNeeds = metadata.moduleNeeds ?? normalizeModuleNeeds(metadata.needs ?? []);
+    const runtimeStrings = stringifyRequirementList(moduleNeeds.runtimes);
+    const toolStrings = stringifyRequirementList(moduleNeeds.tools);
+    const packageStrings = stringifyPackageMap(moduleNeeds.packages);
+    const hasNeedsData = runtimeStrings.length > 0 || toolStrings.length > 0 || Object.keys(packageStrings).length > 0;
+
+    if (hasNeedsData) {
+      lines.push('needs:');
+      if (runtimeStrings.length > 0) {
+        lines.push(`  runtimes: [${runtimeStrings.map(value => `"${value}"`).join(', ')}]`);
+      }
+      if (toolStrings.length > 0) {
+        lines.push(`  tools: [${toolStrings.map(value => `"${value}"`).join(', ')}]`);
+      }
+      if (Object.keys(packageStrings).length > 0) {
+        lines.push('  packages:');
+        for (const ecosystem of Object.keys(packageStrings).sort()) {
+          const values = packageStrings[ecosystem];
+          lines.push(`    ${ecosystem}: [${values.map(value => `"${value}"`).join(', ')}]`);
+        }
+      }
+    } else {
+      lines.push('needs: {}');
     }
-    
-    // Include detailed dependencies only for languages in needs
-    if (metadata.needs && metadata.needs.includes('js') && metadata.needsJs) {
-      lines.push('needs-js:');
-      if (metadata.needsJs.node) lines.push(`  node: "${metadata.needsJs.node}"`);
-      if (metadata.needsJs.packages) lines.push(`  packages: [${metadata.needsJs.packages.map(p => `"${p}"`).join(', ')}]`);
+
+    if (metadata.dependencies && Object.keys(metadata.dependencies).length > 0) {
+      lines.push('dependencies:');
+      for (const [depName, version] of Object.entries(metadata.dependencies)) {
+        lines.push(`  "${depName}": "${version}"`);
+      }
     }
-    if (metadata.needs && metadata.needs.includes('node') && metadata.needsNode) {
-      lines.push('needs-node:');
-      if (metadata.needsNode.node) lines.push(`  node: "${metadata.needsNode.node}"`);
-      if (metadata.needsNode.packages) lines.push(`  packages: [${metadata.needsNode.packages.map(p => `"${p}"`).join(', ')}]`);
+
+    if (metadata.devDependencies && Object.keys(metadata.devDependencies).length > 0) {
+      lines.push('devDependencies:');
+      for (const [depName, version] of Object.entries(metadata.devDependencies)) {
+        lines.push(`  "${depName}": "${version}"`);
+      }
     }
-    if (metadata.needs && metadata.needs.includes('py') && metadata.needsPy) {
-      lines.push('needs-py:');
-      if (metadata.needsPy.python) lines.push(`  python: "${metadata.needsPy.python}"`);
-      if (metadata.needsPy.packages) lines.push(`  packages: [${metadata.needsPy.packages.map(p => `"${p}"`).join(', ')}]`);
-    }
-    if (metadata.needs && metadata.needs.includes('sh') && metadata.needsSh) {
-      lines.push('needs-sh:');
-      if (metadata.needsSh.shell) lines.push(`  shell: "${metadata.needsSh.shell}"`);
-      if (metadata.needsSh.commands) lines.push(`  commands: [${metadata.needsSh.commands.map(c => `"${c}"`).join(', ')}]`);
-    }
-    
+
     if (metadata.bugs) lines.push(`bugs: ${metadata.bugs}`);
     if (metadata.repo) lines.push(`repo: ${metadata.repo}`);
-    if (metadata.keywords && metadata.keywords.length > 0) {
+    if (metadata.keywords?.length) {
       lines.push(`keywords: [${metadata.keywords.map(k => `"${k}"`).join(', ')}]`);
     }
     if (metadata.homepage) lines.push(`homepage: ${metadata.homepage}`);
-    lines.push(`license: ${metadata.license}`);  // Always CC0
+    lines.push(`license: ${metadata.license}`);
     if (metadata.mlldVersion) lines.push(`mlld-version: "${metadata.mlldVersion}"`);
-    
+
     lines.push('---');
     return lines.join('\n');
   }

@@ -3,47 +3,28 @@
  */
 
 import { ValidationStep } from '../types/PublishingStrategy';
-import { ModuleMetadata, ValidationResult } from '../types/PublishingTypes';
+import type { ModuleData, ValidationResult, ValidationWarning, ValidationError, ValidationContext } from '../types/PublishingTypes';
+import type { MlldNode } from '@core/types';
 import { DependencyDetector } from '@core/utils/dependency-detector';
-import { parseSync } from '@grammar/parser';
-
-interface ModuleData {
-  metadata: ModuleMetadata;
-  content: string;
-  filePath: string;
-}
 
 export class DependencyValidator implements ValidationStep {
   name = 'dependencies';
 
-  async validate(module: ModuleData): Promise<ValidationResult> {
-    const errors: any[] = [];
-    const warnings: any[] = [];
+  async validate(module: ModuleData, _context: ValidationContext): Promise<ValidationResult> {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
 
     if (!module.metadata.needs || !Array.isArray(module.metadata.needs)) {
-      // Skip dependency validation if needs is not properly defined
-      // This will be caught by metadata validation
-      return {
-        valid: true,
-        errors: [],
-        warnings: []
-      };
+      return { valid: true, errors, warnings };
     }
 
-    try {
-      const ast = parseSync(module.content);
-      const detector = new DependencyDetector();
-      
-      // Check for missing dependency details
-      await this.checkJavaScriptDependencies(module, ast, detector, warnings);
-      await this.checkNodeDependencies(module, ast, detector, warnings);
-      await this.checkPythonDependencies(module, ast, detector, warnings);
-      await this.checkShellDependencies(module, ast, detector, warnings);
-      
-    } catch (parseError) {
-      // If we can't parse the content, skip dependency validation
-      // This will be caught by syntax validation
-    }
+    const ast = Array.isArray(module.ast) ? module.ast : [];
+    const detector = new DependencyDetector();
+
+    await this.checkJavaScriptDependencies(module, ast, detector, warnings);
+    await this.checkNodeDependencies(module, ast, detector, warnings);
+    await this.checkPythonDependencies(module, ast, detector, warnings);
+    await this.checkShellDependencies(module, ast, detector, warnings);
 
     return {
       valid: errors.length === 0,
@@ -54,9 +35,9 @@ export class DependencyValidator implements ValidationStep {
 
   private async checkJavaScriptDependencies(
     module: ModuleData,
-    ast: any[],
+    ast: MlldNode[],
     detector: DependencyDetector,
-    warnings: any[]
+    warnings: ValidationWarning[]
   ): Promise<void> {
     if (module.metadata.needs.includes('js') && !module.metadata.needsJs) {
       try {
@@ -66,7 +47,6 @@ export class DependencyValidator implements ValidationStep {
             field: 'needs-js',
             message: `Module declares "js" in needs but missing needs-js details.\n` +
                     `    Detected packages: ${packages.join(', ')}`,
-            severity: 'warning' as const
           });
         }
       } catch {
@@ -77,9 +57,9 @@ export class DependencyValidator implements ValidationStep {
 
   private async checkNodeDependencies(
     module: ModuleData,
-    ast: any[],
+    ast: MlldNode[],
     detector: DependencyDetector,
-    warnings: any[]
+    warnings: ValidationWarning[]
   ): Promise<void> {
     if (module.metadata.needs.includes('node') && !module.metadata.needsNode) {
       try {
@@ -89,7 +69,6 @@ export class DependencyValidator implements ValidationStep {
             field: 'needs-node',
             message: `Module declares "node" in needs but missing needs-node details.\n` +
                     `    Detected packages: ${packages.join(', ')}`,
-            severity: 'warning' as const
           });
         }
       } catch {
@@ -100,9 +79,9 @@ export class DependencyValidator implements ValidationStep {
 
   private async checkPythonDependencies(
     module: ModuleData,
-    ast: any[],
+    ast: MlldNode[],
     detector: DependencyDetector,
-    warnings: any[]
+    warnings: ValidationWarning[]
   ): Promise<void> {
     if (module.metadata.needs.includes('py') && !module.metadata.needsPy) {
       try {
@@ -112,7 +91,6 @@ export class DependencyValidator implements ValidationStep {
             field: 'needs-py',
             message: `Module declares "py" in needs but missing needs-py details.\n` +
                     `    Detected packages: ${packages.join(', ')}`,
-            severity: 'warning' as const
           });
         }
       } catch {
@@ -123,9 +101,9 @@ export class DependencyValidator implements ValidationStep {
 
   private async checkShellDependencies(
     module: ModuleData,
-    ast: any[],
+    ast: MlldNode[],
     detector: DependencyDetector,
-    warnings: any[]
+    warnings: ValidationWarning[]
   ): Promise<void> {
     if (module.metadata.needs.includes('sh') && !module.metadata.needsSh) {
       try {
@@ -135,7 +113,6 @@ export class DependencyValidator implements ValidationStep {
             field: 'needs-sh',
             message: `Module declares "sh" in needs but missing needs-sh details.\n` +
                     `    Detected commands: ${commands.join(', ')}`,
-            severity: 'warning' as const
           });
         }
       } catch {

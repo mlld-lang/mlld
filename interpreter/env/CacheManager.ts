@@ -1,6 +1,5 @@
 import type { ResolvedURLConfig } from '@core/config/types';
 import type { Variable } from '@core/types/variable';
-import { URLCache } from '../cache/URLCache';
 import { ImmutableCache } from '@core/security/ImmutableCache';
 
 /**
@@ -12,7 +11,6 @@ export class CacheManager {
   private resolverVariableCache = new Map<string, Variable>();
   
   constructor(
-    private urlCacheManager?: URLCache,
     private immutableCache?: ImmutableCache,
     private urlConfig?: ResolvedURLConfig
   ) {}
@@ -34,13 +32,6 @@ export class CacheManager {
     
     // Fall back to default
     return this.urlConfig.cache.defaultTTL;
-  }
-
-  /**
-   * Get URLCache manager instance
-   */
-  getURLCacheManager(): URLCache | undefined {
-    return this.urlCacheManager;
   }
 
   /**

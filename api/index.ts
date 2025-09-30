@@ -65,7 +65,7 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
   }
   
   // Call the interpreter
-  const result: string = await interpret(content, {
+  const result = await interpret(content, {
     basePath: options?.basePath, // Keep for backward compatibility
     filePath: options?.filePath,
     pathContext,
@@ -76,7 +76,8 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     useMarkdownFormatter: options?.useMarkdownFormatter
   });
 
-  return result;
+  // The interpreter returns a string when returnEnvironment is false (default)
+  return typeof result === 'string' ? result : result.output;
 }
 
 /**

@@ -5,6 +5,46 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0-rc56
+
+### Added
+- **Import Types System**: Control how modules and resources are resolved
+  - `module` imports: Pre-installed registry modules (offline after install)
+  - `static` imports: Content embedded at parse time (zero runtime cost)
+  - `live` imports: Always fresh data (fetched every execution)
+  - `cached(TTL)` imports: Smart caching with time limits (5m, 1h, 7d, etc.)
+  - `local` imports: Direct access to development modules in `llm/modules/`
+  - Example: `/import module { api } from @corp/tools`, `/import cached(1h) <https://api.example.com> as @data`
+
+- **Module management**:
+  - `mlld install @author/module`: Install modules from public registry
+  - `mlld update`: Update modules to latest compatible versions
+  - `mlld outdated`: Check for available updates
+  - `mlld ls`: View installed modules with status and sizes
+  - Registry integration with CDN-distributed module catalog
+
+- **Configuration Files**:
+  - `mlld-config.json`: Your project settings (dependencies, preferences)
+  - `mlld-lock.json`: Auto-generated locks (versions, hashes, sources)
+
+- **Simplified Development Workflow**:
+  - Use `/import local { helper } from @author/module` to access modules in `llm/modules/` using published name (if you are @author or can publish to private @author registry)
+  - Useful for iterating on modules before publishing
+
+### Changed
+- Import syntax now requires `@` prefix on imported names: `/import { @helper } from module`
+- Module publishing requires explicit `/export { ... }` manifests
+- Import failures now stop execution (exit code 1) instead of continuing
+- Smart import type inference based on source patterns
+- Pipelines support leading `||` operator for immediate parallel execution: `/var @result = || @a() || @b() || @c()` runs all three functions concurrently
+- Leading parallel syntax works in `/var`, `/run`, and `/exe` definitions
+- Pipeline concurrency controls: `(n, wait)` shorthand syntax and `with { parallel: n, delay: wait }` for caps and pacing
+
+### Fixed
+- Module installation fetches from real registry instead of placeholders
+- Version resolution respects "latest" tags and semantic versioning
+- Module integrity verified with SHA-256 hashes
+
 ## 2.0.0-rc55
 
 ### Added
@@ -30,6 +70,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mixed pipelines with native mlld, JavaScript, and shell commands all work together
 
 ## [2.0.0-rc54]
+### Added
+- Expose structured module dependency resolution with `ModuleInstaller.resolveDependencies` so CLI flows reuse aggregated metadata.
+- Add dependency summaries across install/update/outdated/info commands via shared helper, with optional dev-dependency inclusion.
+- Introduce `cli/utils/dependency-summary.ts` to normalize runtime/tool/package output and conflict warnings.
+### Changed
+- Cache modules with structured needs/dependency metadata to avoid re-parsing frontmatter.
+- `ResolverManager` persists structured metadata when fetching modules, enabling downstream analysis.
+
 
 ### Added
 - Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.
@@ -653,7 +701,7 @@ This release allows mlld to function as a logical router
 ### Fixed
 - **Namespace import structure for better ergonomics**
   - Namespace imports intelligently unwrap single-export modules
-  - `/import @mlld/env as environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
+- `/import @mlld/env as @environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
   - Modules exporting a single main object matching common patterns (module name, 'main', 'default', 'exports') are automatically unwrapped
   - Multiple-export modules remain unchanged, preserving full namespace structure
 
@@ -1004,7 +1052,7 @@ The `/` command approach creates clear disambiguiation between commands and vari
 ### Added:
 - **Namespace Imports**: Import entire files or modules as namespaced objects
   - File imports: `/import [./file.mld]` creates namespace from filename (e.g., `@file`)
-  - Custom alias: `/import [./file.mld] as myname` creates `@myname` namespace
+- Custom alias: `/import [./file.mld] as @myname` creates `@myname` namespace
   - Module imports: `/import @author/module` creates `@module` namespace
   - Access fields: `@namespace.field` to access imported variables
   - Replaces deprecated wildcard syntax `/import { * } from [file]`
@@ -1129,7 +1177,7 @@ The `/` command approach creates clear disambiguiation between commands and vari
   - Stack traces included for debugging
   - Works in pipelines and shows full execution context
 - **Namespace Imports**: Support for importing all variables from a file under a namespace alias (#264)
-  - Import .mld files: `@import { * as utils } from "utils.mld"` - access as `{{utils.helper}}`
+  - Import .mld files: `@import { * as @utils } from "utils.mld"` - access as `{{utils.helper}}`
   - Import JSON files: `@import { * as config } from "config.json"` - access as `{{config.name}}`
   - Nested object access: `{{config.database.host}}` for deep properties
   - Works in templates with dot notation for clean, organized variable access

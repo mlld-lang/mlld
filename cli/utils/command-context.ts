@@ -43,16 +43,35 @@ export async function getCommandContext(
   
   // Try to load lock file
   let lockFile: LockFile | null = null;
-  const lockFilePath = path.join(projectRoot, 'mlld.lock.json');
-  
+  const canonicalPath = path.join(projectRoot, 'mlld-lock.json');
+  const fallbackPaths = [
+    path.join(projectRoot, 'mlld.lock.json'),
+    path.join(projectRoot, '.mlld', 'mlld.lock.json')
+  ];
+
   try {
-    if (await fileSystem.exists(lockFilePath)) {
-      lockFile = new LockFile(lockFilePath);
-      cliLogger.debug(`Loaded lock file from: ${lockFilePath}`);
-    } else if (options.requireLockFile) {
-      throw new Error(`No mlld.lock.json found in project root: ${projectRoot}`);
+    lockFile = new LockFile(canonicalPath, { fallbackPaths });
+    // Touch the lock file data if required to ensure it exists
+    if (options.requireLockFile) {
+      const entries = lockFile.getAllModules();
+      let hasPhysicalFile = false;
+      for (const candidate of [canonicalPath, ...fallbackPaths]) {
+        try {
+          if (await fileSystem.exists(candidate)) {
+            hasPhysicalFile = true;
+            break;
+          }
+        } catch {
+          // Ignore errors while probing paths
+        }
+      }
+      if (!hasPhysicalFile && Object.keys(entries).length === 0) {
+        throw new Error(`No lock file found in project root: ${projectRoot}`);
+      }
     }
+    cliLogger.debug(`Loaded lock file from: ${canonicalPath}`);
   } catch (error) {
+    lockFile = null;
     if (options.requireLockFile) {
       throw error;
     }

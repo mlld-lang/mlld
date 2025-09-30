@@ -1,11 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { InstallCommand } from './install';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { formatModuleReference } from '../utils/output';
 
-// Mock the registry components
-vi.mock('@core/registry/RegistryManager');
-vi.mock('../utils/lock-file');
 
 describe('InstallCommand', () => {
   let tempDir: string;
@@ -31,24 +29,14 @@ describe('InstallCommand', () => {
   it('should handle empty module list (install from lock)', async () => {
     // This test would verify the install from lock file functionality
     // For now, we'll just test that it doesn't crash
-    try {
-      await installCommand.install([], { dryRun: true });
-    } catch (error) {
-      // Expected for now since we don't have a real registry implementation
-      expect(error).toBeDefined();
-    }
+    await expect(installCommand.install([], { dryRun: true })).resolves.toBeUndefined();
   });
 
   it('should handle specific module installation', async () => {
     // Test installing specific modules
     const modules = ['@alice/utils', '@bob/helpers'];
     
-    try {
-      await installCommand.install(modules, { dryRun: true });
-    } catch (error) {
-      // Expected for now since we don't have a real registry implementation
-      expect(error).toBeDefined();
-    }
+    await expect(installCommand.install(modules, { dryRun: true })).resolves.toBeUndefined();
   });
 
   it('should validate module references', () => {
@@ -62,9 +50,9 @@ describe('InstallCommand', () => {
 
     for (const ref of validRefs) {
       expect(() => {
-        // This would test the formatModuleReference function
-        const parsed = ref.replace('@', '').split('/');
-        expect(parsed).toHaveLength(2);
+        const parsed = formatModuleReference(ref);
+        expect(parsed.username).toBeTruthy();
+        expect(parsed.moduleName).toBeTruthy();
       }).not.toThrow();
     }
   });

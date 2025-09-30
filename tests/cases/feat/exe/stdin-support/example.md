@@ -1,10 +1,12 @@
-# /exe stdin support
+/exe @filterActive(data) = js {
+  // data is already parsed by @json transformer
+  const items = typeof data === 'string' ? JSON.parse(data) : data;
+  return items.filter(item => item.active === true);
+}
 
-Test stdin support in executable definitions.
+/exe @processWithStdin(data) = run { cat } with { stdin: @data, pipeline: [@filterActive] }
 
-/exe @processWithStdin(data) = run { cat | jq '.[] | select(.active == true)' } with { stdin: @data }
-
-/exe @processWithPipe(data) = run @data | { cat | jq '.[] | select(.active == true)' }
+/exe @processWithPipe(data) = run @data | { cat } | @filterActive
 
 /var @jsonData = '[{"name": "Alice", "active": true}, {"name": "Bob", "active": false}]'
 

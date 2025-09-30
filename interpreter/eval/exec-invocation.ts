@@ -2,11 +2,12 @@ import type { ExecInvocation, WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
-import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
+import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
+import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
 import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
@@ -938,6 +939,20 @@ export async function evaluateExecInvocation(
     // Interpolate the template with the bound parameters
     result = await interpolate(definition.template, execEnv);
   }
+  // Handle pipeline executables
+  else if (isPipelineExecutable(definition)) {
+    const { processPipeline } = await import('./pipeline/unified-processor');
+    const pipelineResult = await processPipeline({
+      value: '',
+      env: execEnv,
+      pipeline: definition.pipeline,
+      format: definition.format,
+      identifier: commandName,
+      location: node.location,
+      isRetryable: false
+    });
+    result = typeof pipelineResult === 'string' ? pipelineResult : String(pipelineResult ?? '');
+  }
   // Handle command executables
   else if (isCommandExecutable(definition)) {
     // First, detect which parameters are referenced in the template BEFORE interpolation
@@ -1133,6 +1148,46 @@ export async function evaluateExecInvocation(
         }
       } else {
         result = commandOutput;
+      }
+    }
+
+    if (definition.withClause) {
+      if (definition.withClause.needs) {
+        const checker = new DefaultDependencyChecker();
+        await checkDependencies(definition.withClause.needs, checker, variable.metadata?.definedAt || node.location);
+      }
+
+      if (definition.withClause.pipeline && definition.withClause.pipeline.length > 0) {
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        const pipelineInput = typeof result === 'string'
+          ? result
+          : result === undefined || result === null
+            ? ''
+            : JSON.stringify(result);
+        const pipelineResult = await processPipeline({
+          value: pipelineInput,
+          env: execEnv,
+          pipeline: definition.withClause.pipeline,
+          format: definition.withClause.format as string | undefined,
+          isRetryable: false,
+          identifier: commandName,
+          location: variable.metadata?.definedAt || node.location
+        });
+
+        if (typeof pipelineResult === 'string') {
+          const trimmed = pipelineResult.trim();
+          if (trimmed) {
+            try {
+              result = JSON.parse(trimmed);
+            } catch {
+              result = pipelineResult;
+            }
+          } else {
+            result = pipelineResult;
+          }
+        } else {
+          result = pipelineResult;
+        }
       }
     }
   }

@@ -15,7 +15,7 @@ Testing the new shorthand namespace import syntax.
 
 ## Import with explicit alias
 
-/import "./namespace-test-utils.mld" as lib
+/import "./namespace-test-utils.mld" as @lib
 
 /show `Library greeting: @lib.greeting`
 /show `Library version: @lib.version`

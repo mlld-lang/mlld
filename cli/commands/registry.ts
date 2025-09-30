@@ -1,4 +1,6 @@
 import { RegistryManager } from '@core/registry';
+import { updateCommand } from './update';
+import { outdatedCommand } from './outdated';
 
 export async function registryCommand(args: string[]): Promise<void> {
   const subcommand = args[0];

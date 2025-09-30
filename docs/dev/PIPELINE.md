@@ -200,9 +200,17 @@ Pipeline stages run in parallel when grouped with `||`.
 
 - Grouping: `A || B || C` forms one stage that executes `A`, `B`, and `C` concurrently; results preserve command order.
 - With-clause parity: Nested arrays in `with { pipeline: [...] }` represent a parallel stage. Example: `with { pipeline: [ [@left, @right], @combine ] }` is equivalent to `| @left || @right | @combine`.
-- Shorthand rule: Shorthand pipelines cannot start with `||`. The parser returns an error explaining that `||` runs in parallel with the previous stage, which the source stage does not have.
+- Leading groups: Pipelines can start with a leading `||` operator to execute parallel stages immediately. Examples:
+  - `/var @result = || @a() || @b() || @c()` runs all three in parallel, returns `["resultA", "resultB", "resultC"]`
+  - `/run || @fetch1() || @fetch2() || @fetch3()` executes in parallel, outputs JSON array
+  - `/var @out = || @func1() || @func2() | @combine` parallel group followed by combiner
+  - `/exe @composed() = || @helper1() || @helper2() | @merge` works in exe definitions
+  - Concurrency caps work with leading parallel: `|| @a() || @b() || @c() (2, 100ms)` caps at 2 concurrent with 100ms pacing
+- Leading `||` syntax: The double-bar prefix explicitly enters pipeline mode with parallel execution, avoiding ambiguity with boolean OR (`||`) expressions. Only matches when followed by function calls (with parentheses), not plain variables.
+- Equivalence: `|| @a() || @b() | @c` produces same AST as `"" with { pipeline: [[@a, @b], @c] }`
 - Output: The next stage receives a JSON array string of the group’s outputs.
 - Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Caps and pacing: `(n, wait)` after the pipeline sets a per-pipeline concurrency cap and delay between starts, equivalent to `with { parallel: n, delay: wait }`.
 - Effects: Inline effects attached before a parallel group run once per branch after that branch succeeds; effect failures abort the pipeline.
 - Rate limits: 429/“rate limit” errors in a branch use exponential backoff.
 

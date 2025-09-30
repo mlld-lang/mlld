@@ -9,8 +9,10 @@ import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import { parseSync } from '@grammar/parser';
+import type { MlldNode } from '@core/types';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { ModuleMetadata, ModuleData, GitInfo } from '../types/PublishingTypes';
+import { normalizeModuleNeeds, moduleNeedsToRuntimeNames, stringifyPackageMap, stringifyRequirementList } from '@core/registry';
 
 export class ModuleReader {
   private authService: GitHubAuthService;
@@ -27,6 +29,7 @@ export class ModuleReader {
     metadata: ModuleMetadata; 
     filename: string; 
     filePath: string;
+    ast: MlldNode[];
   }> {
     // Check if path is a directory or file
     const stat = await fs.stat(modulePath);
@@ -98,8 +101,9 @@ export class ModuleReader {
     }
     
     // Parse and validate basic syntax early
+    let ast: MlldNode[];
     try {
-      parseSync(content);
+      ast = parseSync(content);
     } catch (parseError: any) {
       console.log(chalk.red('✘ Invalid mlld syntax'));
       
@@ -119,7 +123,7 @@ export class ModuleReader {
       );
     }
     
-    return { content, metadata, filename, filePath };
+    return { content, metadata, filename, filePath, ast };
   }
 
   /**
@@ -131,7 +135,8 @@ export class ModuleReader {
       author: '',
       about: '',
       license: 'CC0', // Default to CC0
-      // Don't set needs here - let it be undefined so validation catches missing field
+      needs: [],
+      moduleNeeds: normalizeModuleNeeds(undefined),
     };
     
     // Module name comes from frontmatter 'name' field, NOT from filename
@@ -156,13 +161,32 @@ export class ModuleReader {
         metadata.bugs = parsed.bugs;
         metadata.repo = parsed.repo || parsed.repository;
         metadata.mlldVersion = parsed.mlldVersion || parsed['mlld-version'] || parsed.mlld_version;
-        
-        // Parse dependency fields
-        metadata.needs = parsed.needs; // Don't default to [] here, let validation catch it
+
+        const legacyNeedsValue = parsed.needs;
+
         metadata.needsJs = parsed['needs-js'] || parsed.needsJs;
+        metadata.needsNode = parsed['needs-node'] || parsed.needsNode;
         metadata.needsPy = parsed['needs-py'] || parsed.needsPy;
         metadata.needsSh = parsed['needs-sh'] || parsed.needsSh;
-        metadata.needsNode = parsed['needs-node'] || parsed.needsNode;
+
+        const normalizedNeeds = normalizeModuleNeeds(legacyNeedsValue, {
+          js: metadata.needsJs,
+          node: metadata.needsNode,
+          py: metadata.needsPy,
+          sh: metadata.needsSh,
+        });
+        metadata.moduleNeeds = normalizedNeeds;
+        metadata.needs = moduleNeedsToRuntimeNames(normalizedNeeds);
+
+        const dependencies = parsed.dependencies ?? parsed['dependencies'];
+        if (dependencies && typeof dependencies === 'object') {
+          metadata.dependencies = dependencies;
+        }
+
+        const devDependencies = parsed.devDependencies ?? parsed['devDependencies'];
+        if (devDependencies && typeof devDependencies === 'object') {
+          metadata.devDependencies = devDependencies;
+        }
       } catch (e) {
         // Invalid YAML, continue with defaults
       }
@@ -181,6 +205,13 @@ export class ModuleReader {
       }
     }
     
+    if (!metadata.moduleNeeds) {
+      metadata.moduleNeeds = normalizeModuleNeeds(undefined);
+    }
+    if (!Array.isArray(metadata.needs)) {
+      metadata.needs = moduleNeedsToRuntimeNames(metadata.moduleNeeds);
+    }
+
     return metadata as ModuleMetadata;
   }
 
@@ -235,14 +266,14 @@ export class ModuleReader {
 
       // Runtime dependencies (required)
       console.log('\nRuntime dependencies (required):');
-      console.log('  - Use empty array [] for pure mlld modules');
-      console.log('  - Options: js, py, sh (comma-separated)');
-      const needsInput = await rl.question('Needs []: ');
-      if (needsInput) {
-        metadata.needs = needsInput.split(',').map(n => n.trim());
-      } else {
-        metadata.needs = [];
-      }
+      console.log('  - Provide runtime identifiers (node, python, sh, etc.)');
+      console.log('  - Leave blank for pure mlld modules');
+      const needsInput = await rl.question('Runtimes []: ');
+      const runtimeList = needsInput
+        ? needsInput.split(',').map(n => n.trim()).filter(Boolean)
+        : [];
+      metadata.needs = runtimeList;
+      metadata.moduleNeeds = normalizeModuleNeeds(runtimeList);
 
       // Optional fields
       const addOptional = await rl.question('\nAdd optional fields? (y/n): ');
@@ -301,33 +332,45 @@ export class ModuleReader {
     if (metadata.version) lines.push(`version: ${metadata.version}`);
     lines.push(`about: ${metadata.about}`);
     
-    // Always include needs (it's required)
-    if (metadata.needs) {
-      lines.push(`needs: [${metadata.needs.map(n => `"${n}"`).join(', ')}]`);
+    const moduleNeeds = metadata.moduleNeeds ?? normalizeModuleNeeds(metadata.needs ?? []);
+    const runtimeStrings = stringifyRequirementList(moduleNeeds.runtimes);
+    const toolStrings = stringifyRequirementList(moduleNeeds.tools);
+    const packageStrings = stringifyPackageMap(moduleNeeds.packages);
+    const hasNeedsData = runtimeStrings.length > 0 || toolStrings.length > 0 || Object.keys(packageStrings).length > 0;
+
+    if (hasNeedsData) {
+      lines.push('needs:');
+      if (runtimeStrings.length > 0) {
+        lines.push(`  runtimes: [${runtimeStrings.map(value => `"${value}"`).join(', ')}]`);
+      }
+      if (toolStrings.length > 0) {
+        lines.push(`  tools: [${toolStrings.map(value => `"${value}"`).join(', ')}]`);
+      }
+      if (Object.keys(packageStrings).length > 0) {
+        lines.push('  packages:');
+        for (const ecosystem of Object.keys(packageStrings).sort()) {
+          const values = packageStrings[ecosystem];
+          lines.push(`    ${ecosystem}: [${values.map(value => `"${value}"`).join(', ')}]`);
+        }
+      }
+    } else {
+      lines.push('needs: {}');
     }
-    
-    // Include detailed dependencies only for languages in needs
-    if (metadata.needs.includes('js') && metadata.needsJs) {
-      lines.push('needs-js:');
-      if (metadata.needsJs.node) lines.push(`  node: "${metadata.needsJs.node}"`);
-      if (metadata.needsJs.packages) lines.push(`  packages: [${metadata.needsJs.packages.map(p => `"${p}"`).join(', ')}]`);
+
+    if (metadata.dependencies && Object.keys(metadata.dependencies).length > 0) {
+      lines.push('dependencies:');
+      for (const [depName, version] of Object.entries(metadata.dependencies)) {
+        lines.push(`  "${depName}": "${version}"`);
+      }
     }
-    if (metadata.needs.includes('node') && metadata.needsNode) {
-      lines.push('needs-node:');
-      if (metadata.needsNode.node) lines.push(`  node: "${metadata.needsNode.node}"`);
-      if (metadata.needsNode.packages) lines.push(`  packages: [${metadata.needsNode.packages.map(p => `"${p}"`).join(', ')}]`);
+
+    if (metadata.devDependencies && Object.keys(metadata.devDependencies).length > 0) {
+      lines.push('devDependencies:');
+      for (const [depName, version] of Object.entries(metadata.devDependencies)) {
+        lines.push(`  "${depName}": "${version}"`);
+      }
     }
-    if (metadata.needs.includes('py') && metadata.needsPy) {
-      lines.push('needs-py:');
-      if (metadata.needsPy.python) lines.push(`  python: "${metadata.needsPy.python}"`);
-      if (metadata.needsPy.packages) lines.push(`  packages: [${metadata.needsPy.packages.map(p => `"${p}"`).join(', ')}]`);
-    }
-    if (metadata.needs.includes('sh') && metadata.needsSh) {
-      lines.push('needs-sh:');
-      if (metadata.needsSh.shell) lines.push(`  shell: "${metadata.needsSh.shell}"`);
-      if (metadata.needsSh.commands) lines.push(`  commands: [${metadata.needsSh.commands.map(c => `"${c}"`).join(', ')}]`);
-    }
-    
+
     if (metadata.bugs) lines.push(`bugs: ${metadata.bugs}`);
     if (metadata.repo) lines.push(`repo: ${metadata.repo}`);
     if (metadata.keywords && metadata.keywords.length > 0) {
