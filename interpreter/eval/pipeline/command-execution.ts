@@ -567,10 +567,38 @@ export async function executeCommandVariable(
     const { InterpolationContext } = await import('../../core/interpolation-context');
     
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
-    
+
     // Always pass pipeline input as stdin when available
-    const result = await env.executeCommand(command, { input: stdinInput } as any);
-    return result;
+    let commandOutput = await env.executeCommand(command, { input: stdinInput } as any);
+
+    const withClause = execDef.withClause;
+    if (withClause) {
+      if (withClause.needs) {
+        const { checkDependencies, DefaultDependencyChecker } = await import('../dependencies');
+        const checker = new DefaultDependencyChecker();
+        await checkDependencies(withClause.needs, checker, commandVar.metadata?.definedAt);
+      }
+
+      if (withClause.pipeline && withClause.pipeline.length > 0) {
+        const { processPipeline } = await import('./unified-processor');
+        const processed = await processPipeline({
+          value: commandOutput,
+          env,
+          pipeline: withClause.pipeline,
+          format: withClause.format as string | undefined,
+          isRetryable: false,
+          identifier: commandVar?.name,
+          location: commandVar.metadata?.definedAt
+        });
+        commandOutput = typeof processed === 'string' ? processed : String(processed ?? '');
+      }
+    }
+
+    if (typeof commandOutput !== 'string') {
+      commandOutput = String(commandOutput ?? '');
+    }
+
+    return commandOutput;
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
     // Special handling for mlld-when expressions
     if (execDef.language === 'mlld-when') {

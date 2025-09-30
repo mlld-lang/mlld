@@ -158,24 +158,30 @@ ExeRunCommandWithStdin "exe run command with stdin"
 
 // Run command pipe stdin pattern for exe context - handles "run @var | {command}"
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets {
+  = "run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? {
+      const withClause = { stdin: stdinExpr };
+      if (tail) {
+        Object.assign(withClause, tail);
+      }
       return {
         subtype: 'exeCommand',
         source: 'command',
         values: {
           command: content.values.command,
           commandBases: content.values.commandBases,
-          withClause: { stdin: stdinExpr }
+          withClause
         },
         raw: {
           command: content.raw.command,
           commandBases: content.raw.commandBases,
-          stdinExpr: stdinExpr.type === 'VariableReference' ? '@' + stdinExpr.identifier : 'expression'
+          stdinExpr: stdinExpr.type === 'VariableReference' ? '@' + stdinExpr.identifier : 'expression',
+          ...(tail ? { tailModifiers: tail } : {})
         },
         meta: {
           ...content.meta,
           hasStdin: true,
-          isPipeSugar: true
+          isPipeSugar: true,
+          hasTailModifiers: !!tail
         }
       };
     }

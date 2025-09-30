@@ -409,9 +409,6 @@ export class ImportDirectiveEvaluator {
     }
 
     try {
-      // Mark that we're importing this reference
-      env.beginImport(ref);
-      
       if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ImportDirectiveEvaluator] Resolver content for ${ref}:`, {
           contentLength: resolverContent.content.length,
@@ -447,8 +444,7 @@ export class ImportDirectiveEvaluator {
 
       return { value: undefined, env };
     } finally {
-      // End import tracking
-      env.endImport(ref);
+      // Import tracking handled by ModuleContentProcessor.processResolverContent
     }
   }
 
