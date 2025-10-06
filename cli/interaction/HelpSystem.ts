@@ -61,9 +61,14 @@ export class HelpSystem {
       this.displayDevHelp();
       return;
     }
-    
+
     if (command === 'nvim-setup' || command === 'nvim') {
       this.displayNvimSetupHelp();
+      return;
+    }
+
+    if (command === 'serve') {
+      this.displayServeHelp();
       return;
     }
 
@@ -88,6 +93,25 @@ Examples:
   mlld auth login
   mlld auth status
   mlld auth logout
+    `);
+  }
+
+  private displayServeHelp(): void {
+    console.log(`
+Usage: mlld serve <module-path>
+
+Expose exported mlld functions as MCP tools over stdio.
+
+Examples:
+  mlld serve github-tools.mld.md
+  mlld serve llm/mcp/
+  mlld serve 'llm/mcp/**/*.mld.md'
+
+Behavior:
+  - Discovers modules from files, directories, or glob patterns
+  - Reads /export directives when present and falls back to all executables otherwise
+  - Stops on duplicate function names across modules
+  - Streams JSON-RPC responses to stdout for MCP clients
     `);
   }
 
