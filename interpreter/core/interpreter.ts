@@ -28,6 +28,7 @@ import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '..
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import { interpreterLogger as logger } from '@core/utils/logger';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 
 /**
  * Type for variable values
@@ -884,7 +885,7 @@ export async function interpolate(
       // Handle function calls in templates
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as any, env);
-      parts.push(String(result.value));
+      parts.push(asText(result.value));
     } else if (node.type === 'InterpolationVar') {
       // Handle {{var}} style interpolation (from triple colon templates)
       const varName = node.identifier || node.name;
@@ -923,6 +924,8 @@ export async function interpolate(
         stringValue = 'null';
       } else if (value === undefined) {
         stringValue = '';
+      } else if (isStructuredValue(value)) {
+        stringValue = asText(value);
       } else if (typeof value === 'object') {
         stringValue = JSON.stringify(value);
         if (process.env.MLLD_DEBUG === 'true') {
@@ -1145,6 +1148,10 @@ export async function interpolate(
       
       if (value === null) {
         stringValue = 'null';
+      } else if (value === undefined) {
+        stringValue = '';
+      } else if (isStructuredValue(value)) {
+        stringValue = asText(value);
       } else if (typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
         // Handle wrapped strings (quotes, backticks, brackets)
         stringValue = await interpolate(value.content as InterpolationNode[], env, context);
@@ -1176,7 +1183,7 @@ export async function interpolate(
           // method that should be used for string interpolation instead of JSON.stringify
           const { isPipelineInput } = await import('../utils/pipeline-input');
           if (isPipelineInput(value)) {
-            stringValue = value.toString();
+            stringValue = asText(value);
           } else {
             stringValue = JSON.stringify(value);
             if (process.env.MLLD_DEBUG === 'true') {
@@ -1301,7 +1308,7 @@ export async function interpolate(
       // Handle exec invocation nodes in interpolation
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as ExecInvocation, env);
-      const stringValue = String(result.value);
+      const stringValue = asText(result.value);
       
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);
@@ -1387,7 +1394,7 @@ export async function interpolate(
       }
       const { evaluateShow } = await import('../eval/show');
       const res = await evaluateShow(directive, env, { isExpression: true });
-      parts.push(String(res.value ?? ''));
+      parts.push(asText(res.value ?? ''));
     } else if (node.type === 'Literal') {
       // Handle literal nodes from expressions
       const { LiteralNode } = await import('@core/types');
@@ -1569,9 +1576,12 @@ async function processFileFields(
       node: nodeWithPipes
     });
     // Pipes already handle conversion to string format, so return as-is
-    return String(result);
+    return asText(result);
   }
   
   // Convert to string only if no pipes were applied
+  if (isStructuredValue(result)) {
+    return asText(result);
+  }
   return typeof result === 'string' ? result : JSON.stringify(result);
 }
