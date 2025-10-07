@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { createServeCommand, resolveModulePaths } from './serve';
+import { createMcpCommand, resolveModulePaths } from './mcp';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -19,7 +19,7 @@ vi.mock('../mcp/MCPServer', () => {
   return { MCPServer: MockServer };
 });
 
-describe('serve command', () => {
+describe('mcp command', () => {
   beforeEach(() => {
     startMock.mockReset();
     startMock.mockResolvedValue(undefined);
@@ -31,7 +31,7 @@ describe('serve command', () => {
   });
 
   it('resolves module paths from directory', async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-'));
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-'));
     const fileA = path.join(tmpDir, 'a.mld');
     const nestedDir = path.join(tmpDir, 'nested');
     await fs.mkdir(nestedDir);
@@ -47,8 +47,8 @@ describe('serve command', () => {
   });
 
   it('starts MCP server with exported functions', async () => {
-    const command = createServeCommand();
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-'));
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-'));
     const modulePath = path.join(tmpDir, 'tools.mld.md');
     const moduleSource = [
       '/exe @greet(name) = js {',
@@ -74,14 +74,14 @@ describe('serve command', () => {
   });
 
   it('fails when module argument is missing', async () => {
-    const command = createServeCommand();
+    const command = createMcpCommand();
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`exit:${code}`);
     }) as any);
 
     await expect(command.execute([], {})).rejects.toThrow('exit:1');
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Usage: mlld serve'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Usage: mlld mcp'));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('llm/mcp/ not found'));
 
     consoleSpy.mockRestore();
@@ -89,8 +89,8 @@ describe('serve command', () => {
   });
 
   it('fails on duplicate function names', async () => {
-    const command = createServeCommand();
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-'));
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-'));
     const moduleA = path.join(tmpDir, 'module-a.mld.md');
     const moduleB = path.join(tmpDir, 'module-b.mld.md');
 
@@ -130,8 +130,8 @@ describe('serve command', () => {
   });
 
   it('excludes built-in executables when no manifest exists', async () => {
-    const command = createServeCommand();
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-'));
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-'));
     const modulePath = path.join(tmpDir, 'tools.mld');
 
     await fs.writeFile(modulePath, [
@@ -156,8 +156,8 @@ describe('serve command', () => {
   });
 
   it('uses default llm/mcp directory when no module path is provided', async () => {
-    const command = createServeCommand();
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-default-'));
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-default-'));
     const mcpDir = path.join(tmpDir, 'llm', 'mcp');
     await fs.mkdir(mcpDir, { recursive: true });
     const modulePath = path.join(mcpDir, 'default.mld.md');
@@ -185,8 +185,8 @@ describe('serve command', () => {
   });
 
   it('applies CLI environment overrides with MLLD_ prefix', async () => {
-    const command = createServeCommand();
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-env-'));
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-env-'));
     const modulePath = path.join(tmpDir, 'env.mld.md');
     await fs.writeFile(modulePath, [
       '/exe @ping() = js { return "pong"; }',
@@ -206,8 +206,8 @@ describe('serve command', () => {
   });
 
   it('loads config module to filter tools and apply environment variables', async () => {
-    const command = createServeCommand();
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-config-'));
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-config-'));
     const modulePath = path.join(tmpDir, 'tools.mld.md');
     await fs.writeFile(modulePath, [
       '/exe @allowed() = js { return "ok"; }',
@@ -238,8 +238,8 @@ describe('serve command', () => {
   });
 
   it('--tools override takes precedence over config module', async () => {
-    const command = createServeCommand();
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-tools-'));
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-tools-'));
     const modulePath = path.join(tmpDir, 'tools.mld.md');
     await fs.writeFile(modulePath, [
       '/exe @first() = js { return "one"; }',

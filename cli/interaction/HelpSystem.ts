@@ -67,8 +67,8 @@ export class HelpSystem {
       return;
     }
 
-    if (command === 'serve') {
-      this.displayServeHelp();
+    if (command === 'mcp' || command === 'serve') {
+      this.displayMcpHelp();
       return;
     }
 
@@ -96,21 +96,28 @@ Examples:
     `);
   }
 
-  private displayServeHelp(): void {
+  private displayMcpHelp(): void {
     console.log(`
-Usage: mlld serve <module-path>
+Usage: mlld mcp [module-path] [options]
 
 Expose exported mlld functions as MCP tools over stdio.
 
+Options:
+  --config <module.mld.md>    Load MCP config (exports @config { tools, env })
+  --env KEY=VAL,KEY2=VAL2     Inject/override env vars (keys must start with MLLD_)
+  --tools tool1,tool2         Explicit tool allow-list (overrides config)
+
 Examples:
-  mlld serve github-tools.mld.md
-  mlld serve llm/mcp/
-  mlld serve 'llm/mcp/**/*.mld.md'
+  mlld mcp                        # Uses llm/mcp/ when present
+  mlld mcp llm/mcp/
+  mlld mcp --config llm/agents/sandy.mld.md
+  mlld mcp --tools github_readonly,thread_context
 
 Behavior:
   - Discovers modules from files, directories, or glob patterns
   - Reads /export directives when present and falls back to all executables otherwise
-  - Stops on duplicate function names across modules
+  - Applies config module filtering and CLI allow-lists
+  - Accepts environment overrides (MLLD_* only) before executing tools
   - Streams JSON-RPC responses to stdout for MCP clients
     `);
   }

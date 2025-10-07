@@ -24,7 +24,7 @@ interface ConfigResult {
   env?: Record<string, string>;
 }
 
-export interface ServeCommandOptions {
+export interface McpCommandOptions {
   modulePath: string;
 }
 
@@ -34,7 +34,7 @@ interface LoadedModule {
   exports: Map<string, ExecutableVariable>;
 }
 
-class ServeCommand {
+class McpCommand {
   async execute(args: string[], flags: Record<string, unknown>): Promise<void> {
     const serveOptions = await this.resolveServeOptions(args, flags);
 
@@ -132,7 +132,7 @@ class ServeCommand {
         modulePath = defaultRelative;
         defaultUsed = true;
       } else {
-        console.error('Usage: mlld serve [module-path] [--config module.mld.md] [--env KEY=VAL] [--tools tool1,tool2]');
+        console.error('Usage: mlld mcp [module-path] [--config module.mld.md] [--env KEY=VAL] [--tools tool1,tool2]');
         console.error('No module path provided and llm/mcp/ not found');
         process.exit(1);
       }
@@ -217,8 +217,8 @@ class ServeCommand {
   }
 }
 
-export function createServeCommand(): ServeCommand {
-  return new ServeCommand();
+export function createMcpCommand(): McpCommand {
+  return new McpCommand();
 }
 
 export async function resolveModulePaths(modulePath: string): Promise<string[]> {

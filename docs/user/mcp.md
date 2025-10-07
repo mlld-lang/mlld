@@ -1,6 +1,6 @@
 # MCP Server Support
 
-`mlld serve` exposes exported `/exe` functions as Model Context Protocol tools. The command parses one or more modules, gathers exported functions, and starts a JSON-RPC server on stdio so MCP clients can discover and call those functions.
+`mlld mcp` exposes exported `/exe` functions as Model Context Protocol tools. The command parses one or more modules, gathers exported functions, and starts a JSON-RPC server on stdio so MCP clients can discover and call those functions.
 
 - Without arguments it looks for `llm/mcp/` in the current project.
 - You can point it at an individual file, a directory, or a glob.
@@ -18,14 +18,14 @@
    ```
 2. Start the server:
    ```bash
-   mlld serve tools.mld.md
+   mlld mcp tools.mld.md
    ```
-   (If `llm/mcp/` exists, `mlld serve` with no arguments will use it automatically.)
-3. Configure the MCP client (Claude Desktop, etc.) to run `mlld serve` with the module path and any required environment variables.
+   (If `llm/mcp/` exists, `mlld mcp` with no arguments will use it automatically.)
+3. Configure the MCP client (Claude Desktop, etc.) to run `mlld mcp` with the module path and any required environment variables.
 
 ## Command Overview
 
-- `mlld serve [path]` accepts a file, directory, or glob pattern. If no path is supplied and `llm/mcp/` exists, that directory is used.
+- `mlld mcp [path]` accepts a file, directory, or glob pattern. If no path is supplied and `llm/mcp/` exists, that directory is used.
 - Only exported executables appear as MCP tools. If a module lacks `/export`, the command exports every executable defined in that module.
 - Duplicate function names across modules trigger an error that references both module paths.
 - All logging uses `stderr`; JSON-RPC responses stream to `stdout`.

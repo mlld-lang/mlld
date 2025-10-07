@@ -32,12 +32,12 @@ MCP Client ── JSON-RPC over stdio ── MCPServer ── FunctionRouter ─
 - The config module sees these overrides via `@input`, and any additional env values exported from `@config.env` are layered on top.
 ## Testing
 
-- Unit tests cover schema generation, function routing, MCP protocol handling, and CLI wiring (`cli/mcp/*.test.ts`, `cli/commands/serve.test.ts`).
+- Unit tests cover schema generation, function routing, MCP protocol handling, and CLI wiring (`cli/mcp/*.test.ts`, `cli/commands/mcp.test.ts`).
 - Integration fixtures sit under `tests/fixtures/mcp/` (add new examples alongside the GitHub sample).
 - Use `npx vitest run cli/mcp --runInBand` during development to minimize stdout interference.
 
 ## Debugging
 
 - Set `MLLD_DEBUG=true` to trace interpreter activity and confirm argument binding.
-- Enable `DEBUG_MCP=1` before running `mlld serve` to add server-side diagnostics without touching stdout.
+- Enable `DEBUG_MCP=1` before running `mlld mcp` to add server-side diagnostics without touching stdout.
 - Inspect duplicate-name failures via the stderr log produced by `serve` before the process exits.
