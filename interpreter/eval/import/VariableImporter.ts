@@ -8,11 +8,13 @@ import {
   createPathVariable,
   createExecutableVariable,
   createTemplateVariable,
+  createStructuredValueVariable,
   isExecutable,
   isExecutableVariable,
   getEffectiveType,
   VariableTypeGuards
 } from '@core/types/variable';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
@@ -330,6 +332,19 @@ export class VariableImporter {
       originalName: originalName !== name ? originalName : undefined,
       definedAt: { line: 0, column: 0, filePath: importPath }
     };
+
+    if (isStructuredValue(value)) {
+      return createStructuredValueVariable(
+        name,
+        value,
+        source,
+        {
+          ...metadata,
+          isStructuredValue: true,
+          structuredValueType: value.type
+        }
+      );
+    }
     
     // Check if this is an executable export
     if (value && typeof value === 'object' && '__executable' in value && value.__executable) {
@@ -773,7 +788,9 @@ export class VariableImporter {
    * Infer variable type from value
    */
   private inferVariableType(value: any): VariableTypeDiscriminator {
-    if (Array.isArray(value)) {
+    if (isStructuredValue(value)) {
+      return 'structured';
+    } else if (Array.isArray(value)) {
       return 'array';
     } else if (value && typeof value === 'object') {
       return 'object';

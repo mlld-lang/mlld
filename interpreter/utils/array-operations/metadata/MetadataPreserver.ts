@@ -2,6 +2,7 @@ import { isLoadContentResultArray, LoadContentResultArray } from '@core/types/lo
 import { Variable, ArrayVariable, createArrayVariable } from '@core/types/variable';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { ArrayData } from '../ArrayOperationsHandler';
+import { wrapStructured } from '../../structured-value';
 
 export class MetadataPreserver {
   preserveType(arrayData: ArrayData, transformed: any[]): any {
@@ -23,6 +24,16 @@ export class MetadataPreserver {
           type: 'array',
           items: transformed
         };
+
+      case 'structured-value': {
+        const wrapper = arrayData.original;
+        return wrapStructured(
+          transformed,
+          (wrapper && wrapper.type) || 'array',
+          JSON.stringify(transformed),
+          wrapper?.metadata
+        );
+      }
 
       case 'plain-array':
       default:

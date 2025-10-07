@@ -21,10 +21,12 @@ import {
   ImportedVariable,
   ExecutableVariable,
   PipelineInputVariable,
+  StructuredValueVariable,
   PrimitiveVariable,
   PipelineInput,
   Variable
 } from './VariableTypes';
+import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 
 // =========================================================================
 // INDIVIDUAL FACTORY FUNCTION EXPORTS (for backward compatibility)
@@ -210,6 +212,18 @@ export function createPipelineInputVariable(
   pipelineStage?: number
 ): PipelineInputVariable {
   return VariableFactory.createPipelineInput(name, value, format, rawText, source, pipelineStage);
+}
+
+/**
+ * Create a StructuredValueVariable
+ */
+export function createStructuredValueVariable(
+  name: string,
+  value: StructuredValue,
+  source: VariableSource,
+  metadata?: VariableMetadata
+): StructuredValueVariable {
+  return VariableFactory.createStructuredValue(name, value, source, metadata);
 }
 
 /**
@@ -574,6 +588,32 @@ export class VariableFactory {
         isPipelineInput: true,
         pipelineStage
       }
+    };
+  }
+
+  /**
+   * Create a StructuredValueVariable
+   */
+  static createStructuredValue(
+    name: string,
+    value: StructuredValue,
+    source: VariableSource,
+    metadata?: VariableMetadata
+  ): StructuredValueVariable {
+    const structuredMetadata: VariableMetadata = {
+      ...metadata,
+      isStructuredValue: true,
+      structuredValueType: value.type
+    };
+
+    return {
+      type: 'structured',
+      name,
+      value,
+      source,
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+      metadata: structuredMetadata
     };
   }
 

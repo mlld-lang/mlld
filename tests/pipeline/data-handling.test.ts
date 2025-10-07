@@ -82,4 +82,42 @@ describe('Data handling accessors', () => {
     const output = await interpret(input, { fileSystem, pathService });
     expect(output.trim()).toBe('true');
   });
+
+  it('stores structured assignments as wrappers and exposes data to field access, iteration, and equality', async () => {
+    const input = `
+/exe @structuredProfile() = js {
+  const wrapper = {
+    type: 'object',
+    text: '{"name":"Ada","pets":["Rex"]}',
+    data: { name: 'Ada', pets: ['Rex'] },
+    metadata: { source: 'test' },
+    toString() { return this.text; },
+    valueOf() { return this.text; },
+    [Symbol.toPrimitive]() { return this.text; }
+  };
+  wrapper[Symbol.for('mlld.StructuredValue')] = true;
+  return wrapper;
+}
+
+/var @profile = @structuredProfile()
+
+/exe @describePets(pets) = js {
+  if (!Array.isArray(pets)) {
+    throw new Error('pets not array');
+  }
+  return pets.join(',');
+}
+
+/var @summary = @profile.pets | @describePets
+/show @profile.name
+/show @summary
+/when [
+  @profile.name == "Ada" => show "matched"
+  none => show "unmatched"
+]
+`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    expect(output.trim()).toBe('Ada\nRex\nmatched');
+  });
 });

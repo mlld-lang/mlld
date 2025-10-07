@@ -46,6 +46,8 @@ export interface VariableMetadata extends Record<string, any> {
   isComplex?: boolean;
   isPipelineInput?: boolean;
   pipelineStage?: number;
+  isStructuredValue?: boolean;
+  structuredValueType?: StructuredValueType;
   
   // Retryability tracking for pipelines
   isRetryable?: boolean; // true if variable came from function execution
@@ -92,6 +94,7 @@ export type VariableTypeDiscriminator =
   | 'file-content'
   | 'section-content'
   | 'object'
+  | 'structured'
   | 'array'
   | 'computed'
   | 'command-result'
@@ -279,6 +282,18 @@ export interface PipelineInputVariable extends BaseVariable {
 }
 
 /**
+ * Structured value variable for general assignments
+ */
+export interface StructuredValueVariable<T = unknown> extends BaseVariable {
+  type: 'structured';
+  value: StructuredValue<T>;
+  metadata: VariableMetadata & {
+    isStructuredValue: true;
+    structuredValueType?: StructuredValueType;
+  };
+}
+
+/**
  * Primitive values (numbers, booleans, null)
  */
 export interface PrimitiveVariable extends BaseVariable {
@@ -313,6 +328,7 @@ export type Variable =
   | FileContentVariable
   | SectionContentVariable
   | ObjectVariable
+  | StructuredValueVariable
   | ArrayVariable
   | ComputedVariable
   | CommandResultVariable
@@ -334,9 +350,21 @@ export type TextLikeVariable = SimpleTextVariable | InterpolatedTextVariable | T
 /**
  * Union type for structured data variables
  */
-export type StructuredVariable = ObjectVariable | ArrayVariable;
+export type StructuredVariable = ObjectVariable | ArrayVariable | StructuredValueVariable;
 
 /**
  * Union type for variables created from external content
  */
 export type ExternalVariable = FileContentVariable | SectionContentVariable | ImportedVariable | CommandResultVariable | ComputedVariable;
+
+/**
+ * Union type representing raw variable values after extraction
+ */
+export type VariableValue =
+  | string
+  | number
+  | boolean
+  | null
+  | StructuredValue<any>
+  | Record<string, any>
+  | Array<any>;

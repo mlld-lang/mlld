@@ -17,8 +17,10 @@ import {
   createFileContentVariable,
   createSectionContentVariable,
   createComputedVariable,
-  createCommandResultVariable
+  createCommandResultVariable,
+  createStructuredValueVariable
 } from '@core/types/variable';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 
 /**
  * Create VariableSource metadata based on the value node type
@@ -646,6 +648,15 @@ export async function evaluateVar(
         ...metadata
       }
     };
+  } else if (isStructuredValue(resolvedValue)) {
+    const structuredMetadata = {
+      ...metadata,
+      isStructuredValue: true,
+      structuredValueType: resolvedValue.type
+    };
+
+    variable = createStructuredValueVariable(identifier, resolvedValue, source, structuredMetadata);
+
   } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values - we need to preserve their types
     const { createPrimitiveVariable } = await import('@core/types/variable');

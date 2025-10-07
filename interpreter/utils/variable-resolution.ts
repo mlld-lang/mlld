@@ -17,6 +17,7 @@ import {
   isObject,
   isArray
 } from '@core/types/variable';
+import { asData, isStructuredValue } from './structured-value';
 // Import removed to avoid circular dependency - will use dynamic import if needed
 
 /**
@@ -163,7 +164,11 @@ export async function resolveVariable(
   }
   
   // Context requires extraction
-  return extractVariableValue(variable, env);
+  const extracted = await extractVariableValue(variable, env);
+  if (context === ResolutionContext.Equality && isStructuredValue(extracted)) {
+    return asData(extracted);
+  }
+  return extracted;
 }
 
 /**

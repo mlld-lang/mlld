@@ -9,6 +9,7 @@ import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
+import { asData, asText, isStructuredValue } from './structured-value';
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
 const STRING_TEXT_ACCESSORS = new Set(['text', 'content']);
@@ -82,7 +83,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   }
   
   // Extract the raw value if we have a Variable
-  const rawValue = isVariable(value) ? value.value : value;
+  let rawValue = isVariable(value) ? value.value : value;
+  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
+  if (structuredWrapper) {
+    rawValue = structuredWrapper.data;
+  }
   const fieldValue = field.value;
   
   // DEBUG: Log what we're working with
@@ -107,6 +112,24 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'bracketAccess': {
       // All handle string-based property access
       const name = String(fieldValue);
+      if (structuredWrapper) {
+        if (name === 'text') {
+          accessedValue = asText(structuredWrapper);
+          break;
+        }
+        if (name === 'data') {
+          accessedValue = asData(structuredWrapper);
+          break;
+        }
+        if (name === 'type') {
+          accessedValue = structuredWrapper.type;
+          break;
+        }
+        if (name === 'metadata') {
+          accessedValue = structuredWrapper.metadata;
+          break;
+        }
+      }
       if (typeof rawValue === 'string') {
         if (STRING_JSON_ACCESSORS.has(name)) {
           const trimmed = rawValue.trim();
