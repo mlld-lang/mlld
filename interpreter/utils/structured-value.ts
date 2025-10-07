@@ -88,6 +88,40 @@ export function wrapStructured<T>(
   return createStructuredValue(value, resolvedType, resolvedText, metadata);
 }
 
+export function ensureStructuredValue(
+  value: unknown,
+  typeHint?: StructuredValueType,
+  textOverride?: string,
+  metadata?: StructuredValueMetadata
+): StructuredValue {
+  if (isStructuredValue(value)) {
+    if (typeHint || textOverride || metadata) {
+      return wrapStructured(value, typeHint, textOverride, metadata);
+    }
+    return value;
+  }
+
+  if (value === null || value === undefined) {
+    return wrapStructured('', typeHint ?? 'text', '', metadata);
+  }
+
+  if (typeof value === 'string') {
+    const resolvedText = textOverride ?? value;
+    return wrapStructured(value, typeHint ?? 'text', resolvedText, metadata);
+  }
+
+  if (Array.isArray(value)) {
+    return wrapStructured(value, typeHint ?? 'array', textOverride, metadata);
+  }
+
+  if (typeof value === 'object') {
+    return wrapStructured(value as Record<string, unknown>, typeHint ?? 'object', textOverride, metadata);
+  }
+
+  const primitiveText = textOverride ?? String(value);
+  return wrapStructured(value, typeHint ?? 'text', primitiveText, metadata);
+}
+
 function createStructuredValue<T>(
   data: T,
   type: StructuredValueType,
@@ -138,5 +172,6 @@ export const structuredValueUtils = {
   asText,
   asData,
   wrapStructured,
-  isStructuredValue
+  isStructuredValue,
+  ensureStructuredValue
 };

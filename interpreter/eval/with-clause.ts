@@ -1,30 +1,33 @@
-import type { WithClause, PipelineCommand } from '@core/types';
+import type { WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { MlldInterpreterError } from '@core/errors';
+import { asText } from '../utils/structured-value';
+import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 
 /**
  * Apply withClause transformations to a result
  * This handles pipeline commands, trust validation, and dependency checks
  */
 export async function applyWithClause(
-  input: string,
+  input: unknown,
   withClause: WithClause,
   env: Environment
 ): Promise<EvalResult> {
-  let result = input;
+  let result = wrapExecResult(input);
   
   // Apply pipeline transformations
   if (withClause.pipeline && withClause.pipeline.length > 0) {
     // Use unified pipeline processor
     const { processPipeline } = await import('./pipeline/unified-processor');
-    result = await processPipeline({
-      value: result,
+    const pipelineResult = await processPipeline({
+      value: asText(result),
       env,
       pipeline: withClause.pipeline,
       format: withClause.format as string | undefined,
       isRetryable: false // with-clause doesn't track source function
     });
+    result = wrapPipelineResult(pipelineResult);
   }
   
   // Check dependencies if specified
@@ -35,7 +38,7 @@ export async function applyWithClause(
   return {
     value: result,
     env,
-    stdout: result,
+    stdout: asText(result),
     stderr: '',
     exitCode: 0
   };
