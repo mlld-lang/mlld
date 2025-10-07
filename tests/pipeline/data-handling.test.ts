@@ -126,7 +126,7 @@ describe('Data handling accessors', () => {
 
     const input = `
 /var @doc = <doc.md>
-/var @name = @doc.data.filename
+/var @name = @doc.filename
 /var @body = @doc.text
 /show @name
 /show @body`;
