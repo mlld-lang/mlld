@@ -9,7 +9,7 @@ MCP Client ── JSON-RPC over stdio ── MCPServer ── FunctionRouter ─
 - `MCPServer` reads JSON-RPC requests, enforces initialization, and responds with schemas or tool outputs.
 - `FunctionRouter` converts MCP tool calls into `ExecInvocation` nodes and reuses `evaluateExecInvocation` for execution.
 - `SchemaGenerator` translates `/exe` signatures into conservative JSON Schema objects (string parameters, all required).
-- `serve` command loads modules, merges exported executables into a single environment, and starts the server.
+- `serve` command loads modules, merges exported executables into a single environment, applies config/flag filtering, and starts the server.
 
 ## Loading Modules
 
@@ -17,7 +17,19 @@ MCP Client ── JSON-RPC over stdio ── MCPServer ── FunctionRouter ─
 2. Interpret each module with `interpret(..., { returnEnvironment: true })`.
 3. Collect exported executables from the manifest when available; otherwise fall back to every executable variable.
 4. Detect duplicate names before registering functions on the shared environment.
+5. Apply config/tool filters (from `--config`, `--tools`) to the exported map.
 
+### Config modules
+
+- `--config <module.mld.md>` loads a module that exports `@config = { tools?: string[], env?: Record<string,string> }`.
+- `config.tools` filters the served tools (snake_case names match the MCP tool name; hyphenated names are normalised to underscores).
+- `config.env` is merged into `process.env` (only keys with the `MLLD_` prefix are applied) before tool execution.
+- CLI `--tools` overrides the config tool list.
+
+### Environment overrides
+
+- `--env KEY=VAL,KEY2=VAL2` applies overrides before config/modules are evaluated. Keys must start with `MLLD_` and are merged into `process.env`.
+- The config module sees these overrides via `@input`, and any additional env values exported from `@config.env` are layered on top.
 ## Testing
 
 - Unit tests cover schema generation, function routing, MCP protocol handling, and CLI wiring (`cli/mcp/*.test.ts`, `cli/commands/serve.test.ts`).

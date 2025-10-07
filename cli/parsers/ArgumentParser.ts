@@ -10,10 +10,10 @@ export interface ParsedCLIArguments {
 
 export class ArgumentParser {
   private readonly commandsWithSubcommands = [
-    'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 
-    'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 
+    'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show',
+    'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps',
     'setup', 'alias', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
-    'language-server', 'lsp', 'nvim-setup', 'nvim'
+    'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim'
   ];
 
   parseArgs(args: string[]): CLIOptions {

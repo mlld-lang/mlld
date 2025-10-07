@@ -5,13 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0-rc57]
 
 ### Added
 - **MCP Server Support**: `mlld serve` exposes exported `/exe` functions as MCP tools over JSON-RPC
   - Summarizes `/exe` parameters into JSON Schema for MCP discovery
   - Runs a stdio server that respects client initialization and error reporting
   - Detects duplicate tool names across loaded modules and stops with a descriptive error
+  - Supports default `llm/mcp/` discovery, config modules (`--config`), environment overrides (`--env`, MLLD_* only), and explicit tool allow-lists (`--tools`)
 
 ## [2.0.0-rc56]
 

@@ -428,6 +428,7 @@ Commands:
   run                     Run mlld scripts from script directory
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
+  serve                   Expose mlld functions as MCP tools over stdio
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   debug-resolution        Debug variable resolution in a mlld file

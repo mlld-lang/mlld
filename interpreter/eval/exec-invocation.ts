@@ -1363,7 +1363,42 @@ export async function evaluateExecInvocation(
         }
       }
     }
-    
+
+    // NEW: Pass captured shadow environments for JS/Node execution
+    if (
+      variable.metadata?.capturedModuleEnv instanceof Map &&
+      (definition.language === 'js' || definition.language === 'javascript' ||
+        definition.language === 'node' || definition.language === 'nodejs')
+    ) {
+      for (const [capturedName, capturedVar] of variable.metadata.capturedModuleEnv) {
+        if (codeParams[capturedName] !== undefined) {
+          continue;
+        }
+
+        if (params.includes(capturedName)) {
+          continue;
+        }
+
+        if (capturedVar.type === 'executable') {
+          continue;
+        }
+
+        codeParams[capturedName] = prepareValueForShadow(capturedVar);
+
+        if ((capturedVar.value === null || typeof capturedVar.value !== 'object') && capturedVar.type !== 'executable') {
+          const subtype = capturedVar.type === 'primitive' && 'primitiveType' in capturedVar
+            ? (capturedVar as any).primitiveType
+            : (capturedVar as any).subtype;
+          variableMetadata[capturedName] = {
+            type: capturedVar.type,
+            subtype,
+            metadata: capturedVar.metadata,
+            isVariable: true
+          };
+        }
+      }
+    }
+
     // NEW: Pass captured shadow environments for JS/Node execution
     const capturedEnvs = variable.metadata?.capturedShadowEnvs;
     if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 

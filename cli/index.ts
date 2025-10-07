@@ -96,6 +96,10 @@ export interface CLIOptions {
   env?: string;
   // Allow absolute paths outside project root
   allowAbsolute?: boolean;
+  // Serve command options
+  serveConfigPath?: string;
+  serveEnvOverrides?: string;
+  serveTools?: string;
   _?: string[]; // Remaining args after command
 }
 const globalErrorHandler = new ErrorHandler();

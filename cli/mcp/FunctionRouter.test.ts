@@ -30,7 +30,21 @@ async function createEnvironment(source: string): Promise<Environment> {
     normalizeBlankLines: true,
   })) as InterpretResult;
 
-  return result.environment;
+  const environment = result.environment;
+  const moduleEnv = environment.captureModuleEnvironment();
+
+  for (const variable of environment.getAllVariables().values()) {
+    if (variable.type !== 'executable') continue;
+    const meta = variable.metadata as Record<string, unknown> | undefined;
+    if (meta?.isSystem || meta?.isBuiltinTransformer) continue;
+    if (!meta) {
+      variable.metadata = { capturedModuleEnv: moduleEnv };
+    } else if (!meta.capturedModuleEnv) {
+      meta.capturedModuleEnv = moduleEnv;
+    }
+  }
+
+  return environment;
 }
 
 describe('FunctionRouter', () => {
@@ -87,5 +101,32 @@ describe('FunctionRouter', () => {
     const router = new FunctionRouter({ environment });
 
     await expect(router.executeFunction('missing_tool', {})).rejects.toThrow("Tool 'missing_tool' not found");
+  });
+
+  it('exposes @input imports during execution', async () => {
+    process.env.MLLD_TEST_VAR = 'from-env';
+
+    const environment = await createEnvironment(`
+      /import { @MLLD_TEST_VAR } from @input
+
+      /exe @showVar() = js {
+        return 'Value: ' + MLLD_TEST_VAR;
+      }
+
+      /export { @showVar }
+    `);
+
+    const envVar = environment.getVariable('MLLD_TEST_VAR');
+    expect(envVar).toBeDefined();
+
+    const exported = environment.getVariable('showVar');
+    expect(exported?.metadata?.capturedModuleEnv).toBeInstanceOf(Map);
+
+    const router = new FunctionRouter({ environment });
+    const result = await router.executeFunction('show_var', {});
+
+    expect(result).toBe('Value: from-env');
+
+    delete process.env.MLLD_TEST_VAR;
   });
 });

@@ -67,7 +67,7 @@ describe('serve command', () => {
     expect(startMock).toHaveBeenCalledTimes(1);
     expect(lastOptions).toBeDefined();
     expect(lastOptions.exportedFunctions instanceof Map).toBe(true);
-    expect(lastOptions.exportedFunctions.has('greet')).toBe(true);
+    expect(Array.from(lastOptions.exportedFunctions.keys())).toEqual(['greet']);
 
     consoleSpy.mockRestore();
     await fs.rm(tmpDir, { recursive: true, force: true });
@@ -81,7 +81,8 @@ describe('serve command', () => {
     }) as any);
 
     await expect(command.execute([], {})).rejects.toThrow('exit:1');
-    expect(consoleSpy).toHaveBeenCalledWith('Usage: mlld serve <module-path>');
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Usage: mlld serve'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('llm/mcp/ not found'));
 
     consoleSpy.mockRestore();
     exitSpy.mockRestore();
@@ -125,6 +126,140 @@ describe('serve command', () => {
 
     consoleSpy.mockRestore();
     exitSpy.mockRestore();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('excludes built-in executables when no manifest exists', async () => {
+    const command = createServeCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-'));
+    const modulePath = path.join(tmpDir, 'tools.mld');
+
+    await fs.writeFile(modulePath, [
+      '/exe @greet(name) = js {',
+      '  return "Hello " + name;',
+      '}',
+      '',
+      '// No /export directive',
+      '',
+    ].join('\n'));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await command.execute([modulePath], {});
+
+    expect(startMock).toHaveBeenCalledTimes(1);
+    const exportedNames = Array.from(lastOptions.exportedFunctions.keys());
+    expect(exportedNames).toEqual(['greet']);
+
+    consoleSpy.mockRestore();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('uses default llm/mcp directory when no module path is provided', async () => {
+    const command = createServeCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-default-'));
+    const mcpDir = path.join(tmpDir, 'llm', 'mcp');
+    await fs.mkdir(mcpDir, { recursive: true });
+    const modulePath = path.join(mcpDir, 'default.mld.md');
+    await fs.writeFile(modulePath, [
+      '/exe @ping() = js {',
+      '  return "pong";',
+      '}',
+      '',
+      '/export { @ping }',
+      '',
+    ].join('\n'));
+
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await command.execute([], {});
+
+    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(Array.from(lastOptions.exportedFunctions.keys())).toEqual(['ping']);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using default MCP modules directory'));
+
+    consoleSpy.mockRestore();
+    cwdSpy.mockRestore();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('applies CLI environment overrides with MLLD_ prefix', async () => {
+    const command = createServeCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-env-'));
+    const modulePath = path.join(tmpDir, 'env.mld.md');
+    await fs.writeFile(modulePath, [
+      '/exe @ping() = js { return "pong"; }',
+      '/export { @ping }',
+    ].join('\n'));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await command.execute([modulePath], { env: 'MLLD_SAMPLE=abc,PERMISSION=skip' });
+
+    expect(process.env.MLLD_SAMPLE).toBe('abc');
+    expect(process.env.PERMISSION).toBeUndefined();
+
+    delete process.env.MLLD_SAMPLE;
+    consoleSpy.mockRestore();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('loads config module to filter tools and apply environment variables', async () => {
+    const command = createServeCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-config-'));
+    const modulePath = path.join(tmpDir, 'tools.mld.md');
+    await fs.writeFile(modulePath, [
+      '/exe @allowed() = js { return "ok"; }',
+      '/exe @blocked() = js { return "skip"; }',
+      '/export { @allowed, @blocked }',
+    ].join('\n'));
+
+    const configPath = path.join(tmpDir, 'config.mld.md');
+    await fs.writeFile(configPath, [
+      '/var @config = {',
+      '  tools: ["allowed"],',
+      '  env: { MLLD_EXTRA: "value", NON_MLLD: "nope" }',
+      '}',
+    ].join('\n'));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await command.execute([modulePath], { config: configPath });
+
+    const exportedNames = Array.from(lastOptions.exportedFunctions.keys());
+    expect(exportedNames).toEqual(['allowed']);
+    expect(process.env.MLLD_EXTRA).toBe('value');
+    expect(process.env.NON_MLLD).toBeUndefined();
+
+    delete process.env.MLLD_EXTRA;
+    consoleSpy.mockRestore();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('--tools override takes precedence over config module', async () => {
+    const command = createServeCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-serve-test-tools-'));
+    const modulePath = path.join(tmpDir, 'tools.mld.md');
+    await fs.writeFile(modulePath, [
+      '/exe @first() = js { return "one"; }',
+      '/exe @second() = js { return "two"; }',
+      '/export { @first, @second }',
+    ].join('\n'));
+
+    const configPath = path.join(tmpDir, 'config.mld.md');
+    await fs.writeFile(configPath, [
+      '/var @config = { tools: ["first"] }',
+    ].join('\n'));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await command.execute([modulePath], { config: configPath, tools: 'second' });
+
+    const exportedNames = Array.from(lastOptions.exportedFunctions.keys());
+    expect(exportedNames).toEqual(['second']);
+
+    consoleSpy.mockRestore();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 });
