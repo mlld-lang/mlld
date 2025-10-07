@@ -6,6 +6,10 @@
  */
 
 import { SourceLocation } from '../index';
+import type {
+  StructuredValue,
+  StructuredValueType
+} from '@interpreter/utils/structured-value';
 
 // =========================================================================
 // BASE TYPES
@@ -266,7 +270,7 @@ export interface ExecutableVariable extends BaseVariable {
 export interface PipelineInputVariable extends BaseVariable {
   type: 'pipeline-input';
   value: PipelineInput; // The lazy-parsed wrapper object
-  format: 'json' | 'csv' | 'xml' | 'text';
+  format: StructuredValueType;
   rawText: string; // Original text before wrapping
   metadata: VariableMetadata & {
     isPipelineInput: true;
@@ -287,13 +291,11 @@ export interface PrimitiveVariable extends BaseVariable {
 /**
  * Pipeline input wrapper interface
  */
-export interface PipelineInput {
-  text: string;
-  data?: unknown;
+export interface PipelineInput<T = unknown> extends StructuredValue<T> {
+  type: StructuredValueType;
   csv?: unknown;
   xml?: unknown;
   json?: unknown;
-  toString(): string;
 }
 
 
