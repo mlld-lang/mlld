@@ -10,10 +10,11 @@ import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
 import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
 import type { PipelineStage, PipelineCommand } from '@core/types';
-import { executePipeline } from './index';
+import { PipelineExecutor } from './executor';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
 import { attachBuiltinEffects } from './effects-attachment';
+import { isStructuredExecEnabled } from '../../utils/structured-exec';
 
 /**
  * Context for pipeline processing
@@ -161,12 +162,12 @@ export async function processPipeline(
   const hasSyntheticSource = functionalPipeline[0]?.rawIdentifier === '__source__';
   
   // Execute pipeline with normalized stages
+  const structuredEnabled = isStructuredExecEnabled();
+
   try {
-    const result = await executePipeline(
-      input,
+    const executor = new PipelineExecutor(
       functionalPipeline,
       env,
-      context.location,
       detected.format,
       detected.isRetryable,
       sourceFunction,
@@ -174,10 +175,12 @@ export async function processPipeline(
       detected.parallelCap,
       detected.delayMs
     );
-    
-    // TODO: Type preservation - convert string result back to appropriate type
-    // For now, return string result (current behavior)
-    return result;
+
+    if (structuredEnabled) {
+      return await executor.execute(input, { returnStructured: true });
+    }
+
+    return await executor.execute(input);
     
   } catch (error) {
     // Enhance error with context

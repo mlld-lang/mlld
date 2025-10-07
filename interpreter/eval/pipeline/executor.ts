@@ -13,6 +13,10 @@ import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/paralle
 import { asText, isStructuredValue, wrapStructured } from '../../utils/structured-value';
 import { createPipelineInput, isPipelineInput } from '../../utils/pipeline-input';
 
+interface ExecuteOptions {
+  returnStructured?: boolean;
+}
+
 /**
  * Pipeline Executor - Handles actual execution using state machine
  */
@@ -37,6 +41,8 @@ export class PipelineExecutor {
   private rateLimiter = new RateLimitRetry();
   private structuredOutputs: Map<number, StructuredValue> = new Map();
   private initialOutput?: StructuredValue;
+  private finalOutput?: StructuredValue;
+  private lastStageIndex: number = -1;
 
   constructor(
     pipeline: PipelineStage[],
@@ -77,11 +83,15 @@ export class PipelineExecutor {
    * Execute the pipeline until completion or error.
    * WHY: Convert state-machine steps into actual command execution and effect emission.
    */
-  async execute(initialInput: string): Promise<string> {
+  async execute(initialInput: string): Promise<string>;
+  async execute(initialInput: string, options: { returnStructured: true }): Promise<StructuredValue>;
+  async execute(initialInput: string, options?: ExecuteOptions): Promise<string | StructuredValue> {
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
     this.structuredOutputs.clear();
     this.initialOutput = wrapStructured(initialInput, 'text', initialInput);
+    this.finalOutput = this.initialOutput;
+    this.lastStageIndex = -1;
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Pipeline start:', {
@@ -154,6 +164,9 @@ export class PipelineExecutor {
     // Handle final state
     switch (nextStep.type) {
       case 'COMPLETE':
+        if (options?.returnStructured) {
+          return this.getFinalOutput();
+        }
         return nextStep.output;
       
       case 'ERROR':
@@ -243,6 +256,8 @@ export class PipelineExecutor {
 
       const normalized = this.normalizeOutput(output);
       this.structuredOutputs.set(stageIndex, normalized);
+      this.finalOutput = normalized;
+      this.lastStageIndex = stageIndex;
 
       const normalizedText = normalized.text ?? '';
       if (!normalizedText || normalizedText.trim() === '') {
@@ -562,6 +577,8 @@ export class PipelineExecutor {
         stages: structuredResults
       });
       this.structuredOutputs.set(stageIndex, aggregated);
+      this.finalOutput = aggregated;
+      this.lastStageIndex = stageIndex;
       return { type: 'success', output: aggregated.text };
     } catch (err) {
       return { type: 'error', error: err as Error };
@@ -655,6 +672,19 @@ export class PipelineExecutor {
     const wrapper = createPipelineInput<unknown>(fallbackText, 'text');
     this.structuredOutputs.set(stageIndex, wrapper);
     return wrapper;
+  }
+
+  private getFinalOutput(): StructuredValue {
+    if (this.finalOutput) {
+      return this.finalOutput;
+    }
+    if (this.lastStageIndex >= 0) {
+      return this.getStageOutput(this.lastStageIndex, this.initialOutput?.text ?? '');
+    }
+    if (this.initialOutput) {
+      return this.initialOutput;
+    }
+    return wrapStructured('', 'text', '');
   }
 }
 
