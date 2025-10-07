@@ -3,6 +3,7 @@ import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
+import { asText, isStructuredValue } from '../../utils/structured-value';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
 
@@ -454,8 +455,9 @@ export async function executeCommandVariable(
       if (isPipelineParam) {
         // First parameter ALWAYS gets the pipeline input (stdinInput)
         const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
-        const unwrappedStdin = AutoUnwrapManager.unwrap(stdinInput || '');
-        const textValue = unwrappedStdin || '';
+        const stdinForUnwrap = isStructuredValue(stdinInput) ? asText(stdinInput) : (stdinInput || '');
+        const unwrappedStdin = AutoUnwrapManager.unwrap(stdinForUnwrap);
+        const textValue = typeof unwrappedStdin === 'string' ? unwrappedStdin : String(unwrappedStdin ?? '');
         
         if (!format) {
           const shouldParse = shouldAutoParsePipelineInput(stageLanguage);

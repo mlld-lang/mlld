@@ -120,4 +120,22 @@ describe('Data handling accessors', () => {
     const output = await interpret(input, { fileSystem, pathService });
     expect(output.trim()).toBe('Ada\nRex\nmatched');
   });
+
+  it('wraps load-content assignments with structured metadata', async () => {
+    await fileSystem.writeFile('/project/doc.md', 'Structured body');
+
+    const input = `
+/var @doc = <doc.md>
+/var @name = @doc.data.filename
+/var @body = @doc.text
+/show @name
+/show @body`;
+
+    const output = await interpret(input, {
+      fileSystem,
+      pathService,
+      filePath: '/project/test.mld'
+    });
+    expect(output.trim()).toBe('doc.md\nStructured body');
+  });
 });

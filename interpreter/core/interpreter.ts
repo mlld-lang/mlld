@@ -1236,7 +1236,8 @@ export async function interpolate(
           // Each element is escaped individually
           const strategy = EscapingStrategyFactory.getStrategy(context);
           const escapedElements = value.map(elem => {
-            const elemStr = typeof elem === 'string' ? elem : String(elem);
+            const printable = isStructuredValue(elem) ? asText(elem) : elem;
+            const elemStr = typeof printable === 'string' ? printable : String(printable);
             return strategy.escape(elemStr);
           });
           stringValue = escapedElements.join(' ');
@@ -1247,7 +1248,8 @@ export async function interpolate(
           // For other contexts, use JSON representation with custom replacer
           // Note: No indentation for template interpolation - keep it compact
           const { JSONFormatter } = await import('./json-formatter');
-          stringValue = JSONFormatter.stringify(value);
+          const printableArray = value.map(item => (isStructuredValue(item) ? asText(item) : item));
+          stringValue = JSONFormatter.stringify(printableArray);
         }
       } else if (typeof value === 'object') {
         // Check if this is a LoadContentResult - use its content

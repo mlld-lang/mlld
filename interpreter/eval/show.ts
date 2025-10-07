@@ -23,12 +23,14 @@ import {
   isTemplate,
   isStructured,
   isPrimitive,
+  isStructuredValueVariable,
   createSimpleTextVariable
 } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 // Template normalization now handled in grammar - no longer needed here
 
 /**
@@ -278,6 +280,8 @@ export async function evaluateShow(
     } else if (isPrimitive(variable)) {
       // Primitive variables (numbers, booleans, null)
       value = variable.value;
+    } else if (isStructuredValueVariable(variable)) {
+      value = variable.value;
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
@@ -342,7 +346,7 @@ export async function evaluateShow(
     }
     
     // Check if the value contains unevaluated directives
-    if (hasUnevaluatedDirectives(value)) {
+    if (!isStructuredValue(value) && hasUnevaluatedDirectives(value)) {
       // Evaluate any embedded directives
       value = await evaluateDataValue(value, env);
       
@@ -375,7 +379,20 @@ export async function evaluateShow(
     } else if (isLoadContentResultArray(value)) {
       // For array of LoadContentResult, concatenate content with double newlines
       content = value.map(item => item.content).join('\n\n');
+    } else if (isStructuredValue(value)) {
+      content = value.text;
     } else if (Array.isArray(value)) {
+      const printableArray = value.map(item => {
+        if (isStructuredValue(item)) {
+          return item.text;
+        }
+        if (item && typeof item === 'object' && typeof (item as any).text === 'string' && typeof (item as any).type === 'string') {
+          return (item as any).text;
+        }
+        return item;
+      });
+      value = printableArray;
+
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
         logger.debug('show.ts: Formatting array:', {
