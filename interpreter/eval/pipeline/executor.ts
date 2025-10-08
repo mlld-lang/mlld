@@ -10,7 +10,7 @@ import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
-import { asText, isStructuredValue, wrapStructured } from '../../utils/structured-value';
+import { asText, asData, isStructuredValue, wrapStructured } from '../../utils/structured-value';
 import { createPipelineInput, isPipelineInput } from '../../utils/pipeline-input';
 
 export interface ExecuteOptions {
@@ -577,7 +577,7 @@ export class PipelineExecutor {
       }
 
       const structuredResults = results as StructuredValue[];
-      const aggregatedData = structuredResults.map(result => result.data);
+      const aggregatedData = structuredResults.map(result => extractStageValue(result));
       const aggregatedText = safeJSONStringify(aggregatedData);
       const aggregated = wrapStructured(aggregatedData, 'array', aggregatedText, {
         stages: structuredResults
@@ -613,15 +613,7 @@ export class PipelineExecutor {
     }
 
     if (Array.isArray(output)) {
-      const normalizedArray = output.map(item => {
-        if (isStructuredValue(item)) {
-          return item.data;
-        }
-        if (isPipelineInput(item)) {
-          return item.data;
-        }
-        return item;
-      });
+      const normalizedArray = output.map(item => extractStageValue(item));
       const text = safeJSONStringify(normalizedArray);
       return wrapStructured(normalizedArray, 'array', text);
     }
@@ -709,4 +701,14 @@ function safeJSONStringify(value: unknown): string {
   } catch {
     return String(value ?? '');
   }
+}
+
+function extractStageValue(value: any): any {
+  if (isStructuredValue(value)) {
+    return asData(value);
+  }
+  if (isPipelineInput(value)) {
+    return value.data;
+  }
+  return value;
 }

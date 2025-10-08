@@ -13,6 +13,7 @@ import { isVariable } from '@interpreter/utils/variable-resolution';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { isStructuredExecEnabled } from '@interpreter/utils/structured-exec';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 /**
  * Special property names for Variable introspection
@@ -117,13 +118,50 @@ export function createVariableProxy(variable: Variable): any {
  * Prepare a value for passing to shadow environment
  * Variables become proxies, non-Variables pass through
  */
-export function prepareValueForShadow(value: any): any {
+function recordPrimitiveMetadata(
+  target: Record<string, any>,
+  key: string,
+  metadata: Record<string, any>
+): void {
+  if (!target.__mlldPrimitiveMetadata) {
+    Object.defineProperty(target, '__mlldPrimitiveMetadata', {
+      value: {},
+      enumerable: false,
+      configurable: true
+    });
+  }
+  target.__mlldPrimitiveMetadata[key] = metadata;
+}
+
+export function prepareValueForShadow(value: any, key?: string, target?: Record<string, any>): any {
   if (isVariable(value)) {
+    if (value.type === 'primitive' || value.type === 'simple-text' || value.type === 'interpolated-text') {
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: true,
+          type: value.type,
+          subtype: (value as any).primitiveType,
+          metadata: value.metadata || {}
+        });
+      }
+      return value.value;
+    }
     return createVariableProxy(value);
   }
   if (isStructuredExecEnabled()) {
     if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
       return wrapLoadContentValue(value);
+    }
+    if (isStructuredValue(value)) {
+      const data = asData(value);
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: value.type,
+          metadata: value.metadata || {}
+        });
+      }
+      return data;
     }
   }
   return value;
@@ -137,7 +175,7 @@ export function prepareParamsForShadow(params: Record<string, any>): Record<stri
   const shadowParams: Record<string, any> = {};
   
   for (const [key, value] of Object.entries(params)) {
-    shadowParams[key] = prepareValueForShadow(value);
+    shadowParams[key] = prepareValueForShadow(value, key, shadowParams);
   }
   
   return shadowParams;

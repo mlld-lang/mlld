@@ -864,6 +864,12 @@ export async function evaluateVar(
   // Create new variable with the result
   if (typeof result === 'string' && result !== variable.value) {
     variable = createSimpleTextVariable(identifier, result, source, metadata);
+  } else if (isStructuredValue(result)) {
+    const structuredMetadata = {
+      ...metadata,
+      isPipelineResult: true
+    };
+    variable = createStructuredValueVariable(identifier, result, source, structuredMetadata);
   }
   
   env.setVariable(identifier, variable);

@@ -4,6 +4,7 @@ import { createArrayVariable, createObjectVariable, createSimpleTextVariable } f
 import { evaluateExecInvocation } from '../eval/exec-invocation';
 import type { ExecInvocation } from '@core/types';
 import type { IFileSystemService, IPathService } from '@services/index';
+import { unwrapStructuredForTest } from '@interpreter/eval/test-helpers';
 
 describe('Variable Proxy Integration', () => {
   let env: Environment;
@@ -112,7 +113,10 @@ describe('Variable Proxy Integration', () => {
       const result = await evaluateExecInvocation(invocation, env);
       
       // Get result - it's already an object
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       // Verify Variable introspection works
       expect(output.hasHelpers).toBe(true);
@@ -186,7 +190,10 @@ describe('Variable Proxy Integration', () => {
       };
       
       const result = await evaluateExecInvocation(invocation, env);
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       // Verify
       expect(output.name).toBe('Alice');
@@ -245,7 +252,10 @@ describe('Variable Proxy Integration', () => {
       };
       
       const result = await evaluateExecInvocation(invocation, env);
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       // Primitives can't be proxied, so no type info
       expect(output.value).toBe('Hello World');
@@ -297,7 +307,10 @@ describe('Variable Proxy Integration', () => {
       };
       
       const result = await evaluateExecInvocation(invocation, env);
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       // Custom toString should be used
       expect(output.toString).toBe('/home:/usr:/var');
@@ -349,7 +362,10 @@ describe('Variable Proxy Integration', () => {
       };
       
       const result = await evaluateExecInvocation(invocation, env);
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       // Enhanced mode is now always on
       expect(output.isArray).toBe(true);

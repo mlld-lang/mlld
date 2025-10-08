@@ -323,13 +323,13 @@ export async function evaluateExecInvocation(
             throw new MlldInterpreterError(`Cannot call .trim() on ${typeof objectValue}`);
           }
           break;
-        case 'startsWith':
-          if (typeof objectValue === 'string') {
-            result = objectValue.startsWith(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
-          }
-          break;
+      case 'startsWith':
+        if (typeof objectValue === 'string') {
+          result = objectValue.startsWith(evaluatedArgs[0]);
+        } else {
+          throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
+        }
+        break;
         case 'endsWith':
           if (typeof objectValue === 'string') {
             result = objectValue.endsWith(evaluatedArgs[0]);

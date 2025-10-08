@@ -1,7 +1,7 @@
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
-import { createMlldHelpers } from '../variable-proxy';
+import { createMlldHelpers, prepareParamsForShadow } from '../variable-proxy';
 import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
 import { enhanceJSError } from '@core/errors/patterns/init';
 
@@ -78,8 +78,15 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         this.shadowEnvironment as any // Cast to Environment type
       );
 
+      let shadowParams = params ? prepareParamsForShadow(params) : undefined;
+      let primitiveMetadata: Record<string, any> | undefined;
+      if (shadowParams && (shadowParams as any).__mlldPrimitiveMetadata) {
+        primitiveMetadata = (shadowParams as any).__mlldPrimitiveMetadata;
+        delete (shadowParams as any).__mlldPrimitiveMetadata;
+      }
+
       // Merge shadow environment with provided parameters
-      const allParams = params ? { ...params } : {};
+      const allParams = shadowParams ? { ...shadowParams } : {};
       const allParamNames: string[] = Object.keys(allParams);
       const allParamValues: any[] = Object.values(allParams);
 
@@ -112,9 +119,13 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       }
       
       // Add mlld helpers for Variable access
-      if (!params || !params['mlld']) {
-        // Create mlld helpers with primitive metadata
-        const mlldHelpers = createMlldHelpers(metadata);
+      if (!('mlld' in allParams)) {
+        const mergedMetadata = {
+          ...(metadata as Record<string, any> | undefined),
+          ...(primitiveMetadata || {})
+        };
+        const helperMetadata = Object.keys(mergedMetadata || {}).length ? mergedMetadata : undefined;
+        const mlldHelpers = createMlldHelpers(helperMetadata);
         allParamNames.push('mlld');
         allParamValues.push(mlldHelpers);
       }
