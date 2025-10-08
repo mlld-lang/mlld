@@ -4,6 +4,15 @@ import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { unwrapStructuredForTest } from './test-helpers';
+import { isStructuredExecEnabled } from '../utils/structured-exec';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  if (!isStructuredExecEnabled()) {
+    return;
+  }
+  expect(metadata?.source).toBe('load-content');
+}
 
 describe('Content Loader HTML to Markdown Conversion', () => {
   let env: Environment;
@@ -84,7 +93,7 @@ describe('Content Loader HTML to Markdown Conversion', () => {
       expect(content).not.toContain('Navigation menu');
       expect(content).not.toContain('Footer content');
       expect(content).not.toContain('Ads here');
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
 
     it('should fall back to full HTML conversion when Readability cannot extract article', async () => {

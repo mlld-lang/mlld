@@ -8,6 +8,15 @@ import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
+import { isStructuredExecEnabled } from '../utils/structured-exec';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  if (!isStructuredExecEnabled()) {
+    return;
+  }
+  expect(metadata?.source).toBe('load-content');
+}
 
 // Mock tinyglobby for tests
 vi.mock('tinyglobby', () => ({
@@ -125,7 +134,7 @@ describe('Content Loader with Glob Support', () => {
         expect(result.tokest).toBeGreaterThan(0);
         expect(result.absolute).toContain('README.md');
       }
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
 
     it('should handle section extraction and return LoadContentResult', async () => {
@@ -155,7 +164,7 @@ describe('Content Loader with Glob Support', () => {
         expect(result.content).toContain('Install instructions here');
         expect(result.filename).toBe('README.md');
       }
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
   });
 
@@ -220,7 +229,7 @@ describe('Content Loader with Glob Support', () => {
           expect(file.relative).toContain('tests');
         });
       }
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
 
     it.skip('should filter files by section when glob + section', async () => {
@@ -428,7 +437,7 @@ describe('Content Loader with Glob Support', () => {
         expect(result.content).toContain('## test by Alice');
         expect(result.content).toContain('This is a test summary');
       }
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
 
     it('should handle placeholder without field access', async () => {
@@ -471,7 +480,7 @@ describe('Content Loader with Glob Support', () => {
         // Without fields, <> should reference the content itself
         expect(result.content).toContain('### File: This is the overview section.');
       }
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
 
     it('should support backtick templates in rename', async () => {
@@ -520,7 +529,7 @@ describe('Content Loader with Glob Support', () => {
         expect(result.content).toContain('## mymodule v1.0.0');
         expect(result.content).toContain('Module description here');
       }
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
   });
 });

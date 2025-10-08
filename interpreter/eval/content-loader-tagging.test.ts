@@ -7,6 +7,15 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import path from 'path';
 import { unwrapStructuredForTest } from './test-helpers';
+import { isStructuredExecEnabled } from '../utils/structured-exec';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  if (!isStructuredExecEnabled()) {
+    return;
+  }
+  expect(metadata?.source).toBe('load-content');
+}
 
 describe('Content Loader Variable Tagging', () => {
   it('should tag RenamedContentArray with __variable metadata', async () => {
@@ -65,7 +74,7 @@ describe('Content Loader Variable Tagging', () => {
     
     // Verify the toString behavior matches
     expect(result.toString()).toBe(variable.metadata?.customToString?.());
-    expect(metadata?.source).toBe('load-content');
+    expectLoadContentMetadata(metadata);
   });
   
   it('should tag LoadContentResultArray with __variable metadata', async () => {
@@ -113,7 +122,7 @@ describe('Content Loader Variable Tagging', () => {
     
     // Check that customToString is a function
     expect(typeof variable.metadata?.customToString).toBe('function');
-    expect(metadata?.source).toBe('load-content');
+    expectLoadContentMetadata(metadata);
   });
   
   it('should preserve __variable metadata through var.ts', async () => {

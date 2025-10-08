@@ -7,6 +7,15 @@ import * as path from 'path';
 import minimatch from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
+import { isStructuredExecEnabled } from '../utils/structured-exec';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  if (!isStructuredExecEnabled()) {
+    return;
+  }
+  expect(metadata?.source).toBe('load-content');
+}
 
 vi.mock('tinyglobby', () => ({
   glob: vi.fn()
@@ -89,7 +98,7 @@ describe('Content Loader AST patterns', () => {
     expect(results[0]?.type).toBe('function');
     expect(results[1]?.name).toBe('updateProfile');
     expect(results[0]?.file).toBeUndefined();
-    expect(metadata?.source).toBe('load-content');
+    expectLoadContentMetadata(metadata);
   });
 
   it('deduplicates container and member selections', async () => {

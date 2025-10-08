@@ -11,6 +11,7 @@ import type { StageContext, PipelineEvent } from './state-machine';
 import type { StructuredValue } from '../../utils/structured-value';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
+import { isStructuredExecEnabled } from '../../utils/structured-exec';
 
 /**
  * Simplified pipeline context interface
@@ -240,12 +241,85 @@ function createSimplifiedPipelineContext(
   allRetryHistory?: Map<string, string[]>,
   structuredAccess?: StageOutputAccessor
 ): SimplifiedPipelineContext {
-  // Adjust for synthetic source
+  const structuredEnabled = isStructuredExecEnabled();
   const userVisibleStage = hasSyntheticSource && context.stage > 0 
     ? context.stage - 1 
     : context.stage;
-    
-  // Filter out synthetic source from outputs
+
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[SimplifiedContextBuilder] Creating context:', {
+      internalStage: context.stage,
+      userVisibleStage,
+      contextAttempt: context.contextAttempt,
+      historyLength: context.history.length,
+      hasSyntheticSource,
+      structuredEnabled
+    });
+  }
+
+  if (!structuredEnabled) {
+    const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
+      ? context.previousOutputs.slice(1)
+      : context.previousOutputs;
+
+    const pipelineContext: any = {
+      try: context.contextAttempt,
+      tries: context.history,
+      stage: userVisibleStage,
+      length: userVisibleOutputs.length
+    };
+
+    const outputs: Record<number, string> = {};
+    if (hasSyntheticSource) {
+      Object.entries(context.outputs).forEach(([key, value]) => {
+        const index = Number(key);
+        if (!Number.isNaN(index) && index > 0) {
+          outputs[index - 1] = value;
+        }
+      });
+    } else {
+      Object.assign(outputs, context.outputs);
+    }
+
+    Object.assign(pipelineContext, outputs);
+
+    Object.defineProperty(pipelineContext, -1, {
+      get: () => userVisibleOutputs[userVisibleOutputs.length - 1],
+      enumerable: false
+    });
+
+    Object.defineProperty(pipelineContext, -2, {
+      get: () => userVisibleOutputs[userVisibleOutputs.length - 2],
+      enumerable: false
+    });
+
+    for (let i = 3; i <= Math.max(10, userVisibleOutputs.length); i++) {
+      Object.defineProperty(pipelineContext, -i, {
+        get: () => userVisibleOutputs[userVisibleOutputs.length - i],
+        enumerable: false
+      });
+    }
+
+    Object.defineProperty(pipelineContext, 'retries', {
+      get: () => {
+        if (!allRetryHistory || allRetryHistory.size === 0) {
+          return { all: [] };
+        }
+        const allAttempts: string[][] = [];
+        for (const attempts of allRetryHistory.values()) {
+          if (attempts.length > 0) {
+            allAttempts.push([...attempts]);
+          }
+        }
+        return { all: allAttempts };
+      },
+      enumerable: false,
+      configurable: true
+    });
+
+    return pipelineContext as SimplifiedPipelineContext;
+  }
+
   const toStructured = (stageIndex: number | null, fallback: string): StructuredValue => {
     if (stageIndex !== null && structuredAccess) {
       return structuredAccess.getStageOutput(stageIndex, fallback ?? '');
@@ -263,33 +337,19 @@ function createSimplifiedPipelineContext(
   const userVisibleWrappers = hasSyntheticSource && stageWrappers.length > 0
     ? stageWrappers.slice(1)
     : stageWrappers;
-    
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[SimplifiedContextBuilder] Creating context:', {
-      internalStage: context.stage,
-      userVisibleStage,
-      contextAttempt: context.contextAttempt,
-      historyLength: context.history.length,
-      hasSyntheticSource
-    });
-  }
-  
-  // Build basic context
+
   const pipelineContext: any = {
-    // Core fields
     try: context.contextAttempt,
     tries: context.history,
     stage: userVisibleStage,
     length: userVisibleWrappers.length
   };
 
-  // Array-style access (0 = base input, indexes thereafter map to stage outputs)
   pipelineContext[0] = baseWrapper;
   stageWrappers.forEach((wrapper, index) => {
     pipelineContext[index + 1] = wrapper;
   });
 
-  // Add negative indexing
   Object.defineProperty(pipelineContext, -1, {
     get: () => userVisibleWrappers[userVisibleWrappers.length - 1],
     enumerable: false
@@ -300,7 +360,6 @@ function createSimplifiedPipelineContext(
     enumerable: false
   });
 
-  // Add more negative indices as needed
   for (let i = 3; i <= Math.max(10, userVisibleWrappers.length); i++) {
     Object.defineProperty(pipelineContext, -i, {
       get: () => userVisibleWrappers[userVisibleWrappers.length - i],
@@ -308,15 +367,11 @@ function createSimplifiedPipelineContext(
     });
   }
 
-  // Add lazy-evaluated @pipeline.retries.all
-  // This provides access to ALL retry attempts from ALL contexts
   Object.defineProperty(pipelineContext, 'retries', {
     get: () => {
       if (!allRetryHistory || allRetryHistory.size === 0) {
         return { all: [] };
       }
-      
-      // Collect all attempts from all contexts
       const allAttempts: Array<Array<string | StructuredValue>> = [];
       for (const attempts of allRetryHistory.values()) {
         if (attempts.length > 0) {
@@ -324,7 +379,6 @@ function createSimplifiedPipelineContext(
           allAttempts.push(mapped);
         }
       }
-      
       return { all: allAttempts };
     },
     enumerable: false,

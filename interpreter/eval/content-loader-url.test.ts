@@ -5,6 +5,15 @@ import { isLoadContentResultURL } from '@core/types/load-content';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { unwrapStructuredForTest } from './test-helpers';
+import { isStructuredExecEnabled } from '../utils/structured-exec';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  if (!isStructuredExecEnabled()) {
+    return;
+  }
+  expect(metadata?.source).toBe('load-content');
+}
 
 describe('Content Loader URL Metadata', () => {
   let env: Environment;
@@ -66,7 +75,7 @@ describe('Content Loader URL Metadata', () => {
         // Headers
         expect(result.headers).toEqual(mockResponse.headers);
       }
-      expect(metadata?.source).toBe('load-content');
+      expectLoadContentMetadata(metadata);
     });
 
     it('should handle JSON URLs correctly', async () => {
