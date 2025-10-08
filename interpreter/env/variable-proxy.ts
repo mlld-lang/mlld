@@ -14,6 +14,7 @@ import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { isStructuredExecEnabled } from '@interpreter/utils/structured-exec';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { isPipelineInput } from '@interpreter/utils/pipeline-input';
 
 /**
  * Special property names for Variable introspection
@@ -153,6 +154,16 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       return wrapLoadContentValue(value);
     }
     if (isStructuredValue(value)) {
+      if (isPipelineInput(value)) {
+        if (target && key) {
+          recordPrimitiveMetadata(target, key, {
+            isVariable: false,
+            type: value.type,
+            metadata: value.metadata || {}
+          });
+        }
+        return value;
+      }
       const data = asData(value);
       if (target && key) {
         recordPrimitiveMetadata(target, key, {
