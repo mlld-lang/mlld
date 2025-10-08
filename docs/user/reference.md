@@ -372,8 +372,11 @@ Built-in transformers:
 Pipeline context variables:
 - `@ctx.try`: current attempt number
 - `@ctx.stage`: current pipeline stage
-- `@p[0]`: pipeline input
-- `@p[-1]`: previous stage output
+- `@p[0]`: pipeline input (original/base value)
+- `@p[1]` … `@p[n]`: outputs from completed stages
+- `@p[-1]`: previous stage output; `@p[-2]` two stages back
+- `@p.retries.all`: history of retry attempts across contexts
+- With `MLLD_ENABLE_STRUCTURED_EXEC=true`, the items inside `@p` are `StructuredValue` wrappers. Use `.text`/`asText` for the string view and `.data`/`asData` when you need the structured payload.
 
 Retry with hints:
 

@@ -99,6 +99,8 @@ Every loaded file provides metadata through properties:
 /show @file                              >> Same as above (implicit)
 ```
 
+> Tip: When `MLLD_ENABLE_STRUCTURED_EXEC=true`, `<file>` still prints its content but also exposes structured data. Use `.text` for the plain string and `.data` for the rich object in the same variable.
+
 ### JSON File Metadata
 
 JSON files are automatically parsed:

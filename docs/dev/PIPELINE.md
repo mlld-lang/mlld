@@ -308,6 +308,12 @@ This grouping aligns with shorthand `||` and with‑clause nested array syntax: 
 
 These semantics ensure that validators can reason about the current stage's input (`@ctx.input`) while selection/aggregation patterns can reach back to the original input using `@p[0]`.
 
+#### Structured Outputs and Helpers
+
+- When `MLLD_ENABLE_STRUCTURED_EXEC=true`, stage outputs stored in `@p` are `StructuredValue` wrappers. Use `.text` (or the helper `asText(value)`) to match legacy string behaviour, and `.data` / `asData(value)` to inspect structured results.
+- The synthetic `__source__` stage is omitted from the history when the flag is on, so `@p[1]` always maps to the first user-defined stage.
+- The helper utilities `asText`, `asData`, and `wrapStructured` live in `interpreter/utils/structured-value.ts`; import them when writing pipeline-aware code that needs consistent access to both representations.
+
 ```mlld
 # Especially useful for accessing specific fields:
 /exe @checker(input, try) = when: [
