@@ -740,19 +740,24 @@ export async function evaluateExecInvocation(
               value = accessed;
             }
             
-            // Preserve the type of the final value
-            argValueAny = value;
-            // For objects and arrays, use JSON.stringify to get proper string representation
-            if (value === undefined) {
-              argValue = 'undefined';
-            } else if (typeof value === 'object' && value !== null) {
-              try {
-                argValue = JSON.stringify(value);
-              } catch (e) {
+            if (isStructuredValue(value)) {
+              argValueAny = value;
+              argValue = asText(value);
+            } else {
+              // Preserve the type of the final value
+              argValueAny = value;
+              // For objects and arrays, use JSON.stringify to get proper string representation
+              if (value === undefined) {
+                argValue = 'undefined';
+              } else if (typeof value === 'object' && value !== null) {
+                try {
+                  argValue = JSON.stringify(value);
+                } catch (e) {
+                  argValue = String(value);
+                }
+              } else {
                 argValue = String(value);
               }
-            } else {
-              argValue = String(value);
             }
           } else {
             // Variable not found - use interpolation which will throw appropriate error
@@ -773,6 +778,8 @@ export async function evaluateExecInvocation(
 
           if (argValueAny === undefined) {
             argValue = 'undefined';
+          } else if (isStructuredValue(argValueAny)) {
+            argValue = asText(argValueAny);
           } else if (typeof argValueAny === 'object') {
             try {
               argValue = JSON.stringify(argValueAny);
@@ -856,7 +863,14 @@ export async function evaluateExecInvocation(
       
       // Check if we have the original Variable
       const originalVar = originalVariables[i];
-      if (originalVar) {
+      const isShellCode =
+        definition.type === 'code' &&
+        typeof definition.language === 'string' &&
+        (definition.language === 'bash' || definition.language === 'sh');
+
+      const shouldReuseOriginal = originalVar && !isShellCode && definition.type !== 'command';
+
+      if (shouldReuseOriginal) {
         // Use the original Variable directly, just update the name
         paramVar = {
           ...originalVar,
@@ -1316,9 +1330,14 @@ export async function evaluateExecInvocation(
       } else if (paramVar) {
         // Always use enhanced Variable passing
         if (definition.language === 'bash' || definition.language === 'sh') {
-          // Bash/sh get simple values - the BashExecutor will handle conversion
-          // Just pass the Variable or proxy as-is, let the executor adapt it
-          codeParams[paramName] = prepareValueForShadow(paramVar);
+          const rawValue = paramVar.value;
+          if (typeof rawValue === 'string') {
+            codeParams[paramName] = rawValue;
+          } else if (isStructuredValue(rawValue)) {
+            codeParams[paramName] = asText(rawValue);
+          } else {
+            codeParams[paramName] = prepareValueForShadow(paramVar);
+          }
         } else {
           // Other languages (JS, Python) get proxies for rich type info
           // But first, check if it's a complex Variable that needs resolution
@@ -1697,6 +1716,31 @@ export async function evaluateExecInvocation(
     } catch (e) {
       // Preserve existing behavior: if field access fails, surface error as interpreter error
       throw e;
+    }
+  }
+
+  // Normalize Variable results into raw values (with StructuredValue wrappers when enabled)
+  if (result && typeof result === 'object') {
+    const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+    if (isVariable(result)) {
+      const extracted = await extractVariableValue(result, execEnv);
+      if (structuredExecEnabled) {
+        const typeHint = Array.isArray(extracted)
+          ? 'array'
+          : typeof extracted === 'object' && extracted !== null
+            ? 'object'
+            : 'text';
+        const structured = wrapStructured(extracted as any, typeHint as any);
+        if (result.metadata) {
+          structured.metadata = {
+            ...structured.metadata,
+            variableMetadata: result.metadata
+          };
+        }
+        result = structured;
+      } else {
+        result = extracted;
+      }
     }
   }
   

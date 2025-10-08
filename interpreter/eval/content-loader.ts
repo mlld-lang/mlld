@@ -14,7 +14,7 @@ import { JSDOM } from 'jsdom';
 import type { ArrayVariable, Variable } from '@core/types/variable/VariableTypes';
 import { createRenamedContentVariable, createLoadContentResultVariable, extractVariableValue } from '@interpreter/utils/variable-migration';
 import { processPipeline } from './pipeline/unified-processor';
-import { wrapStructured, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
 import { isStructuredExecEnabled } from '../utils/structured-exec';
 
@@ -188,7 +188,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
           headers: response.headers,
           status: response.status
         });
-        return finalizeLoaderResult(pipedResult, { type: 'object', text: pipedContent, metadata: { url: pathOrUrl } });
+        return finalizeLoaderResult(pipedResult, { type: 'object', text: asText(pipedContent), metadata: { url: pathOrUrl } });
       }
       
       return finalizeLoaderResult(urlResult, { type: 'object', text: urlResult.content, metadata: { url: pathOrUrl } });
@@ -266,7 +266,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
           absolute: result.absolute,
           _rawContent: result._rawContent
         });
-        return finalizeLoaderResult(pipedResult, { type: 'object', text: pipedContent });
+        return finalizeLoaderResult(pipedResult, { type: 'object', text: asText(pipedContent) });
       }
     }
 

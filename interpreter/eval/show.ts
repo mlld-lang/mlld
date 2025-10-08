@@ -385,7 +385,7 @@ export async function evaluateShow(
     
     // Import LoadContentResult type check
     const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
-    
+
     // Convert final value to string
     if (typeof value === 'string') {
       content = value;
@@ -933,8 +933,16 @@ export async function evaluateShow(
     } else if (isLoadContentResultArray(loadResult)) {
       // Multiple files from glob - join their contents
       content = loadResult.map(r => r.content).join('\n\n');
+    } else if (loadResult && typeof loadResult === 'object' && 'content' in (loadResult as any) && typeof (loadResult as any).content === 'string') {
+      content = (loadResult as any).content;
+    } else if (isStructuredValue(loadResult)) {
+      content = asText(loadResult);
     } else {
-      content = String(loadResult);
+      try {
+        content = String(loadResult ?? '');
+      } catch {
+        content = '';
+      }
     }
     
     // Handle rename if newTitle is specified (for section extraction)
