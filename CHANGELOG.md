@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- With `MLLD_ENABLE_STRUCTURED_EXEC=true`, template interpolation now joins primitive arrays with commas while complex arrays keep JSON formatting, restoring intuitive output in doc templates.
+- Pipeline context access (`@p` / `@pipeline`) skips the synthetic source stage so indices and retry history match visible stages when structured execution is enabled.
+- `/show` preserves structured output intent: arrays/objects pretty-print, load-content wrappers continue emitting `.text`, and field access to `.text`/`.data` respects load-content metadata under the flag.
+
+### Migration
+- Guidance is available in `docs/dev/STRUCTURED-DATA.md` for teams opting into structured execution, including where to apply `asText`/`asData` before flipping the flag on by default.
+
 ## [2.0.0-rc56]
 
 ### Added
