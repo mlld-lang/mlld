@@ -8,6 +8,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
+import type { StructuredValue } from '../../utils/structured-value';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 
@@ -19,14 +20,18 @@ import { createPipelineInput } from '../../utils/pipeline-input';
  * WHY: Provide stage number, history, and convenience indexing for stage outputs.
  * GOTCHA: 'try' and 'tries' are local to the active retry context and reset downstream.
  */
+export interface StageOutputAccessor {
+  getStageOutput(stageIndex: number, fallbackText: string): StructuredValue;
+}
+
 export interface SimplifiedPipelineContext {
   try: number;                    // Current attempt number
   tries: string[];                // Previous attempts in current context
   stage: number;                  // Current stage (1-indexed)
-  [index: number]: string;        // Array access to pipeline outputs
+  [index: number]: string | StructuredValue;        // Array access to pipeline outputs
   length: number;                 // Number of previous outputs
   retries?: {                     // Global retry accumulator
-    all: string[][];              // All attempts from all contexts
+    all: Array<Array<string | StructuredValue>>;              // All attempts from all contexts
   };
 }
 
@@ -46,7 +51,8 @@ export async function createStageEnvironment(
   format?: string,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
-  allRetryHistory?: Map<string, string[]>
+  allRetryHistory?: Map<string, string[]>,
+  structuredAccess?: StageOutputAccessor
 ): Promise<Environment> {
   // Adjust stage number for synthetic source (hide from user)
   const userVisibleStage = hasSyntheticSource && command.rawIdentifier !== '__source__'
@@ -126,7 +132,8 @@ export async function createStageEnvironment(
     context, 
     events, 
     hasSyntheticSource,
-    allRetryHistory
+    allRetryHistory,
+    structuredAccess
   );
   
   return stageEnv;
@@ -189,13 +196,15 @@ function setSimplifiedPipelineVariable(
   context: StageContext,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
-  allRetryHistory?: Map<string, string[]>
+  allRetryHistory?: Map<string, string[]>,
+  structuredAccess?: StageOutputAccessor
 ): void {
   const pipelineContext = createSimplifiedPipelineContext(
     context,
     events,
     hasSyntheticSource,
-    allRetryHistory
+    allRetryHistory,
+    structuredAccess
   );
   
   const inputSource: VariableSource = {
@@ -228,7 +237,8 @@ function createSimplifiedPipelineContext(
   context: StageContext,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
-  allRetryHistory?: Map<string, string[]>
+  allRetryHistory?: Map<string, string[]>,
+  structuredAccess?: StageOutputAccessor
 ): SimplifiedPipelineContext {
   // Adjust for synthetic source
   const userVisibleStage = hasSyntheticSource && context.stage > 0 
@@ -236,24 +246,24 @@ function createSimplifiedPipelineContext(
     : context.stage;
     
   // Filter out synthetic source from outputs
-  const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
-    ? context.previousOutputs.slice(1)
-    : context.previousOutputs;
+  const toStructured = (stageIndex: number | null, fallback: string): StructuredValue => {
+    if (stageIndex !== null && structuredAccess) {
+      return structuredAccess.getStageOutput(stageIndex, fallback ?? '');
+    }
+    return createPipelineInput(fallback ?? '', 'text');
+  };
+
+  const baseInput = context.outputs?.[0] ?? '';
+  const baseWrapper = toStructured(-1, baseInput);
+
+  const stageWrappers = context.previousOutputs.map((output, index) =>
+    toStructured(index, output)
+  );
+
+  const userVisibleWrappers = hasSyntheticSource && stageWrappers.length > 0
+    ? stageWrappers.slice(1)
+    : stageWrappers;
     
-  // Build outputs object
-  const outputs: any = {};
-  if (hasSyntheticSource) {
-    // Shift indices to hide synthetic source
-    Object.entries(context.outputs).forEach(([key, value]) => {
-      const index = parseInt(key);
-      if (!isNaN(index) && index > 0) {
-        outputs[index - 1] = value;
-      }
-    });
-  } else {
-    Object.assign(outputs, context.outputs);
-  }
-  
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[SimplifiedContextBuilder] Creating context:', {
       internalStage: context.stage,
@@ -270,27 +280,30 @@ function createSimplifiedPipelineContext(
     try: context.contextAttempt,
     tries: context.history,
     stage: userVisibleStage,
-    length: userVisibleOutputs.length,
-    
-    // Array-style access
-    ...outputs
+    length: userVisibleWrappers.length
   };
+
+  // Array-style access (0 = base input, indexes thereafter map to stage outputs)
+  pipelineContext[0] = baseWrapper;
+  stageWrappers.forEach((wrapper, index) => {
+    pipelineContext[index + 1] = wrapper;
+  });
 
   // Add negative indexing
   Object.defineProperty(pipelineContext, -1, {
-    get: () => userVisibleOutputs[userVisibleOutputs.length - 1],
+    get: () => userVisibleWrappers[userVisibleWrappers.length - 1],
     enumerable: false
   });
 
   Object.defineProperty(pipelineContext, -2, {
-    get: () => userVisibleOutputs[userVisibleOutputs.length - 2],
+    get: () => userVisibleWrappers[userVisibleWrappers.length - 2],
     enumerable: false
   });
 
   // Add more negative indices as needed
-  for (let i = 3; i <= Math.max(10, userVisibleOutputs.length); i++) {
+  for (let i = 3; i <= Math.max(10, userVisibleWrappers.length); i++) {
     Object.defineProperty(pipelineContext, -i, {
-      get: () => userVisibleOutputs[userVisibleOutputs.length - i],
+      get: () => userVisibleWrappers[userVisibleWrappers.length - i],
       enumerable: false
     });
   }
@@ -304,10 +317,11 @@ function createSimplifiedPipelineContext(
       }
       
       // Collect all attempts from all contexts
-      const allAttempts: string[][] = [];
+      const allAttempts: Array<Array<string | StructuredValue>> = [];
       for (const attempts of allRetryHistory.values()) {
         if (attempts.length > 0) {
-          allAttempts.push([...attempts]);
+          const mapped = attempts.map(attempt => toStructured(null, attempt));
+          allAttempts.push(mapped);
         }
       }
       

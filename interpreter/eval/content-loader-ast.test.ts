@@ -6,6 +6,7 @@ import { PathService } from '@services/fs/PathService';
 import * as path from 'path';
 import minimatch from 'minimatch';
 import { glob } from 'tinyglobby';
+import { unwrapStructuredForTest } from './test-helpers';
 
 vi.mock('tinyglobby', () => ({
   glob: vi.fn()
@@ -80,13 +81,15 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results, metadata } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(Array.isArray(results)).toBe(true);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('createUser');
     expect(results[0]?.type).toBe('function');
     expect(results[1]?.name).toBe('updateProfile');
     expect(results[0]?.file).toBeUndefined();
+    expect(metadata?.source).toBe('load-content');
   });
 
   it('deduplicates container and member selections', async () => {
@@ -106,7 +109,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(1);
     expect(results[0]?.name).toBe('User');
   });
@@ -129,7 +133,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(Array.isArray(results)).toBe(true);
     expect(results.map(r => (r as any)?.name ?? null)).toEqual(['User', 'UserId', 'Role']);
     expect(results.map(r => (r as any)?.type ?? null)).toEqual(['interface', 'type-alias', 'enum']);
@@ -152,7 +157,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('create_user');
     expect(results[0]?.type).toBe('function');
@@ -179,7 +185,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('CreateUser');
     expect(results[0]?.type).toBe('function');
@@ -204,7 +211,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('create_user');
     expect(results[0]?.type).toBe('function');
@@ -247,7 +255,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('createUser');
     expect(results[0]?.type).toBe('method');
@@ -292,7 +301,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('CreateUser');
     expect(results[0]?.type).toBe('method');
@@ -328,7 +338,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('createUser');
     expect(results[0]?.type).toBe('method');
@@ -365,7 +376,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]?.name).toBe('createUser');
     expect(results[0]?.type).toBe('function');
@@ -401,9 +413,10 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(Array.isArray(results)).toBe(true);
-    const names = (results as any[]).filter(Boolean).map(r => (r as any).name);
+    const names = results.filter(Boolean).map(r => (r as any).name);
     expect(names).toEqual([
       'Billing::Service',
       'helper'
@@ -417,8 +430,9 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const constantResults = await processContentLoader(constantNode as any, env);
-    const constantNames = (constantResults as any[]).filter(Boolean).map(r => (r as any).name);
+    const rawConstantResults = await processContentLoader(constantNode as any, env);
+    const { data: constantResults } = unwrapStructuredForTest<Array<any | null>>(rawConstantResults);
+    const constantNames = constantResults.filter(Boolean).map(r => (r as any).name);
     expect(constantNames).toEqual(['API_VERSION']);
   });
 
@@ -439,9 +453,10 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(Array.isArray(results)).toBe(true);
-    const files = (results as any[])
+    const files = results
       .filter(Boolean)
       .map(r => (r as any).file)
       .sort();
@@ -461,7 +476,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]).toBeTruthy();
     expect(results[1]).toBeNull();
@@ -486,7 +502,8 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
     expect(results.length).toBe(2);
     expect(results[0]).not.toBeNull();
     expect(results[1]).toBeNull();
@@ -517,7 +534,8 @@ describe('Content Loader AST patterns', () => {
       }
     };
 
-    const results = await processContentLoader(node as any, env);
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<string>(rawResults);
     expect(typeof results).toBe('string');
     expect(results).toBe('Name: createUser\nCode:\nexport function createUser() {\n  return 1;\n}');
   });
@@ -551,9 +569,10 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const result = await processContentLoader(node as any, env);
+    const rawResult = await processContentLoader(node as any, env);
+    const { data: result } = unwrapStructuredForTest<string>(rawResult);
     expect(typeof result).toBe('string');
-    const parsed = JSON.parse(result as string);
+    const parsed = JSON.parse(result);
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed.length).toBe(2);
     expect(parsed[0].name).toBe('createUser');
@@ -573,8 +592,9 @@ describe('Content Loader AST patterns', () => {
       ]
     };
 
-    const results = await processContentLoader(node as any, env);
-    const names = (results as any[]).filter(Boolean).map(r => (r as any).name).sort();
+    const rawResults = await processContentLoader(node as any, env);
+    const { data: results } = unwrapStructuredForTest<Array<any | null>>(rawResults);
+    const names = results.filter(Boolean).map(r => (r as any).name).sort();
     expect(names).toEqual(['bar', 'foo']);
   });
 });

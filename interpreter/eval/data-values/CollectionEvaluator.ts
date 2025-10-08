@@ -1,7 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 
 /**
  * Handles evaluation of collection data values (objects and arrays).
@@ -62,7 +62,7 @@ export class CollectionEvaluator {
    */
   async evaluate(value: DataValue, env: Environment): Promise<any> {
     if (isStructuredValue(value)) {
-      return await this.evaluate((value as any).data, env);
+      return (value as any).data;
     }
 
     // Handle objects - recursively evaluate all properties
@@ -115,7 +115,7 @@ export class CollectionEvaluator {
       try {
         let evaluated = await this.evaluateDataValue(propValue, env);
         if (isStructuredValue(evaluated)) {
-          evaluated = asText(evaluated);
+          evaluated = unwrapStructuredPrimitive(evaluated);
         }
         evaluatedObj[key] = evaluated;
       } catch (error) {
@@ -138,7 +138,7 @@ export class CollectionEvaluator {
       try {
         let evaluatedItem = await this.evaluateDataValue(value.items[i], env);
         if (isStructuredValue(evaluatedItem)) {
-          evaluatedItem = asText(evaluatedItem);
+          evaluatedItem = unwrapStructuredPrimitive(evaluatedItem);
         }
         evaluatedElements.push(evaluatedItem);
       } catch (error) {
@@ -187,7 +187,7 @@ export class CollectionEvaluator {
       try {
         let evaluated = await this.evaluateDataValue(propValue, env);
         if (isStructuredValue(evaluated)) {
-          evaluated = asText(evaluated);
+          evaluated = unwrapStructuredPrimitive(evaluated);
         }
         evaluatedObject[key] = evaluated;
       } catch (error) {
@@ -198,4 +198,21 @@ export class CollectionEvaluator {
     
     return evaluatedObject;
   }
+}
+
+function unwrapStructuredPrimitive(value: any): any {
+  if (!isStructuredValue(value)) {
+    return value;
+  }
+
+  const data = value.data;
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  if (typeof data === 'object') {
+    return value;
+  }
+
+  return data;
 }

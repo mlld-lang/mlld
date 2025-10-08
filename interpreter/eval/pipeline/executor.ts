@@ -221,7 +221,10 @@ export class PipelineExecutor {
         this.format,
         this.stateMachine.getEvents(),
         this.hasSyntheticSource,
-        this.allRetryHistory
+        this.allRetryHistory,
+        {
+          getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+        }
       );
       
       let output: any;
@@ -551,7 +554,10 @@ export class PipelineExecutor {
             this.format,
             this.stateMachine.getEvents(),
             this.hasSyntheticSource,
-            this.allRetryHistory
+            this.allRetryHistory,
+            {
+              getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+            }
           );
 
           const raw = await this.executeCommand(cmd, input, subEnv);
@@ -607,8 +613,17 @@ export class PipelineExecutor {
     }
 
     if (Array.isArray(output)) {
-      const text = safeJSONStringify(output);
-      return wrapStructured(output, 'array', text);
+      const normalizedArray = output.map(item => {
+        if (isStructuredValue(item)) {
+          return item.data;
+        }
+        if (isPipelineInput(item)) {
+          return item.data;
+        }
+        return item;
+      });
+      const text = safeJSONStringify(normalizedArray);
+      return wrapStructured(normalizedArray, 'array', text);
     }
 
     if (typeof output === 'object') {

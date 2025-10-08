@@ -7,6 +7,7 @@ import { PathService } from '@services/fs/PathService';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
+import { unwrapStructuredForTest } from './test-helpers';
 
 // Mock tinyglobby for tests
 vi.mock('tinyglobby', () => ({
@@ -114,7 +115,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       expect(isLoadContentResult(result)).toBe(true);
       if (isLoadContentResult(result)) {
@@ -123,6 +125,7 @@ describe('Content Loader with Glob Support', () => {
         expect(result.tokest).toBeGreaterThan(0);
         expect(result.absolute).toContain('README.md');
       }
+      expect(metadata?.source).toBe('load-content');
     });
 
     it('should handle section extraction and return LoadContentResult', async () => {
@@ -143,7 +146,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       // With section extraction, should return LoadContentResult to maintain metadata
       expect(isLoadContentResult(result)).toBe(true);
@@ -151,6 +155,7 @@ describe('Content Loader with Glob Support', () => {
         expect(result.content).toContain('Install instructions here');
         expect(result.filename).toBe('README.md');
       }
+      expect(metadata?.source).toBe('load-content');
     });
   });
 
@@ -178,7 +183,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       expect(isLoadContentResultArray(result)).toBe(true);
       if (isLoadContentResultArray(result)) {
@@ -203,7 +209,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       expect(isLoadContentResultArray(result)).toBe(true);
       if (isLoadContentResultArray(result)) {
@@ -213,6 +220,7 @@ describe('Content Loader with Glob Support', () => {
           expect(file.relative).toContain('tests');
         });
       }
+      expect(metadata?.source).toBe('load-content');
     });
 
     it.skip('should filter files by section when glob + section', async () => {
@@ -235,7 +243,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       expect(isLoadContentResultArray(result)).toBe(true);
       // Files without the API section should be filtered out
@@ -255,7 +264,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       if (isLoadContentResult(result)) {
         expect(result.tokest).toBeGreaterThan(0);
@@ -279,7 +289,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       if (isLoadContentResult(result)) {
         expect(result.json).toBeDefined();
@@ -300,7 +311,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       if (isLoadContentResult(result)) {
         expect(result.fm).toBeDefined();
@@ -355,7 +367,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       // With section rename, should return array of strings
       expect(Array.isArray(result)).toBe(true);
@@ -406,7 +419,8 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       // Single file with section and rename should still return LoadContentResult
       expect(isLoadContentResult(result)).toBe(true);
@@ -414,6 +428,7 @@ describe('Content Loader with Glob Support', () => {
         expect(result.content).toContain('## test by Alice');
         expect(result.content).toContain('This is a test summary');
       }
+      expect(metadata?.source).toBe('load-content');
     });
 
     it('should handle placeholder without field access', async () => {
@@ -448,13 +463,15 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       expect(isLoadContentResult(result)).toBe(true);
       if (isLoadContentResult(result)) {
         // Without fields, <> should reference the content itself
         expect(result.content).toContain('### File: This is the overview section.');
       }
+      expect(metadata?.source).toBe('load-content');
     });
 
     it('should support backtick templates in rename', async () => {
@@ -495,13 +512,15 @@ describe('Content Loader with Glob Support', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       expect(isLoadContentResult(result)).toBe(true);
       if (isLoadContentResult(result)) {
         expect(result.content).toContain('## mymodule v1.0.0');
         expect(result.content).toContain('Module description here');
       }
+      expect(metadata?.source).toBe('load-content');
     });
   });
 });
