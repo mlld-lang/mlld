@@ -5,7 +5,14 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
+import {
+  isExecutableVariable,
+  createSimpleTextVariable,
+  createObjectVariable,
+  createArrayVariable,
+  createPrimitiveVariable,
+  createStructuredValueVariable
+} from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
@@ -663,7 +670,10 @@ export async function evaluateExecInvocation(
     let argValue: string;
     let argValueAny: any;
 
-    if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
+    if (isStructuredValue(arg)) {
+      argValueAny = arg;
+      argValue = asText(arg);
+    } else if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
       // Primitives: pass through directly
       argValue = String(arg);
       argValueAny = arg;
@@ -898,18 +908,22 @@ export async function evaluateExecInvocation(
       else {
         const preservedValue = argValue !== undefined ? argValue : argStringValue;
 
-        if (process.env.MLLD_DEBUG === 'true') {
-          try {
-            console.error('[exec-invocation] preservedValue', {
-              paramName,
-              typeofPreserved: typeof preservedValue,
-              isArray: Array.isArray(preservedValue),
-              preservedValue
-            });
-          } catch {}
-        }
-
-        if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
+        if (isStructuredValue(preservedValue)) {
+          paramVar = createStructuredValueVariable(
+            paramName,
+            preservedValue,
+            {
+              directive: 'var',
+              syntax: 'reference',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        } else if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
           // Object type - preserve structure
           paramVar = createObjectVariable(
             paramName,
