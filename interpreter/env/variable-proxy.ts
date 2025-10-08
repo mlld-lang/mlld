@@ -10,6 +10,9 @@
 
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
+import { isStructuredExecEnabled } from '@interpreter/utils/structured-exec';
 
 /**
  * Special property names for Variable introspection
@@ -117,6 +120,11 @@ export function createVariableProxy(variable: Variable): any {
 export function prepareValueForShadow(value: any): any {
   if (isVariable(value)) {
     return createVariableProxy(value);
+  }
+  if (isStructuredExecEnabled()) {
+    if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
+      return wrapLoadContentValue(value);
+    }
   }
   return value;
 }

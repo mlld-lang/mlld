@@ -1071,6 +1071,10 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       
       // Check if this is a LoadContentResult and return its content
       const { isLoadContentResult } = await import('@core/types/load-content');
+      if (isStructuredValue(loadResult)) {
+        return loadResult;
+      }
+
       if (isLoadContentResult(loadResult)) {
         return loadResult.content;
       }
