@@ -114,11 +114,24 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       const name = String(fieldValue);
       if (structuredWrapper) {
         if (name === 'text') {
-          accessedValue = asText(structuredWrapper);
+          if (
+            rawValue &&
+            typeof rawValue === 'object' &&
+            name in (rawValue as any) &&
+            structuredWrapper.metadata?.source !== 'load-content'
+          ) {
+            accessedValue = (rawValue as any)[name];
+          } else {
+            accessedValue = asText(structuredWrapper);
+          }
           break;
         }
         if (name === 'data') {
-          accessedValue = asData(structuredWrapper);
+          if (rawValue && typeof rawValue === 'object' && name in (rawValue as any)) {
+            accessedValue = (rawValue as any)[name];
+          } else {
+            accessedValue = asData(structuredWrapper);
+          }
           break;
         }
         if (name === 'type') {

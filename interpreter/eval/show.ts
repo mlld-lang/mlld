@@ -382,7 +382,6 @@ export async function evaluateShow(
      */
     const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
     value = await resolveValue(value, env, ResolutionContext.Display);
-    
     // Import LoadContentResult type check
     const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
 
@@ -399,7 +398,25 @@ export async function evaluateShow(
       // For array of LoadContentResult, concatenate content with double newlines
       content = value.map(item => item.content).join('\n\n');
     } else if (isStructuredValue(value)) {
-      content = value.text;
+      if (value.type === 'array' && Array.isArray(value.data)) {
+        const printableArray = value.data.map(item =>
+          isStructuredValue(item)
+            ? (item.type === 'object' || item.type === 'array') ? item.data : asText(item)
+            : item
+        );
+        content = JSONFormatter.stringify(printableArray, { pretty: true, indent: 2 });
+      } else if (value.type === 'object' && value.data && typeof value.data === 'object') {
+        if (
+          (value.metadata && 'loadResult' in value.metadata && value.metadata.loadResult) ||
+          value.metadata?.source === 'load-content'
+        ) {
+          content = value.text;
+        } else {
+          content = JSONFormatter.stringify(value.data, { pretty: true });
+        }
+      } else {
+        content = value.text;
+      }
     } else if (Array.isArray(value)) {
       const printableArray = value.map(item => {
         if (isStructuredValue(item)) {

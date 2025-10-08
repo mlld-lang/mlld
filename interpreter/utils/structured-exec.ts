@@ -25,6 +25,13 @@ export function wrapExecResult<T>(value: T, options?: { type?: string; text?: st
     return typeof value === 'string' ? value : String(value);
   }
 
+  if (isStructuredValue(value)) {
+    if (options?.type || options?.text) {
+      return ensureStructuredValue(value, options?.type as any, options?.text);
+    }
+    return value;
+  }
+
   return ensureStructuredValue(value, options?.type as any, options?.text);
 }
 

@@ -346,9 +346,15 @@ function createSimplifiedPipelineContext(
   };
 
   pipelineContext[0] = baseWrapper;
-  stageWrappers.forEach((wrapper, index) => {
-    pipelineContext[index + 1] = wrapper;
-  });
+  if (hasSyntheticSource) {
+    userVisibleWrappers.forEach((wrapper, index) => {
+      pipelineContext[index + 1] = wrapper;
+    });
+  } else {
+    stageWrappers.forEach((wrapper, index) => {
+      pipelineContext[index + 1] = wrapper;
+    });
+  }
 
   Object.defineProperty(pipelineContext, -1, {
     get: () => userVisibleWrappers[userVisibleWrappers.length - 1],

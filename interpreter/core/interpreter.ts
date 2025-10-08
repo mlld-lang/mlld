@@ -885,7 +885,25 @@ export async function interpolate(
       // Handle function calls in templates
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as any, env);
-      parts.push(asText(result.value));
+      if (isStructuredValue(result.value) && result.value.type === 'array' && Array.isArray(result.value.data)) {
+        const arrayData = result.value.data as unknown[];
+        const allSimple = arrayData.every(item => item === null || item === undefined || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean');
+        if (allSimple) {
+          const joined = arrayData
+            .map(item => {
+              if (item === null || item === undefined) {
+                return '';
+              }
+              return String(item);
+            })
+            .join(',');
+          parts.push(joined);
+        } else {
+          parts.push(asText(result.value));
+        }
+      } else {
+        parts.push(asText(result.value));
+      }
     } else if (node.type === 'InterpolationVar') {
       // Handle {{var}} style interpolation (from triple colon templates)
       const varName = node.identifier || node.name;
@@ -1248,7 +1266,15 @@ export async function interpolate(
           // For other contexts, use JSON representation with custom replacer
           // Note: No indentation for template interpolation - keep it compact
           const { JSONFormatter } = await import('./json-formatter');
-          const printableArray = value.map(item => (isStructuredValue(item) ? asText(item) : item));
+          const printableArray = value.map(item => {
+            if (isStructuredValue(item)) {
+              if (item.type === 'object' || item.type === 'array' || item.type === 'json') {
+                return item.data;
+              }
+              return asText(item);
+            }
+            return item;
+          });
           stringValue = JSONFormatter.stringify(printableArray);
         }
       } else if (typeof value === 'object') {
