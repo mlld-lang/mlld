@@ -1,6 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineStage } from '@core/types';
-import { PipelineExecutor } from './executor';
+import { PipelineExecutor, type ExecuteOptions } from './executor';
+import type { StructuredValue } from '../../utils/structured-value';
 
 // Re-export types
 export type * from './types';
@@ -26,12 +27,41 @@ export async function executePipeline(
   env: Environment,
   location?: any,
   format?: string,
+  isRetryable?: boolean,
+  sourceFunction?: () => Promise<string>,
+  hasSyntheticSource?: boolean,
+  parallelCap?: number,
+  delayMs?: number
+): Promise<string>;
+export async function executePipeline(
+  baseOutput: string,
+  pipeline: PipelineStage[],
+  env: Environment,
+  location: any,
+  format: string | undefined,
+  isRetryable: boolean,
+  sourceFunction: (() => Promise<string>) | undefined,
+  hasSyntheticSource: boolean,
+  parallelCap: number | undefined,
+  delayMs: number | undefined,
+  options: { returnStructured: true }
+): Promise<StructuredValue>;
+export async function executePipeline(
+  baseOutput: string,
+  pipeline: PipelineStage[],
+  env: Environment,
+  location?: any,
+  format?: string,
   isRetryable: boolean = false,
   sourceFunction?: () => Promise<string>,
   hasSyntheticSource: boolean = false,
   parallelCap?: number,
-  delayMs?: number
-): Promise<string> {
+  delayMs?: number,
+  options?: ExecuteOptions
+): Promise<string | StructuredValue> {
   const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction, hasSyntheticSource, parallelCap, delayMs);
+  if (options?.returnStructured) {
+    return await executor.execute(baseOutput, { returnStructured: true });
+  }
   return await executor.execute(baseOutput);
 }

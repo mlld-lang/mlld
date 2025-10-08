@@ -1,4 +1,4 @@
-import { ensureStructuredValue, type StructuredValue } from './structured-value';
+import { ensureStructuredValue, isStructuredValue, type StructuredValue } from './structured-value';
 
 /**
  * Feature flag for structured exec behaviour.
@@ -16,6 +16,9 @@ export function isStructuredExecEnabled(): boolean {
  */
 export function wrapExecResult<T>(value: T, options?: { type?: string; text?: string }): StructuredValue<T> | string {
   if (!isStructuredExecEnabled()) {
+    if (isStructuredValue(value)) {
+      return value;
+    }
     if (value === null || value === undefined) {
       return '';
     }

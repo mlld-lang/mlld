@@ -3,7 +3,33 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { MlldInterpreterError } from '@core/errors';
 import { asText } from '../utils/structured-value';
-import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
+import { wrapExecResult, wrapPipelineResult, isStructuredExecEnabled } from '../utils/structured-exec';
+
+function legacyStdout(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function legacyText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) || typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
 
 /**
  * Apply withClause transformations to a result
@@ -14,14 +40,43 @@ export async function applyWithClause(
   withClause: WithClause,
   env: Environment
 ): Promise<EvalResult> {
-  let result = wrapExecResult(input);
+  const structuredEnabled = isStructuredExecEnabled();
+
+  if (!structuredEnabled) {
+    let legacyResult: any = input;
+
+    if (withClause.pipeline && withClause.pipeline.length > 0) {
+      const { processPipeline } = await import('./pipeline/unified-processor');
+      legacyResult = await processPipeline({
+        value: legacyResult,
+        env,
+        pipeline: withClause.pipeline,
+        format: withClause.format as string | undefined,
+        isRetryable: false
+      });
+    }
+
+    if (withClause.needs) {
+      await checkDependencies(withClause.needs, env);
+    }
+
+    return {
+      value: legacyResult,
+      env,
+      stdout: legacyStdout(legacyResult),
+      stderr: '',
+      exitCode: 0
+    };
+  }
+
+  let result: any = wrapExecResult(input);
   
   // Apply pipeline transformations
   if (withClause.pipeline && withClause.pipeline.length > 0) {
     // Use unified pipeline processor
     const { processPipeline } = await import('./pipeline/unified-processor');
     const pipelineResult = await processPipeline({
-      value: asText(result),
+      value: result,
       env,
       pipeline: withClause.pipeline,
       format: withClause.format as string | undefined,

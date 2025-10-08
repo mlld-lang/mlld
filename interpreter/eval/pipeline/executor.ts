@@ -13,7 +13,7 @@ import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/paralle
 import { asText, isStructuredValue, wrapStructured } from '../../utils/structured-value';
 import { createPipelineInput, isPipelineInput } from '../../utils/pipeline-input';
 
-interface ExecuteOptions {
+export interface ExecuteOptions {
   returnStructured?: boolean;
 }
 

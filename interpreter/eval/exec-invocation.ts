@@ -16,6 +16,8 @@ import { prepareValueForShadow } from '../env/variable-proxy';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { asText, isStructuredValue } from '../utils/structured-value';
+import { wrapExecResult, wrapPipelineResult, isStructuredExecEnabled } from '../utils/structured-exec';
 
 /**
  * Coerce a value to a string for stdin input
@@ -115,6 +117,44 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  const structuredExecEnabled = isStructuredExecEnabled();
+  const createLegacyText = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value) || typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
+
+  const createEvalResult = (value: unknown, targetEnv: Environment): EvalResult => {
+    if (structuredExecEnabled) {
+      const wrapped = wrapExecResult(value);
+      return {
+        value: wrapped,
+        env: targetEnv,
+        stdout: asText(wrapped),
+        stderr: '',
+        exitCode: 0
+      };
+    }
+
+    return {
+      value,
+      env: targetEnv,
+      stdout: createLegacyText(value),
+      stderr: '',
+      exitCode: 0
+    };
+  };
+
+  const toPipelineInput = (value: unknown): unknown => {
+    return structuredExecEnabled ? wrapExecResult(value) : value;
+  };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
       hasCommandRef: !!node.commandRef,
@@ -314,8 +354,9 @@ export async function evaluateExecInvocation(
       if (node.withClause) {
         if (node.withClause.pipeline) {
           const { processPipeline } = await import('./pipeline/unified-processor');
+          const pipelineInputValue = toPipelineInput(result);
           const pipelineResult = await processPipeline({
-            value: String(result),
+            value: pipelineInputValue,
             env,
             node,
             identifier: node.identifier
@@ -323,18 +364,13 @@ export async function evaluateExecInvocation(
           // Still need to handle other withClause features (trust, needs)
           return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
         } else {
-          return applyWithClause(String(result), node.withClause, env);
+          return applyWithClause(result, node.withClause, env);
         }
       }
 
       // Return the result wrapped appropriately when no withClause is present
-      return {
-        value: result,
-        env,
-        stdout: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result)),
-        stderr: '',
-        exitCode: 0
-      };
+      const treatStructured = structuredExecEnabled || isStructuredValue(result);
+      return createEvalResult(result, env);
     }
     // If this is a non-builtin method with objectSource, we do not (yet) support it
     if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
@@ -534,8 +570,9 @@ export async function evaluateExecInvocation(
               if (node.withClause.pipeline) {
                 // Use unified pipeline processor for pipeline part
                 const { processPipeline } = await import('./pipeline/unified-processor');
+                const pipelineInputValue = toPipelineInput(result);
                 const pipelineResult = await processPipeline({
-                  value: String(result),
+                  value: pipelineInputValue,
                   env,
                   node,
                   identifier: node.identifier
@@ -543,17 +580,12 @@ export async function evaluateExecInvocation(
                 // Still need to handle other withClause features (trust, needs)
                 return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
               } else {
-                return applyWithClause(String(result), node.withClause, env);
+                return applyWithClause(result, node.withClause, env);
               }
             }
             
-            return {
-              value: String(result),
-              env,
-              stdout: String(result),
-              stderr: '',
-              exitCode: 0
-            };
+            const treatStructured = structuredExecEnabled || isStructuredValue(result);
+            return createEvalResult(result, env);
           }
         }
       }
@@ -580,8 +612,9 @@ export async function evaluateExecInvocation(
       if (node.withClause.pipeline) {
         // Use unified pipeline processor for pipeline part
         const { processPipeline } = await import('./pipeline/unified-processor');
+        const pipelineInputValue = toPipelineInput(result);
         const pipelineResult = await processPipeline({
-          value: String(result),
+          value: pipelineInputValue,
           env,
           node,
           identifier: node.identifier
@@ -589,17 +622,12 @@ export async function evaluateExecInvocation(
         // Still need to handle other withClause features (trust, needs)
         return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
       } else {
-        return applyWithClause(String(result), node.withClause, env);
+        return applyWithClause(result, node.withClause, env);
       }
     }
     
-    return {
-      value: String(result),
-      env,
-      stdout: String(result),
-      stderr: '',
-      exitCode: 0
-    };
+    const treatStructured = structuredExecEnabled || isStructuredValue(result);
+    return createEvalResult(result, env);
   }
   
   // Get the full executable definition from metadata
@@ -1663,7 +1691,7 @@ export async function evaluateExecInvocation(
         // IMPORTANT: Use execEnv not env, so the function parameters are available
         const nodeWithoutPipeline = { ...node, withClause: undefined };
         const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
-        return typeof freshResult.value === 'string' ? freshResult.value : JSON.stringify(freshResult.value);
+        return structuredExecEnabled ? asText(wrapExecResult(freshResult.value)) : createLegacyText(freshResult.value);
       };
       
       // Create synthetic source stage for retryable pipeline
@@ -1695,23 +1723,28 @@ export async function evaluateExecInvocation(
       
       // Execute the pipeline with the ExecInvocation result as initial input
       // Mark it as retryable with the source function
+      const treatStructured = structuredExecEnabled || isStructuredValue(result);
+      const pipelineInput = treatStructured
+        ? asText(wrapExecResult(result))
+        : createLegacyText(result);
       const pipelineResult = await executePipeline(
-        typeof result === 'string' ? result : JSON.stringify(result),
+        pipelineInput,
         normalizedPipeline,
         execEnv,  // Use execEnv which has merged nodes
         node.location,
         node.withClause.format,
         true,  // isRetryable
         sourceFunction,
-        true   // hasSyntheticSource
+        true,  // hasSyntheticSource
+        undefined,
+        undefined,
+        structuredExecEnabled ? { returnStructured: true } : undefined
       );
       
       // Still need to handle other withClause features (trust, needs)
-      return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, execEnv);
+      return applyWithClause(wrapPipelineResult(pipelineResult), { ...node.withClause, pipeline: undefined }, execEnv);
     } else {
-      // applyWithClause expects a string input
-      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
-      return applyWithClause(stringResult, node.withClause, execEnv);
+      return applyWithClause(result, node.withClause, execEnv);
     }
   }
   
@@ -1725,16 +1758,7 @@ export async function evaluateExecInvocation(
     } catch {}
   }
 
-  return {
-    value: result,
-    env: execEnv,  // Return execEnv which contains merged nodes from when expressions
-    // For stdout, convert the parsed value back to string for backward compatibility
-    // but preserve the actual value in the value field for truthiness checks
-    stdout: typeof result === 'string' ? result : 
-            (typeof result === 'object' && result !== null ? JSON.stringify(result) : String(result)),
-    stderr: '',
-    exitCode: 0
-  };
+  return createEvalResult(result, execEnv);
 }
 
 /**
