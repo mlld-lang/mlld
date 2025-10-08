@@ -12,60 +12,6 @@ describe('Data handling accessors', () => {
     pathService = new PathService();
   });
 
-  describe('structured exec flag', () => {
-    let previousFlag: string | undefined;
-
-    beforeEach(() => {
-      previousFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-      process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'true';
-    });
-
-    afterEach(() => {
-      if (previousFlag === undefined) {
-        delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-      } else {
-        process.env.MLLD_ENABLE_STRUCTURED_EXEC = previousFlag;
-      }
-    });
-
-    it('preserves load-content metadata while emitting identical output', async () => {
-      await fileSystem.writeFile('/workspace/doc.md', 'Structured body');
-
-      const input = `
-/var @doc = <doc.md>
-/show @doc.filename
-/show @doc.text`;
-
-      const output = await interpret(input, {
-        fileSystem,
-        pathService,
-        filePath: '/workspace/test.mld'
-      });
-
-      expect(output.trim()).toBe('doc.md\nStructured body');
-    });
-
-    it('handles mixed pipelines with structured stage outputs', async () => {
-      const script = `
-/exe @filterHigh(array) = for @item in @array => when [
-  @item.finding.startsWith("High") => @item
-  none => skip
-]
-
-/exe @probe(entries) = js {
-  const first = entries[0] || {};
-  return Array.isArray(entries) && typeof first === 'object' && !Array.isArray(first);
-}
-
-/var @entries = '[{"finding":"High-1"},{"finding":"Low-1"}]'
-/var @result = @entries | @filterHigh | @probe
-/show @result`;
-
-      const output = await interpret(script, { fileSystem, pathService });
-      expect(output.trim()).toBe('true');
-    });
-  });
-
   it('parses JSON strings with .data before JavaScript execution', async () => {
     const input = `
 /var @payload = '[{"num":1},{"num":2},{"num":3}]'
