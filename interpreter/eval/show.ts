@@ -30,7 +30,8 @@ import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { wrapExecResult, isStructuredExecEnabled } from '../utils/structured-exec';
 // Template normalization now handled in grammar - no longer needed here
 
 /**
@@ -52,6 +53,8 @@ export async function evaluateShow(
   if (process.env.MLLD_DEBUG === 'true') {
   }
 
+  const structuredExecEnabled = isStructuredExecEnabled();
+  let resultValue: unknown | undefined;
   let content = '';
   
   if (directive.subtype === 'showVariable') {
@@ -289,8 +292,24 @@ export async function evaluateShow(
     // Legacy compatibility: only apply this path when not using unified invocation tail
     if (!(directive as any)?.values?.invocation) {
       if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
-        const { executePipeline } = await import('./pipeline');
-        content = await executePipeline(typeof value === 'string' ? value : String(value ?? ''), variableNode.withClause.pipeline, env);
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        const initialInput = typeof value === 'string' ? value : String(value ?? '');
+        const processed = await processPipeline({
+          value: initialInput,
+          env,
+          directive,
+          pipeline: variableNode.withClause.pipeline,
+          identifier: varName,
+          location: directive.location
+        });
+        value = processed;
+        if (isStructuredValue(processed)) {
+          content = asText(processed);
+        } else if (typeof processed === 'string') {
+          content = processed;
+        } else {
+          content = JSONFormatter.stringify(processed, { pretty: true });
+        }
       }
     }
     } // Close the if (value === undefined && variable) block
@@ -446,8 +465,23 @@ export async function evaluateShow(
     // Legacy path: only run when invocation is not present (avoid double-processing)
     if (!(directive as any)?.values?.invocation) {
       if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
-        const { executePipeline } = await import('./pipeline');
-        content = await executePipeline(content, variableNode.withClause.pipeline, env);
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        const processed = await processPipeline({
+          value: content,
+          env,
+          directive,
+          pipeline: variableNode.withClause.pipeline,
+          identifier: varName,
+          location: directive.location
+        });
+        value = processed;
+        if (isStructuredValue(processed)) {
+          content = asText(processed);
+        } else if (typeof processed === 'string') {
+          content = processed;
+        } else {
+          content = JSONFormatter.stringify(processed, { pretty: true });
+        }
       }
     }
     
@@ -466,12 +500,20 @@ export async function evaluateShow(
           identifier: varName || 'show',
           location: directive.location
         });
-        content = typeof processed === 'string' ? processed : JSONFormatter.stringify(processed);
+        value = processed;
+        if (isStructuredValue(processed)) {
+          content = asText(processed);
+        } else if (typeof processed === 'string') {
+          content = processed;
+        } else {
+          content = JSONFormatter.stringify(processed, { pretty: true });
+        }
       }
     } catch {
       // If no pipeline detected or processing fails, leave content as-is
     }
     
+    resultValue = value;
     
   } else if (directive.subtype === 'showPath') {
     // Handle path inclusion (whole file)
@@ -629,8 +671,12 @@ export async function evaluateShow(
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
       
+      resultValue = result.value;
+
       // Convert result to string appropriately
-      if (typeof result.value === 'string') {
+      if (isStructuredValue(result.value)) {
+        content = asText(result.value);
+      } else if (typeof result.value === 'string') {
         content = result.value;
       } else if (result.value === null || result.value === undefined) {
         content = '';
@@ -659,8 +705,12 @@ export async function evaluateShow(
         const { evaluateExecInvocation } = await import('./exec-invocation');
         const result = await evaluateExecInvocation(invocation, env);
         
+        resultValue = result.value;
+
         // Convert result to string appropriately
-        if (typeof result.value === 'string') {
+        if (isStructuredValue(result.value)) {
+          content = asText(result.value);
+        } else if (typeof result.value === 'string') {
           content = result.value;
         } else if (result.value === null || result.value === undefined) {
           content = '';
@@ -805,8 +855,12 @@ export async function evaluateShow(
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocation, env);
     
+    resultValue = result.value;
+
     // Convert result to string appropriately
-    if (typeof result.value === 'string') {
+    if (isStructuredValue(result.value)) {
+      content = asText(result.value);
+    } else if (typeof result.value === 'string') {
       content = result.value;
     } else if (result.value === null || result.value === undefined) {
       content = '';
@@ -867,6 +921,8 @@ export async function evaluateShow(
     const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
     const loadResult = await processContentLoader(loadContentNode, env);
     
+    resultValue = loadResult;
+    
     // Handle different return types from processContentLoader
     if (typeof loadResult === 'string') {
       // Backward compatibility - plain string
@@ -911,6 +967,7 @@ export async function evaluateShow(
     
     // Execute command and get output
     content = await env.executeCommand(command, undefined, executionContext);
+    resultValue = content;
     
   } else if (directive.subtype === 'showCode') {
     // Handle code execution for display: /show js {console.log("test")}
@@ -966,6 +1023,7 @@ export async function evaluateShow(
     // Execute code using the unified executeCode method
     // Note: executeCode handles all language types internally
     content = await env.executeCode(code, lang, {}, executionContext);
+    resultValue = content;
     
   } else if (directive.subtype === 'show' && directive.values?.content) {
     // Handle simple show directive with content (used in for loops)
@@ -987,11 +1045,30 @@ export async function evaluateShow(
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }
 
+  if (resultValue === undefined) {
+    resultValue = content;
+  }
+
   // Apply tail pipeline when requested (used by inline /show in templates)
   if ((directive as any).values?.withClause?.pipeline && (directive as any).meta?.applyTailPipeline) {
-    const { executePipeline } = await import('./pipeline');
+    const { processPipeline } = await import('./pipeline/unified-processor');
     const pipeline = (directive as any).values.withClause.pipeline;
-    content = await executePipeline(typeof content === 'string' ? content : String(content ?? ''), pipeline, env);
+    const processed = await processPipeline({
+      value: content,
+      env,
+      directive,
+      pipeline,
+      identifier: 'show-tail',
+      location: directive.location
+    });
+    resultValue = processed;
+    if (isStructuredValue(processed)) {
+      content = asText(processed);
+    } else if (typeof processed === 'string') {
+      content = processed;
+    } else {
+      content = JSONFormatter.stringify(processed, { pretty: true });
+    }
   }
   
   // Output directives always end with a newline
@@ -1029,8 +1106,14 @@ export async function evaluateShow(
     }
   }
 
+  if (resultValue === undefined) {
+    resultValue = content;
+  }
+
+  const textForWrapper = content;
+
   if (!content.endsWith('\n')) {
-    content += '\n';
+    content = `${content}\n`;
   }
   
   // Only emit the effect if we're not in an expression context
@@ -1040,6 +1123,16 @@ export async function evaluateShow(
     env.emitEffect('both', content, { source: directive.location });
   }
   
+  if (structuredExecEnabled) {
+    const baseValue = resultValue ?? textForWrapper;
+    const wrapOptions =
+      !isStructuredValue(baseValue) && typeof baseValue !== 'string'
+        ? { text: textForWrapper }
+        : undefined;
+    const wrapped = wrapExecResult(baseValue, wrapOptions);
+    return { value: wrapped, env };
+  }
+
   // Return the content
   return { value: content, env };
 }
