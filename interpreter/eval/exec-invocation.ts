@@ -16,7 +16,7 @@ import { prepareValueForShadow } from '../env/variable-proxy';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
-import { asText, isStructuredValue } from '../utils/structured-value';
+import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
 import { wrapExecResult, wrapPipelineResult, isStructuredExecEnabled } from '../utils/structured-exec';
 
 /**
@@ -1429,6 +1429,28 @@ export async function evaluateExecInvocation(
 
     // Attempt to restore metadata from shelf
     result = metadataShelf.restoreMetadata(processedResult);
+    if (process.env.MLLD_DEBUG_STRUCTURED === 'true' && result && typeof result === 'object') {
+      try {
+        const debugData = (result as any).data;
+        console.error('[exec-invocation] rehydrate candidate', {
+          hasType: 'type' in (result as Record<string, unknown>),
+          hasText: 'text' in (result as Record<string, unknown>),
+          dataType: typeof debugData,
+          dataKeys: debugData && typeof debugData === 'object' ? Object.keys(debugData) : undefined
+        });
+      } catch {}
+    }
+    if (
+      result &&
+      typeof result === 'object' &&
+      !isStructuredValue(result) &&
+      'type' in result &&
+      'text' in result &&
+      'data' in result
+    ) {
+      const payload = (result as any).data;
+      result = wrapStructured(payload, (result as any).type, (result as any).text, (result as any).metadata);
+    }
     
     // Clear the shelf to prevent memory leaks
     metadataShelf.clear();
@@ -1691,7 +1713,10 @@ export async function evaluateExecInvocation(
         // IMPORTANT: Use execEnv not env, so the function parameters are available
         const nodeWithoutPipeline = { ...node, withClause: undefined };
         const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
-        return structuredExecEnabled ? asText(wrapExecResult(freshResult.value)) : createLegacyText(freshResult.value);
+        if (structuredExecEnabled) {
+          return wrapExecResult(freshResult.value);
+        }
+        return createLegacyText(freshResult.value);
       };
       
       // Create synthetic source stage for retryable pipeline
@@ -1723,9 +1748,8 @@ export async function evaluateExecInvocation(
       
       // Execute the pipeline with the ExecInvocation result as initial input
       // Mark it as retryable with the source function
-      const treatStructured = structuredExecEnabled || isStructuredValue(result);
-      const pipelineInput = treatStructured
-        ? asText(wrapExecResult(result))
+      const pipelineInput = structuredExecEnabled
+        ? wrapExecResult(result)
         : createLegacyText(result);
       const pipelineResult = await executePipeline(
         pipelineInput,

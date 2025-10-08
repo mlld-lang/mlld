@@ -22,38 +22,38 @@ export { PipelineExecutor } from './executor';
  * @param hasSyntheticSource - Whether the pipeline has a synthetic __source__ stage at position 0
  */
 export async function executePipeline(
-  baseOutput: string,
+  baseOutput: string | StructuredValue,
   pipeline: PipelineStage[],
   env: Environment,
   location?: any,
   format?: string,
   isRetryable?: boolean,
-  sourceFunction?: () => Promise<string>,
+  sourceFunction?: () => Promise<string | StructuredValue>,
   hasSyntheticSource?: boolean,
   parallelCap?: number,
   delayMs?: number
 ): Promise<string>;
 export async function executePipeline(
-  baseOutput: string,
+  baseOutput: string | StructuredValue,
   pipeline: PipelineStage[],
   env: Environment,
   location: any,
   format: string | undefined,
   isRetryable: boolean,
-  sourceFunction: (() => Promise<string>) | undefined,
+  sourceFunction: (() => Promise<string | StructuredValue>) | undefined,
   hasSyntheticSource: boolean,
   parallelCap: number | undefined,
   delayMs: number | undefined,
   options: { returnStructured: true }
 ): Promise<StructuredValue>;
 export async function executePipeline(
-  baseOutput: string,
+  baseOutput: string | StructuredValue,
   pipeline: PipelineStage[],
   env: Environment,
   location?: any,
   format?: string,
   isRetryable: boolean = false,
-  sourceFunction?: () => Promise<string>,
+  sourceFunction?: () => Promise<string | StructuredValue>,
   hasSyntheticSource: boolean = false,
   parallelCap?: number,
   delayMs?: number,

@@ -130,6 +130,19 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
       }
+      if (process.env.MLLD_DEBUG_STRUCTURED === 'true') {
+        const debugKeys = typeof rawValue === 'object' && rawValue !== null ? Object.keys(rawValue) : undefined;
+        const dataKeys = structuredWrapper && structuredWrapper.data && typeof structuredWrapper.data === 'object'
+          ? Object.keys(structuredWrapper.data as Record<string, unknown>)
+          : undefined;
+        console.error('[field-access]', {
+          name,
+          rawValueType: typeof rawValue,
+          hasStructuredWrapper: Boolean(structuredWrapper),
+          keys: debugKeys,
+          dataKeys
+        });
+      }
       if (typeof rawValue === 'string') {
         if (STRING_JSON_ACCESSORS.has(name)) {
           const trimmed = rawValue.trim();

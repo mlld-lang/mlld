@@ -75,6 +75,18 @@ export function wrapStructured<T>(
     if (!type && !text && !metadata) {
       return value;
     }
+    if (process.env.MLLD_DEBUG_STRUCTURED === 'true') {
+      try {
+        const dataKeys = value.data && typeof value.data === 'object'
+          ? Object.keys(value.data as Record<string, unknown>)
+          : undefined;
+        console.error('[wrapStructured] cloning structured', {
+          typeHint: type,
+          hasMetadata: Boolean(metadata),
+          dataKeys
+        });
+      } catch {}
+    }
     return createStructuredValue(
       value.data,
       type ?? value.type,

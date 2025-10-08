@@ -159,15 +159,12 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       
       // If there's an explicit return value, use it
       if (result !== undefined && result !== null) {
-        // Check if this is a PipelineInput object - if so, return just the text
-        if (typeof result === 'object' && 'text' in result && 'type' in result && 
-            typeof result.text === 'string' && typeof result.type === 'string') {
-          // This is likely a PipelineInput object
-          output = String(result.text);
-        }
-        // For other objects and arrays, use JSON.stringify to preserve structure
-        else if (typeof result === 'object') {
-          output = JSON.stringify(result);
+        if (typeof result === 'object') {
+          try {
+            output = JSON.stringify(result);
+          } catch {
+            output = String(result);
+          }
         } else {
           output = String(result);
         }

@@ -791,7 +791,7 @@ export async function evaluateRun(
       const { processPipeline } = await import('./pipeline/unified-processor');
       // Stage-0 retry is always enabled when we have a source node
       const enableStage0 = !!sourceNodeForPipeline;
-      const pipelineInput = outputText;
+      const pipelineInput = structuredExecEnabled ? outputValue : outputText;
       const valueForPipeline = enableStage0
         ? { value: pipelineInput, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;

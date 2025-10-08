@@ -31,12 +31,12 @@ export class PipelineExecutor {
   private format?: string;
   private pipeline: PipelineStage[];
   private isRetryable: boolean;
-  private sourceFunction?: () => Promise<string>; // Store source function for retries
+  private sourceFunction?: () => Promise<string | StructuredValue>; // Store source function for retries
   private hasSyntheticSource: boolean;
   private parallelCap?: number;
   private delayMs?: number;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
-  private initialInput: string = ''; // Store initial input for synthetic source
+  private initialInputText: string = ''; // Store initial input for synthetic source
   private allRetryHistory: Map<string, string[]> = new Map();
   private rateLimiter = new RateLimitRetry();
   private structuredOutputs: Map<number, StructuredValue> = new Map();
@@ -49,7 +49,7 @@ export class PipelineExecutor {
     env: Environment,
     format?: string,
     isRetryable: boolean = false,
-    sourceFunction?: () => Promise<string>,
+    sourceFunction?: () => Promise<string | StructuredValue>,
     hasSyntheticSource: boolean = false,
     parallelCap?: number,
     delayMs?: number
@@ -83,13 +83,17 @@ export class PipelineExecutor {
    * Execute the pipeline until completion or error.
    * WHY: Convert state-machine steps into actual command execution and effect emission.
    */
-  async execute(initialInput: string): Promise<string>;
-  async execute(initialInput: string, options: { returnStructured: true }): Promise<StructuredValue>;
-  async execute(initialInput: string, options?: ExecuteOptions): Promise<string | StructuredValue> {
+  async execute(initialInput: string | StructuredValue): Promise<string>;
+  async execute(initialInput: string | StructuredValue, options: { returnStructured: true }): Promise<StructuredValue>;
+  async execute(initialInput: string | StructuredValue, options?: ExecuteOptions): Promise<string | StructuredValue> {
+    const initialWrapper = isStructuredValue(initialInput)
+      ? wrapStructured(initialInput)
+      : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));
+
     // Store initial input for synthetic source stage
-    this.initialInput = initialInput;
+    this.initialInputText = initialWrapper.text;
     this.structuredOutputs.clear();
-    this.initialOutput = wrapStructured(initialInput, 'text', initialInput);
+    this.initialOutput = initialWrapper;
     this.finalOutput = this.initialOutput;
     this.lastStageIndex = -1;
     
@@ -102,7 +106,7 @@ export class PipelineExecutor {
     }
     
     // Start the pipeline
-    let nextStep = this.stateMachine.transition({ type: 'START', input: initialInput });
+    let nextStep = this.stateMachine.transition({ type: 'START', input: this.initialInputText });
     let iteration = 0;
 
     // Process steps until complete
@@ -323,8 +327,8 @@ export class PipelineExecutor {
       }
       
       if (firstTime) {
-        // First execution - return the already-computed initial input
-        return this.initialInput;
+        // First execution - return the already-computed initial input text
+        return this.initialInputText;
       }
       
       // Retry execution - need to call source function
@@ -337,7 +341,13 @@ export class PipelineExecutor {
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Source function returned fresh input:', fresh);
       }
-      return fresh;
+      const freshWrapper = isStructuredValue(fresh)
+        ? wrapStructured(fresh)
+        : wrapStructured(fresh, 'text', typeof fresh === 'string' ? fresh : safeJSONStringify(fresh));
+      this.initialOutput = freshWrapper;
+      this.finalOutput = freshWrapper;
+      this.initialInputText = freshWrapper.text;
+      return freshWrapper.text;
     }
 
     // Synthetic identity stage for pipelines that only have inline effects
