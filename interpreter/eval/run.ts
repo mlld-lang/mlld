@@ -16,7 +16,7 @@ import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue } from '@core/types/structured-value';
 import { wrapExecResult, isStructuredExecEnabled } from '../utils/structured-exec';
-import { asText } from '../utils/structured-value';
+import { asText, isStructuredValue } from '../utils/structured-value';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -707,11 +707,13 @@ export async function evaluateRun(
         const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
         // If the when-expression tagged a side-effect show, unwrap to its text
         // so /run echoes it as output (tests expect duplicate lines).
-        const val: any = whenResult.value as any;
-        if (val && typeof val === 'object' && (val as any).__whenEffect === 'show') {
-          setOutput((val as any).text ?? '');
+        const rawValue = whenResult.value as any;
+        if (rawValue && typeof rawValue === 'object' && (rawValue as any).__whenEffect === 'show') {
+          setOutput((rawValue as any).text ?? '');
+        } else if (isStructuredValue(rawValue) && rawValue.data && typeof rawValue.data === 'object' && (rawValue.data as any).__whenEffect === 'show') {
+          setOutput((rawValue.data as any).text ?? asText(rawValue));
         } else {
-          setOutput(whenResult.value as any);
+          setOutput(rawValue);
         }
         
         logger.debug('🎯 mlld-when result:', {

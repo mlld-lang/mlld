@@ -16,6 +16,7 @@ import { prepareValueForShadow } from '../env/variable-proxy';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
 import { wrapExecResult, wrapPipelineResult, isStructuredExecEnabled } from '../utils/structured-exec';
 
@@ -244,7 +245,7 @@ export async function evaluateExecInvocation(
         if (srcResult && typeof srcResult === 'object') {
           if (srcResult.value !== undefined) {
             const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Default);
+            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Display);
           } else if (typeof srcResult.stdout === 'string') {
             objectValue = srcResult.stdout;
           }
@@ -254,6 +255,13 @@ export async function evaluateExecInvocation(
       // Fallback if we still don't have an object value
       if (typeof objectValue === 'undefined') {
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
+      }
+
+      // Structured exec returns wrappers – convert them to plain data before method lookup
+      if (isStructuredValue(objectValue)) {
+        objectValue = objectValue.type === 'array' ? objectValue.data : asText(objectValue);
+      } else if (LegacyStructuredValue.isStructuredValue?.(objectValue)) {
+        objectValue = objectValue.text;
       }
       
       // Evaluate arguments
@@ -1238,6 +1246,8 @@ export async function evaluateExecInvocation(
       // Unwrap tagged show effects for non-pipeline exec-invocation (so /run echoes value)
       if (value && typeof value === 'object' && (value as any).__whenEffect === 'show') {
         value = (value as any).text ?? '';
+      } else if (isStructuredValue(value) && value.data && typeof value.data === 'object' && (value.data as any).__whenEffect === 'show') {
+        value = (value.data as any).text ?? asText(value);
       }
       result = value;
       // Update execEnv to the result which contains merged nodes

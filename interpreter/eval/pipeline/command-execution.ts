@@ -645,7 +645,17 @@ export async function executeCommandVariable(
       // propagate the input forward (so the stage doesn't terminate) while
       // still letting the effect line be emitted by the action itself.
       const inPipeline = !!env.getPipelineContext();
-      if (inPipeline && resultValue && typeof resultValue === 'object' && (resultValue as any).__whenEffect === 'show') {
+      const showEffect =
+        resultValue &&
+        typeof resultValue === 'object' &&
+        (resultValue as any).__whenEffect === 'show';
+      const structuredShowEffect =
+        isStructuredValue(resultValue) &&
+        resultValue.data &&
+        typeof resultValue.data === 'object' &&
+        (resultValue.data as any).__whenEffect === 'show';
+
+      if (inPipeline && (showEffect || structuredShowEffect)) {
         // If this is the last stage, suppress echo to avoid showing seed text.
         // If there are more stages, propagate input forward to keep pipeline alive.
         const pctx = env.getPipelineContext?.();
@@ -666,8 +676,11 @@ export async function executeCommandVariable(
         }
       }
       // Unwrap tagged show effects for non-pipeline contexts
-      if (resultValue && typeof resultValue === 'object' && (resultValue as any).__whenEffect === 'show') {
+      if (showEffect) {
         resultValue = (resultValue as any).text ?? '';
+      } else if (structuredShowEffect) {
+        const data = (resultValue as any).data;
+        resultValue = (data as any)?.text ?? asText(resultValue);
       }
       
       // Return the result as string
