@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc56",
+  "version": "2.0.0-rc57-pre",
   "description": "mlld: llm scripting language",
   "type": "module",
   "main": "dist/index.cjs",
