@@ -61,9 +61,14 @@ export class HelpSystem {
       this.displayDevHelp();
       return;
     }
-    
+
     if (command === 'nvim-setup' || command === 'nvim') {
       this.displayNvimSetupHelp();
+      return;
+    }
+
+    if (command === 'mcp' || command === 'serve') {
+      this.displayMcpHelp();
       return;
     }
 
@@ -88,6 +93,32 @@ Examples:
   mlld auth login
   mlld auth status
   mlld auth logout
+    `);
+  }
+
+  private displayMcpHelp(): void {
+    console.log(`
+Usage: mlld mcp [module-path] [options]
+
+Expose exported mlld functions as MCP tools over stdio.
+
+Options:
+  --config <module.mld.md>    Load MCP config (exports @config { tools, env })
+  --env KEY=VAL,KEY2=VAL2     Inject/override env vars (keys must start with MLLD_)
+  --tools tool1,tool2         Explicit tool allow-list (overrides config)
+
+Examples:
+  mlld mcp                        # Uses llm/mcp/ when present
+  mlld mcp llm/mcp/
+  mlld mcp --config llm/agents/sandy.mld.md
+  mlld mcp --tools github_readonly,thread_context
+
+Behavior:
+  - Discovers modules from files, directories, or glob patterns
+  - Reads /export directives when present and falls back to all executables otherwise
+  - Applies config module filtering and CLI allow-lists
+  - Accepts environment overrides (MLLD_* only) before executing tools
+  - Streams JSON-RPC responses to stdout for MCP clients
     `);
   }
 
@@ -404,6 +435,7 @@ Commands:
   run                     Run mlld scripts from script directory
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
+  serve                   Expose mlld functions as MCP tools over stdio
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   debug-resolution        Debug variable resolution in a mlld file

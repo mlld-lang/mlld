@@ -5,6 +5,7 @@ import { FilterHandler } from './filter/FilterHandler';
 import { MetadataPreserver } from './metadata/MetadataPreserver';
 import { isLoadContentResultArray } from '@core/types/load-content';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { asData, isStructuredValue } from '../structured-value';
 
 export class ArrayOperationsHandler {
   private slice = new SliceHandler();
@@ -73,6 +74,17 @@ export class ArrayOperationsHandler {
       };
     }
 
+    if (isStructuredValue(value)) {
+      const data = asData(value);
+      if (Array.isArray(data)) {
+        return {
+          type: 'structured-value',
+          items: data,
+          original: value
+        };
+      }
+    }
+
     // Plain JavaScript array
     if (Array.isArray(value)) {
       return {
@@ -96,7 +108,7 @@ export class ArrayOperationsHandler {
 }
 
 export interface ArrayData {
-  type: 'load-content-result' | 'array-variable' | 'plain-array' | 'ast-array';
+  type: 'load-content-result' | 'array-variable' | 'plain-array' | 'ast-array' | 'structured-value';
   items: any[];  // Can be LoadContentResult[] or plain values
   original: any;
 }

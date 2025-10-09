@@ -1,6 +1,7 @@
 import type { Environment } from '../env/Environment';
 import { isExecutable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 /**
  * Evaluate a foreach command expression by applying an executable to arrays of values.
@@ -106,7 +107,8 @@ export async function evaluateForeachCommand(
       
       // Use the standard exec invocation evaluator
       const result = await evaluateExecInvocation(execInvocationNode as any, env);
-      results.push(result.value);
+      const value = result.value;
+      results.push(isStructuredValue(value) ? asData(value) : value);
     } catch (error) {
       // Include iteration context in error message
       const params = cmdVariable.paramNames || definition.paramNames || [];

@@ -1,15 +1,10 @@
 import { MlldInterpreterError } from '@core/errors';
 import { llmxmlInstance } from './llmxml-instance';
 import { jsonToXml } from './json-to-xml';
+import type { StructuredValue, StructuredValueType } from './structured-value';
+import { STRUCTURED_VALUE_SYMBOL } from './structured-value';
 
-/**
- * Pipeline input interface that provides both raw text and parsed data
- */
-export interface PipelineInput {
-  text: string;
-  type: string;
-  // Lazy-loaded parsed data based on format
-  readonly data?: any;
+export interface PipelineInput<T = unknown> extends StructuredValue<T> {
   readonly csv?: any[][];
   readonly xml?: any;
 }
@@ -78,7 +73,10 @@ function parseXML(text: string): any {
 /**
  * Create a pipeline input wrapper with lazy parsing
  */
-export function createPipelineInput(text: string, format: string = 'json'): PipelineInput {
+export function createPipelineInput<T = unknown>(
+  text: string,
+  format: StructuredValueType = 'json'
+): PipelineInput<T> {
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('createPipelineInput called with:', {
       textType: typeof text,
@@ -93,6 +91,13 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
     type: format,
     _parsed: undefined
   };
+
+  Object.defineProperty(input, STRUCTURED_VALUE_SYMBOL, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false
+  });
 
   // Define lazy getters based on format
   switch (format.toLowerCase()) {
@@ -149,6 +154,13 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
         enumerable: true,
         configurable: true
       });
+      Object.defineProperty(input, 'data', {
+        get() {
+          return this.csv;
+        },
+        enumerable: true,
+        configurable: true
+      });
       break;
 
     case 'xml':
@@ -162,6 +174,13 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
             }
           }
           return this._parsed;
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(input, 'data', {
+        get() {
+          return this.xml;
         },
         enumerable: true,
         configurable: true
@@ -188,6 +207,22 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
         console.log('PipelineInput.toString() called - returning text property');
         console.trace('toString call stack');
       }
+      return this.text;
+    },
+    enumerable: false,
+    configurable: true
+  });
+
+  Object.defineProperty(input, 'valueOf', {
+    value: function() {
+      return this.text;
+    },
+    enumerable: false,
+    configurable: true
+  });
+
+  Object.defineProperty(input, Symbol.toPrimitive, {
+    value: function() {
       return this.text;
     },
     enumerable: false,

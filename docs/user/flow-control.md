@@ -315,6 +315,7 @@ Pipeline array (`@p`) contains:
 - `@p[1]` … `@p[n]` - outputs of completed visible stages
 - `@p[-1]` - previous stage output; `@p[-2]` two stages back, etc.
 - `@p.retries.all` - all attempt outputs from all retry contexts (for best-of-N patterns)
+- Pipeline stage outputs are `StructuredValue` wrappers with `.text` (string view) and `.data` (structured payload) properties. Templates and display automatically use `.text`; use `.data` when you need structured information.
 
 Gotchas:
 - `@ctx.try` and `@ctx.tries` are local to the active retry context. Stages that are not the requester or the retried stage will see `try: 1` and `tries: []`.

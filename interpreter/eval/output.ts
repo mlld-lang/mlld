@@ -16,6 +16,7 @@ import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 
@@ -406,6 +407,12 @@ async function evaluateSimpleVariableSource(
       { sourceLocation: directive.location, env }
     );
   }
+
+  let structuredWrapper: any = null;
+  if (isStructuredValue(value)) {
+    structuredWrapper = value;
+    value = value.data;
+  }
   
   // Handle field access if present (only for standard structure)
   const sourceFields = directive.values.source.fields;
@@ -447,6 +454,10 @@ async function evaluateSimpleVariableSource(
   const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
   
   // Convert value to string
+  if (structuredWrapper && value === structuredWrapper.data) {
+    return structuredWrapper.text;
+  }
+
   if (typeof value === 'string') {
     return value;
   } else if (isLoadContentResult(value)) {

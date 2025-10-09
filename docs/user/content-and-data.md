@@ -99,6 +99,8 @@ Every loaded file provides metadata through properties:
 /show @file                              >> Same as above (implicit)
 ```
 
+**Note:** Loaded files are `StructuredValue` objects with both `.text` (content string) and `.data` (rich metadata object) properties. Display automatically uses `.text`, while code can access `.data` for structured information.
+
 ### JSON File Metadata
 
 JSON files are automatically parsed:

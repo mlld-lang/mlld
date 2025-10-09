@@ -8,6 +8,7 @@ import {
   isTextLike,
   isPath,
   isImported,
+  isStructuredValueVariable,
   Variable
 } from '@core/types/variable';
 import { interpolate } from '../../core/interpreter';
@@ -426,7 +427,7 @@ export class VariableReferenceEvaluator {
       result = variable.value.resolvedPath;
     } else if (isImported(variable)) {
       result = variable.value;
-    } else if (isObject(variable) || isArray(variable)) {
+    } else if (isObject(variable) || isArray(variable) || isStructuredValueVariable(variable)) {
       // Extract Variable value - WHY: Direct variable references in templates need raw values
       const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
       result = await extractVariableValue(variable, env);

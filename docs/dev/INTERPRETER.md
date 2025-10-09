@@ -80,6 +80,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - With-clause: `run [...] with { pipeline: [...] }` sets `pipelineContext` on env for each stage.
   - Inline effects: built-ins `| log`, `| output`, `| show` attach to the preceding stage, run after it succeeds, and re-run on each retry attempt.
   - Streaming: optional sinks in `eval/pipeline/stream-sinks/*` (progress-only, terminal); ambient `@ctx` exposes attempt/hint history for retry semantics.
+- Structured execution: exec invocation, `/run`, and pipeline stages surface `StructuredValue` wrappers with `.text` and `.data` properties. Display/interpolation paths automatically use `.text`. `@p`/`@pipeline` hold wrappers, so use helpers (`asText`/`asData`) in low-level code that inspects stage history.
 
 ### Metadata Preservation
 

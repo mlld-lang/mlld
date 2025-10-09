@@ -277,7 +277,7 @@ export class ForeachCommandEvaluator {
       if (typeof codeResult === 'string' && 
           (codeResult.startsWith('"') || codeResult.startsWith('{') || codeResult.startsWith('[') || 
            codeResult === 'null' || codeResult === 'true' || codeResult === 'false' ||
-           /^-?\d+(\.\d+)?$/.test(codeResult))) {
+           /^-?\d+(\.\d+)?$/.test(codeResult.trim()))) {
         try {
           const parsed = JSON.parse(codeResult);
           // Return the parsed value directly for data context
@@ -286,6 +286,18 @@ export class ForeachCommandEvaluator {
           // Not valid JSON, use as-is
           return codeResult;
         }
+      }
+      if (typeof codeResult === 'string') {
+        const trimmed = codeResult.trim();
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+          const numeric = Number(trimmed);
+          if (!Number.isNaN(numeric)) {
+            return numeric;
+          }
+        }
+        if (trimmed === 'true') return true;
+        if (trimmed === 'false') return false;
+        if (trimmed === 'null') return null;
       }
       
       return codeResult;

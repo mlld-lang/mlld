@@ -4,6 +4,7 @@ import { createSimpleTextVariable, createPrimitiveVariable } from '@core/types/v
 import { evaluateExecInvocation } from '../eval/exec-invocation';
 import type { ExecInvocation } from '@core/types';
 import type { IFileSystemService, IPathService } from '@services/index';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 
 describe('Bash Primitive Variable Type Handling', () => {
   let env: Environment;
@@ -99,7 +100,8 @@ describe('Bash Primitive Variable Type Handling', () => {
     };
     
     const result = await evaluateExecInvocation(invocation, env);
-    const lines = result.value.trim().split('\n');
+    const valueText = isStructuredValue(result.value) ? asText(result.value) : String(result.value ?? '');
+    const lines = valueText.trim().split('\n');
     
     expect(lines[0]).toBe('value: Hello, World!');
   });

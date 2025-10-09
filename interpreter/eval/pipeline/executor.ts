@@ -1,5 +1,6 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, PipelineStage } from '@core/types';
+import type { StructuredValue } from '../../utils/structured-value';
 
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
@@ -9,6 +10,12 @@ import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
+import { asText, asData, isStructuredValue, wrapStructured } from '../../utils/structured-value';
+import { createPipelineInput, isPipelineInput } from '../../utils/pipeline-input';
+
+export interface ExecuteOptions {
+  returnStructured?: boolean;
+}
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
@@ -24,21 +31,25 @@ export class PipelineExecutor {
   private format?: string;
   private pipeline: PipelineStage[];
   private isRetryable: boolean;
-  private sourceFunction?: () => Promise<string>; // Store source function for retries
+  private sourceFunction?: () => Promise<string | StructuredValue>; // Store source function for retries
   private hasSyntheticSource: boolean;
   private parallelCap?: number;
   private delayMs?: number;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
-  private initialInput: string = ''; // Store initial input for synthetic source
+  private initialInputText: string = ''; // Store initial input for synthetic source
   private allRetryHistory: Map<string, string[]> = new Map();
   private rateLimiter = new RateLimitRetry();
+  private structuredOutputs: Map<number, StructuredValue> = new Map();
+  private initialOutput?: StructuredValue;
+  private finalOutput?: StructuredValue;
+  private lastStageIndex: number = -1;
 
   constructor(
     pipeline: PipelineStage[],
     env: Environment,
     format?: string,
     isRetryable: boolean = false,
-    sourceFunction?: () => Promise<string>,
+    sourceFunction?: () => Promise<string | StructuredValue>,
     hasSyntheticSource: boolean = false,
     parallelCap?: number,
     delayMs?: number
@@ -72,9 +83,19 @@ export class PipelineExecutor {
    * Execute the pipeline until completion or error.
    * WHY: Convert state-machine steps into actual command execution and effect emission.
    */
-  async execute(initialInput: string): Promise<string> {
+  async execute(initialInput: string | StructuredValue): Promise<string>;
+  async execute(initialInput: string | StructuredValue, options: { returnStructured: true }): Promise<StructuredValue>;
+  async execute(initialInput: string | StructuredValue, options?: ExecuteOptions): Promise<string | StructuredValue> {
+    const initialWrapper = isStructuredValue(initialInput)
+      ? wrapStructured(initialInput)
+      : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));
+
     // Store initial input for synthetic source stage
-    this.initialInput = initialInput;
+    this.initialInputText = initialWrapper.text;
+    this.structuredOutputs.clear();
+    this.initialOutput = initialWrapper;
+    this.finalOutput = this.initialOutput;
+    this.lastStageIndex = -1;
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Pipeline start:', {
@@ -85,7 +106,7 @@ export class PipelineExecutor {
     }
     
     // Start the pipeline
-    let nextStep = this.stateMachine.transition({ type: 'START', input: initialInput });
+    let nextStep = this.stateMachine.transition({ type: 'START', input: this.initialInputText });
     let iteration = 0;
 
     // Process steps until complete
@@ -112,8 +133,8 @@ export class PipelineExecutor {
       
       const stageEntry = this.pipeline[nextStep.stage];
       const result = Array.isArray(stageEntry)
-        ? await this.executeParallelStage(stageEntry, nextStep.input, nextStep.context)
-        : await this.executeStage(stageEntry, nextStep.input, nextStep.context);
+        ? await this.executeParallelStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context)
+        : await this.executeSingleStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context);
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Stage result:', {
@@ -147,6 +168,9 @@ export class PipelineExecutor {
     // Handle final state
     switch (nextStep.type) {
       case 'COMPLETE':
+        if (options?.returnStructured) {
+          return this.getFinalOutput();
+        }
         return nextStep.output;
       
       case 'ERROR':
@@ -185,43 +209,13 @@ export class PipelineExecutor {
    * Execute a single pipeline stage with the constructed stage environment.
    * GOTCHA: Inline effects are run after successful stage execution and re-run on retries.
    */
-  private async executeStage(
-    command: PipelineCommand | PipelineCommand[],
+  private async executeSingleStage(
+    stageIndex: number,
+    command: PipelineCommand,
     input: string,
     context: StageContext
   ): Promise<StageResult> {
     try {
-      // Effects, if any, are attached to functional stages and executed after success
-      // Parallel group support: if the stage is an array of commands, execute all in parallel
-      if (Array.isArray(command)) {
-        const outputs: (string | { value: 'retry'; hint?: any; from?: number })[] = [];
-        // Execute each sub-command with its own stage environment
-        for (const sub of command) {
-          const subEnv = await createStageEnvironment(
-            sub,
-            input,
-            context,
-            this.env,
-            this.format,
-            this.stateMachine.getEvents(),
-            this.hasSyntheticSource,
-            this.allRetryHistory
-          );
-          const out = await this.executeCommand(sub, input, subEnv);
-          outputs.push(out);
-        }
-        // If any branch requested a retry, propagate a retry signal
-        const retry = outputs.find(o => typeof o === 'object' && o && 'value' in o && (o as any).value === 'retry');
-        if (retry) {
-          const r = retry as any;
-          return { type: 'retry', reason: r.hint || 'Parallel stage requested retry', from: r.from, hint: r.hint };
-        }
-        // Normalize outputs to strings and pass JSON array to next stage
-        const normalized = outputs.map(o => String(o ?? ''));
-        const jsonArray = JSON.stringify(normalized);
-        return { type: 'success', output: jsonArray };
-      }
-
       // Set up execution environment for a single command stage
       const stageEnv = await createStageEnvironment(
         command,
@@ -231,7 +225,10 @@ export class PipelineExecutor {
         this.format,
         this.stateMachine.getEvents(),
         this.hasSyntheticSource,
-        this.allRetryHistory
+        this.allRetryHistory,
+        {
+          getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+        }
       );
       
       let output: any;
@@ -254,14 +251,6 @@ export class PipelineExecutor {
       
       // No need to transfer nodes - effects are emitted immediately to the shared handler
       
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Stage output:', {
-          stage: context.stage,
-          output: typeof output === 'string' ? output.substring(0, 50) : output,
-          isRetry: this.isRetrySignal(output)
-        });
-      }
-      
       // Check for retry signal
       if (this.isRetrySignal(output)) {
         if (process.env.MLLD_DEBUG === 'true') {
@@ -272,15 +261,16 @@ export class PipelineExecutor {
         return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
       }
 
-      // Empty output terminates pipeline
-      if (!output || output.trim() === '') {
-        // Even with empty output, run any attached inline effects that might
-        // be observing attempts (common for logging). Use empty output.
-        await this.runInlineEffects(command, '', stageEnv);
-        return { type: 'success', output: '' };
-      }
-
       const normalized = this.normalizeOutput(output);
+      this.structuredOutputs.set(stageIndex, normalized);
+      this.finalOutput = normalized;
+      this.lastStageIndex = stageIndex;
+
+      const normalizedText = normalized.text ?? '';
+      if (!normalizedText || normalizedText.trim() === '') {
+        await this.runInlineEffects(command, normalized, stageEnv);
+        return { type: 'success', output: normalizedText };
+      }
       // Clear hint for inline effects: @ctx.hint is only visible inside the retried stage body
       // May be worth revisiting this based on user feedback
       try {
@@ -302,7 +292,7 @@ export class PipelineExecutor {
       } catch {}
       // Run inline effects attached to this functional stage (non-stage effects)
       await this.runInlineEffects(command, normalized, stageEnv);
-      return { type: 'success', output: normalized };
+      return { type: 'success', output: normalizedText };
 
     } catch (error) {
       return { type: 'error', error: error as Error };
@@ -337,8 +327,8 @@ export class PipelineExecutor {
       }
       
       if (firstTime) {
-        // First execution - return the already-computed initial input
-        return this.initialInput;
+        // First execution - return the already-computed initial input text
+        return this.initialInputText;
       }
       
       // Retry execution - need to call source function
@@ -351,7 +341,13 @@ export class PipelineExecutor {
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Source function returned fresh input:', fresh);
       }
-      return fresh;
+      const freshWrapper = isStructuredValue(fresh)
+        ? wrapStructured(fresh)
+        : wrapStructured(fresh, 'text', typeof fresh === 'string' ? fresh : safeJSONStringify(fresh));
+      this.initialOutput = freshWrapper;
+      this.finalOutput = freshWrapper;
+      this.initialInputText = freshWrapper.text;
+      return freshWrapper.text;
     }
 
     // Synthetic identity stage for pipelines that only have inline effects
@@ -522,8 +518,18 @@ export class PipelineExecutor {
   }
 
   private isRetrySignal(output: any): boolean {
-    const isRetry = output === 'retry' || 
-      (output && typeof output === 'object' && output.value === 'retry');
+    let isRetry = false;
+    if (isStructuredValue(output)) {
+      const data = output.data as unknown;
+      isRetry =
+        output.text === 'retry' ||
+        typeof data === 'string' && data === 'retry' ||
+        (data && typeof data === 'object' && (data as any).value === 'retry');
+    } else {
+      isRetry =
+        output === 'retry' ||
+        (output && typeof output === 'object' && (output as any).value === 'retry');
+    }
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Retry check:', {
@@ -550,6 +556,7 @@ export class PipelineExecutor {
   }
 
   private async executeParallelStage(
+    stageIndex: number,
     commands: PipelineCommand[],
     input: string,
     context: StageContext
@@ -558,25 +565,88 @@ export class PipelineExecutor {
       const results = await runWithConcurrency(
         commands,
         Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
-        async (cmd, i) => {
-          const res = await this.executeStage(cmd, input, context);
-          if (res.type !== 'success') {
-            throw res.type === 'error' ? res.error : new Error('retry not supported in parallel stage');
+        async (cmd) => {
+          const subEnv = await createStageEnvironment(
+            cmd,
+            input,
+            context,
+            this.env,
+            this.format,
+            this.stateMachine.getEvents(),
+            this.hasSyntheticSource,
+            this.allRetryHistory,
+            {
+              getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+            }
+          );
+
+          const raw = await this.executeCommand(cmd, input, subEnv);
+          if (this.isRetrySignal(raw)) {
+            return raw;
           }
-          return res.output;
+          const normalized = this.normalizeOutput(raw);
+          await this.runInlineEffects(cmd, normalized, subEnv);
+          return normalized;
         },
         { ordered: true, paceMs: this.delayMs }
       );
-      return { type: 'success', output: JSON.stringify(results) };
+
+      const retrySignal = results.find(res => this.isRetrySignal(res));
+      if (retrySignal) {
+        return { type: 'error', error: new Error('retry not supported in parallel stage') };
+      }
+
+      const structuredResults = results as StructuredValue[];
+      const aggregatedData = structuredResults.map(result => extractStageValue(result));
+      const aggregatedText = safeJSONStringify(aggregatedData);
+      const aggregated = wrapStructured(aggregatedData, 'array', aggregatedText, {
+        stages: structuredResults
+      });
+      this.structuredOutputs.set(stageIndex, aggregated);
+      this.finalOutput = aggregated;
+      this.lastStageIndex = stageIndex;
+      return { type: 'success', output: aggregated.text };
     } catch (err) {
       return { type: 'error', error: err as Error };
     }
   }
 
-  private normalizeOutput(output: any): string {
-    if (typeof output === 'string') return output;
-    if (output?.content && output?.filename) return output.content;
-    return JSON.stringify(output);
+  private normalizeOutput(output: any): StructuredValue {
+    if (isStructuredValue(output)) {
+      return output;
+    }
+    if (isPipelineInput(output)) {
+      return output;
+    }
+
+    if (output === null || output === undefined) {
+      return wrapStructured('', 'text', '');
+    }
+
+    if (typeof output === 'string') {
+      return wrapStructured(output, 'text', output);
+    }
+
+    if (typeof output === 'number' || typeof output === 'boolean' || typeof output === 'bigint') {
+      const text = String(output);
+      return wrapStructured(output, 'text', text);
+    }
+
+    if (Array.isArray(output)) {
+      const normalizedArray = output.map(item => extractStageValue(item));
+      const text = safeJSONStringify(normalizedArray);
+      return wrapStructured(normalizedArray, 'array', text);
+    }
+
+    if (typeof output === 'object') {
+      const maybeText = typeof (output as any).content === 'string' ? (output as any).content : undefined;
+      const text = maybeText ?? safeJSONStringify(output);
+      return wrapStructured(output, 'object', text, {
+        loadResult: maybeText ? output : undefined
+      });
+    }
+
+    return wrapStructured(output, 'text', safeJSONStringify(output));
   }
 
   /**
@@ -585,7 +655,7 @@ export class PipelineExecutor {
    */
   private async runInlineEffects(
     command: any,
-    stageOutput: string,
+    stageOutput: StructuredValue | string,
     stageEnv: Environment
   ): Promise<void> {
     if (!command?.effects || !Array.isArray(command.effects) || command.effects.length === 0) return;
@@ -593,7 +663,7 @@ export class PipelineExecutor {
     for (const effectCmd of command.effects) {
       try {
         if (!effectCmd?.rawIdentifier || !isBuiltinEffect(effectCmd.rawIdentifier)) continue;
-        await runBuiltinEffect(effectCmd, stageOutput, stageEnv);
+        await runBuiltinEffect(effectCmd, asText(stageOutput), stageEnv);
       } catch (err) {
         // Fail-fast on effect errors
         if (err instanceof Error) {
@@ -612,4 +682,53 @@ export class PipelineExecutor {
       }
     }
   }
+
+  private getStageOutput(stageIndex: number, fallbackText: string = ''): StructuredValue {
+    if (stageIndex < 0) {
+      if (!this.initialOutput) {
+        this.initialOutput = wrapStructured(fallbackText, 'text', fallbackText);
+      }
+      return this.initialOutput;
+    }
+
+    const cached = this.structuredOutputs.get(stageIndex);
+    if (cached) {
+      return cached;
+    }
+
+    const wrapper = createPipelineInput<unknown>(fallbackText, 'text');
+    this.structuredOutputs.set(stageIndex, wrapper);
+    return wrapper;
+  }
+
+  private getFinalOutput(): StructuredValue {
+    if (this.finalOutput) {
+      return this.finalOutput;
+    }
+    if (this.lastStageIndex >= 0) {
+      return this.getStageOutput(this.lastStageIndex, this.initialOutput?.text ?? '');
+    }
+    if (this.initialOutput) {
+      return this.initialOutput;
+    }
+    return wrapStructured('', 'text', '');
+  }
+}
+
+function safeJSONStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value ?? '');
+  }
+}
+
+function extractStageValue(value: any): any {
+  if (isStructuredValue(value)) {
+    return asData(value);
+  }
+  if (isPipelineInput(value)) {
+    return value.data;
+  }
+  return value;
 }

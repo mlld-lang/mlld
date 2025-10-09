@@ -4,6 +4,12 @@ import { Environment } from '../env/Environment';
 import { isLoadContentResultURL } from '@core/types/load-content';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { unwrapStructuredForTest } from './test-helpers';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  expect(metadata?.source).toBe('load-content');
+}
 
 describe('Content Loader URL Metadata', () => {
   let env: Environment;
@@ -40,7 +46,8 @@ describe('Content Loader URL Metadata', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       expect(isLoadContentResultURL(result)).toBe(true);
       if (isLoadContentResultURL(result)) {
@@ -64,6 +71,7 @@ describe('Content Loader URL Metadata', () => {
         // Headers
         expect(result.headers).toEqual(mockResponse.headers);
       }
+      expectLoadContentMetadata(metadata);
     });
 
     it('should handle JSON URLs correctly', async () => {
@@ -86,7 +94,8 @@ describe('Content Loader URL Metadata', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       if (isLoadContentResultURL(result)) {
         expect(result.contentType).toBe('application/json');
@@ -115,7 +124,8 @@ describe('Content Loader URL Metadata', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       if (isLoadContentResultURL(result)) {
         expect(result.title).toBe('OG Test');
@@ -147,7 +157,8 @@ describe('Content Loader URL Metadata', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest<string>(rawResult);
       
       // With section extraction, should return plain string
       expect(typeof result).toBe('string');
@@ -185,7 +196,8 @@ describe('Content Loader URL Metadata', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       if (isLoadContentResultURL(result)) {
         // Script and style should be removed

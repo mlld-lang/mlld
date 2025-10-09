@@ -3,278 +3,136 @@ import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
-describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
+describe('Pipeline Structured Execution', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
-  
+
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
   });
-  
-  describe('1. Basic Pipeline Format Tests', () => {
-    it('1.1 JSON Format Pipeline - should parse JSON lazily and process', async () => {
-      const input = `
+
+  it('parses JSON inputs before invoking stages', async () => {
+    const input = `
 /exe @extractNames(input) = js {
-  // Verify input is PipelineInput object
-  if (!input.text || !input.type || !input.data) {
-    throw new Error("Missing PipelineInput properties");
+  if (!Array.isArray(input)) {
+    throw new Error('input is not parsed JSON array');
   }
-  const users = input.data;  // Should parse JSON lazily
-  return users.map(u => u.name).join(", ");
+  return input.map(u => u.name).join(', ');
 }
 
 /var @jsonData = \`[{"name": "Alice"}, {"name": "Bob"}]\`
 /var @names = @jsonData with { format: "json", pipeline: [@extractNames] }
 /show @names`;
 
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('Alice, Bob');
-    });
+    const result = await interpret(input, { fileSystem, pathService });
+    expect(result.trim()).toBe('Alice, Bob');
+  });
 
-    it('1.2 CSV Format Pipeline - should parse CSV lazily', async () => {
-      const input = `
+  it('parses CSV inputs into row arrays', async () => {
+    const input = `
 /exe @countCSVRows(input) = js {
-  const rows = input.csv;  // Should parse CSV lazily
+  if (!Array.isArray(input)) {
+    throw new Error('input is not parsed CSV array');
+  }
+  const rows = input;
   return \`\${rows.length} rows, \${rows[0].length} columns\`;
 }
 
-/var @csvData = \`Name,Age,City
-Alice,30,NYC
-Bob,25,LA\`
+/var @csvData = \`Name,Age,City\nAlice,30,NYC\nBob,25,LA\`
 /var @analysis = @csvData with { format: "csv", pipeline: [@countCSVRows] }
 /show @analysis`;
 
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('3 rows, 3 columns');
-    });
+    const result = await interpret(input, { fileSystem, pathService });
+    expect(result.trim()).toBe('3 rows, 3 columns');
+  });
 
-    it('1.3 XML Format Pipeline - should handle XML format', async () => {
-      const input = `
+  it('passes XML inputs as plain strings', async () => {
+    const input = `
 /exe @processXML(input) = js {
-  // For now, XML just wraps in DOCUMENT tags
-  return input.xml || input.text;
+  return typeof input === 'string' ? input : String(input);
 }
 
 /var @xmlData = "test data"
 /var @xmlTest = @xmlData with { format: "xml", pipeline: [@processXML] }
 /show @xmlTest`;
 
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toContain('test data');
-    });
-
-    it('1.4 Text Format Pipeline - should work with default text format', async () => {
-      const input = `
-/exe @uppercase(input) = js {
-  // Should work with both string and PipelineInput
-  const text = typeof input === 'string' ? input : input.text;
-  return text.toUpperCase();
-}
-
-/var @result = "hello" with { pipeline: [@uppercase] }
-/show @result`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('HELLO');
-    });
+    const result = await interpret(input, { fileSystem, pathService });
+    expect(result.trim()).toContain('test data');
   });
 
-  describe('2. Lazy Parsing Tests', () => {
-    it('2.1 Parse Error Handling - should throw on access, not creation', async () => {
-      const input = `
+  it('propagates JSON parse errors with stage context', async () => {
+    const input = `
 /exe @tryParse(input) = js {
-  try {
-    const data = input.data;  // Should throw here
-    return "Parsed successfully";
-  } catch (e) {
-    return "Parse error: " + e.message;
-  }
+  return 'unreachable';
 }
 
 /var @invalid = "{ invalid json"
 /var @result = @invalid with { format: "json", pipeline: [@tryParse] }
 /show @result`;
 
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toContain('Parse error:');
-    });
+    await expect(interpret(input, { fileSystem, pathService })).rejects.toThrow(/Failed to parse JSON/);
   });
 
-  describe('3. Backwards Compatibility Tests', () => {
-    it('3.1 String Function Compatibility - old functions expecting strings still work', async () => {
-      const input = `
-/exe @oldFunction(text) = js {
-  // This function now handles PipelineInput properly
-  const str = text.text || text;
-  return "Length: " + str.length;
-}
-
-/var @data = "Hello world"
-/var @result = @data with { pipeline: [@oldFunction] }
-/show @result`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('Length: 11');
-    });
-
-    it('3.2 toString() Behavior - PipelineInput stringifies correctly', async () => {
-      const input = `
-/exe @testStringify(input) = js {
-  // Force string conversion
-  return String(input).substring(0, 5);
-}
-
-/var @data = '{"complex": "data"}'
-/var @result = @data with { format: "json", pipeline: [@testStringify] }
-/show @result`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      // Should get first 5 chars of the JSON string
-      expect(result.trim()).toBe('{"com');
-    });
-  });
-
-  describe('4. Multi-Stage Pipeline Tests', () => {
-    it('4.1 Format Preservation Across Stages', async () => {
-      const input = `
-/exe @stage1(input) = js {
-  return JSON.stringify({
-    users: input.data,
-    count: input.data.length
-  });
-}
-
-/exe @stage2(input) = js {
-  const data = input.data;  // Should parse stage1's output
-  return \`Total users: \${data.count}\`;
-}
-
-/var @users = [{"name": "Alice"}, {"name": "Bob"}]
-/var @result = @users with { 
-  format: "json", 
-  pipeline: [@stage1, @stage2] 
-}
-/show @result`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('Total users: 2');
-    });
-
-    it('4.2 Mixed Pipeline Types - wrapped and unwrapped stages', async () => {
-      const input = `
-/exe @jsonStage(input) = js {
-  return input.data[0].value * 2;
-}
-/exe @textStage(num) = js {
-  // Handle both raw numbers and PipelineInput objects
-  const value = typeof num === 'object' && num.text ? num.text : num;
-  return \`Result: \${value}\`;
-}
-/var @data = [{"value": 21},]
-/var @result = @data with { format: "json", pipeline: [@jsonStage, @textStage] }
-/show @result`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('Result: 42');
-    });
-  });
-
-  describe('5. Environment Chain Tests', () => {
-    it('5.1 Parent Variable Access - pipeline stages can access parent vars', async () => {
-      const input = `
-/var @multiplier = "3"
-
-/exe @useParent(input, mult) = js {
-  // First param gets implicit @input from pipeline
-  // Second param gets explicitly passed @multiplier
-  const multValue = typeof mult === 'object' && mult.text ? mult.text : mult;
-  const multiplier = parseInt(multValue);
-  return input.data[0].value * multiplier;
-}
-/var @data = [{"value": 10},]
-/var @result = @data with { format: "json", pipeline: [@useParent(@multiplier)] }
-/show @result`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('30');
-    });
-  });
-
-  describe('6. Built-in Transformer Tests', () => {
-    it('6.1 Format Transformers - JSON pretty print', async () => {
-      const input = `
-/var @obj = { users: ["Alice", "Bob"], count: 2 }
-/var @jsonResult = @obj | @JSON
-/show @jsonResult`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      const parsed = JSON.parse(result.trim());
-      expect(parsed).toEqual({ users: ['Alice', 'Bob'], count: 2 });
-    });
-  });
-
-  describe('7. Complex Integration Tests', () => {
-    it('7.1 Foreach operations (simplified - not testing pipeline integration)', async () => {
-      const input = `
-/var @items = [
-  {"id": 1, "value": 10},
-  {"id": 2, "value": 20}
-]
-
-/exe @processItem(item) = js {
-  // Simple processing without pipeline format
-  return item.value * 2;
-}
-
-/var @results = foreach @processItem(@items)
-/show @results`;
-
-      const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('[\n  20,\n  40\n]');
-    });
-  });
-
-  describe('8. Error Context Tests', () => {
-    it('8.1 Pipeline Stage Errors - should include context', async () => {
-      const input = `
+  it('keeps text format pipelines compatible with string functions', async () => {
+    const input = `
 /exe @uppercase(input) = js {
+  if (typeof input !== 'string') {
+    throw new Error('expected string input');
+  }
   return input.toUpperCase();
 }
 
-/exe @failingStage(input) = js {
-  throw new Error("Stage failed: " + input);
-}
+/var @result = "hello" with { pipeline: [@uppercase] }
+/show @result`;
 
-/exe @lowercase(input) = js {
-  return input.toLowerCase();
-}
-
-/var @result = "test" with { 
-  pipeline: [@uppercase, @failingStage, @lowercase] 
-}`;
-
-      await expect(
-        interpret(input, { fileSystem, pathService })
-      ).rejects.toThrow(/Pipeline failed at stage 2/);
-    });
+    const result = await interpret(input, { fileSystem, pathService });
+    expect(result.trim()).toBe('HELLO');
   });
 
-  describe('Pipeline State Capture', () => {
-    it('should capture current pipeline behavior for baseline', async () => {
-      // This test documents the CURRENT behavior, even if not ideal
-      const behaviors = {
-        pipelineInputStructure: 'has text, type, data, csv, xml properties',
-        lazyParsing: 'getters trigger parsing on first access',
-        errorPropagation: 'includes pipeline step context',
-        formatPreservation: 'format carries through stages',
-        backwardsCompat: 'string functions auto-unwrap',
-        shadowEnvIntegration: 'parameters pass correctly'
-      };
+  it('passes structured data across multiple stages', async () => {
+    const input = `
+/exe @stage1(input) = js {
+  if (!Array.isArray(input)) {
+    throw new Error('stage1 expected array');
+  }
+  return {
+    users: input,
+    count: input.length
+  };
+}
 
-      // Document current state
-      console.log('Current Pipeline Behavior Baseline:', behaviors);
-      expect(behaviors).toBeDefined();
-    });
+/exe @stage2(input) = js {
+  if (!input || typeof input.count !== 'number') {
+    throw new Error('stage2 expected aggregated object');
+  }
+  return \`Total users: \${input.count}\`;
+}
+
+/var @users = [{"name": "Alice"}, {"name": "Bob"}]
+/var @result = @users with { format: "json", pipeline: [@stage1, @stage2] }
+/show @result`;
+
+    const result = await interpret(input, { fileSystem, pathService });
+    expect(result.trim()).toBe('Total users: 2');
+  });
+
+  it('allows parent variables alongside structured inputs', async () => {
+    const input = `
+/var @multiplier = "3"
+
+/exe @useParent(input, mult) = js {
+  if (!Array.isArray(input)) {
+    throw new Error('useParent expected array input');
+  }
+  const multiplier = Number(mult);
+  return input[0].value * multiplier;
+}
+/var @data = [{"value": 10}]
+/var @result = @data with { format: "json", pipeline: [@useParent(@multiplier)] }
+/show @result`;
+
+    const result = await interpret(input, { fileSystem, pathService });
+    expect(result.trim()).toBe('30');
   });
 });

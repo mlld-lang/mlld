@@ -1,6 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineStage } from '@core/types';
-import { PipelineExecutor } from './executor';
+import { PipelineExecutor, type ExecuteOptions } from './executor';
+import type { StructuredValue } from '../../utils/structured-value';
 
 // Re-export types
 export type * from './types';
@@ -21,17 +22,46 @@ export { PipelineExecutor } from './executor';
  * @param hasSyntheticSource - Whether the pipeline has a synthetic __source__ stage at position 0
  */
 export async function executePipeline(
-  baseOutput: string,
+  baseOutput: string | StructuredValue,
+  pipeline: PipelineStage[],
+  env: Environment,
+  location?: any,
+  format?: string,
+  isRetryable?: boolean,
+  sourceFunction?: () => Promise<string | StructuredValue>,
+  hasSyntheticSource?: boolean,
+  parallelCap?: number,
+  delayMs?: number
+): Promise<string>;
+export async function executePipeline(
+  baseOutput: string | StructuredValue,
+  pipeline: PipelineStage[],
+  env: Environment,
+  location: any,
+  format: string | undefined,
+  isRetryable: boolean,
+  sourceFunction: (() => Promise<string | StructuredValue>) | undefined,
+  hasSyntheticSource: boolean,
+  parallelCap: number | undefined,
+  delayMs: number | undefined,
+  options: { returnStructured: true }
+): Promise<StructuredValue>;
+export async function executePipeline(
+  baseOutput: string | StructuredValue,
   pipeline: PipelineStage[],
   env: Environment,
   location?: any,
   format?: string,
   isRetryable: boolean = false,
-  sourceFunction?: () => Promise<string>,
+  sourceFunction?: () => Promise<string | StructuredValue>,
   hasSyntheticSource: boolean = false,
   parallelCap?: number,
-  delayMs?: number
-): Promise<string> {
+  delayMs?: number,
+  options?: ExecuteOptions
+): Promise<string | StructuredValue> {
   const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction, hasSyntheticSource, parallelCap, delayMs);
+  if (options?.returnStructured) {
+    return await executor.execute(baseOutput, { returnStructured: true });
+  }
   return await executor.execute(baseOutput);
 }

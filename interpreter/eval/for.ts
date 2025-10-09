@@ -11,6 +11,7 @@ import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { asData, asText, isStructuredValue } from '../utils/structured-value';
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown): Variable {
@@ -211,13 +212,21 @@ export async function evaluateForExpression(
         }
         const result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
         if (result.env) childEnv = result.env;
-        if (result && (result as any).value === 'skip') {
+        let branchValue = result?.value;
+        if (isStructuredValue(branchValue)) {
+          try {
+            branchValue = asData(branchValue);
+          } catch {
+            branchValue = asText(branchValue);
+          }
+        }
+        if (branchValue === 'skip') {
           return SKIP as any;
         }
-        if (isVariable(result.value)) {
-          exprResult = await extractVariableValue(result.value, childEnv);
+        if (isVariable(branchValue)) {
+          exprResult = await extractVariableValue(branchValue, childEnv);
         } else {
-          exprResult = result.value;
+          exprResult = branchValue;
         }
         if (typeof exprResult === 'string') {
           const trimmed = exprResult.trim();

@@ -5,6 +5,31 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc57]
+
+### Added
+- **MCP server**: `mlld mcp` serves exported `/exe` functions as MCP tools
+  - Exposes functions over JSON-RPC stdio transport
+  - Default discovery: `llm/mcp/` directory when no path specified
+  - Config modules: `--config module.mld.md` exports `@config = { tools?, env? }`
+  - Environment overrides: `--env KEY=VAL` (MLLD_ prefix required)
+  - Tool filtering: `--tools tool1,tool2` or via config
+  - Duplicate tool names halt with error showing conflicting sources
+  - Example: `/exe @greet(name) = js { return \`Hello ${name}\`; }` becomes `greet` tool
+
+### Changed
+- **Data flow between stages**: Native types preserved throughout pipelines
+  - Loaders return parsed data: `<data.json>` yields object, not JSON string
+  - Pipeline stages pass arrays/objects directly: `@data | @process` receives native type
+  - JavaScript functions receive parsed values without `JSON.parse()`
+  - Templates and output convert to text automatically
+  - Fixes #435 
+
+### Breaking
+- Remove `JSON.parse()` calls in JavaScript stages - will fail on already-parsed data
+- Use `.text` to access stringified data, `.data` to get structured data in string context 
+- Pipelines expecting JSON strings will receive objects/arrays instead
+
 ## [2.0.0-rc56]
 
 ### Added

@@ -15,7 +15,7 @@ describe('Pipeline @ctx/@p and retry behavior', () => {
     // The current stage input is the previous stage output (which is the source value)
     expect(output).toContain('input=seed');
     // At the first visible stage, there is no previous visible stage output
-    expect(output).toContain('last=undefined');
+    expect(output).toContain('last= ');
     // hint is visible only inside the retried stage; outside it should be null
     expect(output).toContain('hint=null');
   });

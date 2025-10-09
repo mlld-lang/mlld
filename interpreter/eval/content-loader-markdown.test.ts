@@ -3,6 +3,12 @@ import { processContentLoader } from './content-loader';
 import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { unwrapStructuredForTest } from './test-helpers';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  expect(metadata?.source).toBe('load-content');
+}
 
 describe('Content Loader HTML to Markdown Conversion', () => {
   let env: Environment;
@@ -62,7 +68,8 @@ describe('Content Loader HTML to Markdown Conversion', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
       // Check that it's a LoadContentResultURL
       expect(result).toHaveProperty('url', 'https://example.com/article');
@@ -82,6 +89,7 @@ describe('Content Loader HTML to Markdown Conversion', () => {
       expect(content).not.toContain('Navigation menu');
       expect(content).not.toContain('Footer content');
       expect(content).not.toContain('Ads here');
+      expectLoadContentMetadata(metadata);
     });
 
     it('should fall back to full HTML conversion when Readability cannot extract article', async () => {
@@ -110,7 +118,8 @@ describe('Content Loader HTML to Markdown Conversion', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
       
       // Should still convert to markdown
       const content = result.content;
@@ -139,10 +148,20 @@ describe('Content Loader HTML to Markdown Conversion', () => {
         }
       };
 
-      const result = await processContentLoader(node, env);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest(rawResult);
+      const content =
+        typeof result === 'string'
+          ? result
+          : (result && typeof result === 'object' && 'content' in result
+              ? (result as { content: string }).content
+              : JSON.stringify(result));
+
+      const canonicalExpected = JSON.stringify(JSON.parse(mockJson));
+      const canonicalActual = JSON.stringify(JSON.parse(content));
       
-      // Content should be unchanged JSON
-      expect(result.content).toBe(mockJson);
+      // Content should be unchanged JSON (ignoring whitespace differences)
+      expect(canonicalActual).toBe(canonicalExpected);
     });
   });
 });

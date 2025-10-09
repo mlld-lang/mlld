@@ -1,7 +1,7 @@
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
-import { createMlldHelpers } from '../variable-proxy';
+import { createMlldHelpers, prepareParamsForShadow } from '../variable-proxy';
 import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
 import { enhanceJSError } from '@core/errors/patterns/init';
 
@@ -78,8 +78,15 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         this.shadowEnvironment as any // Cast to Environment type
       );
 
+      let shadowParams = params ? prepareParamsForShadow(params) : undefined;
+      let primitiveMetadata: Record<string, any> | undefined;
+      if (shadowParams && (shadowParams as any).__mlldPrimitiveMetadata) {
+        primitiveMetadata = (shadowParams as any).__mlldPrimitiveMetadata;
+        delete (shadowParams as any).__mlldPrimitiveMetadata;
+      }
+
       // Merge shadow environment with provided parameters
-      const allParams = params ? { ...params } : {};
+      const allParams = shadowParams ? { ...shadowParams } : {};
       const allParamNames: string[] = Object.keys(allParams);
       const allParamValues: any[] = Object.values(allParams);
 
@@ -112,9 +119,13 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       }
       
       // Add mlld helpers for Variable access
-      if (!params || !params['mlld']) {
-        // Create mlld helpers with primitive metadata
-        const mlldHelpers = createMlldHelpers(metadata);
+      if (!('mlld' in allParams)) {
+        const mergedMetadata = {
+          ...(metadata as Record<string, any> | undefined),
+          ...(primitiveMetadata || {})
+        };
+        const helperMetadata = Object.keys(mergedMetadata || {}).length ? mergedMetadata : undefined;
+        const mlldHelpers = createMlldHelpers(helperMetadata);
         allParamNames.push('mlld');
         allParamValues.push(mlldHelpers);
       }
@@ -148,15 +159,12 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       
       // If there's an explicit return value, use it
       if (result !== undefined && result !== null) {
-        // Check if this is a PipelineInput object - if so, return just the text
-        if (typeof result === 'object' && 'text' in result && 'type' in result && 
-            typeof result.text === 'string' && typeof result.type === 'string') {
-          // This is likely a PipelineInput object
-          output = String(result.text);
-        }
-        // For other objects and arrays, use JSON.stringify to preserve structure
-        else if (typeof result === 'object') {
-          output = JSON.stringify(result);
+        if (typeof result === 'object') {
+          try {
+            output = JSON.stringify(result);
+          } catch {
+            output = String(result);
+          }
         } else {
           output = String(result);
         }

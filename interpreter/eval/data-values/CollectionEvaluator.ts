@@ -1,6 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 
 /**
  * Handles evaluation of collection data values (objects and arrays).
@@ -18,6 +19,10 @@ export class CollectionEvaluator {
    * Checks if this evaluator can handle the given data value
    */
   canHandle(value: DataValue): boolean {
+    if (isStructuredValue(value)) {
+      return true;
+    }
+
     // Handle objects
     if (value?.type === 'object') {
       return true;
@@ -56,6 +61,10 @@ export class CollectionEvaluator {
    * Evaluates collection data values with recursive evaluation
    */
   async evaluate(value: DataValue, env: Environment): Promise<any> {
+    if (isStructuredValue(value)) {
+      return (value as any).data;
+    }
+
     // Handle objects - recursively evaluate all properties
     if (value?.type === 'object') {
       return await this.evaluateObject(value as DataObjectValue, env);
@@ -104,7 +113,11 @@ export class CollectionEvaluator {
     
     for (const [key, propValue] of Object.entries(value.properties)) {
       try {
-        evaluatedObj[key] = await this.evaluateDataValue(propValue, env);
+        let evaluated = await this.evaluateDataValue(propValue, env);
+        if (isStructuredValue(evaluated)) {
+          evaluated = unwrapStructuredPrimitive(evaluated);
+        }
+        evaluatedObj[key] = evaluated;
       } catch (error) {
         // Store error information but continue evaluating other properties
         evaluatedObj[key] = this.createPropertyError(key, error);
@@ -123,7 +136,10 @@ export class CollectionEvaluator {
     
     for (let i = 0; i < value.items.length; i++) {
       try {
-        const evaluatedItem = await this.evaluateDataValue(value.items[i], env);
+        let evaluatedItem = await this.evaluateDataValue(value.items[i], env);
+        if (isStructuredValue(evaluatedItem)) {
+          evaluatedItem = unwrapStructuredPrimitive(evaluatedItem);
+        }
         evaluatedElements.push(evaluatedItem);
       } catch (error) {
         // Store error information but continue evaluating other elements
@@ -131,9 +147,7 @@ export class CollectionEvaluator {
       }
     }
     
-    // Use ASTEvaluator to ensure we return plain JavaScript arrays
-    const { ASTEvaluator } = await import('../../core/ast-evaluator');
-    return await ASTEvaluator.evaluateToRuntime(evaluatedElements, env);
+    return evaluatedElements;
   }
 
   /**
@@ -171,7 +185,11 @@ export class CollectionEvaluator {
       }
       
       try {
-        evaluatedObject[key] = await this.evaluateDataValue(propValue, env);
+        let evaluated = await this.evaluateDataValue(propValue, env);
+        if (isStructuredValue(evaluated)) {
+          evaluated = unwrapStructuredPrimitive(evaluated);
+        }
+        evaluatedObject[key] = evaluated;
       } catch (error) {
         // Include the error in the result but don't stop evaluation
         evaluatedObject[key] = this.createPropertyError(key, error);
@@ -180,4 +198,21 @@ export class CollectionEvaluator {
     
     return evaluatedObject;
   }
+}
+
+function unwrapStructuredPrimitive(value: any): any {
+  if (!isStructuredValue(value)) {
+    return value;
+  }
+
+  const data = value.data;
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  if (typeof data === 'object') {
+    return value;
+  }
+
+  return data;
 }

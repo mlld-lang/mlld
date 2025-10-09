@@ -5,7 +5,14 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
+import {
+  isExecutableVariable,
+  createSimpleTextVariable,
+  createObjectVariable,
+  createArrayVariable,
+  createPrimitiveVariable,
+  createStructuredValueVariable
+} from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
@@ -16,6 +23,10 @@ import { prepareValueForShadow } from '../env/variable-proxy';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
+import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
+import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
+import { normalizeTransformerResult } from '../utils/transformer-result';
 
 /**
  * Coerce a value to a string for stdin input
@@ -115,6 +126,24 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  const createEvalResult = (
+    value: unknown,
+    targetEnv: Environment,
+    options?: { type?: string; text?: string }
+  ): EvalResult => {
+    const wrapped = wrapExecResult(value, options);
+    return {
+      value: wrapped,
+      env: targetEnv,
+      stdout: asText(wrapped),
+      stderr: '',
+      exitCode: 0
+    };
+  };
+
+  const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
+    return wrapExecResult(value, options);
+  };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
       hasCommandRef: !!node.commandRef,
@@ -204,7 +233,7 @@ export async function evaluateExecInvocation(
         if (srcResult && typeof srcResult === 'object') {
           if (srcResult.value !== undefined) {
             const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Default);
+            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Display);
           } else if (typeof srcResult.stdout === 'string') {
             objectValue = srcResult.stdout;
           }
@@ -214,6 +243,13 @@ export async function evaluateExecInvocation(
       // Fallback if we still don't have an object value
       if (typeof objectValue === 'undefined') {
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
+      }
+
+      // Structured exec returns wrappers – convert them to plain data before method lookup
+      if (isStructuredValue(objectValue)) {
+        objectValue = objectValue.type === 'array' ? objectValue.data : asText(objectValue);
+      } else if (LegacyStructuredValue.isStructuredValue?.(objectValue)) {
+        objectValue = objectValue.text;
       }
       
       // Evaluate arguments
@@ -283,13 +319,13 @@ export async function evaluateExecInvocation(
             throw new MlldInterpreterError(`Cannot call .trim() on ${typeof objectValue}`);
           }
           break;
-        case 'startsWith':
-          if (typeof objectValue === 'string') {
-            result = objectValue.startsWith(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
-          }
-          break;
+      case 'startsWith':
+        if (typeof objectValue === 'string') {
+          result = objectValue.startsWith(evaluatedArgs[0]);
+        } else {
+          throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
+        }
+        break;
         case 'endsWith':
           if (typeof objectValue === 'string') {
             result = objectValue.endsWith(evaluatedArgs[0]);
@@ -310,12 +346,17 @@ export async function evaluateExecInvocation(
         }
       }
       
+      const normalized = normalizeTransformerResult(commandName, result);
+      const resolvedValue = normalized.value;
+      const wrapOptions = normalized.options;
+
       // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
       if (node.withClause) {
         if (node.withClause.pipeline) {
           const { processPipeline } = await import('./pipeline/unified-processor');
+          const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
           const pipelineResult = await processPipeline({
-            value: String(result),
+            value: pipelineInputValue,
             env,
             node,
             identifier: node.identifier
@@ -323,18 +364,12 @@ export async function evaluateExecInvocation(
           // Still need to handle other withClause features (trust, needs)
           return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
         } else {
-          return applyWithClause(String(result), node.withClause, env);
+          return applyWithClause(resolvedValue, node.withClause, env);
         }
       }
 
       // Return the result wrapped appropriately when no withClause is present
-      return {
-        value: result,
-        env,
-        stdout: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result)),
-        stderr: '',
-        exitCode: 0
-      };
+      return createEvalResult(resolvedValue, env, wrapOptions);
     }
     // If this is a non-builtin method with objectSource, we do not (yet) support it
     if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
@@ -528,14 +563,18 @@ export async function evaluateExecInvocation(
             
             // Pass the type info with a special marker
             const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+            const normalized = normalizeTransformerResult(commandName, result);
+            const resolvedValue = normalized.value;
+            const wrapOptions = normalized.options;
             
             // Apply withClause transformations if present
             if (node.withClause) {
               if (node.withClause.pipeline) {
                 // Use unified pipeline processor for pipeline part
                 const { processPipeline } = await import('./pipeline/unified-processor');
+                const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
                 const pipelineResult = await processPipeline({
-                  value: String(result),
+                  value: pipelineInputValue,
                   env,
                   node,
                   identifier: node.identifier
@@ -543,17 +582,11 @@ export async function evaluateExecInvocation(
                 // Still need to handle other withClause features (trust, needs)
                 return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
               } else {
-                return applyWithClause(String(result), node.withClause, env);
+                return applyWithClause(resolvedValue, node.withClause, env);
               }
             }
             
-            return {
-              value: String(result),
-              env,
-              stdout: String(result),
-              stderr: '',
-              exitCode: 0
-            };
+            return createEvalResult(resolvedValue, env, wrapOptions);
           }
         }
       }
@@ -574,14 +607,18 @@ export async function evaluateExecInvocation(
     
     // Call the transformer implementation directly
     const result = await variable.metadata.transformerImplementation(inputValue);
+    const normalized = normalizeTransformerResult(commandName, result);
+    const resolvedValue = normalized.value;
+    const wrapOptions = normalized.options;
     
     // Apply withClause transformations if present
     if (node.withClause) {
       if (node.withClause.pipeline) {
         // Use unified pipeline processor for pipeline part
         const { processPipeline } = await import('./pipeline/unified-processor');
+        const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
         const pipelineResult = await processPipeline({
-          value: String(result),
+          value: pipelineInputValue,
           env,
           node,
           identifier: node.identifier
@@ -589,17 +626,11 @@ export async function evaluateExecInvocation(
         // Still need to handle other withClause features (trust, needs)
         return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
       } else {
-        return applyWithClause(String(result), node.withClause, env);
+        return applyWithClause(resolvedValue, node.withClause, env);
       }
     }
     
-    return {
-      value: String(result),
-      env,
-      stdout: String(result),
-      stderr: '',
-      exitCode: 0
-    };
+    return createEvalResult(resolvedValue, env, wrapOptions);
   }
   
   // Get the full executable definition from metadata
@@ -627,7 +658,10 @@ export async function evaluateExecInvocation(
     let argValue: string;
     let argValueAny: any;
 
-    if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
+    if (isStructuredValue(arg)) {
+      argValueAny = arg;
+      argValue = asText(arg);
+    } else if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
       // Primitives: pass through directly
       argValue = String(arg);
       argValueAny = arg;
@@ -704,19 +738,24 @@ export async function evaluateExecInvocation(
               value = accessed;
             }
             
-            // Preserve the type of the final value
-            argValueAny = value;
-            // For objects and arrays, use JSON.stringify to get proper string representation
-            if (value === undefined) {
-              argValue = 'undefined';
-            } else if (typeof value === 'object' && value !== null) {
-              try {
-                argValue = JSON.stringify(value);
-              } catch (e) {
+            if (isStructuredValue(value)) {
+              argValueAny = value;
+              argValue = asText(value);
+            } else {
+              // Preserve the type of the final value
+              argValueAny = value;
+              // For objects and arrays, use JSON.stringify to get proper string representation
+              if (value === undefined) {
+                argValue = 'undefined';
+              } else if (typeof value === 'object' && value !== null) {
+                try {
+                  argValue = JSON.stringify(value);
+                } catch (e) {
+                  argValue = String(value);
+                }
+              } else {
                 argValue = String(value);
               }
-            } else {
-              argValue = String(value);
             }
           } else {
             // Variable not found - use interpolation which will throw appropriate error
@@ -737,6 +776,8 @@ export async function evaluateExecInvocation(
 
           if (argValueAny === undefined) {
             argValue = 'undefined';
+          } else if (isStructuredValue(argValueAny)) {
+            argValue = asText(argValueAny);
           } else if (typeof argValueAny === 'object') {
             try {
               argValue = JSON.stringify(argValueAny);
@@ -820,7 +861,14 @@ export async function evaluateExecInvocation(
       
       // Check if we have the original Variable
       const originalVar = originalVariables[i];
-      if (originalVar) {
+      const isShellCode =
+        definition.type === 'code' &&
+        typeof definition.language === 'string' &&
+        (definition.language === 'bash' || definition.language === 'sh');
+
+      const shouldReuseOriginal = originalVar && !isShellCode && definition.type !== 'command';
+
+      if (shouldReuseOriginal) {
         // Use the original Variable directly, just update the name
         paramVar = {
           ...originalVar,
@@ -848,18 +896,22 @@ export async function evaluateExecInvocation(
       else {
         const preservedValue = argValue !== undefined ? argValue : argStringValue;
 
-        if (process.env.MLLD_DEBUG === 'true') {
-          try {
-            console.error('[exec-invocation] preservedValue', {
-              paramName,
-              typeofPreserved: typeof preservedValue,
-              isArray: Array.isArray(preservedValue),
-              preservedValue
-            });
-          } catch {}
-        }
-
-        if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
+        if (isStructuredValue(preservedValue)) {
+          paramVar = createStructuredValueVariable(
+            paramName,
+            preservedValue,
+            {
+              directive: 'var',
+              syntax: 'reference',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        } else if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
           // Object type - preserve structure
           paramVar = createObjectVariable(
             paramName,
@@ -1210,6 +1262,8 @@ export async function evaluateExecInvocation(
       // Unwrap tagged show effects for non-pipeline exec-invocation (so /run echoes value)
       if (value && typeof value === 'object' && (value as any).__whenEffect === 'show') {
         value = (value as any).text ?? '';
+      } else if (isStructuredValue(value) && value.data && typeof value.data === 'object' && (value.data as any).__whenEffect === 'show') {
+        value = (value.data as any).text ?? asText(value);
       }
       result = value;
       // Update execEnv to the result which contains merged nodes
@@ -1278,9 +1332,14 @@ export async function evaluateExecInvocation(
       } else if (paramVar) {
         // Always use enhanced Variable passing
         if (definition.language === 'bash' || definition.language === 'sh') {
-          // Bash/sh get simple values - the BashExecutor will handle conversion
-          // Just pass the Variable or proxy as-is, let the executor adapt it
-          codeParams[paramName] = prepareValueForShadow(paramVar);
+          const rawValue = paramVar.value;
+          if (typeof rawValue === 'string') {
+            codeParams[paramName] = rawValue;
+          } else if (isStructuredValue(rawValue)) {
+            codeParams[paramName] = asText(rawValue);
+          } else {
+            codeParams[paramName] = prepareValueForShadow(paramVar);
+          }
         } else {
           // Other languages (JS, Python) get proxies for rich type info
           // But first, check if it's a complex Variable that needs resolution
@@ -1363,7 +1422,42 @@ export async function evaluateExecInvocation(
         }
       }
     }
-    
+
+    // NEW: Pass captured shadow environments for JS/Node execution
+    if (
+      variable.metadata?.capturedModuleEnv instanceof Map &&
+      (definition.language === 'js' || definition.language === 'javascript' ||
+        definition.language === 'node' || definition.language === 'nodejs')
+    ) {
+      for (const [capturedName, capturedVar] of variable.metadata.capturedModuleEnv) {
+        if (codeParams[capturedName] !== undefined) {
+          continue;
+        }
+
+        if (params.includes(capturedName)) {
+          continue;
+        }
+
+        if (capturedVar.type === 'executable') {
+          continue;
+        }
+
+        codeParams[capturedName] = prepareValueForShadow(capturedVar);
+
+        if ((capturedVar.value === null || typeof capturedVar.value !== 'object') && capturedVar.type !== 'executable') {
+          const subtype = capturedVar.type === 'primitive' && 'primitiveType' in capturedVar
+            ? (capturedVar as any).primitiveType
+            : (capturedVar as any).subtype;
+          variableMetadata[capturedName] = {
+            type: capturedVar.type,
+            subtype,
+            metadata: capturedVar.metadata,
+            isVariable: true
+          };
+        }
+      }
+    }
+
     // NEW: Pass captured shadow environments for JS/Node execution
     const capturedEnvs = variable.metadata?.capturedShadowEnvs;
     if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
@@ -1401,6 +1495,28 @@ export async function evaluateExecInvocation(
 
     // Attempt to restore metadata from shelf
     result = metadataShelf.restoreMetadata(processedResult);
+    if (process.env.MLLD_DEBUG_STRUCTURED === 'true' && result && typeof result === 'object') {
+      try {
+        const debugData = (result as any).data;
+        console.error('[exec-invocation] rehydrate candidate', {
+          hasType: 'type' in (result as Record<string, unknown>),
+          hasText: 'text' in (result as Record<string, unknown>),
+          dataType: typeof debugData,
+          dataKeys: debugData && typeof debugData === 'object' ? Object.keys(debugData) : undefined
+        });
+      } catch {}
+    }
+    if (
+      result &&
+      typeof result === 'object' &&
+      !isStructuredValue(result) &&
+      'type' in result &&
+      'text' in result &&
+      'data' in result
+    ) {
+      const payload = (result as any).data;
+      result = wrapStructured(payload, (result as any).type, (result as any).text, (result as any).metadata);
+    }
     
     // Clear the shelf to prevent memory leaks
     metadataShelf.clear();
@@ -1639,6 +1755,27 @@ export async function evaluateExecInvocation(
       throw e;
     }
   }
+
+  // Normalize Variable results into raw values (with StructuredValue wrappers when enabled)
+  if (result && typeof result === 'object') {
+    const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+    if (isVariable(result)) {
+      const extracted = await extractVariableValue(result, execEnv);
+      const typeHint = Array.isArray(extracted)
+        ? 'array'
+        : typeof extracted === 'object' && extracted !== null
+          ? 'object'
+          : 'text';
+      const structured = wrapStructured(extracted as any, typeHint as any);
+      if (result.metadata) {
+        structured.metadata = {
+          ...structured.metadata,
+          variableMetadata: result.metadata
+        };
+      }
+      result = structured;
+    }
+  }
   
   // Apply withClause transformations if present
   if (node.withClause) {
@@ -1663,7 +1800,7 @@ export async function evaluateExecInvocation(
         // IMPORTANT: Use execEnv not env, so the function parameters are available
         const nodeWithoutPipeline = { ...node, withClause: undefined };
         const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
-        return typeof freshResult.value === 'string' ? freshResult.value : JSON.stringify(freshResult.value);
+        return wrapExecResult(freshResult.value);
       };
       
       // Create synthetic source stage for retryable pipeline
@@ -1695,23 +1832,25 @@ export async function evaluateExecInvocation(
       
       // Execute the pipeline with the ExecInvocation result as initial input
       // Mark it as retryable with the source function
+      const pipelineInput = wrapExecResult(result);
       const pipelineResult = await executePipeline(
-        typeof result === 'string' ? result : JSON.stringify(result),
+        pipelineInput,
         normalizedPipeline,
         execEnv,  // Use execEnv which has merged nodes
         node.location,
         node.withClause.format,
         true,  // isRetryable
         sourceFunction,
-        true   // hasSyntheticSource
+        true,  // hasSyntheticSource
+        undefined,
+        undefined,
+        { returnStructured: true }
       );
       
       // Still need to handle other withClause features (trust, needs)
-      return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, execEnv);
+      return applyWithClause(wrapPipelineResult(pipelineResult), { ...node.withClause, pipeline: undefined }, execEnv);
     } else {
-      // applyWithClause expects a string input
-      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
-      return applyWithClause(stringResult, node.withClause, execEnv);
+      return applyWithClause(result, node.withClause, execEnv);
     }
   }
   
@@ -1725,16 +1864,7 @@ export async function evaluateExecInvocation(
     } catch {}
   }
 
-  return {
-    value: result,
-    env: execEnv,  // Return execEnv which contains merged nodes from when expressions
-    // For stdout, convert the parsed value back to string for backward compatibility
-    // but preserve the actual value in the value field for truthiness checks
-    stdout: typeof result === 'string' ? result : 
-            (typeof result === 'object' && result !== null ? JSON.stringify(result) : String(result)),
-    stderr: '',
-    exitCode: 0
-  };
+  return createEvalResult(result, execEnv);
 }
 
 /**

@@ -13,6 +13,7 @@ import { MlldWhenExpressionError } from '@core/errors';
 import { evaluate, interpolate } from '../core/interpreter';
 import { evaluateCondition } from './when';
 import { logger } from '@core/utils/logger';
+import { asText, isStructuredValue } from '../utils/structured-value';
 
 /**
  * Check if a condition is the 'none' literal
@@ -237,6 +238,10 @@ export async function evaluateWhenExpression(
           const actionResult = await evaluate(pair.action, actionEnv, context);
           
           let value = actionResult.value;
+
+          if (isStructuredValue(value)) {
+            value = value.type === 'array' || value.type === 'object' ? value.data : asText(value);
+          }
           
 
           // Normalize wrapped string nodes (quotes/backticks) into plain strings

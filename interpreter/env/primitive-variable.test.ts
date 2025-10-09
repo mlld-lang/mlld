@@ -4,6 +4,7 @@ import { createSimpleTextVariable, createPrimitiveVariable } from '@core/types/v
 import { evaluateExecInvocation } from '../eval/exec-invocation';
 import type { ExecInvocation } from '@core/types';
 import type { IFileSystemService, IPathService } from '@services/index';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 describe('Primitive Variable Type Handling', () => {
   let env: Environment;
@@ -94,7 +95,12 @@ describe('Primitive Variable Type Handling', () => {
     };
     
     const result = await evaluateExecInvocation(invocation, env);
-    const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+    const raw = result.value;
+    const output = isStructuredValue(raw)
+      ? asData(raw)
+      : typeof raw === 'string'
+        ? JSON.parse(raw)
+        : raw;
     
     expect(output.value).toBe('Hello, World!');
     expect(output.type).toBe('simple-text');
@@ -146,7 +152,12 @@ describe('Primitive Variable Type Handling', () => {
     };
     
     const result = await evaluateExecInvocation(invocation, env);
-    const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+    const raw = result.value;
+    const output = isStructuredValue(raw)
+      ? asData(raw)
+      : typeof raw === 'string'
+        ? JSON.parse(raw)
+        : raw;
     
     expect(output.value).toBe(42);
     expect(output.type).toBe('primitive');
@@ -198,7 +209,12 @@ describe('Primitive Variable Type Handling', () => {
     };
     
     const result = await evaluateExecInvocation(invocation, env);
-    const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+    const raw = result.value;
+    const output = isStructuredValue(raw)
+      ? asData(raw)
+      : typeof raw === 'string'
+        ? JSON.parse(raw)
+        : raw;
     
     expect(output.value).toBe(true);
     expect(output.type).toBe('primitive');

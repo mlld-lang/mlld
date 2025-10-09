@@ -6,6 +6,12 @@ import type { ArrayVariable } from '@core/types/variable/VariableTypes';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import path from 'path';
+import { unwrapStructuredForTest } from './test-helpers';
+import type { StructuredValueMetadata } from '../utils/structured-value';
+
+function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
+  expect(metadata?.source).toBe('load-content');
+}
 
 describe('Content Loader Variable Tagging', () => {
   it('should tag RenamedContentArray with __variable metadata', async () => {
@@ -40,7 +46,8 @@ describe('Content Loader Variable Tagging', () => {
     };
     
     // Process the content loader
-    const result = await processContentLoader(loadContentNode, env);
+    const rawResult = await processContentLoader(loadContentNode, env);
+    const { data: result, metadata } = unwrapStructuredForTest<any>(rawResult);
     
     // Check that result is an array
     expect(Array.isArray(result)).toBe(true);
@@ -63,6 +70,7 @@ describe('Content Loader Variable Tagging', () => {
     
     // Verify the toString behavior matches
     expect(result.toString()).toBe(variable.metadata?.customToString?.());
+    expectLoadContentMetadata(metadata);
   });
   
   it('should tag LoadContentResultArray with __variable metadata', async () => {
@@ -89,7 +97,8 @@ describe('Content Loader Variable Tagging', () => {
     };
     
     // Process the content loader
-    const result = await processContentLoader(loadContentNode, env);
+    const rawResult = await processContentLoader(loadContentNode, env);
+    const { data: result, metadata } = unwrapStructuredForTest<any>(rawResult);
     
     // Check that result is an array
     expect(Array.isArray(result)).toBe(true);
@@ -109,6 +118,7 @@ describe('Content Loader Variable Tagging', () => {
     
     // Check that customToString is a function
     expect(typeof variable.metadata?.customToString).toBe('function');
+    expectLoadContentMetadata(metadata);
   });
   
   it('should preserve __variable metadata through var.ts', async () => {

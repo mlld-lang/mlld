@@ -17,8 +17,11 @@ import {
   createFileContentVariable,
   createSectionContentVariable,
   createComputedVariable,
-  createCommandResultVariable
+  createCommandResultVariable,
+  createStructuredValueVariable
 } from '@core/types/variable';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
 /**
  * Create VariableSource metadata based on the value node type
@@ -646,6 +649,15 @@ export async function evaluateVar(
         ...metadata
       }
     };
+  } else if (isStructuredValue(resolvedValue)) {
+    const structuredMetadata = {
+      ...metadata,
+      isStructuredValue: true,
+      structuredValueType: resolvedValue.type
+    };
+
+    variable = createStructuredValueVariable(identifier, resolvedValue, source, structuredMetadata);
+
   } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values - we need to preserve their types
     const { createPrimitiveVariable } = await import('@core/types/variable');
@@ -714,91 +726,14 @@ export async function evaluateVar(
     }
     
   } else if (valueNode.type === 'load-content') {
-    // Handle load-content nodes from <file.md> syntax
-    const { source: contentSource, options } = valueNode;
-    
-    // Import type guards for LoadContentResult
-    const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
-    
-    if (isLoadContentResult(resolvedValue)) {
-      // Single file with metadata - store as object variable
-      // Mark as NOT complex so it doesn't get re-evaluated
-      variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
-    } else if (isLoadContentResultArray(resolvedValue)) {
-      // Array of files from glob pattern - store as array variable
-      // Check if this array has been tagged with __variable metadata
-      const taggedVariable = (resolvedValue as any).__variable;
-      if (taggedVariable && taggedVariable.metadata) {
-        // Use the metadata from the tagged variable, which includes custom behaviors
-        variable = createArrayVariable(identifier, resolvedValue, true, source, {
-          ...metadata,
-          ...taggedVariable.metadata
-        });
-        
-        /**
-         * Re-apply special behaviors to arrays with custom toString/content getters
-         * WHY: LoadContentResultArray and RenamedContentArray have behaviors (toString, content getter)
-         *      that must be preserved for proper output formatting in templates and display
-         * GOTCHA: The behaviors are lost during Variable creation and must be re-applied
-         * CONTEXT: This happens when arrays are created from content loading operations
-         */
-        const { extractVariableValue } = await import('../utils/variable-migration');
-        const valueWithBehaviors = extractVariableValue(variable);
-        variable.value = valueWithBehaviors;
-      } else {
-        variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);
-      }
-    } else if (Array.isArray(resolvedValue) && resolvedValue.every(item => typeof item === 'string')) {
-      // Array of strings from transformed content - store as simple array
-      // Check if this array has been tagged with __variable metadata
-      const taggedVariable = (resolvedValue as any).__variable;
-      if (taggedVariable && taggedVariable.metadata) {
-        // Use the metadata from the tagged variable, which includes custom behaviors
-        variable = createArrayVariable(identifier, resolvedValue, false, source, {
-          ...metadata,
-          ...taggedVariable.metadata
-        });
-        
-        /**
-         * Re-apply special behaviors to string arrays from content operations
-         * WHY: RenamedContentArray and similar types have custom toString() methods
-         *      that enable proper concatenation behavior in templates
-         * GOTCHA: Arrays tagged with __variable metadata require behavior restoration
-         * CONTEXT: String arrays from glob patterns or renamed content operations
-         */
-        const { extractVariableValue } = await import('../utils/variable-migration');
-        const valueWithBehaviors = extractVariableValue(variable);
-        variable.value = valueWithBehaviors;
-      } else {
-        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
-      }
-    } else if (typeof resolvedValue === 'string') {
-      // Backward compatibility - plain string (e.g., from section extraction)
-      if (contentSource.type === 'path') {
-        const filePath = contentSource.raw || '';
-        
-        if (options?.section) {
-          // Section extraction case
-          const sectionName = options.section.identifier.content || '';
-          variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
-            sectionName, 'hash', source, metadata);
-        } else {
-          // Whole file case
-          variable = createFileContentVariable(identifier, resolvedValue, filePath, source, metadata);
-        }
-      } else if (contentSource.type === 'url') {
-        // URL content
-        const url = contentSource.raw || '';
-        variable = createFileContentVariable(identifier, resolvedValue, url, source, metadata);
-      } else {
-        // Default to simple text
-        variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
-      }
-    } else {
-      // Fallback - shouldn't happen
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
-    }
-    
+    const structuredValue = wrapLoadContentValue(resolvedValue);
+    const mergedMetadata = {
+      ...metadata,
+      structuredValueMetadata: structuredValue.metadata
+    };
+    variable = createStructuredValueVariable(identifier, structuredValue, source, mergedMetadata);
+    resolvedValue = structuredValue;
+
   } else if (valueNode.type === 'foreach' || valueNode.type === 'foreach-command') {
     // Foreach expressions always return arrays
     const isComplex = false; // foreach results are typically simple values
@@ -929,6 +864,12 @@ export async function evaluateVar(
   // Create new variable with the result
   if (typeof result === 'string' && result !== variable.value) {
     variable = createSimpleTextVariable(identifier, result, source, metadata);
+  } else if (isStructuredValue(result)) {
+    const structuredMetadata = {
+      ...metadata,
+      isPipelineResult: true
+    };
+    variable = createStructuredValueVariable(identifier, result, source, structuredMetadata);
   }
   
   env.setVariable(identifier, variable);
@@ -1136,6 +1077,10 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       
       // Check if this is a LoadContentResult and return its content
       const { isLoadContentResult } = await import('@core/types/load-content');
+      if (isStructuredValue(loadResult)) {
+        return loadResult;
+      }
+
       if (isLoadContentResult(loadResult)) {
         return loadResult.content;
       }

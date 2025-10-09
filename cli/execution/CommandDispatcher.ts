@@ -18,6 +18,7 @@ import { createCleanCommand } from '../commands/clean';
 import { createNvimSetupCommand } from '../commands/nvim-setup';
 import { createUpdateCommand } from '../commands/update';
 import { createOutdatedCommand } from '../commands/outdated';
+import { createMcpCommand } from '../commands/mcp';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -55,6 +56,9 @@ export class CommandDispatcher {
     this.commandMap.set('clean', createCleanCommand());
     this.commandMap.set('update', createUpdateCommand());
     this.commandMap.set('outdated', createOutdatedCommand());
+    const mcpCommand = createMcpCommand();
+    this.commandMap.set('mcp', mcpCommand);
+    this.commandMap.set('serve', mcpCommand); // Alias for backward compatibility
     this.commandMap.set('nvim-setup', createNvimSetupCommand());
     this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
   }
