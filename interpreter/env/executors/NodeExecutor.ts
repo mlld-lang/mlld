@@ -82,9 +82,18 @@ export class NodeExecutor extends BaseCommandExecutor {
 
       if (sanitizedParams) {
         shadowParams = prepareParamsForShadow(sanitizedParams);
+        const primitiveMetadata = (shadowParams as any).__mlldPrimitiveMetadata;
+        if (primitiveMetadata) {
+          delete (shadowParams as any).__mlldPrimitiveMetadata;
+        }
         // Also add mlld helpers with metadata
         if (!shadowParams.mlld) {
-          shadowParams.mlld = createMlldHelpers(metadata);
+          const mergedMetadata = {
+            ...(metadata as Record<string, any> | undefined),
+            ...(primitiveMetadata || {})
+          };
+          const helperMetadata = Object.keys(mergedMetadata || {}).length ? mergedMetadata : undefined;
+          shadowParams.mlld = createMlldHelpers(helperMetadata);
         }
       }
       

@@ -4,6 +4,7 @@ import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { mcpNameToMlldName } from './SchemaGenerator';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 
 export interface FunctionRouterOptions {
   environment: Environment;
@@ -130,6 +131,10 @@ export class FunctionRouter {
   }
 
   private serializeResult(value: unknown): string {
+    if (isStructuredValue(value)) {
+      return asText(value);
+    }
+
     if (value === null || value === undefined) {
       return '';
     }

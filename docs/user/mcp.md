@@ -1,46 +1,91 @@
 # MCP Server Support
 
-`mlld mcp` exposes exported `/exe` functions as Model Context Protocol tools. The command parses one or more modules, gathers exported functions, and starts a JSON-RPC server on stdio so MCP clients can discover and call those functions.
+## tldr
 
-- Without arguments it looks for `llm/mcp/` in the current project.
-- You can point it at an individual file, a directory, or a glob.
-- Additional flags (`--config`, `--env`, `--tools`) let you tailor which tools are exposed and which environment variables are available at runtime.
+Turn exported `/exe` functions into MCP tools with one command:
 
-## Quick Start
+```mlld
+/exe @greet(name) = js { return `Hello ${name}`; }
+/export { @greet }
+```
 
-1. Export executable functions from a module:
+```bash
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"demo","version":"1.0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"greet","arguments":{"name":"Ada"}}}' \
+| mlld mcp tools.mld.md
+```
+
+Output:
+```
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"mlld","version":"2.0.0-rc57"}}}
+{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"Hello Ada"}]}}
+```
+
+## Basic Usage
+
+1. Export functions you want to serve:
    ```mlld
-   /exe @greet(name) = js {
-     return `Hello ${name}`;
-   }
-
-   /export { @greet }
+   /exe @status() = js { return 'ok'; }
+   /export { @status }
    ```
-2. Start the server:
+2. Run the server:
    ```bash
    mlld mcp tools.mld.md
    ```
-   (If `llm/mcp/` exists, `mlld mcp` with no arguments will use it automatically.)
-3. Configure the MCP client (Claude Desktop, etc.) to run `mlld mcp` with the module path and any required environment variables.
+   If `llm/mcp/` exists, `mlld mcp` with no arguments serves every module in that directory.
+3. Point your MCP client (Claude Desktop, custom agent, etc.) at the same command and pass any required environment variables.
 
-## Command Overview
+Tips:
+- Serve a directory or glob: `mlld mcp llm/mcp/` or `mlld mcp "llm/mcp/*.mld.md"`.
+- JSON-RPC responses always print to stdout. Logs and warnings stay on stderr, so piping works cleanly.
 
-- `mlld mcp [path]` accepts a file, directory, or glob pattern. If no path is supplied and `llm/mcp/` exists, that directory is used.
-- Only exported executables appear as MCP tools. If a module lacks `/export`, the command exports every executable defined in that module.
-- Duplicate function names across modules trigger an error that references both module paths.
-- All logging uses `stderr`; JSON-RPC responses stream to `stdout`.
-- `--config <module.mld.md>` loads a configuration module that exports `@config = { tools, env }` to filter tools and inject additional environment variables (keys must begin with `MLLD_`).
-- `--env KEY=VAL,KEY2=VAL2` overrides environment variables prior to loading modules (keys must begin with `MLLD_`).
-- `--tools tool1,tool2` explicitly allow-lists tools (matching either the mlld name or the snake_case MCP name). This override takes precedence over the config module.
+## Common Patterns
 
-## Environment and Inputs
+- **Environment overrides**  
+  ```bash
+  mlld mcp tools.mld.md --env MLLD_GITHUB_TOKEN=ghp_xxx
+  ```
+  Keys must start with `MLLD_`. Modules read them with `/import { @MLLD_GITHUB_TOKEN } from @input`.
 
-- Modules keep access to `/import { @VAR } from @input`, so CLI callers can pass API keys or configuration through the process environment. Custom variables must use the `MLLD_` prefix (for example `MLLD_PERMISSION_LEVEL`).
-- Mixed module batches can import from the same environment; each `/exe` retains its captured module context, including variables supplied by `--env` or a config module.
+- **Directory defaults**  
+  Structure multi-tool projects under `llm/mcp/` so `mlld mcp` “just works” without arguments.
+
+- **Name collisions**  
+  If two modules export the same function name, the command prints both source paths and exits. Rename one of the exports or split the modules into separate servers.
+
+## Advanced Usage
+
+- **Config modules**  
+  Provide a companion module that exports `@config`:
+  ```mlld
+  /var @config = {
+    tools: ['status'],
+    env: { MLLD_PERMISSION_LEVEL: 'read' }
+  }
+  ```
+  Run with:
+  ```bash
+  mlld mcp llm/mcp/ --config llm/configs/agent.mld.md
+  ```
+  `config.tools` filters the served tools (snake_case or camelCase both match). `config.env` merges into the process environment after CLI overrides.
+
+- **Manual allow-list**  
+  Override everything with `--tools`:
+  ```bash
+  mlld mcp llm/mcp/ --tools status,create_issue
+  ```
+
+- **Multiple modules**  
+  ```bash
+  mlld mcp "llm/mcp/{github,party}.mld.md"
+  ```
+  The command merges exports into a single environment so shared helpers remain available during execution.
 
 ## Troubleshooting
 
-- **No tools listed**: Confirm the module exports functions with `/export { @name }` or remove the export directive to expose all executables.
-- **Conflicting names**: Rename one of the functions or split modules into separate server instances.
-- **Config module ignored**: Ensure it exports `@config` and that any environment variables in `config.env` start with `MLLD_`.
-- **Client connection issues**: Verify the MCP client points to the `mlld` binary and passes the same arguments you use locally.
+- **No tools listed**: Ensure the module exports functions with `/export { @name }`, or remove the directive to expose every executable.
+- **Tool not found**: Confirm the MCP client calls the snake_case name (`greet_user`), which maps back to `@greetUser`.
+- **Environment ignored**: Only `MLLD_`-prefixed variables apply. Anything else is skipped deliberately.
+- **Config module skipped**: Export `@config` and run `mlld mcp … --config path.mld.md`. Errors during config evaluation appear on stderr.
+- **Client connection issues**: Verify the client runs the same command you use locally and inherits the required environment variables. A quick local check is to pipe JSON requests as shown in the tldr example. 

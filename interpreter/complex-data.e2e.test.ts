@@ -4,6 +4,7 @@ import { evaluate } from '@interpreter/core/interpreter';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { parse } from '@grammar/parser';
 import { PathService } from '@services/fs/PathService';
+import { asText } from '@interpreter/utils/structured-value';
 
 describe('Complex Data Assignment', () => {
   it('should support embedded @run directives in data values', async () => {
@@ -62,7 +63,7 @@ describe('Complex Data Assignment', () => {
     const resolvedValue = await extractVariableValue(docsVar!, env);
     
     expect(resolvedValue).toHaveProperty('readme');
-    expect(resolvedValue.readme).toBe('File contents');
+    expect(asText(resolvedValue.readme)).toBe('File contents');
   });
 
   it('should support variable references with field access', async () => {

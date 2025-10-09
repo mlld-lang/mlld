@@ -4,6 +4,7 @@ import { createArrayVariable, createObjectVariable } from '@core/types/variable/
 import { evaluateExecInvocation } from '../eval/exec-invocation';
 import type { ExecInvocation } from '@core/types';
 import type { IFileSystemService, IPathService } from '@services/index';
+import { unwrapStructuredForTest } from '@interpreter/eval/test-helpers';
 
 describe('Variable Passing Integration Tests', () => {
   let env: Environment;
@@ -96,7 +97,10 @@ describe('Variable Passing Integration Tests', () => {
       };
       
       const result = await evaluateExecInvocation(invocation, env);
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       expect(output.type).toBe('array');
       expect(output.metadata.arrayType).toBe('test-array');
@@ -155,7 +159,10 @@ describe('Variable Passing Integration Tests', () => {
       };
       
       const result = await evaluateExecInvocation(invocation, env);
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       expect(output.type).toBe('object');
       expect(output.metadata.configType).toBe('server');
@@ -429,7 +436,10 @@ echo "value:$files"
       };
       
       const result = await evaluateExecInvocation(invocation, env);
-      const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
+      const unwrappedResult = unwrapStructuredForTest(result.value);
+      const output = typeof unwrappedResult.data === 'string'
+        ? JSON.parse(unwrappedResult.data)
+        : unwrappedResult.data;
       
       // Variable metadata is always provided
       expect(output.hasMlld).toBe(true);

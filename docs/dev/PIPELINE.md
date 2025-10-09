@@ -171,14 +171,15 @@ Transformers work as executable variables in pipelines:
 // Special handling in pipeline.ts
 if (commandVar?.metadata?.isBuiltinTransformer) {
   const result = await commandVar.metadata.transformerImplementation(input);
-  return String(result);
+  const normalized = normalizeTransformerResult(commandVar.name, result);
+  return finalizeResult(normalized.value, normalized.options);
 }
 ```
 
 ### Available Transformers
 
 1. **@XML / @xml** - Uses llmxml for SCREAMING_SNAKE_CASE conversion
-2. **@JSON / @json** - Pretty-prints JSON with 2-space indentation
+2. **@JSON / @json** - Returns parsed JSON data (objects/arrays/primitives) while `.text` is pretty-printed with 2-space indentation
 3. **@CSV / @csv** - Converts JSON arrays to CSV format
 4. **@MD / @md** - Formats markdown using prettier
 
@@ -307,6 +308,13 @@ This grouping aligns with shorthand `||` and with‑clause nested array syntax: 
 - There is no `@pipeline.input` field; references to "pipeline input" in code refer to `@ctx.input` for the current stage or `@p[0]` for the original/base input.
 
 These semantics ensure that validators can reason about the current stage's input (`@ctx.input`) while selection/aggregation patterns can reach back to the original input using `@p[0]`.
+
+#### Structured Outputs and Helpers
+
+- Stage outputs stored in `@p` are `StructuredValue` wrappers with both `.text` (string representation) and `.data` (structured payload) properties.
+- Use `.text` (or the helper `asText(value)`) for string operations, and `.data` / `asData(value)` to inspect structured results and metadata.
+- The synthetic `__source__` stage is omitted from history, so `@p[1]` always maps to the first user-defined stage.
+- The helper utilities `asText`, `asData`, and `wrapStructured` live in `interpreter/utils/structured-value.ts`; import them when writing pipeline-aware code that needs consistent access to both representations.
 
 ```mlld
 # Especially useful for accessing specific fields:
@@ -1084,7 +1092,8 @@ interpreter/
 
 - `@pipeline` (and alias `@p`) expose pipeline state:
   - Indexing: `@pipeline[0]` (input), `@pipeline[1]`, `@pipeline[-1]` (previous), etc.
-  - Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
+- Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
+  - `@pipeline.tries` exposes the recorded outputs for the current retry scope. When downstream stages consume it, they receive an array of attempt outputs; outside the active scope, the value is grouped by retry context so later stages (or aggregators) can inspect the full history.
   - Stage: `@pipeline.stage`, `@pipeline.length`
 - Ambient `@ctx` is available during pipeline evaluation with per-stage info:
   - `@ctx.try`, `@ctx.tries`, `@ctx.stage`, `@ctx.input`, `@ctx.lastOutput`, `@ctx.isPipeline`

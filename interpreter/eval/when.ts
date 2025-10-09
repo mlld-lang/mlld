@@ -16,6 +16,7 @@ import {
   createSimpleTextVariable,
   createObjectVariable
 } from '@core/types/variable';
+import { isStructuredValue, asData, asText } from '../utils/structured-value';
 
 /**
  * Compares two values according to mlld's when comparison rules
@@ -724,7 +725,17 @@ export async function evaluateCondition(
           ]
         } as any);
       }
-      return isTruthy(result);
+      const truthy = isTruthy(result);
+      if (process.env.MLLD_DEBUG === 'true') {
+        try {
+          console.error('[evaluateCondition] expression node result:', {
+            nodeType: node.type,
+            result,
+            truthy
+          });
+        } catch {}
+      }
+      return truthy;
     }
   }
   
@@ -969,6 +980,15 @@ function isTruthy(value: any): boolean {
     
     // For other variable types, use their value
     return isTruthy(variable.value);
+  }
+  
+  if (isStructuredValue(value)) {
+    try {
+      const structuredData = asData(value);
+      return isTruthy(structuredData);
+    } catch {
+      return isTruthy(asText(value));
+    }
   }
   
   // Handle null/undefined

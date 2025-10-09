@@ -82,4 +82,60 @@ describe('Data handling accessors', () => {
     const output = await interpret(input, { fileSystem, pathService });
     expect(output.trim()).toBe('true');
   });
+
+  it('stores structured assignments as wrappers and exposes data to field access, iteration, and equality', async () => {
+    const input = `
+/exe @structuredProfile() = js {
+  const wrapper = {
+    type: 'object',
+    text: '{"name":"Ada","pets":["Rex"]}',
+    data: { name: 'Ada', pets: ['Rex'] },
+    metadata: { source: 'test' },
+    toString() { return this.text; },
+    valueOf() { return this.text; },
+    [Symbol.toPrimitive]() { return this.text; }
+  };
+  wrapper[Symbol.for('mlld.StructuredValue')] = true;
+  return wrapper;
+}
+
+/var @profile = @structuredProfile()
+
+/exe @describePets(pets) = js {
+  if (!Array.isArray(pets)) {
+    throw new Error('pets not array');
+  }
+  return pets.join(',');
+}
+
+/var @summary = @profile.pets | @describePets
+/show @profile.name
+/show @summary
+/when [
+  @profile.name == "Ada" => show "matched"
+  none => show "unmatched"
+]
+`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    expect(output.trim()).toBe('Ada\nRex\nmatched');
+  });
+
+  it('wraps load-content assignments with structured metadata', async () => {
+    await fileSystem.writeFile('/project/doc.md', 'Structured body');
+
+    const input = `
+/var @doc = <doc.md>
+/var @name = @doc.filename
+/var @body = @doc.text
+/show @name
+/show @body`;
+
+    const output = await interpret(input, {
+      fileSystem,
+      pathService,
+      filePath: '/project/test.mld'
+    });
+    expect(output.trim()).toBe('doc.md\nStructured body');
+  });
 });

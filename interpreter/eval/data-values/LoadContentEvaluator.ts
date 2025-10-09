@@ -1,6 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { DataValue } from '@core/types/var';
 import { processContentLoader } from '../content-loader';
+import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
 /**
  * Handles evaluation of load-content data values (<file.md> syntax).
@@ -28,17 +29,7 @@ export class LoadContentEvaluator {
     
     // Use the existing content loader
     const result = await processContentLoader(value, env);
-    
-    // Import type guards
-    const { isLoadContentResult } = await import('@core/types/load-content');
-    
-    // For consistency with the smart object approach,
-    // return just the content string when used in data contexts
-    if (isLoadContentResult(result)) {
-      return result.content;
-    }
-    
-    // For arrays or other types, return as-is
-    return result;
+    const structured = wrapLoadContentValue(result);
+    return structured;
   }
 }

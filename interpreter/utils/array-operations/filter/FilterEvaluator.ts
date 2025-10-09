@@ -3,7 +3,6 @@ import { Environment } from '@interpreter/env/Environment';
 import { DurationComparator } from './DurationComparator';
 import { FieldAccessor } from './FieldAccessor';
 import { isTimeDurationNode } from '@core/types/guards';
-import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 
 export class FilterEvaluator {
   private durationComparator = new DurationComparator();
@@ -46,7 +45,8 @@ export class FilterEvaluator {
         console.warn(`Variable not found in filter: ${value.identifier}`);
         return undefined;
       }
-      return await extractVariableValue(variable, env);
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      return await resolveVariable(variable, env, ResolutionContext.Equality);
     }
 
     // Pass through literals and TimeDuration nodes

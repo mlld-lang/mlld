@@ -23,7 +23,8 @@ import {
   PrimitiveVariable,
   TextLikeVariable,
   StructuredVariable,
-  ExternalVariable
+  ExternalVariable,
+  StructuredValueVariable
 } from './VariableTypes';
 
 // =========================================================================
@@ -122,6 +123,13 @@ export function isPipelineInput(variable: Variable): variable is PipelineInputVa
 }
 
 /**
+ * Type guard for StructuredValueVariable
+ */
+export function isStructuredValueVariable(variable: Variable): variable is StructuredValueVariable {
+  return variable.type === 'structured';
+}
+
+/**
  * Type guard for PrimitiveVariable
  */
 export function isPrimitive(variable: Variable): variable is PrimitiveVariable {
@@ -149,7 +157,7 @@ export function isTextLike(variable: Variable): variable is TextLikeVariable {
  * Check if variable contains structured data
  */
 export function isStructured(variable: Variable): variable is StructuredVariable {
-  return isObject(variable) || isArray(variable);
+  return isObject(variable) || isArray(variable) || isStructuredValueVariable(variable);
 }
 
 /**
@@ -185,6 +193,7 @@ export class VariableTypeGuards {
   static isImported = isImported;
   static isExecutable = isExecutable;
   static isPipelineInput = isPipelineInput;
+  static isStructuredValue = isStructuredValueVariable;
   static isPrimitive = isPrimitive;
 
   // Composite type guards

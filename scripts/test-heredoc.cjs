@@ -284,7 +284,7 @@ tests.push({
   echo "File size: $(echo -n \"$content\" | wc -c | tr -d '[:space:]')"
   echo "First word: $(echo "$content" | head -c 4)"
 }
-/show @analyze(@filedata)
+/show @analyze(@filedata.text)
 `,
   expected: ['File size: 200000', 'First word: test'],
   shouldPass: true
