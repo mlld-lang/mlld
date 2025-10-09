@@ -20,8 +20,22 @@ import {
   createCommandResultVariable,
   createStructuredValueVariable
 } from '@core/types/variable';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
+
+/**
+ * Safely convert a value to string, handling StructuredValue wrappers
+ * WHY: Many code paths need to convert values to strings but must check
+ *      for StructuredValue wrappers first to avoid producing [object Object]
+ */
+function valueToString(value: unknown): string {
+  if (value === null) return '';
+  if (value === undefined) return 'undefined'; // Preserve 'undefined' string for display
+  if (typeof value === 'string') return value;
+  if (isStructuredValue(value)) return asText(value);
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
 
 /**
  * Create VariableSource metadata based on the value node type
@@ -711,18 +725,19 @@ export async function evaluateVar(
   } else if (valueNode.type === 'VariableReference') {
     // For VariableReference nodes, create variable based on resolved value type
     // This handles cases like @user.name where resolvedValue is the field value
-    if (typeof resolvedValue === 'string') {
-      variable = createSimpleTextVariable(identifier, resolvedValue, source, metadata);
-    } else if (typeof resolvedValue === 'number' || typeof resolvedValue === 'boolean' || resolvedValue === null) {
+    const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
+    if (typeof actualValue === 'string') {
+      variable = createSimpleTextVariable(identifier, actualValue, source, metadata);
+    } else if (typeof actualValue === 'number' || typeof actualValue === 'boolean' || actualValue === null) {
       const { createPrimitiveVariable } = await import('@core/types/variable');
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
-    } else if (Array.isArray(resolvedValue)) {
-      variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
-    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+      variable = createPrimitiveVariable(identifier, actualValue, source, metadata);
+    } else if (Array.isArray(actualValue)) {
+      variable = createArrayVariable(identifier, actualValue, false, source, metadata);
+    } else if (typeof actualValue === 'object' && actualValue !== null) {
+      variable = createObjectVariable(identifier, actualValue, false, source, metadata);
     } else {
       // Fallback to text
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
     }
     
   } else if (valueNode.type === 'load-content') {
@@ -741,26 +756,28 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'ExecInvocation') {
     // Exec invocations can return any type
-    if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+    const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
+    if (typeof actualValue === 'object' && actualValue !== null) {
+      if (Array.isArray(actualValue)) {
+        variable = createArrayVariable(identifier, actualValue, false, source, metadata);
       } else {
-        variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+        variable = createObjectVariable(identifier, actualValue, false, source, metadata);
       }
     } else {
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
     }
-    
+
   } else if (valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers - create based on resolved type
-    if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+    const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
+    if (typeof actualValue === 'object' && actualValue !== null) {
+      if (Array.isArray(actualValue)) {
+        variable = createArrayVariable(identifier, actualValue, false, source, metadata);
       } else {
-        variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+        variable = createObjectVariable(identifier, actualValue, false, source, metadata);
       }
     } else {
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
     }
     
   } else if (directive.meta?.expressionType) {
@@ -770,16 +787,16 @@ export async function evaluateVar(
       variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
     } else {
       // Expression returned non-primitive (e.g., string comparison)
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
     }
     
   } else if (valueNode.type === 'Literal') {
     // Literal nodes - DON'T create variable yet, let it fall through to pipeline processing
     // The variable will be created after checking for pipelines
-    
+
   } else {
     // Text variables - need to determine specific type
-    const strValue = String(resolvedValue);
+    const strValue = valueToString(resolvedValue);
     
     if (directive.meta?.wrapperType === 'singleQuote') {
       variable = createSimpleTextVariable(identifier, strValue, source, metadata);
@@ -817,10 +834,10 @@ export async function evaluateVar(
         const { createPrimitiveVariable } = await import('@core/types/variable');
         variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
       } else {
-        variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+        variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
       }
     } else {
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
     }
   }
   

@@ -41,11 +41,31 @@ function coerceStdinString(value: unknown): string {
     return value;
   }
 
-  if (typeof value === 'number' || typeof value === 'boolean') {
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     return String(value);
   }
 
-  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+  if (Buffer.isBuffer(value)) {
+    return value.toString('utf8');
+  }
+
+  // CRITICAL: Check for StructuredValue wrappers before other object operations
+  if (isStructuredValue(value)) {
+    return asText(value);
+  }
+
+  if (isLoadContentResult(value)) {
+    return value.content ?? '';
+  }
+
+  if (Array.isArray(value)) {
+    if (isLoadContentResultArray(value)) {
+      return value.map(item => item.content ?? '').join('\n');
+    }
+    return value.map(item => coerceStdinString(item)).join('\n');
+  }
+
+  if (typeof value === 'object' && value !== null) {
     return JSON.stringify(value);
   }
 

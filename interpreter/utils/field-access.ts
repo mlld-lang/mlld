@@ -244,8 +244,13 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle LoadContentResultArray - special case for .content
       if (isLoadContentResultArray(rawValue)) {
         if (name === 'content') {
-          // Return concatenated content
-          accessedValue = rawValue.map(item => item.content).join('\n\n');
+          // CRITICAL: rawValue might be wrapped in StructuredValue, ensure we have the actual array
+          const actualArray = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
+          if (isLoadContentResultArray(actualArray)) {
+            accessedValue = actualArray.map(item => item.content).join('\n\n');
+          } else {
+            accessedValue = rawValue.map(item => item.content).join('\n\n');
+          }
           break;
         }
         // Try to access as array property
@@ -447,45 +452,49 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
       
       // Handle regular arrays
-      if (!Array.isArray(rawValue)) {
+      // CRITICAL: rawValue might itself be a StructuredValue (nested wrapping)
+      // We need to unwrap it before array operations
+      const arrayData = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
+
+      if (!Array.isArray(arrayData)) {
         // Try object access with numeric key as fallback
         const numKey = String(fieldValue);
-        if (typeof rawValue === 'object' && rawValue !== null) {
+        if (typeof arrayData === 'object' && arrayData !== null) {
           // Handle normalized AST objects (must have both type and properties)
-          if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {
-            if (numKey in rawValue.properties) {
-              accessedValue = rawValue.properties[numKey];
+          if (arrayData.type === 'object' && arrayData.properties && typeof arrayData.properties === 'object') {
+            if (numKey in arrayData.properties) {
+              accessedValue = arrayData.properties[numKey];
               break;
             }
-          } else if (numKey in rawValue) {
-            accessedValue = rawValue[numKey];
+          } else if (numKey in arrayData) {
+            accessedValue = arrayData[numKey];
             break;
           }
         }
         {
           const chain = [...(options?.parentPath || []), String(index)];
-          const msg = `Cannot access index ${index} on non-array value (${typeof rawValue})`;
+          const msg = `Cannot access index ${index} on non-array value (${typeof arrayData})`;
           throw new FieldAccessError(msg, {
-            baseValue: rawValue,
+            baseValue: arrayData,
             fieldAccessChain: [],
             failedAtIndex: Math.max(0, chain.length - 1),
             failedKey: index
           });
         }
       }
-      
-      if (index < 0 || index >= rawValue.length) {
+
+      if (index < 0 || index >= arrayData.length) {
         const chain = [...(options?.parentPath || []), String(index)];
-        const msg = `Array index ${index} out of bounds (length: ${rawValue.length})`;
+        const msg = `Array index ${index} out of bounds (length: ${arrayData.length})`;
         throw new FieldAccessError(msg, {
-          baseValue: rawValue,
+          baseValue: arrayData,
           fieldAccessChain: [],
           failedAtIndex: Math.max(0, chain.length - 1),
           failedKey: index
         });
       }
-      
-      accessedValue = rawValue[index];
+
+      accessedValue = arrayData[index];
       break;
     }
     
