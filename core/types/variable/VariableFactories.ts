@@ -21,10 +21,12 @@ import {
   ImportedVariable,
   ExecutableVariable,
   PipelineInputVariable,
+  StructuredValueVariable,
   PrimitiveVariable,
   PipelineInput,
   Variable
 } from './VariableTypes';
+import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 
 // =========================================================================
 // INDIVIDUAL FACTORY FUNCTION EXPORTS (for backward compatibility)
@@ -162,10 +164,9 @@ export function createPathVariable(
   isURL: boolean,
   isAbsolute: boolean,
   source: VariableSource,
-  security?: { trust?: 'high' | 'medium' | 'low'; ttl?: number },
   metadata?: VariableMetadata
 ): PathVariable {
-  return VariableFactory.createPath(name, resolvedPath, originalPath, isURL, isAbsolute, source, security, metadata);
+  return VariableFactory.createPath(name, resolvedPath, originalPath, isURL, isAbsolute, source, metadata);
 }
 
 /**
@@ -211,6 +212,18 @@ export function createPipelineInputVariable(
   pipelineStage?: number
 ): PipelineInputVariable {
   return VariableFactory.createPipelineInput(name, value, format, rawText, source, pipelineStage);
+}
+
+/**
+ * Create a StructuredValueVariable
+ */
+export function createStructuredValueVariable(
+  name: string,
+  value: StructuredValue,
+  source: VariableSource,
+  metadata?: VariableMetadata
+): StructuredValueVariable {
+  return VariableFactory.createStructuredValue(name, value, source, metadata);
 }
 
 /**
@@ -475,7 +488,6 @@ export class VariableFactory {
     isURL: boolean,
     isAbsolute: boolean,
     source: VariableSource,
-    security?: { trust?: 'high' | 'medium' | 'low'; ttl?: number },
     metadata?: VariableMetadata
   ): PathVariable {
     return {
@@ -485,8 +497,7 @@ export class VariableFactory {
         resolvedPath,
         originalPath,
         isURL,
-        isAbsolute,
-        security
+        isAbsolute
       },
       source,
       createdAt: Date.now(),
@@ -577,6 +588,32 @@ export class VariableFactory {
         isPipelineInput: true,
         pipelineStage
       }
+    };
+  }
+
+  /**
+   * Create a StructuredValueVariable
+   */
+  static createStructuredValue(
+    name: string,
+    value: StructuredValue,
+    source: VariableSource,
+    metadata?: VariableMetadata
+  ): StructuredValueVariable {
+    const structuredMetadata: VariableMetadata = {
+      ...metadata,
+      isStructuredValue: true,
+      structuredValueType: value.type
+    };
+
+    return {
+      type: 'structured',
+      name,
+      value,
+      source,
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+      metadata: structuredMetadata
     };
   }
 

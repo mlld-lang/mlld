@@ -3,7 +3,32 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 ExeRHSContent "exe assignment value"
-  = WhenExpression              // when: [...] expressions for conditional execution
+  = leading:LeadingParallelPipeline {
+      const pipeline = leading.withClause.pipeline || [];
+      const pipelineSummary = pipeline.map(stage => {
+        if (Array.isArray(stage)) {
+          return `[${stage.map(cmd => `@${cmd.rawIdentifier}`).join(', ')}]`;
+        }
+        return `@${stage.rawIdentifier}`;
+      }).join(' | ');
+      return {
+        type: 'exePipelineLeading',
+        subtype: 'exeCommand',
+        source: 'pipeline',
+        values: {
+          withClause: leading.withClause
+        },
+        raw: {
+          pipeline: pipelineSummary
+        },
+        meta: {
+          hasPipeline: true,
+          isPipelineOnly: true,
+          pipelineSource: 'leadingParallel'
+        }
+      };
+    }
+  / WhenExpression              // when: [...] expressions for conditional execution
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
@@ -133,24 +158,30 @@ ExeRunCommandWithStdin "exe run command with stdin"
 
 // Run command pipe stdin pattern for exe context - handles "run @var | {command}"
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets {
+  = "run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? {
+      const withClause = { stdin: stdinExpr };
+      if (tail) {
+        Object.assign(withClause, tail);
+      }
       return {
         subtype: 'exeCommand',
         source: 'command',
         values: {
           command: content.values.command,
           commandBases: content.values.commandBases,
-          withClause: { stdin: stdinExpr }
+          withClause
         },
         raw: {
           command: content.raw.command,
           commandBases: content.raw.commandBases,
-          stdinExpr: stdinExpr.type === 'VariableReference' ? '@' + stdinExpr.identifier : 'expression'
+          stdinExpr: stdinExpr.type === 'VariableReference' ? '@' + stdinExpr.identifier : 'expression',
+          ...(tail ? { tailModifiers: tail } : {})
         },
         meta: {
           ...content.meta,
           hasStdin: true,
-          isPipeSugar: true
+          isPipeSugar: true,
+          hasTailModifiers: !!tail
         }
       };
     }

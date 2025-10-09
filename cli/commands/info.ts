@@ -1,4 +1,6 @@
 import { RegistryManager } from '@core/registry/RegistryManager';
+import { ModuleWorkspace, ModuleInstaller, type ModuleSpecifier } from '@core/registry';
+import { renderDependencySummary } from '../utils/dependency-summary';
 import { OutputFormatter, formatModuleReference } from '../utils/output';
 import { lockFileManager } from '../utils/lock-file';
 import chalk from 'chalk';
@@ -7,6 +9,7 @@ export interface InfoOptions {
   verbose?: boolean;
   basePath?: string;
   format?: 'text' | 'json';
+  includeDevDependencies?: boolean;
 }
 
 export interface ModuleInfo {
@@ -33,8 +36,12 @@ export interface ModuleInfo {
 
 export class InfoCommand {
   private registryManager: RegistryManager;
+  private workspace: ModuleWorkspace;
+  private installer: ModuleInstaller;
   
   constructor(basePath: string) {
+    this.workspace = new ModuleWorkspace({ projectRoot: basePath });
+    this.installer = new ModuleInstaller(this.workspace);
     this.registryManager = new RegistryManager(basePath, {
       enabled: true,
       telemetry: { enabled: false }

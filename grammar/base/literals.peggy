@@ -80,7 +80,8 @@ TimeDurationLiteral "Time Duration Literal"
     }
 
 TimeUnit "Time Unit"
-  = "s" { return 'seconds'; }
+  = "ms" { return 'milliseconds'; }
+  / "s" { return 'seconds'; }
   / "m" { return 'minutes'; }
   / "h" { return 'hours'; }
   / "d" { return 'days'; }

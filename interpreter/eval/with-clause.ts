@@ -1,35 +1,33 @@
-import type { WithClause, PipelineCommand, TrustLevel } from '@core/types';
+import type { WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { MlldInterpreterError } from '@core/errors';
+import { asText } from '../utils/structured-value';
+import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 
 /**
  * Apply withClause transformations to a result
  * This handles pipeline commands, trust validation, and dependency checks
  */
 export async function applyWithClause(
-  input: string,
+  input: unknown,
   withClause: WithClause,
   env: Environment
 ): Promise<EvalResult> {
-  let result = input;
+  let result: any = wrapExecResult(input);
   
   // Apply pipeline transformations
   if (withClause.pipeline && withClause.pipeline.length > 0) {
     // Use unified pipeline processor
     const { processPipeline } = await import('./pipeline/unified-processor');
-    result = await processPipeline({
+    const pipelineResult = await processPipeline({
       value: result,
       env,
       pipeline: withClause.pipeline,
       format: withClause.format as string | undefined,
       isRetryable: false // with-clause doesn't track source function
     });
-  }
-  
-  // Apply trust validation
-  if (withClause.trust) {
-    validateTrust(result, withClause.trust);
+    result = wrapPipelineResult(pipelineResult);
   }
   
   // Check dependencies if specified
@@ -40,24 +38,10 @@ export async function applyWithClause(
   return {
     value: result,
     env,
-    stdout: result,
+    stdout: asText(result),
     stderr: '',
     exitCode: 0
   };
-}
-
-/**
- * Validate trust level
- */
-function validateTrust(result: string, trustLevel: TrustLevel): void {
-  // TODO: Implement trust validation
-  // For now, just log a warning
-  if (trustLevel === 'never') {
-    throw new MlldInterpreterError('Trust level "never" not yet implemented');
-  }
-  
-  // 'always' means no validation needed
-  // 'verify' would prompt user for confirmation (not implemented)
 }
 
 /**

@@ -315,6 +315,7 @@ Pipeline array (`@p`) contains:
 - `@p[1]` … `@p[n]` - outputs of completed visible stages
 - `@p[-1]` - previous stage output; `@p[-2]` two stages back, etc.
 - `@p.retries.all` - all attempt outputs from all retry contexts (for best-of-N patterns)
+- Pipeline stage outputs are `StructuredValue` wrappers with `.text` (string view) and `.data` (structured payload) properties. Templates and display automatically use `.text`; use `.data` when you need structured information.
 
 Gotchas:
 - `@ctx.try` and `@ctx.tries` are local to the active retry context. Stages that are not the requester or the retried stage will see `try: 1` and `tries: []`.
@@ -362,10 +363,45 @@ Run multiple transforms concurrently within a single pipeline stage using `||`.
 /show @out
 ```
 
+Pipelines can also start with a leading `||` to run parallel stages immediately:
+
+```mlld
+/exe @fetchA() = "A"
+/exe @fetchB() = "B"
+/exe @fetchC() = "C"
+
+>> Leading || runs all three in parallel
+/var @results = || @fetchA() || @fetchB() || @fetchC()
+/show @results
+
+>> Works in /run directive too
+/run || @fetchA() || @fetchB() || @fetchC()
+
+>> Control concurrency with (cap, delay) syntax
+/var @limited = || @fetchA() || @fetchB() || @fetchC() (2, 100ms)
+```
+
+Output:
+```
+["A","B","C"]
+["A","B","C"]
+["A","B","C"]
+```
+
+The leading `||` syntax is equivalent to the longhand form:
+
+```mlld
+>> These produce identical results:
+/var @shorthand = || @a() || @b() | @combine
+/var @longhand = "" with { pipeline: [[@a, @b], @combine] }
+```
+
 Notes:
 - Results preserve order of commands in the group.
 - The next stage receives a JSON array string (parse it or accept as text).
 - Concurrency is capped by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Leading `||` syntax avoids ambiguity with boolean OR expressions.
+- Use `(n, wait)` after the pipeline to override concurrency cap and add pacing between starts.
 - Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
 - Inline effects attached to grouped commands run after each command completes.
 

@@ -161,7 +161,7 @@ describe('Parallel Pipeline - Runtime Behavior', () => {
     ).rejects.toThrow(/Pipeline failed at stage 2|boom/);
   });
 
-  it('rejects leading || in shorthand with a clear message', async () => {
+  it('allows leading || in shorthand without an error', async () => {
     const input = `
 /exe @left(input) = \`L:@input\`
 /exe @right(input) = \`R:@input\`
@@ -170,6 +170,6 @@ describe('Parallel Pipeline - Runtime Behavior', () => {
 
     await expect(
       interpret(input, { fileSystem, pathService })
-    ).rejects.toThrow(/Parallel group cannot be the first pipeline stage/i);
+    ).resolves.toBeDefined();
   });
 });

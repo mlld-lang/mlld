@@ -1,10 +1,22 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
-import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
+import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
+import { asText, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
+import { wrapExecResult } from '../../utils/structured-exec';
+import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
+
+export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
+type CommandExecutionPrimitive = string | number | boolean | null | undefined;
+export type CommandExecutionResult =
+  | CommandExecutionPrimitive
+  | StructuredValue
+  | Record<string, unknown>
+  | unknown[]
+  | RetrySignal;
 
 const STRUCTURED_PIPELINE_LANGUAGES = new Set([
   'mlld-for',
@@ -38,6 +50,26 @@ function parseStructuredJson(text: string): any | null {
     return null;
   }
   return null;
+}
+
+function unwrapStructuredDeep(value: any): any {
+  if (isStructuredValue(value)) {
+    return unwrapStructuredDeep(value.data);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => unwrapStructuredDeep(item));
+  }
+
+  if (value && typeof value === 'object') {
+    const result: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      result[key] = unwrapStructuredDeep(val);
+    }
+    return result;
+  }
+
+  return value;
 }
 
 /**
@@ -338,12 +370,20 @@ export async function executeCommandVariable(
   args: any[],
   env: Environment,
   stdinInput?: string
-): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
+): Promise<CommandExecutionResult> {
+  const finalizeResult = (
+    value: unknown,
+    options?: { type?: string; text?: string }
+  ): CommandExecutionResult => {
+    return wrapExecResult(value, options);
+  };
+
   // Built-in transformer handling
   if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
     try {
       const result = await commandVar.metadata.transformerImplementation(stdinInput || '');
-      return String(result);
+      const normalized = normalizeTransformerResult(commandVar?.name, result);
+      return finalizeResult(normalized.value, normalized.options);
     } catch (error) {
       throw new MlldCommandExecutionError(
         `Transformer ${commandVar.name} failed: ${error.message}`,
@@ -454,8 +494,9 @@ export async function executeCommandVariable(
       if (isPipelineParam) {
         // First parameter ALWAYS gets the pipeline input (stdinInput)
         const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
-        const unwrappedStdin = AutoUnwrapManager.unwrap(stdinInput || '');
-        const textValue = unwrappedStdin || '';
+        const stdinForUnwrap = isStructuredValue(stdinInput) ? asText(stdinInput) : (stdinInput || '');
+        const unwrappedStdin = AutoUnwrapManager.unwrap(stdinForUnwrap);
+        const textValue = typeof unwrappedStdin === 'string' ? unwrappedStdin : String(unwrappedStdin ?? '');
         
         if (!format) {
           const shouldParse = shouldAutoParsePipelineInput(stageLanguage);
@@ -507,39 +548,88 @@ export async function executeCommandVariable(
         }
       } else {
         // Regular parameter handling
+        if (isStructuredValue(argValue)) {
+          const structuredVar = createStructuredValueVariable(
+            paramName,
+            argValue,
+            {
+              directive: 'var',
+              syntax: 'reference',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isParameter: true
+            }
+          );
+          execEnv.setParameterVariable(paramName, structuredVar);
+          continue;
+        }
+
         let paramValue: any;
         
         if (argValue === null) {
           paramValue = '';
-        } else if (typeof argValue === 'string') {
+        } else if (typeof argValue === 'string' || typeof argValue === 'number' || typeof argValue === 'boolean') {
           paramValue = argValue;
-        } else if (typeof argValue === 'object' && !argValue.type && !argValue.content) {
-          // Raw object (like pipeline context passed as @p)
-          paramValue = argValue;
-        } else if (argValue.type === 'Text' && argValue.content !== undefined) {
-          paramValue = argValue.content;
-        } else if (argValue.content !== undefined) {
-          paramValue = argValue.content;
+        } else if (argValue && typeof argValue === 'object') {
+          if (!Array.isArray(argValue) && argValue.type === 'Text' && argValue.content !== undefined) {
+            paramValue = argValue.content;
+          } else if (!Array.isArray(argValue) && argValue.content !== undefined) {
+            paramValue = argValue.content;
+          } else {
+            paramValue = argValue;
+          }
         } else {
           paramValue = String(argValue);
         }
         
-        // Check if we're passing an object (like @p pipeline context)
-        if (typeof paramValue === 'object' && paramValue !== null) {
-          // For objects, create an object variable that preserves the actual object
-          const paramVar = {
-            type: 'object',
-            name: paramName,
-            value: paramValue,
-            metadata: { 
+        if (isStructuredValue(paramValue)) {
+          const structuredVar = createStructuredValueVariable(
+            paramName,
+            paramValue,
+            {
+              directive: 'var',
+              syntax: 'reference',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            { isParameter: true }
+          );
+          execEnv.setParameterVariable(paramName, structuredVar);
+        } else if (Array.isArray(paramValue)) {
+          const paramVar = createArrayVariable(
+            paramName,
+            paramValue,
+            true,
+            {
+              directive: 'var',
+              syntax: 'array',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            { isParameter: true }
+          );
+          execEnv.setParameterVariable(paramName, paramVar);
+        } else if (paramValue !== null && typeof paramValue === 'object') {
+          const paramVar = createObjectVariable(
+            paramName,
+            paramValue,
+            true,
+            {
+              directive: 'var',
+              syntax: 'object',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            { 
               isParameter: true,
               isPipelineContext: paramValue.stage !== undefined
             }
-          };
+          );
           
           execEnv.setParameterVariable(paramName, paramVar);
         } else {
-          // For non-objects, create a text variable as before
           const paramSource: VariableSource = {
             directive: 'var',
             syntax: 'quoted',
@@ -567,10 +657,40 @@ export async function executeCommandVariable(
     const { InterpolationContext } = await import('../../core/interpolation-context');
     
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
-    
+
     // Always pass pipeline input as stdin when available
-    const result = await env.executeCommand(command, { input: stdinInput } as any);
-    return result;
+    let commandOutput: unknown = await env.executeCommand(command, { input: stdinInput } as any);
+
+    const withClause = execDef.withClause;
+    if (withClause) {
+      if (withClause.needs) {
+        const { checkDependencies, DefaultDependencyChecker } = await import('../dependencies');
+        const checker = new DefaultDependencyChecker();
+        await checkDependencies(withClause.needs, checker, commandVar.metadata?.definedAt);
+      }
+
+      if (withClause.pipeline && withClause.pipeline.length > 0) {
+        const { processPipeline } = await import('./unified-processor');
+        const processed = await processPipeline({
+          value: commandOutput,
+          env,
+          pipeline: withClause.pipeline,
+          format: withClause.format as string | undefined,
+          isRetryable: false,
+          identifier: commandVar?.name,
+          location: commandVar.metadata?.definedAt
+        });
+        if (processed === 'retry') {
+          return 'retry';
+        }
+        if (processed && typeof processed === 'object' && (processed as any).value === 'retry') {
+          return processed as RetrySignal;
+        }
+        commandOutput = processed;
+      }
+    }
+
+    return finalizeResult(commandOutput);
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
     // Special handling for mlld-when expressions
     if (execDef.language === 'mlld-when') {
@@ -590,19 +710,32 @@ export async function executeCommandVariable(
         // This is a retry signal - return it as-is for the pipeline to handle
         return resultValue;
       }
+      if (resultValue === 'retry') {
+        return 'retry';
+      }
       
       // If when-expression produced a side-effect show inside a pipeline,
       // propagate the input forward (so the stage doesn't terminate) while
       // still letting the effect line be emitted by the action itself.
       const inPipeline = !!env.getPipelineContext();
-      if (inPipeline && resultValue && typeof resultValue === 'object' && (resultValue as any).__whenEffect === 'show') {
+      const showEffect =
+        resultValue &&
+        typeof resultValue === 'object' &&
+        (resultValue as any).__whenEffect === 'show';
+      const structuredShowEffect =
+        isStructuredValue(resultValue) &&
+        resultValue.data &&
+        typeof resultValue.data === 'object' &&
+        (resultValue.data as any).__whenEffect === 'show';
+
+      if (inPipeline && (showEffect || structuredShowEffect)) {
         // If this is the last stage, suppress echo to avoid showing seed text.
         // If there are more stages, propagate input forward to keep pipeline alive.
         const pctx = env.getPipelineContext?.();
         const isLastStage = pctx && typeof pctx.stage === 'number' && typeof pctx.totalStages === 'number'
           ? pctx.stage >= pctx.totalStages
           : false;
-        return isLastStage ? '' : (stdinInput || '');
+        return finalizeResult(isLastStage ? '' : (stdinInput || ''));
       }
 
       // Check if the result needs interpolation (wrapped template)
@@ -616,17 +749,23 @@ export async function executeCommandVariable(
         }
       }
       // Unwrap tagged show effects for non-pipeline contexts
-      if (resultValue && typeof resultValue === 'object' && (resultValue as any).__whenEffect === 'show') {
+      if (showEffect) {
         resultValue = (resultValue as any).text ?? '';
+      } else if (structuredShowEffect) {
+        const data = (resultValue as any).data;
+        resultValue = (data as any)?.text ?? asText(resultValue);
       }
       
-      // Return the result as string
-      return String(resultValue || '');
+      // Return the result in the configured format
+      return finalizeResult(resultValue ?? '');
     } else if (execDef.language === 'mlld-foreach') {
       const foreachNode = execDef.codeTemplate[0];
       const { evaluateForeachCommand } = await import('../foreach');
       const results = await evaluateForeachCommand(foreachNode, execEnv);
       const normalized = results.map(item => {
+        if (isStructuredValue(item)) {
+          return item.data ?? item.text;
+        }
         if (typeof item === 'string' || item instanceof String) {
           const strValue = item instanceof String ? item.valueOf() : item;
           try {
@@ -637,14 +776,28 @@ export async function executeCommandVariable(
         }
         return item;
       });
-      return JSON.stringify(normalized);
+      const text = (() => {
+        try {
+          return JSON.stringify(normalized);
+        } catch {
+          return String(normalized);
+        }
+      })();
+      return finalizeResult(normalized, { type: 'array', text });
     } else if (execDef.language === 'mlld-for') {
       const forNode = execDef.codeTemplate[0];
       const { evaluateForExpression } = await import('../for');
       const arrayVar = await evaluateForExpression(forNode, execEnv);
       const { extractVariableValue } = await import('../../utils/variable-resolution');
       const value = await extractVariableValue(arrayVar, execEnv);
-      return JSON.stringify(value);
+      const text = (() => {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      })();
+      return finalizeResult(value, { type: 'array', text });
     }
     
     // Regular JavaScript/code execution
@@ -678,10 +831,16 @@ export async function executeCommandVariable(
     
     // If the function returns a PipelineInput object, extract the text
     if (result && typeof result === 'object' && 'text' in result && 'type' in result) {
-      return String(result.text);
+      const text =
+        typeof (result as any).text === 'string'
+          ? (result as any).text
+          : String((result as any).text ?? '');
+      const type =
+        typeof (result as any).type === 'string' ? (result as any).type : undefined;
+      return finalizeResult(result, { type, text });
     }
     
-    return String(result);
+    return finalizeResult(result);
   } else if (execDef.type === 'template' && execDef.template) {
     // Interpolate template
     const { interpolate } = await import('../../core/interpreter');

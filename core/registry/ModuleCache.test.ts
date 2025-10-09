@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { ModuleCache } from './ModuleCache';
 import { HashUtils } from './utils/HashUtils';
+import { normalizeModuleNeeds, moduleNeedsToSerializable } from './utils/ModuleNeeds';
 
 describe('ModuleCache', () => {
   let cache: ModuleCache;
@@ -55,10 +56,26 @@ describe('ModuleCache', () => {
       const content = 'import { util } from "@dep/util";\nexport const test = util();';
       const dependencies = { '@dep/util': 'abc123def456' };
       
-      const entry = await cache.store(content, 'test.mld', '@test/with-deps', dependencies);
+      const entry = await cache.store(content, 'test.mld', '@test/with-deps', { dependencies });
       
       const metadata = await cache.getMetadata(entry.hash);
       expect(metadata?.dependencies).toEqual(dependencies);
+    });
+
+    it('should store module needs when provided', async () => {
+      const content = 'export const needs = true;';
+      const moduleNeeds = normalizeModuleNeeds({
+        runtimes: ['node@18'],
+        tools: ['jq'],
+        packages: {
+          node: ['lodash@4.17.21']
+        }
+      });
+
+      const entry = await cache.store(content, 'needs.mld', '@test/needs', { moduleNeeds });
+
+      const metadata = await cache.getMetadata(entry.hash);
+      expect(metadata?.moduleNeeds).toEqual(moduleNeedsToSerializable(moduleNeeds));
     });
     
     it('should update index with import path', async () => {

@@ -476,7 +476,6 @@ export class VariableManager implements IVariableManager {
       false, // Not a URL
       true, // Is absolute
       baseSource,
-      undefined, // No security metadata
       {
         isReserved: true,
         definedAt: { line: 0, column: 0, filePath: '<reserved>' }

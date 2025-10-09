@@ -23,12 +23,15 @@ import {
   isTemplate,
   isStructured,
   isPrimitive,
+  isStructuredValueVariable,
   createSimpleTextVariable
 } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { wrapExecResult } from '../utils/structured-exec';
 // Template normalization now handled in grammar - no longer needed here
 
 /**
@@ -50,6 +53,7 @@ export async function evaluateShow(
   if (process.env.MLLD_DEBUG === 'true') {
   }
 
+  let resultValue: unknown | undefined;
   let content = '';
   
   if (directive.subtype === 'showVariable') {
@@ -246,21 +250,9 @@ export async function evaluateShow(
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
       const isURL = variable.value.isURL || /^https?:\/\//.test(pathValue);
-      const security = variable.value.security;
       
       try {
-        if (isURL) {
-          if (security) {
-            // Use URL cache with security options when available
-            value = await env.fetchURLWithSecurity(pathValue, security, varName);
-          } else {
-            // Fetch URL content directly when no additional security metadata is provided
-            value = await env.fetchURL(pathValue);
-          }
-        } else {
-          // Regular file path
-          value = await env.readFile(pathValue);
-        }
+        value = await env.readFile(pathValue);
       } catch (error) {
         // Try test hook override if available
         try {
@@ -290,6 +282,8 @@ export async function evaluateShow(
     } else if (isPrimitive(variable)) {
       // Primitive variables (numbers, booleans, null)
       value = variable.value;
+    } else if (isStructuredValueVariable(variable)) {
+      value = variable.value;
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
@@ -297,8 +291,24 @@ export async function evaluateShow(
     // Legacy compatibility: only apply this path when not using unified invocation tail
     if (!(directive as any)?.values?.invocation) {
       if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
-        const { executePipeline } = await import('./pipeline');
-        content = await executePipeline(typeof value === 'string' ? value : String(value ?? ''), variableNode.withClause.pipeline, env);
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        const initialInput = typeof value === 'string' ? value : String(value ?? '');
+        const processed = await processPipeline({
+          value: initialInput,
+          env,
+          directive,
+          pipeline: variableNode.withClause.pipeline,
+          identifier: varName,
+          location: directive.location
+        });
+        value = processed;
+        if (isStructuredValue(processed)) {
+          content = asText(processed);
+        } else if (typeof processed === 'string') {
+          content = processed;
+        } else {
+          content = JSONFormatter.stringify(processed, { pretty: true });
+        }
       }
     }
     } // Close the if (value === undefined && variable) block
@@ -354,7 +364,7 @@ export async function evaluateShow(
     }
     
     // Check if the value contains unevaluated directives
-    if (hasUnevaluatedDirectives(value)) {
+    if (!isStructuredValue(value) && hasUnevaluatedDirectives(value)) {
       // Evaluate any embedded directives
       value = await evaluateDataValue(value, env);
       
@@ -371,10 +381,9 @@ export async function evaluateShow(
      */
     const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
     value = await resolveValue(value, env, ResolutionContext.Display);
-    
     // Import LoadContentResult type check
     const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
-    
+
     // Convert final value to string
     if (typeof value === 'string') {
       content = value;
@@ -387,7 +396,38 @@ export async function evaluateShow(
     } else if (isLoadContentResultArray(value)) {
       // For array of LoadContentResult, concatenate content with double newlines
       content = value.map(item => item.content).join('\n\n');
+    } else if (isStructuredValue(value)) {
+      if (value.type === 'array' && Array.isArray(value.data)) {
+        const printableArray = value.data.map(item =>
+          isStructuredValue(item)
+            ? (item.type === 'object' || item.type === 'array') ? item.data : asText(item)
+            : item
+        );
+        content = JSONFormatter.stringify(printableArray, { pretty: true, indent: 2 });
+      } else if (value.type === 'object' && value.data && typeof value.data === 'object') {
+        if (
+          (value.metadata && 'loadResult' in value.metadata && value.metadata.loadResult) ||
+          value.metadata?.source === 'load-content'
+        ) {
+          content = value.text;
+        } else {
+          content = JSONFormatter.stringify(value.data, { pretty: true });
+        }
+      } else {
+        content = value.text;
+      }
     } else if (Array.isArray(value)) {
+      const printableArray = value.map(item => {
+        if (isStructuredValue(item)) {
+          return item.text;
+        }
+        if (item && typeof item === 'object' && typeof (item as any).text === 'string' && typeof (item as any).type === 'string') {
+          return (item as any).text;
+        }
+        return item;
+      });
+      value = printableArray;
+
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
         logger.debug('show.ts: Formatting array:', {
@@ -441,8 +481,23 @@ export async function evaluateShow(
     // Legacy path: only run when invocation is not present (avoid double-processing)
     if (!(directive as any)?.values?.invocation) {
       if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
-        const { executePipeline } = await import('./pipeline');
-        content = await executePipeline(content, variableNode.withClause.pipeline, env);
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        const processed = await processPipeline({
+          value: content,
+          env,
+          directive,
+          pipeline: variableNode.withClause.pipeline,
+          identifier: varName,
+          location: directive.location
+        });
+        value = processed;
+        if (isStructuredValue(processed)) {
+          content = asText(processed);
+        } else if (typeof processed === 'string') {
+          content = processed;
+        } else {
+          content = JSONFormatter.stringify(processed, { pretty: true });
+        }
       }
     }
     
@@ -461,12 +516,20 @@ export async function evaluateShow(
           identifier: varName || 'show',
           location: directive.location
         });
-        content = typeof processed === 'string' ? processed : JSONFormatter.stringify(processed);
+        value = processed;
+        if (isStructuredValue(processed)) {
+          content = asText(processed);
+        } else if (typeof processed === 'string') {
+          content = processed;
+        } else {
+          content = JSONFormatter.stringify(processed, { pretty: true });
+        }
       }
     } catch {
       // If no pipeline detected or processing fails, leave content as-is
     }
     
+    resultValue = value;
     
   } else if (directive.subtype === 'showPath') {
     // Handle path inclusion (whole file)
@@ -491,15 +554,9 @@ export async function evaluateShow(
       throw new Error('Add path directive resolved to empty path');
     }
     
-    // Check if this directive has security options
-    const security = directive.meta ? {
-      ttl: directive.meta.ttl,
-      trust: directive.meta.trust
-    } : undefined;
-    
-    // Read the file content or fetch URL with security options if URL
-    if (env.isURL(resolvedPath) && security) {
-      content = await env.fetchURLWithSecurity(resolvedPath, security, 'add-directive');
+    // Read the file content or fetch URL when path is remote
+    if (env.isURL(resolvedPath)) {
+      content = await env.fetchURL(resolvedPath);
     } else {
       content = await env.readFile(resolvedPath);
     }
@@ -528,16 +585,10 @@ export async function evaluateShow(
       throw new Error('Invalid path type in add section directive');
     }
     
-    // Check if this directive has security options
-    const security = directive.meta ? {
-      ttl: directive.meta.ttl,
-      trust: directive.meta.trust
-    } : undefined;
-    
-    // Read the file content or fetch URL with security options if URL
+    // Read the file content or fetch URL when path is remote
     let fileContent: string;
-    if (env.isURL(resolvedPath) && security) {
-      fileContent = await env.fetchURLWithSecurity(resolvedPath, security, 'add-section-directive');
+    if (env.isURL(resolvedPath)) {
+      fileContent = await env.fetchURL(resolvedPath);
     } else {
       fileContent = await env.readFile(resolvedPath);
     }
@@ -636,8 +687,12 @@ export async function evaluateShow(
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
       
+      resultValue = result.value;
+
       // Convert result to string appropriately
-      if (typeof result.value === 'string') {
+      if (isStructuredValue(result.value)) {
+        content = asText(result.value);
+      } else if (typeof result.value === 'string') {
         content = result.value;
       } else if (result.value === null || result.value === undefined) {
         content = '';
@@ -666,8 +721,12 @@ export async function evaluateShow(
         const { evaluateExecInvocation } = await import('./exec-invocation');
         const result = await evaluateExecInvocation(invocation, env);
         
+        resultValue = result.value;
+
         // Convert result to string appropriately
-        if (typeof result.value === 'string') {
+        if (isStructuredValue(result.value)) {
+          content = asText(result.value);
+        } else if (typeof result.value === 'string') {
           content = result.value;
         } else if (result.value === null || result.value === undefined) {
           content = '';
@@ -812,8 +871,12 @@ export async function evaluateShow(
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocation, env);
     
+    resultValue = result.value;
+
     // Convert result to string appropriately
-    if (typeof result.value === 'string') {
+    if (isStructuredValue(result.value)) {
+      content = asText(result.value);
+    } else if (typeof result.value === 'string') {
       content = result.value;
     } else if (result.value === null || result.value === undefined) {
       content = '';
@@ -874,6 +937,8 @@ export async function evaluateShow(
     const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
     const loadResult = await processContentLoader(loadContentNode, env);
     
+    resultValue = loadResult;
+    
     // Handle different return types from processContentLoader
     if (typeof loadResult === 'string') {
       // Backward compatibility - plain string
@@ -884,8 +949,16 @@ export async function evaluateShow(
     } else if (isLoadContentResultArray(loadResult)) {
       // Multiple files from glob - join their contents
       content = loadResult.map(r => r.content).join('\n\n');
+    } else if (loadResult && typeof loadResult === 'object' && 'content' in (loadResult as any) && typeof (loadResult as any).content === 'string') {
+      content = (loadResult as any).content;
+    } else if (isStructuredValue(loadResult)) {
+      content = asText(loadResult);
     } else {
-      content = String(loadResult);
+      try {
+        content = String(loadResult ?? '');
+      } catch {
+        content = '';
+      }
     }
     
     // Handle rename if newTitle is specified (for section extraction)
@@ -918,6 +991,7 @@ export async function evaluateShow(
     
     // Execute command and get output
     content = await env.executeCommand(command, undefined, executionContext);
+    resultValue = content;
     
   } else if (directive.subtype === 'showCode') {
     // Handle code execution for display: /show js {console.log("test")}
@@ -973,6 +1047,7 @@ export async function evaluateShow(
     // Execute code using the unified executeCode method
     // Note: executeCode handles all language types internally
     content = await env.executeCode(code, lang, {}, executionContext);
+    resultValue = content;
     
   } else if (directive.subtype === 'show' && directive.values?.content) {
     // Handle simple show directive with content (used in for loops)
@@ -994,11 +1069,30 @@ export async function evaluateShow(
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }
 
+  if (resultValue === undefined) {
+    resultValue = content;
+  }
+
   // Apply tail pipeline when requested (used by inline /show in templates)
   if ((directive as any).values?.withClause?.pipeline && (directive as any).meta?.applyTailPipeline) {
-    const { executePipeline } = await import('./pipeline');
+    const { processPipeline } = await import('./pipeline/unified-processor');
     const pipeline = (directive as any).values.withClause.pipeline;
-    content = await executePipeline(typeof content === 'string' ? content : String(content ?? ''), pipeline, env);
+    const processed = await processPipeline({
+      value: content,
+      env,
+      directive,
+      pipeline,
+      identifier: 'show-tail',
+      location: directive.location
+    });
+    resultValue = processed;
+    if (isStructuredValue(processed)) {
+      content = asText(processed);
+    } else if (typeof processed === 'string') {
+      content = processed;
+    } else {
+      content = JSONFormatter.stringify(processed, { pretty: true });
+    }
   }
   
   // Output directives always end with a newline
@@ -1036,8 +1130,14 @@ export async function evaluateShow(
     }
   }
 
+  if (resultValue === undefined) {
+    resultValue = content;
+  }
+
+  const textForWrapper = content;
+
   if (!content.endsWith('\n')) {
-    content += '\n';
+    content = `${content}\n`;
   }
   
   // Only emit the effect if we're not in an expression context
@@ -1047,8 +1147,13 @@ export async function evaluateShow(
     env.emitEffect('both', content, { source: directive.location });
   }
   
-  // Return the content
-  return { value: content, env };
+  const baseValue = resultValue ?? textForWrapper;
+  const wrapOptions =
+    !isStructuredValue(baseValue) && typeof baseValue !== 'string'
+      ? { text: textForWrapper }
+      : undefined;
+  const wrapped = wrapExecResult(baseValue, wrapOptions);
+  return { value: wrapped, env };
 }
 
 /**

@@ -1,5 +1,8 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/show @fruits.includes("banana")        # true
-/show @fruits.indexOf("cherry")         # 2
-/show @fruits.length()                  # 3
-/show @fruits.join(", ")               # "apple, banana, cherry"
+# Backticks (primary)
+/var @msg = `Hello @name, welcome!`
+
+# Double-colon (escape backticks)
+/var @doc = ::Use `npm install` to get started, @name::
+
+# Triple-colon (many @ symbols)
+/var @social = :::Hey @{{handle}}, check this out!:::

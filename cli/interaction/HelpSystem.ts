@@ -61,14 +61,14 @@ export class HelpSystem {
       this.displayDevHelp();
       return;
     }
-    
-    if (command === 'mode') {
-      this.displayModeHelp();
-      return;
-    }
-    
+
     if (command === 'nvim-setup' || command === 'nvim') {
       this.displayNvimSetupHelp();
+      return;
+    }
+
+    if (command === 'mcp' || command === 'serve') {
+      this.displayMcpHelp();
       return;
     }
 
@@ -93,6 +93,32 @@ Examples:
   mlld auth login
   mlld auth status
   mlld auth logout
+    `);
+  }
+
+  private displayMcpHelp(): void {
+    console.log(`
+Usage: mlld mcp [module-path] [options]
+
+Expose exported mlld functions as MCP tools over stdio.
+
+Options:
+  --config <module.mld.md>    Load MCP config (exports @config { tools, env })
+  --env KEY=VAL,KEY2=VAL2     Inject/override env vars (keys must start with MLLD_)
+  --tools tool1,tool2         Explicit tool allow-list (overrides config)
+
+Examples:
+  mlld mcp                        # Uses llm/mcp/ when present
+  mlld mcp llm/mcp/
+  mlld mcp --config llm/agents/sandy.mld.md
+  mlld mcp --tools github_readonly,thread_context
+
+Behavior:
+  - Discovers modules from files, directories, or glob patterns
+  - Reads /export directives when present and falls back to all executables otherwise
+  - Applies config module filtering and CLI allow-lists
+  - Accepts environment overrides (MLLD_* only) before executing tools
+  - Streams JSON-RPC responses to stdout for MCP clients
     `);
   }
 
@@ -371,64 +397,22 @@ Examples:
     console.log(`
 Usage: mlld dev [subcommand]
 
-Manage dev mode for local module development.
+Inspect local module discovery and status.
 
 Subcommands:
-  status               Show current dev mode status and detected modules
+  status               Show detected local modules and access status
   list                 List all local modules with their publish names
 
-Dev mode allows you to use published module names (e.g., @author/module) 
-while developing locally, without any configuration. It automatically scans
-your local modules and creates temporary prefix mappings.
+Local modules under llm/modules/ are loaded automatically when:
+  • The module's author matches your authenticated GitHub user
+  • You have a resolver prefix configured for that author (e.g., private modules)
 
-Enable dev mode:
-  mlld <file> --dev           Enable for a single run
-  export MLLD_DEV=true        Enable for all runs in the session
+Use '/import local { ... } from @author/module' to force a local read.
+No flags or environment variables are required.
 
 Examples:
   mlld dev                    # Show status
-  mlld dev status             # Show status 
-  mlld dev list               # List all local modules
-
-  # Using dev mode
-  mlld test.mld --dev         # Run with dev mode enabled
-  export MLLD_DEV=true        # Enable for session
-  mlld test.mld               # Now runs with dev mode
-
-How it works:
-  1. Scans llm/modules/ for .mlld.md files
-  2. Reads module metadata to find authors
-  3. Creates temporary @author/ prefixes
-  4. Maps @author/module imports to local files
-  5. No configuration needed - just works!
-    `);
-  }
-
-  private displayModeHelp(): void {
-    console.log(`
-Usage: mlld mode <mode>
-
-Set the mlld execution mode.
-
-Available modes:
-  dev, development    Enable development mode (resolve local modules)
-  prod, production    Enable production mode (only published modules)
-  user                Default user mode
-  clear, reset        Remove mode setting (same as user)
-
-Examples:
-  mlld mode dev       # Enable development mode
-  mlld mode prod      # Enable production mode
-  mlld mode user      # Return to default mode
-  mlld mode clear     # Clear mode setting (default to user)
-  mlld mode reset     # Reset to default (same as clear)
-
-Mode affects:
-  - Module resolution (dev mode enables local module resolution)
-  - Future: Security policies and permissions
-  
-The mode is stored in mlld.lock.json and persists across sessions.
-Override temporarily with --dev flag or MLLD_DEV=true environment variable.
+  mlld dev list               # List local modules
     `);
   }
 
@@ -440,9 +424,8 @@ Commands:
   init                    Create a new mlld module
   add-needs, needs, deps  Analyze and update module dependencies
   alias                   Create path aliases for module imports
-  dev                     Manage dev mode for local module development
+  dev                     Inspect local module discovery
   env                     Manage environment variables allowed in @INPUT
-  mode                    Set mlld execution mode
   install, i              Install mlld modules
   ls, list               List installed modules
   info, show             Show module details
@@ -452,6 +435,7 @@ Commands:
   run                     Run mlld scripts from script directory
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
+  serve                   Expose mlld functions as MCP tools over stdio
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   debug-resolution        Debug variable resolution in a mlld file
@@ -464,8 +448,7 @@ Options:
   --strict                Enable strict mode (fail on all errors)
   --permissive            Enable permissive mode (ignore recoverable errors) [default]
   --pretty                Format the output with Prettier
-  --dev                   Enable dev mode (use published names for local modules)
-  --home-path <path>      Custom home path for ~/ substitution
+    --home-path <path>      Custom home path for ~/ substitution
   -v, --verbose           Enable verbose output (some additional info)
   -d, --debug             Enable debug output (full verbose logging)
   -w, --watch             Watch for changes and reprocess
@@ -541,7 +524,6 @@ Configuration:
       case 'add-needs':
       case 'env':
       case 'dev':
-      case 'mode':
       case 'debug-resolution':
       case 'debug-transform':
       case 'test':

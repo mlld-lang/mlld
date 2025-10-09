@@ -75,11 +75,20 @@ export class PublishCommand {
       if (!validationResult.valid) {
         console.log(chalk.red('\n✘ Module validation failed:'));
         validationResult.errors.forEach(error => {
-          console.log(chalk.red(`   ${error}`));
+          const prefix = error.field ? `[${error.field}] ` : '';
+          console.log(chalk.red(`   ${prefix}${error.message}`));
         });
         throw new MlldError('Module validation failed', {
           code: 'VALIDATION_FAILED',
           severity: ErrorSeverity.Fatal
+        });
+      }
+
+      if (validationResult.warnings?.length) {
+        console.log(chalk.yellow('\n⚠ Module validation warnings:'));
+        validationResult.warnings.forEach(warning => {
+          const prefix = warning.field ? `[${warning.field}] ` : '';
+          console.log(chalk.yellow(`   ${prefix}${warning.message}`));
         });
       }
       
@@ -153,12 +162,13 @@ export class PublishCommand {
   }
 
   private async readModule(modulePath: string): Promise<ModuleData> {
-    const { content, metadata, filename, filePath } = await this.moduleReader.readModule(modulePath);
+    const { content, metadata, filePath, ast } = await this.moduleReader.readModule(modulePath);
     
     return {
       metadata,
       content,
       filePath,
+      ast,
       gitInfo: { isGitRepo: false } // Will be populated by detectGitInfo
     };
   }

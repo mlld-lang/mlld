@@ -19,7 +19,7 @@ This file tests all syntax highlighting features including the new operators and
 /import @mlld/github
 /import { func } from @mlld/github
 /import { func, other } from "@base/something.mld"
-/import { func as other, x, y as something } from @mlld/github
+/import { func as @other, x, y as @something } from @mlld/github
 
 /when @condition => /show "Success"
 /output @result to "file.txt"

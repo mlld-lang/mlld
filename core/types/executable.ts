@@ -7,13 +7,14 @@
 
 import { MlldNode } from './nodes';
 import { VariableMetadata } from './index';
+import type { PipelineStage } from './run';
 
 /**
  * Base executable definition that can be invoked with parameters
  */
 export interface BaseExecutable {
   /** The type of executable */
-  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver';
+  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline';
   /** Parameter names expected by this executable */
   paramNames: string[];
   /** Original directive type this came from (exec or text) */
@@ -82,6 +83,18 @@ export interface ResolverExecutable extends BaseExecutable {
 }
 
 /**
+ * Pipeline executable - @exe name() = || @a() || @b()
+ */
+export interface PipelineExecutable extends BaseExecutable {
+  type: 'pipeline';
+  pipeline: PipelineStage[];
+  format?: string;
+  parallelCap?: number;
+  delayMs?: number;
+  sourceDirective: 'exec';
+}
+
+/**
  * Unified executable type
  */
 export type ExecutableDefinition = 
@@ -90,7 +103,8 @@ export type ExecutableDefinition =
   | CodeExecutable 
   | TemplateExecutable
   | SectionExecutable
-  | ResolverExecutable;
+  | ResolverExecutable
+  | PipelineExecutable;
 
 /**
  * Variable that stores an executable definition
@@ -127,6 +141,10 @@ export function isSectionExecutable(def: ExecutableDefinition): def is SectionEx
 
 export function isResolverExecutable(def: ExecutableDefinition): def is ResolverExecutable {
   return def.type === 'resolver';
+}
+
+export function isPipelineExecutable(def: ExecutableDefinition): def is PipelineExecutable {
+  return def.type === 'pipeline';
 }
 
 /**

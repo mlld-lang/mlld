@@ -1,6 +1,6 @@
 # Test directive execution guard during imports
 
-/import "module-guard-helpers.mld" as helpers
+/import "module-guard-helpers.mld" as @helpers
 
 # Verify variables and executables are available (guard allows these)
 /show `Message: @helpers.message`

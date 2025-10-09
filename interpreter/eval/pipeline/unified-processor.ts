@@ -10,10 +10,12 @@ import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
 import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
 import type { PipelineStage, PipelineCommand } from '@core/types';
-import { executePipeline } from './index';
+import { PipelineExecutor } from './executor';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
 import { attachBuiltinEffects } from './effects-attachment';
+import { wrapExecResult } from '../../utils/structured-exec';
+import { ensureStructuredValue, isStructuredValue, wrapStructured, type StructuredValue, type StructuredValueMetadata } from '../../utils/structured-value';
 
 /**
  * Context for pipeline processing
@@ -133,7 +135,7 @@ export async function processPipeline(
   const input = await prepareInput(value, env);
   
   // Create source function for retrying stage 0 if applicable
-  let sourceFunction: (() => Promise<string>) | undefined;
+  let sourceFunction: (() => Promise<string | StructuredValue>) | undefined;
   if (detected.isRetryable && value?.metadata?.sourceFunction) {
     // Create a function that re-executes the source AST node
     const sourceNode = value.metadata.sourceFunction;
@@ -142,15 +144,18 @@ export async function processPipeline(
       if (sourceNode.type === 'ExecInvocation') {
         const { evaluateExecInvocation } = await import('../exec-invocation');
         const result = await evaluateExecInvocation(sourceNode, env);
-        return String(result.value);
+        return wrapExecResult(result.value);
       } else if (sourceNode.type === 'command') {
         const { evaluateCommand } = await import('../run');
         const result = await evaluateCommand(sourceNode, env);
+        if (structuredEnabled) {
+          return wrapExecResult(result.value);
+        }
         return String(result.value);
       } else if (sourceNode.type === 'code') {
         const { evaluateCodeExecution } = await import('../code-execution');
         const result = await evaluateCodeExecution(sourceNode, env);
-        return String(result.value);
+        return wrapExecResult(result.value);
       }
       // Fallback - return original input
       return input;
@@ -162,20 +167,18 @@ export async function processPipeline(
   
   // Execute pipeline with normalized stages
   try {
-    const result = await executePipeline(
-      input,
+    const executor = new PipelineExecutor(
       functionalPipeline,
       env,
-      context.location,
       detected.format,
       detected.isRetryable,
       sourceFunction,
-      hasSyntheticSource
+      hasSyntheticSource,
+      detected.parallelCap,
+      detected.delayMs
     );
-    
-    // TODO: Type preservation - convert string result back to appropriate type
-    // For now, return string result (current behavior)
-    return result;
+
+    return await executor.execute(input, { returnStructured: true });
     
   } catch (error) {
     // Enhance error with context
@@ -242,55 +245,98 @@ async function validatePipeline(
 async function prepareInput(
   value: any,
   env: Environment
-): Promise<string> {
-  // If it's a wrapped value with metadata (from ExecInvocation with pipeline)
-  if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
-    // Extract the actual value, but keep the metadata for sourceFunction
-    const actualValue = value.value;
-    // Recursively prepare the actual value
-    return prepareInput(actualValue, env);
-  }
-  
-  // If it's a Variable, extract the value
-  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
-    // This is a Variable - extract its value
-    const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-    const extracted = await resolveValue(value as Variable, env, ResolutionContext.PipelineInput);
-    
-    // Check if the extracted value is a LoadContentResult
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-    if (isLoadContentResult(extracted)) {
-      // For LoadContentResult, use the content property (this is what should be processed)
-      // The metadata will be preserved via the AutoUnwrapManager shelf
-      return extracted.content;
+): Promise<string | StructuredValue> {
+  return prepareStructuredInput(value, env);
+}
+
+async function prepareStructuredInput(
+  value: any,
+  env: Environment,
+  incomingMetadata?: StructuredValueMetadata
+): Promise<StructuredValue> {
+  const mergedMetadata = (current?: StructuredValueMetadata): StructuredValueMetadata | undefined => {
+    if (!incomingMetadata && !current) {
+      return undefined;
     }
-    if (isLoadContentResultArray(extracted)) {
-      // For arrays, join the contents
-      return extracted.content; // This uses the custom getter that concatenates
+    return {
+      ...(current || {}),
+      ...(incomingMetadata || {})
+    };
+  };
+
+  if (isStructuredValue(value)) {
+    if (incomingMetadata) {
+      return wrapStructured(value, value.type, value.text, mergedMetadata(value.metadata));
     }
-    
-    // Convert to string for pipeline
-    if (typeof extracted === 'string') {
-      return extracted;
-    }
-    return JSON.stringify(extracted);
-  }
-  
-  // Check if direct value is LoadContentResult (shouldn't happen but be safe)
-  const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-  if (isLoadContentResult(value)) {
-    return value.content;
-  }
-  if (isLoadContentResultArray(value)) {
-    return value.content;
-  }
-  
-  // Direct value - convert to string
-  if (typeof value === 'string') {
     return value;
   }
-  
-  return JSON.stringify(value);
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'text' in value &&
+    'data' in value &&
+    typeof (value as any).text === 'string' &&
+    typeof (value as any).type === 'string'
+  ) {
+    return wrapStructured(
+      value as StructuredValue,
+      (value as any).type,
+      (value as any).text,
+      mergedMetadata((value as any).metadata)
+    );
+  }
+
+  if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
+    const metadata = mergedMetadata(value.metadata as StructuredValueMetadata | undefined);
+    return prepareStructuredInput(value.value, env, metadata);
+  }
+
+  if (value && typeof value === 'object') {
+    const { resolveValue, ResolutionContext } = await import('../../utils/variable-resolution');
+    if ('type' in value && 'value' in value && 'name' in value) {
+      const resolved = await resolveValue(value, env, ResolutionContext.PipelineInput);
+      return prepareStructuredInput(resolved, env, incomingMetadata);
+    }
+  }
+
+  const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+  if (isLoadContentResult(value)) {
+    return wrapStructured(
+      value,
+      'object',
+      value.content ?? '',
+      mergedMetadata({ loadResult: value })
+    );
+  }
+
+  if (isLoadContentResultArray(value)) {
+    return wrapStructured(
+      value,
+      'array',
+      value.content ?? '',
+      mergedMetadata({ loadResult: value })
+    );
+  }
+
+  if (typeof value === 'string') {
+    return ensureStructuredValue(value, 'text', value, incomingMetadata);
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return ensureStructuredValue(value, 'text', String(value), incomingMetadata);
+  }
+
+  if (Array.isArray(value)) {
+    return wrapStructured(value, 'array', undefined, incomingMetadata);
+  }
+
+  if (value && typeof value === 'object') {
+    return wrapStructured(value, 'object', undefined, incomingMetadata);
+  }
+
+  return ensureStructuredValue('', 'text', '', incomingMetadata);
 }
 
 /**

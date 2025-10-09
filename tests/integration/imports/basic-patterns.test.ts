@@ -136,12 +136,71 @@ Admin`
       expect(result.exitCode).toBe(1);
     });
   });
+describe('Local Modules', () => {
+  let runner: ImportTestRunner;
+
+  beforeEach(async () => {
+    runner = new ImportTestRunner();
+    await runner.setup();
+  });
+
+  afterEach(async () => {
+    await runner.cleanup();
+  });
+
+  it('should import from local module when configured', async () => {
+    const result = await runner.runTest({
+      name: 'local-module-basic',
+      description: 'Import helper from local author module',
+      files: {
+        'mlld-config.json': JSON.stringify({
+          resolvers: {
+            prefixes: [
+              { prefix: '@tester/', resolver: 'LOCAL' }
+            ]
+          }
+        }, null, 2),
+        'llm/modules/tools.mlld.md': `---
+name: tools
+author: tester
+---
+
+/export { helper }
+
+/var @helper = 'local helper'
+`
+      },
+      mainScript: `
+/import local { helper } from @tester/tools
+/show @helper`,
+      expectedOutput: 'local helper'
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should fail when local module is missing', async () => {
+    const result = await runner.runTest({
+      name: 'local-module-missing',
+      description: 'Local import should fail when module is absent',
+      mainScript: `
+/import local { helper } from @missing/module
+/show @helper`,
+      expectedError: /Local module not found/
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.exitCode).not.toBe(0);
+  });
+});
+
 });
 
 describe('Import Pattern: Namespace Imports', () => {
   it('should import entire file as namespace', async () => {
     const result = await testImport(`
-/import "./utils.mld" as utils
+/import "./utils.mld" as @utils
 /show @utils.greeting
 /show @utils.farewell`, {
       files: {
@@ -173,7 +232,7 @@ Goodbye`
   
   it('should handle nested access in namespace imports', async () => {
     const result = await testImport(`
-/import "./api.mld" as myApi
+/import "./api.mld" as @myApi
 /var @result = @myApi.users.getCount()
 /show @result`, {
       files: {

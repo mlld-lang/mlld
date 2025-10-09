@@ -39,7 +39,6 @@ export interface InterpretOptions {
   returnEnvironment?: boolean; // Return environment with result
   approveAllImports?: boolean; // Bypass interactive import approval
   normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
-  devMode?: boolean; // Enable development mode with local fallback
   enableTrace?: boolean; // Enable directive trace for debugging (default: true)
   useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
   localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
@@ -244,6 +243,9 @@ export async function interpret(
 
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();
+
+  // Configure local modules after resolvers are ready
+  await env.configureLocalModules();
   
   // Set the current file path if provided (for error reporting)
   if (options.filePath) {
@@ -279,10 +281,6 @@ export async function interpret(
     env.setNormalizeBlankLines(options.normalizeBlankLines);
   }
   
-  // Set dev mode if provided
-  if (options.devMode) {
-    await env.setDevMode(options.devMode);
-  }
   
   // Set trace enabled (default: true)
   if (options.enableTrace !== undefined) {

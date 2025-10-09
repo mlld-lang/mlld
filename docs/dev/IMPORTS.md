@@ -33,25 +33,85 @@ The mlld import system provides a flexible, secure way to share code between mod
 
 ### Key Features
 - **Module isolation**: Each module evaluates in its own environment
-- **Explicit export manifests**: Modules declare public bindings with `/export { ... }`; files that have not been updated yet still auto-export as a temporary compatibility fallback.
+
+### Import Types
+
+mlld supports five import types that control resolution behavior:
+
+#### 1. `module` - Registry Modules
+```mlld
+/import module { @api, @utils } from @corp/toolkit
+```
+- Pre-installed from registry via `mlld install`
+- Cached locally, no runtime network access
+- Version-locked for reproducibility
+- Fails if module not installed
+
+#### 2. `static` - Parse-Time Embedding
+```mlld
+/import static <./prompts/system.md> as @prompt
+/import static <./config.json> as @config
+```
+- Content embedded in AST at parse time
+- Zero runtime cost
+- Perfect for templates and configuration
+
+#### 3. `live` - Always Fresh
+```mlld
+/import live { @timestamp } from @now
+/import live <https://api.status.com> as @status
+```
+- Fetched on every execution
+- Never cached
+- Use for real-time data
+
+#### 4. `cached(TTL)` - Time-Based Caching
+```mlld
+/import cached(5m) <https://api.github.com/rate_limit> as @limits
+/import cached(1h) <https://cdn.example.com/data> as @assets
+```
+- Cache-first with explicit TTL
+- Network access only when cache expired
+- TTL units: s/m/h/d/w
+
+#### 5. `local` - Development Mode
+```mlld
+/import local { @helper } from @alice/dev-module
+```
+- Direct filesystem access to `llm/modules/`
+- Bypasses package management
+- Only works if user is `@alice` or has resolver configured
+
+### Import Type Inference
+
+When no type specified, mlld infers based on source:
+- Registry modules (`@author/module`) → `module`
+- Local files (`./file.mld`) → `static`
+- URLs (`https://...`) → `cached(5m)`
+- Built-in resolvers (`@input`) → `live`
+- Local prefix (`@local/`) → `local`
+
+### Key Features
+- **Module isolation**: Each module evaluates in its own environment
+- **Explicit export manifests**: Modules declare public bindings with `/export { ... }`
 - **Shadow environment preservation**: Functions maintain access to their original context
 - **Type preservation**: Variable types are maintained through import/export
-- **Flexible resolution**: Support for local files, registry modules, and URLs
+- **Import type routing**: Five distinct resolution strategies for different use cases
 
-## Import Types
+## Import Patterns
 
 mlld supports three main import patterns:
 
 ### 1. Selected Imports
 Import specific variables from a module:
 ```mlld
-/import { helper, user } from @mlld/github
+/import { @helper, @user } from @mlld/github
 ```
 
 ### 2. Namespace Imports
 Import all exports under a namespace:
 ```mlld
-/import @mlld/github as gh
+/import @mlld/github as @gh
 ```
 
 ### 3. Simple Imports
@@ -210,7 +270,7 @@ A namespace object contains all exported variables at the top level:
 
 Field access traverses the namespace structure:
 ```mlld
-/import @mlld/github as gh
+/import @mlld/github as @gh
 /run @gh.pr.review("123", "repo", "approve", "LGTM")
 ```
 
@@ -384,8 +444,7 @@ if (explicitNames) {
 
 ### Auto-Export Fallback
 
-- Legacy modules without a manifest continue to export every top-level variable that passes `isLegitimateVariableForExport` (system variables remain hidden).
-- The fallback path allows gradual migration; new docs and samples should always include `/export`.
+Modules without explicit `/export` manifest auto-export all legitimate variables (system variables remain hidden).
 
 ### Import Alias Collision Protection
 
@@ -625,3 +684,18 @@ Run 'mlld install' to update the lock file or specify the locked version explici
 2. **Complex Content Detection**: Could benefit from memoization
 3. **Shadow Environment Capture**: Only captured when needed
 4. **Field Access**: Direct object traversal, no string parsing
+
+
+## Import Types and Inference
+
+The five supported keywords map to distinct resolver behaviours. When a directive omits a keyword, the evaluator infers a conservative default:
+
+| Keyword | Behaviour | Typical Sources | Notes |
+|---------|-----------|-----------------|-------|
+| `module` | Load through registry manager | `@user/module` | Fails if path is not a registry module |
+| `static` | Embed content once | Relative files, `@base/...` | Works with `<path>` and quoted strings |
+| `live` | Fetch on every evaluation | `@input`, `@resolver` | Skips caching/autocache |
+| `cached(ttl)` | Cache-first with TTL | Absolute URLs | TTL uses `Xs`, `Xm`, `Xh`, `Xd`, `Xw` (seconds/minutes/hours/days/weeks) |
+| `local` | Read from dev modules | `@local/...` | Bypasses registry locking |
+
+Inference defaults: registry modules → `module`, files → `static`, URLs → `cached`, `@input` → `live`, `@local` → `local`, `@base/@project` → `static`. Any mismatch raises an `IMPORT_TYPE_MISMATCH` error before evaluation.

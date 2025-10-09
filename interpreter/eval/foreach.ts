@@ -1,6 +1,18 @@
 import type { Environment } from '../env/Environment';
 import { isExecutable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+
+function hasArrayData(value: unknown): value is { data: unknown[] } {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (!('data' in value)) {
+    return false;
+  }
+  const { data } = value as { data?: unknown };
+  return Array.isArray(data);
+}
 
 /**
  * Evaluate a foreach command expression by applying an executable to arrays of values.
@@ -59,6 +71,43 @@ export async function evaluateForeachCommand(
   for (let i = 0; i < arrayNodes.length; i++) {
     const arrayVar = arrayNodes[i];
     const arrayValue = await evaluateDataValue(arrayVar, env);
+    if (isStructuredValue(arrayValue)) {
+      let structuredData = asData(arrayValue) as unknown;
+
+      if (!Array.isArray(structuredData)) {
+        // Some structured wrappers store nested structured data (e.g., PipelineInput)
+        if (hasArrayData(structuredData)) {
+          structuredData = structuredData.data;
+        } else if (typeof structuredData === 'string') {
+          try {
+            const parsed = JSON.parse(structuredData);
+            if (Array.isArray(parsed)) {
+              structuredData = parsed;
+            }
+          } catch {
+            // Ignore parse failure; we'll try text fallback next
+          }
+        }
+      }
+
+      if (!Array.isArray(structuredData) && typeof arrayValue.text === 'string') {
+        try {
+          const parsed = JSON.parse(arrayValue.text);
+          if (Array.isArray(parsed)) {
+            structuredData = parsed;
+          }
+        } catch {
+          // Ignore parse failure and fall through to error
+        }
+      }
+
+      if (!Array.isArray(structuredData)) {
+        throw new Error(`Argument ${i + 1} to foreach must be an array, got structured ${arrayValue.type}`);
+      }
+
+      evaluatedArrays.push(structuredData);
+      continue;
+    }
     
     if (!Array.isArray(arrayValue)) {
       throw new Error(`Argument ${i + 1} to foreach must be an array, got ${typeof arrayValue}`);
@@ -106,7 +155,8 @@ export async function evaluateForeachCommand(
       
       // Use the standard exec invocation evaluator
       const result = await evaluateExecInvocation(execInvocationNode as any, env);
-      results.push(result.value);
+      const value = result.value;
+      results.push(isStructuredValue(value) ? asData(value) : value);
     } catch (error) {
       // Include iteration context in error message
       const params = cmdVariable.paramNames || definition.paramNames || [];

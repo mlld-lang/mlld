@@ -8,11 +8,13 @@ import {
   createPathVariable,
   createExecutableVariable,
   createTemplateVariable,
+  createStructuredValueVariable,
   isExecutable,
   isExecutableVariable,
   getEffectiveType,
   VariableTypeGuards
 } from '@core/types/variable';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
@@ -330,6 +332,19 @@ export class VariableImporter {
       originalName: originalName !== name ? originalName : undefined,
       definedAt: { line: 0, column: 0, filePath: importPath }
     };
+
+    if (isStructuredValue(value)) {
+      return createStructuredValueVariable(
+        name,
+        value,
+        source,
+        {
+          ...metadata,
+          isStructuredValue: true,
+          structuredValueType: value.type
+        }
+      );
+    }
     
     // Check if this is an executable export
     if (value && typeof value === 'object' && '__executable' in value && value.__executable) {
@@ -453,7 +468,7 @@ export class VariableImporter {
   }
 
   /**
-   * Create a namespace variable for imports with aliased wildcards (e.g., * as config)
+   * Create a namespace variable for imports with aliased wildcards (e.g., * as @config)
    */
   createNamespaceVariable(
     alias: string, 
@@ -496,7 +511,7 @@ export class VariableImporter {
     if (directive.subtype === 'importAll') {
       throw new MlldImportError(
         'Wildcard imports \'/import { * }\' are no longer supported. ' +
-        'Use namespace imports instead: \'/import "file"\' or \'/import "file" as name\'',
+        'Use namespace imports instead: \'/import "file"\' or \'/import "file" as @name\'',
         directive.location,
         {
           suggestion: 'Change \'/import { * } from "file"\' to \'/import "file"\''
@@ -773,7 +788,9 @@ export class VariableImporter {
    * Infer variable type from value
    */
   private inferVariableType(value: any): VariableTypeDiscriminator {
-    if (Array.isArray(value)) {
+    if (isStructuredValue(value)) {
+      return 'structured';
+    } else if (Array.isArray(value)) {
       return 'array';
     } else if (value && typeof value === 'object') {
       return 'object';

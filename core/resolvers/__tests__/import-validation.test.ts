@@ -84,7 +84,7 @@ describe('Import Content Type Validation', () => {
     it('should import plain text files as namespace with empty exports', async () => {
       await fileSystem.writeFile('/readme.txt', 'This is a plain text file');
       
-      const code = `/import "./readme.txt" as text
+      const code = `/import "./readme.txt" as @text
 /show @text`;
       
       const result = await interpret(code, {

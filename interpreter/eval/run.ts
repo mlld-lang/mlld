@@ -15,6 +15,8 @@ import { logger } from '@core/utils/logger';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue } from '@core/types/structured-value';
+import { wrapExecResult } from '../utils/structured-exec';
+import { asText, isStructuredValue } from '../utils/structured-value';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -77,7 +79,7 @@ function coerceStdinString(value: unknown): string {
   }
 
   if (StructuredValue.isStructuredValue(value)) {
-    return value.toString();
+    return asText(value);
   }
 
   if (isLoadContentResult(value)) {
@@ -180,7 +182,16 @@ export async function evaluateRun(
     return { value: null, env };
   }
 
-  let output = '';
+  let outputValue: unknown;
+  let outputText: string;
+
+  const setOutput = (value: unknown) => {
+    const wrapped = wrapExecResult(value);
+    outputValue = wrapped;
+    outputText = asText(wrapped as any);
+  };
+
+  setOutput('');
   // Track source node to optionally enable stage-0 retry
   let sourceNodeForPipeline: any | undefined;
 
@@ -334,7 +345,7 @@ export async function evaluateRun(
     }
 
     const commandOptions = stdinInput !== undefined ? { input: stdinInput } : undefined;
-    output = await env.executeCommand(command, commandOptions, executionContext);
+    setOutput(await env.executeCommand(command, commandOptions, executionContext));
     
   } else if (directive.subtype === 'runCode') {
     // Handle code execution
@@ -382,9 +393,9 @@ export async function evaluateRun(
     
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
-    output = await AutoUnwrapManager.executeWithPreservation(async () => {
+    setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
       return await env.executeCode(code, language, argValues, executionContext);
-    });
+    }));
     
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference with field access support
@@ -595,7 +606,7 @@ export async function evaluateRun(
       }
       
       // Pass context for exec command errors too
-      output = await env.executeCommand(command, undefined, executionContext);
+      setOutput(await env.executeCommand(command, undefined, executionContext));
       
     } else if (definition.type === 'commandRef') {
       // This command references another command
@@ -624,7 +635,7 @@ export async function evaluateRun(
       // Note: We don't add definition.commandRef here because it will be added 
       // at the beginning of the runExec case when processing refDirective
       const result = await evaluateRun(refDirective, env, callStack);
-      output = result.value;
+      setOutput(result.value);
       
     } else if (definition.type === 'code') {
       // Interpolate the code template with parameters
@@ -672,21 +683,23 @@ export async function evaluateRun(
         const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
         // If the when-expression tagged a side-effect show, unwrap to its text
         // so /run echoes it as output (tests expect duplicate lines).
-        const val: any = whenResult.value as any;
-        if (val && typeof val === 'object' && (val as any).__whenEffect === 'show') {
-          output = (val as any).text ?? '';
+        const rawValue = whenResult.value as any;
+        if (rawValue && typeof rawValue === 'object' && (rawValue as any).__whenEffect === 'show') {
+          setOutput((rawValue as any).text ?? '');
+        } else if (isStructuredValue(rawValue) && rawValue.data && typeof rawValue.data === 'object' && (rawValue.data as any).__whenEffect === 'show') {
+          setOutput((rawValue.data as any).text ?? asText(rawValue));
         } else {
-          output = whenResult.value as any;
+          setOutput(rawValue);
         }
         
         logger.debug('🎯 mlld-when result:', {
-          outputType: typeof output,
-          outputValue: String(output).substring(0, 100)
+          outputType: typeof outputValue,
+          outputValue: outputText.substring(0, 100)
         });
       } else {
-        output = await AutoUnwrapManager.executeWithPreservation(async () => {
+        setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
           return await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);
-        });
+        }));
       }
     } else if (definition.type === 'template') {
       // Handle template executables
@@ -695,7 +708,7 @@ export async function evaluateRun(
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
       
-      output = await interpolate(definition.template, tempEnv, InterpolationContext.Default);
+      setOutput(await interpolate(definition.template, tempEnv, InterpolationContext.Default));
     } else {
       throw new Error(`Unsupported executable type: ${definition.type}`);
     }
@@ -709,7 +722,7 @@ export async function evaluateRun(
     // Evaluate the exec invocation
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocation, env);
-    output = String(result.value);
+    setOutput(result.value);
     sourceNodeForPipeline = execInvocation;
     
   } else if (directive.subtype === 'runExecReference') {
@@ -718,13 +731,19 @@ export async function evaluateRun(
     if (!execRef) {
       throw new Error('Run exec reference directive missing exec reference');
     }
-    
+
     // Evaluate the exec invocation
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execRef, env);
-    output = String(result.value);
+    setOutput(result.value);
     sourceNodeForPipeline = execRef;
-    
+
+  } else if (directive.subtype === 'runPipeline') {
+    // Handle leading parallel pipeline: /run || @a() || @b()
+    // Pipeline is already in withClause, initial input is empty string
+    setOutput('');
+    withClause = directive.values.withClause;
+
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
   }
@@ -750,10 +769,11 @@ export async function evaluateRun(
       const { processPipeline } = await import('./pipeline/unified-processor');
       // Stage-0 retry is always enabled when we have a source node
       const enableStage0 = !!sourceNodeForPipeline;
+      const pipelineInput = outputValue;
       const valueForPipeline = enableStage0
-        ? { value: output, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
-        : output;
-      output = await processPipeline({
+        ? { value: pipelineInput, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
+        : pipelineInput;
+      const pipelineResult = await processPipeline({
         value: valueForPipeline,
         env,
         directive,
@@ -762,22 +782,16 @@ export async function evaluateRun(
         isRetryable: enableStage0,
         location: directive.location
       });
+      setOutput(pipelineResult);
     }
   }
-  
-  // Ensure string output before newline handling
-  if (typeof output !== 'string') {
-    try {
-      output = String(output);
-    } catch {
-      output = '';
-    }
+ 
+  // Output directives always end with a newline for display
+  let displayText = outputText;
+  if (!displayText.endsWith('\n')) {
+    displayText += '\n';
   }
-  // Output directives always end with a newline
-  // This is the interpreter's responsibility, not the grammar's
-  if (!output.endsWith('\n')) {
-    output += '\n';
-  }
+  outputText = displayText;
   
   // Only add output nodes for non-embedded directives
   if (!directive.meta?.isDataValue && !directive.meta?.isEmbedded) {
@@ -785,7 +799,7 @@ export async function evaluateRun(
     const replacementNode: TextNode = {
       type: 'Text',
       nodeId: `${directive.nodeId}-output`,
-      content: output
+      content: displayText
     };
     
     // Add the replacement node to environment
@@ -793,10 +807,13 @@ export async function evaluateRun(
   }
   
   // Emit effect only for top-level run directives (not data/RHS contexts)
-  if (output && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef) {
-    env.emitEffect('both', output);
+  if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef) {
+    env.emitEffect('both', displayText);
   }
   
   // Return the output value
-  return { value: output, env };
+  return {
+    value: outputValue,
+    env
+  };
 }

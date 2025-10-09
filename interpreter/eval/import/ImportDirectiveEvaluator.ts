@@ -1,4 +1,5 @@
-import type { DirectiveNode } from '@core/types';
+import type { DirectiveNode, ImportDirectiveNode } from '@core/types';
+import type { ImportType } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import type { EvalResult } from '../../core/interpreter';
 import { ImportPathResolver, ImportResolution } from './ImportPathResolver';
@@ -6,6 +7,7 @@ import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { ModuleContentProcessor } from './ModuleContentProcessor';
 import { VariableImporter } from './VariableImporter';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
+import { MlldImportError, ErrorSeverity } from '@core/errors';
 // createVariableFromValue is now part of VariableImporter
 import { interpolate } from '../../core/interpreter';
 
@@ -25,6 +27,7 @@ export class ImportDirectiveEvaluator {
   private contentProcessor: ModuleContentProcessor;
   private variableImporter: VariableImporter;
   private objectResolver: ObjectReferenceResolver;
+  // TODO: Integrate capability context construction when import types and security descriptors land.
 
   constructor(env: Environment) {
     this.objectResolver = new ObjectReferenceResolver();
@@ -45,6 +48,12 @@ export class ImportDirectiveEvaluator {
     try {
       // 1. Resolve the import path and determine import type
       const resolution = await this.pathResolver.resolveImportPath(directive);
+
+      const importContext = this.resolveImportType(directive, resolution);
+      resolution.importType = importContext.importType;
+      if (importContext.cacheDurationMs !== undefined) {
+        resolution.cacheDurationMs = importContext.cacheDurationMs;
+      }
 
       // 2. Route to appropriate handler based on import type
       return await this.routeImportRequest(resolution, directive, env);
@@ -79,6 +88,153 @@ export class ImportDirectiveEvaluator {
       default:
         throw new Error(`Unknown import type: ${(resolution as any).type}`);
     }
+  }
+
+  /**
+   * Handle input imports (@input, @stdin)
+   */
+  private resolveImportType(
+    directive: DirectiveNode,
+    resolution: ImportResolution
+  ): { importType: ImportType; cacheDurationMs?: number } {
+    const importDirective = directive as ImportDirectiveNode;
+    const declaredType = importDirective.values?.importType;
+    const cachedDuration = importDirective.values?.cachedDuration;
+
+    if (declaredType) {
+      this.validateDeclaredImportType(declaredType, resolution);
+    }
+
+    if (declaredType === 'local' && resolution.type === 'module') {
+      resolution.preferLocal = true;
+    }
+
+    const resolvedType = declaredType ?? this.inferImportType(resolution);
+    const cacheDurationMs = resolvedType === 'cached'
+      ? this.durationToMilliseconds(cachedDuration)
+      : undefined;
+
+    return {
+      importType: resolvedType,
+      cacheDurationMs
+    };
+  }
+
+  private inferImportType(resolution: ImportResolution): ImportType {
+    switch (resolution.type) {
+      case 'module':
+        return 'module';
+      case 'file':
+        return 'static';
+      case 'url':
+        return 'cached';
+      case 'input':
+        return 'live';
+      case 'resolver':
+        return this.inferResolverImportType(resolution);
+      default:
+        return 'live';
+    }
+  }
+
+  private inferResolverImportType(resolution: ImportResolution): ImportType {
+    const name = resolution.resolverName?.toLowerCase();
+    if (!name) {
+      return 'live';
+    }
+
+    if (name === 'local') {
+      return 'local';
+    }
+
+    if (name === 'base' || name === 'project') {
+      return 'static';
+    }
+
+    return 'live';
+  }
+
+  private validateDeclaredImportType(type: ImportType, resolution: ImportResolution): void {
+    const resolverName = resolution.resolverName?.toLowerCase();
+
+    switch (type) {
+      case 'module':
+        if (resolution.type !== 'module') {
+          throw new MlldImportError("Import type 'module' requires a registry module reference.", {
+            code: 'IMPORT_TYPE_MISMATCH',
+            details: { importType: type, resolvedType: resolution.type }
+          });
+        }
+        return;
+
+      case 'cached':
+        if (resolution.type !== 'url') {
+          throw new MlldImportError("Import type 'cached' requires an absolute URL source.", {
+            code: 'IMPORT_TYPE_MISMATCH',
+            details: { importType: type, resolvedType: resolution.type }
+          });
+        }
+        return;
+
+      case 'local':
+        if (resolution.type === 'module') {
+          resolution.preferLocal = true;
+          return;
+        }
+        if (resolution.type !== 'resolver' || resolverName !== 'local') {
+          throw new MlldImportError("Import type 'local' expects an @local/... module.", {
+            code: 'IMPORT_TYPE_MISMATCH',
+            details: { importType: type, resolvedType: resolution.type }
+          });
+        }
+        return;
+
+      case 'static':
+        if (resolution.type === 'file') {
+          return;
+        }
+        if (resolution.type === 'resolver' && (resolverName === 'base' || resolverName === 'project')) {
+          return;
+        }
+        throw new MlldImportError("Import type 'static' supports local files or @base/@project resolver paths.", {
+          code: 'IMPORT_TYPE_MISMATCH',
+          details: { importType: type, resolvedType: resolution.type }
+        });
+
+      case 'live':
+        if (resolution.type === 'url' || resolution.type === 'resolver' || resolution.type === 'input') {
+          return;
+        }
+        throw new MlldImportError("Import type 'live' is only valid for resolvers, URLs, or @input.", {
+          code: 'IMPORT_TYPE_MISMATCH',
+          details: { importType: type, resolvedType: resolution.type }
+        });
+
+      default:
+        return;
+    }
+  }
+
+  private durationToMilliseconds(duration?: ImportDirectiveNode['values']['cachedDuration']): number | undefined {
+    if (!duration) {
+      return undefined;
+    }
+
+    const multipliers: Record<string, number> = {
+      seconds: 1000,
+      minutes: 60 * 1000,
+      hours: 60 * 60 * 1000,
+      days: 24 * 60 * 60 * 1000,
+      weeks: 7 * 24 * 60 * 60 * 1000,
+      years: 365 * 24 * 60 * 60 * 1000
+    };
+
+    const value = multipliers[duration.unit];
+    if (!value) {
+      return undefined;
+    }
+
+    return duration.value * value;
   }
 
   /**
@@ -173,6 +329,17 @@ export class ImportDirectiveEvaluator {
     directive: DirectiveNode,
     env: Environment
   ): Promise<EvalResult> {
+    if (resolution.preferLocal) {
+      const resolverManager = env.getResolverManager();
+      if (!resolverManager || !resolverManager.hasLocalModule(resolution.resolvedPath)) {
+        throw new MlldImportError(`Local module not found for ${resolution.resolvedPath}`, {
+          code: 'LOCAL_MODULE_NOT_FOUND',
+          severity: ErrorSeverity.Fatal,
+          details: { reference: resolution.resolvedPath }
+        });
+      }
+    }
+
     const candidates = this.buildModuleCandidates(resolution);
     let lastError: unknown = undefined;
 
@@ -242,9 +409,6 @@ export class ImportDirectiveEvaluator {
     }
 
     try {
-      // Mark that we're importing this reference
-      env.beginImport(ref);
-      
       if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ImportDirectiveEvaluator] Resolver content for ${ref}:`, {
           contentLength: resolverContent.content.length,
@@ -280,8 +444,7 @@ export class ImportDirectiveEvaluator {
 
       return { value: undefined, env };
     } finally {
-      // End import tracking
-      env.endImport(ref);
+      // Import tracking handled by ModuleContentProcessor.processResolverContent
     }
   }
 

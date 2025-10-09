@@ -8,6 +8,7 @@
 
 import { AsyncLocalStorage } from 'async_hooks';
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
+import { isStructuredValue, StructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 
 /**
  * Thread-local storage for metadata shelves
@@ -21,6 +22,7 @@ const asyncLocalStorage = new AsyncLocalStorage<MetadataShelf>();
 class MetadataShelf {
   private shelf: Map<string, LoadContentResult> = new Map();
   private singleFileMetadata: LoadContentResult | null = null;
+  private structuredShelf: Map<any, StructuredValue> = new Map();
   
   /**
    * Store LoadContentResult objects on the shelf before unwrapping
@@ -37,6 +39,8 @@ class MetadataShelf {
       // Store both in shelf (for exact matching) and as single file metadata (for auto-restoration)
       this.shelf.set(value.content, value);
       this.singleFileMetadata = value;
+    } else if (isStructuredValue(value)) {
+      this.structuredShelf.set(value.data, value);
     }
   }
   
@@ -44,6 +48,11 @@ class MetadataShelf {
    * Attempt to restore metadata to returned values from JS functions
    */
   restoreMetadata(value: any): any {
+    const structuredRestored = this.restoreStructuredFromShelf(value);
+    if (structuredRestored) {
+      return structuredRestored;
+    }
+
     // Handle arrays (existing functionality)
     if (Array.isArray(value)) {
       // Check if all items are strings that match shelved content
@@ -64,7 +73,7 @@ class MetadataShelf {
       // Only return restored array if we actually restored something
       return hasRestorable ? restored : value;
     }
-    
+
     // Handle single values (new functionality)
     if (typeof value === 'string' && this.singleFileMetadata) {
       // Check for exact match first
@@ -93,6 +102,48 @@ class MetadataShelf {
     
     return value;
   }
+
+  private restoreStructuredFromShelf(value: any): StructuredValue | null {
+    if (!this.structuredShelf.size) return null;
+    const original = this.structuredShelf.get(value);
+    if (!original) {
+      return null;
+    }
+    const text = this.computeStructuredText(original, value);
+    const restored = wrapStructured(value, original.type, text, original.metadata);
+    this.structuredShelf.set(value, restored);
+    return restored;
+  }
+
+  private computeStructuredText(original: StructuredValue, data: any): string {
+    if (original.type === 'text') {
+      return typeof data === 'string' ? data : String(data ?? '');
+    }
+
+    if (original.type === 'array') {
+      if (Array.isArray(data)) {
+        if (typeof data.toString === 'function' && data.toString !== Array.prototype.toString) {
+          return data.toString();
+        }
+        try {
+          return JSON.stringify(data);
+        } catch {
+          return data.map(item => String(item)).join('\n');
+        }
+      }
+      return String(data ?? '');
+    }
+
+    if (data && typeof data === 'object' && 'content' in data && typeof (data as any).content === 'string') {
+      return (data as any).content;
+    }
+
+    try {
+      return JSON.stringify(data);
+    } catch {
+      return String(data ?? '');
+    }
+  }
   
   /**
    * Clear the shelf to prevent memory leaks
@@ -100,6 +151,7 @@ class MetadataShelf {
   clear(): void {
     this.shelf.clear();
     this.singleFileMetadata = null;
+    this.structuredShelf.clear();
   }
 }
 
@@ -117,7 +169,12 @@ export class AutoUnwrapManager {
   static unwrap(value: any): any {
     // Get or create shelf for current async context
     const shelf = asyncLocalStorage.getStore() || new MetadataShelf();
-    
+
+    if (isStructuredValue(value)) {
+      shelf.storeMetadata(value);
+      return value.data;
+    }
+
     if (process.env.MLLD_DEBUG === 'true' && (isLoadContentResult(value) || isLoadContentResultArray(value))) {
       console.error('[AutoUnwrapManager.unwrap] Unwrapping:', {
         type: isLoadContentResultArray(value) ? 'LoadContentResultArray' : 'LoadContentResult',

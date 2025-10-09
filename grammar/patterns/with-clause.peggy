@@ -47,6 +47,13 @@ WithProperty
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
     }
+  / "parallel" _ ":" _ cap:NumberLiteral {
+      return ["parallel", Number(cap)];
+    }
+  / "delay" _ ":" _ wait:TimeDurationLiteral {
+      const delayMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
+      return ["delayMs", delayMs];
+    }
 
 // -------------------------------------------------------------
 // PIPELINE SUPPORT

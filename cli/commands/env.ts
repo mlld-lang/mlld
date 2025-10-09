@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { LockFile } from '@core/registry/LockFile';
+import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { logger } from '@core/utils/logger';
 import { getCommandContext } from '../utils/command-context';
 
@@ -13,40 +13,39 @@ export interface EnvCommandOptions {
 export async function envCommand(options: EnvCommandOptions): Promise<void> {
   // Get command context to find project root
   const context = await getCommandContext({ startPath: options.cwd });
-  const lockFilePath = path.join(context.projectRoot, 'mlld.lock.json');
-  
+
   // Get subcommand
   const subcommand = options._[0] || 'list';
   const args = options._.slice(1);
-  
-  // Load or create lock file
-  const lockFile = new LockFile(lockFilePath);
+
+  // Load project configuration
+  const projectConfig = new ProjectConfig(context.projectRoot);
   
   switch (subcommand) {
     case 'list':
-      await listEnvVars(lockFile, lockFilePath);
+      await listEnvVars(projectConfig, context.projectRoot);
       break;
-      
+
     case 'allow':
       if (args.length === 0) {
         console.error(chalk.red('Error: Variable name required'));
         console.error('Usage: mlld env allow <variable_name> [variable_name...]');
         process.exit(1);
       }
-      await allowEnvVars(lockFile, args, lockFilePath);
+      await allowEnvVars(projectConfig, args, context.projectRoot);
       break;
-      
+
     case 'remove':
       if (args.length === 0) {
         console.error(chalk.red('Error: Variable name required'));
         console.error('Usage: mlld env remove <variable_name> [variable_name...]');
         process.exit(1);
       }
-      await removeEnvVars(lockFile, args, lockFilePath);
+      await removeEnvVars(projectConfig, args, context.projectRoot);
       break;
-      
+
     case 'clear':
-      await clearEnvVars(lockFile, lockFilePath);
+      await clearEnvVars(projectConfig, context.projectRoot);
       break;
       
     default:
@@ -56,8 +55,8 @@ export async function envCommand(options: EnvCommandOptions): Promise<void> {
   }
 }
 
-async function listEnvVars(lockFile: LockFile, lockFilePath: string): Promise<void> {
-  const allowedVars = lockFile.getAllowedEnvVars();
+async function listEnvVars(projectConfig: ProjectConfig, projectRoot: string): Promise<void> {
+  const allowedVars = projectConfig.getAllowedEnvVars();
   
   if (allowedVars.length === 0) {
     console.log(chalk.yellow('No environment variables are allowed in @INPUT'));
@@ -82,16 +81,16 @@ async function listEnvVars(lockFile: LockFile, lockFilePath: string): Promise<vo
   console.log(chalk.gray(`Total: ${allowedVars.length} variable${allowedVars.length === 1 ? '' : 's'} allowed`));
 }
 
-async function allowEnvVars(lockFile: LockFile, varNames: string[], lockFilePath: string): Promise<void> {
+async function allowEnvVars(projectConfig: ProjectConfig, varNames: string[], projectRoot: string): Promise<void> {
   const added: string[] = [];
   const alreadyAllowed: string[] = [];
   
   for (const varName of varNames) {
-    const currentVars = lockFile.getAllowedEnvVars();
+    const currentVars = projectConfig.getAllowedEnvVars();
     if (currentVars.includes(varName)) {
       alreadyAllowed.push(varName);
     } else {
-      await lockFile.addAllowedEnvVar(varName);
+      await projectConfig.addAllowedEnvVar(varName);
       added.push(varName);
     }
   }
@@ -113,23 +112,24 @@ async function allowEnvVars(lockFile: LockFile, varNames: string[], lockFilePath
   }
   
   // Show total count
-  const totalAllowed = lockFile.getAllowedEnvVars().length;
+  const totalAllowed = projectConfig.getAllowedEnvVars().length;
   console.log(chalk.gray(`\nTotal allowed variables: ${totalAllowed}`));
-  
-  // Create lock file if it didn't exist
-  if (!fs.existsSync(lockFilePath)) {
-    console.log(chalk.gray(`\nCreated: ${path.relative(process.cwd(), lockFilePath)}`));
+
+  // Create config file if it didn't exist
+  const configPath = path.join(projectRoot, 'mlld-config.json');
+  if (!fs.existsSync(configPath)) {
+    console.log(chalk.gray(`\nCreated: ${path.relative(process.cwd(), configPath)}`));
   }
 }
 
-async function removeEnvVars(lockFile: LockFile, varNames: string[], lockFilePath: string): Promise<void> {
+async function removeEnvVars(projectConfig: ProjectConfig, varNames: string[], projectRoot: string): Promise<void> {
   const removed: string[] = [];
   const notFound: string[] = [];
   
   for (const varName of varNames) {
-    const currentVars = lockFile.getAllowedEnvVars();
+    const currentVars = projectConfig.getAllowedEnvVars();
     if (currentVars.includes(varName)) {
-      await lockFile.removeAllowedEnvVar(varName);
+      await projectConfig.removeAllowedEnvVar(varName);
       removed.push(varName);
     } else {
       notFound.push(varName);
@@ -152,19 +152,19 @@ async function removeEnvVars(lockFile: LockFile, varNames: string[], lockFilePat
   }
   
   // Show remaining count
-  const totalAllowed = lockFile.getAllowedEnvVars().length;
+  const totalAllowed = projectConfig.getAllowedEnvVars().length;
   console.log(chalk.gray(`\nTotal allowed variables: ${totalAllowed}`));
 }
 
-async function clearEnvVars(lockFile: LockFile, lockFilePath: string): Promise<void> {
-  const currentVars = lockFile.getAllowedEnvVars();
+async function clearEnvVars(projectConfig: ProjectConfig, projectRoot: string): Promise<void> {
+  const currentVars = projectConfig.getAllowedEnvVars();
   
   if (currentVars.length === 0) {
     console.log(chalk.yellow('No environment variables to clear'));
     return;
   }
   
-  await lockFile.clearAllowedEnvVars();
+  await projectConfig.clearAllowedEnvVars();
   
   console.log(chalk.green(`✓ Cleared all ${currentVars.length} allowed environment variable${currentVars.length === 1 ? '' : 's'}`));
   console.log(chalk.gray('\nNo environment variables will be available in @INPUT'));

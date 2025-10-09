@@ -9,6 +9,7 @@ import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
+import { asData, asText, isStructuredValue } from './structured-value';
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
 const STRING_TEXT_ACCESSORS = new Set(['text', 'content']);
@@ -82,7 +83,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   }
   
   // Extract the raw value if we have a Variable
-  const rawValue = isVariable(value) ? value.value : value;
+  let rawValue = isVariable(value) ? value.value : value;
+  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
+  const loadResultMetadata = structuredWrapper?.metadata?.loadResult;
+  if (structuredWrapper) {
+    rawValue = structuredWrapper.data;
+  }
   const fieldValue = field.value;
   
   // DEBUG: Log what we're working with
@@ -107,6 +113,59 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'bracketAccess': {
       // All handle string-based property access
       const name = String(fieldValue);
+      if (structuredWrapper) {
+        if (name === 'text') {
+          if (
+            rawValue &&
+            typeof rawValue === 'object' &&
+            name in (rawValue as any) &&
+            structuredWrapper.metadata?.source !== 'load-content'
+          ) {
+            accessedValue = (rawValue as any)[name];
+          } else {
+            accessedValue = asText(structuredWrapper);
+          }
+          break;
+        }
+        if (name === 'data') {
+          if (rawValue && typeof rawValue === 'object' && name in (rawValue as any)) {
+            accessedValue = (rawValue as any)[name];
+          } else {
+            accessedValue = asData(structuredWrapper);
+          }
+          break;
+        }
+        if (name === 'type') {
+          accessedValue = structuredWrapper.type;
+          break;
+        }
+        if (name === 'metadata') {
+          accessedValue = structuredWrapper.metadata;
+          break;
+        }
+        if (
+          loadResultMetadata &&
+          typeof loadResultMetadata === 'object' &&
+          loadResultMetadata !== null &&
+          name in (loadResultMetadata as Record<string, unknown>)
+        ) {
+          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          break;
+        }
+      }
+      if (process.env.MLLD_DEBUG_STRUCTURED === 'true') {
+        const debugKeys = typeof rawValue === 'object' && rawValue !== null ? Object.keys(rawValue) : undefined;
+        const dataKeys = structuredWrapper && structuredWrapper.data && typeof structuredWrapper.data === 'object'
+          ? Object.keys(structuredWrapper.data as Record<string, unknown>)
+          : undefined;
+        console.error('[field-access]', {
+          name,
+          rawValueType: typeof rawValue,
+          hasStructuredWrapper: Boolean(structuredWrapper),
+          keys: debugKeys,
+          dataKeys
+        });
+      }
       if (typeof rawValue === 'string') {
         if (STRING_JSON_ACCESSORS.has(name)) {
           const trimmed = rawValue.trim();
@@ -131,6 +190,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
 
       if (typeof rawValue !== 'object' || rawValue === null) {
+        if (
+          loadResultMetadata &&
+          typeof loadResultMetadata === 'object' &&
+          loadResultMetadata !== null &&
+          name in (loadResultMetadata as Record<string, unknown>)
+        ) {
+          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          break;
+        }
         const chain = [...(options?.parentPath || []), name];
         const msg = `Cannot access field "${name}" on non-object value (${typeof rawValue})`;
         throw new FieldAccessError(msg, {
@@ -258,6 +326,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       
       // Handle regular objects (including Variables with type: 'object')
       if (!(name in rawValue)) {
+        if (
+          loadResultMetadata &&
+          typeof loadResultMetadata === 'object' &&
+          loadResultMetadata !== null &&
+          name in (loadResultMetadata as Record<string, unknown>)
+        ) {
+          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          break;
+        }
         if (options?.returnUndefinedForMissing) {
           accessedValue = undefined;
           break;

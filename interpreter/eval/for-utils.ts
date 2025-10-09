@@ -1,10 +1,15 @@
 import { isVariable } from '../utils/variable-resolution';
+import { asData, isStructuredValue } from '../utils/structured-value';
 
 export function toIterable(value: unknown): Iterable<[string | null, unknown]> | null {
   // Handle Variable wrappers first
   if (isVariable(value)) {
     // Recursively handle the wrapped value
     return toIterable(value.value);
+  }
+
+  if (isStructuredValue(value)) {
+    return toIterable(asData(value));
   }
   
   // Handle arrays - preserve Variable items

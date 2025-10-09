@@ -125,6 +125,13 @@ When LoadContentResult objects are passed to JavaScript functions, they automati
 }
 ```
 
+### Structured Value Behavior
+
+- Load-content results are stored as `StructuredValue` wrappers with both `.text` (string view) and `.data` (structured object) properties.
+- Display paths (templates, `/show`, pipelines) automatically use `.text`, so visible output stays content-focused.
+- Access metadata with `.data` or the helper `asData(value)` when you need the rich object. Use `.text` / `asText(value)` for the string form when writing to logs or shell commands.
+- Field access resolves through the underlying data while `.text` continues to mirror the content-first behaviour documented above.
+
 ## Type System Integration
 
 ### LoadContentResult

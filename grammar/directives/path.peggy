@@ -20,7 +20,7 @@ It is used in the form:
 // Primary /path directive - handles bracketed paths using proper abstraction
 SlashPath
   // Double quoted string path with @var interpolation
-  = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ quote:UnifiedDoubleQuote ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ quote:UnifiedDoubleQuote tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashPath matched double quoted string with interpolation', { id, quote });
       
       // Extract content from unified quote
@@ -40,11 +40,6 @@ SlashPath
         path: content
       };
       
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
-      }
-      
       // Add withClause if tail modifiers present
       if (tail) {
         values.withClause = tail;
@@ -63,8 +58,8 @@ SlashPath
       );
     }
   // Single quoted string path (literal, no interpolation)
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "'" content:$([^']*) "'" ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashPath matched single quoted string (literal)', { id, content, ttl, tail });
+  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "'" content:$([^']*) "'" tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashPath matched single quoted string (literal)', { id, content, tail });
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
@@ -77,11 +72,6 @@ SlashPath
         identifier: [idNode],
         path: pathParts
       };
-      
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
-      }
       
       // Add withClause if tail modifiers present
       if (tail) {
@@ -101,8 +91,8 @@ SlashPath
       );
     }
   // REMOVED: Bracketed path syntax - use quoted strings instead
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashPath matched normal path', { id, path, ttl, tail });
+  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashPath matched normal path', { id, path, tail });
       
       // Process special path variables
       let processedPath = path.raw.path || path.raw.url;
@@ -131,11 +121,6 @@ SlashPath
         identifier: [idNode],
         path: processedPathParts
       };
-      
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
-      }
       
       // Add withClause if tail modifiers present
       if (tail) {

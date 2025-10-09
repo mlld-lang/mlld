@@ -11,7 +11,7 @@ mlld install @community/string-utils
 ```
 
 ```mlld
-/import { slugify, truncate } from @community/string-utils
+/import { @slugify, @truncate } from @community/string-utils
 
 /var @title = "My Blog Post Title!"
 /var @slug = @slugify(@title)
@@ -48,7 +48,7 @@ mlld info @alice/utils
 Import functions and variables from installed modules. Modules should spell out their public API with `/export { ... }`; the runtime still auto-exports files that lack manifests, but new modules should always declare their manifest.
 
 ```mlld
-/import { formatDate, capitalize } from @alice/utils
+/import { @formatDate, @capitalize } from @alice/utils
 
 /var @greeting = @capitalize("world")
 /var @today = @formatDate(@now)
@@ -59,17 +59,17 @@ Import functions and variables from installed modules. Modules should spell out 
 
 **Selective imports:**
 ```mlld
-/import { func1, func2 } from @author/module
+/import { @func1, @func2 } from @author/module
 ```
 
 **Import with aliases:**
 ```mlld
-/import { longFunctionName as short, data } from @author/module
+/import { longFunctionName as @short, data } from @author/module
 ```
 
 **Namespace imports:**
 ```mlld
-/import { * as utils } from @author/module
+/import { * as @utils } from @author/module
 /var @result = @utils.formatDate(@now)
 ```
 
@@ -125,7 +125,7 @@ Utility functions for text formatting and dates.
 ## tldr
 
 ```mlld-run
-/import { formatDate, capitalize } from @alice/utils
+/import { @formatDate, @capitalize } from @alice/utils
 /var @today = @formatDate(@now)
 /show `Today is @today`
 ```

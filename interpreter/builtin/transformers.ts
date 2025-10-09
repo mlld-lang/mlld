@@ -61,10 +61,15 @@ export const builtinTransformers: TransformerDefinition[] = [
       try {
         // Try to parse and pretty-print existing JSON
         const parsed = JSON.parse(input);
-        return JSON.stringify(parsed, null, 2);
+        return parsed;
       } catch {
         // Not JSON - attempt to convert markdown structures to JSON
-        return convertToJSON(input);
+        const converted = convertToJSON(input);
+        try {
+          return JSON.parse(converted);
+        } catch {
+          return converted;
+        }
       }
     }
   },

@@ -45,6 +45,7 @@ import {
 } from './var';
 import { ImportWildcardNode } from './values';
 import { WithClause } from './run';
+import type { CapabilityContext, CapabilityKind } from './security';
 
 // Define InterpolatableValue for the guard function
 export type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
@@ -120,10 +121,6 @@ export function isWildcardImport(node: VariableReferenceNode): node is ImportWil
   return node.valueType === 'import' && node.identifier === '*';
 }
 
-
-
-
-
 /**
  * ExecInvocation type guards
  */
@@ -172,3 +169,22 @@ export function isArrayFilterNode(node: FieldAccessNode): node is ArrayFilterNod
 export function isTimeDurationNode(node: any): node is TimeDurationNode {
   return node?.type === 'TimeDuration';
 }
+
+// ---------------------------------------------------------------------------
+// CAPABILITY GUARD TYPES
+// ---------------------------------------------------------------------------
+
+export type GuardEvent =
+  | { kind: Extract<CapabilityKind, 'import'>; context: CapabilityContext & { directive: DirectiveNode } }
+  | { kind: Extract<CapabilityKind, 'command'>; context: CapabilityContext & { command: string } }
+  | { kind: Extract<CapabilityKind, 'output'>; context: CapabilityContext & { target: string } };
+
+export type GuardDecision =
+  | { action: 'allow' }
+  | { action: 'deny'; reason: string };
+
+export type GuardThunk<E = unknown> = (
+  event: GuardEvent,
+  env: E
+) => GuardDecision | Promise<GuardDecision>;
+

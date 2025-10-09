@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc55",
+  "version": "2.0.0-rc58",
   "description": "mlld: llm scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -146,7 +146,6 @@
     "lodash": "^4.17.21",
     "marked": "^4.0.12",
     "minimatch": "^3.1.2",
-    "mlld": "^2.0.0-rc36",
     "octokit": "^5.0.3",
     "pathe": "1.1.2",
     "peggy": "^4.2.0",

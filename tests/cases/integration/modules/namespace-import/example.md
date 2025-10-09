@@ -21,7 +21,7 @@ This tests importing modules as namespaces.
 
 ## Explicit namespace alias
 
-/import @test/data as dataset
+/import @test/data as @dataset
 
 /show `Dataset namespace: @dataset`
 /show `Type: @dataset.type`

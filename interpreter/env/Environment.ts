@@ -19,8 +19,8 @@ import * as path from 'path';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
-import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
-import { URLCache } from '../cache/URLCache';
+import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
+import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
 import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
@@ -34,7 +34,7 @@ import { DebugUtils } from './DebugUtils';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
 import { VariableManager, type IVariableManager, type VariableManagerDependencies, type VariableManagerContext } from './VariableManager';
-import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext } from './ImportResolver';
+import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext, type FetchURLOptions } from './ImportResolver';
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
@@ -62,7 +62,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
-  private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
   
@@ -70,7 +69,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private pathContext?: PathContext;
   // Legacy basePath for backward compatibility
   private basePath: string;
-  
+  // Project configuration (replaces direct LockFile usage)
+  private projectConfig?: ProjectConfig;
+
   // Utility managers
   private cacheManager: CacheManager;
   private errorUtils: ErrorUtils;
@@ -115,7 +116,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private normalizeBlankLines: boolean = true;
   
   // Development mode flag
-  private devMode: boolean = false;
+  private localModulePath?: string;
+  private configuredLocalModules: boolean = false;
   
   // Source cache for error reporting
   private sourceCache: Map<string, string> = new Map();
@@ -160,6 +162,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
+  // TODO: Introduce guard registration and evaluation using capability contexts.
 
   // Constructor overloads
   constructor(
@@ -221,34 +224,30 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         console.warn('RegistryManager not available:', error);
       }
       
-      // Initialize module cache and lock file
+      // Initialize module cache and project config
       let moduleCache: ModuleCache | undefined;
+      let projectConfig: ProjectConfig | undefined;
       let lockFile: LockFile | undefined;
-      
+
       try {
         moduleCache = new ModuleCache();
-        // Create lock file instance - it will load lazily when accessed
-        const lockFilePath = path.join(this.getProjectRoot(), 'mlld.lock.json');
+        // Create project config instance
+        projectConfig = new ProjectConfig(this.getProjectRoot());
+        this.projectConfig = projectConfig;
+        const localModulesRelative = projectConfig.getLocalModulesPath?.() ?? path.join('llm', 'modules');
+        this.localModulePath = path.isAbsolute(localModulesRelative)
+          ? localModulesRelative
+          : path.join(this.getProjectRoot(), localModulesRelative);
+        // We need the actual LockFile for resolver management and immutable caching
+        const lockFilePath = path.join(this.getProjectRoot(), 'mlld-lock.json');
         lockFile = new LockFile(lockFilePath);
-        this.allowAbsolutePaths = lockFile.getAllowAbsolutePaths();
+        this.allowAbsolutePaths = projectConfig.getAllowAbsolutePaths();
         
-        // Initialize URL cache manager with a simple cache adapter and lock file
-        if (moduleCache && lockFile) {
-          // Create a cache adapter that URLCache can use
-          const cacheAdapter = {
-            async set(content: string, metadata: { source: string }): Promise<string> {
-              const entry = await moduleCache!.store(content, metadata.source as string);
-              return entry.hash;
-            },
-            async get(hash: string): Promise<string | null> {
-              const result = await moduleCache!.get(hash);
-              return result ? result.content : null;
-            }
-          };
-          this.urlCacheManager = new URLCache(cacheAdapter as any, lockFile);
-        }
       } catch (error) {
         console.warn('Failed to initialize cache/lock file:', error);
+      }
+      if (!this.localModulePath) {
+        this.localModulePath = path.join(this.getProjectRoot(), 'llm', 'modules');
       }
       
       // Initialize resolver manager
@@ -288,12 +287,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
           }
         ], this.basePath);
         
-        // Load resolver configs from lock file if available
-        if (lockFile) {
-          // Try new config location first
-          const resolverPrefixes = lockFile.getResolverPrefixes();
+        // Load resolver configs from project config if available
+        if (projectConfig) {
+          const resolverPrefixes = projectConfig.getResolverPrefixes();
           if (resolverPrefixes.length > 0) {
-            logger.debug(`Configuring ${resolverPrefixes.length} resolver prefixes from lock file`);
+            logger.debug(`Configuring ${resolverPrefixes.length} resolver prefixes from config`);
             this.resolverManager.configurePrefixes(resolverPrefixes, this.basePath);
             logger.debug(`Total prefixes after configuration: ${this.resolverManager.getPrefixConfigs().length}`);
           }
@@ -311,7 +309,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     
     // Initialize utility managers
-    this.cacheManager = new CacheManager(this.urlCacheManager, this.immutableCache, this.urlConfig);
+    this.cacheManager = new CacheManager(this.immutableCache, this.urlConfig);
     this.errorUtils = new ErrorUtils();
     
     // Initialize variable manager with dependencies
@@ -466,7 +464,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
               hasInterpolation: false,
               isMultiLine: false
             },
-            undefined, // No security metadata
             {
               isReserved: true,
               isPrefixPath: true,
@@ -1218,32 +1215,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Get environment variables if enabled
    */
   private getEnvironmentVariables(): Record<string, string> {
-    // Get lock file from root environment
-    let lockFile: LockFile | undefined;
+    // Get project config from root environment
+    let projectConfig: ProjectConfig | undefined;
     let currentEnv: Environment | undefined = this;
-    
-    // Walk up to root environment to find lock file
+
+    // Walk up to root environment to find project config
     while (currentEnv) {
-      if (!currentEnv.parent && currentEnv.resolverManager) {
-        // Try to get lock file from resolver manager (root environment)
-        const resolver = currentEnv.resolverManager as any;
-        if (resolver.lockFile) {
-          lockFile = resolver.lockFile as LockFile;
-          break;
-        }
+      if (currentEnv.projectConfig) {
+        projectConfig = currentEnv.projectConfig;
+        break;
       }
       currentEnv = currentEnv.parent;
     }
-    
-    // If no lock file or no allowed vars configured, return empty
-    if (!lockFile || !lockFile.hasAllowedEnvVarsConfigured()) {
+
+    // If no project config or no allowed vars configured, return empty
+    if (!projectConfig) {
       return {};
     }
-    
+
     // Get allowed environment variable names
-    const allowedVars = lockFile.getAllowedEnvVars();
+    const allowedVars = projectConfig.getAllowedEnvVars();
+    if (allowedVars.length === 0) {
+      return {};
+    }
+
     const envVars: Record<string, string> = {};
-    
+
     // Only include allowed environment variables
     for (const varName of allowedVars) {
       const value = process.env[varName];
@@ -1251,7 +1248,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         envVars[varName] = value;
       }
     }
-    
+
     return envVars;
   }
 
@@ -1526,8 +1523,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.importResolver.validateURL(url);
   }
   
-  async fetchURL(url: string, forImport: boolean = false): Promise<string> {
-    return this.importResolver.fetchURL(url, forImport);
+  async fetchURL(url: string, options?: FetchURLOptions): Promise<string> {
+    return this.importResolver.fetchURL(url, options);
   }
   
   // Note: getURLCacheTTL is now handled by ImportResolver via CacheManager
@@ -1539,21 +1536,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   /**
    * Get URLCache manager
    */
-  getURLCache(): URLCache | undefined {
-    return this.importResolver.getURLCache();
-  }
-
-  /**
-   * Fetch URL with security options from @path directive
-   */
-  async fetchURLWithSecurity(
-    url: string, 
-    security?: import('@core/types/primitives').SecurityOptions,
-    configuredBy?: string
-  ): Promise<string> {
-    return this.importResolver.fetchURLWithSecurity(url, security, configuredBy);
-  }
-  
   /**
    * Fetch URL with full response metadata for content loading
    */
@@ -1662,7 +1644,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       }
     };
     
-    this.urlCacheManager = new URLCache(cacheAdapter, lockFile);
     
     // Re-initialize registry manager with ephemeral components
     if (this.registryManager) {
@@ -1751,30 +1732,43 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   /**
-   * Set development mode flag
+   * Configure local module support once resolvers are ready
    */
-  async setDevMode(devMode: boolean): Promise<void> {
-    this.devMode = devMode;
-    // Pass to resolver manager if it exists
-    if (this.resolverManager) {
-      this.resolverManager.setDevMode(devMode);
-      
-      // Initialize dev mode prefixes if enabling
-      if (devMode) {
-        // Check for local modules directory
-        const localModulePath = this.pathService.join(this.basePath, 'llm', 'modules');
-        if (await this.fileSystem.exists(localModulePath)) {
-          await this.resolverManager.initializeDevMode(localModulePath);
-        }
-      }
+  async configureLocalModules(): Promise<void> {
+    if (!this.resolverManager) return;
+
+    const localPath = this.localModulePath;
+    if (!localPath) return;
+
+    let exists = false;
+    try {
+      exists = await this.fileSystem.exists(localPath);
+    } catch {
+      exists = false;
     }
-  }
-  
-  /**
-   * Get development mode flag
-   */
-  getDevMode(): boolean {
-    return this.devMode;
+
+    if (!exists) {
+      logger.debug(`Local modules path not found: ${localPath}`);
+      return;
+    }
+
+    let currentUser: string | undefined;
+    try {
+      const user = await GitHubAuthService.getInstance().getGitHubUser();
+      currentUser = user?.login?.toLowerCase();
+    } catch {
+      currentUser = undefined;
+    }
+
+    const prefixes = this.projectConfig?.getResolverPrefixes() ?? [];
+    const allowedAuthors = prefixes
+      .filter(prefixConfig => prefixConfig.prefix && prefixConfig.prefix.startsWith('@') && prefixConfig.resolver !== 'REGISTRY')
+      .map(prefixConfig => prefixConfig.prefix.replace(/^@/, '').replace(/\/$/, '').toLowerCase());
+
+    await this.resolverManager.configureLocalModules(localPath, {
+      currentUser,
+      allowedAuthors
+    });
   }
   
   private collectError(

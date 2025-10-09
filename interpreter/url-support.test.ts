@@ -15,8 +15,8 @@ describe('URL Support', () => {
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
+    global.fetch = vi.fn();
     env = new Environment(fileSystem, pathService, '/project');
-    vi.clearAllMocks();
   });
 
   describe('Environment URL Methods', () => {
@@ -80,6 +80,44 @@ describe('URL Support', () => {
       const cached = await env.fetchURL('https://example.com/cached.md');
       expect(cached).toBe('Cached content');
       expect(global.fetch).toHaveBeenCalledTimes(1); // Still only called once
+    });
+
+    it('should reuse cached content for cached imports', async () => {
+      const firstResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue('Cached import content')
+      };
+      const secondResponse = {
+        ok: true,
+        text: vi.fn().mockResolvedValue('New content')
+      };
+      (global.fetch as any)
+        .mockResolvedValueOnce(firstResponse)
+        .mockResolvedValueOnce(secondResponse);
+
+      const options = { forImport: true, importType: 'cached' as const, cacheDurationMs: 10_000 };
+      const first = await env.fetchURL('https://example.com/cached-import.md', options);
+      const second = await env.fetchURL('https://example.com/cached-import.md', options);
+
+      expect(first).toBe('Cached import content');
+      expect(second).toBe('Cached import content');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should bypass caches for live imports', async () => {
+      const firstResponse = { ok: true, text: vi.fn().mockResolvedValue('live-1') };
+      const secondResponse = { ok: true, text: vi.fn().mockResolvedValue('live-2') };
+      (global.fetch as any)
+        .mockResolvedValueOnce(firstResponse)
+        .mockResolvedValueOnce(secondResponse);
+
+      const options = { forImport: true, importType: 'live' as const };
+      const first = await env.fetchURL('https://example.com/live.md', options);
+      const second = await env.fetchURL('https://example.com/live.md', options);
+
+      expect(first).toBe('live-1');
+      expect(second).toBe('live-2');
+      expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
     it('should handle fetch errors', async () => {

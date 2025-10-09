@@ -64,16 +64,6 @@ SlashVar "var directive"
         metaInfo.inferredType = value.options && value.options.section ? 'section-content' : 'file-content';
         metaInfo.sourceType = value.source.type; // 'path' or 'url'
       }
-      // Handle section extraction (legacy - should be removed once migrated)
-      else if (value && value.type === 'section') {
-        processedValue = [value];
-        metaInfo.inferredType = 'section-content';
-      }
-      // Handle path dereference (array of nodes)
-      else if (Array.isArray(value)) {
-        processedValue = value;
-        metaInfo.inferredType = 'file-content';
-      }
       // Handle variable references
       else if (value && (value.type === 'variableReference' || value.type === 'VariableReference')) {
         // Store the variable reference node directly
@@ -90,6 +80,13 @@ SlashVar "var directive"
         if (value.withClause) {
           tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
         }
+      }
+      // Handle leading parallel pipelines (|| @a() || @b())
+      else if (value && value.type === 'LeadingParallelPipeline') {
+        const placeholder = value.placeholder;
+        processedValue = [placeholder];
+        metaInfo.inferredType = 'pipeline';
+        tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {

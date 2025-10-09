@@ -171,14 +171,15 @@ Transformers work as executable variables in pipelines:
 // Special handling in pipeline.ts
 if (commandVar?.metadata?.isBuiltinTransformer) {
   const result = await commandVar.metadata.transformerImplementation(input);
-  return String(result);
+  const normalized = normalizeTransformerResult(commandVar.name, result);
+  return finalizeResult(normalized.value, normalized.options);
 }
 ```
 
 ### Available Transformers
 
 1. **@XML / @xml** - Uses llmxml for SCREAMING_SNAKE_CASE conversion
-2. **@JSON / @json** - Pretty-prints JSON with 2-space indentation
+2. **@JSON / @json** - Returns parsed JSON data (objects/arrays/primitives) while `.text` is pretty-printed with 2-space indentation
 3. **@CSV / @csv** - Converts JSON arrays to CSV format
 4. **@MD / @md** - Formats markdown using prettier
 
@@ -200,9 +201,17 @@ Pipeline stages run in parallel when grouped with `||`.
 
 - Grouping: `A || B || C` forms one stage that executes `A`, `B`, and `C` concurrently; results preserve command order.
 - With-clause parity: Nested arrays in `with { pipeline: [...] }` represent a parallel stage. Example: `with { pipeline: [ [@left, @right], @combine ] }` is equivalent to `| @left || @right | @combine`.
-- Shorthand rule: Shorthand pipelines cannot start with `||`. The parser returns an error explaining that `||` runs in parallel with the previous stage, which the source stage does not have.
+- Leading groups: Pipelines can start with a leading `||` operator to execute parallel stages immediately. Examples:
+  - `/var @result = || @a() || @b() || @c()` runs all three in parallel, returns `["resultA", "resultB", "resultC"]`
+  - `/run || @fetch1() || @fetch2() || @fetch3()` executes in parallel, outputs JSON array
+  - `/var @out = || @func1() || @func2() | @combine` parallel group followed by combiner
+  - `/exe @composed() = || @helper1() || @helper2() | @merge` works in exe definitions
+  - Concurrency caps work with leading parallel: `|| @a() || @b() || @c() (2, 100ms)` caps at 2 concurrent with 100ms pacing
+- Leading `||` syntax: The double-bar prefix explicitly enters pipeline mode with parallel execution, avoiding ambiguity with boolean OR (`||`) expressions. Only matches when followed by function calls (with parentheses), not plain variables.
+- Equivalence: `|| @a() || @b() | @c` produces same AST as `"" with { pipeline: [[@a, @b], @c] }`
 - Output: The next stage receives a JSON array string of the group’s outputs.
 - Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Caps and pacing: `(n, wait)` after the pipeline sets a per-pipeline concurrency cap and delay between starts, equivalent to `with { parallel: n, delay: wait }`.
 - Effects: Inline effects attached before a parallel group run once per branch after that branch succeeds; effect failures abort the pipeline.
 - Rate limits: 429/“rate limit” errors in a branch use exponential backoff.
 
@@ -299,6 +308,13 @@ This grouping aligns with shorthand `||` and with‑clause nested array syntax: 
 - There is no `@pipeline.input` field; references to "pipeline input" in code refer to `@ctx.input` for the current stage or `@p[0]` for the original/base input.
 
 These semantics ensure that validators can reason about the current stage's input (`@ctx.input`) while selection/aggregation patterns can reach back to the original input using `@p[0]`.
+
+#### Structured Outputs and Helpers
+
+- Stage outputs stored in `@p` are `StructuredValue` wrappers with both `.text` (string representation) and `.data` (structured payload) properties.
+- Use `.text` (or the helper `asText(value)`) for string operations, and `.data` / `asData(value)` to inspect structured results and metadata.
+- The synthetic `__source__` stage is omitted from history, so `@p[1]` always maps to the first user-defined stage.
+- The helper utilities `asText`, `asData`, and `wrapStructured` live in `interpreter/utils/structured-value.ts`; import them when writing pipeline-aware code that needs consistent access to both representations.
 
 ```mlld
 # Especially useful for accessing specific fields:
@@ -1076,7 +1092,8 @@ interpreter/
 
 - `@pipeline` (and alias `@p`) expose pipeline state:
   - Indexing: `@pipeline[0]` (input), `@pipeline[1]`, `@pipeline[-1]` (previous), etc.
-  - Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
+- Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
+  - `@pipeline.tries` exposes the recorded outputs for the current retry scope. When downstream stages consume it, they receive an array of attempt outputs; outside the active scope, the value is grouped by retry context so later stages (or aggregators) can inspect the full history.
   - Stage: `@pipeline.stage`, `@pipeline.length`
 - Ambient `@ctx` is available during pipeline evaluation with per-stage info:
   - `@ctx.try`, `@ctx.tries`, `@ctx.stage`, `@ctx.input`, `@ctx.lastOutput`, `@ctx.isPipeline`
