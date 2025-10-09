@@ -8,7 +8,7 @@ import * as path from 'path';
 import { existsSync } from 'fs';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
-import { LockFile } from '@core/registry/LockFile';
+import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { interpret } from '@interpreter/index';
@@ -31,19 +31,15 @@ export class RunCommand {
   private async getScriptDirectory(): Promise<string> {
     // Find the project root first
     const projectRoot = await findProjectRoot(process.cwd(), this.fileSystem);
-    
-    // Check if mlld.lock.json exists and has script directory configured
-    const lockFilePath = path.join(projectRoot, 'mlld.lock.json');
-    
-    if (existsSync(lockFilePath)) {
-      const lockFile = new LockFile(lockFilePath);
-      // Check if scriptDir is configured in the lock file
-      const lockData = (lockFile as any).data;
-      if (lockData && lockData.config?.scriptDir) {
-        this.scriptDir = lockData.config.scriptDir;
-      }
+
+    // Check if config exists and has script directory configured
+    const projectConfig = new ProjectConfig(projectRoot);
+    const configuredScriptDir = projectConfig.getScriptDir();
+
+    if (configuredScriptDir) {
+      this.scriptDir = configuredScriptDir;
     }
-    
+
     // Return the script directory relative to project root
     return path.join(projectRoot, this.scriptDir);
   }
@@ -232,10 +228,10 @@ Options:
   -h, --help     Show this help message
 
 Script Directory:
-  Scripts are loaded from the directory configured in mlld.lock.json.
+  Scripts are loaded from the directory configured in mlld-config.json.
   Default: llm/run/
-  
-  Configure with: mlld setup --script-dir <path>
+
+  Configure with: mlld setup
 
 Examples:
   mlld run                    # List available scripts

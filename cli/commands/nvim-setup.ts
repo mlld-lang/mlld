@@ -37,7 +37,7 @@ if not configs.mlld_ls then
     default_config = {
       cmd = { 'mlld', 'lsp' },  -- Falls back to npx mlld lsp if not found globally
       filetypes = { 'mlld', 'mld' },
-      root_dir = lspconfig.util.root_pattern('mlld.lock.json', 'package.json', '.git'),
+      root_dir = lspconfig.util.root_pattern('mlld-config.json', 'mlld-lock.json', 'mlld.lock.json', 'package.json', '.git'),
       single_file_support = true,  -- Works on individual files without a project
       settings = {
         mlldLanguageServer = {
@@ -98,7 +98,7 @@ return {
         default_config = {
           cmd = { "mlld", "lsp" },
           filetypes = { "mlld", "mld" },
-          root_dir = lspconfig.util.root_pattern("mlld.lock.json", "package.json", ".git"),
+          root_dir = lspconfig.util.root_pattern("mlld-config.json", "mlld-lock.json", "mlld.lock.json", "package.json", ".git"),
           single_file_support = true,
           settings = {
             mlldLanguageServer = {

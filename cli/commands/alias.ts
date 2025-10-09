@@ -184,12 +184,12 @@ After creating an alias, you can import from it:
   /import { data } from @desktop/my-data
 
 Local aliases:
-  - Stored in project's mlld.lock.json
+  - Stored in project's mlld-config.json
   - Path is relative to the project root
   - Only available within the project
 
 Global aliases:
-  - Stored in ~/.config/mlld/mlld.lock.json
+  - Stored in ~/.config/mlld/mlld-config.json
   - Path is absolute
   - Available to all mlld projects
         `);
