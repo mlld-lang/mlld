@@ -4,10 +4,6 @@ import { LoadContentResultImpl } from '../eval/load-content';
 import { createPipelineInput } from '@interpreter/utils/pipeline-input';
 
 describe('prepareValueForShadow (structured)', () => {
-  beforeEach(() => {
-    delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-  });
-
   it('returns native LoadContentResult objects to shadow environments', () => {
     const result = new LoadContentResultImpl({
       content: 'File body',
