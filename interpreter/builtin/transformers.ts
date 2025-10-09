@@ -5,6 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { formatMarkdown } from '../utils/markdown-formatter';
 import { jsonToXml } from '../utils/json-to-xml';
+import { isStructuredExecEnabled } from '@interpreter/utils/structured-exec';
 
 export interface TransformerDefinition {
   name: string;
@@ -58,13 +59,25 @@ export const builtinTransformers: TransformerDefinition[] = [
     uppercase: 'JSON', 
     description: 'Format as JSON or convert to JSON structure',
     implementation: (input: string) => {
+      const structuredMode = isStructuredExecEnabled();
       try {
         // Try to parse and pretty-print existing JSON
         const parsed = JSON.parse(input);
+        if (structuredMode) {
+          return parsed;
+        }
         return JSON.stringify(parsed, null, 2);
       } catch {
         // Not JSON - attempt to convert markdown structures to JSON
-        return convertToJSON(input);
+        const converted = convertToJSON(input);
+        if (structuredMode) {
+          try {
+            return JSON.parse(converted);
+          } catch {
+            return converted;
+          }
+        }
+        return converted;
       }
     }
   },

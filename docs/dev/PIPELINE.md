@@ -171,14 +171,15 @@ Transformers work as executable variables in pipelines:
 // Special handling in pipeline.ts
 if (commandVar?.metadata?.isBuiltinTransformer) {
   const result = await commandVar.metadata.transformerImplementation(input);
-  return String(result);
+  const normalized = normalizeTransformerResult(commandVar.name, result);
+  return finalizeResult(normalized.value, normalized.options);
 }
 ```
 
 ### Available Transformers
 
 1. **@XML / @xml** - Uses llmxml for SCREAMING_SNAKE_CASE conversion
-2. **@JSON / @json** - Pretty-prints JSON with 2-space indentation
+2. **@JSON / @json** - Returns parsed JSON data (objects/arrays/primitives) while `.text` is pretty-printed with 2-space indentation
 3. **@CSV / @csv** - Converts JSON arrays to CSV format
 4. **@MD / @md** - Formats markdown using prettier
 

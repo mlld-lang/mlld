@@ -26,6 +26,7 @@ import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
 import { wrapExecResult, wrapPipelineResult, isStructuredExecEnabled } from '../utils/structured-exec';
+import { normalizeTransformerResult } from '../utils/transformer-result';
 
 /**
  * Coerce a value to a string for stdin input
@@ -139,9 +140,13 @@ export async function evaluateExecInvocation(
     return String(value);
   };
 
-  const createEvalResult = (value: unknown, targetEnv: Environment): EvalResult => {
+  const createEvalResult = (
+    value: unknown,
+    targetEnv: Environment,
+    options?: { type?: string; text?: string }
+  ): EvalResult => {
     if (structuredExecEnabled) {
-      const wrapped = wrapExecResult(value);
+      const wrapped = wrapExecResult(value, options);
       return {
         value: wrapped,
         env: targetEnv,
@@ -160,8 +165,8 @@ export async function evaluateExecInvocation(
     };
   };
 
-  const toPipelineInput = (value: unknown): unknown => {
-    return structuredExecEnabled ? wrapExecResult(value) : value;
+  const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
+    return structuredExecEnabled ? wrapExecResult(value, options) : value;
   };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
@@ -365,11 +370,17 @@ export async function evaluateExecInvocation(
         }
       }
       
+      const normalized = structuredExecEnabled
+        ? normalizeTransformerResult(commandName, result)
+        : { value: result, options: undefined };
+      const resolvedValue = structuredExecEnabled ? normalized.value : result;
+      const wrapOptions = structuredExecEnabled ? normalized.options : undefined;
+
       // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
       if (node.withClause) {
         if (node.withClause.pipeline) {
           const { processPipeline } = await import('./pipeline/unified-processor');
-          const pipelineInputValue = toPipelineInput(result);
+          const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
           const pipelineResult = await processPipeline({
             value: pipelineInputValue,
             env,
@@ -379,13 +390,12 @@ export async function evaluateExecInvocation(
           // Still need to handle other withClause features (trust, needs)
           return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
         } else {
-          return applyWithClause(result, node.withClause, env);
+          return applyWithClause(resolvedValue, node.withClause, env);
         }
       }
 
       // Return the result wrapped appropriately when no withClause is present
-      const treatStructured = structuredExecEnabled || isStructuredValue(result);
-      return createEvalResult(result, env);
+      return createEvalResult(resolvedValue, env, wrapOptions);
     }
     // If this is a non-builtin method with objectSource, we do not (yet) support it
     if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
@@ -579,13 +589,18 @@ export async function evaluateExecInvocation(
             
             // Pass the type info with a special marker
             const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+            const normalized = structuredExecEnabled
+              ? normalizeTransformerResult(commandName, result)
+              : { value: result, options: undefined };
+            const resolvedValue = structuredExecEnabled ? normalized.value : result;
+            const wrapOptions = structuredExecEnabled ? normalized.options : undefined;
             
             // Apply withClause transformations if present
             if (node.withClause) {
               if (node.withClause.pipeline) {
                 // Use unified pipeline processor for pipeline part
                 const { processPipeline } = await import('./pipeline/unified-processor');
-                const pipelineInputValue = toPipelineInput(result);
+                const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
                 const pipelineResult = await processPipeline({
                   value: pipelineInputValue,
                   env,
@@ -595,12 +610,11 @@ export async function evaluateExecInvocation(
                 // Still need to handle other withClause features (trust, needs)
                 return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
               } else {
-                return applyWithClause(result, node.withClause, env);
+                return applyWithClause(resolvedValue, node.withClause, env);
               }
             }
             
-            const treatStructured = structuredExecEnabled || isStructuredValue(result);
-            return createEvalResult(result, env);
+            return createEvalResult(resolvedValue, env, wrapOptions);
           }
         }
       }
@@ -621,13 +635,18 @@ export async function evaluateExecInvocation(
     
     // Call the transformer implementation directly
     const result = await variable.metadata.transformerImplementation(inputValue);
+    const normalized = structuredExecEnabled
+      ? normalizeTransformerResult(commandName, result)
+      : { value: result, options: undefined };
+    const resolvedValue = structuredExecEnabled ? normalized.value : result;
+    const wrapOptions = structuredExecEnabled ? normalized.options : undefined;
     
     // Apply withClause transformations if present
     if (node.withClause) {
       if (node.withClause.pipeline) {
         // Use unified pipeline processor for pipeline part
         const { processPipeline } = await import('./pipeline/unified-processor');
-        const pipelineInputValue = toPipelineInput(result);
+        const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
         const pipelineResult = await processPipeline({
           value: pipelineInputValue,
           env,
@@ -637,12 +656,11 @@ export async function evaluateExecInvocation(
         // Still need to handle other withClause features (trust, needs)
         return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
       } else {
-        return applyWithClause(result, node.withClause, env);
+        return applyWithClause(resolvedValue, node.withClause, env);
       }
     }
     
-    const treatStructured = structuredExecEnabled || isStructuredValue(result);
-    return createEvalResult(result, env);
+    return createEvalResult(resolvedValue, env, wrapOptions);
   }
   
   // Get the full executable definition from metadata

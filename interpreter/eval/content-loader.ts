@@ -996,7 +996,8 @@ function finalizeLoaderResult<T>(
       return wrapped;
     }
     const metadata = mergeMetadata(wrapped.metadata, options?.metadata);
-    return wrapStructured(wrapped, options?.type ?? wrapped.type, options?.text ?? wrapped.text, metadata);
+    const text = options?.text ?? wrapped.text;
+    return wrapStructured(wrapped, wrapped.type, text, metadata);
   }
 
   const inferredType = options?.type ?? inferLoaderType(value);

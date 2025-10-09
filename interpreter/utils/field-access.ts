@@ -85,6 +85,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // Extract the raw value if we have a Variable
   let rawValue = isVariable(value) ? value.value : value;
   const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
+  const loadResultMetadata = structuredWrapper?.metadata?.loadResult;
   if (structuredWrapper) {
     rawValue = structuredWrapper.data;
   }
@@ -142,6 +143,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredWrapper.metadata;
           break;
         }
+        if (
+          loadResultMetadata &&
+          typeof loadResultMetadata === 'object' &&
+          loadResultMetadata !== null &&
+          name in (loadResultMetadata as Record<string, unknown>)
+        ) {
+          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          break;
+        }
       }
       if (process.env.MLLD_DEBUG_STRUCTURED === 'true') {
         const debugKeys = typeof rawValue === 'object' && rawValue !== null ? Object.keys(rawValue) : undefined;
@@ -180,6 +190,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
 
       if (typeof rawValue !== 'object' || rawValue === null) {
+        if (
+          loadResultMetadata &&
+          typeof loadResultMetadata === 'object' &&
+          loadResultMetadata !== null &&
+          name in (loadResultMetadata as Record<string, unknown>)
+        ) {
+          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          break;
+        }
         const chain = [...(options?.parentPath || []), name];
         const msg = `Cannot access field "${name}" on non-object value (${typeof rawValue})`;
         throw new FieldAccessError(msg, {
@@ -307,6 +326,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       
       // Handle regular objects (including Variables with type: 'object')
       if (!(name in rawValue)) {
+        if (
+          loadResultMetadata &&
+          typeof loadResultMetadata === 'object' &&
+          loadResultMetadata !== null &&
+          name in (loadResultMetadata as Record<string, unknown>)
+        ) {
+          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          break;
+        }
         if (options?.returnUndefinedForMissing) {
           accessedValue = undefined;
           break;

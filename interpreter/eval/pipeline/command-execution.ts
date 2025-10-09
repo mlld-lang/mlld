@@ -3,9 +3,20 @@ import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
-import { asText, isStructuredValue } from '../../utils/structured-value';
+import { asText, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
+import { wrapExecResult, isStructuredExecEnabled } from '../../utils/structured-exec';
+import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
+
+export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
+type CommandExecutionPrimitive = string | number | boolean | null | undefined;
+export type CommandExecutionResult =
+  | CommandExecutionPrimitive
+  | StructuredValue
+  | Record<string, unknown>
+  | unknown[]
+  | RetrySignal;
 
 const STRUCTURED_PIPELINE_LANGUAGES = new Set([
   'mlld-for',
@@ -359,12 +370,39 @@ export async function executeCommandVariable(
   args: any[],
   env: Environment,
   stdinInput?: string
-): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
+): Promise<CommandExecutionResult> {
+  const structuredExecEnabled = isStructuredExecEnabled();
+  const finalizeResult = (
+    value: unknown,
+    options?: { type?: string; text?: string }
+  ): CommandExecutionResult => {
+    if (structuredExecEnabled) {
+      return wrapExecResult(value, options);
+    }
+    if (options?.text !== undefined) {
+      return options.text;
+    }
+    if (value && typeof value === 'object') {
+      const maybeText = (value as { text?: unknown }).text;
+      if (typeof maybeText === 'string') {
+        return maybeText;
+      }
+    }
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return String(value);
+  };
+
   // Built-in transformer handling
   if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
     try {
       const result = await commandVar.metadata.transformerImplementation(stdinInput || '');
-      return String(result);
+      if (structuredExecEnabled) {
+        const normalized = normalizeTransformerResult(commandVar?.name, result);
+        return finalizeResult(normalized.value, normalized.options);
+      }
+      return finalizeResult(result);
     } catch (error) {
       throw new MlldCommandExecutionError(
         `Transformer ${commandVar.name} failed: ${error.message}`,
@@ -591,7 +629,7 @@ export async function executeCommandVariable(
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
 
     // Always pass pipeline input as stdin when available
-    let commandOutput = await env.executeCommand(command, { input: stdinInput } as any);
+    let commandOutput: unknown = await env.executeCommand(command, { input: stdinInput } as any);
 
     const withClause = execDef.withClause;
     if (withClause) {
@@ -612,15 +650,17 @@ export async function executeCommandVariable(
           identifier: commandVar?.name,
           location: commandVar.metadata?.definedAt
         });
-        commandOutput = typeof processed === 'string' ? processed : String(processed ?? '');
+        if (processed === 'retry') {
+          return 'retry';
+        }
+        if (processed && typeof processed === 'object' && (processed as any).value === 'retry') {
+          return processed as RetrySignal;
+        }
+        commandOutput = processed;
       }
     }
 
-    if (typeof commandOutput !== 'string') {
-      commandOutput = String(commandOutput ?? '');
-    }
-
-    return commandOutput;
+    return finalizeResult(commandOutput);
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
     // Special handling for mlld-when expressions
     if (execDef.language === 'mlld-when') {
@@ -639,6 +679,9 @@ export async function executeCommandVariable(
       if (resultValue && typeof resultValue === 'object' && resultValue.value === 'retry') {
         // This is a retry signal - return it as-is for the pipeline to handle
         return resultValue;
+      }
+      if (resultValue === 'retry') {
+        return 'retry';
       }
       
       // If when-expression produced a side-effect show inside a pipeline,
@@ -662,7 +705,7 @@ export async function executeCommandVariable(
         const isLastStage = pctx && typeof pctx.stage === 'number' && typeof pctx.totalStages === 'number'
           ? pctx.stage >= pctx.totalStages
           : false;
-        return isLastStage ? '' : (stdinInput || '');
+        return finalizeResult(isLastStage ? '' : (stdinInput || ''));
       }
 
       // Check if the result needs interpolation (wrapped template)
@@ -683,8 +726,8 @@ export async function executeCommandVariable(
         resultValue = (data as any)?.text ?? asText(resultValue);
       }
       
-      // Return the result as string
-      return String(resultValue || '');
+      // Return the result in the configured format
+      return finalizeResult(resultValue ?? '');
     } else if (execDef.language === 'mlld-foreach') {
       const foreachNode = execDef.codeTemplate[0];
       const { evaluateForeachCommand } = await import('../foreach');
@@ -703,14 +746,28 @@ export async function executeCommandVariable(
         }
         return item;
       });
-      return JSON.stringify(normalized);
+      const text = (() => {
+        try {
+          return JSON.stringify(normalized);
+        } catch {
+          return String(normalized);
+        }
+      })();
+      return finalizeResult(normalized, { type: 'array', text });
     } else if (execDef.language === 'mlld-for') {
       const forNode = execDef.codeTemplate[0];
       const { evaluateForExpression } = await import('../for');
       const arrayVar = await evaluateForExpression(forNode, execEnv);
       const { extractVariableValue } = await import('../../utils/variable-resolution');
       const value = await extractVariableValue(arrayVar, execEnv);
-      return JSON.stringify(value);
+      const text = (() => {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      })();
+      return finalizeResult(value, { type: 'array', text });
     }
     
     // Regular JavaScript/code execution
@@ -744,10 +801,16 @@ export async function executeCommandVariable(
     
     // If the function returns a PipelineInput object, extract the text
     if (result && typeof result === 'object' && 'text' in result && 'type' in result) {
-      return String(result.text);
+      const text =
+        typeof (result as any).text === 'string'
+          ? (result as any).text
+          : String((result as any).text ?? '');
+      const type =
+        typeof (result as any).type === 'string' ? (result as any).type : undefined;
+      return finalizeResult(result, { type, text });
     }
     
-    return String(result);
+    return finalizeResult(result);
   } else if (execDef.type === 'template' && execDef.template) {
     // Interpolate template
     const { interpolate } = await import('../../core/interpreter');

@@ -11,8 +11,36 @@ import {
   wrapStructured,
   isStructuredValue,
   type StructuredValue,
-  type StructuredValueMetadata
+  type StructuredValueMetadata,
+  type StructuredValueType
 } from './structured-value';
+
+function detectStructuredType(value: unknown): StructuredValueType {
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  if (value !== null && typeof value === 'object') {
+    return 'object';
+  }
+  return 'json';
+}
+
+function tryParseJson(text: string): { success: boolean; value?: unknown } {
+  if (typeof text !== 'string') {
+    return { success: false };
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { success: false };
+  }
+
+  try {
+    return { success: true, value: JSON.parse(trimmed) };
+  } catch {
+    return { success: false };
+  }
+}
 
 function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMetadata): StructuredValueMetadata | undefined {
   if (!base && !extra) {
@@ -60,8 +88,22 @@ export function wrapLoadContentValue(value: any): StructuredValue {
   }
 
   if (isLoadContentResult(value)) {
-    const metadata = extractLoadContentMetadata(value);
-    return wrapStructured(value, 'object', value.content ?? '', metadata);
+    const baseMetadata = extractLoadContentMetadata(value);
+    const metadata: StructuredValueMetadata = {
+      ...baseMetadata,
+      loadResult: value
+    };
+    const contentText = typeof value.content === 'string' ? value.content : String(value.content ?? '');
+    const parsedFromContent = tryParseJson(contentText);
+    if (parsedFromContent.success) {
+      const data = parsedFromContent.value;
+      return wrapStructured(data, detectStructuredType(data), contentText, metadata);
+    }
+    const parsed = value.json;
+    if (parsed !== undefined) {
+      return wrapStructured(parsed, detectStructuredType(parsed), contentText, metadata);
+    }
+    return wrapStructured(value, 'object', contentText, metadata);
   }
 
   if (Array.isArray(value)) {
@@ -86,7 +128,8 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     const text = value.map(item => item.content).join('\n\n');
     const metadata: StructuredValueMetadata = {
       source: 'load-content',
-      length: value.length
+      length: value.length,
+      loadResult: value
     };
     return wrapStructured(value, 'array', text, metadata);
   }

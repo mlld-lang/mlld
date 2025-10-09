@@ -49,6 +49,7 @@ describe('processContentLoader (structured flag)', () => {
       expect(result.type).toBe('object');
       expect(result.metadata?.source).toBe('load-content');
       expect(result.metadata?.filename).toBe('README.md');
+      expect(result.metadata?.loadResult).toBeDefined();
       expect(asText(result)).toContain('# Test');
       expect((result.data as any).filename).toBe('README.md');
     }
@@ -82,6 +83,31 @@ describe('processContentLoader (structured flag)', () => {
       expect(asText(result)).toContain('Install instructions here');
       expect(result.metadata?.source).toBe('load-content');
       expect(result.metadata?.filename).toBe('README.md');
+    }
+  });
+
+  it('parses JSON files into structured data with preserved metadata', async () => {
+    const filePath = path.join(baseDir, 'data.json');
+    await fileSystem.writeFile(filePath, '[{"value":1},{"value":2}]');
+
+    const node = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'data.json' }],
+        raw: 'data.json'
+      }
+    };
+
+    const result = await processContentLoader(node, env);
+    expect(isStructuredValue(result)).toBe(true);
+    if (isStructuredValue(result)) {
+      expect(result.type).toBe('array');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data).toEqual([{ value: 1 }, { value: 2 }]);
+      expect(result.metadata?.loadResult).toBeDefined();
+      expect((result.metadata?.loadResult as any).filename).toBe('data.json');
+      expect(asText(result)).toBe('[{"value":1},{"value":2}]');
     }
   });
 });
