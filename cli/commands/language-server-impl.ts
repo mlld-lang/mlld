@@ -1127,21 +1127,38 @@ export async function startLanguageServer(): Promise<void> {
     try {
       const docPath = document.uri.replace('file://', '');
       const docDir = path.dirname(docPath);
-      
-      // Search for mlld.lock.json up the directory tree
+
+      // Search for config files up the directory tree
+      // Check new names first, then old name for backward compatibility
       let currentDir = docDir;
       while (currentDir !== path.dirname(currentDir)) {
-        const lockPath = path.join(currentDir, 'mlld.lock.json');
+        // Try new config file first (has user-editable settings)
+        const configPath = path.join(currentDir, 'mlld-config.json');
+        if (await fileSystem.exists(configPath)) {
+          const content = await fileSystem.readFile(configPath);
+          return JSON.parse(content);
+        }
+
+        // Try new lock file
+        const lockPath = path.join(currentDir, 'mlld-lock.json');
         if (await fileSystem.exists(lockPath)) {
           const content = await fileSystem.readFile(lockPath);
           return JSON.parse(content);
         }
+
+        // Try old lock file for backward compatibility
+        const oldLockPath = path.join(currentDir, 'mlld.lock.json');
+        if (await fileSystem.exists(oldLockPath)) {
+          const content = await fileSystem.readFile(oldLockPath);
+          return JSON.parse(content);
+        }
+
         currentDir = path.dirname(currentDir);
       }
     } catch (error) {
-      logger.error('Error reading mlld.lock.json', { error });
+      logger.error('Error reading mlld config files', { error });
     }
-    
+
     return null;
   }
 

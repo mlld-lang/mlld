@@ -52,7 +52,7 @@ export class SetupCommand {
     const hasExistingConfig = existsSync(configPath);
     if (hasExistingConfig && !options.force) {
       const shouldUpdate = await this.promptYesNo(
-        'mlld.lock.json already exists. Update resolver configuration?',
+        'mlld-config.json already exists. Update resolver configuration?',
         true
       );
       if (!shouldUpdate) {
@@ -81,7 +81,7 @@ export class SetupCommand {
         console.log('  1. Private GitHub modules');
         console.log('  2. Path aliases for local modules');
         console.log('  3. BOTH GitHub and path aliases');
-        console.log('  4. Just a basic mlld.lock.json');
+        console.log('  4. Just basic configuration files');
         console.log('');
 
         const choice = await rl.question('Choose an option [1-4]: ');
@@ -479,22 +479,23 @@ A simple mlld script example.
       }
     }
 
-    console.log(chalk.green(`\n✔ Configuration saved to mlld.lock.json`));
+    console.log(chalk.green(`\n✔ Configuration saved to mlld-config.json and mlld-lock.json`));
   }
 
   private async checkConfiguration(): Promise<void> {
     console.log(chalk.blue('mlld Configuration Check\n'));
 
-    const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
-    
-    if (!existsSync(lockFilePath)) {
-      console.log(chalk.yellow('✘ No mlld.lock.json found'));
+    const configPath = path.join(process.cwd(), 'mlld-config.json');
+    const lockPath = path.join(process.cwd(), 'mlld-lock.json');
+
+    if (!existsSync(configPath) && !existsSync(lockPath)) {
+      console.log(chalk.yellow('✘ No configuration files found'));
       console.log(chalk.gray('Run "mlld setup" to create configuration'));
       return;
     }
 
-    const lockFile = new LockFile(lockFilePath);
-    const resolverRegistries = lockFile.getResolverPrefixes();
+    const projectConfig = new ProjectConfig(process.cwd());
+    const resolverRegistries = projectConfig.getResolverPrefixes();
 
     if (resolverRegistries.length === 0) {
       console.log(chalk.yellow('No resolvers configured'));
@@ -535,8 +536,8 @@ A simple mlld script example.
   private async addResolver(): Promise<void> {
     console.log(chalk.blue('Add New Resolver\n'));
 
-    const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
-    const lockFile = new LockFile(lockFilePath);
+    const projectRoot = process.cwd();
+    const projectConfig = new ProjectConfig(projectRoot);
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -563,8 +564,8 @@ A simple mlld script example.
       }
 
       if (newResolver) {
-        const existingRegistries = lockFile.getResolverPrefixes();
-        
+        const existingRegistries = projectConfig.getResolverPrefixes();
+
         // Check for duplicate prefixes
         const existingPrefix = existingRegistries.find(r => r.prefix === newResolver.prefix);
         if (existingPrefix) {
@@ -579,11 +580,11 @@ A simple mlld script example.
           // Remove existing resolver with same prefix
           const updatedRegistries = existingRegistries.filter(r => r.prefix !== newResolver.prefix);
           updatedRegistries.push(newResolver);
-          await lockFile.setResolverPrefixes(updatedRegistries);
+          await projectConfig.setResolverPrefixes(updatedRegistries);
         } else {
           // Add new resolver
           existingRegistries.push(newResolver);
-          await lockFile.setResolverPrefixes(existingRegistries);
+          await projectConfig.setResolverPrefixes(existingRegistries);
         }
 
         console.log(chalk.green(`\n✔ Resolver added: ${newResolver.prefix}`));
@@ -662,7 +663,7 @@ authentication, script directory, and project configuration.
 Options:
   --github              Set up GitHub private modules only
   --local               Set up path alias only
-  --basic               Create basic mlld.lock.json only
+  --basic               Create basic configuration files only
   --force               Overwrite existing configuration
   --check               Check current configuration status
   --add-resolver        Add a new resolver to existing configuration
@@ -676,7 +677,7 @@ Examples:
   mlld setup --add-resolver     # Add a new module source
 
 The setup wizard will:
-1. Check for existing mlld.lock.json
+1. Check for existing configuration files
 2. Configure GitHub authentication (if needed)
 3. Set up module resolvers (GitHub, local, or both)
 4. Configure script directory for 'mlld run' command

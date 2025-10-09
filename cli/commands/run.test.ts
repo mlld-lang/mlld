@@ -9,9 +9,13 @@ import { MlldError } from '@core/errors/index';
 vi.mock('fs/promises');
 vi.mock('fs');
 vi.mock('@interpreter/index');
-vi.mock('@core/registry/LockFile', () => ({
-  LockFile: vi.fn().mockImplementation(() => ({
-    data: {}
+
+// Create a shared mock function that can be controlled in tests
+const mockGetScriptDir = vi.fn().mockReturnValue(undefined);
+
+vi.mock('@core/registry/ProjectConfig', () => ({
+  ProjectConfig: vi.fn(() => ({
+    getScriptDir: mockGetScriptDir
   }))
 }));
 vi.mock('@core/utils/findProjectRoot', () => ({
@@ -26,10 +30,13 @@ describe('RunCommand', () => {
   const mockCwd = '/test/project';
   
   beforeEach(async () => {
+    // Reset the mock before each test
+    mockGetScriptDir.mockReturnValue(undefined);
+
     // Ensure findProjectRoot is mocked before creating RunCommand
     const { findProjectRoot } = await import('@core/utils/findProjectRoot');
     vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
-    
+
     runCommand = new RunCommand();
     vi.spyOn(process, 'cwd').mockReturnValue(mockCwd);
   });
@@ -46,23 +53,12 @@ describe('RunCommand', () => {
       expect(dir).toBe('/test/project/llm/run');
     });
     
-    it('should read script directory from lock file', async () => {
+    it('should read script directory from config file', async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      
-      // Mock the LockFile module
-      const { LockFile } = await import('@core/registry/LockFile');
-      vi.mocked(LockFile).mockImplementation(() => ({
-        data: {
-          config: {
-            scriptDir: 'custom/scripts'
-          }
-        }
-      } as any));
-      
-      // Ensure findProjectRoot is mocked for new instance
-      const { findProjectRoot } = await import('@core/utils/findProjectRoot');
-      vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
-      
+
+      // Mock getScriptDir to return custom directory
+      mockGetScriptDir.mockReturnValue('custom/scripts');
+
       // Create a new instance to test
       const testCommand = new RunCommand();
       const dir = await (testCommand as any).getScriptDirectory();
@@ -86,14 +82,8 @@ describe('RunCommand', () => {
         'readme.txt',
         'data.json'
       ] as any);
-      
-      // Ensure findProjectRoot is mocked for new instance
-      const { findProjectRoot } = await import('@core/utils/findProjectRoot');
-      vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
-      
-      // Create a new instance to avoid issues with mocked LockFile
-      const testCommand = new RunCommand();
-      const scripts = await testCommand.listScripts();
+
+      const scripts = await runCommand.listScripts();
       expect(scripts).toEqual(['script1', 'script2']);
     });
   });
