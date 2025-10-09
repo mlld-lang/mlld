@@ -18,18 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Example: `/exe @greet(name) = js { return \`Hello ${name}\`; }` becomes `greet` tool
 
 ### Changed
-- **Structured data execution**: Always enabled, flag removed
-  - Pipelines preserve native types (arrays, objects) between stages
-  - JSON/CSV loaders return parsed data, not stringified results
-  - JavaScript stages receive native arrays/objects without manual `JSON.parse()`
-  - Templates and display paths use `.text` view automatically
-  - Transformers (`@json`, etc.) forward native values
+- **Data flow between stages**: Native types preserved throughout pipelines
+  - Loaders return parsed data: `<data.json>` yields object, not JSON string
+  - Pipeline stages pass arrays/objects directly: `@data | @process` receives native type
+  - JavaScript functions receive parsed values without `JSON.parse()`
+  - Transformers return native types: `@json` outputs object, `@csv` outputs array
+  - Templates and output convert to text automatically
 
-### Migration
-- Structured execution is permanent. No flag to disable.
-- Remove manual `JSON.parse()` in JavaScript stages - data arrives parsed
-- Pipeline stages see native types: `@data | @processArray` receives actual array
-- See `docs/dev/STRUCTURED-DATA.md` for helper usage (`asText`, `asData`)
+### Breaking
+- Remove `JSON.parse()` calls in JavaScript stages - will fail on already-parsed data
+- Pipelines expecting JSON strings will receive objects/arrays instead
 
 ## [2.0.0-rc56]
 
