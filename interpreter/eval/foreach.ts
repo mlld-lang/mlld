@@ -3,6 +3,17 @@ import { isExecutable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
+function hasArrayData(value: unknown): value is { data: unknown[] } {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (!('data' in value)) {
+    return false;
+  }
+  const { data } = value as { data?: unknown };
+  return Array.isArray(data);
+}
+
 /**
  * Evaluate a foreach command expression by applying an executable to arrays of values.
  * Uses the standard evaluateExecInvocation() for consistent parameter handling.
@@ -65,13 +76,8 @@ export async function evaluateForeachCommand(
 
       if (!Array.isArray(structuredData)) {
         // Some structured wrappers store nested structured data (e.g., PipelineInput)
-        if (
-          structuredData &&
-          typeof structuredData === 'object' &&
-          'data' in (structuredData as Record<string, unknown>) &&
-          Array.isArray((structuredData as any).data)
-        ) {
-          structuredData = (structuredData as any).data;
+        if (hasArrayData(structuredData)) {
+          structuredData = structuredData.data;
         } else if (typeof structuredData === 'string') {
           try {
             const parsed = JSON.parse(structuredData);
