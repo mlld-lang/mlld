@@ -1,7 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
-import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
+import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 import { asText, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
 import { wrapExecResult, isStructuredExecEnabled } from '../../utils/structured-exec';
@@ -567,39 +567,88 @@ export async function executeCommandVariable(
         }
       } else {
         // Regular parameter handling
+        if (isStructuredValue(argValue)) {
+          const structuredVar = createStructuredValueVariable(
+            paramName,
+            argValue,
+            {
+              directive: 'var',
+              syntax: 'reference',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isParameter: true
+            }
+          );
+          execEnv.setParameterVariable(paramName, structuredVar);
+          continue;
+        }
+
         let paramValue: any;
         
         if (argValue === null) {
           paramValue = '';
-        } else if (typeof argValue === 'string') {
+        } else if (typeof argValue === 'string' || typeof argValue === 'number' || typeof argValue === 'boolean') {
           paramValue = argValue;
-        } else if (typeof argValue === 'object' && !argValue.type && !argValue.content) {
-          // Raw object (like pipeline context passed as @p)
-          paramValue = argValue;
-        } else if (argValue.type === 'Text' && argValue.content !== undefined) {
-          paramValue = argValue.content;
-        } else if (argValue.content !== undefined) {
-          paramValue = argValue.content;
+        } else if (argValue && typeof argValue === 'object') {
+          if (!Array.isArray(argValue) && argValue.type === 'Text' && argValue.content !== undefined) {
+            paramValue = argValue.content;
+          } else if (!Array.isArray(argValue) && argValue.content !== undefined) {
+            paramValue = argValue.content;
+          } else {
+            paramValue = argValue;
+          }
         } else {
           paramValue = String(argValue);
         }
         
-        // Check if we're passing an object (like @p pipeline context)
-        if (typeof paramValue === 'object' && paramValue !== null) {
-          // For objects, create an object variable that preserves the actual object
-          const paramVar = {
-            type: 'object',
-            name: paramName,
-            value: paramValue,
-            metadata: { 
+        if (isStructuredValue(paramValue)) {
+          const structuredVar = createStructuredValueVariable(
+            paramName,
+            paramValue,
+            {
+              directive: 'var',
+              syntax: 'reference',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            { isParameter: true }
+          );
+          execEnv.setParameterVariable(paramName, structuredVar);
+        } else if (Array.isArray(paramValue)) {
+          const paramVar = createArrayVariable(
+            paramName,
+            paramValue,
+            true,
+            {
+              directive: 'var',
+              syntax: 'array',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            { isParameter: true }
+          );
+          execEnv.setParameterVariable(paramName, paramVar);
+        } else if (paramValue !== null && typeof paramValue === 'object') {
+          const paramVar = createObjectVariable(
+            paramName,
+            paramValue,
+            true,
+            {
+              directive: 'var',
+              syntax: 'object',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            { 
               isParameter: true,
               isPipelineContext: paramValue.stage !== undefined
             }
-          };
+          );
           
           execEnv.setParameterVariable(paramName, paramVar);
         } else {
-          // For non-objects, create a text variable as before
           const paramSource: VariableSource = {
             directive: 'var',
             syntax: 'quoted',

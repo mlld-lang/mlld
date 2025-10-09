@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, expect } from 'vitest';
-import { prepareValueForShadow } from './variable-proxy';
+import { prepareValueForShadow, prepareParamsForShadow } from './variable-proxy';
 import { LoadContentResultImpl } from '../eval/load-content';
-import { isStructuredValue, asText } from '@interpreter/utils/structured-value';
+import { createPipelineInput } from '@interpreter/utils/pipeline-input';
 
 describe('prepareValueForShadow (structured flag)', () => {
   let previousFlag: string | undefined;
@@ -19,7 +19,7 @@ describe('prepareValueForShadow (structured flag)', () => {
     }
   });
 
-  it('wraps load-content results before exposing to shadow environments', () => {
+  it('returns native LoadContentResult objects to shadow environments', () => {
     const result = new LoadContentResultImpl({
       content: 'File body',
       filename: 'file.md',
@@ -28,10 +28,21 @@ describe('prepareValueForShadow (structured flag)', () => {
     });
 
     const prepared = prepareValueForShadow(result);
-    expect(isStructuredValue(prepared)).toBe(true);
-    if (isStructuredValue(prepared)) {
-      expect(prepared.metadata?.filename).toBe('file.md');
-      expect(asText(prepared)).toBe('File body');
-    }
+    expect(prepared).toBeInstanceOf(LoadContentResultImpl);
+    expect(prepared.filename).toBe('file.md');
+    expect(prepared.content).toBe('File body');
+  });
+
+  it('unwraps pipeline inputs to plain data and records metadata', () => {
+    const params = prepareParamsForShadow({
+      payload: createPipelineInput('[{"id":1},{"id":2}]', 'json')
+    });
+
+    expect(Array.isArray(params.payload)).toBe(true);
+    expect(params.payload).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(params.__mlldPrimitiveMetadata).toBeDefined();
+    expect(params.__mlldPrimitiveMetadata.payload).toMatchObject({
+      type: 'json'
+    });
   });
 });

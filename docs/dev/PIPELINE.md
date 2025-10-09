@@ -1091,7 +1091,8 @@ interpreter/
 
 - `@pipeline` (and alias `@p`) expose pipeline state:
   - Indexing: `@pipeline[0]` (input), `@pipeline[1]`, `@pipeline[-1]` (previous), etc.
-  - Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
+- Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
+  - `@pipeline.tries` exposes the recorded outputs for the current retry scope. When downstream stages consume it, they receive an array of attempt outputs; outside the active scope, the value is grouped by retry context so later stages (or aggregators) can inspect the full history.
   - Stage: `@pipeline.stage`, `@pipeline.length`
 - Ambient `@ctx` is available during pipeline evaluation with per-stage info:
   - `@ctx.try`, `@ctx.tries`, `@ctx.stage`, `@ctx.input`, `@ctx.lastOutput`, `@ctx.isPipeline`

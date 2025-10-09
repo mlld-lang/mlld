@@ -256,7 +256,6 @@ function createSimplifiedPipelineContext(
       structuredEnabled
     });
   }
-
   if (!structuredEnabled) {
     const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
       ? context.previousOutputs.slice(1)
@@ -264,10 +263,18 @@ function createSimplifiedPipelineContext(
 
     const pipelineContext: any = {
       try: context.contextAttempt,
-      tries: context.history,
       stage: userVisibleStage,
       length: userVisibleOutputs.length
     };
+
+    const retryHistoryEntries =
+      context.history.length > 0
+        ? context.history
+        : allRetryHistory && allRetryHistory.size > 0
+          ? Array.from(allRetryHistory.values())
+          : [];
+
+    pipelineContext.tries = retryHistoryEntries;
 
     const outputs: Record<number, string> = {};
     if (hasSyntheticSource) {
@@ -340,11 +347,18 @@ function createSimplifiedPipelineContext(
 
   const pipelineContext: any = {
     try: context.contextAttempt,
-    tries: context.history,
     stage: userVisibleStage,
     length: userVisibleWrappers.length
   };
 
+  const retryHistoryEntries =
+    context.history.length > 0
+      ? context.history
+      : allRetryHistory && allRetryHistory.size > 0
+        ? Array.from(allRetryHistory.values())
+        : [];
+
+  pipelineContext.tries = retryHistoryEntries;
   pipelineContext[0] = baseWrapper;
   if (hasSyntheticSource) {
     userVisibleWrappers.forEach((wrapper, index) => {

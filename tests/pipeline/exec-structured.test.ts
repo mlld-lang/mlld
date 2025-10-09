@@ -86,4 +86,61 @@ describe('Exec pipeline structured flow (feature flag)', () => {
     const parsed = JSON.parse(output.trim());
     expect(parsed).toEqual([1, 2, 3]);
   });
+
+  it('keeps structured arguments native when mixing pipe input and explicit parameters', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+
+    const input = `
+/exe @zip(entries, names) = js {
+  return entries.map((entry, index) => ({
+    id: entry,
+    name: names[index]
+  }));
+}
+
+/var @ids = '[1,2]' | @json
+/var @names = '["Alice","Bob"]' | @json
+/var @paired = @ids | @zip(@names)
+/show @paired
+`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    const parsed = JSON.parse(output.trim());
+    expect(parsed).toEqual([
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' }
+    ]);
+  });
+
+  it('exposes retry history via pipeline.tries', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+
+    const input = `
+/exe @seed() = "s"
+
+/exe @retryer(input, pipeline) = when first [
+  @pipeline.try < 3 => retry
+  * => \`done @pipeline.try\`
+]
+
+/exe @downstream(input, pipeline) = js {
+  return JSON.stringify({
+    tryCount: pipeline.try,
+    tries: pipeline.tries,
+    retries: pipeline.retries
+  }, null, 2);
+}
+
+/var @result = @seed() with { pipeline: [@retryer(@p), @downstream(@p)] }
+/show @result
+`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    const parsed = JSON.parse(output.trim());
+    expect(parsed.tryCount).toBe(1);
+    expect(parsed.retries?.all?.length).toBeGreaterThan(0);
+    expect(parsed.tries).toEqual([['s', 's']]);
+  });
 });
