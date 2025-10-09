@@ -5,25 +5,31 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Changed
-- Structured execution finalized (#435):
-  - Core directives (`/run`, `/show`, exec invocation, with-clause) and pipeline infrastructure now always emit `StructuredValue`, eliminating the legacy string branches added during the feature-flag period.
-  - Built-in transformers and content loaders return parsed data while preserving metadata; shadow environments unwrap inputs automatically so JavaScript/Node stages receive native arrays/objects.
-  - Updated fixtures and new structured-only preservation tests keep JSON/CSV pipelines, loaders, and formatted inputs aligned with the guidance in `docs/dev/STRUCTURED-DATA.md`.
-
-### Migration
-- Structured execution is always enabled. Review existing pipelines and JS stages; use `asText` / `asData` where string views are required. The quick reference lives in `docs/dev/STRUCTURED-DATA.md`.
-
 ## [2.0.0-rc57]
 
 ### Added
-- **MCP Server Support**: `mlld mcp` exposes exported `/exe` functions as MCP tools over JSON-RPC
-  - Summarizes `/exe` parameters into JSON Schema for MCP discovery
-  - Runs a stdio server that respects client initialization and error reporting
-  - Detects duplicate tool names across loaded modules and stops with a descriptive error
-  - Supports default `llm/mcp/` discovery, config modules (`--config`), environment overrides (`--env`, MLLD_* only), and explicit tool allow-lists (`--tools`)
+- **MCP server**: `mlld mcp` serves exported `/exe` functions as MCP tools
+  - Exposes functions over JSON-RPC stdio transport
+  - Default discovery: `llm/mcp/` directory when no path specified
+  - Config modules: `--config module.mld.md` exports `@config = { tools?, env? }`
+  - Environment overrides: `--env KEY=VAL` (MLLD_ prefix required)
+  - Tool filtering: `--tools tool1,tool2` or via config
+  - Duplicate tool names halt with error showing conflicting sources
+  - Example: `/exe @greet(name) = js { return \`Hello ${name}\`; }` becomes `greet` tool
+
+### Changed
+- **Structured data execution**: Always enabled, flag removed
+  - Pipelines preserve native types (arrays, objects) between stages
+  - JSON/CSV loaders return parsed data, not stringified results
+  - JavaScript stages receive native arrays/objects without manual `JSON.parse()`
+  - Templates and display paths use `.text` view automatically
+  - Transformers (`@json`, etc.) forward native values
+
+### Migration
+- Structured execution is permanent. No flag to disable.
+- Remove manual `JSON.parse()` in JavaScript stages - data arrives parsed
+- Pipeline stages see native types: `@data | @processArray` receives actual array
+- See `docs/dev/STRUCTURED-DATA.md` for helper usage (`asText`, `asData`)
 
 ## [2.0.0-rc56]
 
