@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc60]
+
+### Fixed
+- **Shell command interpolation with nested arrays**: Fixed arrays of objects/arrays being converted to `[object Object]` in shell commands
+  - Shell command context (e.g., `echo @array`) now properly JSON-stringifies complex array elements
+  - Previously `String(object)` produced `[object Object]`, breaking data flow through shell executables
+  - Example: `/exe @func(e) = run { echo @e }` now correctly outputs JSON for nested arrays
+  - Fixes remaining edge case from #435 (https://github.com/mlld-lang/mlld/issues/435#issuecomment-3386904732)
+- Addressed instances of old mlld.lock.json file expectations throughout codebase
+
 ## [2.0.0-rc59]
 
 ### Changed
