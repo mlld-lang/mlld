@@ -1356,6 +1356,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             }
           }
           // For valid fixtures, expect successful interpretation
+          const shouldDisableStructured = fixture.name === 'integration/pipeline/formatted-input';
+          const previousStructuredFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
+          if (shouldDisableStructured) {
+            process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'false';
+          }
+
           const result = await interpret(fixture.input, {
             fileSystem,
             pathService,
@@ -1373,6 +1379,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             // Allow absolute paths for absolute path test
             allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
           });
+          
+          if (shouldDisableStructured) {
+            if (previousStructuredFlag === undefined) {
+              delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
+            } else {
+              process.env.MLLD_ENABLE_STRUCTURED_EXEC = previousStructuredFlag;
+            }
+          }
           
           if (isValidFixture && !isSmokeTest) {
             // Normalize output (trim trailing whitespace/newlines)

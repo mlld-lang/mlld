@@ -518,8 +518,18 @@ export class PipelineExecutor {
   }
 
   private isRetrySignal(output: any): boolean {
-    const isRetry = output === 'retry' || 
-      (output && typeof output === 'object' && output.value === 'retry');
+    let isRetry = false;
+    if (isStructuredValue(output)) {
+      const data = output.data as unknown;
+      isRetry =
+        output.text === 'retry' ||
+        typeof data === 'string' && data === 'retry' ||
+        (data && typeof data === 'object' && (data as any).value === 'retry');
+    } else {
+      isRetry =
+        output === 'retry' ||
+        (output && typeof output === 'object' && (output as any).value === 'retry');
+    }
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Retry check:', {

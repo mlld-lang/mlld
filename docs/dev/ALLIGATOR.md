@@ -125,11 +125,12 @@ When LoadContentResult objects are passed to JavaScript functions, they automati
 }
 ```
 
-### Structured Execution Notes
+### Structured Value Behavior
 
-- Enabling `MLLD_ENABLE_STRUCTURED_EXEC=true` stores load-content results as `StructuredValue` wrappers. Display paths (templates, `/show`, pipelines without extra logic) still use `.text`, so visible output stays unchanged.
-- Access the structured view with `.data` or the helper `asData(value)` when you need the metadata-rich object. Use `.text` / `asText(value)` to preserve the legacy string form when writing to logs or shell commands.
-- Field access keeps working the same way: `@doc.title` resolves through the underlying data while `.text` continues to mirror the content-first behaviour documented above.
+- Load-content results are stored as `StructuredValue` wrappers with both `.text` (string view) and `.data` (structured object) properties.
+- Display paths (templates, `/show`, pipelines) automatically use `.text`, so visible output stays content-focused.
+- Access metadata with `.data` or the helper `asData(value)` when you need the rich object. Use `.text` / `asText(value)` for the string form when writing to logs or shell commands.
+- Field access resolves through the underlying data while `.text` continues to mirror the content-first behaviour documented above.
 
 ## Type System Integration
 

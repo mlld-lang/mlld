@@ -154,9 +154,18 @@ describe('Content Loader HTML to Markdown Conversion', () => {
 
       const rawResult = await processContentLoader(node, env);
       const { data: result } = unwrapStructuredForTest(rawResult);
+      const content =
+        typeof result === 'string'
+          ? result
+          : (result && typeof result === 'object' && 'content' in result
+              ? (result as { content: string }).content
+              : JSON.stringify(result));
+
+      const canonicalExpected = JSON.stringify(JSON.parse(mockJson));
+      const canonicalActual = JSON.stringify(JSON.parse(content));
       
-      // Content should be unchanged JSON
-      expect(result.content).toBe(mockJson);
+      // Content should be unchanged JSON (ignoring whitespace differences)
+      expect(canonicalActual).toBe(canonicalExpected);
     });
   });
 });

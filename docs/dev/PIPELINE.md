@@ -311,8 +311,9 @@ These semantics ensure that validators can reason about the current stage's inpu
 
 #### Structured Outputs and Helpers
 
-- When `MLLD_ENABLE_STRUCTURED_EXEC=true`, stage outputs stored in `@p` are `StructuredValue` wrappers. Use `.text` (or the helper `asText(value)`) to match legacy string behaviour, and `.data` / `asData(value)` to inspect structured results.
-- The synthetic `__source__` stage is omitted from the history when the flag is on, so `@p[1]` always maps to the first user-defined stage.
+- Stage outputs stored in `@p` are `StructuredValue` wrappers with both `.text` (string representation) and `.data` (structured payload) properties.
+- Use `.text` (or the helper `asText(value)`) for string operations, and `.data` / `asData(value)` to inspect structured results and metadata.
+- The synthetic `__source__` stage is omitted from history, so `@p[1]` always maps to the first user-defined stage.
 - The helper utilities `asText`, `asData`, and `wrapStructured` live in `interpreter/utils/structured-value.ts`; import them when writing pipeline-aware code that needs consistent access to both representations.
 
 ```mlld

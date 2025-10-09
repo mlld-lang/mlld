@@ -6,8 +6,12 @@ import { ensureStructuredValue, isStructuredValue, type StructuredValue } from '
  */
 export function isStructuredExecEnabled(): boolean {
   const flag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-  if (!flag) return false;
-  return flag === '1' || flag.toLowerCase() === 'true';
+  if (flag === undefined) return true;
+  const normalized = flag.trim().toLowerCase();
+  if (normalized === '' || normalized === '0' || normalized === 'false' || normalized === 'off') {
+    return false;
+  }
+  return true;
 }
 
 /**

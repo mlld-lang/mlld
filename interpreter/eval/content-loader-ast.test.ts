@@ -579,9 +579,8 @@ describe('Content Loader AST patterns', () => {
     };
 
     const rawResult = await processContentLoader(node as any, env);
-    const { data: result } = unwrapStructuredForTest<string>(rawResult);
-    expect(typeof result).toBe('string');
-    const parsed = JSON.parse(result);
+    const { data: result } = unwrapStructuredForTest<unknown>(rawResult);
+    const parsed = Array.isArray(result) ? result : JSON.parse(result as string);
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed.length).toBe(2);
     expect(parsed[0].name).toBe('createUser');

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -6,6 +6,20 @@ import { PathService } from '@services/fs/PathService';
 describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
+  let previousFlag: string | undefined;
+
+  beforeAll(() => {
+    previousFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
+    process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'false';
+  });
+
+  afterAll(() => {
+    if (previousFlag === undefined) {
+      delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
+    } else {
+      process.env.MLLD_ENABLE_STRUCTURED_EXEC = previousFlag;
+    }
+  });
   
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();

@@ -2,7 +2,10 @@
 >> /var @var = @func() with { pipeline: [@pipe, @other] }
 
 /exe @toUpper(input) = js { return input.toUpperCase() }
-/exe @addBrackets(input) = js { return "[" + input + "]" }
+/exe @addBrackets(input) = js {
+  const value = typeof input === 'string' ? input : JSON.stringify(input);
+  return '[' + value + ']';
+}
 /exe @reverse(input) = js { return input.split('').reverse().join('') }
 
 /exe @getData() = js { return "hello world" }
