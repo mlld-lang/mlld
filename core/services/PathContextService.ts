@@ -17,7 +17,7 @@ import { logger } from '@core/utils/logger';
 export interface PathContext {
   /**
    * The mlld project root directory.
-   * - Contains mlld.lock.json
+   * - Contains mlld-config.json and/or mlld-lock.json
    * - Base for module resolution (@user/module)
    * - Base for @base variable
    * - Used for security boundaries
@@ -208,10 +208,19 @@ export class PathContextService {
       errors.push(`filePath does not exist: ${context.filePath}`);
     }
     
-    // Check if mlld.lock.json exists in project root
-    const lockFilePath = path.join(context.projectRoot, 'mlld.lock.json');
-    if (!(await this.fileSystem.exists(lockFilePath))) {
-      warnings.push(`No mlld.lock.json found in project root: ${context.projectRoot}`);
+    // Check if mlld config files exist in project root
+    const configFiles = [
+      'mlld-config.json',
+      'mlld-lock.json',
+      'mlld.lock.json'  // Backward compatibility
+    ];
+
+    const hasConfig = await Promise.all(
+      configFiles.map(file => this.fileSystem.exists(path.join(context.projectRoot, file)))
+    );
+
+    if (!hasConfig.some(exists => exists)) {
+      warnings.push(`No mlld config files found in project root: ${context.projectRoot}`);
     }
     
     // Validate relationships

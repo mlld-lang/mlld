@@ -290,7 +290,7 @@ Examples:
   mlld env clear          # Clear all allowed variables
 
 Note: Environment variables are only accessible via @INPUT when explicitly
-allowed. The allowed list is stored in mlld.lock.json.
+allowed. The allowed list is stored in mlld-config.json.
     `);
   }
 
@@ -494,9 +494,10 @@ Examples:
 
 Configuration:
   Mlld looks for configuration in:
-  1. ~/.config/mlld/mlld.lock.json (global/user config)
-  2. mlld.config.json (project config)
-  
+  1. ~/.config/mlld/mlld-config.json (global/user config)
+  2. mlld-config.json (project config)
+  3. mlld-lock.json (project module lockfile)
+
   CLI options override configuration file settings.
   `);
 
