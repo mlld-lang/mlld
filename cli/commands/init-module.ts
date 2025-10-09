@@ -9,6 +9,7 @@ import * as readline from 'readline/promises';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
+import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
@@ -53,13 +54,12 @@ export class InitModuleCommand {
           suggestedModuleName = match[2];
           
           // Look up the resolver configuration
-          const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
-          if (existsSync(lockFilePath)) {
+          const projectConfig = new ProjectConfig(process.cwd());
+          const resolverPrefixes = projectConfig.getResolverPrefixes();
+
+          if (resolverPrefixes.length > 0) {
             try {
-              const lockFileContent = await fs.readFile(lockFilePath, 'utf8');
-              const lockData = JSON.parse(lockFileContent);
-              
-              const resolver = lockData.config?.resolvers?.registries?.find(
+              const resolver = resolverPrefixes.find(
                 (r: any) => r.prefix === resolverPrefix
               );
               
@@ -121,7 +121,7 @@ export class InitModuleCommand {
             }
           } else {
             throw new MlldError(
-              `No mlld.lock.json found. Run 'mlld setup' to configure resolvers first.`,
+              `No resolver configuration found. Run 'mlld setup' to configure resolvers first.`,
               { code: 'NO_CONFIG', severity: ErrorSeverity.Fatal }
             );
           }
@@ -153,24 +153,21 @@ export class InitModuleCommand {
       
       // Check for local resolver configuration
       let localModulesPath = './llm/modules'; // Default
-      const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
-      
-      if (existsSync(lockFilePath)) {
-        try {
-          const lockFileContent = await fs.readFile(lockFilePath, 'utf8');
-          const lockData = JSON.parse(lockFileContent);
-          
-          // Look for LOCAL resolver with @local/ prefix
-          const localResolver = lockData.config?.resolvers?.registries?.find(
-            (r: any) => r.resolver === 'LOCAL' && r.prefix === '@local/'
-          );
-          
-          if (localResolver && localResolver.config?.basePath) {
-            localModulesPath = localResolver.config.basePath;
-          }
-        } catch (error) {
-          // Ignore errors parsing lock file
+
+      try {
+        const projectConfig = new ProjectConfig(process.cwd());
+        const resolverPrefixes = projectConfig.getResolverPrefixes();
+
+        // Look for LOCAL resolver with @local/ prefix
+        const localResolver = resolverPrefixes.find(
+          (r: any) => r.resolver === 'LOCAL' && r.prefix === '@local/'
+        );
+
+        if (localResolver && localResolver.config?.basePath) {
+          localModulesPath = localResolver.config.basePath;
         }
+      } catch (error) {
+        // Ignore errors loading config
       }
       
       // If we have a resolver path, we know exactly where to create it

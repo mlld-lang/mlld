@@ -5,6 +5,18 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc59]
+
+### Changed
+- **CLI commands aligned with new config file naming**: Updated all CLI commands to reference the new dual-file configuration system
+  - `mlld-config.json`: User-editable project settings (dependencies, preferences, resolver configuration)
+  - `mlld-lock.json`: Auto-generated lock file (versions, hashes, sources)
+  - Replaced `mlld.lock.json` references throughout CLI commands and help text
+  - Commands updated: `setup`, `alias`, `run`, `init-module`
+  - Editor integrations updated: Neovim LSP, VS Code Language Server
+  - Backward compatibility maintained: LSP and editor tooling check for old `mlld.lock.json` as fallback
+  - All commands now use `ProjectConfig` abstraction
+
 ## [2.0.0-rc58]
 
 ### Fixed
