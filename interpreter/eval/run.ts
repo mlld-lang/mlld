@@ -209,6 +209,7 @@ export async function evaluateRun(
       outputValue = wrapped;
       outputText = asText(wrapped as any);
     } else {
+      // TODO(Phase7): remove legacy string coercion branch.
       const text = legacyText(value);
       outputValue = text;
       outputText = text;
@@ -793,7 +794,7 @@ export async function evaluateRun(
       const { processPipeline } = await import('./pipeline/unified-processor');
       // Stage-0 retry is always enabled when we have a source node
       const enableStage0 = !!sourceNodeForPipeline;
-      const pipelineInput = structuredExecEnabled ? outputValue : outputText;
+      const pipelineInput = structuredExecEnabled ? outputValue : outputText; // TODO(Phase7): remove legacy pipeline string path.
       const valueForPipeline = enableStage0
         ? { value: pipelineInput, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;
@@ -837,7 +838,7 @@ export async function evaluateRun(
   
   // Return the output value
   return {
-    value: structuredExecEnabled ? outputValue : outputText,
+    value: structuredExecEnabled ? outputValue : outputText, // TODO(Phase7): remove legacy string return.
     env
   };
 }

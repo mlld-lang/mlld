@@ -379,6 +379,7 @@ export async function executeCommandVariable(
     if (structuredExecEnabled) {
       return wrapExecResult(value, options);
     }
+    // TODO(Phase7): remove legacy command result normalization.
     if (options?.text !== undefined) {
       return options.text;
     }
@@ -402,7 +403,7 @@ export async function executeCommandVariable(
         const normalized = normalizeTransformerResult(commandVar?.name, result);
         return finalizeResult(normalized.value, normalized.options);
       }
-      return finalizeResult(result);
+      return finalizeResult(result); // TODO(Phase7): remove legacy finalize fallback.
     } catch (error) {
       throw new MlldCommandExecutionError(
         `Transformer ${commandVar.name} failed: ${error.message}`,

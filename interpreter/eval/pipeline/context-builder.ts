@@ -257,6 +257,7 @@ function createSimplifiedPipelineContext(
     });
   }
   if (!structuredEnabled) {
+    // TODO(Phase7): remove legacy pipeline context builder branch.
     const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
       ? context.previousOutputs.slice(1)
       : context.previousOutputs;

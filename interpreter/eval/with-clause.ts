@@ -43,6 +43,7 @@ export async function applyWithClause(
   const structuredEnabled = isStructuredExecEnabled();
 
   if (!structuredEnabled) {
+    // TODO(Phase7): remove legacy with-clause flow once structured exec is default.
     let legacyResult: any = input;
 
     if (withClause.pipeline && withClause.pipeline.length > 0) {

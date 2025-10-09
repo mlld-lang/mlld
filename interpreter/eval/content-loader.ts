@@ -979,6 +979,7 @@ function finalizeLoaderResult<T>(
   options?: { type?: StructuredValueType; text?: string; metadata?: StructuredValueMetadata }
 ): T | StructuredValue {
   if (!isStructuredExecEnabled()) {
+    // TODO(Phase7): remove legacy loader passthrough.
     return value;
   }
 
@@ -993,6 +994,7 @@ function finalizeLoaderResult<T>(
   if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
     const wrapped = wrapLoadContentValue(value);
     if (!isStructuredExecEnabled()) {
+      // TODO(Phase7): remove legacy load-content wrapper reuse.
       return wrapped;
     }
     const metadata = mergeMetadata(wrapped.metadata, options?.metadata);

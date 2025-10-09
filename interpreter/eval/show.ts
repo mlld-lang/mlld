@@ -1158,6 +1158,7 @@ export async function evaluateShow(
     return { value: wrapped, env };
   }
 
+  // TODO(Phase7): remove legacy string-only return.
   // Return the content
   return { value: content, env };
 }

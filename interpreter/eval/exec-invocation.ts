@@ -156,6 +156,7 @@ export async function evaluateExecInvocation(
       };
     }
 
+    // TODO(Phase7): remove legacy exec result path.
     return {
       value,
       env: targetEnv,
@@ -166,7 +167,7 @@ export async function evaluateExecInvocation(
   };
 
   const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
-    return structuredExecEnabled ? wrapExecResult(value, options) : value;
+    return structuredExecEnabled ? wrapExecResult(value, options) : value; // TODO(Phase7): remove legacy pipeline passthrough.
   };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
@@ -372,9 +373,9 @@ export async function evaluateExecInvocation(
       
       const normalized = structuredExecEnabled
         ? normalizeTransformerResult(commandName, result)
-        : { value: result, options: undefined };
-      const resolvedValue = structuredExecEnabled ? normalized.value : result;
-      const wrapOptions = structuredExecEnabled ? normalized.options : undefined;
+        : { value: result, options: undefined }; // TODO(Phase7): remove legacy transformer normalization fallback.
+      const resolvedValue = structuredExecEnabled ? normalized.value : result; // TODO(Phase7): remove legacy raw transformer value path.
+      const wrapOptions = structuredExecEnabled ? normalized.options : undefined; // TODO(Phase7): remove legacy transformer options fallback.
 
       // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
       if (node.withClause) {
@@ -591,9 +592,9 @@ export async function evaluateExecInvocation(
             const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
             const normalized = structuredExecEnabled
               ? normalizeTransformerResult(commandName, result)
-              : { value: result, options: undefined };
-            const resolvedValue = structuredExecEnabled ? normalized.value : result;
-            const wrapOptions = structuredExecEnabled ? normalized.options : undefined;
+              : { value: result, options: undefined }; // TODO(Phase7): remove legacy transformer normalization fallback.
+            const resolvedValue = structuredExecEnabled ? normalized.value : result; // TODO(Phase7): remove legacy raw transformer value path.
+            const wrapOptions = structuredExecEnabled ? normalized.options : undefined; // TODO(Phase7): remove legacy transformer options fallback.
             
             // Apply withClause transformations if present
             if (node.withClause) {
@@ -637,9 +638,9 @@ export async function evaluateExecInvocation(
     const result = await variable.metadata.transformerImplementation(inputValue);
     const normalized = structuredExecEnabled
       ? normalizeTransformerResult(commandName, result)
-      : { value: result, options: undefined };
-    const resolvedValue = structuredExecEnabled ? normalized.value : result;
-    const wrapOptions = structuredExecEnabled ? normalized.options : undefined;
+      : { value: result, options: undefined }; // TODO(Phase7): remove legacy transformer normalization fallback.
+    const resolvedValue = structuredExecEnabled ? normalized.value : result; // TODO(Phase7): remove legacy raw transformer value path.
+    const wrapOptions = structuredExecEnabled ? normalized.options : undefined; // TODO(Phase7): remove legacy transformer options fallback.
     
     // Apply withClause transformations if present
     if (node.withClause) {
@@ -1802,7 +1803,7 @@ export async function evaluateExecInvocation(
         if (structuredExecEnabled) {
           return wrapExecResult(freshResult.value);
         }
-        return createLegacyText(freshResult.value);
+        return createLegacyText(freshResult.value); // TODO(Phase7): remove legacy retry string fallback.
       };
       
       // Create synthetic source stage for retryable pipeline
@@ -1836,7 +1837,7 @@ export async function evaluateExecInvocation(
       // Mark it as retryable with the source function
       const pipelineInput = structuredExecEnabled
         ? wrapExecResult(result)
-        : createLegacyText(result);
+        : createLegacyText(result); // TODO(Phase7): remove legacy pipeline input string fallback.
       const pipelineResult = await executePipeline(
         pipelineInput,
         normalizedPipeline,
@@ -1848,7 +1849,7 @@ export async function evaluateExecInvocation(
         true,  // hasSyntheticSource
         undefined,
         undefined,
-        structuredExecEnabled ? { returnStructured: true } : undefined
+        structuredExecEnabled ? { returnStructured: true } : undefined // TODO(Phase7): remove legacy structured flag guard.
       );
       
       // Still need to handle other withClause features (trust, needs)

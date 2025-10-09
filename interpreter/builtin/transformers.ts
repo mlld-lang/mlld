@@ -66,6 +66,7 @@ export const builtinTransformers: TransformerDefinition[] = [
         if (structuredMode) {
           return parsed;
         }
+        // TODO(Phase7): remove legacy JSON pretty-print branch.
         return JSON.stringify(parsed, null, 2);
       } catch {
         // Not JSON - attempt to convert markdown structures to JSON
@@ -77,6 +78,7 @@ export const builtinTransformers: TransformerDefinition[] = [
             return converted;
           }
         }
+        // TODO(Phase7): remove legacy JSON conversion fallback.
         return converted;
       }
     }

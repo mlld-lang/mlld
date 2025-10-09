@@ -161,6 +161,7 @@ export async function processPipeline(
         if (structuredEnabled) {
           return wrapExecResult(result.value);
         }
+        // TODO(Phase7): remove legacy string fallback.
         return String(result.value);
       }
       // Fallback - return original input
@@ -190,7 +191,7 @@ export async function processPipeline(
       return await executor.execute(input, { returnStructured: true });
     }
 
-    return await executor.execute(typeof input === 'string' ? input : input.text);
+    return await executor.execute(typeof input === 'string' ? input : input.text); // TODO(Phase7): remove legacy string execution path.
     
   } catch (error) {
     // Enhance error with context
@@ -261,6 +262,7 @@ async function prepareInput(
   if (isStructuredExecEnabled()) {
     return prepareStructuredInput(value, env);
   }
+  // TODO(Phase7): remove legacy pipeline input preparation.
   // If it's a wrapped value with metadata (from ExecInvocation with pipeline)
   if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
     // Extract the actual value, but keep the metadata for sourceFunction

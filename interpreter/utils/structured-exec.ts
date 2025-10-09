@@ -16,6 +16,7 @@ export function isStructuredExecEnabled(): boolean {
  */
 export function wrapExecResult<T>(value: T, options?: { type?: string; text?: string }): StructuredValue<T> | string {
   if (!isStructuredExecEnabled()) {
+    // TODO(Phase7): remove legacy string coercion branch.
     if (isStructuredValue(value)) {
       return value;
     }

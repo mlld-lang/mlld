@@ -175,6 +175,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       return data;
     }
   }
+  // TODO(Phase7): remove legacy shadow env passthrough.
   return value;
 }
 
