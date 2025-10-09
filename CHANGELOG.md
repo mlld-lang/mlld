@@ -22,11 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Loaders return parsed data: `<data.json>` yields object, not JSON string
   - Pipeline stages pass arrays/objects directly: `@data | @process` receives native type
   - JavaScript functions receive parsed values without `JSON.parse()`
-  - Transformers return native types: `@json` outputs object, `@csv` outputs array
   - Templates and output convert to text automatically
+  - Fixes #435 
 
 ### Breaking
 - Remove `JSON.parse()` calls in JavaScript stages - will fail on already-parsed data
+- Use `.text` to access stringified data, `.data` to get structured data in string context 
 - Pipelines expecting JSON strings will receive objects/arrays instead
 
 ## [2.0.0-rc56]
