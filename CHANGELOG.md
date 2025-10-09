@@ -8,12 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- With `MLLD_ENABLE_STRUCTURED_EXEC=true`, template interpolation now joins primitive arrays with commas while complex arrays keep JSON formatting, restoring intuitive output in doc templates.
-- Pipeline context access (`@p` / `@pipeline`) skips the synthetic source stage so indices and retry history match visible stages when structured execution is enabled.
-- `/show` preserves structured output intent: arrays/objects pretty-print, load-content wrappers continue emitting `.text`, and field access to `.text`/`.data` respects load-content metadata under the flag.
+- Structured execution finalized (#435):
+  - Core directives (`/run`, `/show`, exec invocation, with-clause) and pipeline infrastructure now always emit `StructuredValue`, eliminating the legacy string branches added during the feature-flag period.
+  - Built-in transformers and content loaders return parsed data while preserving metadata; shadow environments unwrap inputs automatically so JavaScript/Node stages receive native arrays/objects.
+  - Updated fixtures and new structured-only preservation tests keep JSON/CSV pipelines, loaders, and formatted inputs aligned with the guidance in `docs/dev/STRUCTURED-DATA.md`.
 
 ### Migration
-- Guidance is available in `docs/dev/STRUCTURED-DATA.md` for teams opting into structured execution, including where to apply `asText`/`asData` before flipping the flag on by default.
+- Structured execution is always enabled. Review existing pipelines and JS stages; use `asText` / `asData` where string views are required. The quick reference lives in `docs/dev/STRUCTURED-DATA.md`.
 
 ## [2.0.0-rc56]
 

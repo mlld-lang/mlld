@@ -58,6 +58,7 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - `structuredOutputs` map tracks wrappers; `previousOutputs` stores `.text`
 - `@pipeline`/`@p` exposes wrappers to subsequent stages
 - Parallel stages aggregate structured arrays (`.data` is array, `.text` is JSON)
+- Regression coverage (#435) ensures pipelines hand structured data between stages without manual `JSON.parse`
 
 **Variables**
 - All variable assignments store `StructuredValue` wrappers
