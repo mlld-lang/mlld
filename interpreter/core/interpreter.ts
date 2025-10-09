@@ -1255,7 +1255,8 @@ export async function interpolate(
           const strategy = EscapingStrategyFactory.getStrategy(context);
           const escapedElements = value.map(elem => {
             const printable = isStructuredValue(elem) ? asText(elem) : elem;
-            const elemStr = typeof printable === 'string' ? printable : String(printable);
+            // Use JSON.stringify for complex values (arrays/objects) instead of String()
+            const elemStr = typeof printable === 'string' ? printable : JSON.stringify(printable);
             return strategy.escape(elemStr);
           });
           stringValue = escapedElements.join(' ');
