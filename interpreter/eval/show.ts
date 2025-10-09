@@ -31,7 +31,7 @@ import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evalua
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
-import { wrapExecResult, isStructuredExecEnabled } from '../utils/structured-exec';
+import { wrapExecResult } from '../utils/structured-exec';
 // Template normalization now handled in grammar - no longer needed here
 
 /**
@@ -53,7 +53,6 @@ export async function evaluateShow(
   if (process.env.MLLD_DEBUG === 'true') {
   }
 
-  const structuredExecEnabled = isStructuredExecEnabled();
   let resultValue: unknown | undefined;
   let content = '';
   
@@ -1148,19 +1147,13 @@ export async function evaluateShow(
     env.emitEffect('both', content, { source: directive.location });
   }
   
-  if (structuredExecEnabled) {
-    const baseValue = resultValue ?? textForWrapper;
-    const wrapOptions =
-      !isStructuredValue(baseValue) && typeof baseValue !== 'string'
-        ? { text: textForWrapper }
-        : undefined;
-    const wrapped = wrapExecResult(baseValue, wrapOptions);
-    return { value: wrapped, env };
-  }
-
-  // TODO(Phase7): remove legacy string-only return.
-  // Return the content
-  return { value: content, env };
+  const baseValue = resultValue ?? textForWrapper;
+  const wrapOptions =
+    !isStructuredValue(baseValue) && typeof baseValue !== 'string'
+      ? { text: textForWrapper }
+      : undefined;
+  const wrapped = wrapExecResult(baseValue, wrapOptions);
+  return { value: wrapped, env };
 }
 
 /**

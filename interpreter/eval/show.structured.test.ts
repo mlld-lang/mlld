@@ -18,25 +18,13 @@ function getDirectiveNodes(ast: any, name: string) {
   });
 }
 
-describe('evaluateShow (structured flag)', () => {
+describe('evaluateShow (structured)', () => {
   let env: Environment;
-  let prevFlag: string | undefined;
 
   beforeEach(() => {
-    prevFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'true';
-
     const fs = new MemoryFileSystem();
     const pathService = new PathService();
     env = new Environment(fs, pathService, '/');
-  });
-
-  afterEach(() => {
-    if (prevFlag === undefined) {
-      delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    } else {
-      process.env.MLLD_ENABLE_STRUCTURED_EXEC = prevFlag;
-    }
   });
 
   it('wraps show exec output when structured flag is enabled', async () => {

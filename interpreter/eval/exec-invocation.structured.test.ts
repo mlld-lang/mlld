@@ -8,14 +8,10 @@ import { evaluate } from '../core/interpreter';
 import { evaluateExecInvocation } from './exec-invocation';
 import { asText, isStructuredValue } from '../utils/structured-value';
 
-describe('evaluateExecInvocation (structured flag)', () => {
+describe('evaluateExecInvocation (structured)', () => {
   let env: Environment;
-  let previousFlag: string | undefined;
 
   beforeEach(async () => {
-    previousFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'true';
-
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
     env = new Environment(fileSystem, pathService, '/');
@@ -27,14 +23,6 @@ describe('evaluateExecInvocation (structured flag)', () => {
 `;
     const { ast } = await parse(source);
     await evaluate(ast, env);
-  });
-
-  afterEach(() => {
-    if (previousFlag === undefined) {
-      delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    } else {
-      process.env.MLLD_ENABLE_STRUCTURED_EXEC = previousFlag;
-    }
   });
 
   it('wraps plain exec output when structured flag is enabled', async () => {

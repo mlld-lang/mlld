@@ -25,7 +25,7 @@ import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
-import { wrapExecResult, wrapPipelineResult, isStructuredExecEnabled } from '../utils/structured-exec';
+import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 
 /**
@@ -126,48 +126,23 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
-  const structuredExecEnabled = isStructuredExecEnabled();
-  const createLegacyText = (value: unknown): string => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value) || typeof value === 'object') {
-      try {
-        return JSON.stringify(value);
-      } catch {
-        return String(value);
-      }
-    }
-    return String(value);
-  };
-
   const createEvalResult = (
     value: unknown,
     targetEnv: Environment,
     options?: { type?: string; text?: string }
   ): EvalResult => {
-    if (structuredExecEnabled) {
-      const wrapped = wrapExecResult(value, options);
-      return {
-        value: wrapped,
-        env: targetEnv,
-        stdout: asText(wrapped),
-        stderr: '',
-        exitCode: 0
-      };
-    }
-
-    // TODO(Phase7): remove legacy exec result path.
+    const wrapped = wrapExecResult(value, options);
     return {
-      value,
+      value: wrapped,
       env: targetEnv,
-      stdout: createLegacyText(value),
+      stdout: asText(wrapped),
       stderr: '',
       exitCode: 0
     };
   };
 
   const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
-    return structuredExecEnabled ? wrapExecResult(value, options) : value; // TODO(Phase7): remove legacy pipeline passthrough.
+    return wrapExecResult(value, options);
   };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
@@ -371,11 +346,9 @@ export async function evaluateExecInvocation(
         }
       }
       
-      const normalized = structuredExecEnabled
-        ? normalizeTransformerResult(commandName, result)
-        : { value: result, options: undefined }; // TODO(Phase7): remove legacy transformer normalization fallback.
-      const resolvedValue = structuredExecEnabled ? normalized.value : result; // TODO(Phase7): remove legacy raw transformer value path.
-      const wrapOptions = structuredExecEnabled ? normalized.options : undefined; // TODO(Phase7): remove legacy transformer options fallback.
+      const normalized = normalizeTransformerResult(commandName, result);
+      const resolvedValue = normalized.value;
+      const wrapOptions = normalized.options;
 
       // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
       if (node.withClause) {
@@ -590,11 +563,9 @@ export async function evaluateExecInvocation(
             
             // Pass the type info with a special marker
             const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
-            const normalized = structuredExecEnabled
-              ? normalizeTransformerResult(commandName, result)
-              : { value: result, options: undefined }; // TODO(Phase7): remove legacy transformer normalization fallback.
-            const resolvedValue = structuredExecEnabled ? normalized.value : result; // TODO(Phase7): remove legacy raw transformer value path.
-            const wrapOptions = structuredExecEnabled ? normalized.options : undefined; // TODO(Phase7): remove legacy transformer options fallback.
+            const normalized = normalizeTransformerResult(commandName, result);
+            const resolvedValue = normalized.value;
+            const wrapOptions = normalized.options;
             
             // Apply withClause transformations if present
             if (node.withClause) {
@@ -636,11 +607,9 @@ export async function evaluateExecInvocation(
     
     // Call the transformer implementation directly
     const result = await variable.metadata.transformerImplementation(inputValue);
-    const normalized = structuredExecEnabled
-      ? normalizeTransformerResult(commandName, result)
-      : { value: result, options: undefined }; // TODO(Phase7): remove legacy transformer normalization fallback.
-    const resolvedValue = structuredExecEnabled ? normalized.value : result; // TODO(Phase7): remove legacy raw transformer value path.
-    const wrapOptions = structuredExecEnabled ? normalized.options : undefined; // TODO(Phase7): remove legacy transformer options fallback.
+    const normalized = normalizeTransformerResult(commandName, result);
+    const resolvedValue = normalized.value;
+    const wrapOptions = normalized.options;
     
     // Apply withClause transformations if present
     if (node.withClause) {
@@ -1757,23 +1726,19 @@ export async function evaluateExecInvocation(
     const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
     if (isVariable(result)) {
       const extracted = await extractVariableValue(result, execEnv);
-      if (structuredExecEnabled) {
-        const typeHint = Array.isArray(extracted)
-          ? 'array'
-          : typeof extracted === 'object' && extracted !== null
-            ? 'object'
-            : 'text';
-        const structured = wrapStructured(extracted as any, typeHint as any);
-        if (result.metadata) {
-          structured.metadata = {
-            ...structured.metadata,
-            variableMetadata: result.metadata
-          };
-        }
-        result = structured;
-      } else {
-        result = extracted;
+      const typeHint = Array.isArray(extracted)
+        ? 'array'
+        : typeof extracted === 'object' && extracted !== null
+          ? 'object'
+          : 'text';
+      const structured = wrapStructured(extracted as any, typeHint as any);
+      if (result.metadata) {
+        structured.metadata = {
+          ...structured.metadata,
+          variableMetadata: result.metadata
+        };
       }
+      result = structured;
     }
   }
   
@@ -1800,10 +1765,7 @@ export async function evaluateExecInvocation(
         // IMPORTANT: Use execEnv not env, so the function parameters are available
         const nodeWithoutPipeline = { ...node, withClause: undefined };
         const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
-        if (structuredExecEnabled) {
-          return wrapExecResult(freshResult.value);
-        }
-        return createLegacyText(freshResult.value); // TODO(Phase7): remove legacy retry string fallback.
+        return wrapExecResult(freshResult.value);
       };
       
       // Create synthetic source stage for retryable pipeline
@@ -1835,9 +1797,7 @@ export async function evaluateExecInvocation(
       
       // Execute the pipeline with the ExecInvocation result as initial input
       // Mark it as retryable with the source function
-      const pipelineInput = structuredExecEnabled
-        ? wrapExecResult(result)
-        : createLegacyText(result); // TODO(Phase7): remove legacy pipeline input string fallback.
+      const pipelineInput = wrapExecResult(result);
       const pipelineResult = await executePipeline(
         pipelineInput,
         normalizedPipeline,
@@ -1849,7 +1809,7 @@ export async function evaluateExecInvocation(
         true,  // hasSyntheticSource
         undefined,
         undefined,
-        structuredExecEnabled ? { returnStructured: true } : undefined // TODO(Phase7): remove legacy structured flag guard.
+        { returnStructured: true }
       );
       
       // Still need to handle other withClause features (trust, needs)

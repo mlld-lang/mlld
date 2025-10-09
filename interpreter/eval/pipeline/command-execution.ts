@@ -4,7 +4,7 @@ import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 import { asText, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
-import { wrapExecResult, isStructuredExecEnabled } from '../../utils/structured-exec';
+import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
@@ -371,39 +371,19 @@ export async function executeCommandVariable(
   env: Environment,
   stdinInput?: string
 ): Promise<CommandExecutionResult> {
-  const structuredExecEnabled = isStructuredExecEnabled();
   const finalizeResult = (
     value: unknown,
     options?: { type?: string; text?: string }
   ): CommandExecutionResult => {
-    if (structuredExecEnabled) {
-      return wrapExecResult(value, options);
-    }
-    // TODO(Phase7): remove legacy command result normalization.
-    if (options?.text !== undefined) {
-      return options.text;
-    }
-    if (value && typeof value === 'object') {
-      const maybeText = (value as { text?: unknown }).text;
-      if (typeof maybeText === 'string') {
-        return maybeText;
-      }
-    }
-    if (value === null || value === undefined) {
-      return '';
-    }
-    return String(value);
+    return wrapExecResult(value, options);
   };
 
   // Built-in transformer handling
   if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
     try {
       const result = await commandVar.metadata.transformerImplementation(stdinInput || '');
-      if (structuredExecEnabled) {
-        const normalized = normalizeTransformerResult(commandVar?.name, result);
-        return finalizeResult(normalized.value, normalized.options);
-      }
-      return finalizeResult(result); // TODO(Phase7): remove legacy finalize fallback.
+      const normalized = normalizeTransformerResult(commandVar?.name, result);
+      return finalizeResult(normalized.value, normalized.options);
     } catch (error) {
       throw new MlldCommandExecutionError(
         `Transformer ${commandVar.name} failed: ${error.message}`,

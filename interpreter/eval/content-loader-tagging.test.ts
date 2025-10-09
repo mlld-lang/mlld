@@ -7,13 +7,9 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import path from 'path';
 import { unwrapStructuredForTest } from './test-helpers';
-import { isStructuredExecEnabled } from '../utils/structured-exec';
 import type { StructuredValueMetadata } from '../utils/structured-value';
 
 function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
-  if (!isStructuredExecEnabled()) {
-    return;
-  }
   expect(metadata?.source).toBe('load-content');
 }
 

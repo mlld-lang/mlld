@@ -14,7 +14,7 @@ import { PipelineExecutor } from './executor';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
 import { attachBuiltinEffects } from './effects-attachment';
-import { isStructuredExecEnabled, wrapExecResult } from '../../utils/structured-exec';
+import { wrapExecResult } from '../../utils/structured-exec';
 import { ensureStructuredValue, isStructuredValue, wrapStructured, type StructuredValue, type StructuredValueMetadata } from '../../utils/structured-value';
 
 /**
@@ -144,10 +144,7 @@ export async function processPipeline(
       if (sourceNode.type === 'ExecInvocation') {
         const { evaluateExecInvocation } = await import('../exec-invocation');
         const result = await evaluateExecInvocation(sourceNode, env);
-        if (structuredEnabled) {
-          return wrapExecResult(result.value);
-        }
-        return String(result.value);
+        return wrapExecResult(result.value);
       } else if (sourceNode.type === 'command') {
         const { evaluateCommand } = await import('../run');
         const result = await evaluateCommand(sourceNode, env);
@@ -158,11 +155,7 @@ export async function processPipeline(
       } else if (sourceNode.type === 'code') {
         const { evaluateCodeExecution } = await import('../code-execution');
         const result = await evaluateCodeExecution(sourceNode, env);
-        if (structuredEnabled) {
-          return wrapExecResult(result.value);
-        }
-        // TODO(Phase7): remove legacy string fallback.
-        return String(result.value);
+        return wrapExecResult(result.value);
       }
       // Fallback - return original input
       return input;
@@ -173,8 +166,6 @@ export async function processPipeline(
   const hasSyntheticSource = functionalPipeline[0]?.rawIdentifier === '__source__';
   
   // Execute pipeline with normalized stages
-  const structuredEnabled = isStructuredExecEnabled();
-
   try {
     const executor = new PipelineExecutor(
       functionalPipeline,
@@ -187,11 +178,7 @@ export async function processPipeline(
       detected.delayMs
     );
 
-    if (structuredEnabled) {
-      return await executor.execute(input, { returnStructured: true });
-    }
-
-    return await executor.execute(typeof input === 'string' ? input : input.text); // TODO(Phase7): remove legacy string execution path.
+    return await executor.execute(input, { returnStructured: true });
     
   } catch (error) {
     // Enhance error with context
@@ -259,58 +246,7 @@ async function prepareInput(
   value: any,
   env: Environment
 ): Promise<string | StructuredValue> {
-  if (isStructuredExecEnabled()) {
-    return prepareStructuredInput(value, env);
-  }
-  // TODO(Phase7): remove legacy pipeline input preparation.
-  // If it's a wrapped value with metadata (from ExecInvocation with pipeline)
-  if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
-    // Extract the actual value, but keep the metadata for sourceFunction
-    const actualValue = value.value;
-    // Recursively prepare the actual value
-    return prepareInput(actualValue, env);
-  }
-  
-  // If it's a Variable, extract the value
-  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
-    // This is a Variable - extract its value
-    const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-    const extracted = await resolveValue(value as Variable, env, ResolutionContext.PipelineInput);
-    
-    // Check if the extracted value is a LoadContentResult
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-    if (isLoadContentResult(extracted)) {
-      // For LoadContentResult, use the content property (this is what should be processed)
-      // The metadata will be preserved via the AutoUnwrapManager shelf
-      return extracted.content;
-    }
-    if (isLoadContentResultArray(extracted)) {
-      // For arrays, join the contents
-      return extracted.content; // This uses the custom getter that concatenates
-    }
-    
-    // Convert to string for pipeline
-    if (typeof extracted === 'string') {
-      return extracted;
-    }
-    return JSON.stringify(extracted);
-  }
-  
-  // Check if direct value is LoadContentResult (shouldn't happen but be safe)
-  const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-  if (isLoadContentResult(value)) {
-    return value.content;
-  }
-  if (isLoadContentResultArray(value)) {
-    return value.content;
-  }
-  
-  // Direct value - convert to string
-  if (typeof value === 'string') {
-    return value;
-  }
-  
-  return JSON.stringify(value);
+  return prepareStructuredInput(value, env);
 }
 
 async function prepareStructuredInput(

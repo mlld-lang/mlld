@@ -6,28 +6,16 @@ import { PathService } from '@services/fs/PathService';
 import { isStructuredValue, asText } from '../utils/structured-value';
 import * as path from 'path';
 
-describe('processContentLoader (structured flag)', () => {
+describe('processContentLoader (structured)', () => {
   let env: Environment;
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
-  let previousFlag: string | undefined;
   const baseDir = process.cwd();
 
   beforeEach(() => {
-    previousFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'true';
-
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
     env = new Environment(fileSystem, pathService, baseDir);
-  });
-
-  afterEach(() => {
-    if (previousFlag === undefined) {
-      delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    } else {
-      process.env.MLLD_ENABLE_STRUCTURED_EXEC = previousFlag;
-    }
   });
 
   it('wraps single file results with structured metadata', async () => {

@@ -11,7 +11,6 @@ import type { StageContext, PipelineEvent } from './state-machine';
 import type { StructuredValue } from '../../utils/structured-value';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
-import { isStructuredExecEnabled } from '../../utils/structured-exec';
 
 /**
  * Simplified pipeline context interface
@@ -241,7 +240,6 @@ function createSimplifiedPipelineContext(
   allRetryHistory?: Map<string, string[]>,
   structuredAccess?: StageOutputAccessor
 ): SimplifiedPipelineContext {
-  const structuredEnabled = isStructuredExecEnabled();
   const userVisibleStage = hasSyntheticSource && context.stage > 0 
     ? context.stage - 1 
     : context.stage;
@@ -252,80 +250,8 @@ function createSimplifiedPipelineContext(
       userVisibleStage,
       contextAttempt: context.contextAttempt,
       historyLength: context.history.length,
-      hasSyntheticSource,
-      structuredEnabled
+      hasSyntheticSource
     });
-  }
-  if (!structuredEnabled) {
-    // TODO(Phase7): remove legacy pipeline context builder branch.
-    const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
-      ? context.previousOutputs.slice(1)
-      : context.previousOutputs;
-
-    const pipelineContext: any = {
-      try: context.contextAttempt,
-      stage: userVisibleStage,
-      length: userVisibleOutputs.length
-    };
-
-    const retryHistoryEntries =
-      context.history.length > 0
-        ? context.history
-        : allRetryHistory && allRetryHistory.size > 0
-          ? Array.from(allRetryHistory.values())
-          : [];
-
-    pipelineContext.tries = retryHistoryEntries;
-
-    const outputs: Record<number, string> = {};
-    if (hasSyntheticSource) {
-      Object.entries(context.outputs).forEach(([key, value]) => {
-        const index = Number(key);
-        if (!Number.isNaN(index) && index > 0) {
-          outputs[index - 1] = value;
-        }
-      });
-    } else {
-      Object.assign(outputs, context.outputs);
-    }
-
-    Object.assign(pipelineContext, outputs);
-
-    Object.defineProperty(pipelineContext, -1, {
-      get: () => userVisibleOutputs[userVisibleOutputs.length - 1],
-      enumerable: false
-    });
-
-    Object.defineProperty(pipelineContext, -2, {
-      get: () => userVisibleOutputs[userVisibleOutputs.length - 2],
-      enumerable: false
-    });
-
-    for (let i = 3; i <= Math.max(10, userVisibleOutputs.length); i++) {
-      Object.defineProperty(pipelineContext, -i, {
-        get: () => userVisibleOutputs[userVisibleOutputs.length - i],
-        enumerable: false
-      });
-    }
-
-    Object.defineProperty(pipelineContext, 'retries', {
-      get: () => {
-        if (!allRetryHistory || allRetryHistory.size === 0) {
-          return { all: [] };
-        }
-        const allAttempts: string[][] = [];
-        for (const attempts of allRetryHistory.values()) {
-          if (attempts.length > 0) {
-            allAttempts.push([...attempts]);
-          }
-        }
-        return { all: allAttempts };
-      },
-      enumerable: false,
-      configurable: true
-    });
-
-    return pipelineContext as SimplifiedPipelineContext;
   }
 
   const toStructured = (stageIndex: number | null, fallback: string): StructuredValue => {

@@ -1,22 +1,11 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { describe, it, beforeEach, expect } from 'vitest';
 import { prepareValueForShadow, prepareParamsForShadow } from './variable-proxy';
 import { LoadContentResultImpl } from '../eval/load-content';
 import { createPipelineInput } from '@interpreter/utils/pipeline-input';
 
-describe('prepareValueForShadow (structured flag)', () => {
-  let previousFlag: string | undefined;
-
+describe('prepareValueForShadow (structured)', () => {
   beforeEach(() => {
-    previousFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'true';
-  });
-
-  afterEach(() => {
-    if (previousFlag === undefined) {
-      delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    } else {
-      process.env.MLLD_ENABLE_STRUCTURED_EXEC = previousFlag;
-    }
+    delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
   });
 
   it('returns native LoadContentResult objects to shadow environments', () => {

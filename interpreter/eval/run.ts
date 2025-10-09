@@ -15,7 +15,7 @@ import { logger } from '@core/utils/logger';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue } from '@core/types/structured-value';
-import { wrapExecResult, isStructuredExecEnabled } from '../utils/structured-exec';
+import { wrapExecResult } from '../utils/structured-exec';
 import { asText, isStructuredValue } from '../utils/structured-value';
 
 /**
@@ -53,23 +53,6 @@ function dedentCommonIndent(src: string): string {
   }
   if (!minIndent) return src;
   return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
-}
-
-function legacyText(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
-  return String(value);
 }
 
 /**
@@ -199,21 +182,13 @@ export async function evaluateRun(
     return { value: null, env };
   }
 
-  const structuredExecEnabled = isStructuredExecEnabled();
   let outputValue: unknown;
   let outputText: string;
 
   const setOutput = (value: unknown) => {
-    if (structuredExecEnabled) {
-      const wrapped = wrapExecResult(value);
-      outputValue = wrapped;
-      outputText = asText(wrapped as any);
-    } else {
-      // TODO(Phase7): remove legacy string coercion branch.
-      const text = legacyText(value);
-      outputValue = text;
-      outputText = text;
-    }
+    const wrapped = wrapExecResult(value);
+    outputValue = wrapped;
+    outputText = asText(wrapped as any);
   };
 
   setOutput('');
@@ -794,7 +769,7 @@ export async function evaluateRun(
       const { processPipeline } = await import('./pipeline/unified-processor');
       // Stage-0 retry is always enabled when we have a source node
       const enableStage0 = !!sourceNodeForPipeline;
-      const pipelineInput = structuredExecEnabled ? outputValue : outputText; // TODO(Phase7): remove legacy pipeline string path.
+      const pipelineInput = outputValue;
       const valueForPipeline = enableStage0
         ? { value: pipelineInput, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;
@@ -838,7 +813,7 @@ export async function evaluateRun(
   
   // Return the output value
   return {
-    value: structuredExecEnabled ? outputValue : outputText, // TODO(Phase7): remove legacy string return.
+    value: outputValue,
     env
   };
 }

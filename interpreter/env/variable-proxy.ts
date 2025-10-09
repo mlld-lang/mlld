@@ -12,7 +12,6 @@ import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
-import { isStructuredExecEnabled } from '@interpreter/utils/structured-exec';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 /**
@@ -148,34 +147,31 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
     return createVariableProxy(value);
   }
-  if (isStructuredExecEnabled()) {
-    if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-      const wrapped = wrapLoadContentValue(value);
-      const data = asData(wrapped);
-      if (target && key) {
-        recordPrimitiveMetadata(target, key, {
-          isVariable: false,
-          type: wrapped.type,
-          metadata: wrapped.metadata || {},
-          text: wrapped.text
-        });
-      }
-      return data;
+  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
+    const wrapped = wrapLoadContentValue(value);
+    const data = asData(wrapped);
+    if (target && key) {
+      recordPrimitiveMetadata(target, key, {
+        isVariable: false,
+        type: wrapped.type,
+        metadata: wrapped.metadata || {},
+        text: wrapped.text
+      });
     }
-    if (isStructuredValue(value)) {
-      const data = asData(value);
-      if (target && key) {
-        recordPrimitiveMetadata(target, key, {
-          isVariable: false,
-          type: value.type,
-          metadata: value.metadata || {},
-          text: value.text
-        });
-      }
-      return data;
-    }
+    return data;
   }
-  // TODO(Phase7): remove legacy shadow env passthrough.
+  if (isStructuredValue(value)) {
+    const data = asData(value);
+    if (target && key) {
+      recordPrimitiveMetadata(target, key, {
+        isVariable: false,
+        type: value.type,
+        metadata: value.metadata || {},
+        text: value.text
+      });
+    }
+    return data;
+  }
   return value;
 }
 

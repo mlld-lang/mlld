@@ -23,6 +23,7 @@
   return data.map(p => p.name).join(', ');
 }
 
+
 /var @names = @getData() | @processJSON
 /show :::JSON Names: {{names}}:::
 
@@ -45,12 +46,14 @@
     : (input && typeof input === 'object' && 'csv' in input ? input.csv : input?.data);
   if (!Array.isArray(rows)) throw new Error('Expected CSV rows array');
   const [headers, ...rest] = rows;
-  return JSON.stringify(
-    rest.map(row => Object.fromEntries(headers.map((h, i) => [h, row[i]])))
+  const objects = rest.map(row =>
+    Object.fromEntries(headers.map((h, i) => [h.trim().toLowerCase(), row[i]]))
   );
+  return JSON.stringify(objects);
 }
 
-/var @converted = @getCSV() with { format: "csv", pipeline: [@csvToJSON, @processJSON] }
+/var @records = @getCSV() with { format: "csv", pipeline: [@csvToJSON] }
+/var @converted = @records | @processJSON
 /show :::Converted: {{converted}}:::
 
 >> Text format (no parsing)

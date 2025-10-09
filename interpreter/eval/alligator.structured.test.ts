@@ -12,26 +12,14 @@ function getDirectiveNodes(ast: any, kind: string) {
   return nodes.filter((node: any) => node.type === 'Directive' && node.kind === kind);
 }
 
-describe('Alligator structured behaviour (flag on)', () => {
+describe('Alligator structured behaviour', () => {
   let env: Environment;
   let fileSystem: MemoryFileSystem;
-  let prevFlag: string | undefined;
 
   beforeEach(() => {
-    prevFlag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    process.env.MLLD_ENABLE_STRUCTURED_EXEC = 'true';
-
     fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
     env = new Environment(fileSystem, pathService, '/workspace');
-  });
-
-  afterEach(() => {
-    if (prevFlag === undefined) {
-      delete process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-    } else {
-      process.env.MLLD_ENABLE_STRUCTURED_EXEC = prevFlag;
-    }
   });
 
   it('preserves metadata for alligator-loaded variables and show output', async () => {

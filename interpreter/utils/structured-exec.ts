@@ -5,12 +5,6 @@ import { ensureStructuredValue, isStructuredValue, type StructuredValue } from '
  * When disabled, legacy string behaviour is preserved.
  */
 export function isStructuredExecEnabled(): boolean {
-  const flag = process.env.MLLD_ENABLE_STRUCTURED_EXEC;
-  if (flag === undefined) return true;
-  const normalized = flag.trim().toLowerCase();
-  if (normalized === '' || normalized === '0' || normalized === 'false' || normalized === 'off') {
-    return false;
-  }
   return true;
 }
 
@@ -18,18 +12,7 @@ export function isStructuredExecEnabled(): boolean {
  * Wrap exec results when the feature flag is enabled.
  * When disabled, returns the legacy string representation.
  */
-export function wrapExecResult<T>(value: T, options?: { type?: string; text?: string }): StructuredValue<T> | string {
-  if (!isStructuredExecEnabled()) {
-    // TODO(Phase7): remove legacy string coercion branch.
-    if (isStructuredValue(value)) {
-      return value;
-    }
-    if (value === null || value === undefined) {
-      return '';
-    }
-    return typeof value === 'string' ? value : String(value);
-  }
-
+export function wrapExecResult<T>(value: T, options?: { type?: string; text?: string }): StructuredValue<T> {
   if (isStructuredValue(value)) {
     if (options?.type || options?.text) {
       return ensureStructuredValue(value, options?.type as any, options?.text);
@@ -40,6 +23,6 @@ export function wrapExecResult<T>(value: T, options?: { type?: string; text?: st
   return ensureStructuredValue(value, options?.type as any, options?.text);
 }
 
-export function wrapPipelineResult<T>(value: T, options?: { type?: string; text?: string }): StructuredValue<T> | string {
+export function wrapPipelineResult<T>(value: T, options?: { type?: string; text?: string }): StructuredValue<T> {
   return wrapExecResult(value, options);
 }

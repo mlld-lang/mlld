@@ -16,7 +16,6 @@ import { createRenamedContentVariable, createLoadContentResultVariable, extractV
 import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
-import { isStructuredExecEnabled } from '../utils/structured-exec';
 
 /**
  * Check if a path contains glob patterns
@@ -978,11 +977,6 @@ function finalizeLoaderResult<T>(
   value: T,
   options?: { type?: StructuredValueType; text?: string; metadata?: StructuredValueMetadata }
 ): T | StructuredValue {
-  if (!isStructuredExecEnabled()) {
-    // TODO(Phase7): remove legacy loader passthrough.
-    return value;
-  }
-
   if (isStructuredValue(value)) {
     const metadata = mergeMetadata(value.metadata, options?.metadata);
     if (!options?.type && !options?.text && (!metadata || metadata === value.metadata)) {
@@ -993,10 +987,6 @@ function finalizeLoaderResult<T>(
 
   if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
     const wrapped = wrapLoadContentValue(value);
-    if (!isStructuredExecEnabled()) {
-      // TODO(Phase7): remove legacy load-content wrapper reuse.
-      return wrapped;
-    }
     const metadata = mergeMetadata(wrapped.metadata, options?.metadata);
     const text = options?.text ?? wrapped.text;
     return wrapStructured(wrapped, wrapped.type, text, metadata);
