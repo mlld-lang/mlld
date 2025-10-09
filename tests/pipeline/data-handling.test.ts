@@ -83,6 +83,89 @@ describe('Data handling accessors', () => {
     expect(output.trim()).toBe('true');
   });
 
+  it('lets foreach consume StructuredValue arrays produced by pipelines', async () => {
+    const input = `
+/exe @echoUser(user) = js {
+  return user
+}
+
+/var @users = '[{"id":1},{"id":2}]' | @json
+/var @results = foreach @echoUser(@users)
+/show @results | @json`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    const parsed = JSON.parse(output.trim());
+    expect(parsed).toEqual([
+      { id: 1 },
+      { id: 2 }
+    ]);
+  });
+
+  it('exposes chunked pipeline results as structured arrays', async () => {
+    const input = `
+/exe @chunk(arr, sz) = js {
+  return Array.from(
+    { length: Math.ceil(arr.length / sz) },
+    (_, i) => arr.slice(i * sz, i * sz + sz)
+  );
+}
+
+/exe @inspect(value) = js {
+  return {
+    isStructured: Boolean(value && typeof value === 'object' && value[Symbol.for('mlld.StructuredValue')]),
+    type: value?.type,
+    valueType: typeof value,
+    isArray: Array.isArray(value),
+    dataIsArray: Array.isArray(value?.data),
+    data: value?.data,
+    text: value?.text ?? value
+  };
+}
+
+/var @numbers = '[1, 2, 3, 4]' | @json
+/var @chunks = @numbers | @chunk(2)
+/show @inspect(@chunks) | @json`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    const info = JSON.parse(output.trim());
+    expect(info).toEqual({
+      isStructured: false,
+      valueType: 'string',
+      isArray: false,
+      dataIsArray: false,
+      text: '[[1,2],[3,4]]'
+    });
+  });
+
+  it('lets foreach consume StructuredValue arrays created by chained pipelines', async () => {
+    const input = `
+/exe @chunk(arr, sz) = js {
+  return Array.from(
+    { length: Math.ceil(arr.length / sz) },
+    (_, i) => arr.slice(i * sz, i * sz + sz)
+  );
+}
+
+/exe @sum(values) = js {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+/var @numbers = '[1, 2, 3, 4]' | @json
+/var @chunks = @numbers | @chunk(2)
+/var @sums = foreach @sum(@chunks)
+/show @chunks | @json
+/show @sums | @json`;
+
+    const output = await interpret(input, { fileSystem, pathService });
+    const normalized = output.replace(/\s+/g, '');
+    const splitIndex = normalized.indexOf('][');
+    expect(splitIndex).toBeGreaterThan(0);
+    const chunksJson = normalized.slice(0, splitIndex + 1);
+    const sumsJson = normalized.slice(splitIndex + 1);
+    expect(JSON.parse(chunksJson)).toEqual([[1, 2], [3, 4]]);
+    expect(JSON.parse(sumsJson)).toEqual([3, 7]);
+  });
+
   it('stores structured assignments as wrappers and exposes data to field access, iteration, and equality', async () => {
     const input = `
 /exe @structuredProfile() = js {

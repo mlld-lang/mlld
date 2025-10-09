@@ -60,6 +60,48 @@ export async function evaluateForeachCommand(
   for (let i = 0; i < arrayNodes.length; i++) {
     const arrayVar = arrayNodes[i];
     const arrayValue = await evaluateDataValue(arrayVar, env);
+    if (isStructuredValue(arrayValue)) {
+      let structuredData = asData(arrayValue) as unknown;
+
+      if (!Array.isArray(structuredData)) {
+        // Some structured wrappers store nested structured data (e.g., PipelineInput)
+        if (
+          structuredData &&
+          typeof structuredData === 'object' &&
+          'data' in (structuredData as Record<string, unknown>) &&
+          Array.isArray((structuredData as any).data)
+        ) {
+          structuredData = (structuredData as any).data;
+        } else if (typeof structuredData === 'string') {
+          try {
+            const parsed = JSON.parse(structuredData);
+            if (Array.isArray(parsed)) {
+              structuredData = parsed;
+            }
+          } catch {
+            // Ignore parse failure; we'll try text fallback next
+          }
+        }
+      }
+
+      if (!Array.isArray(structuredData) && typeof arrayValue.text === 'string') {
+        try {
+          const parsed = JSON.parse(arrayValue.text);
+          if (Array.isArray(parsed)) {
+            structuredData = parsed;
+          }
+        } catch {
+          // Ignore parse failure and fall through to error
+        }
+      }
+
+      if (!Array.isArray(structuredData)) {
+        throw new Error(`Argument ${i + 1} to foreach must be an array, got structured ${arrayValue.type}`);
+      }
+
+      evaluatedArrays.push(structuredData);
+      continue;
+    }
     
     if (!Array.isArray(arrayValue)) {
       throw new Error(`Argument ${i + 1} to foreach must be an array, got ${typeof arrayValue}`);
