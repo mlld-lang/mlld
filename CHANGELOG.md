@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc61]
 
 ### Fixed
-- **Critical structured data handling in field access**: Fixed array operations on nested StructuredValue wrappers
+- **Structured data handling in field access**: Fixed array operations on nested StructuredValue wrappers
   - Field access now properly unwraps nested StructuredValue before array operations
   - Fixes potential runtime errors with deeply nested structured data (e.g., `@nested[0]` where `@nested` is a wrapped array)
   - Related to #435 structured data edge cases
