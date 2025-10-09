@@ -12,11 +12,10 @@ import { isExecutableVariable, createSimpleTextVariable } from '@core/types/vari
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
-import { StructuredValue } from '@core/types/structured-value';
 import { wrapExecResult } from '../utils/structured-exec';
 import { asText, isStructuredValue } from '../utils/structured-value';
+import { coerceValueForStdin } from '../utils/shell-value';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -56,51 +55,10 @@ function dedentCommonIndent(src: string): string {
 }
 
 /**
- * Convert arbitrary evaluated values into stdin-ready text.
- * WHY: Shell executors only accept strings, yet upstream evaluation may
- *      produce structured values, buffers, or loader results.
- * CONTEXT: Called after variables and expressions resolve for /run stdin.
- */
-function coerceStdinString(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return String(value);
-  }
-
-  if (Buffer.isBuffer(value)) {
-    return value.toString('utf8');
-  }
-
-  if (StructuredValue.isStructuredValue(value)) {
-    return asText(value);
-  }
-
-  if (isLoadContentResult(value)) {
-    return value.content ?? '';
-  }
-
-  if (Array.isArray(value)) {
-    if (isLoadContentResultArray(value)) {
-      return value.map(item => item.content ?? '').join('\n');
-    }
-    return value.map(item => coerceStdinString(item)).join('\n');
-  }
-
-  return String(value);
-}
-
-/**
  * Evaluate a stdin expression and coerce it into text for command execution.
  * WHY: /run supports expressions in the `with { stdin: ... }` slot that can
  *      reference variables or pipelines; those must resolve before coercion.
- * CONTEXT: Delegates final conversion to coerceStdinString once evaluation
+ * CONTEXT: Delegates final conversion to the shared shell-value helper once evaluation
  *          finishes in the command execution resolution context.
  */
 async function resolveStdinInput(stdinSource: unknown, env: Environment): Promise<string> {
@@ -131,7 +89,7 @@ async function resolveStdinInput(stdinSource: unknown, env: Environment): Promis
     }
   }
 
-  return coerceStdinString(value);
+  return coerceValueForStdin(value);
 }
 
 /**
