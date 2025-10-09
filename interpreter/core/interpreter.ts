@@ -876,17 +876,22 @@ export async function interpolate(
   
   const parts: string[] = [];
   let withinDoubleQuotes = false;
+  let withinSingleQuotes = false;
 
   const updateQuoteState = (fragment: string): void => {
     if (!fragment) return;
     for (let i = 0; i < fragment.length; i++) {
-      if (fragment[i] !== '"') continue;
+      const char = fragment[i];
+      if (char !== '"' && char !== '\'') continue;
       let backslashCount = 0;
       for (let j = i - 1; j >= 0 && fragment[j] === '\\'; j--) {
         backslashCount++;
       }
-      if (backslashCount % 2 === 0) {
+      const isEscaped = backslashCount % 2 === 1;
+      if (char === '"' && !withinSingleQuotes && !isEscaped) {
         withinDoubleQuotes = !withinDoubleQuotes;
+      } else if (char === '\'' && !withinDoubleQuotes && !isEscaped) {
+        withinSingleQuotes = !withinSingleQuotes;
       }
     }
   };
@@ -1193,16 +1198,47 @@ export async function interpolate(
         const classification = classifyShellValue(value);
         const strategy = EscapingStrategyFactory.getStrategy(context);
 
+        const escapeForSingleQuotes = (text: string): string => {
+          if (text === "'") {
+            return "'";
+          }
+          if (!text.includes("'")) {
+            return text;
+          }
+          const segments = text.split("'");
+          return segments
+            .map((segment, index) => {
+              if (index === segments.length - 1) {
+                return segment;
+              }
+              return `${segment}'\\''`;
+            })
+            .join('');
+        };
+        const escapeForDoubleQuotes = (text: string): string => strategy.escape(text);
+
         if (classification.kind === 'simple') {
-          pushPart(strategy.escape(classification.text));
+          if (withinSingleQuotes) {
+            pushPart(escapeForSingleQuotes(classification.text));
+          } else {
+            pushPart(escapeForDoubleQuotes(classification.text));
+          }
         } else if (classification.kind === 'array-simple') {
-          const escapedElements = classification.elements.map(elem => strategy.escape(elem));
-          pushPart(escapedElements.join(' '));
+          if (withinSingleQuotes) {
+            const escapedElements = classification.elements.map(elem => escapeForSingleQuotes(elem));
+            pushPart(escapedElements.join(' '));
+          } else {
+            const escapedElements = classification.elements.map(elem => escapeForDoubleQuotes(elem));
+            pushPart(escapedElements.join(' '));
+          }
         } else {
-          const escaped = withinDoubleQuotes
-            ? strategy.escape(classification.text)
-            : shellQuote.quote([classification.text]);
-          pushPart(escaped);
+          if (withinDoubleQuotes) {
+            pushPart(escapeForDoubleQuotes(classification.text));
+          } else if (withinSingleQuotes) {
+            pushPart(escapeForSingleQuotes(classification.text));
+          } else {
+            pushPart(shellQuote.quote([classification.text]));
+          }
         }
         continue;
       }
