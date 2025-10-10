@@ -76,14 +76,17 @@ FileReferenceContent "file reference content"
 
 // Template pipes (no arguments) for interpolation contexts
 TemplatePipe "template pipe (no args)"
-  = pipeStart:("" { return peg$currPos; }) "|" "@" name:BaseIdentifier {
+  = pipeStart:("" { return peg$currPos; }) "|" "@" name:BaseIdentifier fieldParts:(_ "." _ part:BaseIdentifier { return part; })* {
       const loc = location();
       const startOffset = pipeStart;
+      const fields = fieldParts || [];
+      const fullName = fields.length > 0 ? `${name}.${fields.join('.')}` : name;
       return {
         type: 'CondensedPipe',
-        transform: name,
+        transform: fullName,
         hasAt: true,
         args: [],
+        fields,
         location: {
           source: loc.source,
           start: {
@@ -98,14 +101,17 @@ TemplatePipe "template pipe (no args)"
 
 // Spaced or condensed pipe (interpolation contexts allow condensed only; var RHS may add spaced variant)
 SpacedOrCondensedFilePipe
-  = HWS pipeStart:("" { return peg$currPos; }) "|" HWS "@" name:BaseIdentifier {
+  = HWS pipeStart:("" { return peg$currPos; }) "|" HWS "@" name:BaseIdentifier fieldParts:(_ "." _ part:BaseIdentifier { return part; })* {
       const loc = location();
       const startOffset = pipeStart;
+      const fields = fieldParts || [];
+      const fullName = fields.length > 0 ? `${name}.${fields.join('.')}` : name;
       return { 
         type: 'CondensedPipe',
-        transform: name,
+        transform: fullName,
         hasAt: true,
         args: [],
+        fields,
         location: {
           source: loc.source,
           start: { 

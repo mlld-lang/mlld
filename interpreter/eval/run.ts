@@ -387,12 +387,31 @@ export async function evaluateRun(
         throw new Error(`Base variable not found: ${varRef.identifier}`);
       }
       
-      // Extract Variable value for field access - WHY: Need raw object to navigate fields
-      const { extractVariableValue } = await import('../utils/variable-resolution');
-      let value = await extractVariableValue(baseVar, env);
-      
-      // Navigate through the field access chain
-      for (const field of varRef.fields) {
+      const variantMap = baseVar.metadata?.transformerVariants as Record<string, any> | undefined;
+      let value: any;
+      let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
+
+      if (variantMap && remainingFields.length > 0) {
+        const firstField = remainingFields[0];
+        if (firstField.type === 'field' || firstField.type === 'stringIndex' || firstField.type === 'numericField') {
+          const variantName = String(firstField.value);
+          const variant = variantMap[variantName];
+          if (!variant) {
+            throw new Error(`Pipeline function '@${varRef.identifier}.${variantName}' is not defined`);
+          }
+          value = variant;
+          remainingFields = remainingFields.slice(1);
+        }
+      }
+
+      if (typeof value === 'undefined') {
+        // Extract Variable value for field access - WHY: Need raw object to navigate fields
+        const { extractVariableValue } = await import('../utils/variable-resolution');
+        value = await extractVariableValue(baseVar, env);
+      }
+
+      // Navigate through the remaining field access chain
+      for (const field of remainingFields) {
         if ((field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField') && typeof value === 'object' && value !== null) {
           value = (value as Record<string, unknown>)[String(field.value)];
         } else if (field.type === 'arrayIndex' && Array.isArray(value)) {

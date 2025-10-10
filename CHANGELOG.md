@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc61]
 
+### Added
+- **Loose JSON parsing modes**: `@json` now accepts relaxed JSON syntax (single quotes, trailing commas, comments) using JSON5, with explicit `@json.loose` and `@json.strict` variants for opting in or enforcing strict parsing. Error messages direct users to the loose mode when strict parsing fails.
+
 ### Fixed
 - **Structured data handling in field access**: Fixed array operations on nested StructuredValue wrappers
   - Field access now properly unwraps nested StructuredValue before array operations

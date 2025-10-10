@@ -146,9 +146,10 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
         const startOffset = firstPipe.pipeStart;
         pipes.push({
           type: 'CondensedPipe',
-          transform: firstPipe.command.name,
+          transform: firstPipe.command.fullName,
           hasAt: true,
           args: firstPipe.command.args || [],
+          fields: firstPipe.command.fields || [],
           location: {
             source: loc.source,
             start: { 
@@ -181,9 +182,10 @@ SpacedOrCondensedPipe
       const startOffset = pipeStart;
       return {
         type: 'CondensedPipe',
-        transform: command.name,
+        transform: command.fullName,
         hasAt: true,
         args: command.args || [],
+        fields: command.fields || [],
         location: {
           source: loc.source,
           start: { 
@@ -198,8 +200,10 @@ SpacedOrCondensedPipe
 
 // Pipe command syntax for non-template pipelines: @name or @name(args)
 PipeCommand "pipe command"
-  = "@" name:BaseIdentifier args:( _ "(" _ a:CommandArgumentList? _ ")" { return a || []; } )? {
-      return { name, args: args || [] };
+  = "@" name:BaseIdentifier fieldParts:(_ "." _ part:BaseIdentifier { return part; })* args:( _ "(" _ a:CommandArgumentList? _ ")" { return a || []; } )? {
+      const fields = fieldParts || [];
+      const fullName = fields.length > 0 ? `${name}.${fields.join('.')}` : name;
+      return { name, fullName, fields, args: args || [] };
     }
 
 // Chain of spaced-or-condensed pipes

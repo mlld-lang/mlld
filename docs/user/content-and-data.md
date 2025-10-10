@@ -388,6 +388,14 @@ mlld provides built-in transformers (both uppercase and lowercase work):
 /var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
 /var @tocsv = @users | @CSV
 /show @tocsv
+
+`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:
+
+```mlld
+/var @loose = "{'name': 'Ada', /* comment */ age: 32,}"
+/var @parsedLoose = @loose | @json              >> Uses relaxed parsing
+/var @parsedStrict = @loose | @json.strict      >> Fails with hint to use @json.loose
+```
 ```
 
 ## Templates and Interpolation
