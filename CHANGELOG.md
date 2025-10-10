@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc64]
+### Fixed
+- **Alligator section parsing with "as" substring**: Fixed grammar bug where section names containing "as" (like "Gotchas", "Installation", "Basic Usage") were rejected
+  - Changed `AlligatorSectionChar` rule from `!"as"` to `!(" as")` to only exclude the `as` keyword when used for renaming
+  - Section syntax like `<file.md # Gotchas>` now works correctly
+  - Distinguishes between section names with "as" and the rename keyword: `<file.md # Section> as "New Title"`
+  - Added test coverage in `tests/cases/slash/show/alligator-section-as-substring/`
+- Preserved structured pipeline outputs across chained executables by wrapping JSON-like strings returned from JS/Node stages, preventing downstream stages from receiving `[object Object]` text (#435).
+- Updated run/exec structured handling and regression fixtures so batch/parallel pipelines, foreach separators, and retry fallbacks assert native arrays/objects instead of stringified JSON, closing the remaining gaps from #435 user scenarios.
+
 ## [2.0.0-rc63]
 ### Fixed
 - Fixed local resolver to recognize all mlld extensions as modules when they contain directives. Previously only .mlld.md files were explicitly treated as modules, causing "Import target is not a module" errors when importing .mld files via custom resolver prefixes like @context/.

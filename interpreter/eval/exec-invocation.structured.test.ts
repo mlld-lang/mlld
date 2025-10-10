@@ -76,9 +76,9 @@ describe('evaluateExecInvocation (structured)', () => {
 
     const result = await evaluateExecInvocation(invocation, env);
     expect(isStructuredValue(result.value)).toBe(true);
-    expect(result.value.type).toBe('text');
+    expect(result.value.type).toBe('object');
+    expect(result.value.data).toEqual({ count: 3 });
     expect(asText(result.value)).toBe('{"count":3}');
-    expect(JSON.parse(asText(result.value))).toEqual({ count: 3 });
     expect(result.stdout).toBe(asText(result.value));
   });
 });

@@ -84,9 +84,46 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - `__mlldPrimitiveMetadata` records wrapper info for AutoUnwrapManager
 - Results from JS code preserve `StructuredValue` when returned
 
+## Implementation Patterns
+
+### When to Unwrap
+
+**Use `asData()` at computation boundaries:**
+- JavaScript function arguments
+- Array/object operations (`.includes`, `.join`, `.length`)
+- Equality comparisons
+- `foreach` iteration
+
+**Use `asText()` at display boundaries:**
+- Template interpolation
+- Shell command arguments
+- CLI/API output
+- Log messages
+- Heredoc byte counts
+
+### Stage Boundary Rules
+
+- **Unwrap at stage boundaries only** - Stages work with plain JS values; use `asData()`/`asText()` right before execution
+- **Preserve metadata** - Don't strip `.metadata` or convert wrappers to raw JSON unless at display boundary
+- **Avoid deep unwrap helpers** - Call helpers at appropriate boundaries, not recursively through nested objects
+
+### Common Fix Patterns
+
+**Problem**: Function receives string instead of array
+**Fix**: Use `asData()` where value enters JS execution context
+
+**Problem**: Metadata lost through transformations
+**Fix**: Unwrap at stage boundaries only; preserve wrappers in storage/variables
+
+**Problem**: Nested wrappers cause issues
+**Fix**: Normalize exec arguments with `asText()` before template composition
+
+**Problem**: When-expression returns wrapped value to pipeline
+**Fix**: Convert StructuredValue results to primitives before tail modifiers
+
 ## Gotchas
 
-- NEVER call builtin array methods (`.includes`, `.join`, `.length`) directly on wrappers—use `asData()` first
+- NEVER call builtin array methods directly on wrappers—use `asData()` first
 - Templates ALWAYS stringify—use `asText()` for interpolation, not `.data`
 - Equality checks unwrap via `asData()` before comparison
 - When-expression actions should convert StructuredValue results to primitives before tail modifiers
