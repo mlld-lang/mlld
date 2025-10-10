@@ -10,7 +10,7 @@ import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
-import { wrapStructured, type StructuredValue } from '../../utils/structured-value';
+import { wrapStructured, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
 
 /**
  * Simplified pipeline context interface
@@ -146,7 +146,7 @@ export async function createStageEnvironment(
 async function setSimplifiedInputVariable(
   env: Environment,
   input: string,
-  structuredInput: StructuredValue,
+  structuredInput?: StructuredValue,
   format?: string
 ): Promise<void> {
   const inputSource: VariableSource = {
@@ -174,7 +174,7 @@ async function setSimplifiedInputVariable(
         isPipelineInput: true
       }
     );
-  } else if (structuredInput) {
+  } else if (structuredInput && isStructuredValue(structuredInput)) {
     const structuredVar = createStructuredValueVariable(
       'input',
       structuredInput,
