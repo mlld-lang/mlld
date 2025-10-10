@@ -4,4 +4,4 @@
 
 # Test conditional retry with fallback after max attempts
 
-valid-json: {"valid": "json"}
+valid-json: {"valid":"json"}

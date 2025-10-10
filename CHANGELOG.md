@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved content type detection to parse file contents for mlld directives across all module extensions, maintaining backward compatibility for files with non-standard extensions that contain valid mlld code.
 - Missing `--tag` on cli added
 - Update docs to cover modules, registry, resolvers
+- Preserved structured pipeline outputs across chained executables by wrapping JSON-like strings returned from JS/Node stages, preventing downstream stages from receiving `[object Object]` text (#435).
+- Updated run/exec structured handling and regression fixtures so batch/parallel pipelines, foreach separators, and retry fallbacks assert native arrays/objects instead of stringified JSON, closing the remaining gaps from #435 user scenarios.
 
 ### Added
 - Batch and condensed pipeline stages now receive the structured wrapper instead of raw strings, so helpers can work with native arrays/objects without JSON.parse.

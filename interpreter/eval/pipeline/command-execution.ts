@@ -3,7 +3,7 @@ import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
-import { asText, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
+import { asText, isStructuredValue, wrapStructured, type StructuredValue } from '../../utils/structured-value';
 import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
@@ -241,6 +241,43 @@ function wrapPipelineStructuredValue<T extends object>(parsedValue: T, original:
   });
 
   return proxy as T;
+}
+
+function wrapJsonLikeString(text: string): StructuredValue | null {
+  if (typeof text !== 'string') {
+    return null;
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const firstChar = trimmed[0];
+  if (firstChar !== '{' && firstChar !== '[') {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return wrapStructured(parsed, 'array', text);
+    }
+    if (parsed !== null && typeof parsed === 'object') {
+      return wrapStructured(parsed, 'object', text);
+    }
+  } catch (error) {
+    if (process.env.MLLD_DEBUG === 'true') {
+      try {
+        const codes = Array.from(trimmed).map(ch => ch.charCodeAt(0));
+        const details = error instanceof Error ? error.stack || error.message : String(error);
+        console.error('[wrapJsonLikeString] Failed to parse JSON-like text:', JSON.stringify(text), codes, details);
+      } catch {}
+    }
+    return null;
+  }
+
+  return null;
 }
 
 function createTypedPipelineVariable(
@@ -855,8 +892,7 @@ export async function executeCommandVariable(
     }
     
     const result = await env.executeCode(code, execDef.language || 'javascript', params);
-    
-    // If the function returns a PipelineInput object, extract the text
+
     if (result && typeof result === 'object' && 'text' in result && 'type' in result) {
       const text =
         typeof (result as any).text === 'string'
@@ -866,7 +902,19 @@ export async function executeCommandVariable(
         typeof (result as any).type === 'string' ? (result as any).type : undefined;
       return finalizeResult(result, { type, text });
     }
-    
+
+    if (
+      typeof result === 'string' &&
+      pipelineCtx !== undefined &&
+      !format &&
+      shouldAutoParsePipelineInput(stageLanguage)
+    ) {
+      const wrapped = wrapJsonLikeString(result);
+      if (wrapped) {
+        return finalizeResult(wrapped);
+      }
+    }
+
     return finalizeResult(result);
   } else if (execDef.type === 'template' && execDef.template) {
     // Interpolate template

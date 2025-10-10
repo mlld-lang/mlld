@@ -130,10 +130,13 @@ describe('Data handling accessors', () => {
     const info = JSON.parse(output.trim());
     expect(info).toEqual({
       isStructured: false,
-      valueType: 'string',
-      isArray: false,
+      valueType: 'object',
+      isArray: true,
       dataIsArray: false,
-      text: '[[1,2],[3,4]]'
+      text: [
+        [1, 2],
+        [3, 4]
+      ]
     });
   });
 
