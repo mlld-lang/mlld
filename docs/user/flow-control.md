@@ -201,12 +201,12 @@ Output:
 
 ### Batch Pipelines on Results
 
-Add `=> |` after the per-item expression to run a pipeline on the collected results.
+Add `=> |` after the per-item expression to run a pipeline on the collected results. The batch stage receives the gathered array (or object) directly, so helpers can work with native values while `.text` stays available if you need the string form.
 
 ```mlld
 /exe @wrap(x) = js { return [x, x * 2]; }
-/exe @flat(text) = js {
-  const values = JSON.parse(text);
+/exe @flat(values) = js {
+  if (!Array.isArray(values)) throw new Error('expected array input');
   return values.flat();
 }
 
@@ -229,8 +229,8 @@ Output:
 Batch pipelines can also collapse results to a single value:
 
 ```mlld
-/exe @sum(text) = js {
-  const values = JSON.parse(text);
+/exe @sum(values) = js {
+  if (!Array.isArray(values)) throw new Error('expected array input');
   return values.reduce((total, value) => total + Number(value), 0);
 }
 
@@ -247,8 +247,8 @@ Output:
 
 ```mlld
 /exe @duplicate(item) = js { return [item, item.toUpperCase()]; }
-/exe @flat(text) = js {
-  const values = JSON.parse(text);
+/exe @flat(values) = js {
+  if (!Array.isArray(values)) throw new Error('expected array input');
   return values.flat();
 }
 
