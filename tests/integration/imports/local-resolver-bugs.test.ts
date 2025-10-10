@@ -2,9 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ImportTestRunner } from './test-utils';
 
 /**
- * Test suite to reproduce the bug reported in party project:
- * https://github.com/mlld-lang/mlld/issues/XXX
- *
  * Issue: LOCAL resolver imports fail with "Import target is not a module"
  * even when the file contains valid mlld directives and exports.
  */

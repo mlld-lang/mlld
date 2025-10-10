@@ -1,4 +1,4 @@
-<MLLD_GUIDE version="2.0.0-rc55">
+<MLLD_GUIDE version="2.0.0-rc63">
 <TOC>
 <OVERVIEW> ......................... Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.
 <CORE_RULES>
@@ -227,6 +227,15 @@ Angle brackets load file contents (not filenames). Works in variables, templates
 /var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
 ```
 
+Data flows as native types:
+
+```mlld
+/var @cfg = <config.json>           # object, not JSON string
+/var @users = @cfg.users            # array access works directly
+/var @text = @cfg.text              # stringified JSON when needed
+/var @parsed = @text.data           # parse JSON string to object
+```
+
 Inline transforms (pipes):
 
 ```mlld
@@ -239,7 +248,7 @@ Security: By default, restricts to project root. Use `--allow-absolute` flag to 
 </RULE_8_FILE_LOADING>
 
 <RULE_9_IMPORTS>
-Module imports and path imports.
+Module imports and path imports. Import type keywords control resolution behavior.
 
 ```mlld
 # Modules (no quotes)
@@ -249,11 +258,19 @@ Module imports and path imports.
 # Paths (quote & resolver via <> when needed)
 /import { @readme } from "@base/README.md"
 /import { @helper } from "./utils.mld"
+
+# Import types (optional, auto-inferred when omitted)
+/import module { @api } from @corp/tools        # pre-installed registry module
+/import static { @config } from "./config.json"  # embedded at parse time
+/import live <https://status.api.io> as @status  # fresh every execution
+/import cached(30m) <https://feed.xml> as @feed  # cached with TTL (5m, 1h, 7d)
+/import local { @helper } from @me/dev-module    # llm/modules/ during dev
 ```
 
 - Prefix identifiers in the braces with `@` so imported names match runtime variable syntax (e.g., `{ @helper }`).
 - Aliases after `as` must include `@` (e.g., `as @utils`), and wildcard imports require `* as @alias`.
-- Keywords (`module`, `static`, `live`, `cached`, `local`) can precede `/import` for explicit type hints; when omitted mlld infers the safest option.
+- Import types: `module` (offline after install), `static` (zero runtime cost), `live` (always fresh), `cached(TTL)` (smart caching), `local` (dev modules).
+- When omitted, mlld infers the safest option.
 
 </RULE_9_IMPORTS>
 
@@ -271,13 +288,17 @@ Module imports and path imports.
 </RULE_10_WHEN_OVERVIEW>
 
 <RULE_11_ITERATION_OVERVIEW>
-Use `foreach` to transform collections; use `/for` to execute/collect. Full details in <CONTROL_FLOW>.
+Use `foreach` to transform collections; use `/for` to execute/collect. Batch pipelines (`=> |`) run after iteration completes. Full details in <CONTROL_FLOW>.
 
 ```mlld
 /var @names = ["Alice","Bob"]
 /exe @greet(name) = ::Hi @name!::
 /var @gs = foreach @greet(@names)
 /for @n in @names => show `Name: @n`
+
+# Batch pipelines - process collected results
+/var @numbers = for @n in [1,2,3,4] => @n => | @sum
+/var @pairs = foreach @duplicate(@data) => | @flatten
 
 # Optional parallel forms
 /for parallel @n in @names => show @n              # uses MLLD_PARALLEL_LIMIT (default 4)
@@ -462,10 +483,17 @@ Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and
 <PIPELINES>
 Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). All `/exe` functions work in pipelines (native mlld, JS, shell). Stages access context via `@ctx` and pipeline history via `@p`.
 
+JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments).
+
 ```mlld
 /var @users = run {cat users.json} | @json | @csv
 /exe @double(n) = js {(@n*2)}
 /var @x = run {echo "5"} | @double
+
+# JSON parsing variants
+/var @relaxed = @input | @json.loose   # JSON5: single quotes, trailing commas, comments
+/var @strict = @input | @json.strict   # strict JSON only
+/var @auto = @input | @json            # loose mode with helpful errors
 
 # Native mlld functions in pipelines
 /exe @filterHigh(items) = for @item in @items => when [
@@ -522,11 +550,17 @@ Parallel groups (`||`): run multiple commands as one stage in parallel.
 /var @capped = || @a() || @b() || @c() || @d() (2, 100ms)  # cap=2, 100ms pacing
 ```
 
+Data flows as native types:
+- Loaders return parsed data: `<file.json>` yields object, not JSON string
+- Pipeline stages (including batch `=> |`) receive native types: `@data | @process` passes arrays/objects
+- JavaScript functions get parsed values (no `JSON.parse()` needed)
+- Use `.text` for stringified form, `.data` for structured access
+
 Semantics:
 * Grouping: `A || B || C` forms a single stage executed concurrently with a global cap.
-* Leading `||`: Start pipeline with parallel execution, avoiding ambiguity with boolean OR. Only matches function calls `@func()`, not plain variables.
+* Leading `||`: Start pipeline with parallel execution. Syntax: `|| @a() || @b() || @c()` runs all three immediately.
 * Equivalence: `|| @a() || @b()` produces same AST as `"" with { pipeline: [[@a, @b]] }`
-* Ordering: Results preserve command order; next stage receives a JSON array string.
+* Ordering: Results preserve command order; next stage receives native array/object.
 * Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 * Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.
 * Rate limits: 429/"rate limit" errors trigger per-command exponential backoff.
@@ -777,7 +811,19 @@ Use /show foreach with options:
 # => 0=Hello Ann | 1=Hello Ben
 ```
 
-Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`. </ITERATION>
+Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`.
+
+Batch pipelines - process collected results after iteration:
+
+```mlld
+/var @numbers = for @n in [1,2,3,4] => @n => | @sum
+/var @pairs = foreach @duplicate(@data) => | @flatten
+/var @sorted = for @item in @items => @process(@item) => | @sortBy("priority")
+```
+
+Batch stage receives the collected array (or object) directly, so helpers work with native arrays/objects without manual parsing.
+
+</ITERATION>
 
 Parallel /for (optional):
 
@@ -819,7 +865,8 @@ Module-first philosophy: keep `.mld` files readable; move complexity into focuse
 * Create helpers via `/exe`, expose with shadow envs (per language, per module)
 * JS and Node have separate shadow environments; no cross-pollution
 * Prefer clear namespaces: `/import @corp/utils as @utils`
-* Declare module APIs explicitly: `/export { publicFn, helper }`; auto-export sticks around only as a compatibility fallback for modules that have not been updated yet
+* **Declare module APIs explicitly**: `/export { @publicFn, @helper }` is required; auto-export is legacy fallback
+* Install modules: `mlld install @author/module`, update with `mlld update`, view with `mlld ls`
 
 ```mlld
 ---
@@ -827,7 +874,7 @@ module: @myorg/github-utils
 description: GitHub operations
 ---
 
-/export { getPR, listIssues, createRelease }
+/export { @getPR, @listIssues, @createRelease }
 /exe @getPR(number, repo) = run {gh pr view ...}
 /exe @listIssues(repo) = run {gh issue list ...}
 /exe @createRelease(tag, notes) = run {gh release create ...}
@@ -886,8 +933,15 @@ Step-by-step & guarded execution:
 </PATTERNS>
 
 <CONFIGURATION>
+
+mlld uses dual configuration:
+- `mlld-config.json`: Your project settings (dependencies, preferences, resolver config)
+- `mlld-lock.json`: Auto-generated locks (versions, hashes, sources)
+
+Edit `mlld-config.json` manually; `mlld-lock.json` updates automatically.
+
 <ENVIRONMENT_VARIABLES>
-Allow environment variables in `mlld.lock.json` (prefix `MLLD_`), then import via `@input`.
+Allow environment variables in `mlld-lock.json` (prefix `MLLD_`), then import via `@input`.
 
 ```json
 {
@@ -932,7 +986,7 @@ Paths may be literal (single quotes), interpolated (double), or bare resolver na
 </PATHS_AND_URLS>
 
 <RESOLVERS>
-Configure prefixes that map to resolvers (LOCAL/HTTP/GITHUB/REGISTRY). Add via CLI or `mlld.lock.json`.
+Configure prefixes that map to resolvers (LOCAL/HTTP/GITHUB/REGISTRY). Add via CLI or `mlld-config.json`.
 
 CLI quick setup:
 

@@ -28,6 +28,7 @@ export interface PublishOptions {
   private?: boolean; // Force private repo publishing
   pr?: boolean; // Create PR even for private publish
   path?: string; // Custom path for private publish (default: mlld/modules/)
+  tag?: string; // Publish with custom tag (e.g., beta, alpha, stable)
 }
 
 export interface ModuleMetadata {

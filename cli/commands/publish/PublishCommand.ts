@@ -54,18 +54,23 @@ export class PublishCommand {
 
       // 2. Read and parse the module
       const moduleData = await this.readModule(modulePath);
-      
-      // 3. Detect git information
+
+      // 3. Validate tag name if provided
+      if (options.tag) {
+        this.validateTagName(options.tag);
+      }
+
+      // 4. Detect git information
       const gitInfo = await this.detectGitInfo(modulePath);
-      
-      // 4. Get user authentication
+
+      // 5. Get user authentication
       const octokit = await this.authService.getOctokit();
       const user = await this.authService.getGitHubUser();
-      
-      // 5. Build publishing context
+
+      // 6. Build publishing context
       const context = await this.buildContext(moduleData, gitInfo, options, user, octokit);
-      
-      // 6. Validate the module
+
+      // 7. Validate the module
       const validationResult = await this.validator.validate(moduleData, {
         user,
         octokit,
@@ -94,15 +99,15 @@ export class PublishCommand {
       
       // Update context with validation results
       context.validationResult = validationResult;
-      
-      // 7. Check for existing open PR first
+
+      // 8. Check for existing open PR first
       const existingPR = await this.findExistingPR(moduleData, user, octokit);
       if (existingPR && existingPR.state === 'open') {
         const handled = await this.handleExistingPR(existingPR, moduleData, options, user, octokit);
         if (handled) return; // Exit if PR was handled
       }
-      
-      // 8. Check if module exists in registry
+
+      // 9. Check if module exists in registry
       const registryModule = await this.checkRegistry(
         moduleData.metadata.name,
         user.login,
@@ -115,20 +120,20 @@ export class PublishCommand {
         if (published) return; // Exit if direct publish succeeded
         // Otherwise fall through to PR creation
       }
-      
-      // 9. Handle interactive decisions
+
+      // 10. Handle interactive decisions
       const finalContext = await this.prompter.collectDecisions(context);
-      
-      // 10. Apply metadata changes if needed
+
+      // 11. Apply metadata changes if needed
       if (finalContext.shouldCommitMetadata) {
         await this.commitMetadataChanges(finalContext);
       }
-      
-      // 11. Select and execute publishing strategy
+
+      // 12. Select and execute publishing strategy
       const strategy = this.selectStrategy(finalContext);
       const result = await strategy.execute(finalContext);
-      
-      // 12. Submit to registry if we have a registry entry
+
+      // 13. Submit to registry if we have a registry entry
       if (result.registryEntry && !options.dryRun) {
         await this.submitToRegistry(result.registryEntry, user, octokit, registryModule);
       }
@@ -154,11 +159,61 @@ export class PublishCommand {
     }
 
     const [, author, moduleName] = match;
-    
+
     // TODO: Implement registry resolution logic
     // This would look up the module in resolver configuration
     // For now, return null to indicate no special handling needed
     return null;
+  }
+
+  private validateTagName(tagName: string): void {
+    // Reserved tag names that cannot be used
+    const reservedTags = ['latest', 'stable'];
+
+    if (reservedTags.includes(tagName.toLowerCase())) {
+      throw new MlldError(`Tag name "${tagName}" is reserved and cannot be used`, {
+        code: 'INVALID_TAG_NAME',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    // Tag name must be alphanumeric with hyphens only
+    const validTagPattern = /^[a-z0-9-]+$/;
+    if (!validTagPattern.test(tagName)) {
+      throw new MlldError(
+        `Invalid tag name "${tagName}". Tag names must contain only lowercase letters, numbers, and hyphens`,
+        {
+          code: 'INVALID_TAG_NAME',
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+
+    // Tag name cannot contain @ symbol (conflicts with version syntax)
+    if (tagName.includes('@')) {
+      throw new MlldError(
+        `Invalid tag name "${tagName}". Tag names cannot contain the @ symbol`,
+        {
+          code: 'INVALID_TAG_NAME',
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+
+    // Tag name length constraints
+    if (tagName.length < 2) {
+      throw new MlldError(`Tag name "${tagName}" is too short. Minimum length is 2 characters`, {
+        code: 'INVALID_TAG_NAME',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+
+    if (tagName.length > 50) {
+      throw new MlldError(`Tag name "${tagName}" is too long. Maximum length is 50 characters`, {
+        code: 'INVALID_TAG_NAME',
+        severity: ErrorSeverity.Fatal
+      });
+    }
   }
 
   private async readModule(modulePath: string): Promise<ModuleData> {
@@ -863,11 +918,16 @@ export class PublishCommand {
         publishedBy: user.id
       };
       
-      // Tags (only for new modules)
-      const tags = {
+      // Tags (only for new modules or when custom tag specified)
+      const tags: Record<string, string> = {
         latest: registryEntry.version,
         stable: registryEntry.version
       };
+
+      // Add custom tag if specified
+      if (options.tag) {
+        tags[options.tag] = registryEntry.version;
+      }
       
       // 7. Create branch name
       const action = existingModule ? 'update' : 'add';
@@ -916,6 +976,12 @@ export class PublishCommand {
             path: metadataPath,
             content: JSON.stringify(metadata, null, 2) + '\n'
           });
+          files.push({
+            path: tagsPath,
+            content: JSON.stringify(tags, null, 2) + '\n'
+          });
+        } else if (options.tag) {
+          // Existing module with custom tag: update tags.json
           files.push({
             path: tagsPath,
             content: JSON.stringify(tags, null, 2) + '\n'

@@ -36,6 +36,7 @@ export function createPublishCommand() {
         private: flags.private || flags.p,
         pr: flags.pr,
         path: flags.path,
+        tag: flags.tag || flags.t,
       };
       
       try {
