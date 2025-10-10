@@ -4,6 +4,7 @@
 
 SlashVar "var directive"
   = DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+      helpers.debug("SlashVar matched", { id, value });
       helpers.debug('AtVar matched', { id, value, ending });
       
       // Extract ending components

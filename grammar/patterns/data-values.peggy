@@ -25,18 +25,21 @@ DataObjectLiteral "data object literal"
 
 // DATA OBJECT PROPERTIES - Build property map
 DataObjectProperties
-  = first:DataObjectProperty rest:(_ "," _ p:DataObjectProperty { return p; })* {
-      const result = {};
-      for (const [key, value] of [first, ...rest]) {
-        result[key] = value;
-      }
-      return result;
+  = first:DataObjectEntry rest:(_ "," _ p:DataObjectEntry { return p; })* {
+      return [first, ...rest];
     }
 
-// DATA OBJECT PROPERTY - Key-value pair
-DataObjectProperty
-  = key:PropertyKey _ ":" _ value:DataPropertyValue {
-      return [key, value];
+DataObjectEntry "object entry"
+  = spread:SpreadPattern {
+      helpers.debug('DataObjectEntry spread', { spread });
+      return spread;
+    }
+  / key:PropertyKey _ ":" _ value:DataPropertyValue {
+      return {
+        type: 'property',
+        key,
+        value
+      };
     }
 
 // DATA PROPERTY VALUE - All valid RHS expressions with data-specific handling

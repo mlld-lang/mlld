@@ -690,9 +690,17 @@ export const helpers = {
         };
     },
     createObjectFromProperties(properties, location) {
+        const entries = Array.isArray(properties) ? properties : [];
+        const propertyMap = {};
+        for (const entry of entries) {
+            if (entry && entry.type === 'property') {
+                propertyMap[entry.key] = entry.value;
+            }
+        }
         return {
             type: 'object',
-            properties: properties || {},
+            properties: propertyMap,
+            entries,
             location
         };
     },

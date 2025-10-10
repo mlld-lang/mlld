@@ -216,7 +216,7 @@ export async function evaluateVar(
     // Object literal: { "key": "value" }
     
     // Check if this object has complex values that need lazy evaluation
-    const isComplex = hasComplexValues(valueNode.properties);
+    const isComplex = hasComplexValues(valueNode.properties, valueNode.entries);
     
     if (isComplex) {
       // For complex objects, store the AST node for lazy evaluation
@@ -699,7 +699,7 @@ export async function evaluateVar(
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
     
   } else if (valueNode.type === 'object') {
-    const isComplex = hasComplexValues(valueNode.properties);
+    const isComplex = hasComplexValues(valueNode.properties, valueNode.entries);
     variable = createObjectVariable(identifier, resolvedValue, isComplex, source, metadata);
     
   } else if (valueNode.type === 'command') {
@@ -927,7 +927,7 @@ function hasComplexValues(properties: any): boolean {
         return true;
       }
       // Check if it's a nested object with complex values
-      if (value.type === 'object' && hasComplexValues(value.properties)) {
+      if (value.type === 'object' && hasComplexValues(value.properties, value.entries)) {
         return true;
       }
       // Check if it's an array with complex items

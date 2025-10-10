@@ -750,9 +750,17 @@ export const helpers = {
   },
   
   createObjectFromProperties(properties: any, location: any) {
+    const entries = Array.isArray(properties) ? properties : [];
+    const propertyMap: Record<string, unknown> = {};
+    for (const entry of entries) {
+      if (entry && entry.type === 'property') {
+        propertyMap[entry.key] = entry.value;
+      }
+    }
     return {
       type: 'object',
-      properties: properties || {},
+      properties: propertyMap,
+      entries,
       location
     };
   },

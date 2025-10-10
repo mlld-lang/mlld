@@ -2,7 +2,8 @@
 import type { 
   DataValue, 
   DataObjectValue, 
-  DataArrayValue
+  DataArrayValue, 
+  DataObjectEntry
 } from '@core/types/var';
 import {
   isDirectiveValue,
@@ -28,6 +29,7 @@ interface ASTArrayNode {
 interface ASTObjectNode {
   type: 'object';
   properties: Record<string, ASTDataNode>;
+  entries?: Array<{ type: string; [key: string]: any }>;
 }
 
 // Union type for all possible AST nodes that can be passed to parseDataValue

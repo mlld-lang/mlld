@@ -1,0 +1,3 @@
+# Test: Object Spread Empty
+
+{}

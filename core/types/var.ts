@@ -8,6 +8,7 @@
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
 import { DirectiveNode, ExecInvocation } from './nodes';
+import { VariableReferenceNode } from './primitives';
 import type { PipelineStage } from './run';
 
 /**
@@ -16,6 +17,20 @@ import type { PipelineStage } from './run';
 export interface DataObjectValue {
   type: 'object';
   properties: Record<string, DataValue>;
+  entries?: DataObjectEntry[];
+}
+
+export type DataObjectEntry = SpreadDefinition | ObjectProperty;
+
+export interface SpreadDefinition {
+  type: 'spread';
+  source: VariableReferenceNode;
+}
+
+export interface ObjectProperty {
+  type: 'property';
+  key: string;
+  value: DataValue;
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { Environment } from '../../env/Environment';
-import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
+import type { DataValue, DataObjectValue, DataArrayValue, DataObjectEntry, SpreadDefinition } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 
@@ -110,8 +110,18 @@ export class CollectionEvaluator {
    */
   private async evaluateObject(value: DataObjectValue, env: Environment): Promise<Record<string, any>> {
     const evaluatedObj: Record<string, any> = {};
-    
-    for (const [key, propValue] of Object.entries(value.properties)) {
+    const entries = this.getObjectEntries(value);
+
+    for (const entry of entries) {
+      if (entry.type === 'spread') {
+        const spreadResult = await this.evaluateSpreadEntry(entry, env);
+        for (const [spreadKey, spreadValue] of Object.entries(spreadResult)) {
+          evaluatedObj[spreadKey] = spreadValue;
+        }
+        continue;
+      }
+
+      const { key, value: propValue } = entry;
       try {
         let evaluated = await this.evaluateDataValue(propValue, env);
         if (isStructuredValue(evaluated)) {
@@ -119,11 +129,10 @@ export class CollectionEvaluator {
         }
         evaluatedObj[key] = evaluated;
       } catch (error) {
-        // Store error information but continue evaluating other properties
         evaluatedObj[key] = this.createPropertyError(key, error);
       }
     }
-    
+
     return evaluatedObj;
   }
 
