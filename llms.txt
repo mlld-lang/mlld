@@ -41,7 +41,8 @@
   <ENVIRONMENT_VARIABLES> .......... Allow-list, @input import.
   <FRONTMATTER> .................... Document metadata block.
   <PATHS_AND_URLS> ................. Quoted/unquoted paths, dynamic paths, URL loading.
-  <RESOLVERS> ...................... Prefixes, LOCAL/HTTP/GITHUB/REGISTRY; quick CLI setup.
+  <RESOLVERS> ...................... Prefixes, resolution priority, import type modifiers, custom config.
+  <REGISTRY> ....................... Publishing workflow, version management, required frontmatter, commands.
   <PUBLISHING_PRIVATE_MODULES> ..... Auth, repo layout, commands.
 </CONFIGURATION>
 <COMMON_MISTAKES>
@@ -861,25 +862,77 @@ mlld has no `return/exit`. Model outcomes with `/when` and flags.
 <MODULES>
 Module-first philosophy: keep `.mld` files readable; move complexity into focused modules that expose capabilities (like microservices). Avoid "kitchen sink" modules or side effects on import.
 
-* Use `/import` to compose capabilities
-* Create helpers via `/exe`, expose with shadow envs (per language, per module)
-* JS and Node have separate shadow environments; no cross-pollution
-* Prefer clear namespaces: `/import @corp/utils as @utils`
-* **Declare module APIs explicitly**: `/export { @publicFn, @helper }` is required; auto-export is legacy fallback
-* Install modules: `mlld install @author/module`, update with `mlld update`, view with `mlld ls`
+**Core patterns:**
+* `/export { @func }` required (auto-export is legacy)
+* Import types: `module` (registry), `static` (embedded), `live` (fresh), `cached(TTL)`, `local` (dev)
+* Namespace imports avoid collisions: `as @alias`
+* Executables preserve module scope (sibling variables always accessible)
+
+**Creating modules:**
 
 ```mlld
 ---
-module: @myorg/github-utils
-description: GitHub operations
+name: text-utils
+author: alice
+version: 1.0.0
+about: String helpers
+needs: [js]
+license: CC0
 ---
 
-/export { @getPR, @listIssues, @createRelease }
-/exe @getPR(number, repo) = run {gh pr view ...}
-/exe @listIssues(repo) = run {gh issue list ...}
-/exe @createRelease(tag, notes) = run {gh release create ...}
-/exe js = {}  # expose JS helpers if any
+/exe @upper(s) = js { return s.toUpperCase() }
+/exe @trim(s) = js { return s.trim() }
+/export { @upper, @trim }
 ```
+
+**Import patterns:**
+
+```mlld
+# Registry (offline after install)
+/import { @helper } from @alice/utils
+/import { @helper } from @alice/utils@1.0.0     # version
+/import { @helper } from @alice/utils@beta      # tag
+
+# Local files
+/import { @config } from "./config.mld"
+/import { @config } from <@base/config.mld>
+
+# Namespace (avoid collisions)
+/import @alice/utils as @alice
+/import @bob/utils as @bob
+
+# Import types (control caching)
+/import module { @api } from @corp/tools         # cached
+/import static { @prompt } from "./prompt.md"    # embedded
+/import live <https://status.io> as @status      # always fresh
+/import cached(1h) <https://feed> as @feed       # TTL cache
+/import local { @dev } from @alice/experimental  # llm/modules/
+```
+
+**Local development:**
+
+```bash
+mlld install @alice/utils              # install from registry
+mlld update @alice/utils               # update to latest
+mlld ls                                # list installed
+```
+
+Dev modules in `llm/modules/` (flat structure, matched by frontmatter):
+
+```
+llm/modules/
+├── my-utils.mld.md    # author: alice, name: experimental
+└── helpers.mld        # author: bob, name: tools
+```
+
+```mlld
+/import local { @helper } from @alice/experimental  # finds my-utils.mld.md
+```
+
+**Lock files (mlld-lock.json):**
+* Auto-generated, tracks versions/hashes
+* Commit to version control
+* Only registry modules validated
 
 </MODULES>
 
@@ -986,54 +1039,134 @@ Paths may be literal (single quotes), interpolated (double), or bare resolver na
 </PATHS_AND_URLS>
 
 <RESOLVERS>
-Configure prefixes that map to resolvers (LOCAL/HTTP/GITHUB/REGISTRY). Add via CLI or `mlld-config.json`.
+Prefixes map @ references to content sources. Built-in types: LOCAL, HTTP, GITHUB, REGISTRY.
 
-CLI quick setup:
+**Built-in resolvers (no config needed):**
+* `@author/module` → RegistryResolver (mlld-lang/registry)
+* `@base/file` → ProjectPathResolver (project root)
+* Local paths `./file.mld` → LocalResolver (fuzzy extension matching: .mld, .mld.md, .md)
+
+**Quick setup:**
 
 ```bash
-mlld setup
-mlld setup --github
-mlld alias --name shared --path ../shared-modules
-mlld alias --name desktop --path ~/Desktop --global
+mlld alias --name notes --path ~/notes              # local prefix
+mlld alias --name shared --path ../shared --global  # global prefix
+mlld setup --github                                 # private repo wizard
 ```
 
-Manual config:
+**Custom prefixes (mlld-config.json):**
 
 ```json
 {
-  "version": "1.0",
-  "config": {
-    "resolvers": {
-      "prefixes": [
-        {"prefix":"@lib/","resolver":"LOCAL","config":{"basePath":"./src/lib"}},
-        {"prefix":"@shared/","resolver":"LOCAL","config":{"basePath":"../shared-modules"}}
-      ]
-    }
-  },
-  "modules": {}
-}
-```
-
-GitHub (private):
-
-```json
-{
-  "version": "1.0",
-  "config": {
-    "resolvers": {
-      "prefixes": [
-        {
-          "prefix":"@myorg/",
-          "resolver":"GITHUB",
-          "config":{"repository":"myorg/private-mlld-modules","branch":"main","basePath":"modules"}
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@lib/",
+        "resolver": "LOCAL",
+        "config": { "basePath": "./src/lib" }
+      },
+      {
+        "prefix": "@company/",
+        "resolver": "GITHUB",
+        "config": {
+          "repository": "company/private-modules",
+          "branch": "main",
+          "basePath": "modules"
         }
-      ]
-    }
+      },
+      {
+        "prefix": "@cdn/",
+        "resolver": "HTTP",
+        "config": {
+          "baseUrl": "https://cdn.example.com",
+          "cacheTTL": "1h"
+        }
+      }
+    ]
   }
 }
 ```
 
+**Resolution priority:**
+1. Longest prefix match (`@company/auth/` beats `@company/`)
+2. Resolver priority values: ProjectPath (10) → Registry (15) → Local/HTTP/GitHub (20)
+3. Import types modify caching behavior, NOT which resolver is selected
+
+**Import type modifiers:**
+* Control caching/timing after resolver selects the source
+* Resolver chosen by prefix/pattern; import type adjusts caching semantics
+* `module` → content-addressed cache
+* `static` → embedded in AST
+* `live` → always fresh
+* `cached(TTL)` → time-based cache
+* `local` → dev mode (llm/modules/)
+
 </RESOLVERS>
+
+<REGISTRY>
+Public registry at github.com/mlld-lang/registry. First module requires PR review; updates publish directly.
+
+**Publishing workflow:**
+
+```bash
+# First time (creates PR)
+mlld publish my-tool.mld.md
+
+# Updates (direct publish after first merge)
+mlld publish my-tool.mld.md  # prompts for version bump
+
+# Force PR workflow
+mlld publish --pr my-tool.mld.md
+```
+
+**Required frontmatter:**
+
+```yaml
+---
+name: my-tool
+author: alice          # must match GitHub username
+version: 1.0.0
+about: Brief description
+needs: [js, sh]        # runtime dependencies
+needs-js: lodash       # package deps (legacy format)
+needs-sh: git, curl    # command deps (legacy format)
+license: CC0           # required
+---
+```
+
+**Version management:**
+
+```mlld
+/import { @helper } from @alice/utils           # latest
+/import { @helper } from @alice/utils@1.0.0     # exact version
+/import { @helper } from @alice/utils@^1.0.0    # semver range
+/import { @helper } from @alice/utils@beta      # tag
+```
+
+**Commands:**
+
+```bash
+mlld install @alice/utils              # install module
+mlld install @alice/utils@1.0.0        # specific version
+mlld update @alice/utils               # update to latest
+mlld outdated                          # check for updates
+mlld ls                                # list installed
+
+# Publishing
+mlld publish my-tool.mld.md            # publish/update
+mlld publish --tag beta my-tool.mld.md # publish with tag
+mlld publish --dry-run my-tool.mld.md  # validate without publishing
+
+# Auto-detect dependencies
+mlld add-needs my-tool.mld.md
+```
+
+**Module source:**
+* GitHub repo → references commit SHA (immutable)
+* Gist → automatic creation if not in repo
+* Version locked in mlld-lock.json
+
+</REGISTRY>
 
 <PUBLISHING_PRIVATE_MODULES>
 Authenticate and publish to your private repo.
