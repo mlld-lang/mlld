@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Related to #435 structured data edge cases
   - Fixed in `interpreter/eval/exec-invocation.ts:49`
 
+- **Shell interpolation of structured values**: Complex arrays/objects now survive shell argument quoting
+  - Shared `classifyShellValue` helper drives `/run` and `@exe` stdin/argument coercion
+  - Interpolation tracks both single- and double-quoted spans, avoiding `[object Object]` and broken quoting
+  - File-content fixtures confirm literal `$`, `` ` ``, and quotes reach the shell intact
+  - Covers regressions from #435 user scenario
+
 - **Variable assignment with wrapped values**: Fixed String() conversions producing [object Object]
   - Variable assignments now use `valueToString()` helper that checks for StructuredValue wrappers
   - Uses `asText()` helper for StructuredValue wrappers instead of naive String() conversion
