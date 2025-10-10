@@ -233,39 +233,46 @@ class ResolverCacheKeyStrategy implements CacheKeyStrategy {
 
 ### Resolution Architecture
 
-mlld uses import types to route to specific resolvers:
+All import resolution routes through `ResolverManager.resolve` (core/resolvers/ResolverManager.ts:321-520), which coordinates the following registered resolvers:
 
-1. **Import Type Routing** (Primary) - Based on explicit type declarations
-   - `module` → CachedModuleResolver (registry modules from cache)
-   - `static` → StaticResolver (parse-time embedding)
-   - `live` → RuntimeResolver (always fresh)
-   - `cached(TTL)` → TTLResolver (time-based caching)
-   - `local` → LocalDevResolver (direct filesystem)
+**Registered Resolvers** (core/registry/ModuleInstaller.ts:98-104):
+- `ProjectPathResolver` - Handles @base prefix for project-relative paths
+- `RegistryResolver` - Fetches from mlld registry (modules.json)
+- `LocalResolver` - Reads from filesystem (project-relative)
+- `GitHubResolver` - Resolves GitHub URLs/repo paths
+- `HTTPResolver` - Fetches via HTTP/HTTPS with caching
 
-2. **Prefix-Based Lookup** - For configured prefixes
+**Resolution Flow:**
+
+1. **Prefix-Based Lookup** - Primary routing mechanism
    - Checks mlld-config.json prefix configurations
-   - Maps prefixes like `@company/`, `@local/`, `@docs/` to resolver types
+   - Maps prefixes like `@author/`, `@base/`, `@company/` to resolver implementations
    - Each prefix has its own configuration (basePath, authentication, etc.)
+   - Example: `@alice/utils` → RegistryResolver, `@base/file` → ProjectPathResolver
 
-3. **Built-in Resolver Lookup** - For built-in resolvers
-   - Direct resolver matching (now, debug, input, base)
+2. **Built-in Resolver Lookup** - For built-in function resolvers
+   - Direct resolver matching (now, debug, input)
    - These don't use prefixes - they ARE the resolver
+   - Example: `@now` → NowResolver
 
-This design provides explicit control over resolution behavior while maintaining flexible configuration.
+3. **Import Type Modifiers** - Control caching/timing behavior
+   - Import types (module/static/live/cached/local) modify how resolved content is cached
+   - They do NOT select different resolvers - they modify resolver behavior
+   - All types route through the same ResolverManager → resolver flow
 
-### Import Type Resolver Priority
+**Import Type Behavior:**
 
-Import types define explicit resolver routing, eliminating priority-based fallback:
+Import types control caching and timing, not resolver selection:
 
 ```
-module     → CachedModuleResolver (cache-only)
-static     → StaticResolver (parse-time)
-live       → RuntimeResolver (always fresh)
-cached(TTL) → TTLResolver (time-based)
-local      → LocalDevResolver (filesystem)
+module      → Standard registry resolution with content-addressed cache
+static      → Content embedded in AST at evaluation time
+live        → Always fetch fresh, bypass cache
+cached(TTL) → Time-based cache with specified TTL
+local       → Development mode (scans llm/modules/ directory)
 ```
 
-When no import type specified, inference rules determine the appropriate resolver based on source patterns.
+When no import type specified, inference rules determine caching behavior based on source patterns.
 
 **Resolution Algorithm:**
 ```typescript
@@ -563,8 +570,8 @@ Suggestions: YYYY-MM-DD, HH:mm:ss, iso, unix
 
 LocalResolver failed: File not found: modules/utils.mld
 Did you mean:
-  - modules/utils.mlld.md
-  - modules/string.mld.md
+  - modules/utils.mld.md
+  - modules/string-utils.mld
 ```
 
 ## Built-in Resolver Implementations

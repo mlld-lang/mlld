@@ -1,5 +1,5 @@
-/exe @sum(text) = js {
-  const values = JSON.parse(text);
+/exe @sum(values) = js {
+  if (!Array.isArray(values)) throw new Error('expected array input');
   return values.reduce((total, value) => total + Number(value), 0);
 }
 

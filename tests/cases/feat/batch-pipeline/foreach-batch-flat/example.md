@@ -1,9 +1,11 @@
 /exe @duplicate(item) = js {
   return [item, item.toUpperCase()];
 }
-/exe @flat(text) = js {
-  const parsed = JSON.parse(text);
-  return parsed.flat();
+/exe @flat(values) = js {
+  if (!Array.isArray(values)) {
+    throw new Error('expected array input');
+  }
+  return values.flat();
 }
 
 /var @names = ["one", "two"]

@@ -142,6 +142,7 @@ During evaluation:
 
 - `evaluateForExpression` gathers iteration results, wraps them with `createArrayVariable('for-batch-input', ...)`, and passes them to `processPipeline`. The return value may be an array, scalar, or object; the evaluator selects the appropriate variable factory so metadata and downstream resolution stay consistent.
 - `evaluateForeachCommand` follows the same flow, returning the transformed value to every caller (core interpreter, lazy evaluation, `evaluateForeachAsText`, etc.). The dedicated data-value evaluator now delegates to this function to avoid drift.
+- `createStageEnvironment` seeds `@input` with the original `StructuredValue`, giving batch stages (and `=> ||` branches) direct access to `.data` while `.text` remains available for string-oriented helpers.
 
 Batch pipelines reuse the existing retry logic: they execute after iteration completes, never mark themselves retryable, and inherit parallel stage semantics (including `||` groups and caps). Tests under `tests/cases/feat/batch-pipeline/` cover flattening, scalar aggregation, mixed per-item/batch phases, and foreach ordering.
 

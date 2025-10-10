@@ -5,6 +5,21 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc63]
+### Fixed
+- Fixed local resolver to recognize all mlld extensions as modules when they contain directives. Previously only .mlld.md files were explicitly treated as modules, causing "Import target is not a module" errors when importing .mld files via custom resolver prefixes like @context/.
+- Improved content type detection to parse file contents for mlld directives across all module extensions, maintaining backward compatibility for files with non-standard extensions that contain valid mlld code.
+- Missing `--tag` on cli added
+- Update docs to cover modules, registry, resolvers
+
+### Added
+- Batch and condensed pipeline stages now receive the structured wrapper instead of raw strings, so helpers can work with native arrays/objects without JSON.parse.
+- **Custom tag support for publishing**: `mlld publish --tag <name>` allows publishing modules with custom version tags
+  - Publish with beta/alpha tags: `mlld publish module.mld --tag beta`
+  - Tag validation ensures alphanumeric + hyphens only, 2-50 character length
+  - Reserved tags (`latest`, `stable`) are rejected with clear error messages
+  - Users can import using custom tags: `/import { @helper } from @alice/utils@beta`
+
 ## [2.0.0-rc62]
 
 ### Added

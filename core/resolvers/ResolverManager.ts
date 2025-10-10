@@ -201,17 +201,19 @@ export class ResolverManager {
    */
   private async scanLocalModules(basePath: string): Promise<LocalModuleInfo[]> {
     const modules: LocalModuleInfo[] = [];
-    
+
     try {
       const files = await fs.readdir(basePath);
-      
+
       for (const file of files) {
-        if (file.endsWith('.mlld.md') || file.endsWith('.mld.md')) {
+        // Check for all valid mlld extensions
+        if (file.endsWith('.mlld.md') || file.endsWith('.mld.md') ||
+            file.endsWith('.mld') || file.endsWith('.md')) {
           try {
             const filePath = path.join(basePath, file);
             const content = await fs.readFile(filePath, 'utf8');
             const metadata = this.extractMetadata(content);
-            
+
             if (metadata?.name && metadata?.author) {
               modules.push({
                 name: metadata.name,
@@ -227,7 +229,7 @@ export class ResolverManager {
     } catch (error) {
       logger.debug(`Failed to scan directory ${basePath}:`, error);
     }
-    
+
     return modules;
   }
 

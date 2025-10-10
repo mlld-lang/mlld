@@ -1,4 +1,4 @@
-<MLLD_GUIDE version="2.0.0-rc55">
+<MLLD_GUIDE version="2.0.0-rc63">
 <TOC>
 <OVERVIEW> ......................... Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.
 <CORE_RULES>
@@ -41,7 +41,8 @@
   <ENVIRONMENT_VARIABLES> .......... Allow-list, @input import.
   <FRONTMATTER> .................... Document metadata block.
   <PATHS_AND_URLS> ................. Quoted/unquoted paths, dynamic paths, URL loading.
-  <RESOLVERS> ...................... Prefixes, LOCAL/HTTP/GITHUB/REGISTRY; quick CLI setup.
+  <RESOLVERS> ...................... Prefixes, resolution priority, import type modifiers, custom config.
+  <REGISTRY> ....................... Publishing workflow, version management, required frontmatter, commands.
   <PUBLISHING_PRIVATE_MODULES> ..... Auth, repo layout, commands.
 </CONFIGURATION>
 <COMMON_MISTAKES>
@@ -227,6 +228,15 @@ Angle brackets load file contents (not filenames). Works in variables, templates
 /var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
 ```
 
+Data flows as native types:
+
+```mlld
+/var @cfg = <config.json>           # object, not JSON string
+/var @users = @cfg.users            # array access works directly
+/var @text = @cfg.text              # stringified JSON when needed
+/var @parsed = @text.data           # parse JSON string to object
+```
+
 Inline transforms (pipes):
 
 ```mlld
@@ -239,7 +249,7 @@ Security: By default, restricts to project root. Use `--allow-absolute` flag to 
 </RULE_8_FILE_LOADING>
 
 <RULE_9_IMPORTS>
-Module imports and path imports.
+Module imports and path imports. Import type keywords control resolution behavior.
 
 ```mlld
 # Modules (no quotes)
@@ -249,11 +259,19 @@ Module imports and path imports.
 # Paths (quote & resolver via <> when needed)
 /import { @readme } from "@base/README.md"
 /import { @helper } from "./utils.mld"
+
+# Import types (optional, auto-inferred when omitted)
+/import module { @api } from @corp/tools        # pre-installed registry module
+/import static { @config } from "./config.json"  # embedded at parse time
+/import live <https://status.api.io> as @status  # fresh every execution
+/import cached(30m) <https://feed.xml> as @feed  # cached with TTL (5m, 1h, 7d)
+/import local { @helper } from @me/dev-module    # llm/modules/ during dev
 ```
 
 - Prefix identifiers in the braces with `@` so imported names match runtime variable syntax (e.g., `{ @helper }`).
 - Aliases after `as` must include `@` (e.g., `as @utils`), and wildcard imports require `* as @alias`.
-- Keywords (`module`, `static`, `live`, `cached`, `local`) can precede `/import` for explicit type hints; when omitted mlld infers the safest option.
+- Import types: `module` (offline after install), `static` (zero runtime cost), `live` (always fresh), `cached(TTL)` (smart caching), `local` (dev modules).
+- When omitted, mlld infers the safest option.
 
 </RULE_9_IMPORTS>
 
@@ -271,13 +289,17 @@ Module imports and path imports.
 </RULE_10_WHEN_OVERVIEW>
 
 <RULE_11_ITERATION_OVERVIEW>
-Use `foreach` to transform collections; use `/for` to execute/collect. Full details in <CONTROL_FLOW>.
+Use `foreach` to transform collections; use `/for` to execute/collect. Batch pipelines (`=> |`) run after iteration completes. Full details in <CONTROL_FLOW>.
 
 ```mlld
 /var @names = ["Alice","Bob"]
 /exe @greet(name) = ::Hi @name!::
 /var @gs = foreach @greet(@names)
 /for @n in @names => show `Name: @n`
+
+# Batch pipelines - process collected results
+/var @numbers = for @n in [1,2,3,4] => @n => | @sum
+/var @pairs = foreach @duplicate(@data) => | @flatten
 
 # Optional parallel forms
 /for parallel @n in @names => show @n              # uses MLLD_PARALLEL_LIMIT (default 4)
@@ -462,10 +484,17 @@ Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and
 <PIPELINES>
 Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). All `/exe` functions work in pipelines (native mlld, JS, shell). Stages access context via `@ctx` and pipeline history via `@p`.
 
+JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments).
+
 ```mlld
 /var @users = run {cat users.json} | @json | @csv
 /exe @double(n) = js {(@n*2)}
 /var @x = run {echo "5"} | @double
+
+# JSON parsing variants
+/var @relaxed = @input | @json.loose   # JSON5: single quotes, trailing commas, comments
+/var @strict = @input | @json.strict   # strict JSON only
+/var @auto = @input | @json            # loose mode with helpful errors
 
 # Native mlld functions in pipelines
 /exe @filterHigh(items) = for @item in @items => when [
@@ -522,11 +551,17 @@ Parallel groups (`||`): run multiple commands as one stage in parallel.
 /var @capped = || @a() || @b() || @c() || @d() (2, 100ms)  # cap=2, 100ms pacing
 ```
 
+Data flows as native types:
+- Loaders return parsed data: `<file.json>` yields object, not JSON string
+- Pipeline stages (including batch `=> |`) receive native types: `@data | @process` passes arrays/objects
+- JavaScript functions get parsed values (no `JSON.parse()` needed)
+- Use `.text` for stringified form, `.data` for structured access
+
 Semantics:
 * Grouping: `A || B || C` forms a single stage executed concurrently with a global cap.
-* Leading `||`: Start pipeline with parallel execution, avoiding ambiguity with boolean OR. Only matches function calls `@func()`, not plain variables.
+* Leading `||`: Start pipeline with parallel execution. Syntax: `|| @a() || @b() || @c()` runs all three immediately.
 * Equivalence: `|| @a() || @b()` produces same AST as `"" with { pipeline: [[@a, @b]] }`
-* Ordering: Results preserve command order; next stage receives a JSON array string.
+* Ordering: Results preserve command order; next stage receives native array/object.
 * Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 * Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.
 * Rate limits: 429/"rate limit" errors trigger per-command exponential backoff.
@@ -777,7 +812,19 @@ Use /show foreach with options:
 # => 0=Hello Ann | 1=Hello Ben
 ```
 
-Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`. </ITERATION>
+Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`.
+
+Batch pipelines - process collected results after iteration:
+
+```mlld
+/var @numbers = for @n in [1,2,3,4] => @n => | @sum
+/var @pairs = foreach @duplicate(@data) => | @flatten
+/var @sorted = for @item in @items => @process(@item) => | @sortBy("priority")
+```
+
+Batch stage receives the collected array (or object) directly, so helpers work with native arrays/objects without manual parsing.
+
+</ITERATION>
 
 Parallel /for (optional):
 
@@ -815,24 +862,77 @@ mlld has no `return/exit`. Model outcomes with `/when` and flags.
 <MODULES>
 Module-first philosophy: keep `.mld` files readable; move complexity into focused modules that expose capabilities (like microservices). Avoid "kitchen sink" modules or side effects on import.
 
-* Use `/import` to compose capabilities
-* Create helpers via `/exe`, expose with shadow envs (per language, per module)
-* JS and Node have separate shadow environments; no cross-pollution
-* Prefer clear namespaces: `/import @corp/utils as @utils`
-* Declare module APIs explicitly: `/export { publicFn, helper }`; auto-export sticks around only as a compatibility fallback for modules that have not been updated yet
+**Core patterns:**
+* `/export { @func }` required (auto-export is legacy)
+* Import types: `module` (registry), `static` (embedded), `live` (fresh), `cached(TTL)`, `local` (dev)
+* Namespace imports avoid collisions: `as @alias`
+* Executables preserve module scope (sibling variables always accessible)
+
+**Creating modules:**
 
 ```mlld
 ---
-module: @myorg/github-utils
-description: GitHub operations
+name: text-utils
+author: alice
+version: 1.0.0
+about: String helpers
+needs: [js]
+license: CC0
 ---
 
-/export { getPR, listIssues, createRelease }
-/exe @getPR(number, repo) = run {gh pr view ...}
-/exe @listIssues(repo) = run {gh issue list ...}
-/exe @createRelease(tag, notes) = run {gh release create ...}
-/exe js = {}  # expose JS helpers if any
+/exe @upper(s) = js { return s.toUpperCase() }
+/exe @trim(s) = js { return s.trim() }
+/export { @upper, @trim }
 ```
+
+**Import patterns:**
+
+```mlld
+# Registry (offline after install)
+/import { @helper } from @alice/utils
+/import { @helper } from @alice/utils@1.0.0     # version
+/import { @helper } from @alice/utils@beta      # tag
+
+# Local files
+/import { @config } from "./config.mld"
+/import { @config } from <@base/config.mld>
+
+# Namespace (avoid collisions)
+/import @alice/utils as @alice
+/import @bob/utils as @bob
+
+# Import types (control caching)
+/import module { @api } from @corp/tools         # cached
+/import static { @prompt } from "./prompt.md"    # embedded
+/import live <https://status.io> as @status      # always fresh
+/import cached(1h) <https://feed> as @feed       # TTL cache
+/import local { @dev } from @alice/experimental  # llm/modules/
+```
+
+**Local development:**
+
+```bash
+mlld install @alice/utils              # install from registry
+mlld update @alice/utils               # update to latest
+mlld ls                                # list installed
+```
+
+Dev modules in `llm/modules/` (flat structure, matched by frontmatter):
+
+```
+llm/modules/
+├── my-utils.mld.md    # author: alice, name: experimental
+└── helpers.mld        # author: bob, name: tools
+```
+
+```mlld
+/import local { @helper } from @alice/experimental  # finds my-utils.mld.md
+```
+
+**Lock files (mlld-lock.json):**
+* Auto-generated, tracks versions/hashes
+* Commit to version control
+* Only registry modules validated
 
 </MODULES>
 
@@ -886,8 +986,15 @@ Step-by-step & guarded execution:
 </PATTERNS>
 
 <CONFIGURATION>
+
+mlld uses dual configuration:
+- `mlld-config.json`: Your project settings (dependencies, preferences, resolver config)
+- `mlld-lock.json`: Auto-generated locks (versions, hashes, sources)
+
+Edit `mlld-config.json` manually; `mlld-lock.json` updates automatically.
+
 <ENVIRONMENT_VARIABLES>
-Allow environment variables in `mlld.lock.json` (prefix `MLLD_`), then import via `@input`.
+Allow environment variables in `mlld-lock.json` (prefix `MLLD_`), then import via `@input`.
 
 ```json
 {
@@ -932,54 +1039,134 @@ Paths may be literal (single quotes), interpolated (double), or bare resolver na
 </PATHS_AND_URLS>
 
 <RESOLVERS>
-Configure prefixes that map to resolvers (LOCAL/HTTP/GITHUB/REGISTRY). Add via CLI or `mlld.lock.json`.
+Prefixes map @ references to content sources. Built-in types: LOCAL, HTTP, GITHUB, REGISTRY.
 
-CLI quick setup:
+**Built-in resolvers (no config needed):**
+* `@author/module` → RegistryResolver (mlld-lang/registry)
+* `@base/file` → ProjectPathResolver (project root)
+* Local paths `./file.mld` → LocalResolver (fuzzy extension matching: .mld, .mld.md, .md)
+
+**Quick setup:**
 
 ```bash
-mlld setup
-mlld setup --github
-mlld alias --name shared --path ../shared-modules
-mlld alias --name desktop --path ~/Desktop --global
+mlld alias --name notes --path ~/notes              # local prefix
+mlld alias --name shared --path ../shared --global  # global prefix
+mlld setup --github                                 # private repo wizard
 ```
 
-Manual config:
+**Custom prefixes (mlld-config.json):**
 
 ```json
 {
-  "version": "1.0",
-  "config": {
-    "resolvers": {
-      "prefixes": [
-        {"prefix":"@lib/","resolver":"LOCAL","config":{"basePath":"./src/lib"}},
-        {"prefix":"@shared/","resolver":"LOCAL","config":{"basePath":"../shared-modules"}}
-      ]
-    }
-  },
-  "modules": {}
-}
-```
-
-GitHub (private):
-
-```json
-{
-  "version": "1.0",
-  "config": {
-    "resolvers": {
-      "prefixes": [
-        {
-          "prefix":"@myorg/",
-          "resolver":"GITHUB",
-          "config":{"repository":"myorg/private-mlld-modules","branch":"main","basePath":"modules"}
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@lib/",
+        "resolver": "LOCAL",
+        "config": { "basePath": "./src/lib" }
+      },
+      {
+        "prefix": "@company/",
+        "resolver": "GITHUB",
+        "config": {
+          "repository": "company/private-modules",
+          "branch": "main",
+          "basePath": "modules"
         }
-      ]
-    }
+      },
+      {
+        "prefix": "@cdn/",
+        "resolver": "HTTP",
+        "config": {
+          "baseUrl": "https://cdn.example.com",
+          "cacheTTL": "1h"
+        }
+      }
+    ]
   }
 }
 ```
 
+**Resolution priority:**
+1. Longest prefix match (`@company/auth/` beats `@company/`)
+2. Resolver priority values: ProjectPath (10) → Registry (15) → Local/HTTP/GitHub (20)
+3. Import types modify caching behavior, NOT which resolver is selected
+
+**Import type modifiers:**
+* Control caching/timing after resolver selects the source
+* Resolver chosen by prefix/pattern; import type adjusts caching semantics
+* `module` → content-addressed cache
+* `static` → embedded in AST
+* `live` → always fresh
+* `cached(TTL)` → time-based cache
+* `local` → dev mode (llm/modules/)
+
 </RESOLVERS>
+
+<REGISTRY>
+Public registry at github.com/mlld-lang/registry. First module requires PR review; updates publish directly.
+
+**Publishing workflow:**
+
+```bash
+# First time (creates PR)
+mlld publish my-tool.mld.md
+
+# Updates (direct publish after first merge)
+mlld publish my-tool.mld.md  # prompts for version bump
+
+# Force PR workflow
+mlld publish --pr my-tool.mld.md
+```
+
+**Required frontmatter:**
+
+```yaml
+---
+name: my-tool
+author: alice          # must match GitHub username
+version: 1.0.0
+about: Brief description
+needs: [js, sh]        # runtime dependencies
+needs-js: lodash       # package deps (legacy format)
+needs-sh: git, curl    # command deps (legacy format)
+license: CC0           # required
+---
+```
+
+**Version management:**
+
+```mlld
+/import { @helper } from @alice/utils           # latest
+/import { @helper } from @alice/utils@1.0.0     # exact version
+/import { @helper } from @alice/utils@^1.0.0    # semver range
+/import { @helper } from @alice/utils@beta      # tag
+```
+
+**Commands:**
+
+```bash
+mlld install @alice/utils              # install module
+mlld install @alice/utils@1.0.0        # specific version
+mlld update @alice/utils               # update to latest
+mlld outdated                          # check for updates
+mlld ls                                # list installed
+
+# Publishing
+mlld publish my-tool.mld.md            # publish/update
+mlld publish --tag beta my-tool.mld.md # publish with tag
+mlld publish --dry-run my-tool.mld.md  # validate without publishing
+
+# Auto-detect dependencies
+mlld add-needs my-tool.mld.md
+```
+
+**Module source:**
+* GitHub repo → references commit SHA (immutable)
+* Gist → automatic creation if not in repo
+* Version locked in mlld-lock.json
+
+</REGISTRY>
 
 <PUBLISHING_PRIVATE_MODULES>
 Authenticate and publish to your private repo.
