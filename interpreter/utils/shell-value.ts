@@ -187,6 +187,8 @@ function looksLikeStructuredString(value: string): boolean {
   }
 
   // Require at least one structural character between the delimiters
+  // NOTE: This is a heuristic quick check. We still rely on JSON5/JSON parsing later;
+  // the goal here is to avoid eagerly stringifying obviously structured payloads.
   const inner = trimmed.slice(1, -1);
   return /[{}\[\]:,]/.test(inner);
 }

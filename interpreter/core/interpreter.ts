@@ -880,19 +880,22 @@ export async function interpolate(
 
   const updateQuoteState = (fragment: string): void => {
     if (!fragment) return;
+    let backslashCount = 0;
     for (let i = 0; i < fragment.length; i++) {
       const char = fragment[i];
-      if (char !== '"' && char !== '\'') continue;
-      let backslashCount = 0;
-      for (let j = i - 1; j >= 0 && fragment[j] === '\\'; j--) {
+      if (char === '\\') {
         backslashCount++;
+        continue;
       }
-      const isEscaped = backslashCount % 2 === 1;
-      if (char === '"' && !withinSingleQuotes && !isEscaped) {
-        withinDoubleQuotes = !withinDoubleQuotes;
-      } else if (char === '\'' && !withinDoubleQuotes && !isEscaped) {
-        withinSingleQuotes = !withinSingleQuotes;
+      if (char === '"' || char === '\'') {
+        const isEscaped = backslashCount % 2 === 1;
+        if (char === '"' && !withinSingleQuotes && !isEscaped) {
+          withinDoubleQuotes = !withinDoubleQuotes;
+        } else if (char === '\'' && !withinDoubleQuotes && !isEscaped) {
+          withinSingleQuotes = !withinSingleQuotes;
+        }
       }
+      backslashCount = 0;
     }
   };
 

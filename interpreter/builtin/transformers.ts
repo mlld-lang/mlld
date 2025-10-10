@@ -37,7 +37,8 @@ function makeJsonTransformer(mode: 'loose' | 'strict') {
       try {
         return JSON5.parse(input);
       } catch {
-        // Fall through to strict parsing + markdown conversion
+        // Fall through to the legacy path (strict JSON then markdown conversion)
+        // so behaviour stays consistent with pre-JSON5 parsing.
       }
     }
 

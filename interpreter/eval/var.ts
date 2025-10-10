@@ -29,7 +29,7 @@ import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured
  *      for StructuredValue wrappers first to avoid producing [object Object]
  */
 function valueToString(value: unknown): string {
-  if (value === null) return '';
+  if (value === null) return ''; // Preserve legacy behaviour: null interpolates to empty
   if (value === undefined) return 'undefined'; // Preserve 'undefined' string for display
   if (typeof value === 'string') return value;
   if (isStructuredValue(value)) return asText(value);
