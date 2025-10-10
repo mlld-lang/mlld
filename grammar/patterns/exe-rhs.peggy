@@ -472,15 +472,16 @@ WhenExpressionAction
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:WhenRHSAction {
-      helpers.debug('ForExpressionExe matched', { pattern, action });
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:WhenRHSAction batchPipe:ForBatchPipeline? {
+      helpers.debug('ForExpressionExe matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
         action,  // Note: accepts WhenRHSAction instead of VarRHSContent
         location(),
-        opts || null
+        opts || null,
+        batchPipe || null
       );
     }
   // Error recovery

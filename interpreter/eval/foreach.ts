@@ -25,7 +25,7 @@ function hasArrayData(value: unknown): value is { data: unknown[] } {
 export async function evaluateForeachCommand(
   foreachExpr: any,
   env: Environment
-): Promise<any[]> {
+): Promise<any> {
   // Debug logging
   if (process.env.MLLD_DEBUG === 'true') {
     logger.debug('evaluateForeachCommand called with:', { foreachExpr });
@@ -170,7 +170,63 @@ export async function evaluateForeachCommand(
     }
   }
   
-  return results;
+  let finalResults: unknown = results;
+
+  const withClause = node.with || foreachExpr.with;
+  const batchPipelineConfig =
+    node.batchPipeline ||
+    withClause?.batchPipeline ||
+    foreachExpr.batchPipeline;
+
+  const batchStages = Array.isArray(batchPipelineConfig)
+    ? batchPipelineConfig
+    : batchPipelineConfig?.pipeline;
+
+  if (batchStages && batchStages.length > 0) {
+    const { processPipeline } = await import('./pipeline/unified-processor');
+    const { createArrayVariable } = await import('@core/types/variable');
+
+    const batchInput = createArrayVariable(
+      'foreach-batch-input',
+      results,
+      false,
+      {
+        directive: 'foreach',
+        syntax: 'expression',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      { isBatchInput: true }
+    );
+
+    try {
+      const pipelineResult = await processPipeline({
+        value: batchInput,
+        env,
+        pipeline: batchStages,
+        identifier: `foreach-batch-${commandName}`,
+        location: foreachExpr.location,
+        isRetryable: false
+      });
+
+      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+
+      if (isStructuredValue(pipelineResult)) {
+        finalResults = asData(pipelineResult);
+      } else if (isVariable(pipelineResult)) {
+        finalResults = await extractVariableValue(pipelineResult, env);
+      } else {
+        finalResults = pipelineResult;
+      }
+    } catch (error) {
+      logger.warn(
+        `Batch pipeline failed for foreach: ${error instanceof Error ? error.message : String(error)}`
+      );
+      finalResults = results;
+    }
+  }
+
+  return finalResults;
 }
 
 /**
@@ -179,7 +235,7 @@ export async function evaluateForeachCommand(
 export async function evaluateForeachSection(
   foreachExpr: any,
   env: Environment
-): Promise<any[]> {
+): Promise<any> {
   // Implementation for section-based foreach
   // This would handle cases like: foreach "section" from [path](@array)
   // For now, delegate to command-based foreach

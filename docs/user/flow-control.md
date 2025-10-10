@@ -199,6 +199,74 @@ Output:
 ["Alice, welcome to the team!", "Bob, welcome to the team!", "Charlie, welcome to the team!"]
 ```
 
+### Batch Pipelines on Results
+
+Add `=> |` after the per-item expression to run a pipeline on the collected results.
+
+```mlld
+/exe @wrap(x) = js { return [x, x * 2]; }
+/exe @flat(text) = js {
+  const values = JSON.parse(text);
+  return values.flat();
+}
+
+/var @pairs = for @x in [1, 2, 3] => @wrap(@x) => | @flat
+/show @pairs
+```
+
+Output:
+```
+[
+  1,
+  2,
+  2,
+  4,
+  3,
+  6
+]
+```
+
+Batch pipelines can also collapse results to a single value:
+
+```mlld
+/exe @sum(text) = js {
+  const values = JSON.parse(text);
+  return values.reduce((total, value) => total + Number(value), 0);
+}
+
+/var @total = for @n in [1, 2, 3, 4] => @n => | @sum
+/show @total
+```
+
+Output:
+```
+10
+```
+
+`foreach` uses the same syntax:
+
+```mlld
+/exe @duplicate(item) = js { return [item, item.toUpperCase()]; }
+/exe @flat(text) = js {
+  const values = JSON.parse(text);
+  return values.flat();
+}
+
+/var @names = ["one", "two"]
+/var @result = foreach @duplicate(@names) => | @flat
+/show @result
+```
+
+Output:
+```
+[
+  "one",
+  "ONE",
+  "two",
+  "TWO"
+]
+```
+
 Multiple parameters:
 
 ```mlld

@@ -8,6 +8,7 @@
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
 import { DirectiveNode, ExecInvocation } from './nodes';
+import type { PipelineStage } from './run';
 
 /**
  * Data object value structure for var directive
@@ -29,9 +30,40 @@ export interface DataArrayValue {
  * Foreach command expression structure
  */
 export interface ForeachCommandExpression {
-  type: 'foreach';
-  command: ExecInvocation;
-  arrays: (ContentNodeArray | DirectiveNode)[];
+  type: 'foreach-command';
+  value: {
+    type: 'foreach';
+    execInvocation: ExecInvocation;
+    arrays: (ContentNodeArray | DirectiveNode)[];
+    with?: ForeachWithOptions;
+    batchPipeline?: ForeachBatchPipeline | null;
+    [key: string]: unknown;
+  };
+  rawText: string;
+  batchPipeline?: ForeachBatchPipeline | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Batch pipeline metadata for foreach expressions
+ */
+export type ForeachBatchPipeline = 
+  | PipelineStage[]
+  | {
+      pipeline: PipelineStage[];
+      isBatchPipeline?: boolean;
+      [key: string]: unknown;
+    };
+
+/**
+ * Foreach with-clause options
+ */
+export interface ForeachWithOptions {
+  separator?: unknown;
+  template?: unknown;
+  batchPipeline?: ForeachBatchPipeline | null;
+  isBatchPipeline?: boolean;
+  [key: string]: unknown;
 }
 
 /**
