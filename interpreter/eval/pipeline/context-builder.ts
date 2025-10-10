@@ -8,9 +8,9 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
-import type { StructuredValue } from '../../utils/structured-value';
-import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
+import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
+import { wrapStructured, type StructuredValue } from '../../utils/structured-value';
 
 /**
  * Simplified pipeline context interface
@@ -46,6 +46,7 @@ export interface SimplifiedPipelineContext {
 export async function createStageEnvironment(
   command: PipelineCommand,
   input: string,
+  structuredInput: StructuredValue,
   context: StageContext,
   env: Environment,
   format?: string,
@@ -124,7 +125,7 @@ export async function createStageEnvironment(
   const stageEnv = env.createChild();
   
   // Set @input variable
-  await setSimplifiedInputVariable(stageEnv, input, format);
+  await setSimplifiedInputVariable(stageEnv, input, wrapStructured(structuredInput), format);
   
   // Set @pipeline / @p variable
   setSimplifiedPipelineVariable(
@@ -143,8 +144,9 @@ export async function createStageEnvironment(
  * Set the @input variable (same as original)
  */
 async function setSimplifiedInputVariable(
-  env: Environment, 
-  input: string, 
+  env: Environment,
+  input: string,
+  structuredInput: StructuredValue,
   format?: string
 ): Promise<void> {
   const inputSource: VariableSource = {
@@ -172,6 +174,18 @@ async function setSimplifiedInputVariable(
         isPipelineInput: true
       }
     );
+  } else if (structuredInput) {
+    const structuredVar = createStructuredValueVariable(
+      'input',
+      structuredInput,
+      inputSource,
+      {
+        isSystem: true,
+        isPipelineParameter: true
+      }
+    );
+    env.setParameterVariable('input', structuredVar);
+    return;
   } else {
     // Simple text variable
     inputVar = createSimpleTextVariable(

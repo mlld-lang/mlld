@@ -59,6 +59,8 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - `@pipeline`/`@p` exposes wrappers to subsequent stages
 - Parallel stages aggregate structured arrays (`.data` is array, `.text` is JSON)
 - Batch pipelines on `for`/`foreach` create synthetic array variables (`for-batch-input`, `foreach-batch-input`) so `processPipeline()` receives structured arrays; results may be scalars, arrays, or objects and are normalized using the standard variable factories.
+- Stage environments set `@input` to a structured wrapper; JS/Node auto-binding sees `StructuredValue.data`, so helpers no longer need to call `JSON.parse` (unless they explicitly want raw strings via `.text`).
+- Both condensed (`=> |`) and parallel (`=> ||`) batch pipelines pass native arrays/objects into their stages, including parallel branches that run concurrently.
 - Regression coverage (#435) ensures pipelines hand structured data between stages without manual `JSON.parse`
 
 **Variables**

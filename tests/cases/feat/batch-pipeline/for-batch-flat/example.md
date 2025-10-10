@@ -1,10 +1,11 @@
 /exe @wrap(x) = js {
   return [x, x * 2];
 }
-/exe @flat(text) = js {
-  const parsed = JSON.parse(text);
-  const flattened = parsed.flat();
-  return flattened.map(item => {
+/exe @flat(values) = js {
+  if (!Array.isArray(values)) {
+    throw new Error('expected array input');
+  }
+  return values.flat().map(item => {
     const numeric = Number(item);
     return Number.isFinite(numeric) && `${numeric}` === String(item) ? numeric : item;
   });

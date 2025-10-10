@@ -4,9 +4,11 @@
 /exe @pluck(obj) = js {
   return obj.value;
 }
-/exe @unique(text) = js {
-  const parsed = JSON.parse(text);
-  const normalized = parsed.map(item => {
+/exe @unique(values) = js {
+  if (!Array.isArray(values)) {
+    throw new Error('expected array input');
+  }
+  const normalized = values.map(item => {
     const numeric = Number(item);
     return Number.isFinite(numeric) && `${numeric}` === String(item) ? numeric : item;
   });
