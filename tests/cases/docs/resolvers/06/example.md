@@ -1,0 +1,1 @@
+/import local { @helper } from @alice/dev-module

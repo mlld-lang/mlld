@@ -281,13 +281,13 @@ Lock file pins exact versions for reproducibility.
 
 **Prefix internals** (convention):
 ```mlld
-/exe @_internal() = ...  # Not in export list
+/exe @_internal(name) = "opaque"  # Not in export list
 ```
 
 **Document exports**:
 ```mlld
 # Public API for data transformation
-/exe @transform(data) = ...
+/exe @transform(data) = `Processed: @data`
 /export { @transform }
 ```
 
