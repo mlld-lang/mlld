@@ -29,6 +29,8 @@ import { InterpolationContext, EscapingStrategyFactory } from './interpolation-c
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { classifyShellValue } from '@interpreter/utils/shell-value';
+import * as shellQuote from 'shell-quote';
 
 /**
  * Type for variable values
@@ -873,14 +875,45 @@ export async function interpolate(
   }
   
   const parts: string[] = [];
+  let withinDoubleQuotes = false;
+  let withinSingleQuotes = false;
+
+  const updateQuoteState = (fragment: string): void => {
+    if (!fragment) return;
+    let backslashCount = 0;
+    for (let i = 0; i < fragment.length; i++) {
+      const char = fragment[i];
+      if (char === '\\') {
+        backslashCount++;
+        continue;
+      }
+      if (char === '"' || char === '\'') {
+        const isEscaped = backslashCount % 2 === 1;
+        if (char === '"' && !withinSingleQuotes && !isEscaped) {
+          withinDoubleQuotes = !withinDoubleQuotes;
+        } else if (char === '\'' && !withinDoubleQuotes && !isEscaped) {
+          withinSingleQuotes = !withinSingleQuotes;
+        }
+      }
+      backslashCount = 0;
+    }
+  };
+
+  const pushPart = (fragment: string): void => {
+    const value = fragment ?? '';
+    parts.push(value);
+    if (context === InterpolationContext.ShellCommand) {
+      updateQuoteState(value);
+    }
+  };
   
   for (const node of nodes) {
     
     if (node.type === 'Text') {
       // Handle Text nodes - directly use string content
-      parts.push(node.content || '');
+      pushPart(node.content || '');
     } else if (node.type === 'PathSeparator') {
-      parts.push(node.value || '/');
+      pushPart(node.value || '/');
     } else if (node.type === 'ExecInvocation') {
       // Handle function calls in templates
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
@@ -897,12 +930,12 @@ export async function interpolate(
               return String(item);
             })
             .join(',');
-          parts.push(joined);
+          pushPart(joined);
         } else {
-          parts.push(asText(result.value));
+          pushPart(asText(result.value));
         }
       } else {
-        parts.push(asText(result.value));
+        pushPart(asText(result.value));
       }
     } else if (node.type === 'InterpolationVar') {
       // Handle {{var}} style interpolation (from triple colon templates)
@@ -924,7 +957,7 @@ export async function interpolate(
         if (process.env.MLLD_DEBUG === 'true') {
           logger.debug('Variable not found during {{var}} interpolation:', { varName });
         }
-        parts.push(`{{${varName}}}`); // Keep unresolved with {{}} syntax
+        pushPart(`{{${varName}}}`); // Keep unresolved with {{}} syntax
         continue;
       }
       
@@ -952,7 +985,7 @@ export async function interpolate(
         stringValue = String(value);
       }
       
-      parts.push(stringValue);
+      pushPart(stringValue);
       logger.debug('[INTERPOLATE] Pushed to parts:', { stringValue, partsLength: parts.length });
     } else if (node.type === 'VariableReference') {
       const varName = node.identifier || node.name;
@@ -982,9 +1015,9 @@ export async function interpolate(
         }
         // WHY: Preserve original syntax when variable is undefined for better error messages
         if (node.valueType === 'varInterpolation') {
-          parts.push(`{{${varName}}}`);  // {{var}} syntax
+          pushPart(`{{${varName}}}`);  // {{var}} syntax
         } else {
-          parts.push(`@${varName}`);      // @var syntax
+          pushPart(`@${varName}`);      // @var syntax
         }
         continue;
       }
@@ -1148,7 +1181,7 @@ export async function interpolate(
         // If pipes have already converted to string, use it directly
         if (typeof value === 'string') {
           const strategy = EscapingStrategyFactory.getStrategy(context);
-          parts.push(strategy.escape(value));
+          pushPart(strategy.escape(value));
           continue;
         }
       }
@@ -1164,6 +1197,55 @@ export async function interpolate(
       const { isVariable, resolveValue, ResolutionContext: ResContext } = await import('../utils/variable-resolution');
       value = await resolveValue(value, env, ResContext.StringInterpolation);
       
+      if (context === InterpolationContext.ShellCommand) {
+        const classification = classifyShellValue(value);
+        const strategy = EscapingStrategyFactory.getStrategy(context);
+
+        const escapeForSingleQuotes = (text: string): string => {
+          if (text === "'") {
+            return "'";
+          }
+          if (!text.includes("'")) {
+            return text;
+          }
+          const segments = text.split("'");
+          return segments
+            .map((segment, index) => {
+              if (index === segments.length - 1) {
+                return segment;
+              }
+              return `${segment}'\\''`;
+            })
+            .join('');
+        };
+        const escapeForDoubleQuotes = (text: string): string => strategy.escape(text);
+
+        if (classification.kind === 'simple') {
+          if (withinSingleQuotes) {
+            pushPart(escapeForSingleQuotes(classification.text));
+          } else {
+            pushPart(escapeForDoubleQuotes(classification.text));
+          }
+        } else if (classification.kind === 'array-simple') {
+          if (withinSingleQuotes) {
+            const escapedElements = classification.elements.map(elem => escapeForSingleQuotes(elem));
+            pushPart(escapedElements.join(' '));
+          } else {
+            const escapedElements = classification.elements.map(elem => escapeForDoubleQuotes(elem));
+            pushPart(escapedElements.join(' '));
+          }
+        } else {
+          if (withinDoubleQuotes) {
+            pushPart(escapeForDoubleQuotes(classification.text));
+          } else if (withinSingleQuotes) {
+            pushPart(escapeForSingleQuotes(classification.text));
+          } else {
+            pushPart(shellQuote.quote([classification.text]));
+          }
+        }
+        continue;
+      }
+
       if (value === null) {
         stringValue = 'null';
       } else if (value === undefined) {
@@ -1248,21 +1330,6 @@ export async function interpolate(
             // Fallback to manual join
             stringValue = value.join('\n\n');
           }
-        } else if (context === InterpolationContext.ShellCommand) {
-          // Special handling for arrays in shell command context
-          // For shell commands, expand arrays into space-separated arguments
-          // Each element is escaped individually
-          const strategy = EscapingStrategyFactory.getStrategy(context);
-          const escapedElements = value.map(elem => {
-            const printable = isStructuredValue(elem) ? asText(elem) : elem;
-            // Use JSON.stringify for complex values (arrays/objects) instead of String()
-            const elemStr = typeof printable === 'string' ? printable : JSON.stringify(printable);
-            return strategy.escape(elemStr);
-          });
-          stringValue = escapedElements.join(' ');
-          // Don't escape again since we already escaped each element
-          parts.push(stringValue);
-          continue;
         } else {
           // For other contexts, use JSON representation with custom replacer
           // Note: No indentation for template interpolation - keep it compact
@@ -1322,14 +1389,14 @@ export async function interpolate(
       if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
       }
       
-      parts.push(escapedValue);
+      pushPart(escapedValue);
       
       // Handle boundary marker after variable if present
       // @var\ produces just the variable, @var\\ produces variable + literal backslash
       if (node.boundary) {
         if (node.boundary.type === 'literal') {
           // Double backslash: add literal backslash after variable
-          parts.push(node.boundary.value);
+          pushPart(node.boundary.value);
         }
         // Single backslash (type: 'consumed'): don't add anything, it's just a boundary
       }
@@ -1341,11 +1408,11 @@ export async function interpolate(
       
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);
-      parts.push(strategy.escape(stringValue));
+      pushPart(strategy.escape(stringValue));
     } else if (node.type === 'FileReference') {
       // Handle file reference interpolation
       const result = await interpolateFileReference(node as any, env, context);
-      parts.push(result);
+      pushPart(result);
     } else if (node.type === 'TemplateForBlock') {
       // Inline template for-loop expansion
       // Evaluate the source collection in expression context
@@ -1369,7 +1436,7 @@ export async function interpolate(
           childEnv.setVariable(`${varName}_key`, keyVar);
         }
         const bodyStr = await interpolate((node as any).body as any[], childEnv, InterpolationContext.Template);
-        parts.push(bodyStr);
+        pushPart(bodyStr);
       }
     } else if (node.type === 'TemplateInlineShow') {
       // Build a synthetic show directive and evaluate in capture mode
@@ -1423,7 +1490,7 @@ export async function interpolate(
       }
       const { evaluateShow } = await import('../eval/show');
       const res = await evaluateShow(directive, env, { isExpression: true });
-      parts.push(asText(res.value ?? ''));
+      pushPart(asText(res.value ?? ''));
     } else if (node.type === 'Literal') {
       // Handle literal nodes from expressions
       const { LiteralNode } = await import('@core/types');
@@ -1438,7 +1505,7 @@ export async function interpolate(
         stringValue = String(value);
       }
       const strategy = EscapingStrategyFactory.getStrategy(context);
-      parts.push(strategy.escape(stringValue));
+      pushPart(strategy.escape(stringValue));
     }
   }
   

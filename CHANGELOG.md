@@ -5,6 +5,39 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc61]
+
+### Added
+- **Loose JSON parsing modes**: `@json` now accepts relaxed JSON syntax (single quotes, trailing commas, comments) using JSON5, with explicit `@json.loose` and `@json.strict` variants for opting in or enforcing strict parsing. Error messages direct users to the loose mode when strict parsing fails.
+
+### Fixed
+- **Structured data handling in field access**: Fixed array operations on nested StructuredValue wrappers
+  - Field access now properly unwraps nested StructuredValue before array operations
+  - Fixes potential runtime errors with deeply nested structured data (e.g., `@nested[0]` where `@nested` is a wrapped array)
+  - Related to #435 structured data edge cases
+  - Fixed in `interpreter/utils/field-access.ts:477` and `:248`
+
+- **Exec invocation stdin handling**: Fixed stdin coercion missing StructuredValue unwrapping
+  - Exec invocations now properly unwrap StructuredValue when preparing stdin data
+  - Aligns with run.ts stdin handling (same pattern as the golden standard)
+  - Prevents double-wrapping or incorrect stringification of structured values passed via stdin
+  - Related to #435 structured data edge cases
+  - Fixed in `interpreter/eval/exec-invocation.ts:49`
+
+- **Shell interpolation of structured values**: Complex arrays/objects now survive shell argument quoting
+  - Shared `classifyShellValue` helper drives `/run` and `@exe` stdin/argument coercion
+  - Interpolation tracks both single- and double-quoted spans, avoiding `[object Object]` and broken quoting
+  - File-content fixtures confirm literal `$`, `` ` ``, and quotes reach the shell intact
+  - Covers regressions from #435 user scenario
+
+- **Variable assignment with wrapped values**: Fixed String() conversions producing [object Object]
+  - Variable assignments now use `valueToString()` helper that checks for StructuredValue wrappers
+  - Uses `asText()` helper for StructuredValue wrappers instead of naive String() conversion
+  - Applies fix to 7 locations in var.ts where String() was used on complex values (lines 725, 751, 763, 773, 782, 820, 823)
+  - Variable type detection now properly unwraps StructuredValue before Array.isArray() checks (3 locations: lines 719, 745, 757)
+  - Related to #435 structured data edge cases
+  - Fixed in `interpreter/eval/var.ts`
+
 ## [2.0.0-rc60]
 
 ### Fixed

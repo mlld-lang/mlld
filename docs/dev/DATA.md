@@ -69,6 +69,7 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - `/load-content` returns wrappers with parsed `.data` and original text
 - Loader metadata (filenames, URLs) preserved in `.metadata.loadResult`
 - Transformers (`@json`, `@yaml`) forward native arrays/objects in `.data`
+  - `@json` uses JSON5 for relaxed parsing (single quotes, trailing commas, comments) and exposes `@json.loose`/`@json.strict` variants for explicit control.
 
 **Display**
 - Templates interpolate using `asText()` automatically

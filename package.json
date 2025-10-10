@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc60",
+  "version": "2.0.0-rc61",
   "description": "mlld: llm scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -141,6 +141,7 @@
     "inquirer": "^12.8.2",
     "js-yaml": "^4.1.0",
     "jsdom": "^26.1.0",
+    "json5": "^2.2.3",
     "llmxml": "^1.4.4",
     "lodash": "^4.17.21",
     "marked": "^4.0.12",

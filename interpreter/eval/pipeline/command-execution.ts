@@ -326,19 +326,34 @@ export async function resolveCommandReference(
       return null;
     }
     
-    // For executable variables (like transformers), return the variable itself
-    // For other types, we might need to resolve field access
-    if (baseVar.type === 'executable') {
-      return baseVar;
+    const variantMap = baseVar.metadata?.transformerVariants as Record<string, any> | undefined;
+    let value: any;
+    let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
+
+    if (variantMap && remainingFields.length > 0) {
+      const firstField = remainingFields[0];
+      if (firstField.type === 'field' || firstField.type === 'stringIndex' || firstField.type === 'numericField') {
+        const variantName = String(firstField.value);
+        const variant = variantMap[variantName];
+        if (!variant) {
+          throw new Error(`Pipeline function '@${varRef.identifier}.${variantName}' is not defined`);
+        }
+        value = variant;
+        remainingFields = remainingFields.slice(1);
+      }
+    }
+
+    if (typeof value === 'undefined') {
+      if (baseVar.type === 'executable') {
+        return baseVar;
+      }
+      // Extract value for non-executable variables
+      const { extractVariableValue } = await import('../../utils/variable-resolution');
+      value = await extractVariableValue(baseVar, env);
     }
     
-    // Extract value for non-executable variables
-    const { extractVariableValue } = await import('../../utils/variable-resolution');
-    let value = await extractVariableValue(baseVar, env);
-    
-    // Navigate through field access if present
-    if (varRef.fields && varRef.fields.length > 0) {
-      for (const field of varRef.fields) {
+    if (remainingFields.length > 0) {
+      for (const field of remainingFields) {
         if ((field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField') && typeof value === 'object' && value !== null) {
           value = (value as Record<string, unknown>)[String(field.value)];
         } else if (field.type === 'arrayIndex' && Array.isArray(value)) {
