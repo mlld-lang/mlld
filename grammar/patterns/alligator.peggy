@@ -138,24 +138,25 @@ AlligatorPathSegment "alligator path segment"
     }
 
 // Valid characters in path segments (inside alligators)
+// Exclude space/tab only when followed by # (section marker) or "as" keyword
 AlligatorPathChar
-  = !">" !"#" !"@" !" as " !"{" !PathSeparator char:. { return char; }
+  = !">" !"#" !"@" !" as " !"{" !PathSeparator !([ \t]+ "#") !([ \t]+ "as") char:. { return char; }
 
 // Options for alligator expressions
 AlligatorOptions
-  = _ section:SectionClause _ transform:AsTransform {
+  = section:SectionClause _ transform:AsTransform {
       // Section with transform - try this first
       const options = { section };
       options.transform = transform;
       return options;
     }
-  / _ section:SectionClause _ rename:AsRename {
+  / section:SectionClause _ rename:AsRename {
       // Section with rename - only if not transform
       const options = { section };
       section.renamed = rename;
       return options;
     }
-  / _ section:SectionClause {
+  / section:SectionClause {
       // Just section without transform or rename
       return { section };
     }
@@ -164,9 +165,9 @@ AlligatorOptions
       return { transform };
     }
 
-// Section extraction clause
+// Section extraction clause - REQUIRES space before # to distinguish from URL fragments
 SectionClause
-  = "#" _ identifier:AlligatorSectionIdentifier {
+  = [ \t]+ "#" _ identifier:AlligatorSectionIdentifier {
       helpers.debug('SectionClause matched', { identifier });
       return {
         type: 'section',
@@ -194,7 +195,7 @@ AlligatorSectionIdentifier "alligator section identifier"
 
 // Characters allowed in section names (inside alligators)
 AlligatorSectionChar
-  = !">" !"as" char:. { return char; }
+  = !">" !(" as") char:. { return char; }
 
 // Rename clause for sections
 AsRename "section rename"
