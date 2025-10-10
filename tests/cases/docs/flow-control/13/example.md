@@ -1,6 +1,6 @@
 /exe @wrap(x) = js { return [x, x * 2]; }
-/exe @flat(text) = js {
-  const values = JSON.parse(text);
+/exe @flat(values) = js {
+  if (!Array.isArray(values)) throw new Error('expected array input');
   return values.flat();
 }
 

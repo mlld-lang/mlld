@@ -1,0 +1,1 @@
+cached angle from fixture

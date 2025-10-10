@@ -426,8 +426,23 @@ ImportAlligatorAdapter
           meta: content.source.meta
         };
       } else if (content.source.type === 'url') {
-        // Future: support importing from URLs
-        helpers.mlldError("URL imports are not yet supported. Use: /import { items } from <local-file>", ">", location());
+        const rawUrl = content.source.raw;
+        const urlNode = helpers.createNode(NodeType.Text, { content: rawUrl, location: location() });
+        return {
+          type: 'path',
+          subtype: 'urlPath',
+          values: {
+            url: [urlNode]
+          },
+          raw: {
+            url: rawUrl
+          },
+          meta: {
+            ...helpers.createPathMetadata(rawUrl, [urlNode]),
+            isUrl: true,
+            protocol: content.source.protocol
+          }
+        };
       }
       
       // Should not reach here
