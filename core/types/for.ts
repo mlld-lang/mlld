@@ -1,4 +1,11 @@
 import type { DirectiveNode, BaseMlldNode, VariableReferenceNode } from './primitives';
+import type { PipelineStage } from './run';
+
+export interface ForBatchPipelineMeta {
+  pipeline: PipelineStage[];
+  isBatchPipeline?: boolean;
+  [key: string]: unknown;
+}
 
 /**
  * Directive node for /for loops
@@ -47,6 +54,7 @@ export interface ForExpression extends BaseMlldNode {
       cap?: number;
       rateMs?: number;
     };
+    batchPipeline?: ForBatchPipelineMeta | null;
   };
 }
 

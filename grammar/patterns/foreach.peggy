@@ -13,8 +13,8 @@
 // Usage: foreach @command(@array1, @array2) 
 // Creates cartesian product when multiple arrays provided
 ForeachCommandExpression
-  = "foreach" _ execInvocation:UnifiedReferenceWithTail withClause:ForeachWithClause? {
-      helpers.debug('ForeachCommandExpression matched', { execInvocation, withClause });
+  = "foreach" _ execInvocation:UnifiedReferenceWithTail batchPipe:ForeachBatchPipeline? withClause:ForeachWithClause? {
+      helpers.debug('ForeachCommandExpression matched', { execInvocation, hasBatch: !!batchPipe, withClause });
       
       // Extract arrays from exec invocation arguments
       let arrays = [];
@@ -22,15 +22,47 @@ ForeachCommandExpression
         arrays = execInvocation.commandRef.args;
       }
       
+      const withOptions = { ...(withClause || {}) };
+      if (batchPipe) {
+        withOptions.batchPipeline = batchPipe.pipeline;
+        withOptions.isBatchPipeline = true;
+      }
+
       return {
         type: "foreach-command",
         value: {
           type: 'foreach',
           execInvocation,
           arrays,
-          ...(withClause ? { with: withClause } : {})
+          ...(Object.keys(withOptions).length > 0 ? { with: withOptions } : {}),
+          ...(batchPipe ? { batchPipeline: batchPipe } : {})
         },
-        rawText: text()
+        rawText: text(),
+        ...(batchPipe ? { batchPipeline: batchPipe } : {})
+      };
+    }
+
+ForeachBatchPipeline "foreach batch pipeline"
+  = _ "=>" _ "||" _ firstParallel:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {
+      const pipeline = [[...firstParallel], ...rest];
+      helpers.debug('ForeachBatchPipeline matched (parallel)', {
+        stageCount: pipeline.length,
+        hasCaps: !!caps
+      });
+      return {
+        pipeline,
+        isBatchPipeline: true,
+        ...(caps ? { parallel: caps.parallel, delayMs: caps.delayMs } : {})
+      };
+    }
+  / _ "=>" _ "|" _ firstStage:PipelineStageFirst rest:PipelineRest* {
+      const pipeline = [firstStage, ...rest];
+      helpers.debug('ForeachBatchPipeline matched', {
+        stageCount: pipeline.length
+      });
+      return {
+        pipeline,
+        isBatchPipeline: true
       };
     }
 

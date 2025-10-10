@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc62]
+
+### Added
+- **Batch pipelines for collection expressions**: `for` and `foreach` now accept a trailing `=> |` pipeline that runs after iteration completes. The batch phase reuses standard pipeline syntax, applies to the gathered array, and may return arrays, scalars, or objects. Grammar attaches the pipeline to `ForExpression.meta.batchPipeline` and `ForeachCommandExpression`, and the interpreter processes the results via `processPipeline()` before emitting the final variable or display output.
+
+### Notes
+- Batch pipelines behave like condensed pipelines: each stage receives string input, so helpers that expect arrays should parse the string back to JSON. Currently parallel groups (`||`) share the same semantics but are not fully supported/tested.
+
 ## [2.0.0-rc61]
 
 ### Added

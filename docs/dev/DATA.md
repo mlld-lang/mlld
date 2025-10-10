@@ -58,6 +58,7 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - `structuredOutputs` map tracks wrappers; `previousOutputs` stores `.text`
 - `@pipeline`/`@p` exposes wrappers to subsequent stages
 - Parallel stages aggregate structured arrays (`.data` is array, `.text` is JSON)
+- Batch pipelines on `for`/`foreach` create synthetic array variables (`for-batch-input`, `foreach-batch-input`) so `processPipeline()` receives structured arrays; results may be scalars, arrays, or objects and are normalized using the standard variable factories.
 - Regression coverage (#435) ensures pipelines hand structured data between stages without manual `JSON.parse`
 
 **Variables**

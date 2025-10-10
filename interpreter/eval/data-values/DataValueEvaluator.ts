@@ -41,7 +41,7 @@ export class DataValueEvaluator {
     this.primitiveEvaluator = new PrimitiveEvaluator(this.stateManager);
     this.collectionEvaluator = new CollectionEvaluator(this.evaluate.bind(this));
     this.variableReferenceEvaluator = new VariableReferenceEvaluator(this.evaluate.bind(this));
-    this.foreachCommandEvaluator = new ForeachCommandEvaluator(this.evaluate.bind(this));
+    this.foreachCommandEvaluator = new ForeachCommandEvaluator();
     this.foreachSectionEvaluator = new ForeachSectionEvaluator(this.evaluate.bind(this));
     this.loadContentEvaluator = new LoadContentEvaluator();
   }

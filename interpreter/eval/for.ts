@@ -5,7 +5,7 @@ import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import { RateLimitRetry, isRateLimitError } from '../eval/pipeline/rate-limit-retry';
-import { createArrayVariable, createObjectVariable } from '@core/types/variable';
+import { createArrayVariable, createObjectVariable, createPrimitiveVariable, createSimpleTextVariable } from '@core/types/variable';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
@@ -258,28 +258,133 @@ export async function evaluateForExpression(
     }
   }
 
-  // Create ArrayVariable with metadata
+  let finalResults: unknown = results;
+  const batchPipelineConfig = expr.meta?.batchPipeline;
+  const batchStages = Array.isArray(batchPipelineConfig)
+    ? batchPipelineConfig
+    : batchPipelineConfig?.pipeline;
+
+  if (batchStages && batchStages.length > 0) {
+    const { processPipeline } = await import('./pipeline/unified-processor');
+    const batchInput = createArrayVariable(
+      'for-batch-input',
+      results,
+      false,
+      {
+        directive: 'for',
+        syntax: 'expression',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      { isBatchInput: true }
+    );
+
+    try {
+      const pipelineResult = await processPipeline({
+        value: batchInput,
+        env,
+        pipeline: batchStages,
+        identifier: `for-batch-${expr.variable.identifier}`,
+        location: expr.location,
+        isRetryable: false
+      });
+
+      if (isStructuredValue(pipelineResult)) {
+        finalResults = asData(pipelineResult);
+      } else if (isVariable(pipelineResult)) {
+        finalResults = await extractVariableValue(pipelineResult, env);
+      } else {
+        finalResults = pipelineResult;
+      }
+    } catch (error) {
+      logger.warn(
+        `Batch pipeline failed for for-expression: ${error instanceof Error ? error.message : String(error)}`
+      );
+      errors.push({
+        index: -1,
+        error: error as Error,
+        value: results
+      });
+      finalResults = results;
+    }
+  }
+
+  const variableSource = {
+    directive: 'for',
+    syntax: 'expression',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+
   const metadata: any = {
-    arrayType: 'for-expression-result',
     sourceExpression: expr.expression,
     iterationVariable: expr.variable.identifier
   };
 
-  // If there are errors, attach them as metadata
+  if (batchStages && batchStages.length > 0) {
+    metadata.hadBatchPipeline = true;
+  }
+
   if (errors.length > 0) {
     metadata.forErrors = errors;
   }
 
-  return createArrayVariable(
+  if (Array.isArray(finalResults)) {
+    metadata.arrayType = 'for-expression-result';
+    return createArrayVariable(
+      'for-result',
+      finalResults,
+      false,
+      variableSource,
+      metadata
+    );
+  }
+
+  if (finalResults === undefined) {
+    return createPrimitiveVariable(
+      'for-result',
+      null,
+      variableSource,
+      metadata
+    );
+  }
+
+  if (
+    finalResults === null ||
+    typeof finalResults === 'number' ||
+    typeof finalResults === 'boolean'
+  ) {
+    return createPrimitiveVariable(
+      'for-result',
+      finalResults as number | boolean | null,
+      variableSource,
+      metadata
+    );
+  }
+
+  if (typeof finalResults === 'string') {
+    return createSimpleTextVariable(
+      'for-result',
+      finalResults,
+      variableSource,
+      metadata
+    );
+  }
+
+  if (typeof finalResults === 'object') {
+    return createObjectVariable(
+      'for-result',
+      finalResults,
+      false,
+      variableSource,
+      metadata
+    );
+  }
+
+  return createSimpleTextVariable(
     'for-result',
-    results,
-    false, // Arrays from for expressions are not "complex"
-    {
-      directive: 'for',
-      syntax: 'expression',
-      hasInterpolation: false,
-      isMultiLine: false
-    },
+    String(finalResults),
+    variableSource,
     metadata
   );
 }

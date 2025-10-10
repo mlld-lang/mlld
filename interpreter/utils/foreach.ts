@@ -33,7 +33,7 @@ export async function evaluateForeachAsText(
   options: ForeachOptions = {}
 ): Promise<string> {
   // Check if it's a section expression or command expression
-  let results: any[];
+  let results: any;
   
   if (foreachExpression.type === 'foreach-section' || 
       (foreachExpression.value && foreachExpression.value.type === 'foreach-section')) {
@@ -45,7 +45,9 @@ export async function evaluateForeachAsText(
   }
   
   // If no results, return empty string
-  if (!Array.isArray(results) || results.length === 0) {
+  const normalizedResults = Array.isArray(results) ? results : [results];
+
+  if (normalizedResults.length === 0) {
     return '';
   }
   
@@ -53,7 +55,7 @@ export async function evaluateForeachAsText(
   const finalOptions = { ...DEFAULT_FOREACH_OPTIONS, ...options };
   
   // Convert results to strings
-  const stringResults = results.map(result => {
+  const stringResults = normalizedResults.map(result => {
     if (typeof result === 'string') {
       return result;
     } else if (typeof result === 'object') {
