@@ -9,6 +9,7 @@ import {
   VariableNode, 
   VariableNodeArray 
 } from './base';
+import type { DataLabel } from './security';
 
 // ====================
 // Raw Value Interfaces
@@ -24,6 +25,7 @@ export interface ShowRaw {
   names?: string[];
   sectionTitle?: string;
   newTitle?: string;
+  securityLabels?: string;
 }
 
 export interface ShowPathRaw extends ShowRaw {
@@ -66,6 +68,7 @@ export interface ShowValues {
   names?: VariableNodeArray;
   sectionTitle?: TextNodeArray;
   newTitle?: TextNodeArray;
+  securityLabels?: DataLabel[];
 }
 
 export interface ShowPathValues extends ShowValues {
@@ -103,6 +106,7 @@ export interface ShowMeta {
     hasVariables: boolean;
   };
   isTemplateContent?: boolean;
+  securityLabels?: DataLabel[];
 }
 
 export interface ShowPathMeta extends ShowMeta {
@@ -186,4 +190,3 @@ export function isShowVariableDirectiveNode(node: DirectiveNode): node is ShowVa
 export function isShowPathSectionDirectiveNode(node: DirectiveNode): node is ShowPathSectionDirectiveNode {
   return isShowDirectiveNode(node) && node.subtype === 'showPathSection';
 }
-

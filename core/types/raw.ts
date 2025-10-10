@@ -10,6 +10,7 @@ export interface ImportRaw {
   namespace?: string;
   path: string;
   importType?: string;
+  securityLabels?: string;
 }
 
 /**
@@ -53,6 +54,7 @@ export interface RunRaw {
   command: string;
   parameters?: string;
   options?: string;
+  securityLabels?: string;
 }
 
 /**

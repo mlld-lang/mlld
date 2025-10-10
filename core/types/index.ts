@@ -115,6 +115,8 @@ export interface VariableMetadata {
   isImported?: boolean;
   importPath?: string;
   isComplex?: boolean;
+  security?: import('./security').SecurityDescriptor;
+  capability?: import('./security').CapabilityContext;
 }
 
 // Import ExecutableVariable for the union

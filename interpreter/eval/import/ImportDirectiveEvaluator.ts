@@ -1,5 +1,5 @@
 import type { DirectiveNode, ImportDirectiveNode } from '@core/types';
-import type { ImportType } from '@core/types/security';
+import type { ImportType, DataLabel } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import type { EvalResult } from '../../core/interpreter';
 import { ImportPathResolver, ImportResolution } from './ImportPathResolver';
@@ -521,6 +521,7 @@ export class ImportDirectiveEvaluator {
     env: Environment,
     sourcePath: string
   ): Promise<void> {
+    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
     if (directive.subtype === 'importSelected') {
       const imports = directive.values?.imports || [];
       for (const importItem of imports) {
@@ -529,7 +530,9 @@ export class ImportDirectiveEvaluator {
         
         if (varName in exportData) {
           const value = exportData[varName];
-          const variable = this.variableImporter.createVariableFromValue(alias, value, sourcePath, varName);
+        const variable = this.variableImporter.createVariableFromValue(alias, value, sourcePath, varName, {
+          securityLabels
+        });
           env.setVariable(alias, variable);
         } else {
           throw new Error(`Export '${varName}' not found in resolver '${sourcePath}'`);
@@ -538,7 +541,9 @@ export class ImportDirectiveEvaluator {
     } else {
       // Import all exports
       for (const [name, value] of Object.entries(exportData)) {
-        const variable = this.variableImporter.createVariableFromValue(name, value, sourcePath);
+        const variable = this.variableImporter.createVariableFromValue(name, value, sourcePath, undefined, {
+          securityLabels
+        });
         env.setVariable(name, variable);
       }
     }

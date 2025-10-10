@@ -9,6 +9,7 @@ import { applyHeaderTransform } from './show';
 import { 
   Variable,
   VariableSource,
+  VariableMetadataUtils,
   createSimpleTextVariable,
   createInterpolatedTextVariable,
   createTemplateVariable,
@@ -20,6 +21,7 @@ import {
   createCommandResultVariable,
   createStructuredValueVariable
 } from '@core/types/variable';
+import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
@@ -621,6 +623,13 @@ export async function evaluateVar(
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
   const source = createVariableSource(valueNode, directive);
   const metadata: any = { definedAt: location };
+
+  const securityLabels = (directive.meta?.securityLabels ?? directive.values?.securityLabels) as DataLabel[] | undefined;
+  const applySecurityMetadata = (base: any, existing?: SecurityDescriptor) =>
+    VariableMetadataUtils.applySecurityMetadata(base, {
+      labels: securityLabels,
+      existingDescriptor: existing
+    });
   
   // Mark if value came from a function for pipeline retryability
   if (valueNode && (
@@ -655,13 +664,18 @@ export async function evaluateVar(
         resolvedValueName: resolvedValue.name
       });
     }
+    const combinedMetadata = {
+      ...resolvedValue.metadata,
+      ...metadata
+    };
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(combinedMetadata, {
+      labels: securityLabels,
+      existingDescriptor: resolvedValue.metadata?.security
+    });
     variable = {
       ...resolvedValue,
       name: identifier,
-      metadata: {
-        ...resolvedValue.metadata,
-        ...metadata
-      }
+      metadata: finalMetadata
     };
   } else if (isStructuredValue(resolvedValue)) {
     const structuredMetadata = {
@@ -669,19 +683,25 @@ export async function evaluateVar(
       isStructuredValue: true,
       structuredValueType: resolvedValue.type
     };
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(structuredMetadata, {
+      labels: securityLabels
+    });
 
-    variable = createStructuredValueVariable(identifier, resolvedValue, source, structuredMetadata);
+    variable = createStructuredValueVariable(identifier, resolvedValue, source, finalMetadata);
 
   } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values - we need to preserve their types
     const { createPrimitiveVariable } = await import('@core/types/variable');
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      labels: securityLabels
+    });
     variable = createPrimitiveVariable(
       identifier,
       valueNode, // Use the actual primitive value
       source,
-      metadata
+      finalMetadata
     );
-    
+
   } else if (valueNode.type === 'array') {
     const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
     
@@ -696,75 +716,119 @@ export async function evaluateVar(
       });
     }
     
-    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      labels: securityLabels
+    });
+    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, finalMetadata);
     
   } else if (valueNode.type === 'object') {
     const isComplex = hasComplexValues(valueNode.properties);
-    variable = createObjectVariable(identifier, resolvedValue, isComplex, source, metadata);
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      labels: securityLabels
+    });
+    variable = createObjectVariable(identifier, resolvedValue, isComplex, source, finalMetadata);
     
   } else if (valueNode.type === 'command') {
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      labels: securityLabels
+    });
     variable = createCommandResultVariable(identifier, resolvedValue, valueNode.command, source, 
-      undefined, undefined, metadata);
+      undefined, undefined, finalMetadata);
     
   } else if (valueNode.type === 'code') {
     // Need to get source code from the value node
     const sourceCode = valueNode.code || ''; // TODO: Verify how to extract source code
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      labels: securityLabels
+    });
     variable = createComputedVariable(identifier, resolvedValue, 
-      valueNode.language || 'js', sourceCode, source, metadata);
+      valueNode.language || 'js', sourceCode, source, finalMetadata);
     
   } else if (valueNode.type === 'path') {
     const filePath = await interpolate(valueNode.segments, env);
-    variable = createFileContentVariable(identifier, resolvedValue, filePath, source, metadata);
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      labels: securityLabels
+    });
+    variable = createFileContentVariable(identifier, resolvedValue, filePath, source, finalMetadata);
     
   } else if (valueNode.type === 'section') {
     const filePath = await interpolate(valueNode.path, env);
     const sectionName = await interpolate(valueNode.section, env);
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      labels: securityLabels
+    });
     variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
-      sectionName, 'hash', source, metadata);
+      sectionName, 'hash', source, finalMetadata);
     
   } else if (valueNode.type === 'VariableReference') {
     // For VariableReference nodes, create variable based on resolved value type
     // This handles cases like @user.name where resolvedValue is the field value
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
     if (typeof actualValue === 'string') {
-      variable = createSimpleTextVariable(identifier, actualValue, source, metadata);
+      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+        labels: securityLabels,
+        existingDescriptor: resolvedValue.metadata?.security
+      });
+      variable = createSimpleTextVariable(identifier, actualValue, source, finalMetadata);
     } else if (typeof actualValue === 'number' || typeof actualValue === 'boolean' || actualValue === null) {
       const { createPrimitiveVariable } = await import('@core/types/variable');
-      variable = createPrimitiveVariable(identifier, actualValue, source, metadata);
+      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+        labels: securityLabels,
+        existingDescriptor: resolvedValue.metadata?.security
+      });
+      variable = createPrimitiveVariable(identifier, actualValue, source, finalMetadata);
     } else if (Array.isArray(actualValue)) {
-      variable = createArrayVariable(identifier, actualValue, false, source, metadata);
+      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+        labels: securityLabels,
+        existingDescriptor: resolvedValue.metadata?.security
+      });
+      variable = createArrayVariable(identifier, actualValue, false, source, finalMetadata);
     } else if (typeof actualValue === 'object' && actualValue !== null) {
-      variable = createObjectVariable(identifier, actualValue, false, source, metadata);
+      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+        labels: securityLabels,
+        existingDescriptor: resolvedValue.metadata?.security
+      });
+      variable = createObjectVariable(identifier, actualValue, false, source, finalMetadata);
     } else {
       // Fallback to text
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
+      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
+        labels: securityLabels,
+        existingDescriptor: resolvedValue.metadata?.security
+      });
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
     
   } else if (valueNode.type === 'load-content') {
     const structuredValue = wrapLoadContentValue(resolvedValue);
-    const mergedMetadata = {
-      ...metadata,
-      structuredValueMetadata: structuredValue.metadata
-    };
+    const mergedMetadata = applySecurityMetadata(
+      {
+        ...metadata,
+        structuredValueMetadata: structuredValue.metadata
+      }
+    );
     variable = createStructuredValueVariable(identifier, structuredValue, source, mergedMetadata);
     resolvedValue = structuredValue;
 
   } else if (valueNode.type === 'foreach' || valueNode.type === 'foreach-command') {
     // Foreach expressions always return arrays
     const isComplex = false; // foreach results are typically simple values
-    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
-    
+    const finalMetadata = applySecurityMetadata(metadata);
+    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, finalMetadata);
+
   } else if (valueNode.type === 'ExecInvocation') {
     // Exec invocations can return any type
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
     if (typeof actualValue === 'object' && actualValue !== null) {
       if (Array.isArray(actualValue)) {
-        variable = createArrayVariable(identifier, actualValue, false, source, metadata);
+        const finalMetadata = applySecurityMetadata(metadata);
+        variable = createArrayVariable(identifier, actualValue, false, source, finalMetadata);
       } else {
-        variable = createObjectVariable(identifier, actualValue, false, source, metadata);
+        const finalMetadata = applySecurityMetadata(metadata);
+        variable = createObjectVariable(identifier, actualValue, false, source, finalMetadata);
       }
     } else {
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
 
   } else if (valueNode.type === 'VariableReferenceWithTail') {
@@ -772,22 +836,27 @@ export async function evaluateVar(
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
     if (typeof actualValue === 'object' && actualValue !== null) {
       if (Array.isArray(actualValue)) {
-        variable = createArrayVariable(identifier, actualValue, false, source, metadata);
+        const finalMetadata = applySecurityMetadata(metadata);
+        variable = createArrayVariable(identifier, actualValue, false, source, finalMetadata);
       } else {
-        variable = createObjectVariable(identifier, actualValue, false, source, metadata);
+        const finalMetadata = applySecurityMetadata(metadata);
+        variable = createObjectVariable(identifier, actualValue, false, source, finalMetadata);
       }
     } else {
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
     
   } else if (directive.meta?.expressionType) {
     // Expression results - create primitive variables for boolean/number results
     if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
       const { createPrimitiveVariable } = await import('@core/types/variable');
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, finalMetadata);
     } else {
       // Expression returned non-primitive (e.g., string comparison)
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
     
   } else if (valueNode.type === 'Literal') {
@@ -799,7 +868,8 @@ export async function evaluateVar(
     const strValue = valueToString(resolvedValue);
     
     if (directive.meta?.wrapperType === 'singleQuote') {
-      variable = createSimpleTextVariable(identifier, strValue, source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createSimpleTextVariable(identifier, strValue, source, finalMetadata);
     } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleQuote' || directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
       // Template variable
       let templateType: 'backtick' | 'doubleColon' | 'tripleColon' = 'backtick';
@@ -813,14 +883,17 @@ export async function evaluateVar(
       const templateValue = directive.meta?.wrapperType === 'tripleColon' && Array.isArray(resolvedValue) 
         ? resolvedValue as any // Pass the AST array
         : strValue; // For other templates, use the string value
-      variable = createTemplateVariable(identifier, templateValue, undefined, templateType as any, source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createTemplateVariable(identifier, templateValue, undefined, templateType as any, source, finalMetadata);
     } else if (directive.meta?.wrapperType === 'doubleQuote' || source.hasInterpolation) {
       // Interpolated text - need to track interpolation points
       // For now, create without interpolation points - TODO: extract these from AST
-      variable = createInterpolatedTextVariable(identifier, strValue, [], source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createInterpolatedTextVariable(identifier, strValue, [], source, finalMetadata);
     } else {
       // Default to simple text
-      variable = createSimpleTextVariable(identifier, strValue, source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createSimpleTextVariable(identifier, strValue, source, finalMetadata);
     }
   }
 
@@ -832,12 +905,15 @@ export async function evaluateVar(
     if (valueNode && valueNode.type === 'Literal') {
       if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
         const { createPrimitiveVariable } = await import('@core/types/variable');
-        variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+        const finalMetadata = applySecurityMetadata(metadata);
+        variable = createPrimitiveVariable(identifier, resolvedValue, source, finalMetadata);
       } else {
-        variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
+        const finalMetadata = applySecurityMetadata(metadata);
+        variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
       }
     } else {
-      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, metadata);
+      const finalMetadata = applySecurityMetadata(metadata);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
   }
   
@@ -880,12 +956,19 @@ export async function evaluateVar(
   // If pipeline was executed, result will be a string
   // Create new variable with the result
   if (typeof result === 'string' && result !== variable.value) {
-    variable = createSimpleTextVariable(identifier, result, source, metadata);
+    const finalMetadata = applySecurityMetadata({
+      ...variable.metadata,
+      ...metadata
+    }, variable.metadata?.security);
+    variable = createSimpleTextVariable(identifier, result, source, finalMetadata);
   } else if (isStructuredValue(result)) {
-    const structuredMetadata = {
-      ...metadata,
-      isPipelineResult: true
-    };
+    const structuredMetadata = applySecurityMetadata(
+      {
+        ...metadata,
+        isPipelineResult: true
+      },
+      variable.metadata?.security
+    );
     variable = createStructuredValueVariable(identifier, result, source, structuredMetadata);
   }
   

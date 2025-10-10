@@ -5,6 +5,14 @@
  */
 
 import { VariableSource, VariableMetadata } from './VariableTypes';
+import type { CapabilityContext, SecurityDescriptor, DataLabel } from '../security';
+import {
+  makeSecurityDescriptor,
+  serializeSecurityDescriptor,
+  deserializeSecurityDescriptor,
+  serializeCapabilityContext,
+  deserializeCapabilityContext
+} from '../security';
 
 // =========================================================================
 // METADATA UTILITY FUNCTIONS
@@ -159,6 +167,95 @@ export class VariableMetadataUtils {
     };
     
     return this.mergeMetadata(complexMetadata, additionalMetadata);
+  }
+
+  /**
+   * Ensure metadata carries a security descriptor and optional capability context.
+   * When labels are provided, they override any existing descriptor.
+   * When no descriptor exists, a default descriptor is attached.
+   */
+  static applySecurityMetadata(
+    metadata?: VariableMetadata,
+    options?: {
+      labels?: DataLabel[];
+      existingDescriptor?: SecurityDescriptor;
+      capability?: CapabilityContext;
+    }
+  ): VariableMetadata {
+    const result: VariableMetadata = { ...(metadata ?? {}) };
+    const labels = options?.labels ?? [];
+    const hasExplicitLabels = labels.length > 0;
+
+    if (hasExplicitLabels) {
+      result.security = makeSecurityDescriptor({ labels, inference: 'explicit' });
+    } else if (result.security) {
+      // Preserve existing descriptor already attached to metadata.
+    } else if (options?.existingDescriptor) {
+      result.security = options.existingDescriptor;
+    } else {
+      result.security = makeSecurityDescriptor();
+    }
+
+    if (options?.capability) {
+      result.capability = options.capability;
+    } else if (result.capability) {
+      // Preserve previously attached capability context.
+      result.capability = {
+        ...result.capability,
+        security: result.security
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Serialize security-aware metadata fragments for persistence.
+   */
+  static serializeSecurityMetadata(
+    metadata?: VariableMetadata
+  ): {
+    security?: ReturnType<typeof serializeSecurityDescriptor>;
+    capability?: ReturnType<typeof serializeCapabilityContext>;
+  } | undefined {
+    if (!metadata) {
+      return undefined;
+    }
+
+    const serializedSecurity = serializeSecurityDescriptor(metadata.security);
+    const serializedCapability = serializeCapabilityContext(metadata.capability);
+
+    if (!serializedSecurity && !serializedCapability) {
+      return undefined;
+    }
+
+    return {
+      security: serializedSecurity,
+      capability: serializedCapability
+    };
+  }
+
+  /**
+   * Deserialize persisted security metadata fragments.
+   */
+  static deserializeSecurityMetadata(
+    payload?:
+      | {
+          security?: ReturnType<typeof serializeSecurityDescriptor>;
+          capability?: ReturnType<typeof serializeCapabilityContext>;
+        }
+      | null
+  ): Pick<VariableMetadata, 'security' | 'capability'> {
+    if (!payload) {
+      return {};
+    }
+
+    const security = deserializeSecurityDescriptor(payload.security);
+    const capability = deserializeCapabilityContext(payload.capability);
+    return {
+      ...(security ? { security } : {}),
+      ...(capability ? { capability } : {})
+    };
   }
 }
 

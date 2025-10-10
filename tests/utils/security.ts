@@ -1,9 +1,9 @@
 import { expect } from 'vitest';
-import type { SecurityDescriptor, SecurityLabel, TaintLevel } from '@core/types/security';
+import type { SecurityDescriptor, DataLabel, TaintLevel } from '@core/types/security';
 
 export function expectSecurityLabels(
   descriptor: SecurityDescriptor | undefined,
-  labels: SecurityLabel[]
+  labels: DataLabel[]
 ): void {
   const actual = descriptor ? Array.from(descriptor.labels).sort() : [];
   const expected = [...labels].sort();

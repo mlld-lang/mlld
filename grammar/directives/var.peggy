@@ -3,12 +3,12 @@
 // Purpose: Single directive for all variable types with type inference from syntax
 
 SlashVar "var directive"
-  = DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+  = DirectiveContext "/var" labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       helpers.debug('AtVar matched', { id, value, ending });
       
       // Extract ending components
       let tail = ending.tail;
-      const security = ending.security;
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       const comment = ending.comment;
       
       // Create variable reference node for identifier
@@ -151,8 +151,9 @@ SlashVar "var directive"
       }
       
       // Apply security options if present
-      if (security) {
-        metaInfo.security = security;
+      if (labelInfo) {
+        metaInfo.securityLabels = labelInfo.labels;
+        values.securityLabels = labelInfo.labels;
       }
       
       // Add comment to meta if present
@@ -160,12 +161,17 @@ SlashVar "var directive"
         metaInfo.comment = comment;
       }
       
+      const raw = {}; // raw object
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
+
       // Create directive with 'var' kind and single subtype
       return helpers.createStructuredDirective(
         DirectiveKind.var,
         'var',  // Single unified subtype
         values,
-        {}, // raw object
+        raw,
         metaInfo,
         location()
       );

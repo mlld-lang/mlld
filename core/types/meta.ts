@@ -2,7 +2,7 @@
  * Metadata type definitions for Mlld directives
  */
 
-import type { ImportType } from './security';
+import type { ImportType, DataLabel } from './security';
 
 /**
  * Base metadata interface with optional categories
@@ -10,6 +10,7 @@ import type { ImportType } from './security';
 export interface DirectiveMeta {
   path?: PathMeta;
   // Other metadata categories can be added here in the future
+  securityLabels?: DataLabel[];
 }
 
 /**

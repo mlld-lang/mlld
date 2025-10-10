@@ -7,7 +7,7 @@ import { ImportRaw } from './raw';
 import { ImportMeta } from './meta';
 import { TimeDurationNode } from './primitives';
 import { WithClause } from './run';
-import { ImportType } from './security';
+import { ImportType, DataLabel } from './security';
 
 /**
  * Base Import directive node
@@ -29,6 +29,7 @@ export interface ImportAllDirectiveNode extends ImportDirectiveNode {
     importType?: ImportType;
     cachedDuration?: TimeDurationNode;
     withClause?: WithClause;
+    securityLabels?: DataLabel[];
   };
 }
 
@@ -43,6 +44,7 @@ export interface ImportSelectedDirectiveNode extends ImportDirectiveNode {
     importType?: ImportType;
     cachedDuration?: TimeDurationNode;
     withClause?: WithClause;
+    securityLabels?: DataLabel[];
   };
 }
 
@@ -57,5 +59,6 @@ export interface ImportNamespaceDirectiveNode extends ImportDirectiveNode {
     importType?: ImportType;
     cachedDuration?: TimeDurationNode;
     withClause?: WithClause;
+    securityLabels?: DataLabel[];
   };
 }

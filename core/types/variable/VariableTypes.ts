@@ -10,6 +10,7 @@ import type {
   StructuredValue,
   StructuredValueType
 } from '@interpreter/utils/structured-value';
+import type { CapabilityContext, SecurityDescriptor } from '../security';
 
 // =========================================================================
 // BASE TYPES
@@ -78,6 +79,10 @@ export interface VariableMetadata extends Record<string, any> {
   
   // Template metadata
   templateAst?: any[]; // For lazy-evaluated templates
+
+  // Security metadata
+  security?: SecurityDescriptor;
+  capability?: CapabilityContext;
 }
 
 // =========================================================================

@@ -4,6 +4,7 @@
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import type { Expression } from './primitives';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
+import type { DataLabel } from './security';
 
 /**
  * With clause for pipeline and dependency management
@@ -54,6 +55,7 @@ export interface RunRaw {
   code?: string;
   identifier?: string;
   withClause?: WithClause;
+  securityLabels?: string;
 }
 
 /**
@@ -65,6 +67,7 @@ export interface RunMeta {
   language?: string;
   hasVariables?: boolean;
   withClause?: WithClause;
+  securityLabels?: DataLabel[];
 }
 
 /**
@@ -91,6 +94,7 @@ export interface RunValues {
   code?: ContentNodeArray;
   identifier?: VariableNodeArray;
   withClause?: WithClause;
+  securityLabels?: DataLabel[];
 }
 
 /**
@@ -100,13 +104,16 @@ export interface RunCommandDirectiveNode extends RunDirectiveNode {
   subtype: 'runCommand';
   values: {
     command: ContentNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     command: string;
+    securityLabels?: string;
   };
   meta: {
     isMultiLine: boolean;
     hasVariables: boolean;
+    securityLabels?: DataLabel[];
   };
 }
 
@@ -119,15 +126,18 @@ export interface RunCodeDirectiveNode extends RunDirectiveNode {
     lang: TextNodeArray;
     args: VariableNodeArray;
     code: ContentNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     lang: string;
     args: string[];
     code: string;
+    securityLabels?: string;
   };
   meta: {
     isMultiLine: boolean;
     language: string;
+    securityLabels?: DataLabel[];
   };
 }
 
@@ -139,13 +149,16 @@ export interface RunExecDirectiveNode extends RunDirectiveNode {
   values: {
     identifier: VariableNodeArray;
     args: VariableNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     identifier: string;
     args: string[];
+    securityLabels?: string;
   };
   meta: {
     argumentCount: number;
+    securityLabels?: DataLabel[];
   };
 }
 

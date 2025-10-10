@@ -1,5 +1,5 @@
 import type { DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, TemplateVariable } from '@core/types/variable';
+import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, TemplateVariable, VariableMetadata } from '@core/types/variable';
 import { 
   createImportedVariable, 
   createObjectVariable,
@@ -14,6 +14,8 @@ import {
   getEffectiveType,
   VariableTypeGuards
 } from '@core/types/variable';
+import { VariableMetadataUtils } from '@core/types/variable';
+import type { DataLabel } from '@core/types/security';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
@@ -178,9 +180,19 @@ export class VariableImporter {
     targetEnv: Environment
   ): Promise<void> {
     const { moduleObject } = processingResult;
+    const serializedMetadata = this.extractMetadataMap(moduleObject);
+    const moduleObjectForImport = serializedMetadata
+      ? Object.fromEntries(Object.entries(moduleObject).filter(([key]) => key !== '__metadata__'))
+      : moduleObject;
     
     // Handle variable merging based on import type
-    await this.handleImportType(directive, moduleObject, targetEnv, processingResult.childEnvironment);
+    await this.handleImportType(
+      directive,
+      moduleObjectForImport,
+      targetEnv,
+      processingResult.childEnvironment,
+      serializedMetadata
+    );
   }
 
   /**
@@ -197,6 +209,7 @@ export class VariableImporter {
 
     // Always start with auto-export of all top-level variables
     const moduleObject: Record<string, any> = {};
+    const serializedMetadataMap: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>> = {};
     const explicitNames = manifest?.hasEntries() ? manifest.getNames() : null;
     const explicitExports = explicitNames ? new Set(explicitNames) : null;
     if (explicitNames && explicitNames.length > 0) {
@@ -301,6 +314,14 @@ export class VariableImporter {
         // For other variables, export the value directly
         moduleObject[name] = variable.value;
       }
+
+      const serializedMetadata = VariableMetadataUtils.serializeSecurityMetadata(variable.metadata);
+      if (serializedMetadata) {
+        serializedMetadataMap[name] = serializedMetadata;
+      }
+    }
+    if (Object.keys(serializedMetadataMap).length > 0) {
+      moduleObject.__metadata__ = serializedMetadataMap;
     }
     
     return {
@@ -316,7 +337,11 @@ export class VariableImporter {
     name: string,
     value: any,
     importPath: string,
-    originalName?: string
+    originalName?: string,
+    options?: {
+      securityLabels?: DataLabel[];
+      serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined;
+    }
   ): Variable {
     const source: VariableSource = {
       directive: 'var',
@@ -325,30 +350,45 @@ export class VariableImporter {
       hasInterpolation: false,
       isMultiLine: false
     };
-    
-    const metadata = {
+    const deserialized = VariableMetadataUtils.deserializeSecurityMetadata(options?.serializedMetadata);
+    const baseMetadata = {
       isImported: true,
       importPath,
       originalName: originalName !== name ? originalName : undefined,
-      definedAt: { line: 0, column: 0, filePath: importPath }
+      definedAt: { line: 0, column: 0, filePath: importPath },
+      ...deserialized
     };
+    const initialMetadata = VariableMetadataUtils.applySecurityMetadata(baseMetadata, {
+      labels: options?.securityLabels,
+      existingDescriptor: deserialized.security
+    });
+    const buildMetadata = (extra?: VariableMetadata): VariableMetadata =>
+      VariableMetadataUtils.applySecurityMetadata(
+        {
+          ...initialMetadata,
+          ...(extra || {})
+        },
+        {
+          labels: options?.securityLabels,
+          existingDescriptor: initialMetadata.security
+        }
+      );
 
     if (isStructuredValue(value)) {
       return createStructuredValueVariable(
         name,
         value,
         source,
-        {
-          ...metadata,
+        buildMetadata({
           isStructuredValue: true,
           structuredValueType: value.type
-        }
+        })
       );
     }
     
     // Check if this is an executable export
     if (value && typeof value === 'object' && '__executable' in value && value.__executable) {
-      return this.createExecutableFromImport(name, value, source, metadata);
+      return this.createExecutableFromImport(name, value, source, buildMetadata(), options?.securityLabels);
     }
     
     // Check if this is a template export
@@ -359,7 +399,7 @@ export class VariableImporter {
         hasInterpolation: true,
         isMultiLine: true
       };
-      const tmplMetadata = { ...metadata, templateAst: (value as any).templateAst };
+      const tmplMetadata = buildMetadata({ templateAst: (value as any).templateAst });
       return createTemplateVariable(
         name,
         (value as any).content,
@@ -388,12 +428,11 @@ export class VariableImporter {
         processedValue,
         isComplexArray,
         source,
-        {
-          ...metadata,
+        buildMetadata({
           isImported: true,
           importPath,
           originalName: originalName !== name ? originalName : undefined
-        }
+        })
       );
     }
 
@@ -408,12 +447,11 @@ export class VariableImporter {
         normalizedObject,
         isComplex, // Mark as complex if it contains AST nodes
         source,
-        {
-          ...metadata,
+        buildMetadata({
           isImported: true,
           importPath,
           originalName: originalName !== name ? originalName : undefined
-        }
+        })
       );
     }
     
@@ -426,7 +464,7 @@ export class VariableImporter {
       false,
       originalName || name,
       source,
-      metadata
+      buildMetadata()
     );
   }
 
@@ -471,9 +509,11 @@ export class VariableImporter {
    * Create a namespace variable for imports with aliased wildcards (e.g., * as @config)
    */
   createNamespaceVariable(
-    alias: string, 
-    moduleObject: Record<string, any>, 
-    importPath: string
+    alias: string,
+    moduleObject: Record<string, any>,
+    importPath: string,
+    securityLabels?: DataLabel[],
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
   ): Variable {
     const source: VariableSource = {
       directive: 'var',
@@ -485,18 +525,39 @@ export class VariableImporter {
     // Check if the namespace contains complex content (like executables)
     const isComplex = this.hasComplexContent(moduleObject);
     
+    const metadata = VariableMetadataUtils.applySecurityMetadata(
+      {
+        isImported: true,
+        importPath,
+        isNamespace: true,
+        definedAt: { line: 0, column: 0, filePath: importPath },
+        namespaceMetadata: metadataMap
+      },
+      { labels: securityLabels }
+    );
+
     return createObjectVariable(
       alias,
       moduleObject,
       isComplex, // Mark as complex if it contains AST nodes or executables
       source,
-      {
-        isImported: true,
-        importPath,
-        isNamespace: true,
-        definedAt: { line: 0, column: 0, filePath: importPath }
-      }
+      metadata
     );
+  }
+
+  private extractMetadataMap(
+    moduleObject: Record<string, any>
+  ): Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined> | undefined {
+    const container = (moduleObject as Record<string, any>).__metadata__;
+    if (!container || typeof container !== 'object') {
+      return undefined;
+    }
+
+    const result: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined> = {};
+    for (const [key, value] of Object.entries(container)) {
+      result[key] = value as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
+    }
+    return result;
   }
 
   /**
@@ -506,7 +567,8 @@ export class VariableImporter {
     directive: DirectiveNode,
     moduleObject: Record<string, any>,
     targetEnv: Environment,
-    childEnv: Environment
+    childEnv: Environment,
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
   ): Promise<void> {
     if (directive.subtype === 'importAll') {
       throw new MlldImportError(
@@ -518,9 +580,9 @@ export class VariableImporter {
         }
       );
     } else if (directive.subtype === 'importNamespace') {
-      await this.handleNamespaceImport(directive, moduleObject, targetEnv, childEnv);
+      await this.handleNamespaceImport(directive, moduleObject, targetEnv, childEnv, metadataMap);
     } else if (directive.subtype === 'importSelected') {
-      await this.handleSelectedImport(directive, moduleObject, targetEnv, childEnv);
+      await this.handleSelectedImport(directive, moduleObject, targetEnv, childEnv, metadataMap);
     } else {
       throw new Error(`Unknown import subtype: ${directive.subtype}`);
     }
@@ -533,7 +595,8 @@ export class VariableImporter {
     directive: DirectiveNode,
     moduleObject: Record<string, any>,
     targetEnv: Environment,
-    childEnv: Environment
+    childEnv: Environment,
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
   ): Promise<void> {
     // For shorthand imports, namespace is stored as an array in values.namespace
     const namespaceNodes = directive.values?.namespace;
@@ -598,10 +661,13 @@ export class VariableImporter {
     }
 
     // Create namespace variable with the (potentially unwrapped) object
+    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
     const namespaceVar = this.createNamespaceVariable(
       alias,
       namespaceObject,
-      importPath
+      importPath,
+      securityLabels,
+      metadataMap
     );
     this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
   }
@@ -613,12 +679,14 @@ export class VariableImporter {
     directive: DirectiveNode,
     moduleObject: Record<string, any>,
     targetEnv: Environment,
-    childEnv: Environment
+    childEnv: Environment,
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
   ): Promise<void> {
     const imports = directive.values?.imports || [];
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
     const importDisplay = this.getImportDisplayPath(directive, importPath);
     const importerFilePath = targetEnv.getCurrentFilePath();
+    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
 
     for (const importItem of imports) {
       const importName = importItem.identifier;
@@ -636,7 +704,11 @@ export class VariableImporter {
       this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
 
       const importedValue = moduleObject[importName];
-      const variable = this.createVariableFromValue(alias, importedValue, importPath, importName);
+      const serializedMetadata = metadataMap ? metadataMap[importName] : undefined;
+      const variable = this.createVariableFromValue(alias, importedValue, importPath, importName, {
+        securityLabels,
+        serializedMetadata
+      });
 
       this.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
     }
@@ -662,7 +734,8 @@ export class VariableImporter {
     name: string,
     value: any,
     source: VariableSource,
-    metadata: any
+    metadata: any,
+    securityLabels?: DataLabel[]
   ): ExecutableVariable {
     // This is an executable variable - reconstruct it properly
     const execValue = value.value;
@@ -721,7 +794,12 @@ export class VariableImporter {
       importPath: metadata.importPath,
       executableDef // This is what actually matters for execution
     };
-    
+
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(enhancedMetadata, {
+      labels: securityLabels,
+      existingDescriptor: enhancedMetadata.security
+    });
+
     const execVariable = createExecutableVariable(
       name,
       'command', // Default type - the real type is in executableDef
@@ -729,7 +807,7 @@ export class VariableImporter {
       paramNames,
       undefined, // No language here - it's in executableDef
       source,
-      enhancedMetadata
+      finalMetadata
     );
     
     return execVariable;
