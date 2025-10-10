@@ -1,6 +1,3 @@
-/var @tpl = `
-/for @v in ["x","y"]
-- @v
-/end
-`
-/show @tpl
+/exe @wrap(x) = `[@x]`
+/exe @wrapAll(items) = foreach @wrap(@items)
+/show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]

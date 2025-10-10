@@ -326,19 +326,34 @@ export async function resolveCommandReference(
       return null;
     }
     
-    // For executable variables (like transformers), return the variable itself
-    // For other types, we might need to resolve field access
-    if (baseVar.type === 'executable') {
-      return baseVar;
+    const variantMap = baseVar.metadata?.transformerVariants as Record<string, any> | undefined;
+    let value: any;
+    let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
+
+    if (variantMap && remainingFields.length > 0) {
+      const firstField = remainingFields[0];
+      if (firstField.type === 'field' || firstField.type === 'stringIndex' || firstField.type === 'numericField') {
+        const variantName = String(firstField.value);
+        const variant = variantMap[variantName];
+        if (!variant) {
+          throw new Error(`Pipeline function '@${varRef.identifier}.${variantName}' is not defined`);
+        }
+        value = variant;
+        remainingFields = remainingFields.slice(1);
+      }
+    }
+
+    if (typeof value === 'undefined') {
+      if (baseVar.type === 'executable') {
+        return baseVar;
+      }
+      // Extract value for non-executable variables
+      const { extractVariableValue } = await import('../../utils/variable-resolution');
+      value = await extractVariableValue(baseVar, env);
     }
     
-    // Extract value for non-executable variables
-    const { extractVariableValue } = await import('../../utils/variable-resolution');
-    let value = await extractVariableValue(baseVar, env);
-    
-    // Navigate through field access if present
-    if (varRef.fields && varRef.fields.length > 0) {
-      for (const field of varRef.fields) {
+    if (remainingFields.length > 0) {
+      for (const field of remainingFields) {
         if ((field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField') && typeof value === 'object' && value !== null) {
           value = (value as Record<string, unknown>)[String(field.value)];
         } else if (field.type === 'arrayIndex' && Array.isArray(value)) {
@@ -369,7 +384,8 @@ export async function executeCommandVariable(
   commandVar: any,
   args: any[],
   env: Environment,
-  stdinInput?: string
+  stdinInput?: string,
+  structuredInput?: StructuredValue
 ): Promise<CommandExecutionResult> {
   const finalizeResult = (
     value: unknown,
@@ -492,59 +508,70 @@ export async function executeCommandVariable(
       const isPipelineParam = i === 0 && pipelineCtx !== undefined && stdinInput !== undefined;
       
       if (isPipelineParam) {
-        // First parameter ALWAYS gets the pipeline input (stdinInput)
         const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
-        const stdinForUnwrap = isStructuredValue(stdinInput) ? asText(stdinInput) : (stdinInput || '');
-        const unwrappedStdin = AutoUnwrapManager.unwrap(stdinForUnwrap);
-        const textValue = typeof unwrappedStdin === 'string' ? unwrappedStdin : String(unwrappedStdin ?? '');
-        
+        const textValue = structuredInput ? structuredInput.text : (stdinInput ?? '');
+        const unwrapSource = structuredInput ?? textValue;
+        const unwrappedStdin = AutoUnwrapManager.unwrap(unwrapSource);
+
+        const hasNativeStructuredInput =
+          structuredInput && structuredInput.type && structuredInput.type !== 'text';
+
+        if (hasNativeStructuredInput) {
+          const typedVar = createTypedPipelineVariable(paramName, structuredInput.data, textValue);
+          execEnv.setParameterVariable(paramName, typedVar);
+          continue;
+        }
+
         if (!format) {
           const shouldParse = shouldAutoParsePipelineInput(stageLanguage);
           if (shouldParse) {
-            const parsed = parseStructuredJson(textValue);
+            const candidate = typeof unwrappedStdin === 'string' ? unwrappedStdin : textValue;
+            const parsed = parseStructuredJson(candidate);
             if (parsed !== null) {
-              const typedVar = createTypedPipelineVariable(paramName, parsed, textValue);
+              const typedVar = createTypedPipelineVariable(paramName, parsed, candidate);
               execEnv.setParameterVariable(paramName, typedVar);
               continue;
             }
           }
-          // Create a simple text variable instead of PipelineInput
+          const resolvedText = typeof unwrappedStdin === 'string' ? unwrappedStdin : textValue;
           const textSource: VariableSource = {
             directive: 'var',
             syntax: 'quoted',
             hasInterpolation: false,
             isMultiLine: false
           };
-          
+
           const textVar = createSimpleTextVariable(
             paramName,
-            textValue,
+            resolvedText,
             textSource,
             { isPipelineParameter: true }
           );
-          
+
           execEnv.setParameterVariable(paramName, textVar);
+          continue;
         } else {
-          // Create wrapped input with format
-          const wrappedInput = createPipelineInput(textValue, format);
-          
+          const resolvedText = typeof unwrappedStdin === 'string' ? unwrappedStdin : textValue;
+          const wrappedInput = createPipelineInput(resolvedText, format);
+
           const pipelineSource: VariableSource = {
             directive: 'var',
             syntax: 'template',
             hasInterpolation: false,
             isMultiLine: false
           };
-          
+
           const pipelineVar = createPipelineInputVariable(
             paramName,
             wrappedInput,
             format as 'json' | 'csv' | 'xml' | 'text',
-            textValue,
+            resolvedText,
             pipelineSource,
             pipelineCtx?.stage
           );
-          
+
           execEnv.setParameterVariable(paramName, pipelineVar);
+          continue;
         }
       } else {
         // Regular parameter handling
@@ -864,7 +891,7 @@ export async function executeCommandVariable(
     if (fromParamScope) {
       // If this is an executable, recursively execute it in the same param scope
       if ((fromParamScope as any).type === 'executable') {
-        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput);
+        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput, structuredInput);
       }
       // Non-executable reference in exec scope: this is most likely a mistake now that
       // identity bodies compile to template executables.
@@ -879,7 +906,7 @@ export async function executeCommandVariable(
     }
 
     if ( (refVar as any).type === 'executable') {
-      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput);
+      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput, structuredInput);
     }
     // Non-executable reference in stage env: surface clear guidance
     const t = (refVar as any).type;

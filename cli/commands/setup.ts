@@ -113,7 +113,7 @@ export class SetupCommand {
 
       // Get existing registries if updating
       if (hasExistingConfig) {
-        resolverRegistries = [...lockFile.getResolverPrefixes()];
+        resolverRegistries = [...projectConfig.getResolverPrefixes()];
       }
 
       // Configure GitHub resolver
@@ -137,10 +137,10 @@ export class SetupCommand {
       }
 
       // Ask about script directory for all setup types
-      const scriptDir = await this.setupScriptDirectory(rl, lockFile);
+      const scriptDir = await this.setupScriptDirectory(rl, projectConfig);
 
       // Save configuration
-      await this.saveConfiguration(lockFile, resolverRegistries, hasExistingConfig, scriptDir);
+      await this.saveConfiguration(projectConfig, resolverRegistries, hasExistingConfig, scriptDir);
 
       console.log(chalk.green('\n✔ Setup complete!'));
       
@@ -396,15 +396,15 @@ Information about this module.
     };
   }
 
-  private async setupScriptDirectory(rl: readline.Interface, lockFile: LockFile): Promise<string> {
+  private async setupScriptDirectory(rl: readline.Interface, projectConfig: ProjectConfig): Promise<string> {
     console.log('');
     console.log('---');
     console.log('');
     console.log(chalk.blue('Script Directory Configuration'));
     console.log('');
-    
-    // Get current script directory from lock file
-    const currentScriptDir = lockFile.getScriptDir() || 'llm/run';
+
+    // Get current script directory from project config
+    const currentScriptDir = projectConfig.getScriptDir() || 'llm/run';
     
     // Get script directory path
     const defaultDir = 'llm/run';
@@ -448,34 +448,34 @@ A simple mlld script example.
   }
 
   private async saveConfiguration(
-    lockFile: LockFile, 
-    resolverRegistries: any[], 
+    projectConfig: ProjectConfig,
+    resolverRegistries: any[],
     hasExistingConfig: boolean,
     scriptDir?: string
   ): Promise<void> {
     // Update resolver registries
-    await lockFile.setResolverPrefixes(resolverRegistries);
-    
+    await projectConfig.setResolverPrefixes(resolverRegistries);
+
     // Save script directory configuration
     if (scriptDir) {
-      await lockFile.setScriptDir(scriptDir);
+      await projectConfig.setScriptDir(scriptDir);
     }
 
     // If this is a new file, add some basic security configuration
     if (!hasExistingConfig) {
       // Set basic security domains for GitHub operations
-      const currentTrustedDomains = lockFile.getTrustedDomains();
+      const currentTrustedDomains = projectConfig.getTrustedDomains();
       const defaultDomains = [
         'raw.githubusercontent.com',
         'gist.githubusercontent.com',
         'api.github.com'
       ];
-      
+
       // Add default domains if not already present
       const needsUpdate = defaultDomains.some(domain => !currentTrustedDomains.includes(domain));
       if (needsUpdate) {
         const mergedDomains = [...new Set([...currentTrustedDomains, ...defaultDomains])];
-        await lockFile.setTrustedDomains(mergedDomains);
+        await projectConfig.setTrustedDomains(mergedDomains);
       }
     }
 

@@ -5,6 +5,72 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc63]
+### Fixed
+- Fixed local resolver to recognize all mlld extensions as modules when they contain directives. Previously only .mlld.md files were explicitly treated as modules, causing "Import target is not a module" errors when importing .mld files via custom resolver prefixes like @context/.
+- Improved content type detection to parse file contents for mlld directives across all module extensions, maintaining backward compatibility for files with non-standard extensions that contain valid mlld code.
+- Missing `--tag` on cli added
+- Update docs to cover modules, registry, resolvers
+
+### Added
+- Batch and condensed pipeline stages now receive the structured wrapper instead of raw strings, so helpers can work with native arrays/objects without JSON.parse.
+- **Custom tag support for publishing**: `mlld publish --tag <name>` allows publishing modules with custom version tags
+  - Publish with beta/alpha tags: `mlld publish module.mld --tag beta`
+  - Tag validation ensures alphanumeric + hyphens only, 2-50 character length
+  - Reserved tags (`latest`, `stable`) are rejected with clear error messages
+  - Users can import using custom tags: `/import { @helper } from @alice/utils@beta`
+
+## [2.0.0-rc62]
+
+### Added
+- **Batch pipelines for collection expressions**: `for` and `foreach` now accept a trailing `=> |` pipeline that runs after iteration completes. The batch phase reuses standard pipeline syntax, applies to the gathered array, and may return arrays, scalars, or objects. Grammar attaches the pipeline to `ForExpression.meta.batchPipeline` and `ForeachCommandExpression`, and the interpreter processes the results via `processPipeline()` before emitting the final variable or display output.
+
+### Notes
+- Batch pipelines behave like condensed pipelines: each stage receives string input, so helpers that expect arrays should parse the string back to JSON. Currently parallel groups (`||`) share the same semantics but are not fully supported/tested.
+
+## [2.0.0-rc61]
+
+### Added
+- **Loose JSON parsing modes**: `@json` now accepts relaxed JSON syntax (single quotes, trailing commas, comments) using JSON5, with explicit `@json.loose` and `@json.strict` variants for opting in or enforcing strict parsing. Error messages direct users to the loose mode when strict parsing fails.
+
+### Fixed
+- **Structured data handling in field access**: Fixed array operations on nested StructuredValue wrappers
+  - Field access now properly unwraps nested StructuredValue before array operations
+  - Fixes potential runtime errors with deeply nested structured data (e.g., `@nested[0]` where `@nested` is a wrapped array)
+  - Related to #435 structured data edge cases
+  - Fixed in `interpreter/utils/field-access.ts:477` and `:248`
+
+- **Exec invocation stdin handling**: Fixed stdin coercion missing StructuredValue unwrapping
+  - Exec invocations now properly unwrap StructuredValue when preparing stdin data
+  - Aligns with run.ts stdin handling (same pattern as the golden standard)
+  - Prevents double-wrapping or incorrect stringification of structured values passed via stdin
+  - Related to #435 structured data edge cases
+  - Fixed in `interpreter/eval/exec-invocation.ts:49`
+
+- **Shell interpolation of structured values**: Complex arrays/objects now survive shell argument quoting
+  - Shared `classifyShellValue` helper drives `/run` and `@exe` stdin/argument coercion
+  - Interpolation tracks both single- and double-quoted spans, avoiding `[object Object]` and broken quoting
+  - File-content fixtures confirm literal `$`, `` ` ``, and quotes reach the shell intact
+  - Covers regressions from #435 user scenario
+
+- **Variable assignment with wrapped values**: Fixed String() conversions producing [object Object]
+  - Variable assignments now use `valueToString()` helper that checks for StructuredValue wrappers
+  - Uses `asText()` helper for StructuredValue wrappers instead of naive String() conversion
+  - Applies fix to 7 locations in var.ts where String() was used on complex values (lines 725, 751, 763, 773, 782, 820, 823)
+  - Variable type detection now properly unwraps StructuredValue before Array.isArray() checks (3 locations: lines 719, 745, 757)
+  - Related to #435 structured data edge cases
+  - Fixed in `interpreter/eval/var.ts`
+
+## [2.0.0-rc60]
+
+### Fixed
+- **Shell command interpolation with nested arrays**: Fixed arrays of objects/arrays being converted to `[object Object]` in shell commands
+  - Shell command context (e.g., `echo @array`) now properly JSON-stringifies complex array elements
+  - Previously `String(object)` produced `[object Object]`, breaking data flow through shell executables
+  - Example: `/exe @func(e) = run { echo @e }` now correctly outputs JSON for nested arrays
+  - Fixes remaining edge case from #435 (https://github.com/mlld-lang/mlld/issues/435#issuecomment-3386904732)
+- Addressed instances of old mlld.lock.json file expectations throughout codebase
+
 ## [2.0.0-rc59]
 
 ### Changed

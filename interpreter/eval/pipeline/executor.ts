@@ -232,10 +232,12 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     try {
+      const structuredInput = this.getStageOutput(stageIndex - 1, input);
       // Set up execution environment for a single command stage
       const stageEnv = await createStageEnvironment(
         command,
         input,
+        structuredInput,
         context,
         this.env,
         this.format,
@@ -250,7 +252,7 @@ export class PipelineExecutor {
       let output: any;
       while (true) {
         try {
-          output = await this.executeCommand(command, input, stageEnv);
+          output = await this.executeCommand(command, input, structuredInput, stageEnv);
           this.rateLimiter.reset();
           break;
         } catch (err: any) {
@@ -350,8 +352,9 @@ export class PipelineExecutor {
   private async executeCommand(
     command: PipelineCommand,
     input: string,
+    structuredInput: StructuredValue,
     stageEnv: Environment
-  ): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
+  ): Promise<StructuredValue | string | { value: 'retry'; hint?: any; from?: number }> {
     // Special handling for synthetic __source__ stage
     if (command.rawIdentifier === '__source__') {
       const firstTime = !this.sourceExecutedOnce;
@@ -367,7 +370,7 @@ export class PipelineExecutor {
       
       if (firstTime) {
         // First execution - return the already-computed initial input text
-        return this.initialInputText;
+      return this.initialInputText;
       }
       
       // Retry execution - need to call source function
@@ -413,7 +416,7 @@ export class PipelineExecutor {
     const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
     
     const result = await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await this.executeCommandVariable(commandVar, args, stageEnv, input);
+      return await this.executeCommandVariable(commandVar, args, stageEnv, input, structuredInput);
     });
 
     return result;
@@ -539,10 +542,11 @@ export class PipelineExecutor {
     commandVar: any,
     args: any[],
     env: Environment,
-    stdinInput?: string
+    stdinInput?: string,
+    structuredInput?: StructuredValue
   ): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
     const { executeCommandVariable } = await import('./command-execution');
-    return await executeCommandVariable(commandVar, args, env, stdinInput);
+    return await executeCommandVariable(commandVar, args, env, stdinInput, structuredInput);
   }
 
   /**
@@ -601,13 +605,16 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     try {
+      const sharedStructuredInput = this.getStageOutput(stageIndex - 1, input);
       const results = await runWithConcurrency(
         commands,
         Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
         async (cmd) => {
+          const branchInput = wrapStructured(sharedStructuredInput);
           const subEnv = await createStageEnvironment(
             cmd,
             input,
+            branchInput,
             context,
             this.env,
             this.format,
@@ -619,7 +626,7 @@ export class PipelineExecutor {
             }
           );
 
-          const raw = await this.executeCommand(cmd, input, subEnv);
+          const raw = await this.executeCommand(cmd, input, branchInput, subEnv);
           if (this.isRetrySignal(raw)) {
             return raw;
           }

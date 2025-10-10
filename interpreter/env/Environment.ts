@@ -507,6 +507,33 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       // Reserve both names
       this.reservedNames.add(transformer.uppercase);
       this.reservedNames.add(transformer.name);
+
+      if (transformer.variants && transformer.variants.length > 0) {
+        const lowerMetadata = (lowerVar.metadata ??= {} as any);
+        const upperMetadata = (upperVar.metadata ??= {} as any);
+        const lowerVariantMap = lowerMetadata.transformerVariants ?? (lowerMetadata.transformerVariants = {} as Record<string, any>);
+        const upperVariantMap = upperMetadata.transformerVariants ?? (upperMetadata.transformerVariants = {} as Record<string, any>);
+        for (const variant of transformer.variants) {
+          const lowerVariant = createTransformerVariable(
+            `${transformer.name}.${variant.field}`,
+            variant.implementation,
+            variant.description,
+            false
+          );
+          const upperVariant = createTransformerVariable(
+            `${transformer.uppercase}_${variant.field.toUpperCase()}`,
+            variant.implementation,
+            variant.description,
+            true
+          );
+
+          (lowerVar.value as Record<string, unknown>)[variant.field] = lowerVariant;
+          (upperVar.value as Record<string, unknown>)[variant.field] = upperVariant;
+
+          lowerVariantMap[variant.field] = lowerVariant;
+          upperVariantMap[variant.field] = upperVariant;
+        }
+      }
     }
   }
   

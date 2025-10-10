@@ -635,36 +635,38 @@ export class LocalResolver implements Resolver {
    * Detect content type based on file extension and content
    */
   private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
-    // Check file extension
-    // Only .mlld.md files are formal modules
-    if (filePath.endsWith('.mlld.md')) {
-      return 'module';
+    // Check file extension - all mlld extensions are recognized as modules
+    const mlldExtensions = ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md'];
+
+    // Check if file has an mlld extension
+    const hasMLLDExtension = mlldExtensions.some(ext => filePath.endsWith(ext));
+
+    // For mlld extensions or unknown extensions, try parsing as mlld
+    if (hasMLLDExtension || (!filePath.endsWith('.json'))) {
+      try {
+        const { parse } = await import('@grammar/parser');
+        const result = await parse(content);
+        if (result.success && this.hasModuleExports(result.ast)) {
+          return 'module';
+        }
+      } catch {
+        // Parse failed - continue to other checks
+      }
     }
+
+    // Check for JSON files
     if (filePath.endsWith('.json')) {
       return 'data';
     }
-    // Note: .mld and .mlld files are treated as 'text' since they're not formal modules
-    // They can still be imported, but they're not packaged modules
-    
-    // Try to detect mlld module content
-    try {
-      const { parse } = await import('@grammar/parser');
-      const result = await parse(content);
-      if (result.success && this.hasModuleExports(result.ast)) {
-        return 'module';
-      }
-    } catch {
-      // Not valid mlld
-    }
-    
-    // Try JSON
+
+    // Try JSON parsing as fallback
     try {
       JSON.parse(content);
       return 'data';
     } catch {
       // Not JSON
     }
-    
+
     return 'text';
   }
   

@@ -6,6 +6,7 @@ import { PathService } from '@services/fs/PathService';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'tinyglobby';
+import { Environment } from './env/Environment';
 
 // Mock tinyglobby for fixture tests
 vi.mock('tinyglobby', () => ({
@@ -1355,30 +1356,42 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               process.env[key] = value as string;
             }
           }
-          // For valid fixtures, expect successful interpretation
-          const result = await interpret(fixture.input, {
-            fileSystem,
-            pathService,
-            format: 'markdown',
-            basePath,
-            urlConfig,
-            stdinContent,
-            useMarkdownFormatter: false, // Disable prettier for tests to maintain exact output
-            outputOptions: {
-              showProgress: false // Disable progress output in tests
-            },
-            // Avoid real filesystem writes and locks
-            ephemeral: true,
-            effectHandler: new TestRedirectEffectHandler('/tmp-tests', fileSystem),
-            // Allow absolute paths for absolute path test
-            allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
-          });
+          let fetchSpy: ReturnType<typeof vi.spyOn> | undefined;
+          if (fixture.name.includes('import/url-angle-cached')) {
+            fetchSpy = vi
+              .spyOn(Environment.prototype, 'fetchURL')
+              .mockImplementation(async () => '/var @value = "cached angle from fixture"');
+          }
+
+          let result: string;
+          try {
+            // For valid fixtures, expect successful interpretation
+            result = await interpret(fixture.input, {
+              fileSystem,
+              pathService,
+              format: 'markdown',
+              basePath,
+              urlConfig,
+              stdinContent,
+              useMarkdownFormatter: false, // Disable prettier for tests to maintain exact output
+              outputOptions: {
+                showProgress: false // Disable progress output in tests
+              },
+              // Avoid real filesystem writes and locks
+              ephemeral: true,
+              effectHandler: new TestRedirectEffectHandler('/tmp-tests', fileSystem),
+              // Allow absolute paths for absolute path test
+              allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
+            }) as string;
+          } finally {
+            fetchSpy?.mockRestore();
+          }
           
           if (isValidFixture && !isSmokeTest) {
             // Normalize output (trim trailing whitespace/newlines)
-          const normalizedResult = result.trim();
-          const normalizedExpected = fixture.expected.trim();
-          expect(normalizedResult).toBe(normalizedExpected);
+            const normalizedResult = result.trim();
+            const normalizedExpected = fixture.expected.trim();
+            expect(normalizedResult).toBe(normalizedExpected);
           } else if (isSmokeTest) {
             // For smoke tests, just verify it doesn't crash and produces output
             expect(result).toBeDefined();

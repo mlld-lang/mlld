@@ -90,6 +90,26 @@ describe('Import type handling', () => {
     expect((output as string).trim()).toBe('inferred cached');
   });
 
+  it('supports cached URL imports with angle-bracket syntax', async () => {
+    const fetchSpy = vi
+      .spyOn(Environment.prototype, 'fetchURL')
+      .mockResolvedValue('/var @value = "cached angle"');
+
+    const source = `/import cached(5m) <https://example.com/angle.mld> as @remote\n/show @remote.value`;
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, options] = fetchSpy.mock.calls[0];
+    expect(options?.importType).toBe('cached');
+    expect(options?.cacheDurationMs).toBe(300_000);
+    expect((output as string).trim()).toBe('cached angle');
+  });
+
   it('imports local files with inferred static type', async () => {
     await fileSystem.writeFile(
       '/project/import-types-file.mld',

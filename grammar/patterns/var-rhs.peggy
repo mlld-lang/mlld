@@ -146,9 +146,10 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
         const startOffset = firstPipe.pipeStart;
         pipes.push({
           type: 'CondensedPipe',
-          transform: firstPipe.command.name,
+          transform: firstPipe.command.fullName,
           hasAt: true,
           args: firstPipe.command.args || [],
+          fields: firstPipe.command.fields || [],
           location: {
             source: loc.source,
             start: { 
@@ -181,9 +182,10 @@ SpacedOrCondensedPipe
       const startOffset = pipeStart;
       return {
         type: 'CondensedPipe',
-        transform: command.name,
+        transform: command.fullName,
         hasAt: true,
         args: command.args || [],
+        fields: command.fields || [],
         location: {
           source: loc.source,
           start: { 
@@ -198,8 +200,10 @@ SpacedOrCondensedPipe
 
 // Pipe command syntax for non-template pipelines: @name or @name(args)
 PipeCommand "pipe command"
-  = "@" name:BaseIdentifier args:( _ "(" _ a:CommandArgumentList? _ ")" { return a || []; } )? {
-      return { name, args: args || [] };
+  = "@" name:BaseIdentifier fieldParts:(_ "." _ part:BaseIdentifier { return part; })* args:( _ "(" _ a:CommandArgumentList? _ ")" { return a || []; } )? {
+      const fields = fieldParts || [];
+      const fullName = fields.length > 0 ? `${name}.${fields.join('.')}` : name;
+      return { name, fullName, fields, args: args || [] };
     }
 
 // Chain of spaced-or-condensed pipes
@@ -414,15 +418,16 @@ CodeChar
 // FOR EXPRESSION - for @var in @collection => expression
 // Used in /var and /exe assignments to collect results
 ForExpression "for expression"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent {
-      helpers.debug('ForExpression matched', { pattern, expr });
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent batchPipe:ForBatchPipeline? {
+      helpers.debug('ForExpression matched', { pattern, expr, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
         expr,
         location(),
-        opts || null
+        opts || null,
+        batchPipe || null
       );
     }
   // Error recovery
@@ -434,4 +439,28 @@ ForExpression "for expression"
     }
   / "for" _ !"each" _ !"@" {
       helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => expression", "@", location());
+    }
+
+ForBatchPipeline "for batch pipeline"
+  = _ "=>" _ "||" _ firstParallel:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {
+      const pipeline = [[...firstParallel], ...rest];
+      helpers.debug('ForBatchPipeline matched (parallel)', {
+        stageCount: pipeline.length,
+        hasCaps: !!caps
+      });
+      return {
+        pipeline,
+        isBatchPipeline: true,
+        ...(caps ? { parallel: caps.parallel, delayMs: caps.delayMs } : {})
+      };
+    }
+  / _ "=>" _ "|" _ firstStage:PipelineStageFirst rest:PipelineRest* {
+      const pipeline = [firstStage, ...rest];
+      helpers.debug('ForBatchPipeline matched', {
+        stageCount: pipeline.length
+      });
+      return {
+        pipeline,
+        isBatchPipeline: true
+      };
     }

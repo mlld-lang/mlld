@@ -210,19 +210,19 @@ describe('PathContextService', () => {
         expect(validation.errors).toContain('filePath does not exist: /nonexistent/file.mld');
       });
       
-      it('should warn about missing mlld.lock.json', async () => {
+      it('should warn about missing mlld config files', async () => {
         await fileSystem.mkdir('/nolock');
         await fileSystem.writeFile('/nolock/script.mld', '');
-        
+
         const context = await PathContextBuilder.fromFile(
           '/nolock/script.mld',
           fileSystem
         );
-        
+
         const validation = await service.validate(context);
-        
+
         expect(validation.valid).toBe(true);
-        expect(validation.warnings).toContain('No mlld.lock.json found in project root: /nolock');
+        expect(validation.warnings).toContain('No mlld config files found in project root: /nolock');
       });
       
       it('should validate filePath is in fileDirectory', async () => {

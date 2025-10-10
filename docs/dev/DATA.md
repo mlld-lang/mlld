@@ -58,6 +58,9 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - `structuredOutputs` map tracks wrappers; `previousOutputs` stores `.text`
 - `@pipeline`/`@p` exposes wrappers to subsequent stages
 - Parallel stages aggregate structured arrays (`.data` is array, `.text` is JSON)
+- Batch pipelines on `for`/`foreach` create synthetic array variables (`for-batch-input`, `foreach-batch-input`) so `processPipeline()` receives structured arrays; results may be scalars, arrays, or objects and are normalized using the standard variable factories.
+- Stage environments set `@input` to a structured wrapper; JS/Node auto-binding sees `StructuredValue.data`, so helpers no longer need to call `JSON.parse` (unless they explicitly want raw strings via `.text`).
+- Both condensed (`=> |`) and parallel (`=> ||`) batch pipelines pass native arrays/objects into their stages, including parallel branches that run concurrently.
 - Regression coverage (#435) ensures pipelines hand structured data between stages without manual `JSON.parse`
 
 **Variables**
@@ -69,6 +72,7 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - `/load-content` returns wrappers with parsed `.data` and original text
 - Loader metadata (filenames, URLs) preserved in `.metadata.loadResult`
 - Transformers (`@json`, `@yaml`) forward native arrays/objects in `.data`
+  - `@json` uses JSON5 for relaxed parsing (single quotes, trailing commas, comments) and exposes `@json.loose`/`@json.strict` variants for explicit control.
 
 **Display**
 - Templates interpolate using `asText()` automatically

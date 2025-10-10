@@ -1,3 +1,5 @@
+import JSON5 from 'json5';
+
 import type { MlldVariable } from '@core/types';
 import type { ExecutableDefinition } from '@core/types/executable';
 
@@ -11,6 +13,50 @@ export interface TransformerDefinition {
   uppercase: string;
   description: string;
   implementation: (input: string) => Promise<string> | string;
+  variants?: TransformerVariant[];
+}
+
+export interface TransformerVariant {
+  field: string;
+  description: string;
+  implementation: (input: string) => Promise<string> | string;
+}
+
+function makeJsonTransformer(mode: 'loose' | 'strict') {
+  return (input: string) => {
+    if (mode === 'strict') {
+      try {
+        return JSON.parse(input);
+      } catch (error) {
+        const details = error instanceof Error ? error.message : String(error);
+        throw new Error(`Strict JSON parsing failed (use @json.loose for relaxed syntax)\n\n${details}`);
+      }
+    }
+
+    if (mode === 'loose') {
+      try {
+        return JSON5.parse(input);
+      } catch {
+        // Fall through to the legacy path (strict JSON then markdown conversion)
+        // so behaviour stays consistent with pre-JSON5 parsing.
+      }
+    }
+
+    return parseJsonWithMarkdownFallback(input);
+  };
+}
+
+function parseJsonWithMarkdownFallback(input: string): unknown {
+  try {
+    return JSON.parse(input);
+  } catch {
+    const converted = convertToJSON(input);
+    try {
+      return JSON.parse(converted);
+    } catch {
+      return converted;
+    }
+  }
 }
 
 export const builtinTransformers: TransformerDefinition[] = [
@@ -56,22 +102,20 @@ export const builtinTransformers: TransformerDefinition[] = [
   {
     name: 'json',
     uppercase: 'JSON', 
-    description: 'Format as JSON or convert to JSON structure',
-    implementation: (input: string) => {
-      try {
-        // Try to parse and pretty-print existing JSON
-        const parsed = JSON.parse(input);
-        return parsed;
-      } catch {
-        // Not JSON - attempt to convert markdown structures to JSON
-        const converted = convertToJSON(input);
-        try {
-          return JSON.parse(converted);
-        } catch {
-          return converted;
-        }
+    description: 'Format as JSON or convert to JSON structure (supports loose JSON syntax)',
+    implementation: makeJsonTransformer('loose'),
+    variants: [
+      {
+        field: 'loose',
+        description: 'Parse relaxed JSON syntax (JSON5)',
+        implementation: makeJsonTransformer('loose')
+      },
+      {
+        field: 'strict',
+        description: 'Parse strict JSON syntax only',
+        implementation: makeJsonTransformer('strict')
       }
-    }
+    ]
   },
   {
     name: 'csv',

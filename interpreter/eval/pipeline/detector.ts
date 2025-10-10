@@ -98,15 +98,27 @@ export function detectPipeline(
 function convertCondensedPipe(pipe: any): PipelineStage {
   // Handle different condensed pipe formats
   if (pipe.type === 'CondensedPipe') {
+    const transform = pipe.transform as string;
+    const fields = (pipe.fields as string[] | undefined) ?? [];
+    const identifierParts = transform.split('.');
+    const baseIdentifier = identifierParts[0];
+    const resolvedFields = fields.length > 0 ? fields : identifierParts.slice(1);
+
+    const variableRef: any = {
+      type: 'VariableReference',
+      valueType: 'varIdentifier',
+      identifier: baseIdentifier
+    };
+
+    if (resolvedFields.length > 0) {
+      variableRef.fields = resolvedFields.map((value) => ({ type: 'field', value }));
+    }
+
     return {
-      identifier: [{
-        type: 'VariableReference',
-        valueType: 'varIdentifier',
-        identifier: pipe.transform
-      }],
+      identifier: [variableRef],
       args: pipe.args || [],
-      fields: [],
-      rawIdentifier: pipe.transform,
+      fields: resolvedFields,
+      rawIdentifier: transform,
       rawArgs: pipe.args || []
     };
   }

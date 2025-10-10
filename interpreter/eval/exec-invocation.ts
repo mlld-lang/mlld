@@ -25,36 +25,12 @@ import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
+import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 
 /**
- * Coerce a value to a string for stdin input
- * Copied from run.ts to avoid export dependencies
- */
-function coerceStdinString(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-    return JSON.stringify(value);
-  }
-
-  return String(value);
-}
-
-/**
- * Resolve stdin input from expression
- * Copied from run.ts to avoid export dependencies
+ * Resolve stdin input from expression using shared shell classification.
  */
 async function resolveStdinInput(stdinSource: unknown, env: Environment): Promise<string> {
   if (stdinSource === null || stdinSource === undefined) {
@@ -70,7 +46,7 @@ async function resolveStdinInput(stdinSource: unknown, env: Environment): Promis
     value = await resolveValue(value, env, ResolutionContext.CommandExecution);
   }
 
-  return coerceStdinString(value);
+  return coerceValueForStdin(value);
 }
 
 /**

@@ -11,7 +11,11 @@
 const BUILTIN_TRANSFORMERS = new Set([
   // Format converters
   'json',
+  'json.loose',
+  'json.strict',
   'JSON',
+  'JSON_LOOSE',
+  'JSON_STRICT',
   'xml', 
   'XML',
   'csv',

@@ -1005,7 +1005,16 @@ export const helpers = {
     /**
      * Creates a ForExpression node for for...in expressions in /var assignments
      */
-    createForExpression(variable, source, expression, location, opts) {
+    createForExpression(variable, source, expression, location, opts, batchPipeline) {
+        const meta = {
+            isForExpression: true
+        };
+        if (opts) {
+            meta.forOptions = opts;
+        }
+        if (batchPipeline) {
+            meta.batchPipeline = batchPipeline;
+        }
         return {
             type: 'ForExpression',
             nodeId: randomUUID(),
@@ -1013,10 +1022,7 @@ export const helpers = {
             source: source,
             expression: Array.isArray(expression) ? expression : [expression],
             location: location,
-            meta: {
-                isForExpression: true,
-                forOptions: opts || undefined
-            }
+            meta
         };
     },
     /**
