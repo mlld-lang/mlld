@@ -47,9 +47,82 @@ function parseStructuredJson(text: string): any | null {
       return parsed;
     }
   } catch {
-    return null;
+    const sanitized = sanitizeJsonStringControlChars(trimmed);
+    if (sanitized !== trimmed) {
+      try {
+        const reparsed = JSON.parse(sanitized);
+        if (reparsed && typeof reparsed === 'object') {
+          return reparsed;
+        }
+      } catch {
+        return null;
+      }
+    }
   }
   return null;
+}
+
+function sanitizeJsonStringControlChars(input: string): string {
+  let inString = false;
+  let escaping = false;
+  let changed = false;
+  let result = '';
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+
+    if (escaping) {
+      result += char;
+      escaping = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      result += char;
+      escaping = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      result += char;
+      continue;
+    }
+
+    if (inString) {
+      const code = char.charCodeAt(0);
+      if (code >= 0 && code < 0x20) {
+        changed = true;
+        switch (char) {
+          case '\n':
+            result += '\\n';
+            continue;
+          case '\r':
+            result += '\\r';
+            continue;
+          case '\t':
+            result += '\\t';
+            continue;
+          case '\f':
+            result += '\\f';
+            continue;
+          case '\b':
+            result += '\\b';
+            continue;
+          case '\v':
+            result += '\\u000b';
+            continue;
+          default:
+            result += `\\u${code.toString(16).padStart(4, '0')}`;
+            continue;
+        }
+      }
+    }
+
+    result += char;
+  }
+
+  return changed ? result : input;
 }
 
 function unwrapStructuredDeep(value: any): any {
