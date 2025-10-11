@@ -100,8 +100,22 @@ class ShellCommandEscapingStrategy implements EscapingStrategy {
     // This preserves literal values when interpolating mlld variables
     
     // Important: We must escape backslashes first to avoid double-escaping
-    const escaped = value
-      .replace(/\\/g, '\\\\')  // Escape backslashes first
+    let escaped = value.replace(/\\/g, '\\\\');
+
+    // Normalize control characters so shell receives printable escapes
+    escaped = escaped
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n')
+      .replace(/\t/g, '\\t')
+      .replace(/\f/g, '\\f')
+      .replace(/\v/g, '\\v');
+
+    escaped = escaped.replace(/[\u0000-\u001F]/g, char => {
+      const code = char.charCodeAt(0).toString(16).padStart(2, '0');
+      return `\\x${code}`;
+    });
+
+    escaped = escaped
       .replace(/"/g, '\\"')    // Escape double quotes
       .replace(/\$/g, '\\$')   // Escape dollar signs to preserve literal values
       .replace(/`/g, '\\`');   // Escape backticks
