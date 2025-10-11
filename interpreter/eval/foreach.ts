@@ -1,7 +1,7 @@
 import type { Environment } from '../env/Environment';
 import { isExecutable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue, looksLikeJsonString } from '@interpreter/utils/structured-value';
 
 function hasArrayData(value: unknown): value is { data: unknown[] } {
   if (!value || typeof value !== 'object') {
@@ -156,7 +156,15 @@ export async function evaluateForeachCommand(
       // Use the standard exec invocation evaluator
       const result = await evaluateExecInvocation(execInvocationNode as any, env);
       const value = result.value;
-      results.push(isStructuredValue(value) ? asData(value) : value);
+      let normalized = isStructuredValue(value) ? asData(value) : value;
+      if (typeof normalized === 'string' && looksLikeJsonString(normalized)) {
+        try {
+          normalized = JSON.parse(normalized.trim());
+        } catch {
+          // Keep original string on parse failure
+        }
+      }
+      results.push(normalized);
     } catch (error) {
       // Include iteration context in error message
       const params = cmdVariable.paramNames || definition.paramNames || [];

@@ -489,6 +489,10 @@ When a pipeline has a retryable source (function), a synthetic stage is added in
 3. **Context Lifecycle**
 Context should be cleared when the REQUESTING stage completes, not the retrying stage.
 
+### Escaping
+
+`/run` pipelines expect JSON-like shell output to stay parseable. Control characters inside string literals are sanitized in `parseStructuredJson`, and regression coverage lives in `tests/cases/integration/pipeline-shell-json-newline/`. 
+
 ### Debugging Techniques
 
 ```bash
@@ -1227,6 +1231,9 @@ When implementing new pipeline features:
 5. **Lazy Evaluation**: Defer expensive operations
 6. **Test Coverage**: Add grammar, unit, and integration tests
 7. **Documentation**: Update user guides and examples
+
+## GOTCHAS
+
 
 ## Summary
 

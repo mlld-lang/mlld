@@ -53,6 +53,20 @@ export function asData<T = unknown>(value: unknown): T {
   throw new TypeError('Structured value required: data view is unavailable');
 }
 
+export function looksLikeJsonString(value: unknown): value is string {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length < 2) {
+    return false;
+  }
+  return (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  );
+}
+
 export function wrapStructured<T>(
   value: StructuredValue<T>,
   type?: StructuredValueType,
@@ -183,6 +197,7 @@ export const structuredValueUtils = {
   STRUCTURED_VALUE_SYMBOL,
   asText,
   asData,
+  looksLikeJsonString,
   wrapStructured,
   isStructuredValue,
   ensureStructuredValue

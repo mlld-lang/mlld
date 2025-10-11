@@ -5,6 +5,12 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc68]
+### Fixed
+- Template executables detect JSON-looking strings and wrap them as structured values, so downstream pipelines receive native objects instead of escaped text (#435).
+- Foreach iteration normalizes stage outputs that stringify JSON and passes parsed arrays/objects forward, restoring the behaviour users expect from `| @json` inputs.
+- `/show` array rendering unwraps structured elements to their `.data` view when possible, keeping canonical text intact for load-content metadata and structured JSON displays.
+
 ## [2.0.0-rc67]
 ### Fixed
 - Pipelines sanitize JSON-like shell output by escaping control characters inside string literals, so `/run` stages that echo newline-bearing JSON feed structured data forward correctly.
