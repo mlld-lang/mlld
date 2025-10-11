@@ -24,7 +24,7 @@ import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCap
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
-import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
+import { asText, isStructuredValue, wrapStructured, looksLikeJsonString } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { normalizeTransformerResult } from '../utils/transformer-result';
@@ -969,13 +969,9 @@ export async function evaluateExecInvocation(
     if (isStructuredValue(templateResult)) {
       result = templateResult;
     } else if (typeof templateResult === 'string') {
-      const trimmed = templateResult.trim();
-      if (
-        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))
-      ) {
+      if (looksLikeJsonString(templateResult)) {
         try {
-          const parsed = JSON.parse(trimmed);
+          const parsed = JSON.parse(templateResult.trim());
           const typeHint = Array.isArray(parsed) ? 'array' : 'object';
           result = wrapStructured(parsed, typeHint, templateResult);
         } catch {

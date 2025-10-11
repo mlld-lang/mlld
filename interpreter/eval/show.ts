@@ -31,6 +31,8 @@ import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evalua
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+
+const STRUCTURED_COLLECTION_TYPES = new Set(['object', 'array', 'json']);
 import { wrapExecResult } from '../utils/structured-exec';
 // Template normalization now handled in grammar - no longer needed here
 
@@ -419,7 +421,7 @@ export async function evaluateShow(
     } else if (Array.isArray(value)) {
       const printableArray = value.map(item => {
         if (isStructuredValue(item)) {
-          if (item.type === 'object' || item.type === 'array' || item.type === 'json') {
+          if (STRUCTURED_COLLECTION_TYPES.has(item.type)) {
             return item.data;
           }
           return asText(item);
