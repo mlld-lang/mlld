@@ -400,53 +400,132 @@ mlld provides built-in transformers (both uppercase and lowercase work):
 
 ## Templates and Interpolation
 
-### Template Syntax
+### Template Syntax and Interpolation
 
-Use different template syntaxes for different contexts:
+**Default to `::...::` for inline templates, `.att` files for external templates (5+ lines).** Switch to `:::...:::` or `.mtt` ONLY for Discord `<@userid>` mentions or heavy social media `@handle` usage.
+
+#### Quick Reference
+
+| Syntax | Interpolation | Pipes | Loops | Use For |
+|--------|---------------|-------|-------|---------|
+| `::...::` | `@var` `<file>` `@exe()` | ✓ | ✓ | **Default inline** |
+| `.att` | `@var` `<file>` `@exe()` | ✓ | ✓ | **Default external (5+ lines)** |
+| `` `...` `` | `@var` `<file>` `@exe()` | ✓ | ✓ | Same as `::...::` (preference) |
+| `"..."` | `@var` `<file>` `@exe()` | ✓ | ✗ | Single-line only |
+| `:::...:::` | `{{var}}` only | ✗ | ✗ | Discord/social escape hatch |
+| `.mtt` | `{{var}}` only | ✗ | ✗ | Discord/social external |
+| `'...'` | None (literal) | ✗ | ✗ | Literal text |
+| `{...}` | `@var` `<file>` | ✗ | ✗ | Commands/code |
+
+#### Inline Templates
 
 ```mlld
-/var @name = "Alice"
-/var @user = {"role": "admin", "id": 123}
+>> Double-colon (default)
+/var @msg = ::Hello @name!::
+/var @doc = ::Use `npm test` before @env::
+/var @report = ::
+Status: @status
+Config: <@base/config.json>
+Data: @data|@json
+::
 
->> Backticks (primary template syntax)
-/var @msg1 = `Hello @name!`
-/var @msg2 = `User @user.role has ID @user.id`
+>> Backticks (alternative)
+/var @msg = `Hello @name!`
+/var @multi = `
+Line 1: @var
+Line 2: @other
+`
 
->> Double colon for escaping backticks
-/var @code = ::Use `mlld run` with user @name::
+>> Double quotes (single-line only)
+/var @path = "@base/files/@filename"
+/run {echo "Processing @file"}
 
->> Triple colon for many @ symbols (use {{}} syntax)
-/var @social = :::Hey @{{name}}, check out {{user.role}}!:::
+>> Triple-colon (Discord/social only)
+/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
+/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
+
+>> Single quotes (literal)
+/var @literal = '@name stays literal'
 ```
 
-### External Templates (.att, .mtt)
-
-mlld supports two formats for external template files:
-- `.att` template files interpolate `@` vars and `<alligator.md>` vars
-- `.mtt` templates interpolate simple {{mustache}} style vars (less full featured)
+#### External Templates (.att, .mtt)
 
 Keep reusable templates in standalone files and execute them as functions:
 
 ```mlld
->> Files
-# templates/welcome.att   -> Hello @name! Title: @title
-# templates/note.mtt      -> Note: {{body}}
+>> .att files (default for 5+ lines)
+>> file: templates/deploy.att
+# Deployment: @env
+Status: @status
+Config: <@base/config/@env.json>
 
->> Define executables from files
-/exe @welcome(name, title) = template "./templates/welcome.att"
-/exe @note(body)           = template "./templates/note.mtt"
+>> usage
+/exe @deploy(env, status) = template "./templates/deploy.att"
+/show @deploy("prod", "success")
 
->> Invoke with parameters
-/show @welcome("Alice", "Engineer")
-/show @note("Bring snacks")
+>> .mtt files (Discord/social only)
+>> file: templates/discord.mtt
+🚨 Alert <@{{adminId}}>!
+Reporter: <@{{reporterId}}>
+Severity: {{severity}}
+
+>> usage
+/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
 ```
 
-Rules:
-- `.att` uses `@var` and supports `<file.md>` references inside the template.
-- `.mtt` uses `{{var}}` (simple mustache‑style). It is currently less full‑featured than `.att`.
-- These files are not imported as modules. Use the `/exe ... = template "path"` form.
+**Rules:**
+- `.att` uses `@var` and supports `<file.md>` references, pipes, and loops inside the template
+- `.mtt` uses `{{var}}` (simple mustache-style) - use ONLY for Discord/social scenarios
+- These files are not imported as modules. Use the `/exe ... = template "path"` form
 
-### Interpolation Contexts
+#### Template Loops
+
+Loops with `/for` and `/end` are supported in `::...::`, backticks, and `.att` files only:
+
+```mlld
+/var @list = ::
+/for @item in @items
+- @item.name: @item.value
+/end
+::
+
+>> Requirements: /for and /end at line start
+>> NOT supported in :::...:::, .mtt, or "..."
+```
+
+#### Trade-offs When Using Discord/Social Escape Hatch
+
+| Feature | `::...::` / `.att` | `:::...:::` / `.mtt` |
+|---------|-------------------|----------------------|
+| `@var` interpolation | ✓ | ✗ Use `{{var}}` |
+| `<file.md>` loading | ✓ | ✗ |
+| `@exe()` calls | ✓ | ✗ |
+| Pipes `\|` | ✓ | ✗ |
+| Loops | ✓ | ✗ |
+| Discord `<@id>` | Escape `\<@id\>` | ✓ Natural |
+| Many `@handles` | Works | ✓ Cleaner |
+
+#### Common Mistakes
+
+```mlld
+>> ✗ Using {{}} in ::...::
+/var @msg = ::Hello {{name}}::        >> {{name}} is literal
+/var @msg = ::Hello @name::           >> ✓
+
+>> ✗ Using @var in :::...:::
+/var @msg = :::Hello @name:::         >> @name is literal
+/var @msg = :::Hello {{name}}:::      >> ✓
+
+>> ✗ Using ::: without Discord/social need
+/var @msg = :::Status: {{status}}:::  >> Loses all features
+/var @msg = ::Status: @status::       >> ✓ Full features
+
+>> ✗ Importing template files
+/import { @tpl } from "./file.att"    >> Error
+/exe @tpl(x) = template "./file.att"  >> ✓
+```
+
+#### Interpolation Contexts
 
 Variable interpolation works in specific contexts:
 
@@ -636,10 +715,10 @@ Generated: @now
 - Check array contents: `@list.includes("item")`
 
 **Templates:**
-- Use backticks for simple cases: `` `Hello @name` ``
-- Use `::...::` when template contains backticks
-- Use `:::...:::` with `{{}}` syntax for many @ symbols
-- Store larger templates as `.att` or `.mtt` and bind them via `/exe ... = template "path"`
+- Default to `::...::` for inline (< 5 lines), `.att` files for external (5+ lines)
+- Switch to `:::...:::` or `.mtt` ONLY for Discord mentions or heavy social `@handle` usage
+- Loops (`/for`...`/end`) work in `::...::`, backticks, and `.att` only
+- Never import template files; use `/exe @name(...) = template "path.att"` form
 
 **Environment Variables:**
 - Import explicitly: `/import { API_KEY } from @input`

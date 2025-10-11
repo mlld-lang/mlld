@@ -1,14 +1,8 @@
->> In directives
-/show @name
+/var @list = ::
+/for @item in @items
+- @item.name: @item.value
+/end
+::
 
->> In double quotes
-/var @greeting = "Hello @name"
-
->> In command braces
-/run {echo "Welcome @name"}
-
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
-
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Requirements: /for and /end at line start
+>> NOT supported in :::...:::, .mtt, or "..."

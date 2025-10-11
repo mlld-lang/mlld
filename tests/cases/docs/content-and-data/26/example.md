@@ -1,7 +1,14 @@
->> Access piped JSON data
-/import { version, author } from @input
-/show `Release @version by @author`
+>> In directives
+/show @name
 
->> Access piped text (becomes 'content' field)
-/import { content } from @input
-/show `Received: @content`
+>> In double quotes
+/var @greeting = "Hello @name"
+
+>> In command braces
+/run {echo "Welcome @name"}
+
+>> NOT in single quotes (literal)
+/var @literal = 'Hello @name'               >> Outputs: Hello @name
+
+>> NOT in plain markdown lines
+Hello @name                                 >> Plain text, no interpolation

@@ -82,4 +82,35 @@ describe('evaluateShow (structured)', () => {
     expect((result.value as any).data).toEqual({ count: 2 });
     expect(() => JSON.parse(asText(result.value))).not.toThrow();
   });
+
+  it('preserves canonical structured text for json arrays', async () => {
+    const source = `
+/var @items = '[{"id":1},{"id":2}]' | @json
+/show @items
+`;
+    const { ast } = await parse(source);
+    const directives = getDirectiveNodes(ast, 'var');
+    for (const directive of directives) {
+      await evaluate(directive, env);
+    }
+
+    const structuredVar = env.getVariable('items');
+    expect(structuredVar).toBeDefined();
+    const expectedText =
+      structuredVar && isStructuredValue(structuredVar.value)
+        ? asText(structuredVar.value)
+        : '[{"id":1},{"id":2}]';
+
+    const [showDirective] = getDirectiveNodes(ast, 'show');
+    expect(showDirective).toBeDefined();
+    const showNode: any = {
+      ...showDirective,
+      location: showDirective.location || { line: 1, column: 1 },
+      meta: showDirective.meta || {}
+    };
+
+    const result = await evaluateShow(showNode, env);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(asText(result.value)).toBe(expectedText);
+  });
 });
