@@ -1,10 +1,15 @@
->> Import specific variables
-/import { API_KEY, NODE_ENV } from @input
-/show `Deploying to @NODE_ENV with key @API_KEY`
+>> ✗ Using {{}} in ::...::
+/var @msg = ::Hello {{name}}::        >> {{name}} is literal
+/var @msg = ::Hello @name::           >> ✓
 
->> Import and use in objects
-/var @config = {
-  "apiKey": @API_KEY,
-  "environment": @NODE_ENV,
-  "timestamp": @now
-}
+>> ✗ Using @var in :::...:::
+/var @msg = :::Hello @name:::         >> @name is literal
+/var @msg = :::Hello {{name}}:::      >> ✓
+
+>> ✗ Using ::: without Discord/social need
+/var @msg = :::Status: {{status}}:::  >> Loses all features
+/var @msg = ::Status: @status::       >> ✓ Full features
+
+>> ✗ Importing template files
+/import { @tpl } from "./file.att"    >> Error
+/exe @tpl(x) = template "./file.att"  >> ✓

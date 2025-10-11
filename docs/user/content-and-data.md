@@ -457,14 +457,11 @@ Keep reusable templates in standalone files and execute them as functions:
 >> file: templates/deploy.att
 # Deployment: @env
 Status: @status
-/for @change in @changes
-- @change
-/end
 Config: <@base/config/@env.json>
 
 >> usage
-/exe @deploy(env, status, changes) = template "./templates/deploy.att"
-/show @deploy("prod", "success", ["fix", "feature"])
+/exe @deploy(env, status) = template "./templates/deploy.att"
+/show @deploy("prod", "success")
 
 >> .mtt files (Discord/social only)
 >> file: templates/discord.mtt
