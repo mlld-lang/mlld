@@ -99,28 +99,11 @@ class ShellCommandEscapingStrategy implements EscapingStrategy {
     // in double-quoted strings: \ $ ` "
     // This preserves literal values when interpolating mlld variables
     
-    // Important: We must escape backslashes first to avoid double-escaping
-    let escaped = value.replace(/\\/g, '\\\\');
-
-    // Normalize control characters so shell receives printable escapes
-    escaped = escaped
-      .replace(/\r/g, '\\r')
-      .replace(/\n/g, '\\n')
-      .replace(/\t/g, '\\t')
-      .replace(/\f/g, '\\f')
-      .replace(/\v/g, '\\v');
-
-    escaped = escaped.replace(/[\u0000-\u001F]/g, char => {
-      const code = char.charCodeAt(0).toString(16).padStart(2, '0');
-      return `\\x${code}`;
-    });
-
-    escaped = escaped
+    return value
+      .replace(/\\/g, '\\\\')  // Escape backslashes first
       .replace(/"/g, '\\"')    // Escape double quotes
       .replace(/\$/g, '\\$')   // Escape dollar signs to preserve literal values
       .replace(/`/g, '\\`');   // Escape backticks
-    
-    return escaped;
   }
   
   getContext(): InterpolationContext {

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc66]
 ### Fixed
-- Shell interpolation escapes control characters so JSON emitted by `/run` pipelines keeps newline sequences intact for downstream stages.
+- Pipelines sanitize JSON-like shell output by escaping control characters inside string literals, so `/run` stages that echo newline-bearing JSON feed structured data forward correctly.
 
 ## [2.0.0-rc64]
 ### Fixed
