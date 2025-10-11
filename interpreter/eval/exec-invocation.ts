@@ -965,7 +965,28 @@ export async function evaluateExecInvocation(
   // Handle template executables
   if (isTemplateExecutable(definition)) {
     // Interpolate the template with the bound parameters
-    result = await interpolate(definition.template, execEnv);
+    const templateResult = await interpolate(definition.template, execEnv);
+    if (isStructuredValue(templateResult)) {
+      result = templateResult;
+    } else if (typeof templateResult === 'string') {
+      const trimmed = templateResult.trim();
+      if (
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))
+      ) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          const typeHint = Array.isArray(parsed) ? 'array' : 'object';
+          result = wrapStructured(parsed, typeHint, templateResult);
+        } catch {
+          result = templateResult;
+        }
+      } else {
+        result = templateResult;
+      }
+    } else {
+      result = templateResult;
+    }
   }
   // Handle pipeline executables
   else if (isPipelineExecutable(definition)) {

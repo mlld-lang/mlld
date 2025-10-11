@@ -419,7 +419,10 @@ export async function evaluateShow(
     } else if (Array.isArray(value)) {
       const printableArray = value.map(item => {
         if (isStructuredValue(item)) {
-          return item.text;
+          if (item.type === 'object' || item.type === 'array' || item.type === 'json') {
+            return item.data;
+          }
+          return asText(item);
         }
         if (item && typeof item === 'object' && typeof (item as any).text === 'string' && typeof (item as any).type === 'string') {
           return (item as any).text;

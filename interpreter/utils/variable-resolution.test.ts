@@ -6,8 +6,9 @@ import {
   isVariable,
   extractVariableValue
 } from './variable-resolution';
-import { createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable/VariableFactories';
+import { createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable/VariableFactories';
 import { Environment } from '@interpreter/env/Environment';
+import { wrapStructured } from '../utils/structured-value';
 
 // Mock the module imports
 vi.mock('@interpreter/eval/data-values', () => ({
@@ -48,6 +49,13 @@ describe('Variable Resolution Strategy', () => {
       
       expect(isVariable(result)).toBe(true);
       expect(result).toBe(textVar); // Same reference
+    });
+    
+    it('preserves structured value in string interpolation context', async () => {
+      const structured = wrapStructured({ file: 1 }, 'object');
+      const structuredVar = createStructuredValueVariable('item', structured, mockSource);
+      const result = await resolveVariable(structuredVar, mockEnv, ResolutionContext.StringInterpolation);
+      expect(result).toBe(structured);
     });
     
     it('should extract value in display context', async () => {

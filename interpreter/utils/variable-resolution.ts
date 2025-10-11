@@ -165,12 +165,16 @@ export async function resolveVariable(
   
   // Context requires extraction
   const extracted = await extractVariableValue(variable, env);
-  if (context === ResolutionContext.Equality && isStructuredValue(extracted)) {
-    return asData(extracted);
+  if (isStructuredValue(extracted)) {
+    if (context === ResolutionContext.Equality) {
+      return asData(extracted);
+    }
+    if (context === ResolutionContext.CommandExecution) {
+      return asText(extracted);
+    }
+    return extracted;
   }
-  if (context === ResolutionContext.CommandExecution && isStructuredValue(extracted)) {
-    return asText(extracted);
-  }
+
   return extracted;
 }
 
