@@ -3,6 +3,8 @@ import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutio
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
+import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
+import { StringDecoder } from 'string_decoder';
 import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
 
 /**
@@ -11,7 +13,8 @@ import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
 export class ShellCommandExecutor extends BaseCommandExecutor {
   constructor(
     errorUtils: ErrorUtils,
-    workingDirectory: string
+    workingDirectory: string,
+    private getStreamingOptions: () => { mode: 'off'|'full'|'progress'; dest: 'stdout'|'stderr'|'auto'; noTty?: boolean }
   ) {
     super(errorUtils, workingDirectory);
   }
@@ -251,7 +254,63 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       );
     }
 
-    // Execute the validated command
+    // Decide streaming
+    const streaming = this.getStreamingOptions();
+    if (streaming.mode === 'full' || streaming.mode === 'progress') {
+      // Stream via execa with shell (dynamic import for CJS compatibility)
+      const { execa } = await import('execa');
+      const child = execa(safeCommand, {
+        shell: true,
+        cwd: this.workingDirectory,
+        env: { ...process.env, ...(options?.env || {}) },
+        timeout: options?.timeout || 30000,
+        input: options?.input
+      });
+      let stdoutBuf = '';
+      let stderrBuf = '';
+      const decoderOut = new StringDecoder('utf8');
+      const decoderErr = new StringDecoder('utf8');
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        const text = decoderOut.write(chunk);
+        stdoutBuf += text;
+        try { getStreamBus().publish({ type: 'CHUNK', stage: (context?.stage ?? 0), source: 'stdout', text, commandId: context?.commandId, attempt: undefined }); } catch {}
+      });
+      child.stderr?.on('data', (chunk: Buffer) => {
+        const text = decoderErr.write(chunk);
+        stderrBuf += text;
+        try { getStreamBus().publish({ type: 'CHUNK', stage: (context?.stage ?? 0), source: 'stderr', text, commandId: context?.commandId, attempt: undefined }); } catch {}
+      });
+      let resultExit = 0;
+      try {
+        await child; // execa collects but we rely on our own buffers
+      } catch (e: any) {
+        // execa rejected on non-zero or timeout
+        resultExit = typeof e?.exitCode === 'number' ? e.exitCode : (e?.timedOut ? 124 : 1);
+      }
+
+      const duration = Date.now() - startTime;
+      if (resultExit !== 0) {
+        const err = new MlldCommandExecutionError(
+          `Shell command failed${(child as any).timedOut ? ' (timeout)' : ''}`,
+          context?.sourceLocation,
+          {
+            command: safeCommand,
+            exitCode: resultExit,
+            duration,
+            stderr: stderrBuf,
+            stdout: stdoutBuf,
+            workingDirectory: this.workingDirectory,
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+        throw err;
+      }
+
+      return { output: stdoutBuf, duration, exitCode: 0 };
+    }
+
+    // Non-streaming default path (synchronous)
     // In test environments with MLLD_NO_STREAMING, suppress stderr to keep output clean
     const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
     const result = execSync(safeCommand, {
@@ -264,11 +323,6 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     });
 
     const duration = Date.now() - startTime;
-    
-    return {
-      output: result,
-      duration,
-      exitCode: 0
-    };
+    return { output: result, duration, exitCode: 0 };
   }
 }

@@ -101,6 +101,10 @@ export interface CLIOptions {
   serveEnvOverrides?: string;
   serveTools?: string;
   _?: string[]; // Remaining args after command
+  // Streaming (Phase 0 plumbing only)
+  stream?: 'off' | 'full' | 'progress';
+  streamDest?: 'stdout' | 'stderr' | 'auto';
+  noTty?: boolean;
 }
 const globalErrorHandler = new ErrorHandler();
 
@@ -256,6 +260,12 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     }
     
     // Use the new interpreter
+    // Streaming env override (Phase 0): allow MLLD_STREAM* env; no behavioral impact yet
+    const streamEnv = (process.env.MLLD_STREAM || '').toLowerCase();
+    const streamMode = streamEnv === 'full' || streamEnv === 'progress' ? (streamEnv as 'full' | 'progress') : 'off';
+    const streamDestEnv = (process.env.MLLD_STREAM_DEST || 'auto').toLowerCase();
+    const noTtyEnv = process.env.MLLD_NO_TTY === 'true';
+
     const interpretResult = await interpret(content, {
       pathContext: pathContext,
       filePath: path.resolve(input), // Pass the current file path for error reporting
@@ -272,6 +282,11 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
         showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext,
         timeout: cliOptions.commandTimeout
+      },
+      streaming: {
+        mode: cliOptions.stream || streamMode,
+        dest: cliOptions.streamDest || (['stdout','stderr','auto'].includes(streamDestEnv) ? (streamDestEnv as any) : 'auto'),
+        noTty: cliOptions.noTty || noTtyEnv
       },
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
