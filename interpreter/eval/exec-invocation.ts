@@ -1150,12 +1150,10 @@ export async function evaluateExecInvocation(
       }
       const commandOutput = await execEnv.executeCode(fallbackCommand, 'sh', codeParams);
       // Try to parse as JSON if it looks like JSON
-      if (typeof commandOutput === 'string' && commandOutput.trim()) {
-        const trimmed = commandOutput.trim();
-        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      if (typeof commandOutput === 'string') {
+        if (looksLikeJsonString(commandOutput)) {
           try {
-            result = JSON.parse(trimmed);
+            result = JSON.parse(commandOutput.trim());
           } catch {
             result = commandOutput;
           }
@@ -1178,12 +1176,10 @@ export async function evaluateExecInvocation(
       const commandOutput = await execEnv.executeCommand(command, commandOptions);
       
       // Try to parse as JSON if it looks like JSON
-      if (typeof commandOutput === 'string' && commandOutput.trim()) {
-        const trimmed = commandOutput.trim();
-        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      if (typeof commandOutput === 'string') {
+        if (looksLikeJsonString(commandOutput)) {
           try {
-            result = JSON.parse(trimmed);
+            result = JSON.parse(commandOutput.trim());
           } catch {
             // Not valid JSON, use as-is
             result = commandOutput;

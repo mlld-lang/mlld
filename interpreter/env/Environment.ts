@@ -38,6 +38,7 @@ import { ImportResolver, type IImportResolver, type ImportResolverDependencies, 
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
+import { looksLikeJsonString } from '@interpreter/utils/structured-value';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { ExportManifest } from '../eval/import/ExportManifest';
 
@@ -1356,15 +1357,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
           // Auto-parse JSON-looking inputs so ctx.input.<field> works
           input: (() => {
             const raw = (pctx as any).input;
-            if (typeof raw === 'string') {
-              const trimmed = raw.trim();
-              if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-                  (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-                try {
-                  return JSON.parse(trimmed);
-                } catch {
-                  // ignore parse errors; keep raw
-                }
+            if (typeof raw === 'string' && looksLikeJsonString(raw)) {
+              try {
+                return JSON.parse(raw.trim());
+              } catch {
+                // ignore parse errors; keep raw
               }
             }
             return raw;

@@ -11,7 +11,7 @@ import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
-import { asData, asText, isStructuredValue } from '../utils/structured-value';
+import { asData, asText, isStructuredValue, looksLikeJsonString } from '../utils/structured-value';
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown): Variable {
@@ -228,15 +228,11 @@ export async function evaluateForExpression(
         } else {
           exprResult = branchValue;
         }
-        if (typeof exprResult === 'string') {
-          const trimmed = exprResult.trim();
-          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-              (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-            try {
-              exprResult = JSON.parse(trimmed);
-            } catch {
-              // keep original string if parsing fails
-            }
+        if (typeof exprResult === 'string' && looksLikeJsonString(exprResult)) {
+          try {
+            exprResult = JSON.parse(exprResult.trim());
+          } catch {
+            // keep original string if parsing fails
           }
         }
       }
