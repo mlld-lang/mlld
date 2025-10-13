@@ -78,9 +78,6 @@ function isWrappedExpression(trimmed: string): boolean {
     if (char === '(') {
       depth += 1;
       // If we close the outermost pair before the end, it is not fully wrapped.
-      if (depth === 1 && i !== 0) {
-        // Additional opening parenthesis inside; continue scanning.
-      }
     } else if (char === ')') {
       depth -= 1;
       if (depth === 0 && i !== trimmed.length - 1) {
