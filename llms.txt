@@ -749,6 +749,12 @@ Define reusable commands/code/templates/sections.
 
 # Section extractor
 /exe @intro(file) = <@file # Introduction>
+
+# With stdin (explicit with clause)
+/exe @processJson(data) = run { cat | jq '.[]' } with { stdin: @data }
+
+# With stdin (pipe sugar - requires 'run' keyword)
+/exe @filterActive(data) = run @data | { cat } | @transformFilter
 ```
 
 Shadow environments (JS/Node):

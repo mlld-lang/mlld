@@ -12,6 +12,7 @@ import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
+import { looksLikeJsonString } from '@interpreter/utils/structured-value';
 
 export interface IVariableManager {
   // Core variable operations
@@ -203,15 +204,11 @@ export class VariableManager implements IVariableManager {
         // Auto-parse JSON-looking inputs so @ctx.input.<field> works in when-expressions
         input: (() => {
           const raw = (pctx as any).input;
-          if (typeof raw === 'string') {
-            const trimmed = raw.trim();
-            if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-                (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-              try {
-                return JSON.parse(trimmed);
-              } catch {
-                // fall through to return raw if parsing fails
-              }
+          if (typeof raw === 'string' && looksLikeJsonString(raw)) {
+            try {
+              return JSON.parse(raw.trim());
+            } catch {
+              // fall through to return raw if parsing fails
             }
           }
           return raw;

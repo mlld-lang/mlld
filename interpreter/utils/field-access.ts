@@ -377,17 +377,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       
       // Deprecation warning: dot-notation numeric access on arrays (e.g., arr.1)
       // Recommend bracket access instead (arr[1])
-      try {
-        if (Array.isArray(rawValue)) {
-          const { deprecateOnce } = await import('../utils/deprecation');
-          deprecateOnce(
-            `array-dot-numeric`,
-            `Deprecated: dot-notation numeric access on arrays (".${numKey}"). Use bracket notation instead ("[${numKey}]").`
-          );
-        }
-      } catch {
-        // best-effort; ignore if module load or console not available
-      }
+      // Historically this path emitted a deprecation warning for array access
+      // like obj.0. Property style access is now supported, so we skip the warning.
 
       // Handle normalized AST objects (must have both type and properties)
       if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {

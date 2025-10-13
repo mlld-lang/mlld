@@ -5,6 +5,11 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc69]
+### Fixed
+- JS and Node executors treat expression-style blocks as implicit returns, so `/var` assignments and pipelines receive native objects/arrays and property access like `@repo.name` works without helper wrappers.
+- Node shadow executor surfaces the underlying runtime error message while still cleaning up timers, restoring the `node-shadow-cleanup` regression coverage.
+
 ## [2.0.0-rc68]
 ### Fixed
 - Template executables detect JSON-looking strings and wrap them as structured values, so downstream pipelines receive native objects instead of escaped text (#435).

@@ -9,6 +9,7 @@ import type { NodeShadowEnvironment } from '../NodeShadowEnvironment';
 import { prepareParamsForShadow, createMlldHelpers } from '../variable-proxy';
 import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
 import { enhanceJSError } from '@core/errors/patterns/init';
+import { addImplicitReturn } from './implicit-return';
 
 export interface NodeShadowEnvironmentProvider {
   /**
@@ -65,8 +66,10 @@ export class NodeExecutor extends BaseCommandExecutor {
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
+    let normalizedCode = code;
 
     try {
+      normalizedCode = addImplicitReturn(code);
       // Always use shadow environment for Node.js execution
       const nodeShadowEnv = this.nodeShadowProvider.getOrCreateNodeShadowEnv();
       
@@ -107,7 +110,7 @@ export class NodeExecutor extends BaseCommandExecutor {
       }
       
       // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, shadowParams);
+      const result = await nodeShadowEnv.execute(normalizedCode, shadowParams);
       
       // Format result (same as subprocess version)
       let output = '';
@@ -128,42 +131,41 @@ export class NodeExecutor extends BaseCommandExecutor {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      
-      // For shadow environment errors, extract the original message
-      // The NodeShadowEnvironment may wrap errors, so extract the original
       let originalError = errorMessage;
-      if (errorMessage.includes('Node shadow environment error:')) {
-        // Extract the original error message after the prefix
-        originalError = errorMessage.replace('Node shadow environment error: ', '');
+      if (originalError.includes('Node shadow environment error:')) {
+        originalError = originalError.replace('Node shadow environment error: ', '');
       }
-      
-      // Try to enhance the error with patterns
+      if (!originalError.trim() && typeof errorStack === 'string') {
+        const stackMatch = errorStack.match(/Error:\s*([^\n]+)/);
+        if (stackMatch?.[1]) {
+          originalError = stackMatch[1];
+        }
+      }
+
       const enhanced = enhanceJSError(
         error as Error,
-        code,
+        normalizedCode,
         params,
         { language: 'node' }
       );
-      
-      // Use enhanced message if available
       const finalMessage = enhanced?.message || `Node.js error: ${originalError}`;
-      
-      // Create a proper MlldError for Node.js errors
-      throw new MlldCommandExecutionError(
-        finalMessage,
-        context?.sourceLocation,
-        {
-          command: `node code execution`,
+
+      const enrichedError = error instanceof Error ? error : new Error(originalError || 'Node.js execution failed');
+      if (enrichedError instanceof Error) {
+        enrichedError.message = finalMessage;
+      }
+      if (typeof enrichedError === 'object') {
+        (enrichedError as any).stderr = originalError;
+        (enrichedError as any).details = {
+          ...(enrichedError as any).details,
+          stderr: originalError,
           exitCode: 1,
-          duration: Date.now() - startTime,
-          stderr: originalError, // Use the unwrapped original error message
-          stdout: '',
           workingDirectory: this.workingDirectory,
-          directiveType: context?.directiveType || 'exec',
-          // Include stack for debugging if available
-          ...(errorStack && { errorStack })
-        }
-      );
+          directiveType: context?.directiveType || 'exec'
+        };
+      }
+
+      throw enrichedError;
     }
   }
 
@@ -174,6 +176,7 @@ export class NodeExecutor extends BaseCommandExecutor {
     const startTime = Date.now();
     const tmpDir = os.tmpdir();
     const tmpFile = path.join(tmpDir, `mlld_exec_${Date.now()}.js`);
+    const normalizedCode = addImplicitReturn(code);
     
     // Build Node.js code with parameters
     let nodeCode = '';
@@ -200,13 +203,13 @@ export class NodeExecutor extends BaseCommandExecutor {
     }
     
     // Wrap the code to capture return values
-    const wrappedCode = `
+const wrappedCode = `
 ${nodeCode}
 // mlld return value capture
 (async () => {
   try {
     const __mlld_result = await (async () => {
-${code}
+${normalizedCode}
     })();
     
     // If there's a return value, output it as JSON
