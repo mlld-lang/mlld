@@ -159,6 +159,10 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       }
     }
 
+    if ((!errorDetails.stderr || errorDetails.stderr.length === 0) && error instanceof Error) {
+      errorDetails.stderr = error.message || error.toString();
+    }
+
     // Create rich MlldCommandExecutionError with source context
     return MlldCommandExecutionError.create(
       command,
