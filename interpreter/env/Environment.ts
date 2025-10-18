@@ -76,6 +76,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Utility managers
   private cacheManager: CacheManager;
   private errorUtils: ErrorUtils;
+  private streamingOptions: { mode?: 'off'|'full'|'progress'; dest?: 'stdout'|'stderr'|'auto'; noTty?: boolean } | undefined;
   private commandExecutorFactory: CommandExecutorFactory;
   private variableManager: IVariableManager;
   private importResolver: IImportResolver;
@@ -372,6 +373,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const executorDependencies: ExecutorDependencies = {
       errorUtils: this.errorUtils,
       workingDirectory: this.getExecutionDirectory(),
+      getStreamingOptions: () => this.getStreamingOptions(),
       shadowEnvironment: {
         getShadowEnv: (language: string) => this.getShadowEnv(language)
       },
@@ -385,6 +387,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       }
     };
     this.commandExecutorFactory = new CommandExecutorFactory(executorDependencies);
+  }
+
+  setStreamingOptions(opts?: { mode?: 'off'|'full'|'progress'; dest?: 'stdout'|'stderr'|'auto'; noTty?: boolean }): void {
+    this.streamingOptions = opts || { mode: 'off', dest: 'auto' };
+  }
+
+  getStreamingOptions(): { mode: 'off'|'full'|'progress'; dest: 'stdout'|'stderr'|'auto'; noTty?: boolean } {
+    const mode = this.streamingOptions?.mode || 'off';
+    const dest = this.streamingOptions?.dest || 'auto';
+    const noTty = this.streamingOptions?.noTty || false;
+    return { mode, dest, noTty };
   }
   
   /**
@@ -779,6 +792,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     attemptHistory?: any[];
     hint?: string | null;
     hintHistory?: string[];
+    // Internal stage index (unadjusted for synthetic source)
+    internalStage?: number;
   }): void {
     this.pipelineContext = context;
   }
@@ -1308,6 +1323,28 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     context?: CommandExecutionContext
   ): Promise<string> {
     // Merge with instance defaults and delegate to command executor factory
+    // Auto-plumb pipeline context if not provided
+    if (!context) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        context = {
+          stage: (pctx as any).internalStage ?? (pctx as any).stage,
+          commandId: (pctx as any).currentCommand,
+          directiveType: 'run',
+          filePath: this.getCurrentFilePath()
+        };
+      }
+    } else if (context && (context.stage === undefined || context.commandId === undefined)) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        if (context.stage === undefined) {
+          context.stage = (pctx as any).internalStage ?? (pctx as any).stage;
+        }
+        if (context.commandId === undefined) {
+          context.commandId = (pctx as any).currentCommand;
+        }
+      }
+    }
     const finalOptions = { ...this.outputOptions, ...options };
     return this.commandExecutorFactory.executeCommand(command, finalOptions, context);
   }
@@ -1380,6 +1417,29 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         }
       } catch {
         // Best-effort; ignore ctx injection errors
+      }
+    }
+
+    // Auto-plumb pipeline context if not provided
+    if (!context) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        context = {
+          stage: (pctx as any).internalStage ?? (pctx as any).stage,
+          commandId: (pctx as any).currentCommand,
+          directiveType: 'run',
+          filePath: this.getCurrentFilePath()
+        };
+      }
+    } else if (context && (context.stage === undefined || context.commandId === undefined)) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        if (context.stage === undefined) {
+          context.stage = (pctx as any).internalStage ?? (pctx as any).stage;
+        }
+        if (context.commandId === undefined) {
+          context.commandId = (pctx as any).currentCommand;
+        }
       }
     }
 

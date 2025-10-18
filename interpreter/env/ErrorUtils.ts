@@ -21,6 +21,9 @@ export interface CommandExecutionContext {
   directiveNode?: any; // MlldNode
   filePath?: string;
   directiveType?: string;
+  // Optional pipeline metadata (for streaming, diagnostics)
+  stage?: number;
+  commandId?: string;
 }
 
 /**
