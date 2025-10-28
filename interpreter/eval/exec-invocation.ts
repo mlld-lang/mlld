@@ -1839,7 +1839,6 @@ export async function evaluateExecInvocation(
       });
     } catch {}
   }
-
   return createEvalResult(result, execEnv);
 }
 

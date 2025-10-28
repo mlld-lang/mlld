@@ -104,12 +104,17 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       let functionBody = code;
       
       // Check if this is a single-line expression that should be auto-returned
-      const isSingleLine = !code.includes('\n');
+      const trimmedCode = code.trim();
       const hasNoReturn = !code.includes('return');
-      const looksLikeStatement = code.includes(';') || code.trim().startsWith('console.log');
+      const statementKeywordPattern = /\b(const|let|var|function|class|if|for|while|switch|try|catch|await|throw)\b/;
+      const looksLikeStatement =
+        code.includes(';') ||
+        trimmedCode.startsWith('console.log') ||
+        statementKeywordPattern.test(trimmedCode) ||
+        trimmedCode.includes('=>');
       
       // For single-line expressions without explicit return, wrap in return statement
-      if (isSingleLine && hasNoReturn && !looksLikeStatement) {
+      if (hasNoReturn && !looksLikeStatement) {
         functionBody = `return (${functionBody})`;
       }
       

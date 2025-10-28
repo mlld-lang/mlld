@@ -1180,12 +1180,28 @@ export async function evaluateShow(
   if (!content.endsWith('\n')) {
     content = `${content}\n`;
   }
+
+  const snapshot = env.getSecuritySnapshot();
+  const resultDescriptor = mergeDescriptors(
+    extractDescriptorFromValue(resultValue),
+    snapshot
+      ? makeSecurityDescriptor({
+          labels: snapshot.labels,
+          taintLevel: snapshot.taintLevel,
+          sources: snapshot.sources,
+          policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+        })
+      : undefined
+  );
+  if (resultDescriptor) {
+    env.recordSecurityDescriptor(resultDescriptor);
+  }
   
   // Only emit the effect if we're not in an expression context
   // In expression contexts (like when expressions), we only return the value
   if (!context?.isExpression) {
     // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
-    env.emitEffect('both', content, { source: directive.location });
+  env.emitEffect('both', content, { source: directive.location });
   }
 
   env.recordSecurityDescriptor(extractDescriptorFromValue(resultValue));
@@ -1195,6 +1211,12 @@ export async function evaluateShow(
       ? { text: textForWrapper }
       : undefined;
   const wrapped = wrapExecResult(baseValue, wrapOptions);
+  if (resultDescriptor) {
+    wrapped.metadata = {
+      ...(wrapped.metadata || {}),
+      security: resultDescriptor
+    };
+  }
   return { value: wrapped, env };
   } finally {
     const capability = env.popSecurityContext();

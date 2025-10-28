@@ -106,8 +106,19 @@ export class NodeExecutor extends BaseCommandExecutor {
         }
       }
       
+      // Apply expression auto-return heuristics to match JavaScript executor behaviour
+      const trimmedCode = code.trim();
+      const hasNoReturn = !trimmedCode.includes('return');
+      const statementKeywordPattern = /\b(const|let|var|function|class|if|for|while|switch|try|catch|await|throw)\b/;
+      const looksLikeStatement =
+        code.includes(';') ||
+        trimmedCode.startsWith('console.log') ||
+        statementKeywordPattern.test(trimmedCode) ||
+        trimmedCode.includes('=>');
+      const executableCode = hasNoReturn && !looksLikeStatement ? `return (${code})` : code;
+      
       // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, shadowParams);
+      const result = await nodeShadowEnv.execute(executableCode, shadowParams);
       
       // Format result (same as subprocess version)
       let output = '';

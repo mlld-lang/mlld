@@ -194,7 +194,7 @@ AlligatorSectionIdentifier "alligator section identifier"
 
 // Characters allowed in section names (inside alligators)
 AlligatorSectionChar
-  = !">" !"as" char:. { return char; }
+  = !">" !(" as ") char:. { return char; }
 
 // Rename clause for sections
 AsRename "section rename"

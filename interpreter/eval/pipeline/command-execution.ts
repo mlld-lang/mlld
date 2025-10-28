@@ -854,20 +854,35 @@ export async function executeCommandVariable(
       }
     }
     
-    const result = await env.executeCode(code, execDef.language || 'javascript', params);
+    const executionRaw = await env.executeCode(code, execDef.language || 'javascript', params);
     
-    // If the function returns a PipelineInput object, extract the text
-    if (result && typeof result === 'object' && 'text' in result && 'type' in result) {
+    // If the function returns a StructuredValue-like object, preserve it directly
+    if (executionRaw && typeof executionRaw === 'object' && 'text' in executionRaw && 'type' in executionRaw) {
       const text =
-        typeof (result as any).text === 'string'
-          ? (result as any).text
-          : String((result as any).text ?? '');
+        typeof (executionRaw as any).text === 'string'
+          ? (executionRaw as any).text
+          : String((executionRaw as any).text ?? '');
       const type =
-        typeof (result as any).type === 'string' ? (result as any).type : undefined;
-      return finalizeResult(result, { type, text });
+        typeof (executionRaw as any).type === 'string' ? (executionRaw as any).type : undefined;
+      return finalizeResult(executionRaw, { type, text });
+    }
+
+    let processedResult: any = executionRaw;
+    if (typeof processedResult === 'string') {
+      const trimmed = processedResult.trim();
+      if (trimmed.length > 0) {
+        const firstChar = trimmed[0];
+        if (firstChar === '{' || firstChar === '[' || firstChar === '"' || firstChar === '-' || firstChar === 't' || firstChar === 'f' || firstChar === 'n' || /\d/.test(firstChar)) {
+          try {
+            processedResult = JSON.parse(trimmed);
+          } catch {
+            processedResult = processedResult;
+          }
+        }
+      }
     }
     
-    return finalizeResult(result);
+    return finalizeResult(processedResult);
   } else if (execDef.type === 'template' && execDef.template) {
     // Interpolate template
     const { interpolate } = await import('../../core/interpreter');

@@ -676,6 +676,29 @@ export async function evaluateVar(
       resolvedValueType: typeof resolvedValue
     });
   }
+  if (process.env.MLLD_DEBUG_IDS === 'true' && (identifier === 'squared' || identifier === 'ids')) {
+    try {
+      const structuredInfo = isStructuredValue(resolvedValue)
+        ? {
+            type: resolvedValue.type,
+            text: resolvedValue.text,
+            dataType: typeof resolvedValue.data,
+            preview: resolvedValue.data && typeof resolvedValue.data === 'object'
+              ? Array.isArray(resolvedValue.data)
+                ? { length: resolvedValue.data.length, first: resolvedValue.data[0] }
+                : { keys: Object.keys(resolvedValue.data).slice(0, 5) }
+              : resolvedValue.data
+          }
+        : undefined;
+      console.error('[var-debug]', {
+        identifier,
+        resolvedType: typeof resolvedValue,
+        isStructured: isStructuredValue(resolvedValue),
+        structuredInfo,
+        rawValue: resolvedValue
+      });
+    } catch {}
+  }
 
   // Check if resolvedValue is already a Variable that we should preserve
   const { isVariable } = await import('../utils/variable-resolution');
