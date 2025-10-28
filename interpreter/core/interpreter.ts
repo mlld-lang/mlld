@@ -1429,10 +1429,10 @@ export async function interpolate(
       for (const [key, value] of iterable as Iterable<[string | null, unknown]>) {
         const childEnv = env.createChildEnvironment();
         const varName = (node as any).variable?.identifier || (node as any).variable?.name || 'item';
-        const iterationVar = importer.createVariableFromValue(varName, value, 'template-for');
+        const iterationVar = importer.createVariableFromValue(varName, value, 'template-for', undefined, { env });
         childEnv.setVariable(varName, iterationVar);
         if (key !== null && key !== undefined) {
-          const keyVar = importer.createVariableFromValue(`${varName}_key`, key, 'template-for');
+          const keyVar = importer.createVariableFromValue(`${varName}_key`, key, 'template-for', undefined, { env });
           childEnv.setVariable(`${varName}_key`, keyVar);
         }
         const bodyStr = await interpolate((node as any).body as any[], childEnv, InterpolationContext.Template);

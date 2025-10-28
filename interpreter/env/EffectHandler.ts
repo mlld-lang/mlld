@@ -1,4 +1,5 @@
 import { Location } from '@core/types/location';
+import type { CapabilityContext } from '@core/types/security';
 import * as fs from 'fs';
 
 /**
@@ -11,6 +12,7 @@ export interface Effect {
   path?: string;  // For file effects
   source?: Location;  // For error reporting
   metadata?: any;  // For preserving LoadContentResult metadata, etc.
+  capability?: CapabilityContext;
 }
 
 /**

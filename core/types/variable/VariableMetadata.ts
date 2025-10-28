@@ -5,13 +5,20 @@
  */
 
 import { VariableSource, VariableMetadata } from './VariableTypes';
-import type { CapabilityContext, SecurityDescriptor, DataLabel } from '../security';
+import type {
+  CapabilityContext,
+  SecurityDescriptor,
+  DataLabel,
+  TaintLevel,
+  CapabilityKind
+} from '../security';
 import {
   makeSecurityDescriptor,
   serializeSecurityDescriptor,
   deserializeSecurityDescriptor,
   serializeCapabilityContext,
-  deserializeCapabilityContext
+  deserializeCapabilityContext,
+  createCapabilityContext
 } from '../security';
 
 // =========================================================================
@@ -180,30 +187,70 @@ export class VariableMetadataUtils {
       labels?: DataLabel[];
       existingDescriptor?: SecurityDescriptor;
       capability?: CapabilityContext;
+      taintLevel?: TaintLevel;
+      sources?: string[];
+      policyContext?: Record<string, unknown>;
+      capabilityKind?: CapabilityKind;
     }
   ): VariableMetadata {
     const result: VariableMetadata = { ...(metadata ?? {}) };
-    const labels = options?.labels ?? [];
-    const hasExplicitLabels = labels.length > 0;
+    const baseDescriptor =
+      options?.existingDescriptor ??
+      result.security ??
+      makeSecurityDescriptor();
 
-    if (hasExplicitLabels) {
-      result.security = makeSecurityDescriptor({ labels, inference: 'explicit' });
-    } else if (result.security) {
-      // Preserve existing descriptor already attached to metadata.
-    } else if (options?.existingDescriptor) {
-      result.security = options.existingDescriptor;
-    } else {
-      result.security = makeSecurityDescriptor();
-    }
+    const overrideProvided =
+      options?.labels ||
+      options?.taintLevel ||
+      options?.sources ||
+      options?.policyContext ||
+      options?.capabilityKind;
+
+    const descriptor = overrideProvided
+      ? makeSecurityDescriptor({
+          labels: options?.labels ?? baseDescriptor.labels,
+          taintLevel: options?.taintLevel ?? baseDescriptor.taintLevel,
+          sources: options?.sources ?? baseDescriptor.sources,
+          capability: options?.capabilityKind ?? baseDescriptor.capability,
+          policyContext: {
+            ...(baseDescriptor.policyContext ?? {}),
+            ...(options?.policyContext ?? {})
+          }
+        })
+      : baseDescriptor;
+
+    result.security = descriptor;
 
     if (options?.capability) {
-      result.capability = options.capability;
+      result.capability =
+        options.capability.security === descriptor
+          ? options.capability
+          : createCapabilityContext({
+              kind: options.capability.kind,
+              importType: options.capability.importType,
+              descriptor,
+              metadata: options.capability.metadata
+                ? { ...options.capability.metadata }
+                : undefined,
+              policy: options.capability.policy
+                ? { ...options.capability.policy }
+                : undefined,
+              operation: options.capability.operation
+                ? { ...options.capability.operation }
+                : undefined
+            });
     } else if (result.capability) {
-      // Preserve previously attached capability context.
-      result.capability = {
-        ...result.capability,
-        security: result.security
-      };
+      const existing = result.capability;
+      if (existing.security !== descriptor) {
+        result.capability = createCapabilityContext({
+          kind: existing.kind,
+          importType: existing.importType,
+          descriptor,
+          metadata: existing.metadata ? { ...existing.metadata } : undefined,
+          policy: existing.policy ? { ...existing.policy } : undefined,
+          operation: existing.operation ? { ...existing.operation } : undefined
+        });
+      }
     }
 
     return result;

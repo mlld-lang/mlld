@@ -1,6 +1,8 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, PipelineStage } from '@core/types';
 import type { StructuredValue } from '../../utils/structured-value';
+import type { SecurityDescriptor, DataLabel, CapabilityContext } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
@@ -215,10 +217,12 @@ export class PipelineExecutor {
     input: string,
     context: StageContext
   ): Promise<StageResult> {
+    let stageEnv: Environment | undefined;
+    let popStageContext: (() => CapabilityContext | undefined) | undefined;
     try {
       const structuredInput = this.getStageOutput(stageIndex - 1, input);
       // Set up execution environment for a single command stage
-      const stageEnv = await createStageEnvironment(
+      stageEnv = await createStageEnvironment(
         command,
         input,
         structuredInput,
@@ -232,6 +236,7 @@ export class PipelineExecutor {
           getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
         }
       );
+      popStageContext = this.pushStageSecurityContext(stageEnv, command, stageIndex, context, structuredInput);
       
       let output: any;
       while (true) {
@@ -260,10 +265,17 @@ export class PipelineExecutor {
         }
         const from = this.parseRetryScope(output);
         const hint = this.parseRetryHint(output);
+        if (popStageContext) {
+          const capability = popStageContext();
+          popStageContext = undefined;
+          if (capability?.security) {
+            this.env.recordSecurityDescriptor(capability.security);
+          }
+        }
         return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
       }
 
-      const normalized = this.normalizeOutput(output);
+      let normalized = this.normalizeOutput(output);
       this.structuredOutputs.set(stageIndex, normalized);
       this.finalOutput = normalized;
       this.lastStageIndex = stageIndex;
@@ -271,6 +283,21 @@ export class PipelineExecutor {
       const normalizedText = normalized.text ?? '';
       if (!normalizedText || normalizedText.trim() === '') {
         await this.runInlineEffects(command, normalized, stageEnv);
+        if (popStageContext) {
+          const capability = popStageContext();
+          popStageContext = undefined;
+          if (capability?.security) {
+            normalized = wrapStructured(
+              normalized,
+              normalized.type,
+              normalized.text,
+              { ...(normalized.metadata || {}), security: capability.security }
+            );
+            this.structuredOutputs.set(stageIndex, normalized);
+            this.finalOutput = normalized;
+            this.env.recordSecurityDescriptor(capability.security);
+          }
+        }
         return { type: 'success', output: normalizedText };
       }
       // Clear hint for inline effects: @ctx.hint is only visible inside the retried stage body
@@ -294,11 +321,34 @@ export class PipelineExecutor {
       } catch {}
       // Run inline effects attached to this functional stage (non-stage effects)
       await this.runInlineEffects(command, normalized, stageEnv);
+      if (popStageContext) {
+        const capability = popStageContext();
+        popStageContext = undefined;
+        if (capability?.security) {
+          normalized = wrapStructured(
+            normalized,
+            normalized.type,
+            normalized.text,
+            { ...(normalized.metadata || {}), security: capability.security }
+          );
+          this.structuredOutputs.set(stageIndex, normalized);
+          this.finalOutput = normalized;
+          this.env.recordSecurityDescriptor(capability.security);
+        }
+      }
       return { type: 'success', output: normalizedText };
 
     } catch (error) {
       return { type: 'error', error: error as Error };
     } finally {
+      if (popStageContext) {
+        try {
+          const capability = popStageContext();
+          if (capability?.security) {
+            this.env.recordSecurityDescriptor(capability.security);
+          }
+        } catch {}
+      }
       this.env.clearPipelineContext();
     }
   }
@@ -587,13 +637,36 @@ export class PipelineExecutor {
             }
           );
 
-          const raw = await this.executeCommand(cmd, input, branchInput, subEnv);
-          if (this.isRetrySignal(raw)) {
-            return raw;
+          const popStageContext = this.pushStageSecurityContext(subEnv, cmd, stageIndex, context, branchInput);
+          try {
+            const raw = await this.executeCommand(cmd, input, branchInput, subEnv);
+            if (this.isRetrySignal(raw)) {
+              const capability = popStageContext();
+              if (capability?.security) {
+                this.env.recordSecurityDescriptor(capability.security);
+              }
+              return raw;
+            }
+            let normalized = this.normalizeOutput(raw);
+            await this.runInlineEffects(cmd, normalized, subEnv);
+            const capability = popStageContext();
+            if (capability?.security) {
+              normalized = wrapStructured(
+                normalized,
+                normalized.type,
+                normalized.text,
+                { ...(normalized.metadata || {}), security: capability.security }
+              );
+              this.env.recordSecurityDescriptor(capability.security);
+            }
+            return normalized;
+          } catch (err) {
+            const capability = popStageContext();
+            if (capability?.security) {
+              this.env.recordSecurityDescriptor(capability.security);
+            }
+            throw err;
           }
-          const normalized = this.normalizeOutput(raw);
-          await this.runInlineEffects(cmd, normalized, subEnv);
-          return normalized;
         },
         { ordered: true, paceMs: this.delayMs }
       );
@@ -606,16 +679,60 @@ export class PipelineExecutor {
       const structuredResults = results as StructuredValue[];
       const aggregatedData = structuredResults.map(result => extractStageValue(result));
       const aggregatedText = safeJSONStringify(aggregatedData);
-      const aggregated = wrapStructured(aggregatedData, 'array', aggregatedText, {
+      const aggregatedBase = wrapStructured(aggregatedData, 'array', aggregatedText, {
         stages: structuredResults
       });
+      const stageDescriptors = structuredResults
+        .map(result => result.metadata?.security as SecurityDescriptor | undefined)
+        .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+      const aggregatedDescriptor = stageDescriptors.length > 0
+        ? mergeDescriptors(...stageDescriptors)
+        : undefined;
+      const aggregated = aggregatedDescriptor
+        ? wrapStructured(aggregatedBase, aggregatedBase.type, aggregatedBase.text, {
+            ...(aggregatedBase.metadata || {}),
+            security: aggregatedDescriptor
+          })
+        : aggregatedBase;
       this.structuredOutputs.set(stageIndex, aggregated);
       this.finalOutput = aggregated;
+      if (aggregatedDescriptor) {
+        this.env.recordSecurityDescriptor(aggregatedDescriptor);
+      }
       this.lastStageIndex = stageIndex;
       return { type: 'success', output: aggregated.text };
     } catch (err) {
       return { type: 'error', error: err as Error };
     }
+  }
+
+  private pushStageSecurityContext(
+    stageEnv: Environment,
+    command: PipelineCommand,
+    stageIndex: number,
+    context: StageContext,
+    structuredInput: StructuredValue
+  ): () => CapabilityContext | undefined {
+    const inputDescriptor = structuredInput.metadata?.security as SecurityDescriptor | undefined;
+    const labels = (command as any)?.securityLabels as DataLabel[] | undefined;
+    const labelDescriptor = labels && labels.length > 0 ? makeSecurityDescriptor({ labels }) : undefined;
+    const descriptor = mergeDescriptors(inputDescriptor, labelDescriptor) ?? makeSecurityDescriptor();
+    stageEnv.pushSecurityContext({
+      descriptor,
+      kind: 'pipeline',
+      metadata: {
+        stage: command.rawIdentifier,
+        stageIndex: stageIndex + 1,
+        attempt: context.contextAttempt
+      },
+      operation: {
+        kind: 'pipeline',
+        command: command.rawIdentifier,
+        stageIndex: stageIndex + 1,
+        totalStages: context.totalStages
+      }
+    });
+    return () => stageEnv.popSecurityContext();
   }
 
   private normalizeOutput(output: any): StructuredValue {

@@ -16,6 +16,7 @@ import {
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable';
 import type { DataLabel } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
@@ -202,7 +203,8 @@ export class VariableImporter {
     childVars: Map<string, Variable>,
     parseResult: any,
     skipModuleEnvSerialization?: boolean,
-    manifest?: ExportManifest | null
+    manifest?: ExportManifest | null,
+    childEnv?: Environment
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
@@ -250,6 +252,16 @@ export class VariableImporter {
       console.log(`[processModuleExports] childVars keys: ${Array.from(childVars.keys()).join(', ')}`);
     }
     
+    const envSnapshot = childEnv?.getSecuritySnapshot?.();
+    const envDescriptor = envSnapshot
+      ? makeSecurityDescriptor({
+          labels: envSnapshot.labels,
+          taintLevel: envSnapshot.taintLevel,
+          sources: envSnapshot.sources,
+          policyContext: envSnapshot.policy ? { ...envSnapshot.policy } : undefined
+        })
+      : undefined;
+
     for (const [name, variable] of childVars) {
       if (explicitExports && !explicitExports.has(name)) {
         continue;
@@ -315,7 +327,11 @@ export class VariableImporter {
         moduleObject[name] = variable.value;
       }
 
-      const serializedMetadata = VariableMetadataUtils.serializeSecurityMetadata(variable.metadata);
+      const mergedDescriptor = mergeDescriptors(variable.metadata?.security, envDescriptor);
+      const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(variable.metadata, {
+        existingDescriptor: mergedDescriptor
+      });
+      const serializedMetadata = VariableMetadataUtils.serializeSecurityMetadata(metadataWithSecurity);
       if (serializedMetadata) {
         serializedMetadataMap[name] = serializedMetadata;
       }
@@ -341,6 +357,7 @@ export class VariableImporter {
     options?: {
       securityLabels?: DataLabel[];
       serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined;
+      env?: Environment;
     }
   ): Variable {
     const source: VariableSource = {
@@ -351,6 +368,21 @@ export class VariableImporter {
       isMultiLine: false
     };
     const deserialized = VariableMetadataUtils.deserializeSecurityMetadata(options?.serializedMetadata);
+    const snapshot = options?.env?.getSecuritySnapshot?.();
+    let snapshotDescriptor = snapshot
+      ? makeSecurityDescriptor({
+          labels: snapshot.labels,
+          taintLevel: snapshot.taintLevel,
+          sources: snapshot.sources,
+          policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+        })
+      : undefined;
+    let combinedDescriptor = deserialized.security;
+    if (snapshotDescriptor) {
+      combinedDescriptor = combinedDescriptor
+        ? mergeDescriptors(combinedDescriptor, snapshotDescriptor)
+        : snapshotDescriptor;
+    }
     const baseMetadata = {
       isImported: true,
       importPath,
@@ -360,7 +392,7 @@ export class VariableImporter {
     };
     const initialMetadata = VariableMetadataUtils.applySecurityMetadata(baseMetadata, {
       labels: options?.securityLabels,
-      existingDescriptor: deserialized.security
+      existingDescriptor: combinedDescriptor
     });
     const buildMetadata = (extra?: VariableMetadata): VariableMetadata =>
       VariableMetadataUtils.applySecurityMetadata(
@@ -513,7 +545,8 @@ export class VariableImporter {
     moduleObject: Record<string, any>,
     importPath: string,
     securityLabels?: DataLabel[],
-    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
+    env?: Environment
   ): Variable {
     const source: VariableSource = {
       directive: 'var',
@@ -525,6 +558,16 @@ export class VariableImporter {
     // Check if the namespace contains complex content (like executables)
     const isComplex = this.hasComplexContent(moduleObject);
     
+    const snapshot = env?.getSecuritySnapshot?.();
+    let snapshotDescriptor = snapshot
+      ? makeSecurityDescriptor({
+          labels: snapshot.labels,
+          taintLevel: snapshot.taintLevel,
+          sources: snapshot.sources,
+          policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+        })
+      : undefined;
+
     const metadata = VariableMetadataUtils.applySecurityMetadata(
       {
         isImported: true,
@@ -533,7 +576,10 @@ export class VariableImporter {
         definedAt: { line: 0, column: 0, filePath: importPath },
         namespaceMetadata: metadataMap
       },
-      { labels: securityLabels }
+      {
+        labels: securityLabels,
+        existingDescriptor: snapshotDescriptor
+      }
     );
 
     return createObjectVariable(
@@ -655,7 +701,9 @@ export class VariableImporter {
 
     // If the unwrapped object is a template export, create a template variable instead
     if (namespaceObject && typeof namespaceObject === 'object' && (namespaceObject as any).__template) {
-      const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath);
+      const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath, undefined, {
+        env: targetEnv
+      });
       this.setVariableWithImportBinding(targetEnv, alias, templateVar, bindingInfo);
       return;
     }
@@ -667,7 +715,8 @@ export class VariableImporter {
       namespaceObject,
       importPath,
       securityLabels,
-      metadataMap
+      metadataMap,
+      targetEnv
     );
     this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
   }
@@ -707,7 +756,8 @@ export class VariableImporter {
       const serializedMetadata = metadataMap ? metadataMap[importName] : undefined;
       const variable = this.createVariableFromValue(alias, importedValue, importPath, importName, {
         securityLabels,
-        serializedMetadata
+        serializedMetadata,
+        env: targetEnv
       });
 
       this.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);

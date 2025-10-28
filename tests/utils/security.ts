@@ -14,5 +14,5 @@ export function expectTaintLevel(
   descriptor: SecurityDescriptor | undefined,
   taint: TaintLevel
 ): void {
-  expect(descriptor?.taint ?? 'unknown').toBe(taint);
+  expect(descriptor?.taintLevel ?? 'unknown').toBe(taint);
 }

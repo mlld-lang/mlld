@@ -9,7 +9,7 @@ import {
 } from '@core/resolvers/types';
 import { MlldFileNotFoundError } from '@core/errors';
 import { ResolverError } from '@core/errors/ResolverError';
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 import { IFileSystemService } from '@services/fs/IFileSystemService';
 import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
 
@@ -110,7 +110,8 @@ export class LocalResolver implements Resolver {
             source: `file://${mldMdPath}`,
             mimeType: 'text/x-mlld-module',
             size: Buffer.byteLength(content, 'utf8'),
-            timestamp: new Date()
+            timestamp: new Date(),
+            taintLevel: 'localFile' as TaintLevel
           }
         };
       }
@@ -261,7 +262,7 @@ export class LocalResolver implements Resolver {
         metadata: {
           source: `file://${fullPath}`,
           timestamp: new Date(),  // Use current time since IFileSystemService doesn't provide mtime
-          taintLevel: (TaintLevel as any).LOCAL,
+          taintLevel: 'localFile' as TaintLevel,
           size: content.length,  // Calculate size from content
           mimeType: this.getMimeType(fullPath)
         }

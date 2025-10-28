@@ -5,7 +5,9 @@ import type { ExecutableVariable, ExecutableDefinition } from '@core/types/execu
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
-import { TaintLevel } from '@security/taint';
+import type { TaintLevel, DataLabel } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { deriveCommandTaint } from '@core/security/taint';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
@@ -115,13 +117,13 @@ function determineTaintLevel(nodes: MlldNode[], env: Environment): TaintLevel {
       if (varName) {
         // TODO: Get actual taint level from variable metadata
         // For now, be conservative and assume variables could be tainted
-        return TaintLevel.REGISTRY_WARNING;
+        return 'resolver';
       }
     }
   }
   
   // Literal commands are trusted
-  return TaintLevel.TRUSTED;
+  return 'literal';
 }
 
 /**
@@ -139,6 +141,29 @@ export async function evaluateRun(
   if (env.getIsImporting()) {
     return { value: null, env };
   }
+
+  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+  const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
+  env.pushSecurityContext({
+    descriptor: baseDescriptor,
+    kind: 'command',
+    metadata: {
+      directiveType: directive.subtype,
+      filePath: env.getCurrentFilePath()
+    },
+    operation: {
+      kind: 'run',
+      subtype: directive.subtype,
+      location: directive.location
+    }
+  });
+  let contextPopped = false;
+  const popContext = () => {
+    if (!contextPopped) {
+      env.popSecurityContext();
+      contextPopped = true;
+    }
+  };
 
   let outputValue: unknown;
   let outputText: string;
@@ -172,6 +197,7 @@ export async function evaluateRun(
     }
   }
   
+  try {
   if (directive.subtype === 'runCommand') {
     // Handle command execution
     const commandNodes = directive.values?.identifier || directive.values?.command;
@@ -181,6 +207,14 @@ export async function evaluateRun(
     
     // Interpolate command (resolve variables) with shell command context
     const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+    const commandTaint = deriveCommandTaint({ command });
+    env.recordSecurityDescriptor(
+      makeSecurityDescriptor({
+        taintLevel: commandTaint.level,
+        labels: commandTaint.labels,
+        sources: commandTaint.sources
+      })
+    );
 
     // Friendly pre-check for oversized simple /run command payloads
     // Rationale: Some environments may not hit ShellCommandExecutor's guard early enough.
@@ -267,7 +301,7 @@ export async function evaluateRun(
         }
         
         // Block LLM output execution
-        if (taintLevel === TaintLevel.LLM_OUTPUT) {
+        if (taintLevel === 'llmOutput') {
           throw new MlldCommandExecutionError(
             'Security: Cannot execute LLM-generated commands',
             directive.location,
@@ -789,8 +823,13 @@ export async function evaluateRun(
   }
   
   // Return the output value
+  popContext();
   return {
     value: outputValue,
     env
   };
+  } catch (error) {
+    popContext();
+    throw error;
+  }
 }

@@ -16,6 +16,7 @@ import { logger } from '@core/utils/logger';
 import { attachBuiltinEffects } from './effects-attachment';
 import { wrapExecResult } from '../../utils/structured-exec';
 import { ensureStructuredValue, isStructuredValue, wrapStructured, type StructuredValue, type StructuredValueMetadata } from '../../utils/structured-value';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
 
 /**
  * Context for pipeline processing
@@ -44,6 +45,20 @@ export interface UnifiedPipelineContext {
   location?: any;               // Source location for errors
 }
 
+function extractSecurityDescriptor(value: any): SecurityDescriptor | undefined {
+  if (!value) return undefined;
+  if (isStructuredValue(value)) {
+    return value.metadata?.security as SecurityDescriptor | undefined;
+  }
+  if (typeof value === 'object') {
+    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
+    if (metadata?.security) {
+      return metadata.security;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Process a value through its pipeline (if any)
  * 
@@ -59,6 +74,20 @@ export async function processPipeline(
   context: UnifiedPipelineContext
 ): Promise<any> {
   const { value, env, node, directive, identifier } = context;
+  const descriptorFromValue = extractSecurityDescriptor(value);
+  let pipelineDescriptor: SecurityDescriptor | undefined = descriptorFromValue;
+  const directiveLabels = directive
+    ? (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined
+    : undefined;
+  if (directiveLabels && directiveLabels.length > 0) {
+    pipelineDescriptor = mergeDescriptors(
+      pipelineDescriptor,
+      makeSecurityDescriptor({ labels: directiveLabels })
+    );
+  }
+  if (pipelineDescriptor) {
+    env.recordSecurityDescriptor(pipelineDescriptor);
+  }
   
   // Debug detection
   if (identifier && process.env.MLLD_DEBUG === 'true') {
@@ -166,6 +195,7 @@ export async function processPipeline(
   const hasSyntheticSource = functionalPipeline[0]?.rawIdentifier === '__source__';
   
   // Execute pipeline with normalized stages
+let executionResult: StructuredValue;
   try {
     const executor = new PipelineExecutor(
       functionalPipeline,
@@ -177,9 +207,8 @@ export async function processPipeline(
       detected.parallelCap,
       detected.delayMs
     );
+    executionResult = await executor.execute(input, { returnStructured: true }) as StructuredValue;
 
-    return await executor.execute(input, { returnStructured: true });
-    
   } catch (error) {
     // Enhance error with context
     if (error instanceof Error) {
@@ -192,6 +221,17 @@ export async function processPipeline(
     }
     throw error;
   }
+  if (pipelineDescriptor && isStructuredValue(executionResult)) {
+    const metadata: StructuredValueMetadata = {
+      ...(executionResult.metadata || {}),
+      security: pipelineDescriptor
+    };
+    return wrapStructured(executionResult, undefined, undefined, metadata);
+  }
+  if (pipelineDescriptor) {
+    env.recordSecurityDescriptor(pipelineDescriptor);
+  }
+  return executionResult;
 }
 
 /**

@@ -19,7 +19,7 @@ describe('Security metadata propagation', () => {
 
     const variable = env.getVariable('foo');
     expect(variable?.metadata?.security).toBeDefined();
-    expect(Array.from(variable!.metadata!.security!.labels)).toEqual(['secret', 'untrusted']);
+    expect(variable!.metadata!.security!.labels).toEqual(['secret', 'untrusted']);
   });
 
   it('restores serialized metadata during import reconstruction', () => {
@@ -33,7 +33,6 @@ describe('Security metadata propagation', () => {
       securityLabels: ['secret']
     });
 
-    expect(Array.from(variable.metadata?.security?.labels || [])).toEqual(['secret']);
-    expect(variable.metadata?.security?.inference).toBe('explicit');
+    expect(variable.metadata?.security?.labels || []).toEqual(['secret']);
   });
 });

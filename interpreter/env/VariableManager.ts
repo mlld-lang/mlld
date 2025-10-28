@@ -12,6 +12,7 @@ import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
+import type { DataLabel, TaintLevel, SecurityDescriptor } from '@core/types/security';
 
 export interface IVariableManager {
   // Core variable operations
@@ -55,6 +56,14 @@ export interface VariableManagerDependencies {
     attemptCount?: number;
     attemptHistory?: any[];
   } | undefined;
+  getSecuritySnapshot?(): {
+    labels: readonly DataLabel[];
+    sources: readonly string[];
+    taintLevel: TaintLevel;
+    policy?: Readonly<Record<string, unknown>>;
+    operation?: Readonly<Record<string, unknown>>;
+  } | undefined;
+  recordSecurityDescriptor?(descriptor: SecurityDescriptor | undefined): void;
 }
 
 export interface VariableManagerContext {
@@ -180,6 +189,14 @@ export class VariableManager implements IVariableManager {
       }
 
       const pctx = this.deps.getPipelineContext?.();
+      const securitySnapshot = this.deps.getSecuritySnapshot?.();
+      const securityFields = {
+        labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
+        sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
+        taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
+        policy: securitySnapshot?.policy ?? null,
+        operation: securitySnapshot?.operation ?? null
+      };
       // Build minimal ctx per spec; defaults when no pipeline context
       const ctxValue = pctx ? {
         try: (pctx as any).attemptCount || 1,
@@ -225,6 +242,7 @@ export class VariableManager implements IVariableManager {
         lastOutput: null,
         input: null
       };
+      Object.assign(ctxValue, securityFields);
 
       return createObjectVariable('ctx', ctxValue, false, undefined, {
         isReserved: true,
@@ -240,6 +258,7 @@ export class VariableManager implements IVariableManager {
     const parent = this.deps.getParent();
     
     if (variable) {
+      this.deps.recordSecurityDescriptor?.(variable.metadata?.security);
       // Special handling for lazy variables like @debug
       if (variable.metadata && 'isLazy' in variable.metadata && variable.metadata.isLazy && variable.value === null) {
         // For lazy variables, we need to compute the value
@@ -259,12 +278,17 @@ export class VariableManager implements IVariableManager {
       const capturedEnv = this.deps.getCapturedModuleEnv();
       if (capturedEnv && capturedEnv.has(name)) {
         variable = capturedEnv.get(name);
+        if (variable) {
+          this.deps.recordSecurityDescriptor?.(variable.metadata?.security);
+          return variable;
+        }
       }
     }
     
     // Check parent scope for regular variables
     const parentVar = parent?.getVariable(name);
     if (parentVar) {
+      this.deps.recordSecurityDescriptor?.(parentVar.metadata?.security);
       return parentVar;
     }
     

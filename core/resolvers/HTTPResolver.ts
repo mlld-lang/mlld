@@ -6,7 +6,7 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 
 /**
  * Configuration for HTTPResolver
@@ -120,7 +120,7 @@ export class HTTPResolver implements Resolver {
         metadata: {
           source: url.toString(),
           timestamp: new Date(),
-          taintLevel: (TaintLevel as any).EXTERNAL,
+          taintLevel: 'networkCached' as TaintLevel,
           mimeType: cached.headers?.['content-type'] || 'text/plain'
         }
       };
@@ -145,7 +145,7 @@ export class HTTPResolver implements Resolver {
         metadata: {
           source: url.toString(),
           timestamp: new Date(),
-          taintLevel: (TaintLevel as any).EXTERNAL,
+          taintLevel: 'networkLive' as TaintLevel,
           mimeType: headers['content-type'] || 'text/plain',
           size: parseInt(headers['content-length'] || '0', 10) || undefined
         }

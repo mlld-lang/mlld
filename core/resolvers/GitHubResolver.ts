@@ -6,7 +6,7 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { logger } from '@core/utils/logger';
 import * as fs from 'fs';
@@ -156,7 +156,7 @@ export class GitHubResolver implements Resolver {
         metadata: {
           source: `github://${config.repository}/${path}`,
           timestamp: new Date(),
-          taintLevel: (await this.getAuthToken(config)) ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
+          taintLevel: 'networkCached' as TaintLevel,
           author: owner
         }
       };
@@ -183,7 +183,7 @@ export class GitHubResolver implements Resolver {
         metadata: {
           source: `github://${config.repository}/${path}`,
           timestamp: new Date(),
-          taintLevel: token ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
+          taintLevel: 'networkLive' as TaintLevel,
           author: owner,
           mimeType: this.getMimeType(path)
         }

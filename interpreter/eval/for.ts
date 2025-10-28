@@ -14,7 +14,7 @@ import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-
 import { asData, asText, isStructuredValue } from '../utils/structured-value';
 
 // Helper to ensure a value is wrapped as a Variable
-function ensureVariable(name: string, value: unknown): Variable {
+function ensureVariable(name: string, value: unknown, env: Environment): Variable {
   // If already a Variable, return as-is
   if (isVariable(value)) {
     return value;
@@ -43,7 +43,7 @@ function ensureVariable(name: string, value: unknown): Variable {
   
   // Otherwise, create a Variable from the value
   const importer = new VariableImporter();
-  return importer.createVariableFromValue(name, value, 'for-loop');
+  return importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
 }
 
 export async function evaluateForDirective(
@@ -97,10 +97,10 @@ export async function evaluateForDirective(
       let childEnv = env.createChildEnvironment();
       // Inherit forOptions for nested loops if set
       if (effective) (childEnv as any).__forOptions = effective;
-      const iterationVar = ensureVariable(varName, value);
+      const iterationVar = ensureVariable(varName, value, env);
       childEnv.setVariable(varName, iterationVar);
       if (key !== null && typeof key === 'string') {
-        const keyVar = ensureVariable(`${varName}_key`, key);
+        const keyVar = ensureVariable(`${varName}_key`, key, env);
         childEnv.setVariable(`${varName}_key`, keyVar);
       }
 
@@ -192,10 +192,10 @@ export async function evaluateForExpression(
     const [key, value] = entry;
     let childEnv = env.createChildEnvironment();
     if (effective) (childEnv as any).__forOptions = effective;
-    const iterationVar = ensureVariable(varName, value);
+    const iterationVar = ensureVariable(varName, value, env);
     childEnv.setVariable(varName, iterationVar);
     if (key !== null && typeof key === 'string') {
-      const keyVar = ensureVariable(`${varName}_key`, key);
+      const keyVar = ensureVariable(`${varName}_key`, key, env);
       childEnv.setVariable(`${varName}_key`, keyVar);
     }
     try {

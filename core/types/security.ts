@@ -12,7 +12,12 @@ export type DataLabel =
   | 'destructive'
   | 'network';
 
-export type CapabilityKind = DirectiveKind | 'pipeline' | 'effect';
+export type CapabilityKind =
+  | DirectiveKind
+  | 'pipeline'
+  | 'effect'
+  | 'command'
+  | 'output';
 
 export type TaintLevel =
   | 'unknown'
@@ -27,38 +32,44 @@ export type TaintLevel =
   | 'networkLive'
   | 'llmOutput';
 
-export interface CapabilitySource {
-  path?: string;
-  locator?: string;
-  description?: string;
-}
-
 export interface SecurityDescriptor {
-  readonly labels: ReadonlySet<DataLabel>;
-  readonly taint: TaintLevel;
-  readonly source?: CapabilitySource;
-  readonly inference?: 'explicit' | 'inferred' | 'default';
+  readonly labels: readonly DataLabel[];
+  readonly taintLevel: TaintLevel;
+  readonly sources: readonly string[];
+  readonly capability?: CapabilityKind;
+  readonly policyContext?: Readonly<Record<string, unknown>>;
 }
 
 export interface CapabilityContext {
   readonly kind: CapabilityKind;
   readonly importType?: ImportType;
+  readonly taintLevel: TaintLevel;
+  readonly labels: readonly DataLabel[];
+  readonly sources: readonly string[];
+  readonly policy?: Readonly<Record<string, unknown>>;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly operation?: Readonly<Record<string, unknown>>;
   readonly security: SecurityDescriptor;
-  readonly metadata?: Record<string, unknown>;
 }
 
 export type SerializedSecurityDescriptor = {
   labels: DataLabel[];
-  taint: TaintLevel;
-  source?: CapabilitySource;
-  inference?: SecurityDescriptor['inference'];
+  taintLevel: TaintLevel;
+  sources: string[];
+  capability?: CapabilityKind;
+  policyContext?: Record<string, unknown>;
 };
 
 export type SerializedCapabilityContext = {
   kind: CapabilityKind;
   importType?: ImportType;
-  security: SerializedSecurityDescriptor;
+  taintLevel: TaintLevel;
+  labels: DataLabel[];
+  sources: string[];
+  policy?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  operation?: Record<string, unknown>;
+  security: SerializedSecurityDescriptor;
 };
 
 export const DATA_LABELS: readonly DataLabel[] = [
@@ -86,110 +97,88 @@ const TAINT_ORDER: Record<TaintLevel, number> = {
   unknown: -1
 };
 
-const INFERENCE_RANK: Record<NonNullable<SecurityDescriptor['inference']>, number> = {
-  explicit: 2,
-  inferred: 1,
-  default: 0
-};
-
-function normalizeLabels(labels?: Iterable<DataLabel>): DataLabel[] {
-  if (!labels) {
-    return [];
+function freezeArray<T>(values: Iterable<T> | undefined): readonly T[] {
+  if (!values) {
+    return Object.freeze([]) as readonly T[];
   }
+  const deduped = Array.from(new Set(values));
+  return Object.freeze(deduped);
+}
 
-  const seen = new Set<DataLabel>();
-  const normalized: DataLabel[] = [];
-  for (const label of labels) {
-    if (!seen.has(label)) {
-      seen.add(label);
-      normalized.push(label);
-    }
+function freezeObject<T extends Record<string, unknown> | undefined>(input: T): T {
+  if (!input) {
+    return input;
   }
-  return normalized;
+  return Object.freeze({ ...input }) as T;
 }
 
-function freezeSet<T>(input: Set<T>): ReadonlySet<T> {
-  return Object.freeze(input) as ReadonlySet<T>;
-}
-
-function cloneSource(source?: CapabilitySource): CapabilitySource | undefined {
-  if (!source) return undefined;
-  return Object.freeze({ ...source });
-}
-
-function buildDescriptor(
-  labels: Iterable<DataLabel>,
-  taint: TaintLevel,
-  source?: CapabilitySource,
-  inference?: SecurityDescriptor['inference']
+function createDescriptor(
+  labels: readonly DataLabel[],
+  taintLevel: TaintLevel,
+  sources: readonly string[],
+  capability?: CapabilityKind,
+  policyContext?: Readonly<Record<string, unknown>>
 ): SecurityDescriptor {
-  const set = freezeSet(new Set(labels));
-  const descriptor: SecurityDescriptor = {
-    labels: set,
-    taint,
-    source: cloneSource(source),
-    inference
-  };
-  return Object.freeze(descriptor);
+  return Object.freeze({
+    labels,
+    taintLevel,
+    sources,
+    capability,
+    policyContext
+  });
 }
 
 export function makeSecurityDescriptor(options?: {
   labels?: Iterable<DataLabel>;
-  taint?: TaintLevel;
-  source?: CapabilitySource;
-  inference?: SecurityDescriptor['inference'];
+  taintLevel?: TaintLevel;
+  sources?: Iterable<string>;
+  capability?: CapabilityKind;
+  policyContext?: Record<string, unknown>;
 }): SecurityDescriptor {
-  const normalizedLabels = normalizeLabels(options?.labels);
-  const inferred =
-    options?.inference ??
-    (normalizedLabels.length > 0 ? 'explicit' : 'default');
-
-  return buildDescriptor(
-    normalizedLabels,
-    options?.taint ?? 'unknown',
-    options?.source,
-    inferred
+  const labels = freezeArray(options?.labels);
+  const sources = freezeArray(options?.sources);
+  const policyContext = freezeObject(options?.policyContext);
+  return createDescriptor(
+    labels,
+    options?.taintLevel ?? 'unknown',
+    sources,
+    options?.capability,
+    policyContext
   );
 }
 
 export function mergeDescriptors(
   ...descriptors: Array<SecurityDescriptor | undefined>
 ): SecurityDescriptor {
-  const labels = new Set<DataLabel>();
-  let taint: TaintLevel | undefined;
-  let highestInference: SecurityDescriptor['inference'] = 'default';
+  const labelSet = new Set<DataLabel>();
+  const sourceSet = new Set<string>();
+
+  let taintLevel: TaintLevel = 'unknown';
+  let capability: CapabilityKind | undefined;
+  let policyContext: Record<string, unknown> | undefined;
 
   for (const descriptor of descriptors) {
     if (!descriptor) continue;
 
-    for (const label of descriptor.labels) {
-      labels.add(label);
+    descriptor.labels.forEach(label => labelSet.add(label));
+    descriptor.sources.forEach(source => sourceSet.add(source));
+    taintLevel = compareTaintLevels(taintLevel, descriptor.taintLevel);
+
+    if (descriptor.capability) {
+      capability = descriptor.capability;
     }
 
-    if (taint === undefined) {
-      taint = descriptor.taint;
-    } else {
-      taint = compareTaintLevels(taint, descriptor.taint);
-    }
-
-    const inference = descriptor.inference ?? 'default';
-    if (
-      highestInference === undefined ||
-      INFERENCE_RANK[inference] > INFERENCE_RANK[highestInference]
-    ) {
-      highestInference = inference;
+    if (descriptor.policyContext) {
+      policyContext = { ...(policyContext ?? {}), ...descriptor.policyContext };
     }
   }
 
-  if (taint === undefined) {
-    taint = 'unknown';
-  }
-
-  return buildDescriptor(
-    labels,
-    taint,
-    undefined,
-    highestInference ?? 'default'
+  return createDescriptor(
+    freezeArray(labelSet),
+    taintLevel,
+    freezeArray(sourceSet),
+    capability,
+    freezeObject(policyContext)
   );
 }
 
@@ -198,7 +187,7 @@ export function hasLabel(
   label: DataLabel
 ): boolean {
   if (!descriptor) return false;
-  return descriptor.labels.has(label);
+  return descriptor.labels.includes(label);
 }
 
 export function compareTaintLevels(a: TaintLevel, b: TaintLevel): TaintLevel {
@@ -214,9 +203,10 @@ export function serializeSecurityDescriptor(
   if (!descriptor) return undefined;
   return {
     labels: Array.from(descriptor.labels),
-    taint: descriptor.taint,
-    source: descriptor.source ? { ...descriptor.source } : undefined,
-    inference: descriptor.inference
+    taintLevel: descriptor.taintLevel,
+    sources: Array.from(descriptor.sources),
+    capability: descriptor.capability,
+    policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
   };
 }
 
@@ -226,9 +216,39 @@ export function deserializeSecurityDescriptor(
   if (!serialized) return undefined;
   return makeSecurityDescriptor({
     labels: serialized.labels,
-    taint: serialized.taint,
-    source: serialized.source,
-    inference: serialized.inference
+    taintLevel: serialized.taintLevel,
+    sources: serialized.sources,
+    capability: serialized.capability,
+    policyContext: serialized.policyContext
+  });
+}
+
+export interface CreateCapabilityContextOptions {
+  kind: CapabilityKind;
+  importType?: ImportType;
+  descriptor: SecurityDescriptor;
+  metadata?: Record<string, unknown>;
+  policy?: Record<string, unknown>;
+  operation?: Record<string, unknown>;
+}
+
+export function createCapabilityContext(
+  options: CreateCapabilityContextOptions
+): CapabilityContext {
+  const policy =
+    options.policy ??
+    options.descriptor.policyContext ??
+    undefined;
+  return Object.freeze({
+    kind: options.kind,
+    importType: options.importType,
+    taintLevel: options.descriptor.taintLevel,
+    labels: options.descriptor.labels,
+    sources: options.descriptor.sources,
+    policy: policy ? Object.freeze({ ...policy }) : undefined,
+    metadata: options.metadata ? Object.freeze({ ...options.metadata }) : undefined,
+    operation: options.operation ? Object.freeze({ ...options.operation }) : undefined,
+    security: options.descriptor
   });
 }
 
@@ -239,8 +259,13 @@ export function serializeCapabilityContext(
   return {
     kind: context.kind,
     importType: context.importType,
-    security: serializeSecurityDescriptor(context.security)!,
-    metadata: context.metadata ? { ...context.metadata } : undefined
+    taintLevel: context.taintLevel,
+    labels: Array.from(context.labels),
+    sources: Array.from(context.sources),
+    policy: context.policy ? { ...context.policy } : undefined,
+    metadata: context.metadata ? { ...context.metadata } : undefined,
+    operation: context.operation ? { ...context.operation } : undefined,
+    security: serializeSecurityDescriptor(context.security)!
   };
 }
 
@@ -248,10 +273,13 @@ export function deserializeCapabilityContext(
   serialized: SerializedCapabilityContext | undefined
 ): CapabilityContext | undefined {
   if (!serialized) return undefined;
-  return Object.freeze({
+  const descriptor = deserializeSecurityDescriptor(serialized.security)!;
+  return createCapabilityContext({
     kind: serialized.kind,
     importType: serialized.importType,
-    security: deserializeSecurityDescriptor(serialized.security)!,
-    metadata: serialized.metadata ? { ...serialized.metadata } : undefined
+    descriptor,
+    metadata: serialized.metadata,
+    policy: serialized.policy,
+    operation: serialized.operation
   });
 }

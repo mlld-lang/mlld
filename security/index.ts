@@ -16,7 +16,7 @@ export * from './import';
 export * from './cache';
 export * from './url';
 export * from './registry';
-export * from './taint';
+export * from '@core/security/taint';
 export * from './path';
 
 // Export from directories that exist

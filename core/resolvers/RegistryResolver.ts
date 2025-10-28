@@ -6,7 +6,7 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 import { logger } from '@core/utils/logger';
 import { parseSemVer, compareSemVer, satisfiesVersion } from '@core/utils/version-checker';
 
@@ -318,7 +318,7 @@ export class RegistryResolver implements Resolver {
         metadata: {
           source: `registry://${moduleKey}@${resolvedVersion}`,
           timestamp: new Date(),
-          taintLevel: (TaintLevel as any).PUBLIC,
+          taintLevel: 'module' as TaintLevel,
           author: moduleEntry.author,
           mimeType: 'text/x-mlld-module',
           hash: versionData.source.contentHash,

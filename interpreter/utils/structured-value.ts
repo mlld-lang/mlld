@@ -1,3 +1,5 @@
+import type { SecurityDescriptor } from '@core/types/security';
+
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 
 export type StructuredValueType =
@@ -12,6 +14,7 @@ export type StructuredValueType =
 export interface StructuredValueMetadata {
   source?: string;
   retries?: number;
+  security?: SecurityDescriptor;
   [key: string]: unknown;
 }
 
@@ -141,11 +144,12 @@ function createStructuredValue<T>(
   metadata?: StructuredValueMetadata
 ): StructuredValue<T> {
   const resolvedText = text ?? '';
+  const resolvedMetadata = cloneMetadata(metadata);
   const structuredValue: StructuredValue<T> = {
     type,
     text: resolvedText,
     data,
-    metadata,
+    metadata: resolvedMetadata,
     toString() {
       return resolvedText;
     },
@@ -159,6 +163,16 @@ function createStructuredValue<T>(
   };
 
   return structuredValue;
+}
+
+function cloneMetadata(metadata?: StructuredValueMetadata): StructuredValueMetadata | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+  if (Object.isFrozen(metadata)) {
+    return metadata;
+  }
+  return Object.freeze({ ...metadata });
 }
 
 function deriveText(value: unknown): string {

@@ -1,5 +1,5 @@
 import { parse as parseShell } from 'shell-quote';
-import type { TaintLevel } from '@security/taint';
+import type { TaintLevel } from '@core/types/security';
 import { IMMUTABLE_SECURITY_PATTERNS } from '@security/policy/patterns';
 
 export interface CommandAnalysis {
@@ -55,7 +55,7 @@ export class CommandAnalyzer {
     risks.push(...exfiltrationRisks);
     
     // 5. Extra analysis for tainted data
-    if (taint === 'llm_output' || taint === 'network') {
+    if (taint === 'llmOutput' || taint === 'networkLive' || taint === 'networkCached') {
       risks.push({
         type: 'INJECTION',
         severity: 'CRITICAL',

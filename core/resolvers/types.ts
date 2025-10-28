@@ -1,4 +1,4 @@
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 export type { FuzzyMatchConfig } from '@core/resolvers/utils/PathMatcher';
 
 /**

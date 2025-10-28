@@ -19,6 +19,18 @@ import * as path from 'path';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
+import {
+  makeSecurityDescriptor,
+  mergeDescriptors,
+  createCapabilityContext,
+  type SecurityDescriptor,
+  type CapabilityContext,
+  type CapabilityKind,
+  type ImportType,
+  type DataLabel,
+  type TaintLevel
+} from '@core/types/security';
+import { TaintTracker } from '@core/security';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -46,6 +58,30 @@ interface ImportBindingInfo {
   location?: SourceLocation;
 }
 
+interface SecurityScopeFrame {
+  kind: CapabilityKind;
+  importType?: ImportType;
+  metadata?: Readonly<Record<string, unknown>>;
+  operation?: Readonly<Record<string, unknown>>;
+  previousDescriptor: SecurityDescriptor;
+  previousPolicy?: Readonly<Record<string, unknown>>;
+}
+
+interface SecurityRuntimeState {
+  tracker: TaintTracker;
+  descriptor: SecurityDescriptor;
+  stack: SecurityScopeFrame[];
+  policy?: Readonly<Record<string, unknown>>;
+}
+
+interface SecuritySnapshot {
+  labels: readonly DataLabel[];
+  sources: readonly string[];
+  taintLevel: TaintLevel;
+  policy?: Readonly<Record<string, unknown>>;
+  operation?: Readonly<Record<string, unknown>>;
+}
+
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
@@ -59,6 +95,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Note: importApproval and immutableCache are now handled by ImportResolver
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
+  private securityRuntime?: SecurityRuntimeState;
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
@@ -328,7 +365,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getBasePath: () => this.getProjectRoot(),
       getFileDirectory: () => this.getFileDirectory(),
       getExecutionDirectory: () => this.getExecutionDirectory(),
-      getPipelineContext: () => this.getPipelineContext()
+      getPipelineContext: () => this.getPipelineContext(),
+      getSecuritySnapshot: () => this.getSecuritySnapshot(),
+      recordSecurityDescriptor: descriptor => this.recordSecurityDescriptor(descriptor)
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -647,6 +686,94 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Get from this environment or parent
     if (this.securityManager) return this.securityManager;
     return this.parent?.getSecurityManager();
+  }
+
+  getSecuritySnapshot(): SecuritySnapshot | undefined {
+    if (this.securityRuntime) {
+      const top = this.securityRuntime.stack[this.securityRuntime.stack.length - 1];
+      return {
+        labels: this.securityRuntime.descriptor.labels,
+        sources: this.securityRuntime.descriptor.sources,
+        taintLevel: this.securityRuntime.descriptor.taintLevel,
+        policy: this.securityRuntime.policy,
+        operation: top?.operation
+      };
+    }
+    return this.parent?.getSecuritySnapshot();
+  }
+
+  protected ensureSecurityRuntime(): SecurityRuntimeState {
+    if (!this.securityRuntime) {
+      this.securityRuntime = {
+        tracker: new TaintTracker(),
+        descriptor: makeSecurityDescriptor(),
+        stack: [],
+        policy: undefined
+      };
+    }
+    return this.securityRuntime;
+  }
+
+  pushSecurityContext(input: {
+    descriptor: SecurityDescriptor;
+    kind: CapabilityKind;
+    importType?: ImportType;
+    metadata?: Record<string, unknown>;
+    operation?: Record<string, unknown>;
+    policy?: Record<string, unknown>;
+  }): void {
+    const runtime = this.ensureSecurityRuntime();
+    const previousDescriptor = runtime.descriptor;
+    const merged = mergeDescriptors(previousDescriptor, input.descriptor);
+    const policy = input.policy ?? runtime.policy;
+    runtime.stack.push({
+      kind: input.kind,
+      importType: input.importType,
+      metadata: input.metadata ? Object.freeze({ ...input.metadata }) : undefined,
+      operation: input.operation ? Object.freeze({ ...input.operation }) : undefined,
+      previousDescriptor,
+      previousPolicy: runtime.policy,
+      policyOverride: input.policy ? Object.freeze({ ...input.policy }) : undefined
+    });
+    runtime.descriptor = merged;
+    runtime.policy = policy;
+  }
+
+  popSecurityContext(): CapabilityContext | undefined {
+    const runtime = this.securityRuntime;
+    if (!runtime) {
+      return undefined;
+    }
+    const frame = runtime.stack.pop();
+    if (!frame) {
+      return undefined;
+    }
+    const descriptor = runtime.descriptor;
+    const context = createCapabilityContext({
+      kind: frame.kind,
+      importType: frame.importType,
+      descriptor,
+      metadata: frame.metadata,
+      policy: runtime.policy,
+      operation: frame.operation
+    });
+    runtime.descriptor = frame.previousDescriptor;
+    runtime.policy = frame.previousPolicy;
+    return context;
+  }
+
+  mergeSecurityDescriptors(
+    ...descriptors: Array<SecurityDescriptor | undefined>
+  ): SecurityDescriptor {
+    return mergeDescriptors(...descriptors);
+  }
+
+  recordSecurityDescriptor(descriptor: SecurityDescriptor | undefined): void {
+    if (!descriptor) {
+      return;
+    }
+    const runtime = this.ensureSecurityRuntime();
+    runtime.descriptor = mergeDescriptors(runtime.descriptor, descriptor);
   }
   
   getRegistryManager(): RegistryManager | undefined {
@@ -993,14 +1120,38 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       console.error('[WARNING] No effect handler available!');
       return;
     }
-    
+    const snapshot = this.getSecuritySnapshot();
+    let capability: CapabilityContext | undefined;
+    if (snapshot) {
+      const descriptor = makeSecurityDescriptor({
+        labels: snapshot.labels,
+        taintLevel: snapshot.taintLevel,
+        sources: snapshot.sources,
+        policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+      });
+      capability = createCapabilityContext({
+        kind: 'effect',
+        descriptor,
+        metadata: {
+          effectType: type,
+          path: options?.path
+        },
+        operation: snapshot.operation ?? {
+          kind: 'effect',
+          effectType: type
+        }
+      });
+      this.recordSecurityDescriptor(descriptor);
+    }
+
     // Always emit effects (handler decides whether to actually output)
     this.effectHandler.handleEffect({
       type,
       content,
       path: options?.path,
       source: options?.source,
-      metadata: options?.metadata
+      metadata: options?.metadata,
+      capability
     });
   }
   

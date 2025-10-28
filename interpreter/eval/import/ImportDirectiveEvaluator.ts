@@ -1,5 +1,7 @@
 import type { DirectiveNode, ImportDirectiveNode } from '@core/types';
 import type { ImportType, DataLabel } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { deriveImportTaint } from '@core/security/taint';
 import type { Environment } from '../../env/Environment';
 import type { EvalResult } from '../../core/interpreter';
 import { ImportPathResolver, ImportResolution } from './ImportPathResolver';
@@ -45,6 +47,7 @@ export class ImportDirectiveEvaluator {
    * Main entry point for import directive evaluation
    */
   async evaluateImport(directive: DirectiveNode, env: Environment): Promise<EvalResult> {
+    let contextActive = false;
     try {
       // 1. Resolve the import path and determine import type
       const resolution = await this.pathResolver.resolveImportPath(directive);
@@ -55,10 +58,46 @@ export class ImportDirectiveEvaluator {
         resolution.cacheDurationMs = importContext.cacheDurationMs;
       }
 
+      const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+      const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
+      const taintSnapshot = deriveImportTaint({
+        importType: resolution.importType ?? 'live',
+        resolverName: resolution.resolverName,
+        source: resolution.resolvedPath
+      });
+      const taintDescriptor = makeSecurityDescriptor({
+        taintLevel: taintSnapshot.level,
+        labels: taintSnapshot.labels,
+        sources: taintSnapshot.sources
+      });
+      const descriptor = mergeDescriptors(baseDescriptor, taintDescriptor);
+
+      env.pushSecurityContext({
+        descriptor,
+        kind: 'import',
+        importType: resolution.importType,
+        metadata: {
+          resolvedPath: resolution.resolvedPath,
+          resolver: resolution.resolverName
+        },
+        operation: {
+          kind: 'import',
+          subtype: directive.subtype,
+          location: directive.location
+        }
+      });
+      contextActive = true;
+
       // 2. Route to appropriate handler based on import type
-      return await this.routeImportRequest(resolution, directive, env);
+      const result = await this.routeImportRequest(resolution, directive, env);
+      env.popSecurityContext();
+      contextActive = false;
+      return result;
 
     } catch (error) {
+      if (contextActive) {
+        env.popSecurityContext();
+      }
       return this.handleImportError(error, directive, env);
     }
   }
@@ -531,7 +570,8 @@ export class ImportDirectiveEvaluator {
         if (varName in exportData) {
           const value = exportData[varName];
         const variable = this.variableImporter.createVariableFromValue(alias, value, sourcePath, varName, {
-          securityLabels
+          securityLabels,
+          env
         });
           env.setVariable(alias, variable);
         } else {
@@ -542,7 +582,8 @@ export class ImportDirectiveEvaluator {
       // Import all exports
       for (const [name, value] of Object.entries(exportData)) {
         const variable = this.variableImporter.createVariableFromValue(name, value, sourcePath, undefined, {
-          securityLabels
+          securityLabels,
+          env
         });
         env.setVariable(name, variable);
       }

@@ -21,7 +21,8 @@ import {
   createCommandResultVariable,
   createStructuredValueVariable
 } from '@core/types/variable';
-import type { SecurityDescriptor, DataLabel } from '@core/types/security';
+import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
@@ -125,6 +126,31 @@ export async function evaluateVar(
     throw new Error('Var directive identifier must be a simple variable name');
   }
 
+  const securityLabels = (directive.meta?.securityLabels ?? directive.values?.securityLabels) as DataLabel[] | undefined;
+  const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
+  const capabilityKind = directive.kind as CapabilityKind;
+  env.pushSecurityContext({
+    descriptor: baseDescriptor,
+    kind: capabilityKind,
+    metadata: { identifier },
+    operation: {
+      kind: 'var',
+      identifier,
+      location: directive.location
+    }
+  });
+
+  const finishVariable = (variable: Variable): Variable => {
+    const capabilityContext = env.popSecurityContext();
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(variable.metadata, {
+      existingDescriptor: capabilityContext.security,
+      capability: capabilityContext
+    });
+    const finalVariable: Variable = { ...variable, metadata: finalMetadata };
+    env.setVariable(identifier, finalVariable);
+    return finalVariable;
+  };
+
   // Get the value node - this contains type information from the parser
   const valueNodes = directive.values?.value;
   
@@ -158,6 +184,7 @@ export async function evaluateVar(
     });
   }
 
+  try {
   // Type-based routing based on the AST structure
   let resolvedValue: any;
   const templateAst: any = null; // Store AST for templates that need lazy interpolation
@@ -449,9 +476,9 @@ export async function evaluateVar(
       if (resolvedValue && typeof resolvedValue === 'object' && 
           resolvedValue.type === 'executable') {
         // Preserve the executable variable
-        env.setVariable(identifier, resolvedValue);
+        const finalVar = finishVariable(resolvedValue);
         return {
-          value: resolvedValue,
+          value: finalVar,
           env,
           stdout: '',
           stderr: '',
@@ -608,8 +635,8 @@ export async function evaluateVar(
     const forResult = await evaluateForExpression(valueNode, env);
     
     // The result is already an ArrayVariable
-    env.setVariable(identifier, forResult);
-    return { value: forResult, env };
+    const finalVar = finishVariable(forResult);
+    return { value: finalVar, env };
     
   } else {
     // Default case - try to interpolate as text
@@ -623,8 +650,6 @@ export async function evaluateVar(
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
   const source = createVariableSource(valueNode, directive);
   const metadata: any = { definedAt: location };
-
-  const securityLabels = (directive.meta?.securityLabels ?? directive.values?.securityLabels) as DataLabel[] | undefined;
   const applySecurityMetadata = (base: any, existing?: SecurityDescriptor) =>
     VariableMetadataUtils.applySecurityMetadata(base, {
       labels: securityLabels,
@@ -972,7 +997,7 @@ export async function evaluateVar(
     variable = createStructuredValueVariable(identifier, result, source, structuredMetadata);
   }
   
-  env.setVariable(identifier, variable);
+  const finalVar = finishVariable(variable);
   
   // Debug logging for primitive values
   if (process.env.MLLD_DEBUG === 'true' && identifier === 'sum') {
@@ -980,13 +1005,17 @@ export async function evaluateVar(
       identifier,
       resolvedValue,
       valueType: typeof resolvedValue,
-      variableType: variable.type,
-      variableValue: variable.value
+      variableType: finalVar.type,
+      variableValue: finalVar.value
     });
   }
 
   // Return empty string - var directives don't produce output
   return { value: '', env };
+  } catch (error) {
+    env.popSecurityContext();
+    throw error;
+  }
 }
 
 /**
