@@ -12,6 +12,8 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import { processPipeline } from '@interpreter/eval/pipeline/unified-processor';
 import type { PipelineCommand } from '@core/types/run';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
+import { evaluateOutput } from '@interpreter/eval/output';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { evaluateShow } from '@interpreter/eval/show';
 import { createSimpleTextVariable } from '@core/types/variable';
 
@@ -129,5 +131,32 @@ describe('Security metadata propagation', () => {
 
     const serialized = moduleObject.__metadata__?.foo?.security;
     expect(serialized?.labels).toEqual(expect.arrayContaining(['secret', 'network']));
+  });
+
+  it('attaches capability metadata when emitting file effects', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const env = new Environment(fileSystem, new PathService(), '/');
+    const handler = new TestEffectHandler();
+    env.setEffectHandler(handler);
+
+    const descriptor = makeSecurityDescriptor({ labels: ['secret'] });
+    const templateSource = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    } as const;
+    env.setVariable(
+      'foo',
+      createSimpleTextVariable('foo', 'file contents', templateSource, { security: descriptor })
+    );
+
+    const directive = parseSync('/output @foo to "out.txt"')[0] as DirectiveNode;
+    await evaluateOutput(directive, env);
+
+    const fileEffect = handler.collected.find(effect => effect.type === 'file');
+    expect(fileEffect).toBeDefined();
+    expect(fileEffect?.path).toContain('out.txt');
+    expect(fileEffect?.capability?.security.labels).toEqual(expect.arrayContaining(['secret']));
   });
 });
