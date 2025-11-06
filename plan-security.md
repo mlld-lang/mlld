@@ -44,15 +44,154 @@
 - Ensure variables store both `security` and `capability` metadata in `VariableMetadata`; add helper guards (`getSecurity`, `hasLabel`, `mergeDescriptors`).
 - Add comprehensive tests covering propagation across arrays, objects, templates, pipelines, and nested imports.
 
-## Phase 4 – Guard Directive Runtime
-- Finalize `GuardEvent`, `GuardDecision`, and `GuardThunk` definitions; implement guard registration and dispatch in `Environment`.
-- Extend grammar and AST to support `/guard` directives that compile into thunks. Guard thunks receive event-specific `CapabilityContext` copies.
-- Invoke guards before key capability crossings (imports, command executions, outputs). Define default behaviour for deny decisions.
-- Provide example guards and integration tests: deny live secrets, require approval for untrusted commands, allow module-only PII.
+## Phase 4.0 – Basic Guard Runtime
 
-## Phase 5 – Secret Inference & Enforcement Modes
+**Objective:**
+Deliver core guard functionality: syntax, registration, invocation, and basic actions (allow/deny/retry).
+
+**Scope:**
+- Guard directive parsing: `/guard [@name] [for <label>] = when [...]`
+- Guard registration and lookup by data label
+- Guard invocation at directive boundaries (before execution)
+- Actions: `allow`, `deny "reason"`, `retry "hint"` (auto-deny if not retryable)
+- Context variables: `@ctx.input`, `@ctx.op`, `@ctx.labels`, `@ctx.tries`
+- Data labels on `/exe` declarations (operation labels)
+- Integration with existing pipeline retry infrastructure
+- Retry capability checking (can source be retried?)
+
+**Non-Goals:**
+- Guard-based fixing (`allow @value`) - deferred to 4.1
+- Domain/network detection - deferred to 4.1
+- Schema validation helpers - deferred to 4.1
+- Built-in guards - deferred to 4.1
+- `prompt` action - deferred to Phase 5+
+
+**Workstreams:**
+
+1. **Grammar Extension**
+   - Add `/guard` directive pattern to grammar
+   - Support optional name: `/guard @name for label = when`
+   - Support optional label filter: `/guard for secret = when`
+   - Parse guard body as when-block with allow/deny/retry actions
+
+2. **Guard Registration & Storage**
+   - Create guard registry in Environment
+   - Register guards by label filter (`for secret`, `for pii`, etc)
+   - Support anonymous guards (no name) and named guards
+   - Allow multiple guards per label (evaluate in order)
+
+3. **Operation Labels on /exe**
+   - Extend `/exe` grammar to accept optional labels
+   - Store labels in executable metadata
+   - Example: `/exe network,paid @fetchData() = ...`
+   - Expose via `@ctx.op.labels` during guard evaluation
+
+4. **Guard Invocation Infrastructure**
+   - Instrument directives to check inputs for labels before execution
+   - Directives: `/run`, `/show`, `/import`, `/output`, `/exe` (invocation)
+   - Build `@ctx.op` structure with directive-specific metadata
+   - Invoke matching guards with populated @ctx
+   - Handle guard decisions: allow → continue, deny → throw, retry → delegate
+
+5. **@ctx Population for Guards**
+   - `@ctx.input` - actual data value(s) being guarded
+   - `@ctx.labels` - accumulated labels from all inputs
+   - `@ctx.sources` - provenance tracking
+   - `@ctx.op` - operation metadata (type, labels, directive-specific fields)
+   - `@ctx.tries` - retry attempt counter
+
+6. **Retry Integration**
+   - When guard returns `retry "hint"`, check if source is retryable
+   - If retryable: delegate to existing pipeline retry system
+   - If not retryable: auto-deny with message "Cannot retry: {hint} (source not retryable)"
+   - Investigation: can retry work outside pipeline contexts? (defer if complex)
+
+7. **Testing**
+   - Grammar tests for guard syntax variations
+   - Registration tests (multiple guards per label, ordering)
+   - Invocation tests (guards fire at right boundaries)
+   - Decision tests (allow/deny/retry behaviors)
+   - Integration tests with labeled /exe and directives
+   - Retry tests in pipeline and non-pipeline contexts
+
+**Deliverables:**
+- Guard directive grammar and AST types
+- Guard registration system
+- Directive instrumentation (run, show, import, output)
+- @ctx population logic
+- Retry capability checking
+- Test coverage for all guard actions
+
+**Time Estimate:** 1-1.5 weeks
+
+---
+
+## Phase 4.1 – Guard Fixing & Network Detection
+
+**Objective:**
+Add guard-based data fixing, network activity detection, and schema validation helpers.
+
+**Scope:**
+- `allow @value` action for guard-based fixing
+- Domain extraction from commands and imports
+- `@ctx.op.domains` population
+- Schema validation helper design and implementation
+- Built-in guards (@secretProtection, @piiRestrictions, etc)
+
+**Workstreams:**
+
+1. **Allow with Value (Fixing)**
+   - Extend `allow` action to accept optional value
+   - Syntax: `allow @transformedValue`
+   - When guard returns `allow @value`, replace @ctx.input with fixed value
+   - Ensure fixed value propagates to operation correctly
+
+2. **Network Activity Detection**
+   - Implement domain extraction from commands (see below)
+   - Populate `@ctx.op.domains` array
+   - Support guards filtering on domains
+
+3. **Domain Extraction Algorithm**
+   - Tier 1: Protocol URLs (`https://`, `http://`, `ftp://`, `ssh://`, `git://`, `ws://`, `wss://`)
+   - Tier 2: Network commands + domains (`curl api.com`, `wget example.com`, `ssh user@host.com`)
+   - Tier 3: Git-style URLs (`git@github.com:user/repo`)
+   - Tier 4: IP addresses (excluding private ranges: 192.168.x, 10.x, 127.x)
+   - Common TLDs: `.com .org .net .io .dev .app .ai .co .edu .gov` + country codes
+   - Network commands: curl, wget, ssh, git, rsync, scp, nc, netcat, ping, ftp, telnet
+
+4. **Schema Validation Helpers**
+   - Design API for `@matchesSchema(data, schema)` helper
+   - Implement JSON schema validation
+   - Support for common validation patterns
+   - Error messages for validation failures
+
+5. **Built-in Guards**
+   - `@secretProtection` - prevent secrets in network/log/output
+   - `@piiRestrictions` - prevent PII in logs
+   - `@destructiveConfirmation` - prompt for destructive ops (requires Phase 5)
+   - `@untrustedRestrictions` - block untrusted code execution
+
+6. **Testing**
+   - Domain extraction test suite (coverage of all patterns)
+   - Allow-with-value tests (fixing data)
+   - Schema validation tests
+   - Built-in guard integration tests
+
+**Deliverables:**
+- `allow @value` implementation
+- Domain extraction utility
+- Schema validation helpers
+- Built-in guard library
+- Test coverage
+
+**Time Estimate:** 1 week
+
+## Phase 5 – Secret Inference, Enforcement Modes & Prompts
 - Wire in a secret detection strategy for `typeInference: "basic"`, storing inference provenance on descriptors.
 - Implement `strict` (reject missing labels) and `paranoid` (default untrusted) modes in config loading; ensure inference + explicit labels merge predictably.
+- Add `prompt "message"` action with user Y/N/additional instruction
+- User feedback flows through hint channel to retried operations
+- Confirmation UI for destructive operations
 - Add configuration schema updates, documentation, and tests for each mode.
 
 ## Phase 6 – Documentation, Tooling, and Rollout
@@ -86,10 +225,26 @@
   - `TaintTracker` integrated with merge helpers aligned to the new label set.
   - Evaluators construct and merge descriptors through arrays, objects, pipelines, command outputs.
   - Variables expose metadata helpers (`getSecurity`, `hasLabel`, `mergeDescriptors`) and default to `unknown` taint when provenance is missing.
-- **Phase 4 – Guard Directive Runtime**
-  - `/guard` directives compile into registered thunks with deterministic evaluation order.
-  - Guards fire for `import`, `command`, and `output` events; deny decisions block execution with clear errors.
-  - Integration tests cover allow/deny scenarios across imports and commands.
+- **Phase 4.0 – Basic Guard Runtime**
+  - Parser accepts `/guard [@name] [for <label>] = when [...]` syntax
+  - Guards register by label and can be looked up
+  - Guards fire for import, run, show, output directives before execution
+  - /exe accepts optional labels: `/exe network,paid @func() = ...`
+  - Operation labels exposed via `@ctx.op.labels`
+  - Allow/deny decisions work correctly with clear errors
+  - Retry decisions delegate to existing pipeline retry system
+  - Retry auto-denies if source not retryable
+  - Guards can access `@ctx.input`, `@ctx.op`, `@ctx.labels`, `@ctx.tries`
+  - Integration tests cover allow/deny/retry scenarios
+  - Tests cover retry in pipeline and non-pipeline contexts
+
+- **Phase 4.1 – Guard Fixing & Network Detection**
+  - `allow @value` works for guard-based fixing
+  - Domain extraction detects 95%+ of network commands
+  - `@ctx.op.domains` populated correctly
+  - Schema validation helpers work with guards
+  - Built-in guards function as expected
+  - Test coverage for domain detection edge cases
 - **Phase 5 – Secret Inference & Enforcement Modes**
   - Basic inference tags secrets and records provenance on descriptors.
   - `strict` rejects unlabeled declarations; `paranoid` defaults descriptors to `untrusted`.
@@ -99,14 +254,16 @@
   - Internal migration guidance enumerates the upgrade path.
 
 ## Guard Semantics
-- Guards execute synchronously at defined checkpoints before side-effects occur (import resolution, command dispatch, output emission).
-- Evaluation order matches registration order; deny decisions short-circuit remaining guards.
-- Initial `GuardDecision` surface is `{ allow }` or `{ deny }`, reserving `prompt`/`retry` for later.
-- Guard thunks receive immutable `CapabilityContext` snapshots; development builds assert against mutation.
-- Guard failures raise `GuardError` instances with context for `AuditLogger`.
-- Streaming output never begins before guard approval; denial yields no partial output.
-- Guards are non-reentrant per event; thunks may call helpers but must not trigger nested guard evaluation.
-- Capability metadata is populated prior to guard invocation so policies read consistent context.
+- Guards execute synchronously at directive boundaries BEFORE operations execute
+- Guards are invoked BY directives (e.g., /run, /show, /import), not as separate checkpoints
+- Directives check their inputs for labels, then invoke matching guards
+- Guards receive populated @ctx with both data (@ctx.input) and pending operation (@ctx.op)
+- Evaluation order matches registration order; `deny` decisions short-circuit remaining guards
+- Guards can see forward-looking operation info (@ctx.op describes what's ABOUT to happen)
+- `retry` decisions delegate to existing pipeline retry infrastructure
+- `retry` auto-denies if source is not retryable (with clear error message)
+- Guard failures raise `GuardError` instances with context for `AuditLogger`
+- Guards are non-reentrant per directive invocation
 
 ## Taint Lattice
 - Levels (highest risk to lowest): `llmOutput` > `networkLive` > `networkCached` > `resolver` > `userInput` > `commandOutput` > `localFile` > `staticEmbed` > `module` > `literal` > `unknown`.
