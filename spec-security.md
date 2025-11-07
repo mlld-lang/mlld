@@ -112,12 +112,51 @@ Guards can validate data against schemas:
 ]
 ```
 
+### Guard Helper Functions
+
+Guards have access to helper functions for common checks:
+
+**Operation Helpers:**
+- `@opIs(type)` - Checks `@ctx.op.type == type`
+- `@opHas(label)` - Checks `@ctx.op.labels.includes(label)`
+- `@opHasAny([labels])` - Checks any label in operation
+- `@opHasAll([labels])` - Checks all labels in operation
+
+**Input Helpers:**
+- `@inputHas(label)` - Checks `@ctx.labels.includes(label)`
+
+**Examples:**
+```mlld
+/guard for secret = when [
+  @opIs("run") => deny "No secrets in shell"
+  @opHas("network") => deny "No secrets over network"
+  @inputHas("trusted") => allow  # Bypass if trusted
+
+  # Raw context access still available
+  @ctx.op.type == "import" => deny "No secret imports"
+  @ctx.labels.length > 2 => deny "Too many risk labels"
+
+  # Domain checking (Phase 4.1+)
+  @ctx.op.domains.includes("evil.com") => deny "Blocked domain"
+]
+```
+
+**@input in Guards:**
+
+Like pipeline stages, guards use `@input` to access the data being guarded:
+- For simple values: the raw value
+- For structured data: object with `.text` and `.data` properties
+- Reuses the existing pipeline `@input` semantics
+
+Note: `@ctx.input` is an alias to the same value (consistent with pipeline `@ctx.input`)
+
 ### Context (@ctx)
 
 Extended ambient context that flows through all operations:
 
 ```mlld
-@ctx.input       # Actual data value being guarded (available to guards)
+@input           # Data being guarded (primary - like pipeline stages)
+@ctx.input       # Alias to @input (for consistency with other @ctx properties)
 @ctx.labels      # Array of accumulated label strings ["secret", "pii"]
 @ctx.sources     # Array of data source identifiers ["user-input", "api-response"]
 @ctx.op          # Current operation metadata (see below)
@@ -160,15 +199,43 @@ For built-in directives:
   type: "show",
   labels: ["output"]  # Implicit
 }
+
+# /output
+@ctx.op = {
+  type: "output",
+  labels: ["output", "io"]  # Implicit
+}
 ```
+
+### Implicit Operation Labels
+
+Built-in directives have implicit operation labels:
+
+| Directive | Implicit Labels |
+|-----------|----------------|
+| `/run` | `["shell", "external"]` |
+| `/show` | `["output"]` |
+| `/import live` | `["network", "import"]` |
+| `/import cached` | `["network", "import"]` |
+| `/output` | `["output", "io"]` |
+
+User-defined executables have labels only if explicitly declared:
+```mlld
+/exe network,paid @fetch() = {curl ...}  # labels: ["network", "paid"]
+/exe @helper() = {echo ...}              # labels: []
+```
+
+Guards can check these via `@opHas(label)` or `@ctx.op.labels`.
 
 ## Built-in Data Labels
 
 mlld ships with a minimal built-in label set:
 
 - `secret` - Sensitive data (passwords, keys, tokens)
-- `public` - Safe to expose anywhere  
+- `pii` - Personally identifiable information
+- `public` - Safe to expose anywhere
 - `untrusted` - From external sources, potential injection risk
+- `trusted` - From verified/safe sources
 - `network` - Makes external calls
 - `destructive` - Modifies or deletes data
 
@@ -179,20 +246,20 @@ Default guards that prevent common security mistakes:
 ```mlld
 # Prevent credential leaks
 /guard @secretProtection for secret = when [
-  @ctx.op.labels.includes("network") => deny "Secrets cannot be sent over network"
-  @ctx.op.type == "show" => deny "Secrets cannot be displayed"
+  @opHas("network") => deny "Secrets cannot be sent over network"
+  @opIs("show") => deny "Secrets cannot be displayed"
   * => allow
 ]
 
-# Confirm destructive operations
-/guard @destructiveConfirmation for destructive = when [
-  !@ctx.userConfirmed => prompt "Confirm destructive operation"
+# Restrict destructive operations
+/guard @destructiveRestrictions for destructive = when [
+  @opIs("run") => deny "Destructive operations in shell require review"
   * => allow
 ]
 
 # Restrict untrusted content
 /guard @untrustedRestrictions for untrusted = when [
-  @ctx.op.type == "run" => deny "Cannot execute untrusted content"
+  @opIs("run") => deny "Cannot execute untrusted content"
   * => allow
 ]
 ```
@@ -229,10 +296,73 @@ Guards can be automatically applied to specific data labels:
 ```mlld
 # Guard applies to all 'secret' labeled variables
 /guard @secretDataGuard for secret = when [
-  @ctx.op.type == "run" => deny "Can't use secrets in shell commands"
-  @ctx.op.labels.includes("network") => deny "Can't send secrets over network"
+  @opIs("run") => deny "Can't use secrets in shell commands"
+  @opHas("network") => deny "Can't send secrets over network"
   * => allow
 ]
+```
+
+## Guard Export and Import
+
+Named guards can be exported and imported to enable reusable security policies:
+
+```mlld
+# security-policy.mld
+/guard @noSecretsInLogs for secret = when [
+  @opHas("output") => deny "No secrets in logs"
+  * => allow
+]
+
+/guard @companyDomains for secret = when [
+  @ctx.op.domains.some(d => !d.endsWith(".company.com")) =>
+    deny "Secrets only to company domains"
+  * => allow
+]
+
+/export { @noSecretsInLogs, @companyDomains }
+
+# app.mld
+/import module { @noSecretsInLogs, @companyDomains } from "./security-policy.mld"
+
+# Guards are now active
+/var secret @key = "abc"
+/show @key  # @noSecretsInLogs fires → DENIED
+```
+
+**Key behaviors:**
+- Imported guards activate immediately
+- Guards cannot be overridden (mlld immutability)
+- Guards are execution-scoped (apply to all operations)
+- To disable a guard, don't import it
+
+**Organization-wide policies:**
+Teams can define shared guard libraries that all projects import, ensuring consistent security policies across codebases.
+
+## Guard Scope and Execution (Phase 4.0)
+
+**Current behavior:**
+Guards are execution-scoped and global within an execution context:
+- Guards imported in a module apply to all operations during execution
+- No module-level scoping (guards don't distinguish between modules)
+- Guards fire based on data labels and operation types, regardless of where data originated
+
+**Example:**
+```mlld
+# main.mld
+/import module { @strictSecrets } from "./guards.mld"
+/import module { @externalData } from "registry:external-lib"
+
+/show @externalData  # @strictSecrets checks this (if @externalData has 'secret' label)
+```
+
+**Future considerations (Phase 4.1+):**
+- Module-aware guards that can check `@ctx.module` (which module is executing)
+- Data provenance in guards (which module data came from)
+- Fine-grained scoping (guards that apply only to specific modules)
+- Integration with taint tracking for module provenance
+
+**Current design philosophy:**
+Keep scoping simple. If a guard is too broad, rewrite it with more specific conditions. If you don't want a guard, don't import it.
 ```
 
 ## Runtime Execution
@@ -288,7 +418,7 @@ Guards can be automatically applied to specific data labels:
 
 ### Retry with Guards
 
-**Note:** Retry outside of pipelines requires investigation (Phase 4.0). For now, retry works best in pipeline contexts.
+**Note:** `retry` currently only works in pipeline contexts where the data source is a function call. For direct invocations without retryable sources, guards can only `allow` or `deny`. Retry will auto-deny with error: "Cannot retry: [hint] (source not retryable)".
 
 ```mlld
 # Pipeline context - retry works naturally
@@ -301,9 +431,9 @@ Guards can be automatically applied to specific data labels:
 /var llmjson @result = @claude("generate user") | @process
 /show @result  # Guard can retry @claude stage
 
-# Direct invocation - under investigation
+# Direct invocation - limited support
 /var llmjson @result = @claude("generate user")
-/show @result  # Can guard retry @claude? TBD in Phase 4.0
+/show @result  # Guard cannot retry (no retryable source in context)
 ```
 
 ### Fixing with Guards (Phase 4.1+)

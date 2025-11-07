@@ -75,10 +75,14 @@ Deliver core guard functionality: syntax, registration, invocation, and basic ac
    - Parse guard body as when-block with allow/deny/retry actions
 
 2. **Guard Registration & Storage**
-   - Create guard registry in Environment
+   - Create guard registry in Environment class
    - Register guards by label filter (`for secret`, `for pii`, etc)
    - Support anonymous guards (no name) and named guards
-   - Allow multiple guards per label (evaluate in order)
+   - Allow multiple guards per label (evaluate in registration order)
+   - First `deny` decision short-circuits remaining guards
+   - Support guard export/import (guards are exportable entities)
+   - Guards are execution-scoped (global within execution context)
+   - Guards cannot be overridden (mlld immutability applies)
 
 3. **Operation Labels on /exe**
    - Extend `/exe` grammar to accept optional labels
@@ -89,22 +93,31 @@ Deliver core guard functionality: syntax, registration, invocation, and basic ac
 4. **Guard Invocation Infrastructure**
    - Instrument directives to check inputs for labels before execution
    - Directives: `/run`, `/show`, `/import`, `/output`, `/exe` (invocation)
+   - For each directive, invoke guards AFTER inputs are evaluated, BEFORE operation executes
    - Build `@ctx.op` structure with directive-specific metadata
+   - Populate `@ctx.input` with actual data value being guarded
    - Invoke matching guards with populated @ctx
-   - Handle guard decisions: allow → continue, deny → throw, retry → delegate
+   - Handle guard decisions: allow → continue, deny → throw GuardError, retry → delegate
 
 5. **@ctx Population for Guards**
-   - `@ctx.input` - actual data value(s) being guarded
+   - `@input` - actual data value(s) being guarded (primary, like pipeline stages)
+   - `@ctx.input` - alias to @input (for consistency)
    - `@ctx.labels` - accumulated labels from all inputs
    - `@ctx.sources` - provenance tracking
-   - `@ctx.op` - operation metadata (type, labels, directive-specific fields)
-   - `@ctx.tries` - retry attempt counter
+   - `@ctx.op` - operation metadata with consistent structure:
+     - `type`: directive type ("run", "show", "import", "output", "exec-invocation")
+     - `labels`: implicit labels for built-ins, user-declared for /exe
+     - Directive-specific fields (command, path, name, etc)
+     - `domains`: extracted domains (Phase 4.1+)
+   - `@ctx.tries` - retry attempt counter (in retry contexts)
+   - Note: Rename runtime field from @ctx.operation to @ctx.op
 
 6. **Retry Integration**
-   - When guard returns `retry "hint"`, check if source is retryable
+   - When guard returns `retry "hint"`, check if source is retryable (function call in pipeline)
    - If retryable: delegate to existing pipeline retry system
-   - If not retryable: auto-deny with message "Cannot retry: {hint} (source not retryable)"
-   - Investigation: can retry work outside pipeline contexts? (defer if complex)
+   - If not retryable: auto-deny with GuardError: "Cannot retry: {hint} (source not retryable)"
+   - Explicit limitation: retry only works in pipeline contexts with function sources
+   - Document limitation clearly in error messages and docs
 
 7. **Testing**
    - Grammar tests for guard syntax variations
@@ -113,14 +126,25 @@ Deliver core guard functionality: syntax, registration, invocation, and basic ac
    - Decision tests (allow/deny/retry behaviors)
    - Integration tests with labeled /exe and directives
    - Retry tests in pipeline and non-pipeline contexts
+   - Export/import tests for guards
+
+8. **Guard Helper Functions**
+   - Implement `@opIs(type)`, `@opHas(label)`, `@opHasAny([labels])`, `@opHasAll([labels])`
+   - Implement `@inputHas(label)` - checks @ctx.labels.includes(label)
+   - Helpers are available in guard when-blocks
+   - Map to underlying @ctx checks (e.g., @opHas → @ctx.op.labels.includes)
+   - Note: @input is accessible directly as a variable (like in pipeline stages)
 
 **Deliverables:**
 - Guard directive grammar and AST types
-- Guard registration system
-- Directive instrumentation (run, show, import, output)
-- @ctx population logic
+- Guard registration system in Environment
+- GuardError type in core/errors (with label, decision, capabilityContext)
+- Directive instrumentation (run, show, import, output, exec-invocation)
+- @ctx population logic (rename operation → op)
+- Guard helper functions (@opHas, @opIs, @opHasAny, @opHasAll, @inputHas)
+- Guard export/import support
 - Retry capability checking
-- Test coverage for all guard actions
+- Test coverage for all guard actions and helpers
 
 **Time Estimate:** 1-1.5 weeks
 
@@ -230,13 +254,20 @@ Add guard-based data fixing, network activity detection, and schema validation h
   - Guards register by label and can be looked up
   - Guards fire for import, run, show, output directives before execution
   - /exe accepts optional labels: `/exe network,paid @func() = ...`
-  - Operation labels exposed via `@ctx.op.labels`
-  - Allow/deny decisions work correctly with clear errors
+  - Operation labels exposed via `@ctx.op.labels` (implicit for built-ins)
+  - Implicit labels documented: /run has ["shell","external"], /show has ["output"], etc
+  - Allow/deny decisions work correctly with clear GuardError messages
+  - GuardError type exists with proper fields
   - Retry decisions delegate to existing pipeline retry system
-  - Retry auto-denies if source not retryable
+  - Retry auto-denies if source not retryable with clear message
   - Guards can access `@ctx.input`, `@ctx.op`, `@ctx.labels`, `@ctx.tries`
+  - Runtime field renamed from @ctx.operation to @ctx.op
+  - Guard helpers work: @opHas, @opIs, @opHasAny, @opHasAll, @inputHas
+  - Named guards can be exported and imported
+  - Imported guards activate immediately
   - Integration tests cover allow/deny/retry scenarios
   - Tests cover retry in pipeline and non-pipeline contexts
+  - Tests cover guard export/import
 
 - **Phase 4.1 – Guard Fixing & Network Detection**
   - `allow @value` works for guard-based fixing
@@ -261,9 +292,11 @@ Add guard-based data fixing, network activity detection, and schema validation h
 - Evaluation order matches registration order; `deny` decisions short-circuit remaining guards
 - Guards can see forward-looking operation info (@ctx.op describes what's ABOUT to happen)
 - `retry` decisions delegate to existing pipeline retry infrastructure
-- `retry` auto-denies if source is not retryable (with clear error message)
+- `retry` auto-denies if source is not retryable (with GuardError message)
 - Guard failures raise `GuardError` instances with context for `AuditLogger`
 - Guards are non-reentrant per directive invocation
+- Guards are execution-scoped (apply globally within execution context)
+- Guards cannot be overridden (mlld immutability applies)
 
 ## Taint Lattice
 - Levels (highest risk to lowest): `llmOutput` > `networkLive` > `networkCached` > `resolver` > `userInput` > `commandOutput` > `localFile` > `staticEmbed` > `module` > `literal` > `unknown`.

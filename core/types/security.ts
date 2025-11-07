@@ -8,7 +8,6 @@ export type DataLabel =
   | 'untrusted'
   | 'public'
   | 'trusted'
-  | 'audited'
   | 'destructive'
   | 'network';
 
@@ -78,7 +77,6 @@ export const DATA_LABELS: readonly DataLabel[] = [
   'untrusted',
   'public',
   'trusted',
-  'audited',
   'destructive',
   'network'
 ] as const;
