@@ -50,7 +50,8 @@ async function runCommand(command, stepName) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, {
       shell: true,
-      cwd: projectRoot
+      cwd: projectRoot,
+      stdio: ['pipe', 'pipe', 'pipe'] // Capture all output
     });
     
     let output = '';
@@ -88,7 +89,8 @@ async function runCommandOptional(command, stepName) {
   return new Promise((resolve) => {
     const child = spawn(command, {
       shell: true,
-      cwd: projectRoot
+      cwd: projectRoot,
+      stdio: ['pipe', 'pipe', 'pipe'] // Capture all output
     });
 
     let output = '';
@@ -166,7 +168,7 @@ async function build() {
     currentStep++;
     
     showProgress(steps[currentStep].display, 'running');
-    await runCommand('tsup', 'typescript');
+    await runCommand('tsup > /dev/null 2>&1', 'typescript');
     showProgress(steps[currentStep].display, 'done');
     currentStep++;
     
