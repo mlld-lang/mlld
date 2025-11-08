@@ -190,16 +190,37 @@ function buildOperationContext(
   traceInfo: { directive: string; varName?: string }
 ): OperationContext {
   const labels = (directive.meta?.securityLabels || directive.values?.securityLabels) as string[] | undefined;
-  return {
+  const baseMetadata: Record<string, unknown> = {
+    trace: traceInfo.directive
+  };
+  const context: OperationContext = {
     type: directive.kind,
     subtype: directive.subtype,
     labels,
     name: traceInfo.varName,
     location: directive.location ?? null,
-    metadata: {
-      trace: traceInfo.directive
-    }
+    metadata: baseMetadata
   };
+
+  switch (directive.kind) {
+    case 'run':
+      applyRunMetadata(context, directive);
+      break;
+    case 'import':
+      applyImportMetadata(context, directive);
+      break;
+    case 'output':
+      applyOutputMetadata(context, directive);
+      break;
+    case 'var':
+      applyVarMetadata(context, directive);
+      break;
+    case 'show':
+      applyShowMetadata(context, directive);
+      break;
+  }
+
+  return context;
 }
 
 async function dispatchDirective(
@@ -241,4 +262,87 @@ async function dispatchDirective(
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);
   }
+}
+
+function applyRunMetadata(context: OperationContext, directive: DirectiveNode): void {
+  const metadata: Record<string, unknown> = { ...(context.metadata ?? {}) };
+  metadata.runSubtype = directive.subtype;
+
+  if (directive.subtype === 'runCommand') {
+    const nodes = directive.values?.identifier || directive.values?.command;
+    const preview = summarizeNodes(nodes);
+    if (preview) {
+      context.command = preview;
+      metadata.commandPreview = preview;
+    }
+  } else if (directive.subtype === 'runExec') {
+    const execNode = directive.values?.identifier?.[0];
+    const execName = execNode ? getTextContent(execNode) : undefined;
+    if (execName) {
+      context.command = `@${execName}`;
+      metadata.execName = execName;
+    }
+  }
+
+  context.metadata = metadata;
+}
+
+function applyImportMetadata(context: OperationContext, directive: DirectiveNode): void {
+  const metadata: Record<string, unknown> = { ...(context.metadata ?? {}) };
+  const pathNode = directive.values?.path?.[0];
+  const path = pathNode ? getTextContent(pathNode) : undefined;
+  if (path) {
+    context.target = path;
+  }
+  context.metadata = metadata;
+}
+
+function applyOutputMetadata(context: OperationContext, directive: DirectiveNode): void {
+  const metadata: Record<string, unknown> = { ...(context.metadata ?? {}) };
+  const pathNode =
+    directive.values?.path?.[0] ||
+    directive.values?.target?.path?.[0] ||
+    (Array.isArray(directive.values?.target)
+      ? directive.values.target[0]?.path?.[0]
+      : undefined);
+  const path = pathNode ? getTextContent(pathNode) : undefined;
+  if (path) {
+    context.target = path;
+  }
+  const targetType = directive.meta?.targetType;
+  if (targetType) {
+    metadata.outputTargetType = targetType;
+  }
+  context.metadata = metadata;
+}
+
+function applyVarMetadata(context: OperationContext, directive: DirectiveNode): void {
+  const metadata: Record<string, unknown> = { ...(context.metadata ?? {}) };
+  const identifierNodes = directive.values?.identifier;
+  const varName = identifierNodes && identifierNodes[0] ? getTextContent(identifierNodes[0]) : undefined;
+  if (varName) {
+    context.target = varName;
+  }
+  context.metadata = metadata;
+}
+
+function applyShowMetadata(context: OperationContext, directive: DirectiveNode): void {
+  const metadata: Record<string, unknown> = { ...(context.metadata ?? {}) };
+  metadata.showSubtype = directive.subtype;
+  context.metadata = metadata;
+}
+
+function summarizeNodes(nodes: unknown): string | undefined {
+  if (!nodes) {
+    return undefined;
+  }
+  const array = Array.isArray(nodes) ? nodes : [nodes];
+  const parts = array
+    .map(node => (typeof node === 'string' ? node : getTextContent(node as any) ?? ''))
+    .join('');
+  const preview = parts.trim();
+  if (!preview) {
+    return undefined;
+  }
+  return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
 }

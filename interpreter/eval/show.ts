@@ -1,7 +1,7 @@
 import type { DirectiveNode } from '@core/types';
 import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
-import type { EvalResult } from '../core/interpreter';
+import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
@@ -61,7 +61,7 @@ function extractDescriptorFromValue(value: unknown): SecurityDescriptor | undefi
 export async function evaluateShow(
   directive: DirectiveNode,
   env: Environment,
-  context?: any
+  context?: EvaluationContext
 ): Promise<EvalResult> {
   // Check if we're importing - skip execution if so
   if (env.getIsImporting()) {
@@ -198,7 +198,8 @@ export async function evaluateShow(
       // Skip the variable type checking below since we already have the value
     } else {
       // Normal variable reference
-      variable = env.getVariable(varName);
+      const extractedVar = getExtractedVariable(context, varName);
+      variable = extractedVar ?? env.getVariable(varName);
       if (!variable) {
         throw new Error(`Variable not found: ${varName}`);
       }
@@ -750,7 +751,8 @@ export async function evaluateShow(
       }
       
       // Look up what this invocation refers to
-      const variable = env.getVariable(name);
+      const extracted = getExtractedVariable(context, name);
+      const variable = extracted ?? env.getVariable(name);
       if (!variable) {
         throw new Error(`Variable not found: ${name}`);
       }
@@ -1300,4 +1302,23 @@ export function extractSection(content: string, sectionName: string): string {
   }
   
   return sectionLines.join('\\n').trim();
+}
+function getExtractedVariable(
+  context: EvaluationContext | undefined,
+  name: string
+): Variable | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const candidate of context.extractedInputs) {
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      'name' in candidate &&
+      (candidate as Variable).name === name
+    ) {
+      return candidate as Variable;
+    }
+  }
+  return undefined;
 }

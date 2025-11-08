@@ -37,28 +37,50 @@ async function extractShowInputs(
 }
 
 function resolveShowVariableName(directive: DirectiveNode): string | undefined {
-  const invocation = directive.values?.invocation?.[0];
+  const invocation = directive.values?.invocation as any;
   if (invocation) {
     if (invocation.type === 'VariableReference') {
       return invocation.identifier;
     }
-    if (invocation.type === 'VariableReferenceWithTail' && invocation.variable) {
+    if (invocation.type === 'VariableReferenceWithTail') {
       const innerVar = invocation.variable;
-      if (innerVar.type === 'VariableReference') {
-        return innerVar.identifier;
+      if (!innerVar) {
+        return undefined;
       }
       if (innerVar.type === 'TemplateVariable') {
         return innerVar.identifier;
       }
+      return innerVar.identifier;
     }
     if (invocation.type === 'TemplateVariable') {
       return invocation.identifier;
     }
   }
 
-  const legacyVariable = directive.values?.variable?.[0];
-  if (legacyVariable && typeof legacyVariable === 'object' && 'identifier' in legacyVariable) {
-    return (legacyVariable as { identifier?: string }).identifier;
+  const legacyVariable = directive.values?.variable as any;
+  if (!legacyVariable) {
+    return undefined;
+  }
+
+  const variableNode = Array.isArray(legacyVariable) ? legacyVariable[0] : legacyVariable;
+  if (!variableNode) {
+    return undefined;
+  }
+
+  if (variableNode.type === 'VariableReferenceWithTail') {
+    const innerVar = variableNode.variable;
+    if (innerVar?.type === 'TemplateVariable') {
+      return innerVar.identifier;
+    }
+    return innerVar?.identifier;
+  }
+
+  if (variableNode.type === 'VariableReference') {
+    return variableNode.identifier;
+  }
+
+  if (variableNode.type === 'TemplateVariable') {
+    return variableNode.identifier;
   }
 
   return undefined;

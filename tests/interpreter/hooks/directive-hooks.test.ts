@@ -95,4 +95,51 @@ describe('directive hook infrastructure', () => {
     expect(captured.length).toBe(1);
     expect((captured[0] as any)?.name).toBe('foo');
   });
+
+  it('records run command preview in operation context', async () => {
+    const env = createEnv();
+    let observedCommand: string | undefined;
+
+    env.getHookManager().registerPre(async (directive, _inputs, _env, operation) => {
+      if (directive.kind === 'run') {
+        observedCommand = operation?.command;
+        return { action: 'abort', metadata: { reason: 'skip run' } };
+      }
+      return { action: 'continue' };
+    });
+
+    const directive = parseSync('/run { echo "hi" }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/skip run/);
+    expect(observedCommand).toContain('echo');
+  });
+
+  it('records output target path in operation context', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'foo',
+      createSimpleTextVariable(
+        'foo',
+        'value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+    let observedTarget: string | undefined;
+
+    env.getHookManager().registerPre(async (directive, _inputs, _env, operation) => {
+      if (directive.kind === 'output') {
+        observedTarget = operation?.target;
+        return { action: 'abort', metadata: { reason: 'skip output' } };
+      }
+      return { action: 'continue' };
+    });
+
+    const directive = parseSync('/output @foo to "out.txt"')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/skip output/);
+    expect(observedTarget).toBe('out.txt');
+  });
 });
