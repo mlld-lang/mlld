@@ -52,6 +52,9 @@ import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { ExportManifest } from '../eval/import/ExportManifest';
+import { ContextManager } from './ContextManager';
+import { HookManager } from '../hooks/HookManager';
+import { guardPreHookStub, taintPostHookStub } from '../hooks/stubs';
 
 interface ImportBindingInfo {
   source: string;
@@ -115,6 +118,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private commandExecutorFactory: CommandExecutorFactory;
   private variableManager: IVariableManager;
   private importResolver: IImportResolver;
+  private contextManager: ContextManager;
+  private hookManager: HookManager;
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
@@ -128,6 +133,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     input: any;
     previousOutputs: string[];
     format?: string;
+    attemptCount?: number;
+    attemptHistory?: any[];
+    hint?: string | null;
+    hintHistory?: any[];
   };
   
   // Output management properties
@@ -234,6 +243,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Initialize effect handler: use provided, inherit from parent, or create default
     this.effectHandler = effectHandler || parent?.effectHandler || new DefaultEffectHandler();
+
+    if (parent) {
+      this.contextManager = parent.contextManager;
+      this.hookManager = parent.hookManager;
+    } else {
+      this.contextManager = new ContextManager();
+      this.hookManager = new HookManager();
+      this.registerBuiltinHooks();
+    }
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -367,7 +385,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getExecutionDirectory: () => this.getExecutionDirectory(),
       getPipelineContext: () => this.getPipelineContext(),
       getSecuritySnapshot: () => this.getSecuritySnapshot(),
-      recordSecurityDescriptor: descriptor => this.recordSecurityDescriptor(descriptor)
+      recordSecurityDescriptor: descriptor => this.recordSecurityDescriptor(descriptor),
+      getContextManager: () => this.contextManager
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -1167,6 +1186,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   setEffectHandler(handler: EffectHandler): void {
     this.effectHandler = handler;
+  }
+  
+  getContextManager(): ContextManager {
+    return this.contextManager;
+  }
+
+  getHookManager(): HookManager {
+    return this.hookManager;
+  }
+
+  private registerBuiltinHooks(): void {
+    this.hookManager.registerPre(guardPreHookStub);
+    this.hookManager.registerPost(taintPostHookStub);
   }
   
   /**

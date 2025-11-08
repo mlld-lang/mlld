@@ -13,6 +13,7 @@ import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
 import type { DataLabel, TaintLevel, SecurityDescriptor } from '@core/types/security';
+import type { ContextManager } from './ContextManager';
 
 export interface IVariableManager {
   // Core variable operations
@@ -64,6 +65,7 @@ export interface VariableManagerDependencies {
     operation?: Readonly<Record<string, unknown>>;
   } | undefined;
   recordSecurityDescriptor?(descriptor: SecurityDescriptor | undefined): void;
+  getContextManager?(): ContextManager | undefined;
 }
 
 export interface VariableManagerContext {
@@ -79,6 +81,98 @@ export class VariableManager implements IVariableManager {
   
   getVariables(): Map<string, Variable> {
     return this.variables;
+  }
+
+  private buildLegacyContext(
+    pipelineContext?: {
+      stage: number;
+      totalStages: number;
+      currentCommand: string;
+      input: any;
+      previousOutputs: string[];
+      format?: string;
+      attemptCount?: number;
+      attemptHistory?: any[];
+      hint?: string | null;
+      hintHistory?: any[];
+    },
+    securitySnapshot?: {
+      labels: readonly DataLabel[];
+      sources: readonly string[];
+      taintLevel: TaintLevel;
+      policy?: Readonly<Record<string, unknown>>;
+      operation?: Readonly<Record<string, unknown>>;
+    }
+  ): Record<string, unknown> {
+    if (!pipelineContext) {
+      return {
+        try: 1,
+        tries: [],
+        stage: 0,
+        isPipeline: false,
+        hint: null,
+        lastOutput: null,
+        input: null,
+        labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
+        sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
+        taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
+        policy: securitySnapshot?.policy ?? null,
+        operation: securitySnapshot?.operation ?? null,
+        op: securitySnapshot?.operation ?? null
+      };
+    }
+
+    const outputs: any[] = pipelineContext.attemptHistory || [];
+    const hints: any[] = pipelineContext.hintHistory || [];
+    const tries: any[] = [];
+    const total = Math.max(outputs.length, hints.length);
+    for (let i = 0; i < total; i++) {
+      tries.push({
+        attempt: i + 1,
+        result: 'retry',
+        hint: hints[i],
+        output: outputs[i]
+      });
+    }
+
+    const normalizeInput = (raw: any): any => {
+      if (typeof raw !== 'string') {
+        return raw;
+      }
+      const trimmed = raw.trim();
+      const looksJson =
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'));
+      if (!looksJson) {
+        return raw;
+      }
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return raw;
+      }
+    };
+
+    const ctxValue = {
+      try: pipelineContext.attemptCount || 1,
+      tries,
+      stage: typeof pipelineContext.stage === 'number' ? pipelineContext.stage : 0,
+      isPipeline: true,
+      hint: pipelineContext.hint ?? null,
+      lastOutput:
+        Array.isArray(pipelineContext.previousOutputs) && pipelineContext.previousOutputs.length > 0
+          ? pipelineContext.previousOutputs[pipelineContext.previousOutputs.length - 1]
+          : null,
+      input: normalizeInput(pipelineContext.input),
+      labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
+      sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
+      taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
+      policy: securitySnapshot?.policy ?? null,
+      operation: securitySnapshot?.operation ?? null,
+      op: securitySnapshot?.operation ?? null
+    };
+
+    return ctxValue;
   }
   
   setVariable(name: string, variable: Variable): void {
@@ -188,61 +282,12 @@ export class VariableManager implements IVariableManager {
         });
       }
 
-      const pctx = this.deps.getPipelineContext?.();
+      const contextManager = this.deps.getContextManager?.();
+      const pipelineContext = this.deps.getPipelineContext?.();
       const securitySnapshot = this.deps.getSecuritySnapshot?.();
-      const securityFields = {
-        labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
-        sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
-        taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
-        policy: securitySnapshot?.policy ?? null,
-        operation: securitySnapshot?.operation ?? null
-      };
-      // Build minimal ctx per spec; defaults when no pipeline context
-      const ctxValue = pctx ? {
-        try: (pctx as any).attemptCount || 1,
-        tries: (() => {
-          const outputs: any[] = (pctx as any).attemptHistory || [];
-          const hints: any[] = (pctx as any).hintHistory || [];
-          const arr: any[] = [];
-          const n = Math.max(outputs.length, hints.length);
-          for (let i = 0; i < n; i++) {
-            arr.push({ attempt: i + 1, result: 'retry', hint: hints[i], output: outputs[i] });
-          }
-          return arr;
-        })(),
-        stage: typeof pctx.stage === 'number' ? pctx.stage : 0,
-        isPipeline: true,
-        hint: (pctx as any).hint ?? null,
-        // Provide last output from previous stage attempts when available
-        lastOutput: Array.isArray((pctx as any).previousOutputs) && (pctx as any).previousOutputs.length > 0
-          ? (pctx as any).previousOutputs[(pctx as any).previousOutputs.length - 1]
-          : null,
-        // Auto-parse JSON-looking inputs so @ctx.input.<field> works in when-expressions
-        input: (() => {
-          const raw = (pctx as any).input;
-          if (typeof raw === 'string') {
-            const trimmed = raw.trim();
-            if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-                (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-              try {
-                return JSON.parse(trimmed);
-              } catch {
-                // fall through to return raw if parsing fails
-              }
-            }
-          }
-          return raw;
-        })()
-      } : {
-        try: 1,
-        tries: [],
-        stage: 0,
-        isPipeline: false,
-        hint: null,
-        lastOutput: null,
-        input: null
-      };
-      Object.assign(ctxValue, securityFields);
+      const ctxValue = contextManager
+        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot })
+        : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
       return createObjectVariable('ctx', ctxValue, false, undefined, {
         isReserved: true,

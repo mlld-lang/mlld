@@ -1,7 +1,9 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
-import type { EvalResult } from '../core/interpreter';
+import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { getTextContent } from '../utils/type-guard-helpers';
+import type { OperationContext } from '../env/ContextManager';
+import { extractDirectiveInputs } from './directive-inputs';
 
 // Import specific evaluators
 import { evaluatePath } from './path';
@@ -100,7 +102,7 @@ function extractTraceInfo(directive: DirectiveNode): {
 export async function evaluateDirective(
   directive: DirectiveNode,
   env: Environment,
-  context?: any
+  context?: EvaluationContext
 ): Promise<EvalResult> {
   // Extract trace info and push to stack
   const traceInfo = extractTraceInfo(directive);
@@ -109,44 +111,30 @@ export async function evaluateDirective(
     traceInfo.varName,
     directive.location
   );
-  
-  try {
-    // Route based on directive kind
-    switch (directive.kind) {
-    case 'path':
-      return await evaluatePath(directive, env);
-      
-    case 'run':
-      return await evaluateRun(directive, env);
-      
-    case 'import':
-      return await evaluateImport(directive, env);
-      
-    case 'when':
-      return await evaluateWhen(directive as any, env);
-      
-    case 'output':
-      return await evaluateOutput(directive, env);
-      
-    // New directives
-    case 'var':
-      return await evaluateVar(directive, env);
-      
-    case 'show':
-      return await evaluateShow(directive, env, context);
-      
-    case 'exe':
-      return await evaluateExe(directive, env);
-      
-    case 'for':
-      return await evaluateForDirective(directive as any, env);
 
-    case 'export':
-      return await evaluateExport(directive as any, env);
-      
-    default:
-      throw new Error(`Unknown directive kind: ${directive.kind}`);
+  const contextManager = env.getContextManager();
+  const hookManager = env.getHookManager();
+  const operationContext = buildOperationContext(directive, traceInfo);
+  contextManager.pushOperation(operationContext);
+
+  try {
+    const extractedInputs = await extractDirectiveInputs(directive, env);
+    const preDecision = await hookManager.runPre(directive, extractedInputs, env, operationContext);
+
+    if (preDecision.action === 'abort') {
+      const reason = preDecision.metadata?.reason ?? 'Operation aborted by hook';
+      throw new Error(reason);
     }
+
+    if (preDecision.action === 'retry') {
+      throw new Error('Hook retry decisions are not supported in Phase 3.5 scaffolding');
+    }
+
+    const mergedContext = mergeEvaluationContext(context, extractedInputs, operationContext);
+
+    let result = await dispatchDirective(directive, env, mergedContext);
+    result = await hookManager.runPost(directive, result, extractedInputs, env, operationContext);
+    return result;
   } catch (error) {
     // Enhance errors with directive trace
     const trace = env.getDirectiveTrace();
@@ -179,7 +167,78 @@ export async function evaluateDirective(
     }
     throw error;
   } finally {
+    contextManager.popOperation();
     // Always pop the directive from the trace
     env.popDirective();
+  }
+}
+
+function mergeEvaluationContext(
+  baseContext: EvaluationContext | undefined,
+  extractedInputs: readonly unknown[],
+  operationContext: OperationContext
+): EvaluationContext {
+  const extra: EvaluationContext = {
+    extractedInputs,
+    operationContext
+  };
+  return baseContext ? { ...baseContext, ...extra } : extra;
+}
+
+function buildOperationContext(
+  directive: DirectiveNode,
+  traceInfo: { directive: string; varName?: string }
+): OperationContext {
+  const labels = (directive.meta?.securityLabels || directive.values?.securityLabels) as string[] | undefined;
+  return {
+    type: directive.kind,
+    subtype: directive.subtype,
+    labels,
+    name: traceInfo.varName,
+    location: directive.location ?? null,
+    metadata: {
+      trace: traceInfo.directive
+    }
+  };
+}
+
+async function dispatchDirective(
+  directive: DirectiveNode,
+  env: Environment,
+  evaluationContext?: EvaluationContext
+): Promise<EvalResult> {
+  switch (directive.kind) {
+    case 'path':
+      return await evaluatePath(directive, env);
+
+    case 'run':
+      return await evaluateRun(directive, env);
+
+    case 'import':
+      return await evaluateImport(directive, env);
+
+    case 'when':
+      return await evaluateWhen(directive as any, env);
+
+    case 'output':
+      return await evaluateOutput(directive, env);
+
+    case 'var':
+      return await evaluateVar(directive, env);
+
+    case 'show':
+      return await evaluateShow(directive, env, evaluationContext);
+
+    case 'exe':
+      return await evaluateExe(directive, env);
+
+    case 'for':
+      return await evaluateForDirective(directive as any, env);
+
+    case 'export':
+      return await evaluateExport(directive as any, env);
+
+    default:
+      throw new Error(`Unknown directive kind: ${directive.kind}`);
   }
 }

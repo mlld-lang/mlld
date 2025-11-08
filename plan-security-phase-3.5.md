@@ -13,15 +13,16 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 - ✅ `/exe` declarations and invocations now reuse the shared descriptor helpers: definitions accept label lists, carry capability contexts via `VariableMetadataUtils`, and invocations merge descriptors from the executable + arguments + pipeline retries. Regression coverage lives in `tests/interpreter/security-metadata.test.ts`.
 - ✅ Template interpolation collects contributor descriptors via `interpolateWithSecurity`, so any inline text that calls variables or execs inherits the same capability snapshot as `/var` assignments.
 - ✅ `/export` and `/output` run inside a security context and record descriptor/capability metadata for emitted artifacts; structured effects inherit the merged snapshot.
-- Hook infrastructure remains manual: evaluators push/pop security scopes themselves, there is no hook manager, and `@ctx` namespaces are still composed ad-hoc.
-- Tests cover descriptor propagation for the newly wired directives, but no suite exercises hook ordering, ContextManager lifetimes, or guard/taint hook coordination yet.
+- ✅ Hook scaffolding now exists: `evaluateDirective()` runs through a shared HookManager (stub guard pre-hook + taint post-hook), and a ContextManager builds `@ctx.op`/`@ctx.pipe` snapshots for the ambient variable.
+- ⚠️ Remaining Part B gaps: `extractDirectiveInputs()` still returns an empty array, evaluators do not consume `context.extractedInputs` yet, and pipeline stages do not populate ContextManager scopes. OperationContext metadata also needs to include directive-specific fields (command, target, op labels) before guards can reason on it.
+- Tests now include a hook smoke suite (`tests/interpreter/hooks/*`) proving order + @ctx plumbing, but we still lack coverage for evaluator reuse of `extractedInputs`, error-path retries, and pipeline stage nesting.
 
 ## Scope
-- Complete the outstanding evaluator integrations noted in `plan-security.md` Phase 3.5 Part A.
-- Implement the hook manager described in `spec-hooks.md`, wire it into `evaluateDirective()`, and keep hook ordering fixed and internal.
-- Introduce a lightweight `ContextManager` (dedicated helper class) that owns `@ctx` namespace stacks while Environment delegates push/pop/build operations.
-- Move taint/descriptor post-processing into the hook path so evaluators simply return values plus metadata hints.
-- Expand tests/fixtures to cover the new directives, hook flow, and context semantics.
+- Complete the outstanding evaluator integrations noted in `plan-security.md` Phase 3.5 Part A. ✅
+- Implement the hook manager described in `spec-hooks.md`, wire it into `evaluateDirective()`, and keep hook ordering fixed and internal. This includes creating a reusable hook runner that every directive path (CLI, LSP, module import) calls before and after evaluator dispatch.
+- Introduce a lightweight `ContextManager` (dedicated helper class) that owns `@ctx` namespace stacks while Environment delegates push/pop/build operations. The manager must integrate with existing environment push/pop semantics (variables, pipelines, retry contexts) so @ctx remains consistent in nested pipelines, `/for`, and guard retries.
+- Move taint/descriptor post-processing into the hook path so evaluators simply return values plus metadata hints. Evaluators should provide enough metadata (e.g., input descriptors, result structured values) for the taint hook to merge descriptors without peeking into directive-specific internals.
+- Expand tests/fixtures to cover the new directives, hook flow, and context semantics. This includes both targeted unit tests (hook ordering, context stack nesting) and fixture-level tests (scripts that inspect `@ctx.*` identifiers, guard scripts that assert label propagation). 
 
 ## Non-Goals
 - Guard parsing, guard configuration, prompt UX, or policy enforcement (Phase 4+).
@@ -30,16 +31,18 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 
 ## Inputs
 - `spec-hooks.md` – authoritative description of hook lifecycle, decisions, and @ctx namespaces.
-- `spec-security.md` – descriptor semantics, capability contexts, and guard expectations.
-- `plan-security.md` – Phase 3 gap list, hook roadmap, and guard prerequisites.
+- `spec-security.md` – descriptor semantics, capability contexts, and guard expectations. Pay particular attention to the guard execution model section, since Phase 3.5 is responsible for producing the capability payloads Phase 4 consumes.
+- `plan-security.md` – Phase 3 gap list, hook roadmap, guard prerequisites, and the canonical Part A/B/C/D breakdown.
 - `spec-middleware.md` (historical) – cross-check to ensure terminology drift is addressed.
 - `docs/dev/TESTS.md` – fixture organization, naming, and validation workflow.
+- Interpreter architecture references: `docs/dev/INTERPRETER.md` (single-pass evaluation, environment responsibilities), `docs/dev/PIPELINE.md` (retry semantics, stage metadata), and `docs/dev/TYPES.md` (variable wrappers and metadata) are useful when wiring hooks into existing evaluators.
 
 ## Key Decisions & Risks
-- **Context ownership**: `@ctx` state lives in a simple `ContextManager` (separate helper) whose only job is to push/pop namespace stacks and build the ambient object; Environment delegates to it. Risk: ad-hoc pushes leak between directives. Mitigation: expose scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) plus unit tests covering nesting and alias output.
+- **Context ownership**: `@ctx` state lives in a simple `ContextManager` (separate helper) whose only job is to push/pop namespace stacks and build the ambient object; Environment delegates to it. Risk: ad-hoc pushes leak between directives. Mitigation: expose scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) plus unit tests covering nesting and alias output. The manager must cooperate with `Environment.createChild()` so nested evaluations inherit context snapshots correctly.
 - **Hook ordering**: Hooks execute in fixed interpreter order (guard pre-hook → evaluator → taint post-hook → future diagnostics/profiling). Risk: future hooks expect custom ordering. Mitigation: document the order, assert it in tests, and keep registration private.
 - **Descriptor immutability**: Hooks reuse descriptor references; mutation corrupts downstream state. Mitigation: freeze descriptors/capability contexts in helpers and add regression tests.
 - **Gap closure verification**: /exe/interpolation/export/output require deterministic fixtures. Risk: regressions reintroduce bespoke paths. Mitigation: add dedicated fixtures under `tests/cases/feat/security/phase3p5-*` covering each.
+- **Environment contract**: Hook execution happens inside `evaluateDirective()`, which is shared by the CLI, LSP, and module loader. The hook manager must be light enough to run on every directive without regressing perf, and it must be aware of import-mode shortcuts (e.g., directives skipped during `/import`) so hooks don’t fire in contexts where the directive body never executes.
 
 ## Workstreams (aligned with `plan-security.md`)
 

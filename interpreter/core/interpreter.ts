@@ -27,6 +27,7 @@ import { isExecInvocation, isLiteralNode } from '@core/types';
 import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
+import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { normalizeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
@@ -193,6 +194,10 @@ export interface EvaluationContext {
   isCondition?: boolean;
   /** Whether we're evaluating an expression (affects variable resolution) */
   isExpression?: boolean;
+  /** Pre-evaluated directive inputs supplied by hook extraction */
+  extractedInputs?: readonly unknown[];
+  /** Operation context captured for the active directive */
+  operationContext?: OperationContext;
 }
 
 /**
