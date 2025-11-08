@@ -236,6 +236,37 @@ describe('directive hook infrastructure', () => {
     expect(capturedValue).toBe('bar');
   });
 
+  it('provides guard input helpers to pre-hooks', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'foo',
+      createSimpleTextVariable(
+        'foo',
+        'guard helper sample',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+
+    let tokenSnapshot: number[] = [];
+    env.getHookManager().registerPre(async (directive, _inputs, _env, _operation, helpers) => {
+      if (directive.kind === 'show') {
+        tokenSnapshot = helpers?.guard?.ctx.tokens ?? [];
+        return { action: 'abort', metadata: { reason: 'guard helper capture' } };
+      }
+      return { action: 'continue' };
+    });
+
+    const directive = parseSync('/show @foo')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/guard helper capture/);
+    expect(tokenSnapshot.length).toBe(1);
+    expect(tokenSnapshot[0]).toBeGreaterThan(0);
+  });
+
   // /var extraction deferred: executing value in hook context can trigger
   // side effects twice (see Phase 4 guard plan).
 });

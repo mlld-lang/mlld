@@ -362,14 +362,16 @@ export class VariableMetadataUtils {
     }
     const metrics = VariableMetadataUtils.computeMetricsForVariable(variable);
     const security = variable.metadata.security;
+    const tokenValue = metrics?.tokens ?? metrics?.tokest ?? undefined;
+    const tokestValue = metrics?.tokest ?? metrics?.tokens ?? undefined;
     const context: VariableContextSnapshot = {
       name: variable.name,
       type: variable.type,
       definedAt: variable.definedAt,
       labels: security?.labels ?? [],
       taint: security?.taintLevel ?? 'unknown',
-      tokens: metrics?.tokens,
-      tokest: metrics?.tokest,
+      tokens: tokenValue,
+      tokest: tokestValue,
       length: metrics?.length,
       size: Array.isArray(variable.value) ? variable.value.length : undefined,
       sources: security?.sources ?? [],

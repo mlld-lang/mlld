@@ -293,6 +293,8 @@ Single file load result with rich metadata:
 - `fm`: Frontmatter (markdown files)
 - `json`: Parsed JSON (JSON files)
 
+Token estimates come from the shared helper (`core/utils/token-metrics.ts`), so the same heuristics apply whether a string originates from `<file>` loads, `/var` assignments, or downstream guard evaluations. Every variable exposes these metrics via `.ctx` (for example `@doc.ctx.tokens` / `@doc.ctx.tokest`).
+
 ### LoadContentResultArray
 Array of LoadContentResult objects:
 - Auto-unwraps to array of content strings in JS/Node

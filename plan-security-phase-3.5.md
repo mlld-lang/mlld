@@ -74,15 +74,13 @@ To keep delivery manageable we will land Phase C in three focused slices that 
    
    _Notes:_ Pipeline stages now rely on captured snapshots; any future stage helpers must pass `capturePipelineContext` so the ambient stack stays in sync. Guard work should use the new `withGuardContext` helper instead of manual push/pop.
 
-3. **C3 – Token/Length Metrics & Variable `.ctx` Namespace** _(in progress)_
+3. **C3 – Token/Length Metrics & Variable `.ctx` Namespace** ✅ (complete on `datalabels`)
    - Extract the token estimation heuristics from `LoadContentResultImpl` into a shared utility so any text-like variable can report `tokest`/`tokens`.
    - When variables are created (including alligator loads, pipelines, `/run` outputs), attach a normalized `metrics` payload to metadata (estimated tokens, eventual exact tokens, content length).
    - Extend `ContextManager` and variable `.ctx` accessors to surface these metrics lazily (`@myVar.ctx.tokens`, `@input.totalTokens()`) per the guard spec.
    - Update docs (`docs/dev/ALLIGATOR.md`, `spec-hooks.md`) and fixtures to demonstrate the unified token reporting; add regression tests that compare `.ctx.tokens` against the helper output.
    
-   _Prep work:_ Alligator heuristics live in `interpreter/eval/load-content.ts`; plan to lift `_estimateTokens()` into `core/utils/token-metrics.ts` and reuse via `VariableMetadataUtils.applySecurityMetadata`. Fixtures should compare `.ctx.tokens` to the helper output to avoid regressions.
-   
-   _Status_: Shared token helper + variable `.ctx` accessors now exist on `datalabels` (see `core/utils/token-metrics.ts` + `VariableMetadataUtils.attachContext`). Remaining work: expose the guard-facing aggregate helpers (`@input.totalTokens()`/`@input.any.ctx`) and document the new namespace once guard runner lands.
+   _Notes:_ Token estimates now flow through `VariableMetadataUtils` so `.ctx.tokens` falls back to `.ctx.tokest` when exact counts are unavailable. `HookManager` pre-hooks receive the `createGuardInputHelper` aggregate, giving guard runners access to `.any/.all/.none` plus helpers like `@input.totalTokens()`. Tests under `tests/interpreter/variable-ctx.test.ts` and `tests/interpreter/hooks/directive-hooks.test.ts` lock the new behavior, and the developer docs call out the `.ctx.tokens` contract.
 
 Deliverables for Phase C are therefore the combined outputs of C1–C3: guard-ready `/var` execution, consolidated context plumbing (including JS/Node), and reusable token metrics that power the `.ctx` namespace and guard helpers.
 

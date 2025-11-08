@@ -1,7 +1,13 @@
 import type { DirectiveNode } from '@core/types';
+import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { OperationContext } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
+import { isVariable } from '../utils/variable-resolution';
+import {
+  createGuardInputHelper,
+  type GuardInputHelper
+} from './input-array-helper';
 
 export type HookDecisionAction = 'continue' | 'abort' | 'retry';
 
@@ -10,11 +16,16 @@ export interface HookDecision {
   metadata?: Record<string, unknown>;
 }
 
+export interface HookInputHelpers {
+  guard?: GuardInputHelper;
+}
+
 export type PreHook = (
   directive: DirectiveNode,
   inputs: readonly unknown[],
   env: Environment,
-  operation?: OperationContext
+  operation?: OperationContext,
+  helpers?: HookInputHelpers
 ) => Promise<HookDecision>;
 
 export type PostHook = (
@@ -48,7 +59,8 @@ export class HookManager {
     operation?: OperationContext
   ): Promise<HookDecision> {
     for (const hook of this.preHooks) {
-      const decision = await hook(directive, inputs, env, operation);
+      const helpers = this.buildInputHelpers(inputs);
+      const decision = await hook(directive, inputs, env, operation, helpers);
       if (decision.action !== 'continue') {
         return decision;
       }
@@ -68,5 +80,17 @@ export class HookManager {
       current = await hook(directive, current, inputs, env, operation);
     }
     return current;
+  }
+
+  private buildInputHelpers(inputs: readonly unknown[]): HookInputHelpers | undefined {
+    if (!Array.isArray(inputs) || inputs.length === 0) {
+      return undefined;
+    }
+    if (inputs.every(isVariable)) {
+      return {
+        guard: createGuardInputHelper(inputs as readonly Variable[])
+      };
+    }
+    return undefined;
   }
 }
