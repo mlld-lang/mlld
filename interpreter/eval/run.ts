@@ -5,7 +5,7 @@ import type { ExecutableVariable, ExecutableDefinition } from '@core/types/execu
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
-import type { TaintLevel, DataLabel } from '@core/types/security';
+import type { TaintLevel, DataLabel, SecurityDescriptor } from '@core/types/security';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { deriveCommandTaint } from '@core/security/taint';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
@@ -145,34 +145,19 @@ export async function evaluateRun(
     return { value: null, env };
   }
 
-  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-  const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
-  env.pushSecurityContext({
-    descriptor: baseDescriptor,
-    kind: 'command',
-    metadata: {
-      directiveType: directive.subtype,
-      filePath: env.getCurrentFilePath()
-    },
-    operation: {
-      kind: 'run',
-      subtype: directive.subtype,
-      location: directive.location
-    }
-  });
-  let contextPopped = false;
-  const popContext = () => {
-    if (!contextPopped) {
-      env.popSecurityContext();
-      contextPopped = true;
-    }
-  };
-
   let outputValue: unknown;
   let outputText: string;
+  let pendingOutputDescriptor: SecurityDescriptor | undefined;
 
   const setOutput = (value: unknown) => {
     const wrapped = wrapExecResult(value);
+    if (pendingOutputDescriptor) {
+      wrapped.metadata = {
+        ...(wrapped.metadata || {}),
+        security: wrapped.metadata?.security ?? pendingOutputDescriptor
+      };
+      pendingOutputDescriptor = undefined;
+    }
     outputValue = wrapped;
     outputText = asText(wrapped as any);
   };
@@ -212,13 +197,11 @@ export async function evaluateRun(
     // Interpolate command (resolve variables) with shell command context
     const command = preExtractedCommand ?? await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
     const commandTaint = deriveCommandTaint({ command });
-    env.recordSecurityDescriptor(
-      makeSecurityDescriptor({
-        taintLevel: commandTaint.level,
-        labels: commandTaint.labels,
-        sources: commandTaint.sources
-      })
-    );
+    pendingOutputDescriptor = makeSecurityDescriptor({
+      taintLevel: commandTaint.level,
+      labels: commandTaint.labels,
+      sources: commandTaint.sources
+    });
 
     // Friendly pre-check for oversized simple /run command payloads
     // Rationale: Some environments may not hit ShellCommandExecutor's guard early enough.
@@ -827,13 +810,11 @@ export async function evaluateRun(
   }
   
   // Return the output value
-  popContext();
   return {
     value: outputValue,
     env
   };
   } catch (error) {
-    popContext();
     throw error;
   }
 }

@@ -3,27 +3,12 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { ExportManifest, type ExportManifestEntry } from './import/ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
-import { makeSecurityDescriptor, type DataLabel } from '@core/types/security';
 
 export async function evaluateExport(
   directive: ExportDirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
-  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-  env.pushSecurityContext({
-    descriptor: makeSecurityDescriptor({ labels: securityLabels }),
-    kind: 'export',
-    metadata: {
-      filePath: env.getCurrentFilePath()
-    },
-    operation: {
-      kind: 'export',
-      location: directive.location
-    }
-  });
-
-  try {
-    const exportNodes = directive.values?.exports ?? [];
+  const exportNodes = directive.values?.exports ?? [];
 
     const filePath = env.getCurrentFilePath();
     const entries: ExportManifestEntry[] = [];
@@ -59,10 +44,7 @@ export async function evaluateExport(
       env.setExportManifest(manifest);
     }
 
-    manifest.add(entries);
+  manifest.add(entries);
 
-    return { value: undefined, env };
-  } finally {
-    env.popSecurityContext();
-  }
+  return { value: undefined, env };
 }

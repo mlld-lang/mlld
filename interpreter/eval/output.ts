@@ -72,19 +72,6 @@ export async function evaluateOutput(
   // Removed: isLegacy flag - bracket syntax no longer supported
 
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-  env.pushSecurityContext({
-    descriptor: makeSecurityDescriptor({ labels: securityLabels }),
-    kind: 'output',
-    metadata: {
-      filePath: env.getCurrentFilePath()
-    },
-    operation: {
-      kind: 'output',
-      subtype: directive.subtype,
-      targetType,
-      location: directive.location
-    }
-  });
 
   try {
     // Get the content to output
@@ -193,8 +180,6 @@ export async function evaluateOutput(
       );
     }
     throw error;
-  } finally {
-    env.popSecurityContext();
   }
 }
 
@@ -293,11 +278,9 @@ async function evaluateInvocationSource(
   }
   
   if (variable.metadata?.security) {
-    env.recordSecurityDescriptor(variable.metadata.security);
   }
   
   if (variable.metadata?.security) {
-    env.recordSecurityDescriptor(variable.metadata.security);
   }
   
   // For any variable with args, treat it as an invocation
@@ -319,7 +302,6 @@ async function evaluateInvocationSource(
     // Use the standard exec invocation evaluator
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execNode as any, env);
-    env.recordSecurityDescriptor(extractSecurityDescriptor(result.value));
     return String(result.value);
     
   } else if (isTextLike(variable)) {
@@ -562,7 +544,6 @@ async function evaluateCommandSource(
   }
   
   if (cmdVariable.metadata?.security) {
-    env.recordSecurityDescriptor(cmdVariable.metadata.security);
   }
   
   // Create a child environment for parameter substitution
@@ -593,7 +574,6 @@ async function evaluateCommandSource(
   
   // Execute the command
   const cmdResult = await evaluate(cmdVariable.value, cmdChildEnv);
-  env.recordSecurityDescriptor(extractSecurityDescriptor(cmdResult.value));
   return String(cmdResult.value || '');
 }
 
@@ -610,7 +590,6 @@ async function evaluateExecSource(
   if (execInvocationNode && execInvocationNode.type === 'ExecInvocation') {
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocationNode, env);
-    env.recordSecurityDescriptor(extractSecurityDescriptor(result.value));
     return String(result.value);
   } else {
     throw new MlldOutputError(

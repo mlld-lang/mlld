@@ -74,7 +74,7 @@ Post-hooks can transform results but cannot abort execution.
 
 ## Ambient Context (@ctx) Namespace
 
-The `@ctx` ambient variable provides execution context information throughout mlld scripts. The context is managed by the Environment (or a dedicated ContextManager) and organized into namespaces for different concerns:
+The `@ctx` ambient variable provides execution context information throughout mlld scripts. The context is managed by the Environment (or a dedicated ContextManager) and organized into namespaces for different concerns. Token metrics flow through this namespace, so every variable exposes `ctx.tokens`/`ctx.tokest`, and guard helpers can aggregate the same metrics across inputs.
 
 **Context Management:**
 
@@ -95,7 +95,7 @@ Context namespaces are managed centrally (not by the hook system):
 @ctx.op.command      # For /run - the shell command
 @ctx.op.path         # For /import - the import path
 @ctx.op.name         # For /exe invocations - the function name
-@ctx.op.domains      # Phase 4.1+ - extracted domains from commands/imports
+@ctx.op.domains      # Extracted domains from commands/imports (Phase 4.1+)
 ```
 
 **Examples:**
@@ -245,6 +245,34 @@ To access a specific input's properties:
 @input[0].ctx.labels  # → ["secret"] (just first input)
 @input[0].ctx.tokens  # → 1234
 ```
+
+### Guard Input Helper (Pre-Hook Helper Payload)
+
+Pre-hooks receive a helper payload when every extracted input is a variable. Guards consume this payload to inspect aggregate properties without duplicating boilerplate:
+
+```typescript
+type HookInputHelpers = {
+  guard?: {
+    raw: Variable[];              // Original variables
+    ctx: {
+      labels: string[];
+      tokens: number[];
+      sources: string[];
+      totalTokens(): number;
+      maxTokens(): number;
+    };
+    totalTokens(): number;
+    maxTokens(): number;
+    any.ctx.labels.includes(label);
+    all.ctx.labels.includes(label);
+    none.ctx.labels.includes(label);
+  };
+};
+```
+
+- `helpers.guard` exists only when **all** directive inputs resolve to variables.
+- `helpers.guard.ctx.tokens` prefers exact token counts when available and falls back to estimated counts (`tokest`).
+- The quantifier helpers (`any`, `all`, `none`) evaluate predicates lazily, matching the semantics described in the Guard Helper section above.
 
 ### Operation Type Filters
 

@@ -22,7 +22,11 @@ import {
   createStructuredValueVariable
 } from '@core/types/variable';
 import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/security';
-import { makeSecurityDescriptor, normalizeSecurityDescriptor } from '@core/types/security';
+import {
+  createCapabilityContext,
+  makeSecurityDescriptor,
+  normalizeSecurityDescriptor
+} from '@core/types/security';
 import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
@@ -149,16 +153,11 @@ export async function prepareVarAssignment(
   const securityLabels = (directive.meta?.securityLabels ?? directive.values?.securityLabels) as DataLabel[] | undefined;
   const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
   const capabilityKind = directive.kind as CapabilityKind;
-  env.pushSecurityContext({
-    descriptor: baseDescriptor,
-    kind: capabilityKind,
-    metadata: { identifier },
-    operation: {
-      kind: 'var',
-      identifier,
-      location: directive.location
-    }
-  });
+  const operationMetadata = {
+    kind: 'var',
+    identifier,
+    location: directive.location
+  };
 
   let resolvedSecurityDescriptor: SecurityDescriptor | undefined;
   const mergeResolvedDescriptor = (descriptor?: SecurityDescriptor): void => {
@@ -192,9 +191,17 @@ export async function prepareVarAssignment(
   };
 
   const finalizeVariable = (variable: Variable): Variable => {
-    const capabilityContext = env.popSecurityContext();
+    const descriptor = resolvedSecurityDescriptor
+      ? env.mergeSecurityDescriptors(baseDescriptor, resolvedSecurityDescriptor)
+      : baseDescriptor;
+    const capabilityContext = createCapabilityContext({
+      kind: capabilityKind,
+      descriptor,
+      metadata: { identifier },
+      operation: operationMetadata
+    });
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(variable.metadata, {
-      existingDescriptor: capabilityContext.security,
+      existingDescriptor: descriptor,
       capability: capabilityContext
     });
     return VariableMetadataUtils.attachContext({
@@ -1083,9 +1090,6 @@ export async function prepareVarAssignment(
     variable = createStructuredValueVariable(identifier, result, source, structuredMetadata);
   }
   
-  if (resolvedSecurityDescriptor) {
-    env.recordSecurityDescriptor(resolvedSecurityDescriptor);
-  }
   const finalVar = finalizeVariable(variable);
   
   // Debug logging for primitive values
@@ -1101,7 +1105,6 @@ export async function prepareVarAssignment(
 
   return { identifier, variable: finalVar };
   } catch (error) {
-    env.popSecurityContext();
     throw error;
   }
 }

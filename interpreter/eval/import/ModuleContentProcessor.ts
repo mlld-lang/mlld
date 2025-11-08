@@ -53,21 +53,6 @@ export class ModuleContentProcessor {
         labels: directive.meta?.securityLabels || directive.values?.securityLabels
       })
     );
-    this.env.pushSecurityContext({
-      descriptor: importDescriptor,
-      kind: 'import',
-      importType: resolution.importType,
-      metadata: {
-        resolvedPath,
-        sourceType: resolution.type
-      },
-      operation: {
-        kind: 'import',
-        location: directive.location,
-        subtype: directive.subtype
-      }
-    });
-
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerPath = resolvedPath.toLowerCase();
@@ -132,10 +117,6 @@ export class ModuleContentProcessor {
     } finally {
       // End import tracking
       this.securityValidator.endImport(resolvedPath);
-      const capability = this.env.popSecurityContext();
-      if (capability?.security) {
-        this.env.recordSecurityDescriptor(capability.security);
-      }
     }
   }
 
@@ -163,21 +144,6 @@ export class ModuleContentProcessor {
         labels: directive.meta?.securityLabels || directive.values?.securityLabels
       })
     );
-    this.env.pushSecurityContext({
-      descriptor: importDescriptor,
-      kind: 'import',
-      importType: undefined,
-      metadata: {
-        resolvedPath: ref,
-        sourceType: 'resolver'
-      },
-      operation: {
-        kind: 'import',
-        location: directive.location,
-        subtype: directive.subtype
-      }
-    });
-
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerRef = ref.toLowerCase();
@@ -250,10 +216,6 @@ export class ModuleContentProcessor {
     } finally {
       // End import tracking
       this.securityValidator.endImport(ref);
-      const capability = this.env.popSecurityContext();
-      if (capability?.security) {
-        this.env.recordSecurityDescriptor(capability.security);
-      }
     }
   }
 

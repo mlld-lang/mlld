@@ -16,7 +16,12 @@ import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import * as path from 'path';
-import { makeSecurityDescriptor, type DataLabel, type CapabilityContext } from '@core/types/security';
+import {
+  createCapabilityContext,
+  makeSecurityDescriptor,
+  type DataLabel,
+  type CapabilityContext
+} from '@core/types/security';
 
 function buildTemplateAstFromContent(content: string): any[] {
   const ast: any[] = [];
@@ -179,9 +184,10 @@ export async function evaluateExe(
   }
   
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-  env.pushSecurityContext({
-    descriptor: makeSecurityDescriptor({ labels: securityLabels }),
+  const descriptor = makeSecurityDescriptor({ labels: securityLabels });
+  const capabilityContext: CapabilityContext = createCapabilityContext({
     kind: 'exe',
+    descriptor,
     metadata: {
       identifier,
       filePath: env.getCurrentFilePath()
@@ -193,11 +199,9 @@ export async function evaluateExe(
     }
   });
 
-  let capabilityContext: CapabilityContext | undefined;
-  try {
-    let executableDef: ExecutableDefinition;
-  
-  
+  let executableDef: ExecutableDefinition;
+
+
     if (directive.subtype === 'exeCommand') {
       const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
@@ -605,9 +609,8 @@ export async function evaluateExe(
 
     const executableTypeForVariable = executableDef.type === 'code' ? 'code' : 'command';
 
-    capabilityContext = env.popSecurityContext();
     const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      existingDescriptor: capabilityContext?.security,
+      existingDescriptor: descriptor,
       capability: capabilityContext
     });
 
@@ -634,11 +637,6 @@ export async function evaluateExe(
     
     // Return the executable definition (no output for variable definitions)
     return { value: executableDef, env };
-  } finally {
-    if (!capabilityContext) {
-      env.popSecurityContext();
-    }
-  }
 }
 
 /**

@@ -1058,7 +1058,9 @@ export async function interpolate(
         }
         continue;
       }
-      
+
+      collectDescriptor(variable.metadata?.security as SecurityDescriptor | undefined);
+
       // Extract value based on variable type using new type guards
       let value: unknown = '';
       
@@ -1090,6 +1092,7 @@ export async function interpolate(
            */
           const { resolveVariable, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
           value = await resolveVariable(variable, env, ResCtx.StringInterpolation);
+          collectDescriptor(extractInterpolationDescriptor(value));
           
         } catch (error) {
           // Handle executable variables specially in interpolation

@@ -80,7 +80,21 @@ To keep delivery manageable we will land Phase C in three focused slices that 
    - Extend `ContextManager` and variable `.ctx` accessors to surface these metrics lazily (`@myVar.ctx.tokens`, `@input.totalTokens()`) per the guard spec.
    - Update docs (`docs/dev/ALLIGATOR.md`, `spec-hooks.md`) and fixtures to demonstrate the unified token reporting; add regression tests that compare `.ctx.tokens` against the helper output.
    
-   _Notes:_ Token estimates now flow through `VariableMetadataUtils` so `.ctx.tokens` falls back to `.ctx.tokest` when exact counts are unavailable. `HookManager` pre-hooks receive the `createGuardInputHelper` aggregate, giving guard runners access to `.any/.all/.none` plus helpers like `@input.totalTokens()`. Tests under `tests/interpreter/variable-ctx.test.ts` and `tests/interpreter/hooks/directive-hooks.test.ts` lock the new behavior, and the developer docs call out the `.ctx.tokens` contract.
+   _Notes:_ Token estimates now flow through `VariableMetadataUtils` so `.ctx.tokens` falls back to `.ctx.tokest` when exact counts are unavailable. `HookManager` pre-hooks receive the `createGuardInputHelper` aggregate, giving future guard runners access to `.any/.all/.none` plus helpers like `@input.totalTokens()`. Tests under `tests/interpreter/variable-ctx.test.ts`, `tests/interpreter/hooks/directive-hooks.test.ts`, and fixture `tests/cases/feat/security/phase3c-metrics` lock the new behavior, and the developer docs call out the `.ctx.tokens` contract.
+
+### Phase D Preview – Taint Tracking via Hooks
+
+Now that guarded assignments, context management, and token metrics are in place, the remaining Phase 3.5 work (Part D) focuses on moving taint propagation into hooks and removing evaluator-specific plumbing.
+
+**Goals**
+- Shift descriptor merging into the taint post-hook so evaluators only describe inputs/outputs.
+- Remove legacy `pushSecurityContext` calls from individual evaluators; rely on hook results instead.
+- Ensure pipelines/parallel stages surface stage metadata through the hook path, including retries.
+- Expand tests (e.g., `tests/interpreter/security-metadata.test.ts`) to compare hook-driven taint output against the legacy behavior.
+
+**Status**
+- Infrastructure is ready (hook manager ordering, context helpers, guard-aware `/var` flow).
+- Work items listed above remain open; they will be tackled next to complete Part D.
 
 Deliverables for Phase C are therefore the combined outputs of C1–C3: guard-ready `/var` execution, consolidated context plumbing (including JS/Node), and reusable token metrics that power the `.ctx` namespace and guard helpers.
 

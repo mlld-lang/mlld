@@ -47,7 +47,6 @@ export class ImportDirectiveEvaluator {
    * Main entry point for import directive evaluation
    */
   async evaluateImport(directive: DirectiveNode, env: Environment): Promise<EvalResult> {
-    let contextActive = false;
     try {
       // 1. Resolve the import path and determine import type
       const resolution = await this.pathResolver.resolveImportPath(directive);
@@ -72,32 +71,11 @@ export class ImportDirectiveEvaluator {
       });
       const descriptor = mergeDescriptors(baseDescriptor, taintDescriptor);
 
-      env.pushSecurityContext({
-        descriptor,
-        kind: 'import',
-        importType: resolution.importType,
-        metadata: {
-          resolvedPath: resolution.resolvedPath,
-          resolver: resolution.resolverName
-        },
-        operation: {
-          kind: 'import',
-          subtype: directive.subtype,
-          location: directive.location
-        }
-      });
-      contextActive = true;
-
       // 2. Route to appropriate handler based on import type
       const result = await this.routeImportRequest(resolution, directive, env);
-      env.popSecurityContext();
-      contextActive = false;
       return result;
 
     } catch (error) {
-      if (contextActive) {
-        env.popSecurityContext();
-      }
       return this.handleImportError(error, directive, env);
     }
   }

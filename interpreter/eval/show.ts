@@ -76,20 +76,6 @@ export async function evaluateShow(
   let resultValue: unknown | undefined;
   let content = '';
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-  env.pushSecurityContext({
-    descriptor: makeSecurityDescriptor({ labels: securityLabels }),
-    kind: 'output',
-    metadata: {
-      directive: directive.subtype,
-      filePath: env.getCurrentFilePath()
-    },
-    operation: {
-      kind: 'show',
-      subtype: directive.subtype,
-      location: directive.location
-    }
-  });
-  try {
   
   if (directive.subtype === 'showVariable') {
     // Handle variable reference - supports both unified AST and legacy structure
@@ -205,7 +191,6 @@ export async function evaluateShow(
       if (!variable) {
         throw new Error(`Variable not found: ${varName}`);
       }
-      env.recordSecurityDescriptor(extractDescriptorFromVariable(variable));
     }
 
     // Handle all variable types using the new type guards (skip if we already have a value from template literal)
@@ -339,7 +324,6 @@ export async function evaluateShow(
           location: directive.location
         });
         value = processed;
-        env.recordSecurityDescriptor(extractDescriptorFromValue(value));
         if (isStructuredValue(processed)) {
           content = asText(processed);
         } else if (typeof processed === 'string') {
@@ -419,7 +403,6 @@ export async function evaluateShow(
      */
     const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
     value = await resolveValue(value, env, ResolutionContext.Display);
-    env.recordSecurityDescriptor(extractDescriptorFromValue(value));
     // Import LoadContentResult type check
     const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
 
@@ -533,7 +516,6 @@ export async function evaluateShow(
           location: directive.location
         });
       value = processed;
-      env.recordSecurityDescriptor(extractDescriptorFromValue(value));
         if (isStructuredValue(processed)) {
           content = asText(processed);
         } else if (typeof processed === 'string') {
@@ -560,7 +542,6 @@ export async function evaluateShow(
           location: directive.location
         });
       value = processed;
-      env.recordSecurityDescriptor(extractDescriptorFromValue(value));
         if (isStructuredValue(processed)) {
           content = asText(processed);
         } else if (typeof processed === 'string') {
@@ -704,7 +685,6 @@ export async function evaluateShow(
     if (directive.values?.pipeline) {
       const { executePipeline } = await import('./pipeline');
       content = await executePipeline(content, directive.values.pipeline, env);
-      env.recordSecurityDescriptor(extractDescriptorFromValue(content));
     }
     
     // Template normalization is now handled in the grammar at parse time
@@ -733,7 +713,6 @@ export async function evaluateShow(
       const result = await evaluateExecInvocation(invocation, env);
       
       resultValue = result.value;
-      env.recordSecurityDescriptor(extractDescriptorFromValue(resultValue));
 
       // Convert result to string appropriately
       if (isStructuredValue(result.value)) {
@@ -769,7 +748,6 @@ export async function evaluateShow(
         const result = await evaluateExecInvocation(invocation, env);
         
         resultValue = result.value;
-        env.recordSecurityDescriptor(extractDescriptorFromValue(resultValue));
 
         // Convert result to string appropriately
         if (isStructuredValue(result.value)) {
@@ -1197,9 +1175,6 @@ export async function evaluateShow(
         })
       : undefined
   );
-  if (resultDescriptor) {
-    env.recordSecurityDescriptor(resultDescriptor);
-  }
   
   // Only emit the effect if we're not in an expression context
   // In expression contexts (like when expressions), we only return the value
@@ -1208,7 +1183,6 @@ export async function evaluateShow(
   env.emitEffect('both', content, { source: directive.location });
   }
 
-  env.recordSecurityDescriptor(extractDescriptorFromValue(resultValue));
   const baseValue = resultValue ?? textForWrapper;
   const wrapOptions =
     !isStructuredValue(baseValue) && typeof baseValue !== 'string'
@@ -1222,12 +1196,6 @@ export async function evaluateShow(
     };
   }
   return { value: wrapped, env };
-  } finally {
-    const capability = env.popSecurityContext();
-    if (capability?.security) {
-      env.recordSecurityDescriptor(capability.security);
-    }
-  }
 }
 
 /**
