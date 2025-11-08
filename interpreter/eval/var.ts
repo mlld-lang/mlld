@@ -1,6 +1,6 @@
 import type { DirectiveNode, VarValue, VariableNodeArray } from '@core/types';
 import type { Environment } from '../env/Environment';
-import type { EvalResult } from '../core/interpreter';
+import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { astLocationToSourceLocation } from '@core/types';
@@ -25,6 +25,12 @@ import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/
 import { makeSecurityDescriptor, normalizeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
+
+export interface VarAssignmentResult {
+  identifier: string;
+  variable: Variable;
+  evalResultOverride?: EvalResult;
+}
 
 /**
  * Safely convert a value to string, handling StructuredValue wrappers
@@ -121,10 +127,10 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
  * This is the unified variable assignment directive that replaces @text and @data.
  * Type is inferred from the RHS syntax.
  */
-export async function evaluateVar(
+export async function prepareVarAssignment(
   directive: DirectiveNode,
   env: Environment
-): Promise<EvalResult> {
+): Promise<VarAssignmentResult> {
   // Extract identifier from array
   const identifierNodes = directive.values?.identifier as VariableNodeArray | undefined;
   if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
@@ -185,15 +191,13 @@ export async function evaluateVar(
     return text;
   };
 
-  const finishVariable = (variable: Variable): Variable => {
+  const finalizeVariable = (variable: Variable): Variable => {
     const capabilityContext = env.popSecurityContext();
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(variable.metadata, {
       existingDescriptor: capabilityContext.security,
       capability: capabilityContext
     });
-    const finalVariable: Variable = { ...variable, metadata: finalMetadata };
-    env.setVariable(identifier, finalVariable);
-    return finalVariable;
+    return { ...variable, metadata: finalMetadata };
   };
 
 
@@ -522,13 +526,17 @@ export async function evaluateVar(
       if (resolvedValue && typeof resolvedValue === 'object' && 
           resolvedValue.type === 'executable') {
         // Preserve the executable variable
-        const finalVar = finishVariable(resolvedValue);
+        const finalVar = finalizeVariable(resolvedValue);
         return {
-          value: finalVar,
-          env,
-          stdout: '',
-          stderr: '',
-          exitCode: 0
+          identifier,
+          variable: finalVar,
+          evalResultOverride: {
+            value: finalVar,
+            env,
+            stdout: '',
+            stderr: '',
+            exitCode: 0
+          }
         };
       }
       
@@ -681,8 +689,12 @@ export async function evaluateVar(
     const forResult = await evaluateForExpression(valueNode, env);
     
     // The result is already an ArrayVariable
-    const finalVar = finishVariable(forResult);
-    return { value: finalVar, env };
+    const finalVar = finalizeVariable(forResult);
+    return {
+      identifier,
+      variable: finalVar,
+      evalResultOverride: { value: finalVar, env }
+    };
     
   } else {
     // Default case - try to interpolate as text
@@ -1071,7 +1083,7 @@ export async function evaluateVar(
   if (resolvedSecurityDescriptor) {
     env.recordSecurityDescriptor(resolvedSecurityDescriptor);
   }
-  const finalVar = finishVariable(variable);
+  const finalVar = finalizeVariable(variable);
   
   // Debug logging for primitive values
   if (process.env.MLLD_DEBUG === 'true' && identifier === 'sum') {
@@ -1084,12 +1096,22 @@ export async function evaluateVar(
     });
   }
 
-  // Return empty string - var directives don't produce output
-  return { value: '', env };
+  return { identifier, variable: finalVar };
   } catch (error) {
     env.popSecurityContext();
     throw error;
   }
+}
+
+export async function evaluateVar(
+  directive: DirectiveNode,
+  env: Environment,
+  context?: EvaluationContext
+): Promise<EvalResult> {
+  const assignment =
+    context?.precomputedVarAssignment ?? (await prepareVarAssignment(directive, env));
+  env.setVariable(assignment.identifier, assignment.variable);
+  return assignment.evalResultOverride ?? { value: '', env };
 }
 
 /**

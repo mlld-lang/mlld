@@ -213,6 +213,29 @@ describe('directive hook infrastructure', () => {
     expect(capturedExecName).toBe('emit');
   });
 
+  it('exposes /var assignments to pre-hooks without duplicate evaluation', async () => {
+    const env = createEnv();
+    let capturedName: string | undefined;
+    let capturedValue: string | undefined;
+
+    env.getHookManager().registerPre(async (directive, inputs) => {
+      if (directive.kind === 'var') {
+        const variable = inputs[0] as any;
+        capturedName = variable?.name;
+        capturedValue = variable?.value;
+      }
+      return { action: 'continue' };
+    });
+
+    const directive = parseSync('/var @foo = "bar"')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+
+    const stored = env.getVariable('foo');
+    expect(stored?.value).toBe('bar');
+    expect(capturedName).toBe('foo');
+    expect(capturedValue).toBe('bar');
+  });
+
   // /var extraction deferred: executing value in hook context can trigger
   // side effects twice (see Phase 4 guard plan).
 });

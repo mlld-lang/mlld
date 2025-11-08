@@ -23,6 +23,7 @@ import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
+import type { VarAssignmentResult } from '../eval/var';
 import { isExecInvocation, isLiteralNode } from '@core/types';
 import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
@@ -198,6 +199,8 @@ export interface EvaluationContext {
   extractedInputs?: readonly unknown[];
   /** Operation context captured for the active directive */
   operationContext?: OperationContext;
+  /** Precomputed /var assignment (Phase C guard runner) */
+  precomputedVarAssignment?: VarAssignmentResult;
 }
 
 /**

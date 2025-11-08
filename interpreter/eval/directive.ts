@@ -11,7 +11,7 @@ import { evaluateRun } from './run';
 import { evaluateImport } from './import';
 import { evaluateWhen } from './when';
 import { evaluateOutput } from './output';
-import { evaluateVar } from './var';
+import { evaluateVar, prepareVarAssignment, type VarAssignmentResult } from './var';
 import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
 import { evaluateForDirective } from './for';
@@ -118,7 +118,15 @@ export async function evaluateDirective(
   contextManager.pushOperation(operationContext);
 
   try {
-    const extractedInputs = await extractDirectiveInputs(directive, env);
+    let extractedInputs: readonly unknown[] = [];
+    let precomputedVarAssignment: VarAssignmentResult | undefined;
+
+    if (directive.kind === 'var') {
+      precomputedVarAssignment = await prepareVarAssignment(directive, env);
+      extractedInputs = [precomputedVarAssignment.variable];
+    } else {
+      extractedInputs = await extractDirectiveInputs(directive, env);
+    }
     const preDecision = await hookManager.runPre(directive, extractedInputs, env, operationContext);
 
     if (preDecision.action === 'abort') {
@@ -130,7 +138,12 @@ export async function evaluateDirective(
       throw new Error('Hook retry decisions are not supported in Phase 3.5 scaffolding');
     }
 
-    const mergedContext = mergeEvaluationContext(context, extractedInputs, operationContext);
+    const mergedContext = mergeEvaluationContext(
+      context,
+      extractedInputs,
+      operationContext,
+      precomputedVarAssignment
+    );
 
     let result = await dispatchDirective(directive, env, mergedContext);
     result = await hookManager.runPost(directive, result, extractedInputs, env, operationContext);
@@ -176,11 +189,13 @@ export async function evaluateDirective(
 function mergeEvaluationContext(
   baseContext: EvaluationContext | undefined,
   extractedInputs: readonly unknown[],
-  operationContext: OperationContext
+  operationContext: OperationContext,
+  precomputedVarAssignment?: VarAssignmentResult
 ): EvaluationContext {
   const extra: EvaluationContext = {
     extractedInputs,
-    operationContext
+    operationContext,
+    precomputedVarAssignment
   };
   return baseContext ? { ...baseContext, ...extra } : extra;
 }
@@ -245,7 +260,7 @@ async function dispatchDirective(
       return await evaluateOutput(directive, env, evaluationContext);
 
     case 'var':
-      return await evaluateVar(directive, env);
+      return await evaluateVar(directive, env, evaluationContext);
 
     case 'show':
       return await evaluateShow(directive, env, evaluationContext);

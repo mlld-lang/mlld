@@ -14,8 +14,9 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 - ✅ Template interpolation collects contributor descriptors via `interpolateWithSecurity`, so any inline text that calls variables or execs inherits the same capability snapshot as `/var` assignments.
 - ✅ `/export` and `/output` run inside a security context and record descriptor/capability metadata for emitted artifacts; structured effects inherit the merged snapshot.
 - ✅ Hook scaffolding now exists: `evaluateDirective()` runs through a shared HookManager (stub guard pre-hook + taint post-hook), and a ContextManager builds `@ctx.op`/`@ctx.pipe` snapshots for the ambient variable.
-- ✅ `extractDirectiveInputs()` now covers `/show`, `/output`, and `/run`; the corresponding evaluators consume `context.extractedInputs` so hooks inspect real values without double evaluation, and pipeline stages push/pop operation contexts via the shared ContextManager. `/var` extraction remains deferred (executing RHS twice causes double side effects), so guards for assignments will land alongside the assignment-specific guard runner in Phase C.
-- Tests now include a hook smoke suite (`tests/interpreter/hooks/*`) proving order + @ctx plumbing, with focused cases for `/show`, `/output`, and `/run`. Remaining coverage gaps live in pipeline retry edge cases and guard retries, which are Phase C/D items.
+- ✅ `extractDirectiveInputs()` now covers `/show`, `/output`, and `/run`; the corresponding evaluators consume `context.extractedInputs` so hooks inspect real values without double evaluation, and pipeline stages push/pop operation contexts via the shared ContextManager.
+- ⚠️ `/var` extraction is deferred: executing the RHS just to capture a hook input duplicates side effects (inline effects, CLI commands, pipelines). We'll tackle `/var` inputs alongside the guard runner in Phase C so assignments are evaluated exactly once.
+- Tests now include a hook smoke suite (`tests/interpreter/hooks/*`) proving order + @ctx plumbing. Remaining coverage gaps (pipeline retry nesting, guard decision paths) will land in Phase C/D.
 
 ## Scope
 - Complete the outstanding evaluator integrations noted in `plan-security.md` Phase 3.5 Part A. ✅
@@ -23,6 +24,7 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 - Introduce a lightweight `ContextManager` (dedicated helper class) that owns `@ctx` namespace stacks while Environment delegates push/pop/build operations. The manager must integrate with existing environment push/pop semantics (variables, pipelines, retry contexts) so @ctx remains consistent in nested pipelines, `/for`, and guard retries.
 - Move taint/descriptor post-processing into the hook path so evaluators simply return values plus metadata hints. Evaluators should provide enough metadata (e.g., input descriptors, result structured values) for the taint hook to merge descriptors without peeking into directive-specific internals.
 - Expand tests/fixtures to cover the new directives, hook flow, and context semantics. This includes both targeted unit tests (hook ordering, context stack nesting) and fixture-level tests (scripts that inspect `@ctx.*` identifiers, guard scripts that assert label propagation). 
+- Document the `/var` deferment so Phase C contributors know to wire `extractDirectiveInputs` through the forthcoming assignment guard runner.
 
 ## Non-Goals
 - Guard parsing, guard configuration, prompt UX, or policy enforcement (Phase 4+).
@@ -36,6 +38,45 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 - `spec-middleware.md` (historical) – cross-check to ensure terminology drift is addressed.
 - `docs/dev/TESTS.md` – fixture organization, naming, and validation workflow.
 - Interpreter architecture references: `docs/dev/INTERPRETER.md` (single-pass evaluation, environment responsibilities), `docs/dev/PIPELINE.md` (retry semantics, stage metadata), and `docs/dev/TYPES.md` (variable wrappers and metadata) are useful when wiring hooks into existing evaluators.
+
+## Phase C Preview – Guard Runner & `/var` Extraction
+
+Phase B confirmed that `/var` cannot safely participate in generic input extraction without a guard-aware execution path. Evaluating the RHS purely for hooks caused a double-execution of embedded directives (effects fired twice, pipelines reran, CLI commands duplicated). We therefore defer `/var` inputs to Phase C, where the assignment guard runner will:
+
+- Execute the RHS exactly once, capture the resulting `Variable`, and pass that instance to guards before committing it to the environment.
+- Stream effects immediately even when the guard later denies the assignment (current interpreter behavior emits effects before assignment when `/var` is used inside pipelines or exe wrappers, so guards must tolerate already-streamed output).
+- Provide hook-friendly metadata (labels, taint snapshots) without re-running the assignment body.
+
+**Gotchas learned:**
+- Effects triggered during RHS evaluation (especially `/show` inside pipelines or exe helpers) are irreversible; guard failures must not suppress them because they already streamed during evaluation.
+- Pipelines invoked inside `/var` often mutate `@ctx.pipe.*`; the guard runner must snapshot the context after the value resolves so hooks/guards inspect the same attempt counters the user saw.
+- Assignment retries (e.g., guard `retry` decisions) need to coordinate with the pipeline retry machinery. We’ll reuse the existing retry context helpers so guard retries share the same attempt budgets as pipeline stages.
+
+Phase C will also expand `extractDirectiveInputs()` to include `/var` once the guard runner owns RHS execution, and add targeted tests covering guard retries, pipeline mutation inside assignments, and effect streaming order during guard-denied assignments.
+
+### Phase C Breakdown
+
+To keep delivery manageable we will land Phase C in three focused slices that build on one another:
+
+1. **C1 – Assignment Guard Runner & `/var` Inputs**
+   - Implement the guard-aware `/var` runner that evaluates RHS exactly once, captures the resulting `Variable`, and replays it through guard hooks before committing to the environment.
+   - Wire guard retries to the existing pipeline `RetryContext`, ensuring guard `retry` decisions respect source retryability and inherit attempt counters/hints.
+   - Extend `extractDirectiveInputs()` and the hook path so `/var` exposes its captured value to pre-hooks without double evaluation.
+   - Tests: regression coverage for guard retries, effect streaming order, and pipelines nested inside assignments (fixture additions under `tests/cases/feat/security/phase3c-*`).
+
+2. **C2 – ContextManager Consolidation & Ambient Consumers**
+   - Add scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) so evaluators/pipelines no longer manipulate stacks manually.
+   - Route the JS/Node executor context injection (`Environment.executeCode`) through `ContextManager.buildAmbientContext()` to eliminate the bespoke builder and guarantee Node/JS code sees the same `@ctx` as hooks and scripts.
+   - Ensure child environments inherit context stacks safely (no accidental sharing between parallel pipelines).
+   - Tests: hook smoke suite expansion plus targeted JS/Node executor fixtures asserting the injected `ctx` mirrors interpreter-visible values.
+
+3. **C3 – Token/Length Metrics & Variable `.ctx` Namespace**
+   - Extract the token estimation heuristics from `LoadContentResultImpl` into a shared utility so any text-like variable can report `tokest`/`tokens`.
+   - When variables are created (including alligator loads, pipelines, `/run` outputs), attach a normalized `metrics` payload to metadata (estimated tokens, eventual exact tokens, content length).
+   - Extend `ContextManager` and variable `.ctx` accessors to surface these metrics lazily (`@myVar.ctx.tokens`, `@input.totalTokens()`) per the guard spec.
+   - Update docs (`docs/dev/ALLIGATOR.md`, `spec-hooks.md`) and fixtures to demonstrate the unified token reporting; add regression tests that compare `.ctx.tokens` against the helper output.
+
+Deliverables for Phase C are therefore the combined outputs of C1–C3: guard-ready `/var` execution, consolidated context plumbing (including JS/Node), and reusable token metrics that power the `.ctx` namespace and guard helpers.
 
 ## Key Decisions & Risks
 - **Context ownership**: `@ctx` state lives in a simple `ContextManager` (separate helper) whose only job is to push/pop namespace stacks and build the ambient object; Environment delegates to it. Risk: ad-hoc pushes leak between directives. Mitigation: expose scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) plus unit tests covering nesting and alias output. The manager must cooperate with `Environment.createChild()` so nested evaluations inherit context snapshots correctly.
