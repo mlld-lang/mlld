@@ -4,7 +4,7 @@
  * Types and utilities for managing variable metadata and source information.
  */
 
-import { VariableSource, VariableMetadata } from './VariableTypes';
+import { VariableSource, VariableMetadata, type Variable, type VariableMetrics, type VariableContextSnapshot } from './VariableTypes';
 import type {
   CapabilityContext,
   SecurityDescriptor,
@@ -20,6 +20,7 @@ import {
   deserializeCapabilityContext,
   createCapabilityContext
 } from '../security';
+import { buildTokenMetrics, type TokenEstimationOptions, type TokenMetrics } from '@core/utils/token-metrics';
 
 // =========================================================================
 // METADATA UTILITY FUNCTIONS
@@ -302,6 +303,117 @@ export class VariableMetadataUtils {
     return {
       ...(security ? { security } : {}),
       ...(capability ? { capability } : {})
+    };
+  }
+
+  static applyTextMetrics(
+    metadata: VariableMetadata | undefined,
+    text: string | undefined,
+    options?: TokenEstimationOptions
+  ): VariableMetadata | undefined {
+    if (typeof text !== 'string') {
+      return metadata;
+    }
+    const metrics = buildTokenMetrics(text, options);
+    if (!metadata) {
+      return { metrics };
+    }
+    return {
+      ...metadata,
+      metrics: VariableMetadataUtils.mergeMetrics(metadata.metrics, metrics)
+    };
+  }
+
+  static assignMetrics(variable: Variable, metrics: VariableMetrics): void {
+    if (!variable.metadata) {
+      variable.metadata = {};
+    }
+    variable.metadata.metrics = metrics;
+    if (variable.metadata.ctxCache) {
+      delete variable.metadata.ctxCache;
+    }
+  }
+
+  static attachContext(variable: Variable): Variable {
+    if ((variable as any).__ctxAttached) {
+      return variable;
+    }
+    Object.defineProperty(variable, '__ctxAttached', {
+      value: true,
+      enumerable: false,
+      configurable: false
+    });
+    Object.defineProperty(variable, 'ctx', {
+      enumerable: false,
+      configurable: true,
+      get() {
+        return VariableMetadataUtils.buildVariableContext(variable);
+      }
+    });
+    return variable;
+  }
+
+  private static buildVariableContext(variable: Variable): VariableContextSnapshot {
+    if (!variable.metadata) {
+      variable.metadata = {};
+    }
+    if (variable.metadata.ctxCache) {
+      return variable.metadata.ctxCache;
+    }
+    const metrics = VariableMetadataUtils.computeMetricsForVariable(variable);
+    const security = variable.metadata.security;
+    const context: VariableContextSnapshot = {
+      name: variable.name,
+      type: variable.type,
+      definedAt: variable.definedAt,
+      labels: security?.labels ?? [],
+      taint: security?.taintLevel ?? 'unknown',
+      tokens: metrics?.tokens,
+      tokest: metrics?.tokest,
+      length: metrics?.length,
+      size: Array.isArray(variable.value) ? variable.value.length : undefined,
+      sources: security?.sources ?? [],
+      exported: Boolean(variable.metadata.isImported),
+      policy: security?.policyContext ?? null
+    };
+    variable.metadata.ctxCache = context;
+    return context;
+  }
+
+  private static computeMetricsForVariable(variable: Variable): VariableMetrics | undefined {
+    if (variable.metadata?.metrics) {
+      return variable.metadata.metrics;
+    }
+
+    if (typeof variable.value === 'string') {
+      const metrics = buildTokenMetrics(variable.value);
+      VariableMetadataUtils.assignMetrics(variable, metrics);
+      return metrics;
+    }
+
+    const text = (variable.value as any)?.text;
+    if (typeof text === 'string') {
+      const metrics = buildTokenMetrics(text);
+      VariableMetadataUtils.assignMetrics(variable, metrics);
+      return metrics;
+    }
+
+    return undefined;
+  }
+
+  private static mergeMetrics(
+    existing: VariableMetrics | undefined,
+    incoming: TokenMetrics
+  ): VariableMetrics {
+    if (!existing) {
+      return incoming;
+    }
+    if (existing.source === 'exact' && incoming.source !== 'exact') {
+      return existing;
+    }
+    return {
+      ...existing,
+      ...incoming
     };
   }
 }

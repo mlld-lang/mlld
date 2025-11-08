@@ -27,6 +27,20 @@ import {
   Variable
 } from './VariableTypes';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
+import { VariableMetadataUtils } from './VariableMetadata';
+import type { TokenEstimationOptions } from '@core/utils/token-metrics';
+
+function finalizeVariable<T extends Variable>(variable: T): T {
+  return VariableMetadataUtils.attachContext(variable);
+}
+
+function applyTextMetrics(
+  metadata: VariableMetadata | undefined,
+  text: string | undefined,
+  options?: TokenEstimationOptions
+): VariableMetadata | undefined {
+  return VariableMetadataUtils.applyTextMetrics(metadata, text, options);
+}
 
 // =========================================================================
 // INDIVIDUAL FACTORY FUNCTION EXPORTS (for backward compatibility)
@@ -261,15 +275,16 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): SimpleTextVariable {
-    return {
+    const finalMetadata = applyTextMetrics(metadata, value);
+    return finalizeVariable({
       type: 'simple-text',
       name,
       value,
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      metadata: finalMetadata
+    });
   }
 
   /**
@@ -282,7 +297,8 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): InterpolatedTextVariable {
-    return {
+    const finalMetadata = applyTextMetrics(metadata, value);
+    return finalizeVariable({
       type: 'interpolated-text',
       name,
       value,
@@ -290,8 +306,8 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      metadata: finalMetadata
+    });
   }
 
   /**
@@ -305,7 +321,9 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): TemplateVariable {
-    return {
+    const textValue = typeof value === 'string' ? value : undefined;
+    const finalMetadata = applyTextMetrics(metadata, textValue);
+    return finalizeVariable({
       type: 'template',
       name,
       value,
@@ -314,8 +332,8 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      metadata: finalMetadata
+    });
   }
 
   // =========================================================================
@@ -333,7 +351,10 @@ export class VariableFactory {
     encoding?: string,
     metadata?: VariableMetadata
   ): FileContentVariable {
-    return {
+    const extensionMatch = filePath.match(/\.([a-zA-Z0-9]+)$/);
+    const extension = extensionMatch ? extensionMatch[1].toLowerCase() : undefined;
+    const finalMetadata = applyTextMetrics(metadata, value, { extension });
+    return finalizeVariable({
       type: 'file-content',
       name,
       value,
@@ -342,8 +363,8 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      metadata: finalMetadata
+    });
   }
 
   /**
@@ -358,7 +379,10 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): SectionContentVariable {
-    return {
+    const extensionMatch = filePath.match(/\.([a-zA-Z0-9]+)$/);
+    const extension = extensionMatch ? extensionMatch[1].toLowerCase() : undefined;
+    const finalMetadata = applyTextMetrics(metadata, value, { extension });
+    return finalizeVariable({
       type: 'section-content',
       name,
       value,
@@ -368,8 +392,8 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      metadata: finalMetadata
+    });
   }
 
   // =========================================================================
@@ -386,7 +410,7 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): ObjectVariable {
-    return {
+    return finalizeVariable({
       type: 'object',
       name,
       value,
@@ -395,7 +419,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
-    };
+    });
   }
 
   /**
@@ -408,7 +432,7 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): ArrayVariable {
-    return {
+    return finalizeVariable({
       type: 'array',
       name,
       value,
@@ -417,7 +441,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
-    };
+    });
   }
 
   // =========================================================================
@@ -435,7 +459,9 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): ComputedVariable {
-    return {
+    const textValue = typeof value === 'string' ? value : undefined;
+    const finalMetadata = applyTextMetrics(metadata, textValue);
+    return finalizeVariable({
       type: 'computed',
       name,
       value,
@@ -444,8 +470,8 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      metadata: finalMetadata
+    });
   }
 
   /**
@@ -460,7 +486,8 @@ export class VariableFactory {
     stderr?: string,
     metadata?: VariableMetadata
   ): CommandResultVariable {
-    return {
+    const finalMetadata = applyTextMetrics(metadata, value);
+    return finalizeVariable({
       type: 'command-result',
       name,
       value,
@@ -470,8 +497,8 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      metadata: finalMetadata
+    });
   }
 
   // =========================================================================
@@ -490,7 +517,7 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): PathVariable {
-    return {
+    return finalizeVariable({
       type: 'path',
       name,
       value: {
@@ -503,7 +530,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
-    };
+    });
   }
 
   /**
@@ -519,7 +546,7 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): ImportedVariable {
-    return {
+    return finalizeVariable({
       type: 'imported',
       name,
       value,
@@ -533,7 +560,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
-    };
+    });
   }
 
   /**
@@ -548,7 +575,7 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): ExecutableVariable {
-    return {
+    return finalizeVariable({
       type: 'executable',
       name,
       value: {
@@ -561,7 +588,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
-    };
+    });
   }
 
   /**
@@ -575,7 +602,12 @@ export class VariableFactory {
     source: VariableSource,
     pipelineStage?: number
   ): PipelineInputVariable {
-    return {
+    const baseMetadata: VariableMetadata = {
+      isPipelineInput: true,
+      pipelineStage
+    };
+    const finalMetadata = applyTextMetrics(baseMetadata, rawText, { format });
+    return finalizeVariable({
       type: 'pipeline-input',
       name,
       value,
@@ -584,11 +616,8 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata: {
-        isPipelineInput: true,
-        pipelineStage
-      }
-    };
+      metadata: finalMetadata || baseMetadata
+    });
   }
 
   /**
@@ -606,15 +635,17 @@ export class VariableFactory {
       structuredValueType: value.type
     };
 
-    return {
+    const finalMetadata = applyTextMetrics(structuredMetadata, value.text);
+
+    return finalizeVariable({
       type: 'structured',
       name,
       value,
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata: structuredMetadata
-    };
+      metadata: finalMetadata || structuredMetadata
+    });
   }
 
   /**
@@ -626,7 +657,7 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): PrimitiveVariable {
-    return {
+    return finalizeVariable({
       type: 'primitive',
       name,
       value,
@@ -635,7 +666,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
-    };
+    });
   }
 
 

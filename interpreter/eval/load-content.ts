@@ -7,11 +7,16 @@
  */
 
 import { JSDOM } from 'jsdom';
-import type { 
-  LoadContentResult, 
-  LoadContentResultURL, 
+import type {
+  LoadContentResult,
+  LoadContentResultURL,
   LoadContentResultHTML
 } from '@core/types/load-content';
+import {
+  buildTokenMetrics,
+  type TokenEstimationOptions,
+  type TokenMetrics
+} from '@core/utils/token-metrics';
 
 /**
  * Internal class implementation of LoadContentResult
@@ -24,8 +29,7 @@ export class LoadContentResultImpl implements LoadContentResult {
   absolute: string;
   
   private _extension: string | null;
-  private _tokest?: number;
-  private _tokens?: number;
+  private _metrics?: TokenMetrics;
   private _fm?: any;
   private _fmParsed = false;
   private _json?: any;
@@ -78,20 +82,24 @@ export class LoadContentResultImpl implements LoadContentResult {
     return this._fm;
   }
   
-  get tokest(): number {
-    if (this._tokest === undefined) {
-      // Use heuristic for token estimation
-      this._tokest = this._estimateTokens();
+  private ensureMetrics(): TokenMetrics {
+    if (!this._metrics) {
+      const options: TokenEstimationOptions = {
+        extension: this._extension,
+        format: undefined
+      };
+      this._metrics = buildTokenMetrics(this.content, options);
     }
-    return this._tokest;
+    return this._metrics;
+  }
+
+  get tokest(): number {
+    return this.ensureMetrics().tokest;
   }
   
   get tokens(): number {
-    if (this._tokens === undefined) {
-      // For now, use the same as tokest
-      this._tokens = this.tokest;
-    }
-    return this._tokens;
+    const metrics = this.ensureMetrics();
+    return metrics.tokens ?? metrics.tokest;
   }
   
   get json(): any {
@@ -123,45 +131,6 @@ export class LoadContentResultImpl implements LoadContentResult {
       fm: this.fm,
       tokest: this.tokest
     };
-  }
-  
-  private _estimateTokens(): number {
-    // Language-specific token estimation heuristics
-    const charCount = this.content.length;
-    
-    switch (this._extension) {
-      case 'py':
-      case 'js':
-      case 'ts':
-      case 'java':
-      case 'c':
-      case 'cpp':
-      case 'cs':
-      case 'go':
-      case 'rs':
-        // Programming languages: ~3 chars per token
-        return Math.ceil(charCount / 3);
-      
-      case 'md':
-      case 'txt':
-      case 'rst':
-      case 'adoc':
-        // Natural language: ~4 chars per token
-        return Math.ceil(charCount / 4);
-      
-      case 'json':
-      case 'yaml':
-      case 'yml':
-      case 'toml':
-      case 'xml':
-      case 'html':
-        // Structured data: ~5 chars per token
-        return Math.ceil(charCount / 5);
-      
-      default:
-        // Default estimate: ~4 chars per token
-        return Math.ceil(charCount / 4);
-    }
   }
 }
 

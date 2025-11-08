@@ -197,7 +197,10 @@ export async function prepareVarAssignment(
       existingDescriptor: capabilityContext.security,
       capability: capabilityContext
     });
-    return { ...variable, metadata: finalMetadata };
+    return VariableMetadataUtils.attachContext({
+      ...variable,
+      metadata: finalMetadata
+    });
   };
 
 
