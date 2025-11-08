@@ -81,6 +81,7 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
   - Demonstrate interpolation descriptor merging.
   - Capture hook execution side effects (e.g., logging order).
 - Follow `docs/dev/TESTS.md`: unique filenames, `skip.md` when necessary, and `npm run build:fixtures` as part of validation. Guard-facing fixtures should include structured outputs (arrays/objects) to verify descriptor metadata survives JSON conversions.
+- Refine the new module/output fixtures (`feat/module-system/security-exe-roundtrip`, `slash/output/security-imported-exec`) once `.ctx` accessors land: add `/show ...ctx.labels` assertions and guard scripts that deny/allow based on the propagated labels so users can observe security metadata from mlld code.
 - Required runs: `npm test`, targeted unit suites for hooks/context, plus interpreter fixture subsets covering the new cases.
 
 ## Exit Criteria

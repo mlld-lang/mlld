@@ -1,0 +1,9 @@
+# Module exporting a labeled executable that returns structured text
+
+/exe secret @greeter(name) = js {
+  return `HELLO ${name.toUpperCase()}`;
+}
+
+/var @exports = {
+  greeter: @greeter
+}
