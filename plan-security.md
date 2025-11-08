@@ -24,7 +24,7 @@
 - **Baseline verification**: `npm test` now passes without TTL/trust artefacts; the `path-validation` suite uses a fetch override hook to simulate remote content.
 - **Follow-up**: document the removal of `URLCache.ts`; any future caching work will reuse the simplified `CacheManager` hook.
 
-## Phase 1 – Import-Type Grammar & Runtime (No Security Labels Yet)
+## Phase 1 – Import-Type Grammar & Runtime _(completed - main branch)_
 - Extend `/import` grammar and supporting patterns to parse explicit import type keywords (`module`, `static`, `live`, `cached`, `local`). Remove all TTL/trust grammar.
 - Update AST (`core/types/import.ts`, `core/types/values.ts`, directive nodes) to include `importType?: ImportType`, leaving data labels undefined for now.
 - Refactor runtime import resolution (`ImportPathResolver`, `ImportDirectiveEvaluator`, `ImportSecurityValidator`) to honour the five import types, adjust resolver behaviour, and replace TTL-based caching with explicit duration metadata for `cached`.
@@ -32,53 +32,118 @@
 - Update docs/tests to reflect the new import syntax; no data labels or guards yet. Ensure any tests that relied on trust/TTL stubs are rewritten or removed (e.g., integration/modules fixture already updated).
 - Optional: retire the legacy `/path` directive in favor of import capabilities once core updates land.
 
-## Phase 2 – Security Descriptor Foundations
+## Phase 2 – Security Descriptor Foundations _(completed - datalabels branch)_
 - Implement final types in `core/types/security.ts`: `DataLabel`, `SecurityDescriptor`, helper utilities, and `CapabilityContext` shapes.
 - Extend grammar and AST nodes to parse optional data labels on `/import`, `/var`, `/exe`, `/run`, `/show`.
 - Adjust `VariableMetadata` and `VariableFactories` to accept and store `SecurityDescriptor` placeholders (without taint merge logic yet).
 - Add unit tests ensuring labels parse correctly and propagate into AST nodes.
+- ✅ **Status**: Grammar parses labels, types are implemented, tests pass (tests/core/security-descriptor.test.ts, tests/grammar/security-labels.test.ts)
 
-## Phase 3 – Taint Tracking & Metadata Propagation
-- Integrate the `TaintTracker` from `security-wip` (migrated to `core/security/taint.ts`), adapting enums to the new label set and exposing merge helpers.
-- Update evaluators (`/import`, `/var`, pipeline stages, command outputs) to construct `SecurityDescriptor` instances and merge them as values combine. Default to `unknown` when provenance is missing.
-- Ensure variables store both `security` and `capability` metadata in `VariableMetadata`; add helper guards (`getSecurity`, `hasLabel`, `mergeDescriptors`).
-- Add comprehensive tests covering propagation across arrays, objects, templates, pipelines, and nested imports.
+## Phase 3 – Taint Tracking & Metadata Propagation _(completed - datalabels branch)_
+
+**See `plan-security-phase-3.md` for detailed implementation.**
+
+**Summary of completed work:**
+- Taint tracking primitives in `core/security/taint.ts` with TaintTracker, helpers, and taint lattice
+- Environment security subsystem with push/pop security context, descriptor merging
+- Directive evaluators (`/var`, `/import`, `/run`, `/show`) build and propagate SecurityDescriptors
+- Pipeline integration threading descriptors through stages
+- Serialization for module import/export
+- Tests: `tests/core/security-descriptor.test.ts`, `tests/grammar/security-labels.test.ts`, `tests/interpreter/security-metadata.test.ts`
+
+**Current implementation:**
+- Security context managed via Environment push/pop stack
+- Descriptor merging happens in individual directive evaluators
+- @ctx population in VariableManager
+
+**Known gaps from Phase 3:**
+- `/exe` evaluator lacks security integration
+- Interpolation doesn't merge descriptors from embedded variables
+- Some test coverage gaps
+
+## Phase 3.5 – Hook Architecture & Refactoring _(next - implements spec-hooks.md)_
+
+**Objective:**
+Implement evaluation hook infrastructure, fill Phase 3 gaps, and refactor existing taint tracking to use hooks, preparing for Phase 4 guards. Security hooks consist of two built-in components: the guard pre-hook (policy enforcement before execution) and the taint post-hook (descriptor propagation after execution).
+
+**Part A: Fix Phase 3 Gaps (3-5 days)**
+- Fix `/exe` evaluator security integration
+- Fix exec invocation label propagation
+- Fix template interpolation descriptor merging
+- Fix `/export` and `/output` evaluator security integration
+- Add comprehensive test coverage for all fixes
+
+**Part B: Hook Infrastructure (3-5 days)**
+- Implement `HookManager` class (see `spec-hooks.md`)
+- Add pre/post hook registration and execution in a fixed order (guard pre-hook → directive execution → taint post-hook), with additional diagnostics/profiling hooks appended later but still interpreter-controlled
+- Integrate hook execution in `evaluateDirective()`
+- Implement `extractDirectiveInputs()` helper for directive-specific input extraction
+- Implement lightweight `ContextManager` that manages `@ctx.op`, `@ctx.pipe`, and `@ctx.guard` stacks, exposing helper methods the Environment delegates to (per `spec-hooks.md` and Phase 3.5 plan)
+- Test infrastructure with no-op hooks (ensure no behavioral changes or performance regression)
+
+**Part C: Context Manager & Variable .ctx (1 week)**
+- Extend the `ContextManager` helper so Environment-scoped utilities (`withOpContext`, `withPipeContext`, `withGuardContext`) push/pop namespace data and emit backward-compatible aliases (`@ctx.operation`, `@ctx.try`, etc.)
+- **Implement variable `.ctx` namespace** for metadata access:
+  - Security metadata: `.ctx.labels`, `.ctx.taint`, `.ctx.source`
+  - Lazy computed: `.ctx.tokens`, `.ctx.length`, `.ctx.type`, `.ctx.size`
+  - Introspection: `.ctx.name`, `.ctx.defined`, `.ctx.exported`
+  - Array semantics: accessing `.ctx` on arrays flattens/merges results
+- Update field access evaluator to support `.ctx.*` paths
+- Add lazy evaluation and caching for computed properties
+- Test variable metadata access across all variable types
+
+**Part D: Taint Tracking Migration to Hooks (1-2 weeks)**
+- **Migrate existing taint tracking** from evaluator-based to hook-based approach
+- Move descriptor merging logic from individual evaluators into centralized taint post-hook
+- Remove `pushSecurityContext`/`popSecurityContext` calls from evaluators (replaced by hooks)
+- Taint post-hook runs after directive execution, updates `result.ctx.labels`, `result.ctx.taint`, `result.ctx.source`
+- Refactor tests to validate hook-based propagation
+- **Reorganize @ctx namespaces**: @ctx.op.*, @ctx.pipe.*, @ctx.guard.* (maintain backward compat with aliases)
+
+**Time estimate:** 3-4 weeks total
 
 ## Phase 4.0 – Basic Guard Runtime
 
 **Objective:**
-Deliver core guard functionality: syntax, registration, invocation, and basic actions (allow/deny/retry).
+Deliver core guard functionality: syntax, registration, hook implementation, and basic actions (allow/deny/retry).
 
 **Scope:**
-- Guard directive parsing: `/guard [@name] [for <label>] = when [...]`
-- Guard registration and lookup by data label
-- Guard invocation at directive boundaries (before execution)
+- Guard directive parsing: `/guard [@name] for <filter> = when [...]`
+- Guard filter types: `for <data-label>` (per-input) and `for op:<type>` (per-operation)
+- Guard registration and lookup by filter
+- **Guards as pre-execution hooks** (not directive-by-directive instrumentation)
 - Actions: `allow`, `deny "reason"`, `retry "hint"` (auto-deny if not retryable)
-- Context variables: `@ctx.input`, `@ctx.op`, `@ctx.labels`, `@ctx.tries`
+- Context variables: `@input`, `@ctx.op`, `@ctx.guard.try`, `@ctx.guard.max`
 - Data labels on `/exe` declarations (operation labels)
-- Integration with existing pipeline retry infrastructure
+- Integration with existing pipeline retry infrastructure (reuse `RetryContext`)
 - Retry capability checking (can source be retried?)
+- Directives covered: `/run`, `/show`, `/import`, `/var`, `/exe` (invocation)
 
 **Non-Goals:**
+- `/output` directive guard support - deferred to Phase 7.1
 - Guard-based fixing (`allow @value`) - deferred to 4.1
 - Domain/network detection - deferred to 4.1
 - Schema validation helpers - deferred to 4.1
 - Built-in guards - deferred to 4.1
-- `prompt` action - deferred to Phase 5+
+- `prompt` action - deferred to Phase 7.2
+- Non-pipeline retry - deferred to Phase 7.3
 
 **Workstreams:**
 
 1. **Grammar Extension**
    - Add `/guard` directive pattern to grammar
-   - Support optional name: `/guard @name for label = when`
-   - Support optional label filter: `/guard for secret = when`
+   - Support optional name: `/guard @name for filter = when`
+   - **Require filter** (no overbroad guards): `for secret`, `for op:run`, `for op:cmd`, etc.
    - Parse guard body as when-block with allow/deny/retry actions
+   - Parse operation type filters with execution context: `op:cmd`, `op:sh`, `op:js`, `op:node`, `op:py`
 
 2. **Guard Registration & Storage**
    - Create guard registry in Environment class
-   - Register guards by label filter (`for secret`, `for pii`, etc)
+   - Register guards by filter type:
+     - Data guards: `for <data-label>` (per-input trigger)
+     - Operation guards: `for op:<type>` (per-operation trigger)
    - Support anonymous guards (no name) and named guards
-   - Allow multiple guards per label (evaluate in registration order)
+   - Allow multiple guards per filter (evaluate in registration order)
    - First `deny` decision short-circuits remaining guards
    - Support guard export/import (guards are exportable entities)
    - Guards are execution-scoped (global within execution context)
@@ -90,34 +155,40 @@ Deliver core guard functionality: syntax, registration, invocation, and basic ac
    - Example: `/exe network,paid @fetchData() = ...`
    - Expose via `@ctx.op.labels` during guard evaluation
 
-4. **Guard Invocation Infrastructure**
-   - Instrument directives to check inputs for labels before execution
-   - Directives: `/run`, `/show`, `/import`, `/output`, `/exe` (invocation)
-   - For each directive, invoke guards AFTER inputs are evaluated, BEFORE operation executes
-   - Build `@ctx.op` structure with directive-specific metadata
-   - Populate `@ctx.input` with actual data value being guarded
-   - Invoke matching guards with populated @ctx
-   - Handle guard decisions: allow → continue, deny → throw GuardError, retry → delegate
+4. **Guard Hook Implementation**
+   - **Implement guards as pre-execution hooks** (see `spec-hooks.md`)
+   - Guard hook executes in `evaluateDirective()` before dispatching to specific evaluators
+   - Extract directive inputs once, pass to hooks
+   - Per-input guards: iterate over inputs, fire guard for each matching label
+   - Per-operation guards: fire once with all inputs as array
+   - Build `@ctx.op` structure with directive-specific metadata and execution context type
+   - Populate `@input` and `@ctx.guard.*` for guard evaluation
+   - Handle guard decisions: allow → continue, deny → throw GuardError, retry → create retry context
+   - First denial short-circuits (no further guards checked)
 
 5. **@ctx Population for Guards**
-   - `@input` - actual data value(s) being guarded (primary, like pipeline stages)
+   - `@input` - actual data value being guarded (single value for per-input, array for per-operation)
    - `@ctx.input` - alias to @input (for consistency)
-   - `@ctx.labels` - accumulated labels from all inputs
+   - `@ctx.labels` - accumulated labels (per-input: same as @input.ctx.labels)
    - `@ctx.sources` - provenance tracking
    - `@ctx.op` - operation metadata with consistent structure:
-     - `type`: directive type ("run", "show", "import", "output", "exec-invocation")
+     - `type`: execution context type ("op:cmd", "op:sh", "op:js", "op:node", etc.) or directive type
      - `labels`: implicit labels for built-ins, user-declared for /exe
      - Directive-specific fields (command, path, name, etc)
      - `domains`: extracted domains (Phase 4.1+)
-   - `@ctx.tries` - retry attempt counter (in retry contexts)
-   - Note: Rename runtime field from @ctx.operation to @ctx.op
+   - `@ctx.guard.try` - guard retry attempt number (uses pipeline retry infrastructure)
+   - `@ctx.guard.tries` - array of previous retry results
+   - `@ctx.guard.max` - maximum retry limit (default: 3)
+   - Note: Reorganize runtime @ctx into namespaces (@ctx.pipe.*, @ctx.guard.*, @ctx.op.*)
 
 6. **Retry Integration**
-   - When guard returns `retry "hint"`, check if source is retryable (function call in pipeline)
-   - If retryable: delegate to existing pipeline retry system
+   - When guard returns `retry "hint"`, create retry context using pipeline infrastructure
+   - Retry context tracks `attemptNumber` (surfaced as `@ctx.guard.try`)
+   - Check if input source is retryable before allowing retry
+   - If retryable: increment retry context, re-evaluate inputs, loop again
    - If not retryable: auto-deny with GuardError: "Cannot retry: {hint} (source not retryable)"
-   - Explicit limitation: retry only works in pipeline contexts with function sources
-   - Document limitation clearly in error messages and docs
+   - Retry limits managed by retry context (max 3 by default)
+   - Each guard evaluation point gets fresh retry context (independent of pipeline retries)
 
 7. **Testing**
    - Grammar tests for guard syntax variations
@@ -128,23 +199,30 @@ Deliver core guard functionality: syntax, registration, invocation, and basic ac
    - Retry tests in pipeline and non-pipeline contexts
    - Export/import tests for guards
 
-8. **Guard Helper Functions**
-   - Implement `@opIs(type)`, `@opHas(label)`, `@opHasAny([labels])`, `@opHasAll([labels])`
-   - Implement `@inputHas(label)` - checks @ctx.labels.includes(label)
-   - Helpers are available in guard when-blocks
-   - Map to underlying @ctx checks (e.g., @opHas → @ctx.op.labels.includes)
-   - Note: @input is accessible directly as a variable (like in pipeline stages)
+8. **Array Helpers for Per-Operation Guards**
+   - When `@input` is an array (per-operation guards), provide helpers:
+     - `@input.any.ctx.labels.includes(label)` - ANY input has label
+     - `@input.all.ctx.labels.includes(label)` - ALL inputs have label
+     - `@input.none.ctx.labels.includes(label)` - NONE have label
+   - Aggregate methods:
+     - `@input.totalTokens()` - sum of all token counts
+     - `@input.maxTokens()` - maximum token count
+   - Default array `.ctx` access returns flattened/merged results
+   - Specific input access: `@input[0].ctx.labels`
 
 **Deliverables:**
 - Guard directive grammar and AST types
-- Guard registration system in Environment
+- Guard registration system in Environment (per-input and per-operation scopes)
 - GuardError type in core/errors (with label, decision, capabilityContext)
-- Directive instrumentation (run, show, import, output, exec-invocation)
-- @ctx population logic (rename operation → op)
-- Guard helper functions (@opHas, @opIs, @opHasAny, @opHasAll, @inputHas)
+- **Guard hook implementation** (pre-execution hook, not directive instrumentation)
+- Hook integration in `evaluateDirective()`
+- @ctx namespace reorganization (@ctx.op.*, @ctx.guard.*, @ctx.pipe.*)
+- Execution context types in @ctx.op (op:cmd, op:sh, op:js, op:node, op:py)
+- Array helper methods for per-operation guards (@input.any, @input.all, @input.none)
 - Guard export/import support
-- Retry capability checking
-- Test coverage for all guard actions and helpers
+- Retry integration using pipeline `RetryContext`
+- Test coverage for all guard actions, both trigger scopes, and array helpers
+- Covers: `/run`, `/show`, `/import`, `/var`, `/exe` (NOT `/output` - deferred to Phase 7.1)
 
 **Time Estimate:** 1-1.5 weeks
 
@@ -218,11 +296,45 @@ Add guard-based data fixing, network activity detection, and schema validation h
 - Confirmation UI for destructive operations
 - Add configuration schema updates, documentation, and tests for each mode.
 
-## Phase 6 – Documentation, Tooling, and Rollout
+## Phase 6 – Documentation, Tooling, and Rollout _(future)_
 - Update developer/user docs, `/guard` guide, and `llms.txt` with the new capability model (present tense only).
 - Adjust LSP semantic token rules and tests to highlight import types and labels.
 - Ensure `AuditLogger` records capability context for CaMeL-style audits.
 - Publish migration guidance (internal) explaining manual upgrade steps.
+- Record user-visible changes in `CHANGELOG.md` per release.
+
+## Phase 7 – Deferred Enhancements _(future)_
+
+**Features punted from earlier phases for later consideration:**
+
+### 7.1 - Output Directive Guard Support
+- Guard integration for `/output` directive
+- File effect metadata in @ctx.op.target
+- Guards can check output destinations and file paths
+- Example: prevent secrets from being written to public directories
+- Required: file effect metadata tracking in effect emission system
+
+### 7.2 - Prompt Action in Guards
+- `prompt "message"` action for user confirmation
+- Interactive Y/N/provide-instruction flow in CLI
+- User feedback flows through hint channel to retried operations
+- CLI integration for prompts with retry support
+- Example: confirm destructive operations before execution
+
+### 7.3 - Non-Pipeline Guard Retry
+- Guards can retry outside pipeline contexts
+- Track variable provenance to enable retry of non-pipeline sources
+- Support retrying direct invocations: `/show @result` where @result came from function
+- Requires: enhanced provenance tracking beyond current pipeline infrastructure
+- Example: guard retries `/var @x = @claude()` even without pipeline
+
+### 7.4 - Advanced Guard Features
+- Guard composition (guards calling other guards)
+- Conditional guard activation (enable/disable guards based on runtime context)
+- Guard debugging mode (`MLLD_DEBUG_GUARDS=true`) with verbose output
+- Guard performance metrics and profiling
+- Schema validation guard enhancements
+- Guard testing utilities and fixtures
 
 ## Cross-Cutting Tasks
 - Maintain a shared checklist tracking grammar, types, runtime, tests, docs, and exports touched in each phase. Update the checklist now that trust/TTL removals are complete.
@@ -245,28 +357,52 @@ Add guard-based data fixing, network activity detection, and schema validation h
   - Grammar emits `securityLabels` arrays for `/import`, `/var`, `/exe`, `/run`, `/show`.
   - `SecurityDescriptor` helpers are finalized with unit tests.
   - Variables created through directives persist descriptors (taint merge deferred to Phase 3).
-- **Phase 3 – Taint Tracking & Metadata Propagation**
-  - `TaintTracker` integrated with merge helpers aligned to the new label set.
-  - Evaluators construct and merge descriptors through arrays, objects, pipelines, command outputs.
-  - Variables expose metadata helpers (`getSecurity`, `hasLabel`, `mergeDescriptors`) and default to `unknown` taint when provenance is missing.
+- **Phase 3 – Taint Tracking & Metadata Propagation** _(completed - datalabels branch)_
+  - TaintTracker in `core/security/taint.ts` with taint lattice and helpers
+  - Environment security subsystem with context push/pop and descriptor merging
+  - Directive evaluators build and propagate SecurityDescriptors
+  - Pipeline integration with descriptor threading
+  - Module export/import preserves descriptors
+  - Tests: security-descriptor.test.ts, security-labels.test.ts, security-metadata.test.ts
+  - See `plan-security-phase-3.md` for full implementation details
+
+- **Phase 3.5 – Hook Architecture & Refactoring** _(next phase)_
+  - **Part A**: Phase 3 gaps filled - `/exe`, exec invocation, interpolation, `/export`, `/output` have security integration
+  - **Part A**: Comprehensive test coverage for gap fixes
+  - **Part B**: Hook infrastructure (`HookManager`) in place with no behavioral changes
+  - **Part B**: Pre/post hooks registered in hardcoded order (not user-configurable)
+  - **Part B**: Hook execution integrated in `evaluateDirective()`
+  - **Part B**: ContextManager (or Environment methods) for @ctx namespace management
+  - **Part B**: No performance regression when no hooks registered
+  - **Part C**: Variable `.ctx` namespace works on all variable types
+  - **Part C**: Security metadata accessible: `.ctx.labels`, `.ctx.taint`, `.ctx.source`
+  - **Part C**: Lazy properties compute correctly: `.ctx.tokens`, `.ctx.length`, `.ctx.type`
+  - **Part C**: Array `.ctx` access flattens/merges results; `@array[0].ctx` accesses specific element
+  - **Part D**: Taint tracking refactored to post-hook
+  - **Part D**: Descriptor merging centralized in taint post-hook (removed from evaluators)
+  - **Part D**: @ctx reorganized into namespaces (@ctx.op.*, @ctx.pipe.*, @ctx.guard.*) with backward compat
 - **Phase 4.0 – Basic Guard Runtime**
-  - Parser accepts `/guard [@name] [for <label>] = when [...]` syntax
-  - Guards register by label and can be looked up
-  - Guards fire for import, run, show, output directives before execution
+  - Parser accepts `/guard [@name] for <filter> = when [...]` syntax with required filter
+  - Guards support two trigger scopes: per-input (`for <data-label>`) and per-operation (`for op:<type>`)
+  - Operation type filters include execution contexts: `op:cmd`, `op:sh`, `op:js`, `op:node`, `op:py`
+  - Guard registry supports both data guards and operation guards
+  - **Guards implemented as pre-execution hooks** in `evaluateDirective()`
+  - Hook system extracts inputs and invokes guards before directive execution
+  - Per-input guards fire individually for each labeled input
+  - Per-operation guards fire once with all inputs as array
   - /exe accepts optional labels: `/exe network,paid @func() = ...`
-  - Operation labels exposed via `@ctx.op.labels` (implicit for built-ins)
-  - Implicit labels documented: /run has ["shell","external"], /show has ["output"], etc
-  - Allow/deny decisions work correctly with clear GuardError messages
+  - @ctx.op includes execution context type (op:cmd, op:js, etc.) and labels
+  - Allow/deny/retry decisions work correctly with clear GuardError messages
   - GuardError type exists with proper fields
-  - Retry decisions delegate to existing pipeline retry system
+  - Retry creates retry context using pipeline `RetryContext` infrastructure
+  - `@ctx.guard.try` increments with each retry (independent of `@ctx.pipe.try`)
   - Retry auto-denies if source not retryable with clear message
-  - Guards can access `@ctx.input`, `@ctx.op`, `@ctx.labels`, `@ctx.tries`
-  - Runtime field renamed from @ctx.operation to @ctx.op
-  - Guard helpers work: @opHas, @opIs, @opHasAny, @opHasAll, @inputHas
+  - Guards can access `@input`, `@ctx.op`, `@ctx.guard.try`, `@ctx.guard.max`
+  - Array helpers work for per-operation guards: `@input.any`, `@input.all`, `@input.none`
   - Named guards can be exported and imported
   - Imported guards activate immediately
-  - Integration tests cover allow/deny/retry scenarios
-  - Tests cover retry in pipeline and non-pipeline contexts
+  - Integration tests cover allow/deny/retry scenarios for both trigger scopes
+  - Tests cover retry with RetryContext integration
   - Tests cover guard export/import
 
 - **Phase 4.1 – Guard Fixing & Network Detection**
@@ -285,18 +421,22 @@ Add guard-based data fixing, network activity detection, and schema validation h
   - Internal migration guidance enumerates the upgrade path.
 
 ## Guard Semantics
-- Guards execute synchronously at directive boundaries BEFORE operations execute
-- Guards are invoked BY directives (e.g., /run, /show, /import), not as separate checkpoints
-- Directives check their inputs for labels, then invoke matching guards
-- Guards receive populated @ctx with both data (@ctx.input) and pending operation (@ctx.op)
+- Guards execute as **pre-execution hooks** at directive boundaries BEFORE operations execute
+- Hook system extracts directive inputs, collects labels, and invokes matching guards
+- **Per-input guards** (data guards) fire individually for each labeled input (`@input` is single value)
+- **Per-operation guards** fire once per directive with all inputs as array (`@input` is array)
+- Guards receive populated @ctx with data (`@input`) and pending operation (`@ctx.op`)
 - Evaluation order matches registration order; `deny` decisions short-circuit remaining guards
-- Guards can see forward-looking operation info (@ctx.op describes what's ABOUT to happen)
-- `retry` decisions delegate to existing pipeline retry infrastructure
+- Guards see forward-looking operation info (@ctx.op describes what's ABOUT to happen)
+- `retry` decisions create retry contexts using pipeline infrastructure (`RetryContext`)
+- `@ctx.guard.try` tracks retry attempts (independent of pipeline `@ctx.pipe.try`)
 - `retry` auto-denies if source is not retryable (with GuardError message)
+- Each guard evaluation point has independent retry budget (resets per directive)
 - Guard failures raise `GuardError` instances with context for `AuditLogger`
 - Guards are non-reentrant per directive invocation
 - Guards are execution-scoped (apply globally within execution context)
 - Guards cannot be overridden (mlld immutability applies)
+- All guards must have filters (no overbroad guards allowed)
 
 ## Taint Lattice
 - Levels (highest risk to lowest): `llmOutput` > `networkLive` > `networkCached` > `resolver` > `userInput` > `commandOutput` > `localFile` > `staticEmbed` > `module` > `literal` > `unknown`.

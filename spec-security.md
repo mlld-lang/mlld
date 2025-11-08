@@ -51,33 +51,61 @@ Operation labels are available in `@ctx.op.labels` for guard evaluation:
 
 ### Guards
 
-Guards are validation functions that decide whether operations should proceed:
+Guards are validation functions that decide whether operations should proceed. Guards run as pre-execution hooks that block unsafe directives before they execute (see `spec-hooks.md` for hook infrastructure).
 
 ```mlld
-/guard [@name] [for <label>] = when [
+/guard [@name] for <filter> = when [
   condition1 => allow
-  condition2 => deny "reason"
-  condition3 => retry "hint"
-  condition4 => prompt "message"  # Future - Phase 5+
+  condition2 => allow @value
+  condition3 => deny "reason"
+  condition4 => retry "hint"
+  condition5 => prompt "message"
   * => allow
 ]
 ```
 
+**Guard Filters (Required):**
+- `for <data-label>` - Per-input guard (fires individually for each labeled input)
+- `for op:<type>` - Per-operation guard (fires once with all inputs)
+
 **Guard Actions**:
 - `allow` - Operation proceeds
-- `allow @value` - Operation proceeds with fixed/transformed value (Phase 4.1+)
+- `allow @value` - Operation proceeds with fixed/transformed value
 - `deny "reason"` - Operation blocked with error message
 - `retry "hint"` - Re-execute data source with hint (auto-denies if source not retryable)
-- `prompt "message"` - User confirmation required (Phase 5+)
+- `prompt "message"` - User confirmation required
+
+**Guard Trigger Scopes:**
+
+Per-input guards (data guards):
+```mlld
+/guard for secret = when [
+  # @input is single value with label "secret"
+  # Fires individually for each secret-labeled input
+  @input.ctx.tokens > 5000 => deny "Secret too large"
+  * => allow
+]
+```
+
+Per-operation guards:
+```mlld
+/guard for op:run = when [
+  # @input is array of ALL inputs
+  # Fires once per /run directive
+  @input.any.ctx.labels.includes("secret") => deny "No secrets in shell"
+  * => allow
+]
+```
 
 **Guard Execution Model:**
 
-Guards are invoked BY directives before execution:
-1. Directives evaluate their inputs
-2. System checks inputs for data labels
-3. Matching guards evaluate before operation executes
-4. Guards see both the data (`@ctx.input`) and pending operation (`@ctx.op`)
-5. Guards prevent operations from running (not post-validation)
+Guards execute as pre-execution hooks at directive boundaries (hook lifecycle is defined in `spec-hooks.md`):
+1. The hook runtime extracts and evaluates directive inputs
+2. System collects data labels from inputs
+3. Matching guards evaluate before the directive executes
+4. Guards see the data (`@input`) and pending operation (`@ctx.op`)
+5. Guards prevent directives from running (not post-validation)
+6. Guard retry uses the pipeline retry infrastructure
 
 **Example flow:**
 ```mlld
@@ -85,13 +113,37 @@ Guards are invoked BY directives before execution:
 /run {curl api.com -d "@key"}
 
 # Execution:
-# 1. /run evaluates @key reference
-# 2. /run sees @key has label [secret]
-# 3. /run invokes guards registered for 'secret'
+# 1. Hook runtime extracts inputs: [@key]
+# 2. Hook runtime sees @key has label [secret]
+# 3. Guard hook evaluates for 'secret' with @input = @key
 # 4. Guard checks @ctx.op and decides
 # 5. If deny → error thrown, /run never executes
 #    If allow → /run executes normally
-#    If retry → @fetchKey() re-executes, then /run tries again
+#    If retry → retry context increments, @fetchKey() re-executes, loop continues
+```
+
+**Per-Input vs Per-Operation:**
+
+Data guards (per-input) fire individually:
+```mlld
+/var secret @a = "key1"
+/var secret @b = "key2"
+/run @func(@a, @b)
+
+# Secret guard fires twice:
+#   Guard check 1: @input = @a
+#   Guard check 2: @input = @b
+# First denial aborts operation
+```
+
+Operation guards (per-operation) fire once:
+```mlld
+/guard for op:run = when [
+  @input.any.ctx.labels.includes("secret") => deny "No secrets"
+]
+
+/run @func(@a, @b)
+# Guard fires once: @input = [@a, @b]
 ```
 
 **Schema Guards** _(Under design - Phase 4.1+)_
@@ -155,14 +207,18 @@ Note: `@ctx.input` is an alias to the same value (consistent with pipeline `@ctx
 Extended ambient context that flows through all operations:
 
 ```mlld
-@input           # Data being guarded (primary - like pipeline stages)
-@ctx.input       # Alias to @input (for consistency with other @ctx properties)
-@ctx.labels      # Array of accumulated label strings ["secret", "pii"]
-@ctx.sources     # Array of data source identifiers ["user-input", "api-response"]
+@input           # Data being guarded (single value or array depending on guard scope)
+@ctx.input       # Alias to @input (for consistency)
+@ctx.labels      # Accumulated labels (in per-input guards: same as @input.ctx.labels)
+@ctx.sources     # Data provenance array
 @ctx.op          # Current operation metadata (see below)
-@ctx.tries       # Current retry attempt number (if in retry loop)
+@ctx.guard.try   # Current guard retry attempt (1, 2, 3...)
+@ctx.guard.tries # Array of previous guard retry results
+@ctx.guard.max   # Maximum guard retry limit (default: 3)
 @ctx.policy      # Active policy configuration
 ```
+
+**Note:** Guard context uses the pipeline retry infrastructure but surfaces through `@ctx.guard.*` namespace.
 
 **@ctx.op Structure:**
 
@@ -177,12 +233,12 @@ For executable invocations (`/exe`):
 
 For built-in directives:
 ```mlld
-# /run
+# /run with execution context
 @ctx.op = {
-  type: "run",
+  type: "op:cmd",      # or op:sh, op:bash, op:js, op:node, op:py
   command: "curl api.com",
   labels: ["shell", "external"],  # Implicit
-  domains: ["api.com"]  # Phase 4.1+ - auto-extracted
+  domains: ["api.com"]  # Auto-extracted
 }
 
 # /import
@@ -191,7 +247,7 @@ For built-in directives:
   importType: "live",
   path: "https://api.com/data",
   labels: ["network", "import"],  # Implicit
-  domains: ["api.com"]  # Phase 4.1+ - auto-extracted
+  domains: ["api.com"]  # Auto-extracted
 }
 
 # /show
@@ -207,13 +263,24 @@ For built-in directives:
 }
 ```
 
+**Execution Context Types:**
+- `op:cmd` - Bare shell: `/run {...}`
+- `op:sh` - Shell script: `/run sh {...}`
+- `op:bash` - Bash script: `/run bash {...}`
+- `op:js` - JavaScript: `/run js {...}`
+- `op:node` - Node.js: `/run node {...}`
+- `op:py` - Python: `/run python {...}`
+
 ### Implicit Operation Labels
 
 Built-in directives have implicit operation labels:
 
 | Directive | Implicit Labels |
 |-----------|----------------|
-| `/run` | `["shell", "external"]` |
+| `/run {...}` (cmd) | `["shell", "external"]` |
+| `/run sh {...}` | `["shell", "script"]` |
+| `/run js {...}` | `["script", "sandboxed"]` |
+| `/run node {...}` | `["script", "network-capable"]` |
 | `/show` | `["output"]` |
 | `/import live` | `["network", "import"]` |
 | `/import cached` | `["network", "import"]` |
@@ -225,7 +292,7 @@ User-defined executables have labels only if explicitly declared:
 /exe @helper() = {echo ...}              # labels: []
 ```
 
-Guards can check these via `@opHas(label)` or `@ctx.op.labels`.
+Guards can check these via `@ctx.op.labels`.
 
 ## Built-in Data Labels
 
@@ -246,20 +313,25 @@ Default guards that prevent common security mistakes:
 ```mlld
 # Prevent credential leaks
 /guard @secretProtection for secret = when [
-  @opHas("network") => deny "Secrets cannot be sent over network"
-  @opIs("show") => deny "Secrets cannot be displayed"
+  @ctx.op.labels.includes("network") => deny "Secrets cannot be sent over network"
+  @ctx.op.type == "show" => deny "Secrets cannot be displayed"
+  @ctx.op.type == "op:cmd" => deny "Secrets in bare shell commands"
+  @ctx.op.type == "op:node" => deny "Secrets in Node.js (network access)"
+  @ctx.op.type == "op:js" => allow  # JavaScript is sandboxed
   * => allow
 ]
 
 # Restrict destructive operations
 /guard @destructiveRestrictions for destructive = when [
-  @opIs("run") => deny "Destructive operations in shell require review"
+  @ctx.op.type == "op:cmd" => deny "Destructive operations in shell require review"
+  @ctx.op.labels.includes("external") => deny "Destructive external operations blocked"
   * => allow
 ]
 
 # Restrict untrusted content
 /guard @untrustedRestrictions for untrusted = when [
-  @opIs("run") => deny "Cannot execute untrusted content"
+  @ctx.op.type == "op:cmd" => deny "Cannot execute untrusted content in shell"
+  @ctx.op.type == "op:sh" => deny "Cannot execute untrusted shell scripts"
   * => allow
 ]
 ```
@@ -289,18 +361,72 @@ Security configured in `mlld.lock.json`:
 }
 ```
 
-## Label-Guard Linkage
+## Guard Filters and Triggers
 
-Guards can be automatically applied to specific data labels:
+All guards must have a filter specifying when they trigger. Guards cannot be overbroad (no filter) as this creates performance and correctness issues.
 
+**Data Guards (per-input):**
 ```mlld
-# Guard applies to all 'secret' labeled variables
+# Fires individually for each secret-labeled input
 /guard @secretDataGuard for secret = when [
-  @opIs("run") => deny "Can't use secrets in shell commands"
-  @opHas("network") => deny "Can't send secrets over network"
+  @ctx.op.type == "op:cmd" => deny "Can't use secrets in shell"
+  @ctx.op.labels.includes("network") => deny "Can't send secrets over network"
+  @input.ctx.tokens > 10000 => deny "Secret too large"
   * => allow
 ]
 ```
+
+**Operation Guards (per-operation):**
+```mlld
+# Fires once per /run directive with all inputs as array
+/guard @shellRestrictions for op:run = when [
+  @input.any.ctx.labels.includes("secret") => deny "No secrets in shell"
+  @input.totalTokens() > 50000 => deny "Total payload too large"
+  * => allow
+]
+
+# Filter by execution context
+/guard @nodeSecurityPolicy for op:node = when [
+  @input.any.ctx.labels.includes("secret") => deny "No secrets in Node.js"
+  * => allow
+]
+```
+
+**Operation Type Filters (op: prefix for built-ins):**
+
+Guards can filter by built-in operation types using the `op:` prefix:
+
+**Directive types:**
+- `op:run`, `op:show`, `op:import`, `op:output`, `op:var`, `op:exe`
+
+**Execution contexts (within /run):**
+- `op:cmd`, `op:sh`, `op:bash`, `op:js`, `op:node`, `op:py`
+
+**User-Defined Labels (NO op: prefix):**
+
+Labels from `/exe` declarations are plain labels without prefix:
+
+```mlld
+/exe network,paid @fetch() = {curl ...}
+
+# Guard by label (no op: prefix)
+/guard for network = when [
+  # Matches BOTH:
+  #   - Data with label 'network'
+  #   - Operations with label 'network' (from /exe)
+  @ctx.op.type == "op:cmd" => deny "No network in bare shell"
+  * => allow
+]
+
+/guard for destructive = when [
+  # Matches data OR operations labeled 'destructive'
+  * => deny "Destructive operations require approval"
+]
+```
+
+**Key distinction:**
+- `for op:<type>` = Built-in operation types (per-operation guard)
+- `for <label>` = User-defined labels (per-input guard for data, or per-operation for /exe labels)
 
 ## Guard Export and Import
 
@@ -418,36 +544,49 @@ Keep scoping simple. If a guard is too broad, rewrite it with more specific cond
 
 ### Retry with Guards
 
-**Note:** `retry` currently only works in pipeline contexts where the data source is a function call. For direct invocations without retryable sources, guards can only `allow` or `deny`. Retry will auto-deny with error: "Cannot retry: [hint] (source not retryable)".
+Guards use the pipeline retry infrastructure. Guard retries create a retry context and track attempts through `@ctx.guard.try`:
 
 ```mlld
-# Pipeline context - retry works naturally
+# Guard with retry
 /guard for llmjson = when first [
-  @isValidJson(@ctx.input) => allow
-  @ctx.tries < 3 => retry "Invalid JSON from LLM"
+  @isValidJson(@input) => allow
+  @ctx.guard.try < 3 => retry "Invalid JSON from LLM"
   * => deny "Invalid JSON after 3 attempts"
 ]
 
 /var llmjson @result = @claude("generate user") | @process
 /show @result  # Guard can retry @claude stage
-
-# Direct invocation - limited support
-/var llmjson @result = @claude("generate user")
-/show @result  # Guard cannot retry (no retryable source in context)
 ```
 
-### Fixing with Guards (Phase 4.1+)
+**Retry semantics:**
+- Guards can retry if the input's source is retryable (function call in pipeline)
+- Retry creates a retry context (reuses `RetryContext` from pipeline state machine)
+- `@ctx.guard.try` increments with each retry (1, 2, 3...)
+- Non-retryable sources auto-deny: "Cannot retry: [hint] (source not retryable)"
+- Each guard evaluation point has its own retry budget (resets per directive)
+
+### Fixing with Guards
+
+Guards can fix invalid data using `allow @value`:
 
 ```mlld
 /guard @jsonFixer for llmjson = when first [
-  @isValidJson(@ctx.input) => allow
-  @isValidJson(@trimJson(@ctx.input)) => allow @trimJson(@ctx.input)
-  @ctx.tries < 3 => retry "Invalid JSON"
+  @isValidJson(@input) => allow
+  @isValidJson(@trimJson(@input)) => allow @trimJson(@input)  # Fix and continue
+  @ctx.guard.try < 3 => retry "Invalid JSON"
   * => deny "Invalid JSON after fixes and retries"
 ]
 ```
 
-## Network Activity Detection (Phase 4.1+)
+**Flow:**
+1. Check if input is valid → allow
+2. Try common fixes → allow with fixed value
+3. If unfixable and retries remain → retry source
+4. Otherwise → deny
+
+This enables progressive fixing: try cheap fixes first, expensive retries later.
+
+## Network Activity Detection
 
 Guards can detect network activity by examining `@ctx.op.domains`, which auto-extracts domains from:
 
