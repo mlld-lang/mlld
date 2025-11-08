@@ -32,6 +32,13 @@ export interface PipelineContextSnapshot {
   hintHistory?: unknown[];
 }
 
+export interface GuardContextSnapshot {
+  name?: string;
+  attempt: number;
+  tries?: ReadonlyArray<Record<string, unknown>>;
+  max?: number;
+}
+
 export interface SecuritySnapshotLike {
   labels: readonly string[];
   sources: readonly string[];
@@ -52,6 +59,8 @@ interface BuildContextOptions {
  */
 export class ContextManager {
   private readonly opStack: OperationContext[] = [];
+  private readonly pipelineStack: PipelineContextSnapshot[] = [];
+  private readonly guardStack: GuardContextSnapshot[] = [];
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -68,25 +77,95 @@ export class ContextManager {
     return this.opStack[this.opStack.length - 1];
   }
 
+  async withOperation<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
+    this.pushOperation(context);
+    try {
+      return await Promise.resolve(fn());
+    } finally {
+      this.popOperation();
+    }
+  }
+
+  pushPipelineContext(context: PipelineContextSnapshot): void {
+    this.pipelineStack.push(Object.freeze({ ...context }));
+  }
+
+  replacePipelineContext(context: PipelineContextSnapshot): void {
+    if (this.pipelineStack.length === 0) {
+      this.pushPipelineContext(context);
+      return;
+    }
+    this.pipelineStack[this.pipelineStack.length - 1] = Object.freeze({ ...context });
+  }
+
+  popPipelineContext(): PipelineContextSnapshot | undefined {
+    return this.pipelineStack.pop();
+  }
+
+  peekPipelineContext(): PipelineContextSnapshot | undefined {
+    if (this.pipelineStack.length === 0) {
+      return undefined;
+    }
+    return this.pipelineStack[this.pipelineStack.length - 1];
+  }
+
+  async withPipelineContext<T>(
+    context: PipelineContextSnapshot,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    this.pushPipelineContext(context);
+    try {
+      return await Promise.resolve(fn());
+    } finally {
+      this.popPipelineContext();
+    }
+  }
+
+  pushGuardContext(context: GuardContextSnapshot): void {
+    this.guardStack.push(Object.freeze({ ...context }));
+  }
+
+  popGuardContext(): GuardContextSnapshot | undefined {
+    return this.guardStack.pop();
+  }
+
+  peekGuardContext(): GuardContextSnapshot | undefined {
+    if (this.guardStack.length === 0) {
+      return undefined;
+    }
+    return this.guardStack[this.guardStack.length - 1];
+  }
+
+  async withGuardContext<T>(context: GuardContextSnapshot, fn: () => Promise<T> | T): Promise<T> {
+    this.pushGuardContext(context);
+    try {
+      return await Promise.resolve(fn());
+    } finally {
+      this.popGuardContext();
+    }
+  }
+
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
     if (options.testOverride !== undefined) {
       return options.testOverride as Record<string, unknown>;
     }
 
-    const pipeline = options.pipelineContext;
+    const pipeline = options.pipelineContext ?? this.peekPipelineContext();
     const security = options.securitySnapshot;
     const currentOperation = this.peekOperation() ?? security?.operation;
     const pipelineFields = this.buildPipelineFields(pipeline);
+    const guardContext = this.peekGuardContext();
 
-  const ctxValue: Record<string, unknown> = {
-    ...pipelineFields.root,
-    labels: security ? Array.from(security.labels) : [],
-    sources: security ? Array.from(security.sources) : [],
-    taintLevel: security?.taintLevel ?? 'unknown',
-    policy: security?.policy ?? null,
-    operation: currentOperation ?? null,
-    op: currentOperation ?? null
-  };
+    const ctxValue: Record<string, unknown> = {
+      ...pipelineFields.root,
+      labels: security ? Array.from(security.labels) : [],
+      sources: security ? Array.from(security.sources) : [],
+      taintLevel: security?.taintLevel ?? 'unknown',
+      policy: security?.policy ?? null,
+      operation: currentOperation ?? null,
+      op: currentOperation ?? null,
+      guard: guardContext ?? null
+    };
 
     if (pipelineFields.pipe) {
       ctxValue.pipe = pipelineFields.pipe;

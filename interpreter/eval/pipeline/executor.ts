@@ -1,6 +1,6 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, PipelineStage } from '@core/types';
-import type { OperationContext } from '../../env/ContextManager';
+import type { OperationContext, PipelineContextSnapshot } from '../../env/ContextManager';
 import type { StructuredValue } from '../../utils/structured-value';
 import type { SecurityDescriptor, DataLabel, CapabilityContext } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
@@ -220,8 +220,24 @@ export class PipelineExecutor {
   ): Promise<StageResult> {
     let stageEnv: Environment | undefined;
     let popStageContext: (() => CapabilityContext | undefined) | undefined;
-    let pipelineContextPushed = false;
     let ctxManager: ReturnType<Environment['getContextManager']> | undefined;
+    let pipelineSnapshot: PipelineContextSnapshot | undefined;
+
+    const finalizeStageSecurity = (): CapabilityContext | undefined => {
+      if (!popStageContext) {
+        return undefined;
+      }
+      try {
+        const capability = popStageContext();
+        if (capability?.security) {
+          this.env.recordSecurityDescriptor(capability.security);
+        }
+        return capability;
+      } finally {
+        popStageContext = undefined;
+      }
+    };
+
     try {
       const structuredInput = this.getStageOutput(stageIndex - 1, input);
       // Set up execution environment for a single command stage
@@ -237,61 +253,59 @@ export class PipelineExecutor {
         this.allRetryHistory,
         {
           getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+        },
+        {
+          capturePipelineContext: snapshot => {
+            pipelineSnapshot = snapshot;
+          },
+          skipSetPipelineContext: true
         }
       );
+      if (!pipelineSnapshot) {
+        throw new Error('Pipeline context snapshot unavailable for pipeline stage');
+      }
       popStageContext = this.pushStageSecurityContext(stageEnv, command, stageIndex, context, structuredInput);
       ctxManager = stageEnv.getContextManager();
-      ctxManager.pushOperation(this.createPipelineOperationContext(command, stageIndex, context));
-      pipelineContextPushed = true;
-      
-      let output: any;
-      while (true) {
-        try {
-          output = await this.executeCommand(command, input, structuredInput, stageEnv);
-          this.rateLimiter.reset();
-          break;
-        } catch (err: any) {
-          if (isRateLimitError(err)) {
-            if (process.env.MLLD_DEBUG === 'true') {
-              logger.warn('Rate limit detected, retrying with backoff');
+      const stageOpContext = this.createPipelineOperationContext(command, stageIndex, context);
+
+      const executeStage = async (): Promise<StageResult> => {
+        let output: any;
+        while (true) {
+          try {
+            output = await this.executeCommand(command, input, structuredInput, stageEnv!);
+            this.rateLimiter.reset();
+            break;
+          } catch (err: any) {
+            if (isRateLimitError(err)) {
+              if (process.env.MLLD_DEBUG === 'true') {
+                logger.warn('Rate limit detected, retrying with backoff');
+              }
+              const retry = await this.rateLimiter.wait();
+              if (retry) continue;
             }
-            const retry = await this.rateLimiter.wait();
-            if (retry) continue;
-          }
-          throw err;
-        }
-      }
-      
-      // No need to transfer nodes - effects are emitted immediately to the shared handler
-      
-      // Check for retry signal
-      if (this.isRetrySignal(output)) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[PipelineExecutor] Retry detected at stage', context.stage);
-        }
-        const from = this.parseRetryScope(output);
-        const hint = this.parseRetryHint(output);
-        if (popStageContext) {
-          const capability = popStageContext();
-          popStageContext = undefined;
-          if (capability?.security) {
-            this.env.recordSecurityDescriptor(capability.security);
+            throw err;
           }
         }
-        return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
-      }
 
-      let normalized = this.normalizeOutput(output);
-      this.structuredOutputs.set(stageIndex, normalized);
-      this.finalOutput = normalized;
-      this.lastStageIndex = stageIndex;
+        if (this.isRetrySignal(output)) {
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.error('[PipelineExecutor] Retry detected at stage', context.stage);
+          }
+          const from = this.parseRetryScope(output);
+          const hint = this.parseRetryHint(output);
+          finalizeStageSecurity();
+          return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
+        }
 
-      const normalizedText = normalized.text ?? '';
-      if (!normalizedText || normalizedText.trim() === '') {
-        await this.runInlineEffects(command, normalized, stageEnv);
-        if (popStageContext) {
-          const capability = popStageContext();
-          popStageContext = undefined;
+        let normalized = this.normalizeOutput(output);
+        this.structuredOutputs.set(stageIndex, normalized);
+        this.finalOutput = normalized;
+        this.lastStageIndex = stageIndex;
+
+        const normalizedText = normalized.text ?? '';
+        if (!normalizedText || normalizedText.trim() === '') {
+          await this.runInlineEffects(command, normalized, stageEnv!);
+          const capability = finalizeStageSecurity();
           if (capability?.security) {
             normalized = wrapStructured(
               normalized,
@@ -301,35 +315,22 @@ export class PipelineExecutor {
             );
             this.structuredOutputs.set(stageIndex, normalized);
             this.finalOutput = normalized;
-            this.env.recordSecurityDescriptor(capability.security);
           }
+          return { type: 'success', output: normalizedText };
         }
-        return { type: 'success', output: normalizedText };
-      }
-      // Clear hint for inline effects: @ctx.hint is only visible inside the retried stage body
-      // May be worth revisiting this based on user feedback
-      try {
-        const pctx = this.env.getPipelineContext?.();
-        if (pctx) {
-          this.env.setPipelineContext({
-            stage: pctx.stage,
-            totalStages: pctx.totalStages,
-            currentCommand: pctx.currentCommand,
-            input: pctx.input,
-            previousOutputs: pctx.previousOutputs,
-            format: pctx.format,
-            attemptCount: (pctx as any).attemptCount,
-            attemptHistory: (pctx as any).attemptHistory,
-            hint: null,
-            hintHistory: (pctx as any).hintHistory || []
-          } as any);
-        }
-      } catch {}
-      // Run inline effects attached to this functional stage (non-stage effects)
-      await this.runInlineEffects(command, normalized, stageEnv);
-      if (popStageContext) {
-        const capability = popStageContext();
-        popStageContext = undefined;
+
+        try {
+          const pctx = this.env.getPipelineContext?.();
+          if (pctx) {
+            this.env.updatePipelineContext({
+              ...pctx,
+              hint: null
+            });
+          }
+        } catch {}
+
+        await this.runInlineEffects(command, normalized, stageEnv!);
+        const capability = finalizeStageSecurity();
         if (capability?.security) {
           normalized = wrapStructured(
             normalized,
@@ -339,28 +340,21 @@ export class PipelineExecutor {
           );
           this.structuredOutputs.set(stageIndex, normalized);
           this.finalOutput = normalized;
-          this.env.recordSecurityDescriptor(capability.security);
         }
-      }
-      return { type: 'success', output: normalizedText };
+        return { type: 'success', output: normalizedText };
+      };
 
+      const runWithinPipeline = async (): Promise<StageResult> => {
+        if (ctxManager) {
+          return await ctxManager.withOperation(stageOpContext, executeStage);
+        }
+        return await executeStage();
+      };
+
+      return await this.env.withPipeContext(pipelineSnapshot, runWithinPipeline);
     } catch (error) {
+      finalizeStageSecurity();
       return { type: 'error', error: error as Error };
-    } finally {
-      if (popStageContext) {
-        try {
-          const capability = popStageContext();
-          if (capability?.security) {
-            this.env.recordSecurityDescriptor(capability.security);
-          }
-        } catch {}
-      }
-      if (pipelineContextPushed && ctxManager) {
-        try {
-          ctxManager.popOperation();
-        } catch {}
-      }
-      this.env.clearPipelineContext();
     }
   }
 
@@ -651,6 +645,7 @@ export class PipelineExecutor {
         Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
         async (cmd) => {
           const branchInput = wrapStructured(sharedStructuredInput);
+          let pipelineSnapshot: PipelineContextSnapshot | undefined;
           const subEnv = await createStageEnvironment(
             cmd,
             input,
@@ -663,25 +658,41 @@ export class PipelineExecutor {
             this.allRetryHistory,
             {
               getStageOutput: (stage, fallback) => this.getStageOutput(stage, fallback)
+            },
+            {
+              capturePipelineContext: snapshot => {
+                pipelineSnapshot = snapshot;
+              },
+              skipSetPipelineContext: true
             }
           );
 
+          if (!pipelineSnapshot) {
+            throw new Error('Pipeline context snapshot unavailable for parallel branch');
+          }
+
           const popStageContext = this.pushStageSecurityContext(subEnv, cmd, stageIndex, context, branchInput);
           const branchCtxManager = subEnv.getContextManager();
-          branchCtxManager.pushOperation(this.createPipelineOperationContext(cmd, stageIndex, context));
-          try {
-            const raw = await this.executeCommand(cmd, input, branchInput, subEnv);
-            if (this.isRetrySignal(raw)) {
-              const capability = popStageContext();
-              if (capability?.security) {
-                this.env.recordSecurityDescriptor(capability.security);
-              }
-              branchCtxManager.popOperation();
+          const finalizeStageSecurity = (): CapabilityContext | undefined => {
+            const capability = popStageContext();
+            if (capability?.security) {
+              this.env.recordSecurityDescriptor(capability.security);
+            }
+            return capability;
+          };
+
+          const branchOpContext = this.createPipelineOperationContext(cmd, stageIndex, context);
+
+          const executeBranch = async (): Promise<StructuredValue | { value: 'retry'; hint?: any; from?: number }> => {
+            try {
+              const raw = await this.executeCommand(cmd, input, branchInput, subEnv);
+              if (this.isRetrySignal(raw)) {
+              finalizeStageSecurity();
               return raw;
             }
             let normalized = this.normalizeOutput(raw);
             await this.runInlineEffects(cmd, normalized, subEnv);
-            const capability = popStageContext();
+            const capability = finalizeStageSecurity();
             if (capability?.security) {
               normalized = wrapStructured(
                 normalized,
@@ -689,18 +700,20 @@ export class PipelineExecutor {
                 normalized.text,
                 { ...(normalized.metadata || {}), security: capability.security }
               );
-              this.env.recordSecurityDescriptor(capability.security);
             }
-            branchCtxManager.popOperation();
             return normalized;
           } catch (err) {
-            const capability = popStageContext();
-            if (capability?.security) {
-              this.env.recordSecurityDescriptor(capability.security);
-            }
-            branchCtxManager.popOperation();
+            finalizeStageSecurity();
             throw err;
           }
+          };
+
+          return await this.env.withPipeContext(pipelineSnapshot, async () => {
+            if (branchCtxManager) {
+              return await branchCtxManager.withOperation(branchOpContext, executeBranch);
+            }
+            return await executeBranch();
+          });
         },
         { ordered: true, paceMs: this.delayMs }
       );

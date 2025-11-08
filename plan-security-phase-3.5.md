@@ -58,23 +58,29 @@ Phase C will also expand `extractDirectiveInputs()` to include `/var` once the
 
 To keep delivery manageable we will land Phase C in three focused slices that build on one another:
 
-1. **C1 – Assignment Guard Runner & `/var` Inputs**
+1. **C1 – Assignment Guard Runner & `/var` Inputs** ✅ (complete on `datalabels`)
    - Implement the guard-aware `/var` runner that evaluates RHS exactly once, captures the resulting `Variable`, and replays it through guard hooks before committing to the environment.
    - Wire guard retries to the existing pipeline `RetryContext`, ensuring guard `retry` decisions respect source retryability and inherit attempt counters/hints.
    - Extend `extractDirectiveInputs()` and the hook path so `/var` exposes its captured value to pre-hooks without double evaluation.
    - Tests: regression coverage for guard retries, effect streaming order, and pipelines nested inside assignments (fixture additions under `tests/cases/feat/security/phase3c-*`).
+   
+   _Notes:_ Precomputing assignments surfaced the need for a tidy `VarAssignmentResult` payload and `EvaluationContext.precomputedVarAssignment`. Guard work should continue to use that structure rather than re-evaluating directives.
 
-2. **C2 – ContextManager Consolidation & Ambient Consumers**
+2. **C2 – ContextManager Consolidation & Ambient Consumers** ✅ (complete on `datalabels`)
    - Add scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) so evaluators/pipelines no longer manipulate stacks manually.
    - Route the JS/Node executor context injection (`Environment.executeCode`) through `ContextManager.buildAmbientContext()` to eliminate the bespoke builder and guarantee Node/JS code sees the same `@ctx` as hooks and scripts.
    - Ensure child environments inherit context stacks safely (no accidental sharing between parallel pipelines).
    - Tests: hook smoke suite expansion plus targeted JS/Node executor fixtures asserting the injected `ctx` mirrors interpreter-visible values.
+   
+   _Notes:_ Pipeline stages now rely on captured snapshots; any future stage helpers must pass `capturePipelineContext` so the ambient stack stays in sync. Guard work should use the new `withGuardContext` helper instead of manual push/pop.
 
-3. **C3 – Token/Length Metrics & Variable `.ctx` Namespace**
+3. **C3 – Token/Length Metrics & Variable `.ctx` Namespace** (next)
    - Extract the token estimation heuristics from `LoadContentResultImpl` into a shared utility so any text-like variable can report `tokest`/`tokens`.
    - When variables are created (including alligator loads, pipelines, `/run` outputs), attach a normalized `metrics` payload to metadata (estimated tokens, eventual exact tokens, content length).
    - Extend `ContextManager` and variable `.ctx` accessors to surface these metrics lazily (`@myVar.ctx.tokens`, `@input.totalTokens()`) per the guard spec.
    - Update docs (`docs/dev/ALLIGATOR.md`, `spec-hooks.md`) and fixtures to demonstrate the unified token reporting; add regression tests that compare `.ctx.tokens` against the helper output.
+   
+   _Prep work:_ Alligator heuristics live in `interpreter/eval/load-content.ts`; plan to lift `_estimateTokens()` into `core/utils/token-metrics.ts` and reuse via `VariableMetadataUtils.applySecurityMetadata`. Fixtures should compare `.ctx.tokens` to the helper output to avoid regressions.
 
 Deliverables for Phase C are therefore the combined outputs of C1–C3: guard-ready `/var` execution, consolidated context plumbing (including JS/Node), and reusable token metrics that power the `.ctx` namespace and guard helpers.
 

@@ -8,6 +8,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
+import type { PipelineContextSnapshot } from '../../env/ContextManager';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 import { wrapStructured, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
@@ -43,6 +44,11 @@ export interface SimplifiedPipelineContext {
  * WHY: Constructs @input (with format), @pipeline/@p, and seeds the ambient @ctx data.
  * CONTEXT: Hides the synthetic source stage from user-visible indices and stage numbers.
  */
+interface StageEnvironmentOptions {
+  capturePipelineContext?(context: PipelineContextSnapshot): void;
+  skipSetPipelineContext?: boolean;
+}
+
 export async function createStageEnvironment(
   command: PipelineCommand,
   input: string,
@@ -53,7 +59,8 @@ export async function createStageEnvironment(
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>,
-  structuredAccess?: StageOutputAccessor
+  structuredAccess?: StageOutputAccessor,
+  options?: StageEnvironmentOptions
 ): Promise<Environment> {
   // Adjust stage number for synthetic source (hide from user)
   const userVisibleStage = hasSyntheticSource && command.rawIdentifier !== '__source__'
@@ -104,8 +111,7 @@ export async function createStageEnvironment(
     // Best-effort; keep original on failure
   }
 
-  // Set pipeline context in main environment
-  env.setPipelineContext({
+  const pipelineContextSnapshot: PipelineContextSnapshot = {
     stage: userVisibleStage,
     totalStages: userVisibleTotalStages,
     currentCommand: command.rawIdentifier,
@@ -119,7 +125,13 @@ export async function createStageEnvironment(
     // Provide hint info for ambient @ctx.hint
     hint: normalizedHint,
     hintHistory: context.hintHistory || []
-  });
+  };
+
+  options?.capturePipelineContext?.(pipelineContextSnapshot);
+
+  if (!options?.skipSetPipelineContext) {
+    env.setPipelineContext(pipelineContextSnapshot);
+  }
 
   // Create child environment
   const stageEnv = env.createChild();

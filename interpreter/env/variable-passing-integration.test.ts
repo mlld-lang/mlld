@@ -171,6 +171,49 @@ describe('Variable Passing Integration Tests', () => {
       expect(output.port).toBe(3000);
     });
   });
+
+  describe('Context injection', () => {
+    it('injects ambient @ctx into JS executors via ContextManager', async () => {
+      env.setPipelineContext({
+        stage: 2,
+        totalStages: 3,
+        currentCommand: 'noop',
+        input: '{"foo":"bar"}',
+        previousOutputs: ['prev-output'],
+        format: 'json',
+        attemptCount: 2,
+        attemptHistory: ['first-attempt'],
+        hint: 'retry please',
+        hintHistory: ['retry please']
+      });
+
+      const commandExecutorFactory = (env as any).commandExecutorFactory;
+      const originalExecuteCode = commandExecutorFactory.executeCode;
+
+      let capturedCtx: any;
+      commandExecutorFactory.executeCode = async (
+        code: string,
+        language: string,
+        params?: Record<string, any>
+      ) => {
+        if (language === 'js' || language === 'javascript') {
+          capturedCtx = params?.ctx;
+          return '';
+        }
+        return originalExecuteCode.call(commandExecutorFactory, code, language, params);
+      };
+
+      await env.executeCode('return;', 'js', {});
+
+      expect(capturedCtx).toBeDefined();
+      expect(capturedCtx.try).toBe(2);
+      expect(capturedCtx.pipe?.stage).toBe(2);
+      expect(capturedCtx.input.foo).toBe('bar');
+
+      commandExecutorFactory.executeCode = originalExecuteCode;
+      env.clearPipelineContext();
+    });
+  });
   
   describe('Python Executor', () => {
     it('should pass Variables with type information to Python', async () => {

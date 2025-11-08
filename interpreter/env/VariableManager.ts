@@ -13,7 +13,7 @@ import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
 import type { DataLabel, TaintLevel, SecurityDescriptor } from '@core/types/security';
-import type { ContextManager } from './ContextManager';
+import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
 
 export interface IVariableManager {
   // Core variable operations
@@ -47,16 +47,7 @@ export interface VariableManagerDependencies {
   getSecurityManager(): any; // Will be typed more specifically when needed
   getBasePath(): string;
   // Provide access to current pipeline context for ambient @ctx
-  getPipelineContext?(): {
-    stage: number;
-    totalStages: number;
-    currentCommand: string;
-    input: any;
-    previousOutputs: string[];
-    format?: string;
-    attemptCount?: number;
-    attemptHistory?: any[];
-  } | undefined;
+  getPipelineContext?(): PipelineContextSnapshot | undefined;
   getSecuritySnapshot?(): {
     labels: readonly DataLabel[];
     sources: readonly string[];
@@ -84,18 +75,7 @@ export class VariableManager implements IVariableManager {
   }
 
   private buildLegacyContext(
-    pipelineContext?: {
-      stage: number;
-      totalStages: number;
-      currentCommand: string;
-      input: any;
-      previousOutputs: string[];
-      format?: string;
-      attemptCount?: number;
-      attemptHistory?: any[];
-      hint?: string | null;
-      hintHistory?: any[];
-    },
+    pipelineContext?: PipelineContextSnapshot,
     securitySnapshot?: {
       labels: readonly DataLabel[];
       sources: readonly string[];

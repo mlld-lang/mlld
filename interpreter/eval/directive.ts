@@ -112,42 +112,42 @@ export async function evaluateDirective(
     directive.location
   );
 
-  const contextManager = env.getContextManager();
   const hookManager = env.getHookManager();
   const operationContext = buildOperationContext(directive, traceInfo);
-  contextManager.pushOperation(operationContext);
 
   try {
-    let extractedInputs: readonly unknown[] = [];
-    let precomputedVarAssignment: VarAssignmentResult | undefined;
+    return await env.withOpContext(operationContext, async () => {
+      let extractedInputs: readonly unknown[] = [];
+      let precomputedVarAssignment: VarAssignmentResult | undefined;
 
-    if (directive.kind === 'var') {
-      precomputedVarAssignment = await prepareVarAssignment(directive, env);
-      extractedInputs = [precomputedVarAssignment.variable];
-    } else {
-      extractedInputs = await extractDirectiveInputs(directive, env);
-    }
-    const preDecision = await hookManager.runPre(directive, extractedInputs, env, operationContext);
+      if (directive.kind === 'var') {
+        precomputedVarAssignment = await prepareVarAssignment(directive, env);
+        extractedInputs = [precomputedVarAssignment.variable];
+      } else {
+        extractedInputs = await extractDirectiveInputs(directive, env);
+      }
+      const preDecision = await hookManager.runPre(directive, extractedInputs, env, operationContext);
 
-    if (preDecision.action === 'abort') {
-      const reason = preDecision.metadata?.reason ?? 'Operation aborted by hook';
-      throw new Error(reason);
-    }
+      if (preDecision.action === 'abort') {
+        const reason = preDecision.metadata?.reason ?? 'Operation aborted by hook';
+        throw new Error(reason);
+      }
 
-    if (preDecision.action === 'retry') {
-      throw new Error('Hook retry decisions are not supported in Phase 3.5 scaffolding');
-    }
+      if (preDecision.action === 'retry') {
+        throw new Error('Hook retry decisions are not supported in Phase 3.5 scaffolding');
+      }
 
-    const mergedContext = mergeEvaluationContext(
-      context,
-      extractedInputs,
-      operationContext,
-      precomputedVarAssignment
-    );
+      const mergedContext = mergeEvaluationContext(
+        context,
+        extractedInputs,
+        operationContext,
+        precomputedVarAssignment
+      );
 
-    let result = await dispatchDirective(directive, env, mergedContext);
-    result = await hookManager.runPost(directive, result, extractedInputs, env, operationContext);
-    return result;
+      let result = await dispatchDirective(directive, env, mergedContext);
+      result = await hookManager.runPost(directive, result, extractedInputs, env, operationContext);
+      return result;
+    });
   } catch (error) {
     // Enhance errors with directive trace
     const trace = env.getDirectiveTrace();
@@ -180,7 +180,6 @@ export async function evaluateDirective(
     }
     throw error;
   } finally {
-    contextManager.popOperation();
     // Always pop the directive from the trace
     env.popDirective();
   }

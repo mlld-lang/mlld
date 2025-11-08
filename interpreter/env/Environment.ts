@@ -52,7 +52,7 @@ import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { ExportManifest } from '../eval/import/ExportManifest';
-import { ContextManager } from './ContextManager';
+import { ContextManager, type PipelineContextSnapshot, type GuardContextSnapshot, type OperationContext } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { guardPreHookStub, taintPostHookStub } from '../hooks/stubs';
 
@@ -124,20 +124,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
   private nodeShadowEnv?: NodeShadowEnvironment; // VM-based Node.js shadow environment
-  
-  // Pipeline execution context
-  private pipelineContext?: {
-    stage: number;
-    totalStages: number;
-    currentCommand: string;
-    input: any;
-    previousOutputs: string[];
-    format?: string;
-    attemptCount?: number;
-    attemptHistory?: any[];
-    hint?: string | null;
-    hintHistory?: any[];
-  };
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -912,48 +898,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   /**
    * Set pipeline execution context
    */
-  setPipelineContext(context: {
-    stage: number;
-    totalStages: number;
-    currentCommand: string;
-    input: any;
-    previousOutputs: string[];
-    format?: string;
-    // Optional retry context data for ambient @ctx
-    attemptCount?: number;
-    attemptHistory?: any[];
-    hint?: string | null;
-    hintHistory?: string[];
-  }): void {
-    this.pipelineContext = context;
+  setPipelineContext(context: PipelineContextSnapshot): void {
+    this.contextManager.pushPipelineContext(context);
   }
   
   /**
    * Clear pipeline execution context
    */
   clearPipelineContext(): void {
-    this.pipelineContext = undefined;
+    this.contextManager.popPipelineContext();
+  }
+
+  updatePipelineContext(context: PipelineContextSnapshot): void {
+    this.contextManager.replacePipelineContext(context);
   }
   
   /**
    * Get current pipeline context
    */
-  getPipelineContext(): typeof this.pipelineContext {
-    // Check this environment first
-    if (this.pipelineContext) {
-      return this.pipelineContext;
-    }
-    
-    // Check parent environments
-    let current = this.parent;
-    while (current) {
-      if (current.pipelineContext) {
-        return current.pipelineContext;
-      }
-      current = current.parent;
-    }
-    
-    return undefined;
+  getPipelineContext(): PipelineContextSnapshot | undefined {
+    return this.contextManager.peekPipelineContext();
   }
   
   /**
@@ -1194,6 +1158,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getHookManager(): HookManager {
     return this.hookManager;
+  }
+
+  async withOpContext<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
+    return this.contextManager.withOperation(context, fn);
+  }
+
+  async withPipeContext<T>(
+    context: PipelineContextSnapshot,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withPipelineContext(context, fn);
+  }
+
+  async withGuardContext<T>(
+    context: GuardContextSnapshot,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withGuardContext(context, fn);
   }
 
   private registerBuiltinHooks(): void {
@@ -1516,51 +1498,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       try {
         // Prefer explicit @test_ctx override for deterministic tests
         const testCtxVar = this.getVariable('test_ctx');
-        const pctx = this.getPipelineContext();
-        const ctxValue = testCtxVar ? (testCtxVar.value as any) : (pctx ? {
-          try: (pctx as any).attemptCount || 1,
-          tries: (() => {
-            const outputs: any[] = (pctx as any).attemptHistory || [];
-            const hints: any[] = (pctx as any).hintHistory || [];
-            const arr: any[] = [];
-            const n = Math.max(outputs.length, hints.length);
-            for (let i = 0; i < n; i++) {
-              arr.push({ attempt: i + 1, result: 'retry', hint: hints[i], output: outputs[i] });
-            }
-            return arr;
-          })(),
-          stage: typeof pctx.stage === 'number' ? pctx.stage : 0,
-          isPipeline: true,
-          hint: (pctx as any).hint ?? null,
-          // Provide last output from previous stage attempts when available
-          lastOutput: Array.isArray((pctx as any).previousOutputs) && (pctx as any).previousOutputs.length > 0
-            ? (pctx as any).previousOutputs[(pctx as any).previousOutputs.length - 1]
-            : null,
-          // Auto-parse JSON-looking inputs so ctx.input.<field> works
-          input: (() => {
-            const raw = (pctx as any).input;
-            if (typeof raw === 'string') {
-              const trimmed = raw.trim();
-              if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-                  (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-                try {
-                  return JSON.parse(trimmed);
-                } catch {
-                  // ignore parse errors; keep raw
-                }
-              }
-            }
-            return raw;
-          })()
-        } : {
-          try: 1,
-          tries: [],
-          stage: 0,
-          isPipeline: false,
-          hint: null,
-          lastOutput: null,
-          input: null
-        });
+        const ctxValue = testCtxVar
+          ? (testCtxVar.value as any)
+          : this.contextManager.buildAmbientContext({
+              pipelineContext: this.getPipelineContext(),
+              securitySnapshot: this.getSecuritySnapshot()
+            });
         if (!('ctx' in finalParams)) {
           finalParams = { ...finalParams, ctx: Object.freeze(ctxValue) };
         }
