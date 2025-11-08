@@ -242,7 +242,7 @@ async function dispatchDirective(
       return await evaluateWhen(directive as any, env);
 
     case 'output':
-      return await evaluateOutput(directive, env);
+      return await evaluateOutput(directive, env, evaluationContext);
 
     case 'var':
       return await evaluateVar(directive, env);

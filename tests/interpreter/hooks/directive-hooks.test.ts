@@ -142,4 +142,54 @@ describe('directive hook infrastructure', () => {
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/skip output/);
     expect(observedTarget).toBe('out.txt');
   });
+
+  it('extracts /output source variables for pre-hooks', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'foo',
+      createSimpleTextVariable(
+        'foo',
+        'value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+
+    let captured: readonly unknown[] = [];
+    env.getHookManager().registerPre(async (directive, inputs) => {
+      if (directive.kind === 'output') {
+        captured = inputs;
+        return { action: 'abort', metadata: { reason: 'skip output' } };
+      }
+      return { action: 'continue' };
+    });
+
+    const directive = parseSync('/output @foo to "out.txt"')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/skip output/);
+
+    expect(captured.length).toBe(1);
+    expect((captured[0] as any)?.name).toBe('foo');
+  });
+
+  it('extracts /run command input for pre-hooks', async () => {
+    const env = createEnv();
+    let capturedCommand: string | undefined;
+
+    env.getHookManager().registerPre(async (directive, inputs) => {
+      if (directive.kind === 'run') {
+        const commandVar = inputs[0] as any;
+        capturedCommand = commandVar?.value;
+        return { action: 'abort', metadata: { reason: 'skip run' } };
+      }
+      return { action: 'continue' };
+    });
+
+    const directive = parseSync('/run { echo "hi" }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/skip run/);
+    expect(capturedCommand).toContain('echo');
+  });
 });

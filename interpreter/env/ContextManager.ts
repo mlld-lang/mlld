@@ -78,15 +78,15 @@ export class ContextManager {
     const currentOperation = this.peekOperation() ?? security?.operation;
     const pipelineFields = this.buildPipelineFields(pipeline);
 
-    const ctxValue: Record<string, unknown> = {
-      ...pipelineFields.root,
-      labels: security ? Array.from(security.labels) : [],
-      sources: security ? Array.from(security.sources) : [],
-      taintLevel: security?.taintLevel ?? 'unknown',
-      policy: security?.policy ?? null,
-      operation: currentOperation ?? null,
-      op: currentOperation ?? null
-    };
+  const ctxValue: Record<string, unknown> = {
+    ...pipelineFields.root,
+    labels: security ? Array.from(security.labels) : [],
+    sources: security ? Array.from(security.sources) : [],
+    taintLevel: security?.taintLevel ?? 'unknown',
+    policy: security?.policy ?? null,
+    operation: currentOperation ?? null,
+    op: currentOperation ?? null
+  };
 
     if (pipelineFields.pipe) {
       ctxValue.pipe = pipelineFields.pipe;

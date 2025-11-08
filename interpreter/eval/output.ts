@@ -10,6 +10,7 @@ import type {
   isEnvTarget,
   isResolverTarget
 } from '@core/types/output';
+import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
@@ -56,7 +57,8 @@ function extractSecurityDescriptor(value: unknown): SecurityDescriptor | undefin
  */
 export async function evaluateOutput(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: EvaluationContext
 ): Promise<EvalResult> {
   // Check if we're importing - skip execution if so
   if (env.getIsImporting()) {
@@ -116,7 +118,7 @@ export async function evaluateOutput(
       }
     } else {
       // Evaluate source content
-      content = await evaluateOutputSource(directive, env, sourceType);
+      content = await evaluateOutputSource(directive, env, sourceType, context);
     }
     
     // Apply format transformation if specified
@@ -202,7 +204,8 @@ export async function evaluateOutput(
 async function evaluateOutputSource(
   directive: DirectiveNode,
   env: Environment,
-  sourceType: string
+  sourceType: string,
+  context?: EvaluationContext
 ): Promise<string> {
   switch (sourceType) {
     case 'literal':
@@ -221,7 +224,7 @@ async function evaluateOutputSource(
       return String(source);
       
     case 'variable':
-      return await evaluateVariableSource(directive, env);
+      return await evaluateVariableSource(directive, env, context);
       
     case 'command':
       return await evaluateCommandSource(directive, env);
@@ -244,7 +247,8 @@ async function evaluateOutputSource(
  */
 async function evaluateVariableSource(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: EvaluationContext
 ): Promise<string> {
   // Check if the source has args, which indicates it's an invocation
   const source = directive.values.source;
@@ -252,10 +256,10 @@ async function evaluateVariableSource(
   
   if (hasArgs || directive.subtype === 'outputInvocation' || directive.subtype === 'outputExecInvocation') {
     // @output @template(args) to target or @output @command(args) to target
-    return await evaluateInvocationSource(directive, env);
+    return await evaluateInvocationSource(directive, env, context);
   } else {
     // @output @variable to target - simple variable reference
-    return await evaluateSimpleVariableSource(directive, env);
+    return await evaluateSimpleVariableSource(directive, env, context);
   }
 }
 
@@ -264,7 +268,8 @@ async function evaluateVariableSource(
  */
 async function evaluateInvocationSource(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: EvaluationContext
 ): Promise<string> {
   const identifierNodes = directive.values.source.identifier;
   const varName = (identifierNodes && Array.isArray(identifierNodes) && identifierNodes[0]?.identifier) 
@@ -277,7 +282,7 @@ async function evaluateInvocationSource(
   const args = directive.values.source.args || [];
   
   // Get the variable
-  const variable = env.getVariable(varName);
+  const variable = findExtractedVariable(context, varName) ?? env.getVariable(varName);
   
   if (!variable) {
     throw new MlldOutputError(
@@ -392,7 +397,8 @@ async function evaluateInvocationSource(
  */
 async function evaluateSimpleVariableSource(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: EvaluationContext
 ): Promise<string> {
   // The source can be either an object with identifier array or a direct node
   let varName: string;
@@ -420,7 +426,7 @@ async function evaluateSimpleVariableSource(
     );
   }
   
-  const variable = env.getVariable(varName);
+  const variable = findExtractedVariable(context, varName) ?? env.getVariable(varName);
   
   if (!variable) {
     throw new MlldOutputError(
@@ -511,6 +517,26 @@ async function evaluateSimpleVariableSource(
   } else {
     return String(value || '');
   }
+}
+
+function findExtractedVariable(
+  context: EvaluationContext | undefined,
+  name: string | undefined
+): Variable | undefined {
+  if (!context?.extractedInputs || !name) {
+    return undefined;
+  }
+  for (const candidate of context.extractedInputs) {
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      'name' in candidate &&
+      (candidate as Variable).name === name
+    ) {
+      return candidate as Variable;
+    }
+  }
+  return undefined;
 }
 
 /**
