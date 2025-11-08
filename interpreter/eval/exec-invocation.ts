@@ -11,7 +11,8 @@ import {
   createObjectVariable,
   createArrayVariable,
   createPrimitiveVariable,
-  createStructuredValueVariable
+  createStructuredValueVariable,
+  VariableMetadataUtils
 } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
@@ -27,6 +28,7 @@ import { StructuredValue as LegacyStructuredValue } from '@core/types/structured
 import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
+import { normalizeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 
 /**
@@ -94,6 +96,18 @@ class SimpleMetadataShelf {
 // Module-level shelf instance
 const metadataShelf = new SimpleMetadataShelf();
 
+function extractSecurityDescriptor(value: unknown): SecurityDescriptor | undefined {
+  if (!value) return undefined;
+  if (isStructuredValue(value)) {
+    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
+  }
+  if (typeof value === 'object') {
+    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
+    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  }
+  return undefined;
+}
+
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -102,12 +116,43 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  let resultSecurityDescriptor: SecurityDescriptor | undefined;
+  const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
+    if (!descriptor) {
+      return;
+    }
+    resultSecurityDescriptor = resultSecurityDescriptor
+      ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptor)
+      : descriptor;
+  };
+
+  const createParameterMetadata = (value: unknown) => {
+    const descriptor = extractSecurityDescriptor(value);
+    if (!descriptor) {
+      return { isSystem: true, isParameter: true };
+    }
+    return VariableMetadataUtils.applySecurityMetadata(
+      { isSystem: true, isParameter: true },
+      { existingDescriptor: descriptor }
+    );
+  };
+
   const createEvalResult = (
     value: unknown,
     targetEnv: Environment,
     options?: { type?: string; text?: string }
   ): EvalResult => {
     const wrapped = wrapExecResult(value, options);
+    if (resultSecurityDescriptor) {
+      const existing = wrapped.metadata?.security as SecurityDescriptor | undefined;
+      const merged = existing
+        ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
+        : resultSecurityDescriptor;
+      wrapped.metadata = {
+        ...(wrapped.metadata ?? {}),
+        security: merged
+      };
+    }
     return {
       value: wrapped,
       env: targetEnv,
@@ -871,6 +916,7 @@ export async function evaluateExecInvocation(
       // Create appropriate variable type based on actual data
       else {
         const preservedValue = argValue !== undefined ? argValue : argStringValue;
+        const paramMetadata = createParameterMetadata(preservedValue);
 
         if (isStructuredValue(preservedValue)) {
           paramVar = createStructuredValueVariable(
@@ -882,10 +928,7 @@ export async function evaluateExecInvocation(
               hasInterpolation: false,
               isMultiLine: false
             },
-            {
-              isSystem: true,
-              isParameter: true
-            }
+            paramMetadata
           );
         } else if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
           // Object type - preserve structure
@@ -899,10 +942,7 @@ export async function evaluateExecInvocation(
               hasInterpolation: false,
               isMultiLine: false
             },
-            {
-              isSystem: true,
-              isParameter: true
-            }
+            paramMetadata
           );
         } else if (Array.isArray(preservedValue)) {
           // Array type - preserve structure
@@ -916,10 +956,7 @@ export async function evaluateExecInvocation(
               hasInterpolation: false,
               isMultiLine: false
             },
-            {
-              isSystem: true,
-              isParameter: true
-            }
+            paramMetadata
           );
         } else if (typeof preservedValue === 'number' || typeof preservedValue === 'boolean' || preservedValue === null) {
           // Primitive types - create appropriate Variable type
@@ -932,10 +969,7 @@ export async function evaluateExecInvocation(
               hasInterpolation: false,
               isMultiLine: false
             },
-            {
-              isSystem: true,
-              isParameter: true
-            }
+            paramMetadata
           );
         } else {
           // String or undefined - use SimpleTextVariable
@@ -948,16 +982,32 @@ export async function evaluateExecInvocation(
               hasInterpolation: false,
               isMultiLine: false
             },
-            {
-              isSystem: true,
-              isParameter: true
-            }
+            paramMetadata
           );
         }
       }
       
       execEnv.setParameterVariable(paramName, paramVar);
     }
+  }
+
+  // Capture descriptors from executable definition and parameters
+  const descriptorPieces: SecurityDescriptor[] = [];
+  if (variable.metadata?.security) {
+    descriptorPieces.push(variable.metadata.security);
+  }
+  for (const paramName of params) {
+    const paramVar = execEnv.getVariable(paramName);
+    if (paramVar?.metadata?.security) {
+      descriptorPieces.push(paramVar.metadata.security);
+    }
+  }
+  if (descriptorPieces.length > 0) {
+    resultSecurityDescriptor =
+      descriptorPieces.length === 1
+        ? descriptorPieces[0]
+        : env.mergeSecurityDescriptors(...descriptorPieces);
+    env.recordSecurityDescriptor(resultSecurityDescriptor);
   }
   
   let result: string;
@@ -1752,7 +1802,22 @@ export async function evaluateExecInvocation(
       result = structured;
     }
   }
+
+  mergeResultDescriptor(extractSecurityDescriptor(result));
   
+  if (resultSecurityDescriptor) {
+    const structured = wrapExecResult(result);
+    const existing = structured.metadata?.security as SecurityDescriptor | undefined;
+    const merged = existing
+      ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
+      : resultSecurityDescriptor;
+    structured.metadata = {
+      ...(structured.metadata ?? {}),
+      security: merged
+    };
+    result = structured;
+  }
+
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {
@@ -1824,7 +1889,21 @@ export async function evaluateExecInvocation(
       );
       
       // Still need to handle other withClause features (trust, needs)
-      return applyWithClause(wrapPipelineResult(pipelineResult), { ...node.withClause, pipeline: undefined }, execEnv);
+      let pipelineValue = wrapPipelineResult(pipelineResult);
+      const pipelineDescriptor = pipelineValue.metadata?.security as SecurityDescriptor | undefined;
+      const combinedDescriptor = pipelineDescriptor
+        ? (resultSecurityDescriptor
+            ? env.mergeSecurityDescriptors(pipelineDescriptor, resultSecurityDescriptor)
+            : pipelineDescriptor)
+        : resultSecurityDescriptor;
+      if (combinedDescriptor) {
+        pipelineValue.metadata = {
+          ...(pipelineValue.metadata ?? {}),
+          security: combinedDescriptor
+        };
+        mergeResultDescriptor(combinedDescriptor);
+      }
+      return applyWithClause(pipelineValue, { ...node.withClause, pipeline: undefined }, execEnv);
     } else {
       return applyWithClause(result, node.withClause, execEnv);
     }

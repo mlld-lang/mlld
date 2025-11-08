@@ -29,6 +29,7 @@ import { InterpolationContext, EscapingStrategyFactory } from './interpolation-c
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { normalizeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { classifyShellValue } from '@interpreter/utils/shell-value';
 import * as shellQuote from 'shell-quote';
 
@@ -853,13 +854,32 @@ interface InterpolationNode {
   pipes?: any[];
 }
 
+interface InterpolateOptions {
+  collectSecurityDescriptor?: (descriptor: SecurityDescriptor) => void;
+}
+
+function extractInterpolationDescriptor(value: unknown): SecurityDescriptor | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (isStructuredValue(value)) {
+    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
+  }
+  if (typeof value === 'object') {
+    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
+    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  }
+  return undefined;
+}
+
 /**
  * String interpolation helper - resolves {{variables}} in content
  */
 export async function interpolate(
   nodes: InterpolationNode[],
   env: Environment,
-  context: InterpolationContext = InterpolationContext.Default
+  context: InterpolationContext = InterpolationContext.Default,
+  options?: InterpolateOptions
 ): Promise<string> {
   logger.info('[INTERPOLATE] interpolate() called');
   
@@ -906,6 +926,12 @@ export async function interpolate(
       updateQuoteState(value);
     }
   };
+  const collectDescriptor = (descriptor?: SecurityDescriptor): void => {
+    if (!descriptor) {
+      return;
+    }
+    options?.collectSecurityDescriptor?.(descriptor);
+  };
   
   for (const node of nodes) {
     
@@ -918,6 +944,7 @@ export async function interpolate(
       // Handle function calls in templates
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as any, env);
+      collectDescriptor(extractInterpolationDescriptor(result.value));
       if (isStructuredValue(result.value) && result.value.type === 'array' && Array.isArray(result.value.data)) {
         const arrayData = result.value.data as unknown[];
         const allSimple = arrayData.every(item => item === null || item === undefined || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean');
@@ -960,6 +987,7 @@ export async function interpolate(
         pushPart(`{{${varName}}}`); // Keep unresolved with {{}} syntax
         continue;
       }
+      collectDescriptor(variable.metadata?.security as SecurityDescriptor | undefined);
       
       /**
        * Extract Variable value for string interpolation
@@ -968,6 +996,7 @@ export async function interpolate(
        */
       const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
       const value = await resolveVariable(variable, env, ResolutionContext.StringInterpolation);
+      collectDescriptor(extractInterpolationDescriptor(value));
       
       // Convert final value to string
       let stringValue: string;
@@ -1134,7 +1163,7 @@ export async function interpolate(
           if (fieldName === 'hint') {
             if (typeof value === 'object' && value !== null) {
               if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
-                value = await interpolate((value as any).content as any[], env, context);
+                value = await interpolate((value as any).content as any[], env, context, options);
               } else if ('type' in (value as any)) {
                 const { extractVariableValue } = await import('../utils/variable-resolution');
                 value = await extractVariableValue(value as any, env);
@@ -1254,7 +1283,7 @@ export async function interpolate(
         stringValue = asText(value);
       } else if (typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
         // Handle wrapped strings (quotes, backticks, brackets)
-        stringValue = await interpolate(value.content as InterpolationNode[], env, context);
+        stringValue = await interpolate(value.content as InterpolationNode[], env, context, options);
       } else if (typeof value === 'object' && 'type' in value) {
         const nodeValue = value as Record<string, unknown>;
         if (process.env.MLLD_DEBUG === 'true') {
@@ -1404,6 +1433,7 @@ export async function interpolate(
       // Handle exec invocation nodes in interpolation
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as ExecInvocation, env);
+      collectDescriptor(extractInterpolationDescriptor(result.value));
       const stringValue = asText(result.value);
       
       // Apply context-appropriate escaping
@@ -1435,7 +1465,7 @@ export async function interpolate(
           const keyVar = importer.createVariableFromValue(`${varName}_key`, key, 'template-for', undefined, { env });
           childEnv.setVariable(`${varName}_key`, keyVar);
         }
-        const bodyStr = await interpolate((node as any).body as any[], childEnv, InterpolationContext.Template);
+        const bodyStr = await interpolate((node as any).body as any[], childEnv, InterpolationContext.Template, options);
         pushPart(bodyStr);
       }
     } else if (node.type === 'TemplateInlineShow') {

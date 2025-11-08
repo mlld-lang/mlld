@@ -5,6 +5,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { evaluateVar } from '@interpreter/eval/var';
+import { evaluateExe } from '@interpreter/eval/exe';
 import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { ObjectReferenceResolver } from '@interpreter/eval/import/ObjectReferenceResolver';
 import { VariableMetadataUtils } from '@core/types/variable';
@@ -158,5 +159,32 @@ describe('Security metadata propagation', () => {
     expect(fileEffect).toBeDefined();
     expect(fileEffect?.path).toContain('out.txt');
     expect(fileEffect?.capability?.security.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('propagates /exe labels to executable definitions and invocation results', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const exeDirective = parseSync('/exe secret @emit() = js { return "hello"; }')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const execVar = env.getVariable('emit');
+    expect(execVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+
+    const invocationDirective = parseSync('/var @result = @emit()')[0] as DirectiveNode;
+    await evaluateVar(invocationDirective, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('merges descriptors during template interpolation', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const secretDirective = parseSync('/var secret @token = "shh"')[0] as DirectiveNode;
+    await evaluateVar(secretDirective, env);
+
+    const templateDirective = parseSync('/var @message = `Token: @token`')[0] as DirectiveNode;
+    await evaluateVar(templateDirective, env);
+
+    const messageVar = env.getVariable('message');
+    expect(messageVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
   });
 });

@@ -145,8 +145,50 @@ export function makeSecurityDescriptor(options?: {
   );
 }
 
+type SecurityDescriptorLike =
+  | SecurityDescriptor
+  | SerializedSecurityDescriptor
+  | (SecurityDescriptor & { labels?: unknown; sources?: unknown })
+  | undefined
+  | null;
+
+export function normalizeSecurityDescriptor(
+  input: SecurityDescriptorLike
+): SecurityDescriptor | undefined {
+  if (!input) {
+    return undefined;
+  }
+
+  const candidate = input as SecurityDescriptor;
+  const labels = (candidate as any).labels;
+  const sources = (candidate as any).sources;
+  const hasIterableLabels = Array.isArray(labels) && typeof labels.forEach === 'function';
+  const hasIterableSources = Array.isArray(sources) && typeof sources.forEach === 'function';
+
+  if (hasIterableLabels && hasIterableSources) {
+    return candidate;
+  }
+
+  const normalizedLabels =
+    Array.isArray(labels) ? (labels as DataLabel[]) :
+    labels !== undefined && labels !== null ? [labels as DataLabel] :
+    undefined;
+  const normalizedSources =
+    Array.isArray(sources) ? (sources as string[]) :
+    sources !== undefined && sources !== null ? [sources as string] :
+    undefined;
+
+  return makeSecurityDescriptor({
+    labels: normalizedLabels,
+    taintLevel: (candidate as any).taintLevel,
+    sources: normalizedSources,
+    capability: (candidate as any).capability,
+    policyContext: (candidate as any).policyContext
+  });
+}
+
 export function mergeDescriptors(
-  ...descriptors: Array<SecurityDescriptor | undefined>
+  ...descriptors: Array<SecurityDescriptorLike>
 ): SecurityDescriptor {
   const labelSet = new Set<DataLabel>();
   const sourceSet = new Set<string>();
@@ -155,7 +197,8 @@ export function mergeDescriptors(
   let capability: CapabilityKind | undefined;
   let policyContext: Record<string, unknown> | undefined;
 
-  for (const descriptor of descriptors) {
+  for (const incoming of descriptors) {
+    const descriptor = normalizeSecurityDescriptor(incoming);
     if (!descriptor) continue;
 
     descriptor.labels.forEach(label => labelSet.add(label));

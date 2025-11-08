@@ -4,13 +4,19 @@ import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
-import { createExecutableVariable, createSimpleTextVariable, type VariableSource } from '@core/types/variable';
+import {
+  createExecutableVariable,
+  createSimpleTextVariable,
+  VariableMetadataUtils,
+  type VariableSource
+} from '@core/types/variable';
 // import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import * as path from 'path';
+import { makeSecurityDescriptor, type DataLabel, type CapabilityContext } from '@core/types/security';
 
 function buildTemplateAstFromContent(content: string): any[] {
   const ast: any[] = [];
@@ -172,11 +178,28 @@ export async function evaluateExe(
     throw new Error('Exec directive identifier must be a simple command name');
   }
   
-  let executableDef: ExecutableDefinition;
+  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+  env.pushSecurityContext({
+    descriptor: makeSecurityDescriptor({ labels: securityLabels }),
+    kind: 'exe',
+    metadata: {
+      identifier,
+      filePath: env.getCurrentFilePath()
+    },
+    operation: {
+      kind: 'exe',
+      identifier,
+      location: directive.location
+    }
+  });
+
+  let capabilityContext: CapabilityContext | undefined;
+  try {
+    let executableDef: ExecutableDefinition;
   
   
-  if (directive.subtype === 'exeCommand') {
-    const params = directive.values?.params || [];
+    if (directive.subtype === 'exeCommand') {
+      const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     const withClause = directive.values?.withClause;
 
@@ -575,36 +598,47 @@ export async function evaluateExe(
     metadata.capturedShadowEnvs = env.captureAllShadowEnvs();
   }
 
-  // Only capture module environment when we're evaluating a module for import
-  if (env.getIsImporting()) {
-    metadata.capturedModuleEnv = env.captureModuleEnvironment();
-  }
+    // Only capture module environment when we're evaluating a module for import
+    if (env.getIsImporting()) {
+      metadata.capturedModuleEnv = env.captureModuleEnvironment();
+    }
 
-  const executableTypeForVariable = executableDef.type === 'code' ? 'code' : 'command';
+    const executableTypeForVariable = executableDef.type === 'code' ? 'code' : 'command';
 
-  const variable = createExecutableVariable(
-    identifier,
-    executableTypeForVariable,
-    '', // Template will be filled from executableDef
-    executableDef.paramNames || [],
-    language,
-    source,
-        metadata
+    capabilityContext = env.popSecurityContext();
+    const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      existingDescriptor: capabilityContext?.security,
+      capability: capabilityContext
+    });
+
+    const variable = createExecutableVariable(
+      identifier,
+      executableTypeForVariable,
+      '', // Template will be filled from executableDef
+      executableDef.paramNames || [],
+      language,
+      source,
+      metadataWithSecurity
     );
 
-  // Set the actual template/command content
-  if (executableDef.type === 'command') {
-    variable.value.template = executableDef.commandTemplate;
-  } else if (executableDef.type === 'code') {
-    variable.value.template = executableDef.codeTemplate;
-  } else if (executableDef.type === 'template') {
-    variable.value.template = executableDef.template;
+    // Set the actual template/command content
+    if (executableDef.type === 'command') {
+      variable.value.template = executableDef.commandTemplate;
+    } else if (executableDef.type === 'code') {
+      variable.value.template = executableDef.codeTemplate;
+    } else if (executableDef.type === 'template') {
+      variable.value.template = executableDef.template;
+    }
+    
+    env.setVariable(identifier, variable);
+    
+    // Return the executable definition (no output for variable definitions)
+    return { value: executableDef, env };
+  } finally {
+    if (!capabilityContext) {
+      env.popSecurityContext();
+    }
   }
-  
-  env.setVariable(identifier, variable);
-  
-  // Return the executable definition (no output for variable definitions)
-  return { value: executableDef, env };
 }
 
 /**

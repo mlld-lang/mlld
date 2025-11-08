@@ -19,6 +19,21 @@ import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
+import { makeSecurityDescriptor, normalizeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
+
+function extractSecurityDescriptor(value: unknown): SecurityDescriptor | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (isStructuredValue(value)) {
+    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
+  }
+  if (typeof value === 'object') {
+    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
+    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  }
+  return undefined;
+}
 
 /**
  * Evaluates @output directive with enhanced syntax.
@@ -54,7 +69,20 @@ export async function evaluateOutput(
   const format = directive.meta?.format;
   // Removed: isLegacy flag - bracket syntax no longer supported
 
-
+  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+  env.pushSecurityContext({
+    descriptor: makeSecurityDescriptor({ labels: securityLabels }),
+    kind: 'output',
+    metadata: {
+      filePath: env.getCurrentFilePath()
+    },
+    operation: {
+      kind: 'output',
+      subtype: directive.subtype,
+      targetType,
+      location: directive.location
+    }
+  });
 
   try {
     // Get the content to output
@@ -163,6 +191,8 @@ export async function evaluateOutput(
       );
     }
     throw error;
+  } finally {
+    env.popSecurityContext();
   }
 }
 
@@ -257,6 +287,14 @@ async function evaluateInvocationSource(
     );
   }
   
+  if (variable.metadata?.security) {
+    env.recordSecurityDescriptor(variable.metadata.security);
+  }
+  
+  if (variable.metadata?.security) {
+    env.recordSecurityDescriptor(variable.metadata.security);
+  }
+  
   // For any variable with args, treat it as an invocation
   if (args.length > 0) {
     // Create an ExecInvocation node and use the standard evaluator
@@ -276,6 +314,7 @@ async function evaluateInvocationSource(
     // Use the standard exec invocation evaluator
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execNode as any, env);
+    env.recordSecurityDescriptor(extractSecurityDescriptor(result.value));
     return String(result.value);
     
   } else if (isTextLike(variable)) {
@@ -496,6 +535,10 @@ async function evaluateCommandSource(
     );
   }
   
+  if (cmdVariable.metadata?.security) {
+    env.recordSecurityDescriptor(cmdVariable.metadata.security);
+  }
+  
   // Create a child environment for parameter substitution
   const cmdChildEnv = env.createChild();
   
@@ -524,6 +567,7 @@ async function evaluateCommandSource(
   
   // Execute the command
   const cmdResult = await evaluate(cmdVariable.value, cmdChildEnv);
+  env.recordSecurityDescriptor(extractSecurityDescriptor(cmdResult.value));
   return String(cmdResult.value || '');
 }
 
@@ -540,6 +584,7 @@ async function evaluateExecSource(
   if (execInvocationNode && execInvocationNode.type === 'ExecInvocation') {
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocationNode, env);
+    env.recordSecurityDescriptor(extractSecurityDescriptor(result.value));
     return String(result.value);
   } else {
     throw new MlldOutputError(

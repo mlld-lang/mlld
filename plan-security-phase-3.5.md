@@ -10,11 +10,11 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 - Lock the behavior with unit tests and fixtures that follow `docs/dev/TESTS.md`.
 
 ## Current State & Gaps
-- `/exe` evaluator and exec invocation paths still bypass the descriptor utilities; declarations do not accept operation labels, and invocations drop existing metadata.
-- Template interpolation merges string output but not descriptors, so taint/label propagation halts inside inline templates.
-- `/export` and `/output` evaluators rely on ad-hoc metadata assignment; they need to reuse the same helpers as `/run` and `/show`.
-- Hook infrastructure is nominal: evaluators call security helpers directly, `@ctx` aliases are populated piecemeal, and there is no shared pre/post hook execution path.
-- Tests prove descriptor propagation for covered directives, but no suite exercises hook ordering, context namespaces, or the missing directive/effect cases.
+- ✅ `/exe` declarations and invocations now reuse the shared descriptor helpers: definitions accept label lists, carry capability contexts via `VariableMetadataUtils`, and invocations merge descriptors from the executable + arguments + pipeline retries. Regression coverage lives in `tests/interpreter/security-metadata.test.ts`.
+- ✅ Template interpolation collects contributor descriptors via `interpolateWithSecurity`, so any inline text that calls variables or execs inherits the same capability snapshot as `/var` assignments.
+- ✅ `/export` and `/output` run inside a security context and record descriptor/capability metadata for emitted artifacts; structured effects inherit the merged snapshot.
+- Hook infrastructure remains manual: evaluators push/pop security scopes themselves, there is no hook manager, and `@ctx` namespaces are still composed ad-hoc.
+- Tests cover descriptor propagation for the newly wired directives, but no suite exercises hook ordering, ContextManager lifetimes, or guard/taint hook coordination yet.
 
 ## Scope
 - Complete the outstanding evaluator integrations noted in `plan-security.md` Phase 3.5 Part A.
@@ -43,15 +43,15 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 
 ## Workstreams (aligned with `plan-security.md`)
 
-### Part A – Close Phase 3 Gaps
-- `/exe` declarations: parse optional operation labels, store them in executable metadata, and ensure capability descriptors attach during definition.
-- `/exe` invocations: merge caller/input descriptors with function metadata so results carry accumulated labels.
-- Interpolation (`interpreter/eval/interpolate.ts`): merge descriptors from embedded variables and literal fragments so inline templates inherit taint.
-- `/export` and `/output`: reuse the descriptor application helpers so emitted variables/files include capability metadata.
-- Tests: add fixtures validating `/exe` label parsing, invocation propagation, interpolation merges, and `/export`/`/output` metadata round-trips.
+### Part A – Close Phase 3 Gaps ✅
+- `/exe` declarations: DONE (`interpreter/eval/exe.ts` now pushes security context around executable creation, applies metadata via `VariableMetadataUtils`, and records operation labels).
+- `/exe` invocations: DONE (`interpreter/eval/exec-invocation.ts` merges descriptors from executables, parameters, nested pipelines, and structured outputs; see new helpers around `extractSecurityDescriptor` and `mergeResultDescriptor`).
+- Interpolation: DONE (`interpreter/eval/var.ts` + `interpreter/core/interpreter.ts` collect descriptors during interpolation and hand them to `/var` metadata).
+- `/export` and `/output`: DONE (both directives wrap execution in a security context and record descriptor snapshots before emitting effects).
+- Tests: Added to `tests/interpreter/security-metadata.test.ts` plus targeted integration suites (`shadow-env-basic-import`, `imports/shadow-environments`) to gate regressions.
 
 ### Part B – Hook Infrastructure
-- Implement `HookManager` inside the Environment package with `registerPreHook`, `registerPostHook`, and `runHooksAroundDirective` helpers. Registration order is fixed; there are no priority tags or external APIs.
+- Implement `HookManager` inside the Environment package with `registerPreHook`, `registerPostHook`, and `runHooksAroundDirective` helpers. Registration order is fixed; there are no priority tags or external APIs. _Implementation note_: hook handlers must receive both the raw `DirectiveNode` and a resolved `OperationContext` (see `spec-hooks.md`) so guard hooks can match on type/subtype/labels without re-deriving metadata.
 - Introduce `extractDirectiveInputs()` (per spec) so pre-hooks see normalized inputs without duplicating evaluator logic.
 - Update `evaluateDirective()` to:
   1. Build the operation context via helper function + `ContextManager`.
@@ -63,16 +63,15 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 - Tests: unit tests with mock hooks that record call order; interpreter tests ensuring hooks run once per directive.
 
 ### Part C – Context Manager & Variable `.ctx`
-- Add the dedicated `ContextManager` helper that owns stacks for `op`, `pipe`, and `guard` namespaces plus alias emission (`@ctx.operation`, `@ctx.try`, etc.).
-- Provide Environment-scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) that push/pop through the manager so evaluators never manipulate stacks directly.
-- Populate variable `.ctx` metadata using the same capability snapshot helper used by hooks; include security labels, taintLevel, sources, and structural metadata (length, tokens) per the spec.
+- Provide Environment-scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) that push/pop through the manager so evaluators never manipulate stacks directly. _Architectural reminder_: pipelines and guards can nest arbitrarily; the manager needs independent stacks per namespace plus legacy alias mirrors to keep `@ctx.operation`/`@ctx.try` working until removal.
+- Populate variable `.ctx` metadata using the same capability snapshot helper used by hooks; include security labels, taintLevel, sources, and structural metadata (length, tokens) per the spec. Store references to the originating `CapabilityContext` so guard hooks can diff before/after states when they fire inside pipelines.
 - Update field-access evaluation so `.ctx.*` paths resolve lazily and cache values.
 - Tests: unit coverage for context nesting and alias behavior; fixtures that inspect `.ctx` values inside scripts.
 
 ### Part D – Taint Tracking via Hooks
-- Move descriptor merging logic into a taint post-hook that receives the directive result plus evaluated inputs and writes the merged descriptor back via `VariableMetadataUtils`.
+- Move descriptor merging logic into a taint post-hook that receives the directive result plus evaluated inputs and writes the merged descriptor back via `VariableMetadataUtils`. _Implementation note_: taint hooks must understand multi-result directives (pipelines, parallel groups, effects) and rewrite structured outputs without rebasing `StructuredValue.metadata`.
 - Remove evaluator-specific `pushSecurityContext` calls; evaluators now simply describe their inputs/outputs, and the post-hook applies canonical logic.
-- Ensure pipelines feed stage metadata through hooks, including retries and parallel groups; reuse existing pipeline retry contexts instead of creating new abstractions.
+- Ensure pipelines feed stage metadata through hooks, including retries and parallel groups; reuse existing pipeline retry contexts instead of creating new abstractions. Hook context should capture retry counters so guards and taint hooks observe the same `@ctx.pipe.try` values.
 - Tests: extend `tests/interpreter/security-metadata.test.ts` (or add a sibling) to confirm the post-hook updates descriptors identically to the previous evaluator-specific logic.
 
 ### Validation & Fixtures
@@ -81,11 +80,11 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
   - Exercise `/exe` labels and invocations.
   - Demonstrate interpolation descriptor merging.
   - Capture hook execution side effects (e.g., logging order).
-- Follow `docs/dev/TESTS.md`: unique filenames, `skip.md` when necessary, and `npm run build:fixtures` as part of validation.
+- Follow `docs/dev/TESTS.md`: unique filenames, `skip.md` when necessary, and `npm run build:fixtures` as part of validation. Guard-facing fixtures should include structured outputs (arrays/objects) to verify descriptor metadata survives JSON conversions.
 - Required runs: `npm test`, targeted unit suites for hooks/context, plus interpreter fixture subsets covering the new cases.
 
 ## Exit Criteria
-- `/exe`, interpolation, `/export`, and `/output` evaluators reuse the shared descriptor helpers, and fixtures prove the propagation.
+- `/exe`, interpolation, `/export`, and `/output` evaluators reuse the shared descriptor helpers, and fixtures prove the propagation. ✅
 - Hook execution lives in `evaluateDirective()` with fixed internal ordering; there are no evaluator-specific hook calls.
 - Environment-managed `@ctx` namespaces (with aliases) behave deterministically and match `spec-hooks.md`.
 - Variable `.ctx` mirrors the capability metadata seen by hooks.

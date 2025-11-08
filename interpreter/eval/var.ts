@@ -22,7 +22,7 @@ import {
   createStructuredValueVariable
 } from '@core/types/variable';
 import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/security';
-import { makeSecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, normalizeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
@@ -38,6 +38,20 @@ function valueToString(value: unknown): string {
   if (isStructuredValue(value)) return asText(value);
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+function extractSecurityDescriptorFromValue(value: unknown): SecurityDescriptor | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (isStructuredValue(value)) {
+    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
+  }
+  if (typeof value === 'object') {
+    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
+    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  }
+  return undefined;
 }
 
 /**
@@ -139,6 +153,37 @@ export async function evaluateVar(
       location: directive.location
     }
   });
+
+  let resolvedSecurityDescriptor: SecurityDescriptor | undefined;
+  const mergeResolvedDescriptor = (descriptor?: SecurityDescriptor): void => {
+    if (!descriptor) {
+      return;
+    }
+    resolvedSecurityDescriptor = resolvedSecurityDescriptor
+      ? env.mergeSecurityDescriptors(resolvedSecurityDescriptor, descriptor)
+      : descriptor;
+  };
+  const interpolateWithSecurity = async (
+    nodes: any,
+    interpolationContext: InterpolationContext = InterpolationContext.Default
+  ): Promise<string> => {
+    const descriptors: SecurityDescriptor[] = [];
+    const text = await interpolate(nodes, env, interpolationContext, {
+      collectSecurityDescriptor: collected => {
+        if (collected) {
+          descriptors.push(collected);
+        }
+      }
+    });
+    if (descriptors.length > 0) {
+      const merged =
+        descriptors.length === 1
+          ? descriptors[0]
+          : env.mergeSecurityDescriptors(...descriptors);
+      mergeResolvedDescriptor(merged);
+    }
+    return text;
+  };
 
   const finishVariable = (variable: Variable): Variable => {
     const capabilityContext = env.popSecurityContext();
@@ -526,11 +571,11 @@ export async function evaluateVar(
         });
       } else {
         // Double colon uses @var interpolation - interpolate now
-        resolvedValue = await interpolate(valueNode, env);
+        resolvedValue = await interpolateWithSecurity(valueNode);
       }
     } else {
       // Template or string content - need to interpolate
-        resolvedValue = await interpolate(valueNode, env);
+        resolvedValue = await interpolateWithSecurity(valueNode);
     }
     
   } else if (valueNode.type === 'Text' && 'content' in valueNode) {
@@ -643,8 +688,10 @@ export async function evaluateVar(
     if (process.env.MLLD_DEBUG === 'true') {
       logger.debug('var.ts: Default case for valueNode:', { valueNode });
     }
-    resolvedValue = await interpolate([valueNode], env);
+    resolvedValue = await interpolateWithSecurity([valueNode]);
   }
+
+  mergeResolvedDescriptor(extractSecurityDescriptorFromValue(resolvedValue));
 
   // Create and store the appropriate variable type
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
@@ -1020,6 +1067,9 @@ export async function evaluateVar(
     variable = createStructuredValueVariable(identifier, result, source, structuredMetadata);
   }
   
+  if (resolvedSecurityDescriptor) {
+    env.recordSecurityDescriptor(resolvedSecurityDescriptor);
+  }
   const finalVar = finishVariable(variable);
   
   // Debug logging for primitive values
