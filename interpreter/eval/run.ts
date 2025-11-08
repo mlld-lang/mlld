@@ -1,6 +1,6 @@
 import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
-import type { EvalResult } from '../core/interpreter';
+import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
@@ -11,6 +11,8 @@ import { deriveCommandTaint } from '@core/security/taint';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
+import type { Variable } from '@core/types/variable';
+import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
@@ -135,7 +137,8 @@ function determineTaintLevel(nodes: MlldNode[], env: Environment): TaintLevel {
 export async function evaluateRun(
   directive: DirectiveNode,
   env: Environment,
-  callStack: string[] = []
+  callStack: string[] = [],
+  context?: EvaluationContext
 ): Promise<EvalResult> {
   // Check if we're importing - skip execution if so
   if (env.getIsImporting()) {
@@ -205,8 +208,9 @@ export async function evaluateRun(
       throw new Error('Run command directive missing command');
     }
     
+    const preExtractedCommand = getPreExtractedRunCommand(context);
     // Interpolate command (resolve variables) with shell command context
-    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+    const command = preExtractedCommand ?? await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
     const commandTaint = deriveCommandTaint({ command });
     env.recordSecurityDescriptor(
       makeSecurityDescriptor({
@@ -521,7 +525,7 @@ export async function evaluateRun(
         throw new Error('Run exec directive identifier must be a command reference');
       }
       
-      const variable = env.getVariable(commandName);
+      const variable = getPreExtractedExec(context, commandName) ?? env.getVariable(commandName);
       if (!variable || !isExecutableVariable(variable)) {
         throw new Error(`Executable variable not found: ${commandName}`);
       }
@@ -832,4 +836,43 @@ export async function evaluateRun(
     popContext();
     throw error;
   }
+}
+
+function getPreExtractedRunCommand(context?: EvaluationContext): string | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const input of context.extractedInputs) {
+    if (
+      input &&
+      typeof input === 'object' &&
+      'name' in input &&
+      (input as any).name === '__run_command__' &&
+      typeof (input as any).value === 'string'
+    ) {
+      return (input as any).value as string;
+    }
+  }
+  return undefined;
+}
+
+function getPreExtractedExec(
+  context: EvaluationContext | undefined,
+  name: string
+): ExecutableVariable | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const input of context.extractedInputs) {
+    if (
+      input &&
+      typeof input === 'object' &&
+      'name' in input &&
+      (input as Variable).name === name &&
+      (input as Variable).type === 'executable'
+    ) {
+      return input as ExecutableVariable;
+    }
+  }
+  return undefined;
 }

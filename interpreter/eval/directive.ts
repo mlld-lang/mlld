@@ -233,7 +233,7 @@ async function dispatchDirective(
       return await evaluatePath(directive, env);
 
     case 'run':
-      return await evaluateRun(directive, env);
+      return await evaluateRun(directive, env, [], evaluationContext);
 
     case 'import':
       return await evaluateImport(directive, env);
