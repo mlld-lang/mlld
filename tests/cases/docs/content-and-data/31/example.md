@@ -1,22 +1,17 @@
->> Load environment-specific config
-/import { NODE_ENV } from @input
-/var @env = @NODE_ENV || "development"
+>> Load files and check context limits
+/var @files = <src/**/*.ts>
 
->> Load base config and environment overrides
-/var @baseConfig = <config/base.json>
-/var @envConfig = <config/@env.json>
-
->> Merge configurations using JS
-/var @config = js {
-  return Object.assign(
-    {},
-    @baseConfig.json,
-    @envConfig.json,
-    {
-      environment: @env,
-      timestamp: @now
-    }
-  )
+>> Define filter for large files (over 2000 tokens)
+/exe @filterLarge(files) = js {
+  return files.filter(f => f.tokest > 2000)
 }
+/var @large = @filterLarge(@files)
 
-/output @config to "runtime-config.json" as json
+>> Calculate total tokens
+/exe @sumTokens(files) = js {
+  return files.reduce((sum, f) => sum + (f.tokest || 0), 0)
+}
+/var @totalTokens = @sumTokens(@files)
+
+/show `Found @large.length files over 2000 tokens`
+/show `Total estimated tokens: @totalTokens`

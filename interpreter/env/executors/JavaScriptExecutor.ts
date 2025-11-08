@@ -4,6 +4,7 @@ import { MlldCommandExecutionError } from '@core/errors';
 import { createMlldHelpers, prepareParamsForShadow } from '../variable-proxy';
 import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
 import { enhanceJSError } from '@core/errors/patterns/init';
+import { addImplicitReturn } from './implicit-return';
 
 export interface ShadowEnvironment {
   /**
@@ -101,22 +102,7 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       }
 
       // Build the function body with mlld built-ins
-      let functionBody = code;
-      
-      // Check if this is a single-line expression that should be auto-returned
-      const trimmedCode = code.trim();
-      const hasNoReturn = !code.includes('return');
-      const statementKeywordPattern = /\b(const|let|var|function|class|if|for|while|switch|try|catch|await|throw)\b/;
-      const looksLikeStatement =
-        code.includes(';') ||
-        trimmedCode.startsWith('console.log') ||
-        statementKeywordPattern.test(trimmedCode) ||
-        trimmedCode.includes('=>');
-      
-      // For single-line expressions without explicit return, wrap in return statement
-      if (hasNoReturn && !looksLikeStatement) {
-        functionBody = `return (${functionBody})`;
-      }
+      let functionBody = addImplicitReturn(code);
       
       // Then prepend mlld built-in values to the function body
       if (!params || !params['mlld_now']) {

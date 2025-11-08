@@ -1,11 +1,18 @@
->> Files
-# templates/welcome.att   -> Hello @name! Title: @title
-# templates/note.mtt      -> Note: {{body}}
+>> .att files (default for 5+ lines)
+>> file: templates/deploy.att
+# Deployment: @env
+Status: @status
+Config: <@base/config/@env.json>
 
->> Define executables from files
-/exe @welcome(name, title) = template "./templates/welcome.att"
-/exe @note(body)           = template "./templates/note.mtt"
+>> usage
+/exe @deploy(env, status) = template "./templates/deploy.att"
+/show @deploy("prod", "success")
 
->> Invoke with parameters
-/show @welcome("Alice", "Engineer")
-/show @note("Bring snacks")
+>> .mtt files (Discord/social only)
+>> file: templates/discord.mtt
+🚨 Alert <@{{adminId}}>!
+Reporter: <@{{reporterId}}>
+Severity: {{severity}}
+
+>> usage
+/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"

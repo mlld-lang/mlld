@@ -1,12 +1,26 @@
-/var @name = "Alice"
-/var @user = {"role": "admin", "id": 123}
+>> Double-colon (default)
+/var @msg = ::Hello @name!::
+/var @doc = ::Use `npm test` before @env::
+/var @report = ::
+Status: @status
+Config: <@base/config.json>
+Data: @data|@json
+::
 
->> Backticks (primary template syntax)
-/var @msg1 = `Hello @name!`
-/var @msg2 = `User @user.role has ID @user.id`
+>> Backticks (alternative)
+/var @msg = `Hello @name!`
+/var @multi = `
+Line 1: @var
+Line 2: @other
+`
 
->> Double colon for escaping backticks
-/var @code = ::Use `mlld run` with user @name::
+>> Double quotes (single-line only)
+/var @path = "@base/files/@filename"
+/run {echo "Processing @file"}
 
->> Triple colon for many @ symbols (use {{}} syntax)
-/var @social = :::Hey @{{name}}, check out {{user.role}}!:::
+>> Triple-colon (Discord/social only)
+/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
+/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
+
+>> Single quotes (literal)
+/var @literal = '@name stays literal'

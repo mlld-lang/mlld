@@ -32,7 +32,9 @@ import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue, looksLikeJsonString } from '@interpreter/utils/structured-value';
+
+const STRUCTURED_COLLECTION_TYPES = new Set(['object', 'array', 'json']);
 import { wrapExecResult } from '../utils/structured-exec';
 // Template normalization now handled in grammar - no longer needed here
 
@@ -456,7 +458,10 @@ export async function evaluateShow(
     } else if (Array.isArray(value)) {
       const printableArray = value.map(item => {
         if (isStructuredValue(item)) {
-          return item.text;
+          if (STRUCTURED_COLLECTION_TYPES.has(item.type)) {
+            return item.data;
+          }
+          return asText(item);
         }
         if (item && typeof item === 'object' && typeof (item as any).text === 'string' && typeof (item as any).type === 'string') {
           return (item as any).text;
@@ -1161,11 +1166,8 @@ export async function evaluateShow(
   } else if (typeof content === 'string') {
     // Check if content is a JSON string that should be pretty-printed
     try {
-      // Only attempt to parse if it looks like JSON (starts with { or [)
-      const trimmed = content.trim();
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        const parsed = JSON.parse(content);
+      if (looksLikeJsonString(content)) {
+        const parsed = JSON.parse(content.trim());
         content = JSONFormatter.stringify(parsed, { pretty: true });
       }
     } catch {

@@ -1,5 +1,3 @@
-# Guide
-
 ## Gotchas
 
 Common mistakes to avoid.

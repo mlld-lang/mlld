@@ -99,14 +99,11 @@ class ShellCommandEscapingStrategy implements EscapingStrategy {
     // in double-quoted strings: \ $ ` "
     // This preserves literal values when interpolating mlld variables
     
-    // Important: We must escape backslashes first to avoid double-escaping
-    const escaped = value
+    return value
       .replace(/\\/g, '\\\\')  // Escape backslashes first
       .replace(/"/g, '\\"')    // Escape double quotes
       .replace(/\$/g, '\\$')   // Escape dollar signs to preserve literal values
       .replace(/`/g, '\\`');   // Escape backticks
-    
-    return escaped;
   }
   
   getContext(): InterpolationContext {

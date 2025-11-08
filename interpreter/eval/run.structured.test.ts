@@ -77,6 +77,6 @@ describe('evaluateRun (structured)', () => {
     expect(isStructuredValue(result.value)).toBe(true);
     expect((result.value as any).type).toBe('object');
     expect((result.value as any).data).toEqual({ count: 2 });
-    expect(() => JSON.parse(asText(result.value))).not.toThrow();
+    expect(asText(result.value)).toBe('{"count":2}');
   });
 });

@@ -146,17 +146,118 @@ Only these produce output: `/show`, `/run`, `/output`. Everything else mutates s
 </RULE_4_OUTPUT_SOURCES>
 
 <RULE_5_INTERPOLATION_CONTEXTS>
-Prefer backticks for templates; use `::…::` to escape backticks; use `:::…:::` when many `@` appear (e.g., social).
+Default to `::...::` for inline templates, `.att` files for external templates (5+ lines). Switch to `:::...:::` or `.mtt` ONLY for Discord `<@userid>` mentions or heavy social media `@handle` usage.
 
-* Backticks interpolate `@var`
-* Double quotes interpolate `@var`
-* Single quotes are literal (no interpolation)
-* Braced commands `{…}` interpolate `@var`
+**Quick Reference:**
+
+| Syntax | Interpolation | Pipes | Loops | Use For |
+|--------|---------------|-------|-------|---------|
+| `::...::` | `@var` `<file>` `@exe()` | ✓ | ✓ | **Default inline** |
+| `.att` | `@var` `<file>` `@exe()` | ✓ | ✓ | **Default external (5+ lines)** |
+| `` `...` `` | `@var` `<file>` `@exe()` | ✓ | ✓ | Same as `::...::` (preference) |
+| `"..."` | `@var` `<file>` `@exe()` | ✓ | ✗ | Single-line only |
+| `:::...:::` | `{{var}}` only | ✗ | ✗ | Discord/social escape hatch |
+| `.mtt` | `{{var}}` only | ✗ | ✗ | Discord/social external |
+| `'...'` | None (literal) | ✗ | ✗ | Literal text |
+| `{...}` | `@var` `<file>` | ✗ | ✗ | Commands/code |
+
+**Inline templates:**
 
 ```mlld
-/var @msg = `Hello @user!`
-/var @note = ::Run `npm test` before deploy::
-/var @tweet = :::Hey @{{handle}}—ship it!:::
+>> Double-colon (default)
+/var @msg = ::Hello @name!::
+/var @doc = ::Use `npm test` before @env::
+/var @report = ::
+Status: @status
+Config: <@base/config.json>
+Data: @data|@json
+::
+
+>> Backticks (alternative)
+/var @msg = `Hello @name!`
+/var @multi = `
+Line 1: @var
+Line 2: @other
+`
+
+>> Double quotes (single-line only)
+/var @path = "@base/files/@filename"
+/run {echo "Processing @file"}
+
+>> Triple-colon (Discord/social only)
+/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
+/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
+
+>> Single quotes (literal)
+/var @literal = '@name stays literal'
+```
+
+**External templates:**
+
+```mlld
+>> .att files (default for 5+ lines)
+>> file: templates/deploy.att
+# Deployment: @env
+Status: @status
+Config: <@base/config/@env.json>
+
+>> usage
+/exe @deploy(env, status) = template "templates/deploy.att"
+/show @deploy("prod", "success")
+
+>> .mtt files (Discord/social only)
+>> file: templates/discord.mtt
+🚨 Alert <@{{adminId}}>!
+Reporter: <@{{reporterId}}>
+Severity: {{severity}}
+
+>> usage
+/exe @alert(adminId, reporterId, severity) = template "templates/discord.mtt"
+```
+
+**Loops (::, backticks, .att only):**
+
+```mlld
+/var @list = ::
+/for @item in @items
+- @item.name: @item.value
+/end
+::
+
+>> Requirements: /for and /end at line start
+>> NOT supported in :::...:::, .mtt, or "..."
+```
+
+**Trade-offs when using Discord/social escape hatch:**
+
+| Feature | `::...::` / `.att` | `:::...:::` / `.mtt` |
+|---------|-------------------|----------------------|
+| `@var` interpolation | ✓ | ✗ Use `{{var}}` |
+| `<file.md>` loading | ✓ | ✗ |
+| `@exe()` calls | ✓ | ✗ |
+| Pipes `\|` | ✓ | ✗ |
+| Loops | ✓ | ✗ |
+| Discord `<@id>` | Escape `\<@id\>` | ✓ Natural |
+| Many `@handles` | Works | ✓ Cleaner |
+
+**Common mistakes:**
+
+```mlld
+>> ✗ Using {{}} in ::...::
+/var @msg = ::Hello {{name}}::        >> {{name}} is literal
+/var @msg = ::Hello @name::           >> ✓
+
+>> ✗ Using @var in :::...:::
+/var @msg = :::Hello @name:::         >> @name is literal
+/var @msg = :::Hello {{name}}:::      >> ✓
+
+>> ✗ Using ::: without Discord/social need
+/var @msg = :::Status: {{status}}:::  >> Loses all features
+/var @msg = ::Status: @status::       >> ✓ Full features
+
+>> ✗ Importing template files
+/import { @tpl } from "./file.att"    >> Error
+/exe @tpl(x) = template "./file.att"  >> ✓
 ```
 
 </RULE_5_INTERPOLATION_CONTEXTS>
@@ -648,6 +749,12 @@ Define reusable commands/code/templates/sections.
 
 # Section extractor
 /exe @intro(file) = <@file # Introduction>
+
+# With stdin (explicit with clause)
+/exe @processJson(data) = run { cat | jq '.[]' } with { stdin: @data }
+
+# With stdin (pipe sugar - requires 'run' keyword)
+/exe @filterActive(data) = run @data | { cat } | @transformFilter
 ```
 
 Shadow environments (JS/Node):

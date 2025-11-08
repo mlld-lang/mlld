@@ -738,10 +738,22 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     
     // For fixtures without expected output, run as smoke tests
     const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
-    
-    const testFn = (skipTests[fixture.name] || shouldSkipDoc) ? it.skip : it;
-    const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` : 
-                       shouldSkipDoc ? ` (Skipped: Intentional partial/educational example)` : '';
+
+    // List of known slow fixture tests (> 2s)
+    const slowFixtures = [
+      'feat/with/combined',
+      'feat/with/needs-node',
+      'slash/run/command-bases-npm-run'
+    ];
+
+    // Check if SKIP_SLOW is enabled and this is a slow test
+    const shouldSkipSlow = process.env.SKIP_SLOW === '1' &&
+                           slowFixtures.some(slow => fixture.name.includes(slow));
+
+    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow) ? it.skip : it;
+    const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` :
+                       shouldSkipDoc ? ` (Skipped: Intentional partial/educational example)` :
+                       shouldSkipSlow ? ` (Skipped: Slow test in fast mode)` : '';
 
     testFn(`should handle ${fixture.name}${isDocumentationTest ? ' (syntax only)' : isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, async () => {
       // Check if this is a valid fixture that has a parse error

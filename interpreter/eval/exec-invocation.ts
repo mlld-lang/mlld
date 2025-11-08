@@ -25,7 +25,7 @@ import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCap
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
-import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
+import { asText, isStructuredValue, wrapStructured, looksLikeJsonString } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { normalizeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
@@ -1015,7 +1015,24 @@ export async function evaluateExecInvocation(
   // Handle template executables
   if (isTemplateExecutable(definition)) {
     // Interpolate the template with the bound parameters
-    result = await interpolate(definition.template, execEnv);
+    const templateResult = await interpolate(definition.template, execEnv);
+    if (isStructuredValue(templateResult)) {
+      result = templateResult;
+    } else if (typeof templateResult === 'string') {
+      if (looksLikeJsonString(templateResult)) {
+        try {
+          const parsed = JSON.parse(templateResult.trim());
+          const typeHint = Array.isArray(parsed) ? 'array' : 'object';
+          result = wrapStructured(parsed, typeHint, templateResult);
+        } catch {
+          result = templateResult;
+        }
+      } else {
+        result = templateResult;
+      }
+    } else {
+      result = templateResult;
+    }
   }
   // Handle pipeline executables
   else if (isPipelineExecutable(definition)) {
@@ -1183,12 +1200,10 @@ export async function evaluateExecInvocation(
       }
       const commandOutput = await execEnv.executeCode(fallbackCommand, 'sh', codeParams);
       // Try to parse as JSON if it looks like JSON
-      if (typeof commandOutput === 'string' && commandOutput.trim()) {
-        const trimmed = commandOutput.trim();
-        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      if (typeof commandOutput === 'string') {
+        if (looksLikeJsonString(commandOutput)) {
           try {
-            result = JSON.parse(trimmed);
+            result = JSON.parse(commandOutput.trim());
           } catch {
             result = commandOutput;
           }
@@ -1211,12 +1226,10 @@ export async function evaluateExecInvocation(
       const commandOutput = await execEnv.executeCommand(command, commandOptions);
       
       // Try to parse as JSON if it looks like JSON
-      if (typeof commandOutput === 'string' && commandOutput.trim()) {
-        const trimmed = commandOutput.trim();
-        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      if (typeof commandOutput === 'string') {
+        if (looksLikeJsonString(commandOutput)) {
           try {
-            result = JSON.parse(trimmed);
+            result = JSON.parse(commandOutput.trim());
           } catch {
             // Not valid JSON, use as-is
             result = commandOutput;

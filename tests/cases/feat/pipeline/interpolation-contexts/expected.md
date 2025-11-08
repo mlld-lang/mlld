@@ -1,6 +1,8 @@
 Hello [ALICE]!
 
-Content: [{"message":"hello world"}]
+Content: [{
+  "message": "hello world"
+}]
 
 The user is ALICE with data {
   "type": "user",
