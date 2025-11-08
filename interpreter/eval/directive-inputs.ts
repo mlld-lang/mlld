@@ -188,9 +188,12 @@ async function extractRunInputs(
     return [variable];
   }
 
-  if (directive.subtype === 'runExec') {
-    const execNode = directive.values?.identifier?.[0];
-    const execName = execNode ? getTextContent(execNode) : undefined;
+  if (
+    directive.subtype === 'runExec' ||
+    directive.subtype === 'runExecInvocation' ||
+    directive.subtype === 'runExecReference'
+  ) {
+    const execName = resolveRunExecName(directive);
     if (!execName) {
       return [];
     }
@@ -199,4 +202,26 @@ async function extractRunInputs(
   }
 
   return [];
+}
+
+function resolveRunExecName(directive: DirectiveNode): string | undefined {
+  const identifierNodes = directive.values?.identifier;
+  if (identifierNodes && Array.isArray(identifierNodes) && identifierNodes[0]) {
+    const identifier = identifierNodes[0];
+    if (identifier && typeof identifier === 'object' && 'identifier' in identifier) {
+      return identifier.identifier as string;
+    }
+  }
+
+  const execInvocation = directive.values?.execInvocation;
+  if (execInvocation?.commandRef?.identifier) {
+    return execInvocation.commandRef.identifier;
+  }
+
+  const execRef = (directive.values as any)?.execRef;
+  if (execRef?.commandRef?.identifier) {
+    return execRef.commandRef.identifier;
+  }
+
+  return undefined;
 }

@@ -196,6 +196,7 @@ export async function evaluateVar(
     return finalVariable;
   };
 
+
   // Get the value node - this contains type information from the parser
   const valueNodes = directive.values?.value;
   

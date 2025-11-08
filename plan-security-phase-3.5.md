@@ -14,8 +14,8 @@ This plan reflects the hook nomenclature introduced in `spec-hooks.md` and the u
 - ✅ Template interpolation collects contributor descriptors via `interpolateWithSecurity`, so any inline text that calls variables or execs inherits the same capability snapshot as `/var` assignments.
 - ✅ `/export` and `/output` run inside a security context and record descriptor/capability metadata for emitted artifacts; structured effects inherit the merged snapshot.
 - ✅ Hook scaffolding now exists: `evaluateDirective()` runs through a shared HookManager (stub guard pre-hook + taint post-hook), and a ContextManager builds `@ctx.op`/`@ctx.pipe` snapshots for the ambient variable.
-- ⚠️ Remaining Part B gaps: `extractDirectiveInputs()` still returns an empty array, evaluators do not consume `context.extractedInputs` yet, and pipeline stages do not populate ContextManager scopes. OperationContext metadata also needs to include directive-specific fields (command, target, op labels) before guards can reason on it.
-- Tests now include a hook smoke suite (`tests/interpreter/hooks/*`) proving order + @ctx plumbing, but we still lack coverage for evaluator reuse of `extractedInputs`, error-path retries, and pipeline stage nesting.
+- ✅ `extractDirectiveInputs()` now covers `/show`, `/output`, and `/run`; the corresponding evaluators consume `context.extractedInputs` so hooks inspect real values without double evaluation, and pipeline stages push/pop operation contexts via the shared ContextManager. `/var` extraction remains deferred (executing RHS twice causes double side effects), so guards for assignments will land alongside the assignment-specific guard runner in Phase C.
+- Tests now include a hook smoke suite (`tests/interpreter/hooks/*`) proving order + @ctx plumbing, with focused cases for `/show`, `/output`, and `/run`. Remaining coverage gaps live in pipeline retry edge cases and guard retries, which are Phase C/D items.
 
 ## Scope
 - Complete the outstanding evaluator integrations noted in `plan-security.md` Phase 3.5 Part A. ✅

@@ -192,4 +192,27 @@ describe('directive hook infrastructure', () => {
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/skip run/);
     expect(capturedCommand).toContain('echo');
   });
+
+  it('extracts /run exec inputs for pre-hooks', async () => {
+    const env = createEnv();
+    const execDirective = parseSync('/exe @emit() = js { return "ok"; }')[0] as DirectiveNode;
+    await evaluateDirective(execDirective, env);
+
+    let capturedExecName: string | undefined;
+    env.getHookManager().registerPre(async (directive, inputs) => {
+      if (directive.kind === 'run') {
+        const execVar = inputs[0] as any;
+        capturedExecName = execVar?.name;
+        return { action: 'abort', metadata: { reason: 'skip run' } };
+      }
+      return { action: 'continue' };
+    });
+
+    const runDirective = parseSync('/run @emit()')[0] as DirectiveNode;
+    await expect(evaluateDirective(runDirective, env)).rejects.toThrow(/skip run/);
+    expect(capturedExecName).toBe('emit');
+  });
+
+  // /var extraction deferred: executing value in hook context can trigger
+  // side effects twice (see Phase 4 guard plan).
 });

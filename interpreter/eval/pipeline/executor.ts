@@ -1,5 +1,6 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, PipelineStage } from '@core/types';
+import type { OperationContext } from '../../env/ContextManager';
 import type { StructuredValue } from '../../utils/structured-value';
 import type { SecurityDescriptor, DataLabel, CapabilityContext } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
@@ -219,6 +220,8 @@ export class PipelineExecutor {
   ): Promise<StageResult> {
     let stageEnv: Environment | undefined;
     let popStageContext: (() => CapabilityContext | undefined) | undefined;
+    let pipelineContextPushed = false;
+    let ctxManager: ReturnType<Environment['getContextManager']> | undefined;
     try {
       const structuredInput = this.getStageOutput(stageIndex - 1, input);
       // Set up execution environment for a single command stage
@@ -237,6 +240,9 @@ export class PipelineExecutor {
         }
       );
       popStageContext = this.pushStageSecurityContext(stageEnv, command, stageIndex, context, structuredInput);
+      ctxManager = stageEnv.getContextManager();
+      ctxManager.pushOperation(this.createPipelineOperationContext(command, stageIndex, context));
+      pipelineContextPushed = true;
       
       let output: any;
       while (true) {
@@ -347,6 +353,11 @@ export class PipelineExecutor {
           if (capability?.security) {
             this.env.recordSecurityDescriptor(capability.security);
           }
+        } catch {}
+      }
+      if (pipelineContextPushed && ctxManager) {
+        try {
+          ctxManager.popOperation();
         } catch {}
       }
       this.env.clearPipelineContext();
@@ -609,6 +620,24 @@ export class PipelineExecutor {
     return undefined;
   }
 
+  private createPipelineOperationContext(
+    command: PipelineCommand,
+    stageIndex: number,
+    stageContext: StageContext
+  ): OperationContext {
+    const labels = (command as any)?.securityLabels as DataLabel[] | undefined;
+    return {
+      type: 'pipeline-stage',
+      subtype: command.rawIdentifier,
+      name: command.rawIdentifier,
+      labels,
+      metadata: {
+        stageIndex: stageIndex + 1,
+        totalStages: stageContext.totalStages
+      }
+    };
+  }
+
   private async executeParallelStage(
     stageIndex: number,
     commands: PipelineCommand[],
@@ -638,6 +667,8 @@ export class PipelineExecutor {
           );
 
           const popStageContext = this.pushStageSecurityContext(subEnv, cmd, stageIndex, context, branchInput);
+          const branchCtxManager = subEnv.getContextManager();
+          branchCtxManager.pushOperation(this.createPipelineOperationContext(cmd, stageIndex, context));
           try {
             const raw = await this.executeCommand(cmd, input, branchInput, subEnv);
             if (this.isRetrySignal(raw)) {
@@ -645,6 +676,7 @@ export class PipelineExecutor {
               if (capability?.security) {
                 this.env.recordSecurityDescriptor(capability.security);
               }
+              branchCtxManager.popOperation();
               return raw;
             }
             let normalized = this.normalizeOutput(raw);
@@ -659,12 +691,14 @@ export class PipelineExecutor {
               );
               this.env.recordSecurityDescriptor(capability.security);
             }
+            branchCtxManager.popOperation();
             return normalized;
           } catch (err) {
             const capability = popStageContext();
             if (capability?.security) {
               this.env.recordSecurityDescriptor(capability.security);
             }
+            branchCtxManager.popOperation();
             throw err;
           }
         },
