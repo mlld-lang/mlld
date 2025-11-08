@@ -5,6 +5,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
+import { createSimpleTextVariable } from '@core/types/variable';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -62,5 +63,36 @@ describe('directive hook infrastructure', () => {
     expect(ctx.pipe.stage).toBe(2);
     expect(ctx.pipe.try).toBe(2);
     expect(ctx.input.foo).toBe('bar');
+  });
+
+  it('extracts /show directive inputs for pre-hooks', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'foo',
+      createSimpleTextVariable(
+        'foo',
+        'value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+
+    let captured: readonly unknown[] = [];
+    env.getHookManager().registerPre(async (directive, inputs) => {
+      if (directive.kind === 'show') {
+        captured = inputs;
+      }
+      return { action: 'continue' };
+    });
+
+    const directive = parseSync('/show @foo')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+
+    expect(captured.length).toBe(1);
+    expect((captured[0] as any)?.name).toBe('foo');
   });
 });
