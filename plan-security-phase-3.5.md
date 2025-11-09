@@ -82,21 +82,15 @@ To keep delivery manageable we will land Phase C in three focused slices that 
    
    _Notes:_ Token estimates now flow through `VariableMetadataUtils` so `.ctx.tokens` falls back to `.ctx.tokest` when exact counts are unavailable. `HookManager` pre-hooks receive the `createGuardInputHelper` aggregate, giving future guard runners access to `.any/.all/.none` plus helpers like `@input.totalTokens()`. Tests under `tests/interpreter/variable-ctx.test.ts`, `tests/interpreter/hooks/directive-hooks.test.ts`, and fixture `tests/cases/feat/security/phase3c-metrics` lock the new behavior, and the developer docs call out the `.ctx.tokens` contract.
 
-### Phase D Preview – Taint Tracking via Hooks
+### Part D – Taint Tracking via Hooks ✅ (complete on `datalabels`)
 
-Now that guarded assignments, context management, and token metrics are in place, the remaining Phase 3.5 work (Part D) focuses on moving taint propagation into hooks and removing evaluator-specific plumbing.
+**What landed**
+- Added a production taint post-hook (`interpreter/hooks/taint-post-hook.ts`) that receives directive inputs/results, extracts their `SecurityDescriptor`s, merges them via the taint lattice, and feeds the merged descriptor back into the runtime.
+- Removed legacy `pushSecurityContext`/`recordSecurityDescriptor` plumbing from `/var`, `/run`, `/show`, `/exe`, `/export`, `/output`, and `/import`. Evaluators now describe their inputs/outputs (attach descriptors/capabilities directly to variables and structured values) and rely on the hook to update ambient state.
+- Updated the pipeline executor so stage outputs carry their merged descriptors via structured-value metadata; parallel stages and aggregated results no longer mutate env stacks, keeping security metadata with the data itself.
+- Tests (`tests/interpreter/security-metadata.test.ts`, hook + ctx suites) now validate hook-driven taint propagation matches the legacy behavior.
 
-**Goals**
-- Shift descriptor merging into the taint post-hook so evaluators only describe inputs/outputs.
-- Remove legacy `pushSecurityContext` calls from individual evaluators; rely on hook results instead.
-- Ensure pipelines/parallel stages surface stage metadata through the hook path, including retries.
-- Expand tests (e.g., `tests/interpreter/security-metadata.test.ts`) to compare hook-driven taint output against the legacy behavior.
-
-**Status**
-- Infrastructure is ready (hook manager ordering, context helpers, guard-aware `/var` flow).
-- Work items listed above remain open; they will be tackled next to complete Part D.
-
-Deliverables for Phase C are therefore the combined outputs of C1–C3: guard-ready `/var` execution, consolidated context plumbing (including JS/Node), and reusable token metrics that power the `.ctx` namespace and guard helpers.
+Phase 3.5 (Parts C + D) is therefore complete: guard-ready `/var`, centralized context/metrics, and hook-owned taint tracking across directives and pipelines.
 
 ## Key Decisions & Risks
 - **Context ownership**: `@ctx` state lives in a simple `ContextManager` (separate helper) whose only job is to push/pop namespace stacks and build the ambient object; Environment delegates to it. Risk: ad-hoc pushes leak between directives. Mitigation: expose scoped helpers (`withOpContext`, `withPipeContext`, `withGuardContext`) plus unit tests covering nesting and alias output. The manager must cooperate with `Environment.createChild()` so nested evaluations inherit context snapshots correctly.

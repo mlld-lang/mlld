@@ -25,12 +25,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-color: #121212;
+    --bg-color: #000;
     --text-color: #ffffff;
     --text-color-rgb: 255, 255, 255;
     --accent-color: #ffffff;
-    --code-bg: #1a1a1a;
-    --terminal-bg: #1a1a1a;
+    --code-bg: #111;
+    --terminal-bg: #111;
     --terminal-bg-rgb: 26, 26, 26;
     --terminal-text: #ffffff;
     --terminal-text-dim: rgba(255, 255, 255, 0.7);

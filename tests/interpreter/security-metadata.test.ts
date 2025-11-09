@@ -5,6 +5,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { evaluateVar } from '@interpreter/eval/var';
+import { evaluateDirective } from '@interpreter/eval/directive';
 import { evaluateExe } from '@interpreter/eval/exe';
 import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { ObjectReferenceResolver } from '@interpreter/eval/import/ObjectReferenceResolver';
@@ -186,5 +187,34 @@ describe('Security metadata propagation', () => {
 
     const messageVar = env.getVariable('message');
     expect(messageVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('propagates pipeline taint and labels into structured outputs and downstream results', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const tokenDirective = parseSync('/var secret @token = "abc123"')[0] as DirectiveNode;
+    await evaluateDirective(tokenDirective, env);
+
+    const pipelineDirective = parseSync(
+      `
+/run sh {
+  echo @token
+} | /run {
+  cat
+} | /run {
+  python -c "print('done')"
+}
+      `.trim()
+    )[0] as DirectiveNode;
+
+    const pipelineResult = await evaluateDirective(pipelineDirective, env);
+    const structuredPipeline = pipelineResult.value as any;
+    expect(structuredPipeline?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(structuredPipeline?.metadata?.security?.taintLevel).toBe('untrusted');
+
+    const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
+    const result = await evaluateDirective(resultDirective, env);
+    const structuredResult = result.value as any;
+    expect(structuredResult?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(structuredResult?.metadata?.security?.taintLevel).toBe('untrusted');
   });
 });
