@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc70]
+### Fixed
+- **Parallel for loop circular reference detection**: Fixed false positive circular reference warnings when multiple parallel tasks load the same file
+  - Each parallel execution context now maintains its own interpolation stack for independent file loading
+  - Prevents `Warning: Circular reference detected` when parallel tasks legitimately reference the same shared file
+  - Real circular references (A includes B includes A) are still correctly detected via parent chain checking
+  - Regression test added in `tests/cases/regression/parallel-interpolation-stack/`
+
 ## [2.0.0-rc69]
 ### Fixed
 - JS and Node executors treat expression-style blocks as implicit returns, so `/var` assignments and pipelines receive native objects/arrays and property access like `@repo.name` works without helper wrappers.
