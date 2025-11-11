@@ -264,8 +264,9 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       // Use printf piping for stdin input
       const escapedInput = options.input.replace(/'/g, "'\\''");
       finalCommand = `printf '%s' '${escapedInput}' | ${safeCommand}`;
-    } else {
+    } else if (!safeCommand.includes('|')) {
       // Provide empty stdin to prevent commands from hanging waiting for input
+      // But only if command doesn't use pipes (to avoid breaking pipe chains)
       finalCommand = `${safeCommand} < /dev/null`;
     }
 
