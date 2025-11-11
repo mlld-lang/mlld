@@ -36,7 +36,7 @@ function parseEnvFile(filePath) {
 
       // Remove quotes if present
       if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
+        (value.startsWith("'") && value.endsWith("'"))) {
         value = value.slice(1, -1);
       }
 
@@ -77,7 +77,6 @@ const command = testFast
 if (testFast) {
   console.log('⚡ Fast test mode enabled (TESTFAST=true)');
   console.log('   Skipping slowest tests: imports/basic-patterns, imports/edge-cases, cli/absolute-paths, heredoc e2e');
-  console.log('   Still running: Shadow env, complex imports, cleanup, slow fixture tests');
   console.log('   Run full suite with: TESTFAST=false npm test\n');
 } else {
   console.log('🔍 Running full test suite');

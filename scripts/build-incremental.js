@@ -2,7 +2,14 @@
 /**
  * Granular incremental build system
  *
- * Only rebuilds the parts that changed:
+ * Uses timestamp-based change detection (not git) to align with typical dev workflow:
+ * edit → test → edit → test (without committing between runs)
+ *
+ * Tracks last build time in .last-build and only rebuilds components whose
+ * source files changed since then. For performance, only checks files in git dirty
+ * state (staged, unstaged, and untracked) rather than scanning all source files.
+ *
+ * Components checked:
  * - Grammar: Only if .peggy or grammar/*.ts changed
  * - TypeScript: Only if source .ts files changed
  * - Errors: Only if error templates changed
@@ -12,9 +19,13 @@
  * This is MUCH faster than rebuilding everything!
  */
 
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, writeFileSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { glob } from 'glob';
+import { join } from 'path';
+
+// Track last build time
+const LAST_BUILD_FILE = '.last-build';
 
 // ANSI color codes
 const yellow = '\x1b[33m';
@@ -39,38 +50,110 @@ let totalSteps = 0;
 let completedSteps = 0;
 
 /**
- * Get list of changed files from git
+ * Get last build timestamp
  */
-function getChangedFiles() {
+function getLastBuildTime() {
   try {
-    const changedFiles = new Set();
+    if (existsSync(LAST_BUILD_FILE)) {
+      const timestamp = readFileSync(LAST_BUILD_FILE, 'utf8').trim();
+      return parseInt(timestamp, 10);
+    }
+  } catch {}
+  return 0; // No previous build
+}
+
+/**
+ * Update last build timestamp
+ */
+function updateLastBuildTime() {
+  try {
+    writeFileSync(LAST_BUILD_FILE, Date.now().toString());
+  } catch (error) {
+    // Not critical if this fails
+    console.warn(`${yellow}Warning:${reset} Could not update build timestamp`);
+  }
+}
+
+/**
+ * Get list of dirty files from git (much faster than checking all files)
+ */
+function getDirtyFiles() {
+  try {
+    const dirtyFiles = new Set();
 
     // Staged changes
     try {
       const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
         .trim().split('\n').filter(Boolean);
-      staged.forEach(f => changedFiles.add(f));
+      staged.forEach(f => dirtyFiles.add(f));
     } catch {}
 
     // Unstaged changes
     try {
       const unstaged = execSync('git diff --name-only', { encoding: 'utf8' })
         .trim().split('\n').filter(Boolean);
-      unstaged.forEach(f => changedFiles.add(f));
+      unstaged.forEach(f => dirtyFiles.add(f));
     } catch {}
 
     // Untracked files
     try {
       const untracked = execSync('git ls-files --others --exclude-standard', { encoding: 'utf8' })
         .trim().split('\n').filter(Boolean);
-      untracked.forEach(f => changedFiles.add(f));
+      untracked.forEach(f => dirtyFiles.add(f));
     } catch {}
 
-    return Array.from(changedFiles);
+    return Array.from(dirtyFiles);
   } catch {
-    // If git fails, return empty (we'll check timestamps instead)
+    // If git fails, return empty (we'll check all files as fallback)
     return [];
   }
+}
+
+/**
+ * Check if any files in the list are newer than the last build
+ * Only checks files that are in git dirty state for performance
+ */
+function hasFilesNewerThan(pattern, timestamp, dirtyFiles) {
+  // Helper to match a file against pattern
+  const matchesPattern = (file, pattern) => {
+    if (typeof pattern === 'string') {
+      return file === pattern;
+    } else if (Array.isArray(pattern)) {
+      return pattern.includes(file);
+    } else if (pattern instanceof RegExp) {
+      return pattern.test(file);
+    } else if (typeof pattern === 'function') {
+      return pattern(file);
+    }
+    return false;
+  };
+
+  // If we have dirty files, only check those that match our pattern
+  if (dirtyFiles && dirtyFiles.length > 0) {
+    const matchedDirtyFiles = dirtyFiles.filter(f => matchesPattern(f, pattern));
+
+    for (const file of matchedDirtyFiles) {
+      if (existsSync(file)) {
+        const fileMtime = statSync(file).mtimeMs;
+        if (fileMtime > timestamp) {
+          return file;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Fallback: check all files matching pattern (used when no dirty files or not a git repo)
+  const filesToCheck = Array.isArray(pattern) ? pattern : glob.sync(pattern);
+  for (const file of filesToCheck) {
+    if (existsSync(file)) {
+      const fileMtime = statSync(file).mtimeMs;
+      if (fileMtime > timestamp) {
+        return file;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -96,19 +179,20 @@ function isOutputStale(outputFile, inputFiles) {
 /**
  * Check if version needs rebuilding
  */
-function checkVersion(changedFiles) {
+function checkVersion(lastBuildTime, dirtyFiles) {
   const versionOutput = 'core/version.ts';
   const versionInput = 'package.json';
 
-  // Check git changes
-  if (changedFiles.includes(versionInput)) {
-    console.log(`${cyan}  Version:${reset} package.json changed`);
+  // Check if output is missing
+  if (!existsSync(versionOutput)) {
+    console.log(`${cyan}  Version:${reset} ${versionOutput} missing`);
     return true;
   }
 
-  // Check timestamps
-  if (isOutputStale(versionOutput, [versionInput])) {
-    console.log(`${cyan}  Version:${reset} ${versionOutput} is stale`);
+  // Check if input changed since last build
+  const changedFile = hasFilesNewerThan([versionInput], lastBuildTime, dirtyFiles);
+  if (changedFile) {
+    console.log(`${cyan}  Version:${reset} ${changedFile} changed`);
     return true;
   }
 
@@ -118,7 +202,7 @@ function checkVersion(changedFiles) {
 /**
  * Check if error patterns need rebuilding
  */
-function checkErrors(changedFiles) {
+function checkErrors(lastBuildTime, dirtyFiles) {
   const errorOutputs = [
     'core/errors/patterns/parse-errors.generated.js',
     'core/errors/patterns/js-errors.generated.js'
@@ -129,20 +213,19 @@ function checkErrors(changedFiles) {
     'scripts/build-js-errors.js'
   ];
 
-  // Check git changes
-  for (const input of errorInputs) {
-    if (changedFiles.includes(input)) {
-      console.log(`${cyan}  Errors:${reset} ${input} changed`);
+  // Check if outputs are missing
+  for (const output of errorOutputs) {
+    if (!existsSync(output)) {
+      console.log(`${cyan}  Errors:${reset} ${output} missing`);
       return true;
     }
   }
 
-  // Check timestamps
-  for (const output of errorOutputs) {
-    if (isOutputStale(output, errorInputs)) {
-      console.log(`${cyan}  Errors:${reset} ${output} is stale`);
-      return true;
-    }
+  // Check if inputs changed since last build
+  const changedFile = hasFilesNewerThan(errorInputs, lastBuildTime, dirtyFiles);
+  if (changedFile) {
+    console.log(`${cyan}  Errors:${reset} ${changedFile} changed`);
+    return true;
   }
 
   return false;
@@ -151,18 +234,11 @@ function checkErrors(changedFiles) {
 /**
  * Check if grammar needs rebuilding
  */
-function checkGrammar(changedFiles) {
+function checkGrammar(lastBuildTime, dirtyFiles) {
   const grammarOutputs = [
     'grammar/generated/parser/parser.js',
     'grammar/generated/parser/parser.cjs',
     'grammar/generated/parser/parser.ts'
-  ];
-
-  const grammarInputs = [
-    'grammar/mlld.peggy',
-    'grammar/deps/grammar-core.ts',
-    'grammar/parser/index.ts',
-    'grammar/build-grammar.mjs'
   ];
 
   // Check if outputs exist
@@ -173,20 +249,17 @@ function checkGrammar(changedFiles) {
     }
   }
 
-  // Check git changes for grammar files
-  for (const file of changedFiles) {
-    if (file.match(/^grammar\/.*\.(peggy|ts|mjs)$/) && !file.includes('test')) {
-      console.log(`${cyan}  Grammar:${reset} ${file} changed`);
-      return true;
-    }
-  }
+  // Check if any grammar source files changed
+  const grammarPattern = (f) =>
+    f.startsWith('grammar/') &&
+    (f.endsWith('.peggy') || f.endsWith('.ts') || f.endsWith('.mjs')) &&
+    !f.includes('.test.') &&
+    !f.includes('/generated/');
 
-  // Check timestamps
-  for (const output of grammarOutputs) {
-    if (isOutputStale(output, grammarInputs)) {
-      console.log(`${cyan}  Grammar:${reset} ${output} is stale`);
-      return true;
-    }
+  const changedFile = hasFilesNewerThan(grammarPattern, lastBuildTime, dirtyFiles);
+  if (changedFile) {
+    console.log(`${cyan}  Grammar:${reset} ${changedFile} changed`);
+    return true;
   }
 
   return false;
@@ -195,7 +268,7 @@ function checkGrammar(changedFiles) {
 /**
  * Check if TypeScript needs rebuilding
  */
-function checkTypeScript(changedFiles) {
+function checkTypeScript(lastBuildTime, dirtyFiles) {
   const tsOutputs = [
     'dist/index.mjs',
     'dist/index.cjs',
@@ -210,22 +283,25 @@ function checkTypeScript(changedFiles) {
     }
   }
 
-  // Check git changes for source TypeScript files (not tests)
-  for (const file of changedFiles) {
-    if (file.match(/\.(ts|tsx)$/) && !file.includes('.test.') && !file.includes('tests/')) {
-      // Skip grammar files (handled separately)
-      if (file.startsWith('grammar/')) continue;
+  // Check if any source TypeScript files changed (excluding tests and grammar)
+  const tsPattern = (f) =>
+    (f.startsWith('api/') || f.startsWith('cli/') || f.startsWith('core/') ||
+     f.startsWith('interpreter/') || f.startsWith('output/') ||
+     f.startsWith('security/') || f.startsWith('services/')) &&
+    (f.endsWith('.ts') || f.endsWith('.tsx')) &&
+    !f.includes('.test.') &&
+    !f.includes('.spec.') &&
+    !f.includes('/tests/');
 
-      console.log(`${cyan}  TypeScript:${reset} ${file} changed`);
-      return true;
-    }
-  }
+  // Also check tsup config and tsconfig files
+  const configFiles = ['tsup.config.ts', 'tsconfig.json', 'tsconfig.build.json'];
 
-  // Check if dist is stale (older than 24 hours)
-  const distTime = statSync(tsOutputs[0]).mtimeMs;
-  const ageInHours = (Date.now() - distTime) / (1000 * 60 * 60);
-  if (ageInHours > 24) {
-    console.log(`${cyan}  TypeScript:${reset} dist is ${Math.floor(ageInHours)} hours old`);
+  // Combine pattern and config files
+  const combinedPattern = (f) => tsPattern(f) || configFiles.includes(f);
+
+  const changedFile = hasFilesNewerThan(combinedPattern, lastBuildTime, dirtyFiles);
+  if (changedFile) {
+    console.log(`${cyan}  TypeScript:${reset} ${changedFile} changed`);
     return true;
   }
 
@@ -235,15 +311,36 @@ function checkTypeScript(changedFiles) {
 /**
  * Check if fixtures need rebuilding
  */
-function checkFixtures(changedFiles) {
+function checkFixtures(lastBuildTime, dirtyFiles) {
   // Fixtures are only needed for development, can skip in most cases
   // Only rebuild if test case .md files changed
 
-  for (const file of changedFiles) {
-    if (file.match(/^tests\/cases\/.*\.md$/)) {
-      console.log(`${cyan}  Fixtures:${reset} ${file} changed`);
+  // Check if fixtures directory exists and has content
+  const fixturesDir = 'tests/fixtures';
+  if (!existsSync(fixturesDir)) {
+    console.log(`${cyan}  Fixtures:${reset} ${fixturesDir} directory missing`);
+    return true;
+  }
+
+  try {
+    const fixtureFiles = glob.sync(`${fixturesDir}/**/*.generated-fixture.json`);
+    if (fixtureFiles.length === 0) {
+      console.log(`${cyan}  Fixtures:${reset} ${fixturesDir} is empty`);
       return true;
     }
+  } catch {
+    // If we can't check, force rebuild to be safe
+    console.log(`${cyan}  Fixtures:${reset} cannot check fixture directory`);
+    return true;
+  }
+
+  // Check if test case files changed
+  const testCasePattern = (f) => f.startsWith('tests/cases/') && f.endsWith('.md');
+
+  const changedFile = hasFilesNewerThan(testCasePattern, lastBuildTime, dirtyFiles);
+  if (changedFile) {
+    console.log(`${cyan}  Fixtures:${reset} ${changedFile} changed`);
+    return true;
   }
 
   return false;
@@ -257,7 +354,12 @@ function runBuildStep(name, command) {
   console.log(`${blue}[${completedSteps}/${totalSteps}]${reset} Building ${name}...`);
 
   try {
-    execSync(command, { stdio: 'inherit' });
+    // Silence tsup output to avoid noisy SWC warnings
+    if (command.includes('tsup')) {
+      execSync(command, { stdio: 'ignore' });
+    } else {
+      execSync(command, { stdio: 'inherit' });
+    }
     console.log(`${green}✓${reset} ${name} complete\n`);
   } catch (error) {
     console.error(`${yellow}✗${reset} ${name} failed\n`);
@@ -282,24 +384,27 @@ async function main() {
     needsRebuild.wasm = true;
     needsRebuild.mlldx = true;
   } else {
-    // Get changed files
-    const changedFiles = getChangedFiles();
+    // Get last build timestamp
+    const lastBuildTime = getLastBuildTime();
+
+    // Get dirty files (only check these for performance)
+    const dirtyFiles = getDirtyFiles();
 
     // Check each component
-    needsRebuild.version = checkVersion(changedFiles);
-    needsRebuild.errors = checkErrors(changedFiles);
-    needsRebuild.grammar = checkGrammar(changedFiles);
-    needsRebuild.typescript = checkTypeScript(changedFiles);
-    needsRebuild.fixtures = checkFixtures(changedFiles);
+    needsRebuild.version = checkVersion(lastBuildTime, dirtyFiles);
+    needsRebuild.errors = checkErrors(lastBuildTime, dirtyFiles);
+    needsRebuild.grammar = checkGrammar(lastBuildTime, dirtyFiles);
+    needsRebuild.typescript = checkTypeScript(lastBuildTime, dirtyFiles);
+    needsRebuild.fixtures = checkFixtures(lastBuildTime, dirtyFiles);
 
-    // Python, WASM, mlldx - only if relevant files changed
-    needsRebuild.python = changedFiles.some(f =>
-      f.includes('python') || f === 'package.json'
-    );
+    // Python, WASM, mlldx - check their files too
+    const pythonPattern = (f) => (f.startsWith('python/') && f.endsWith('.py')) || f === 'package.json';
+    needsRebuild.python = hasFilesNewerThan(pythonPattern, lastBuildTime, dirtyFiles) !== null;
+
     needsRebuild.wasm = false; // Usually skip WASM (optional step)
-    needsRebuild.mlldx = changedFiles.some(f =>
-      f === 'package.json' || (f.match(/\.(ts|js)$/) && !f.includes('.test.'))
-    );
+
+    const mlldxFiles = ['package.json', 'mlldx-package/package.json'];
+    needsRebuild.mlldx = hasFilesNewerThan(mlldxFiles, lastBuildTime, dirtyFiles) !== null;
   }
 
   // Count steps
@@ -332,7 +437,7 @@ async function main() {
     }
 
     if (needsRebuild.typescript) {
-      runBuildStep('TypeScript', 'tsup');
+      runBuildStep('TypeScript', 'npx tsup');
     }
 
     if (needsRebuild.python) {
@@ -348,6 +453,9 @@ async function main() {
     }
 
     console.log(`${green}✅ Incremental build complete!${reset}`);
+
+    // Update timestamp for next build comparison
+    updateLastBuildTime();
   } catch (error) {
     console.error(`${yellow}❌ Build failed${reset}`);
     process.exit(1);
