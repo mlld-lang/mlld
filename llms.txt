@@ -18,7 +18,8 @@
 <SYNTAX>
   <VARIABLES> ...................... Types, primitives, command results, code execution.
   <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
-  <FILE_LOADING> ................... Angle brackets, metadata fields, globs, "as" templates, detection rules.
+  <FILE_LOADING> ................... Angle brackets, metadata fields, detection rules.
+  <FILE_LOADING_GLOBS> ............. Glob patterns, array access, "as" templates, common patterns.
   <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
   <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects, parallel groups with ||.
   <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
@@ -158,8 +159,10 @@ Default to `::...::` for inline templates, `.att` files for external templates (
 | `"..."` | `@var` `<file>` `@exe()` | ✓ | ✗ | Single-line only |
 | `:::...:::` | `{{var}}` only | ✗ | ✗ | Discord/social escape hatch |
 | `.mtt` | `{{var}}` only | ✗ | ✗ | Discord/social external |
-| `'...'` | None (literal) | ✗ | ✗ | Literal text |
+| `'...'` | **None (literal)** | ✗ | ✗ | **Literal text** |
 | `{...}` | `@var` `<file>` | ✗ | ✗ | Commands/code |
+
+Key: Backticks, `::...::`, and `"..."` all use `@var` interpolation. Only `'...'` (single quotes) keeps text literal without interpolation.
 
 **Inline templates:**
 
@@ -540,6 +543,46 @@ File metadata fields: `content` (default), `filename`, `relative`, `absolute`, `
 URL metadata fields: All file fields plus: `url`, `domain`, `title`, `description`, `html`, `text`, `md`, `headers`, `status`, `contentType`
 </FILE_LOADING>
 
+<FILE_LOADING_GLOBS>
+Glob patterns load multiple files at once. Use `<path/**/*.ext>` to match recursively and access results as an array.
+
+```mlld
+# Load all markdown files
+/var @docs = <docs/**/*.md>
+/show @docs.length                    # number of files loaded
+/show @docs[0].filename               # first file's name
+/show @docs[0].content                # first file's content
+
+# Generate table of contents
+/var @toc = <docs/**/*.md> as "- [<>.fm.title](<>.relative)"
+
+# Find specific test directories
+/var @tests = <tests/**/example.md>   # all example.md files
+/var @dirs = @tests.map(t => t.relative.replace("/example.md", ""))
+
+# Field access on each file
+/for @doc in @docs => show @doc.fm.title
+```
+
+Glob metadata (each matched file has):
+- All standard file fields: `content`, `filename`, `relative`, `absolute`
+- `file` property traces source path
+- Frontmatter via `fm` property
+- Use `as "template"` to transform each match with `<>` placeholder
+
+Common patterns:
+```mlld
+# All TypeScript files
+/var @sources = <src/**/*.ts>
+
+# All JSON configs
+/var @configs = <**/*.json>
+
+# Specific pattern
+/var @handlers = <src/**/handler.ts>
+```
+</FILE_LOADING_GLOBS>
+
 <BUILTIN_METHODS>
 Variables support builtin methods for common operations. Methods are called with parentheses and can accept arguments.
 
@@ -767,6 +810,32 @@ Expose JS helpers across `js {}` blocks in the same module:
 
 /var @out = js { cap("hello") + ": " + double(5) }  # "Hello: 10"
 ```
+
+Variable scoping (security):
+JS/Node blocks only access parameters passed explicitly—no auto-injection of outer scope variables:
+
+```mlld
+/var @data = [1, 2, 3]
+
+# ❌ Cannot access outer variables
+/var @result = node {
+  return data.map(x => x * 2);  # ReferenceError: data not defined
+}
+
+# ✅ Pass variables as parameters
+/exe @double(arr) = js {
+  return arr.map(x => x * 2);
+}
+/var @result = @double(@data)  # [2, 4, 6]
+
+# ✅ Multiple parameters
+/exe @process(data, multiplier) = js {
+  return data.map(x => x * multiplier);
+}
+/var @result = @process(@data, 2)  # [2, 4, 6]
+```
+
+This isolation prevents accidental variable leakage and makes dependencies explicit.
 
 </EXE_EXECUTABLES>
 

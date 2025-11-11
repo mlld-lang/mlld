@@ -129,9 +129,7 @@ UnifiedBacktickInterpolation "Backtick interpolation content"
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
-  / "<" chars:(!">" char:. { return char; })* ">" { // Literal angle brackets (fallback for non-file references)
-      return helpers.createNode(NodeType.Text, { content: '<' + chars.join('') + '>', location: location() });
-    }
+  / AngleBracketLiteral              // USE ABSTRACTED PATTERN instead of inline rule
   / UnifiedBacktickTextSegment       // Plain text
 
 // -------------------------------------------------------------
@@ -166,7 +164,7 @@ UnifiedBacktickTextSegment
 UnifiedBacktickChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / !("`" / "@" / "<" / "/for" / "/end") char:. { return char; }
+  / !("`" / "@" / "<" / (LineStartPredicate "/for") / (LineStartPredicate "/end")) char:. { return char; }
 
 // Text inside double quotes (supports newlines)
 UnifiedDoubleQuotedText

@@ -5,6 +5,33 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Template `/for` loop greedy matching**: Inline `/for` loops in templates now only trigger at line start, not mid-line
+  - Previously, mentioning `/for` in template text (e.g., "Use /for iteration") would trigger parse errors
+  - Fixed `UnifiedBacktickChar` and `UnifiedDoubleColonTextSegment` to use `LineStartPredicate` for `/for` and `/end` detection
+  - Both backtick and `::` templates now consistently require line-start only for inline loops
+  - Grammar changes in `grammar/base/unified-templates.peggy` and `grammar/base/unified-quotes.peggy`
+
+- **Heredoc and backtick template XML tag parity**: Both template types now handle XML-like tags identically
+  - Previously, backtick templates allowed `<xml>` tags but heredoc `::` templates treated them as file references
+  - Created abstracted `UnifiedAngleBracketContent` and `AngleBracketLiteral` patterns following DRY principles
+  - Both `` ` `` and `::` templates now parse `<tags>` the same way (literal text when no `./*/@` present)
+  - Grammar changes in `grammar/patterns/file-reference.peggy`, `grammar/base/unified-templates.peggy`, `grammar/base/unified-quotes.peggy`
+
+### Changed
+- **Enhanced error message for `run sh` in `/exe`**: `errors/parse/exe-run-sh/error.md` now clearly explains the distinction between bare shell commands and shell scripts
+  - Shows that bare commands (`/exe @cmd(x) = {echo "@x"}`) support @variable interpolation but are single-line only
+  - Shows that shell scripts (`/exe @cmd(x) = sh {echo "$1"}`) use $1, $2 parameters but support multiline with && and ;
+  - Clarifies that the `run` keyword is only for standalone `/run` directives, not `/exe` definitions
+
+### Documentation
+- **llms.txt updates**:
+  - Added `<FILE_LOADING_GLOBS>` section with prominent glob pattern examples and array access patterns
+  - Enhanced interpolation table to emphasize single quotes are literal (no interpolation)
+  - Added "Variable scoping (security)" section explaining JS/Node blocks only access explicit parameters
+
 ## [2.0.0-rc69]
 ### Fixed
 - JS and Node executors treat expression-style blocks as implicit returns, so `/var` assignments and pipelines receive native objects/arrays and property access like `@repo.name` works without helper wrappers.

@@ -133,3 +133,22 @@ FileFieldChain "field chain"
   = fields:AnyFieldAccess+ {
       return fields;
     }
+
+// -------------------------------------------------------------
+// UNIFIED ANGLE BRACKET HANDLING
+// -------------------------------------------------------------
+
+// Unified angle bracket handler - determines file reference vs literal text
+UnifiedAngleBracketContent "Unified angle bracket content"
+  = FileReferenceInterpolation  // Try file reference first (with semantic lookahead)
+  / AngleBracketLiteral         // Fallback to literal text
+
+// Literal angle brackets when not a file reference
+// Used when content doesn't match file reference patterns (no . * or @)
+AngleBracketLiteral "Literal angle bracket text"
+  = "<" chars:(!">" char:. { return char; })* ">" {
+      return helpers.createNode(NodeType.Text, {
+        content: '<' + chars.join('') + '>',
+        location: location()
+      });
+    }
