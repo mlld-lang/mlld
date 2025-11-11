@@ -35,6 +35,7 @@ ExeRHSContent "exe assignment value"
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
+  / ExeDataObjectPattern        // { "key": value } - JSON object literals with interpolation support
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
   / ExeCommandPattern           // {command} - shell commands with interpolation
   / ExeTemplateFromFilePattern  // template "path" - external template file
@@ -338,6 +339,25 @@ ExeForeachPattern "exe foreach pattern"
       };
     }
 
+
+// Data object pattern for exe context - handles { "key": value } with interpolation
+ExeDataObjectPattern "exe data object pattern"
+  = obj:DataObjectLiteral {
+      return {
+        type: 'exeDataObject',
+        subtype: 'exeDataObject',
+        source: 'dataObject',
+        values: {
+          objectTemplate: obj
+        },
+        raw: {
+          object: 'dataObject'
+        },
+        meta: {
+          hasInterpolation: true
+        }
+      };
+    }
 
 // Environment declaration for exe context - handles { helper1, helper2 }
 ExeEnvironmentDeclaration "exe environment declaration"

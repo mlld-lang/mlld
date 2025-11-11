@@ -3,7 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable } from '@core/types/executable';
-import { interpolate } from '../core/interpreter';
+import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import {
   isExecutableVariable,
@@ -1014,8 +1014,20 @@ export async function evaluateExecInvocation(
   
   // Handle template executables
   if (isTemplateExecutable(definition)) {
-    // Interpolate the template with the bound parameters
-    const templateResult = await interpolate(definition.template, execEnv);
+    // Check if this is an object template (from /exe = { ... })
+    const isObjectTemplate = (definition as any).isObjectTemplate;
+    const templateNodes = definition.template;
+
+    let templateResult: any;
+    if (isObjectTemplate && templateNodes[0]?.type === 'object') {
+      // For object templates, evaluate the object data value to handle file references and interpolation
+      const { evaluateDataValue } = await import('./lazy-eval');
+      templateResult = await evaluateDataValue(templateNodes[0], execEnv);
+    } else {
+      // Regular template interpolation for backtick/bracket templates
+      templateResult = await interpolate(definition.template, execEnv);
+    }
+
     if (isStructuredValue(templateResult)) {
       result = templateResult;
     } else if (typeof templateResult === 'string') {

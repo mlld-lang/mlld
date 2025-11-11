@@ -555,7 +555,37 @@ export async function evaluateExe(
       paramNames,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
-    
+
+  } else if (directive.subtype === 'exeDataObject') {
+    /**
+     * Handle data object executable definitions
+     * WHY: Data object executables provide structured JSON-like data with parameter
+     * substitution and file interpolation, useful for configuration and data templates.
+     * GOTCHA: Objects are evaluated lazily - file references and variables are
+     * interpolated at execution time, not definition time.
+     * CONTEXT: Common for configuration templates, test fixtures, and structured data
+     * Example: /exe @config(dir) = { "path": "@dir", "files": "<@dir/*.md>" }
+     */
+    const objectTemplate = directive.values?.objectTemplate;
+    if (!objectTemplate) {
+      throw new Error('Exec data object directive missing object template');
+    }
+
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+
+    // Create a template executable that will evaluate the object at runtime
+    // We treat this as a template type but mark it for special object handling
+    executableDef = {
+      type: 'template',
+      template: [objectTemplate], // Wrap in array for consistency with template handling
+      paramNames,
+      sourceDirective: 'exec',
+      // Add metadata to indicate this is an object template
+      isObjectTemplate: true
+    } as TemplateExecutable & { isObjectTemplate: boolean };
+
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }
@@ -899,9 +929,25 @@ function createExecWrapper(
       if (!templateNodes) {
         throw new Error(`Template ${execName} has no template content`);
       }
-      
-      // Interpolate the template with parameters
-      result = await interpolate(templateNodes, execEnv);
+
+      // Check if this is an object template
+      if ((definition as any).isObjectTemplate && templateNodes[0]?.type === 'object') {
+        // Evaluate the object node directly to preserve object structure
+        const { evaluate } = await import('../core/interpreter');
+        const objectResult = await evaluate(templateNodes[0], execEnv);
+
+        // Return the native object directly - don't stringify
+        // The wrapper at the end will handle JSON.parse properly
+        if (typeof objectResult === 'object' && objectResult !== null) {
+          // Return as JSON string so the parse at the end can convert back to object
+          result = JSON.stringify(objectResult);
+        } else {
+          result = String(objectResult);
+        }
+      } else {
+        // Regular template interpolation
+        result = await interpolate(templateNodes, execEnv);
+      }
     } else if (definition.type === 'section') {
       // Extract section from file
       throw new Error(`Section executables cannot be invoked from shadow environments yet`);
