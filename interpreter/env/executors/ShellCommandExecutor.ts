@@ -1,12 +1,15 @@
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
 
+const execAsync = promisify(exec);
+
 /**
- * Executes shell commands using execSync
+ * Executes shell commands using async exec for true parallel execution
  */
 export class ShellCommandExecutor extends BaseCommandExecutor {
   constructor(
@@ -254,19 +257,35 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     // Execute the validated command
     // In test environments with MLLD_NO_STREAMING, suppress stderr to keep output clean
     const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
-    const result = execSync(safeCommand, {
+
+    // Handle stdin input if provided (exec doesn't support input option like execSync)
+    let finalCommand = safeCommand;
+    if (options?.input) {
+      // Use printf piping for stdin input
+      const escapedInput = options.input.replace(/'/g, "'\\''");
+      finalCommand = `printf '%s' '${escapedInput}' | ${safeCommand}`;
+    } else if (!safeCommand.includes('|')) {
+      // Provide empty stdin to prevent commands from hanging waiting for input
+      // But only if command doesn't use pipes (to avoid breaking pipe chains)
+      finalCommand = `${safeCommand} < /dev/null`;
+    }
+
+    const { stdout, stderr } = await execAsync(finalCommand, {
       encoding: 'utf8',
       cwd: this.workingDirectory,
       env: { ...process.env, ...(options?.env || {}) },
-      maxBuffer: 10 * 1024 * 1024, // 10MB limit
-      ...(options?.input ? { input: options.input } : {}),
-      ...(suppressStderr ? { stdio: ['pipe', 'pipe', 'pipe'] } : {})
+      maxBuffer: 10 * 1024 * 1024 // 10MB limit
     });
 
+    // async exec always captures stderr; write it to process.stderr if not suppressed
+    if (stderr && !suppressStderr) {
+      process.stderr.write(stderr);
+    }
+
     const duration = Date.now() - startTime;
-    
+
     return {
-      output: result,
+      output: stdout,
       duration,
       exitCode: 0
     };

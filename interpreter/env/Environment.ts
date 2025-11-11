@@ -825,24 +825,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Add a file path to the interpolation stack
+   * Each environment maintains its own stack to support parallel execution
    */
   pushInterpolationStack(path: string): void {
-    if (this.parent) {
-      this.parent.pushInterpolationStack(path);
-    } else {
-      this.interpolationStack.add(path);
-    }
+    this.interpolationStack.add(path);
   }
-  
+
   /**
    * Remove a file path from the interpolation stack
+   * Each environment maintains its own stack to support parallel execution
    */
   popInterpolationStack(path: string): void {
-    if (this.parent) {
-      this.parent.popInterpolationStack(path);
-    } else {
-      this.interpolationStack.delete(path);
-    }
+    this.interpolationStack.delete(path);
   }
   
   /**
