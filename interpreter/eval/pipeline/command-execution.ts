@@ -3,7 +3,7 @@ import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
-import { asText, isStructuredValue, wrapStructured, type StructuredValue } from '../../utils/structured-value';
+import { asText, isStructuredValue, wrapStructured, looksLikeJsonString, type StructuredValue } from '../../utils/structured-value';
 import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
@@ -501,6 +501,19 @@ export async function executeCommandVariable(
     value: unknown,
     options?: { type?: string; text?: string }
   ): CommandExecutionResult => {
+    if (
+      typeof value === 'string' &&
+      (!options || !options.type || options.type === 'text') &&
+      looksLikeJsonString(value)
+    ) {
+      try {
+        const parsed = JSON.parse(value.trim());
+        const typeHint = Array.isArray(parsed) ? 'array' : 'object';
+        return wrapExecResult(parsed, { type: typeHint, text: options?.text ?? value });
+      } catch {
+        // Fall through to default wrapping when JSON.parse fails
+      }
+    }
     return wrapExecResult(value, options);
   };
 

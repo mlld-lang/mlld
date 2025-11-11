@@ -1,7 +1,14 @@
 /exe @zipAs(entries,values,fieldName) = js {
+  console.log('[issue-435][zipAs] raw entries:', entries);
+  console.log('[issue-435][zipAs] raw values:', values);
   return entries.map((entry, i) => {
     const obj = {...entry}
     obj[fieldName] = values[i];
+    console.log('[issue-435][zipAs] iteration', i, {
+      entry,
+      incomingValue: values[i],
+      fieldName
+    });
     return obj;
   });
 }
@@ -12,7 +19,9 @@
   ]
 
 /exe @getIdentifiers(arr) = js {
+  console.log('[issue-435][getIdentifiers] raw arr:', arr);
   return arr.map((entry, i) => {
+    console.log('[issue-435][getIdentifiers] entry', i, entry);
     return entry.file * entry.file
   });
 }

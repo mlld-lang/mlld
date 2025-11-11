@@ -1,21 +1,21 @@
 /var secret @token = "abc123"
 
-/var @pipelineOutput = /run sh {
-  echo @token
-} | /run {
-  cat
-} | /run {
-  python -c "print('done')"
+/exe @emitToken(value) = run { printf "Token: @value" }
+/exe @echoValue(value) = run { printf "@value" }
+/exe @markDone(value) = js {
+  return `${value} :: done`;
 }
 
-/show `Pipeline taint: @pipelineOutput.ctx.taint`
-/show `Pipeline labels: @pipelineOutput.ctx.labels`
+/var @pipelineOutput = @token | @emitToken | @echoValue | @markDone
 
-/exe @emitToken(token) = run {
-  printf "Token: @token"
-}
+/var @pipelineCtx = @pipelineOutput.ctx
+/show `Pipeline taint: @pipelineCtx.taint`
+/show `Pipeline labels: @pipelineCtx.labels`
 
-/var @result = @emitToken(@token)
+/exe @emitTokenOne(value) = run { printf "Token: @value" }
 
-/show `Result taint: @result.ctx.taint`
-/show `Result labels: @result.ctx.labels`
+/var @result = @emitTokenOne(@token)
+
+/var @resultCtx = @result.ctx
+/show `Result taint: @resultCtx.taint`
+/show `Result labels: @resultCtx.labels`

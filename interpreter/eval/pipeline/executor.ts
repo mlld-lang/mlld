@@ -46,6 +46,7 @@ export class PipelineExecutor {
   private initialOutput?: StructuredValue;
   private finalOutput?: StructuredValue;
   private lastStageIndex: number = -1;
+  private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
 
   constructor(
     pipeline: PipelineStage[],
@@ -225,6 +226,7 @@ export class PipelineExecutor {
 
     try {
       const structuredInput = this.getStageOutput(stageIndex - 1, input);
+      this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
       // Set up execution environment for a single command stage
       stageEnv = await createStageEnvironment(
         command,
@@ -282,6 +284,19 @@ export class PipelineExecutor {
         }
 
         let normalized = this.normalizeOutput(output);
+        if (this.debugStructured) {
+          console.error('[PipelineExecutor][pre-output]', {
+            stage: command.rawIdentifier,
+            stageIndex
+          });
+        }
+        this.logStructuredStage('output', command.rawIdentifier, stageIndex, normalized);
+        if (this.debugStructured) {
+          console.error('[PipelineExecutor][post-output]', {
+            stage: command.rawIdentifier,
+            stageIndex
+          });
+        }
         normalized = this.attachSecurityMetadata(normalized, stageDescriptor);
         this.structuredOutputs.set(stageIndex, normalized);
         this.finalOutput = normalized;
@@ -607,6 +622,7 @@ export class PipelineExecutor {
         Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
         async (cmd) => {
           const branchInput = wrapStructured(sharedStructuredInput);
+          this.logStructuredStage('input', cmd.rawIdentifier, stageIndex, branchInput, true);
           let pipelineSnapshot: PipelineContextSnapshot | undefined;
           const subEnv = await createStageEnvironment(
             cmd,
@@ -645,6 +661,7 @@ export class PipelineExecutor {
                 return raw;
               }
               let normalized = this.normalizeOutput(raw);
+              this.logStructuredStage('output', cmd.rawIdentifier, stageIndex, normalized, true);
               normalized = this.attachSecurityMetadata(normalized, stageDescriptor);
               await this.runInlineEffects(cmd, normalized, subEnv);
               return normalized;
@@ -707,7 +724,9 @@ export class PipelineExecutor {
   }
 
   private normalizeOutput(output: any): StructuredValue {
+    this.logStructuredValue('normalize:raw', output);
     if (isStructuredValue(output)) {
+      this.logStructuredValue('normalize:structured', output);
       return output;
     }
     if (isPipelineInput(output)) {
@@ -715,33 +734,45 @@ export class PipelineExecutor {
     }
 
     if (output === null || output === undefined) {
-      return wrapStructured('', 'text', '');
+      const wrapped = wrapStructured('', 'text', '');
+      this.logStructuredValue('normalize:wrapped', wrapped);
+      return wrapped;
     }
 
     if (typeof output === 'string') {
-      return wrapStructured(output, 'text', output);
+      const wrapped = wrapStructured(output, 'text', output);
+      this.logStructuredValue('normalize:wrapped', wrapped);
+      return wrapped;
     }
 
     if (typeof output === 'number' || typeof output === 'boolean' || typeof output === 'bigint') {
       const text = String(output);
-      return wrapStructured(output, 'text', text);
+      const wrapped = wrapStructured(output, 'text', text);
+      this.logStructuredValue('normalize:wrapped', wrapped);
+      return wrapped;
     }
 
     if (Array.isArray(output)) {
       const normalizedArray = output.map(item => extractStageValue(item));
       const text = safeJSONStringify(normalizedArray);
-      return wrapStructured(normalizedArray, 'array', text);
+      const wrapped = wrapStructured(normalizedArray, 'array', text);
+      this.logStructuredValue('normalize:wrapped', wrapped);
+      return wrapped;
     }
 
     if (typeof output === 'object') {
       const maybeText = typeof (output as any).content === 'string' ? (output as any).content : undefined;
       const text = maybeText ?? safeJSONStringify(output);
-      return wrapStructured(output, 'object', text, {
+      const wrapped = wrapStructured(output, 'object', text, {
         loadResult: maybeText ? output : undefined
       });
+      this.logStructuredValue('normalize:wrapped', wrapped);
+      return wrapped;
     }
 
-    return wrapStructured(output, 'text', safeJSONStringify(output));
+    const wrapped = wrapStructured(output, 'text', safeJSONStringify(output));
+    this.logStructuredValue('normalize:wrapped', wrapped);
+    return wrapped;
   }
 
   private attachSecurityMetadata(
@@ -825,6 +856,76 @@ export class PipelineExecutor {
     }
     return wrapStructured('', 'text', '');
   }
+
+  private logStructuredStage(
+    phase: 'input' | 'output',
+    stageName: string,
+    stageIndex: number,
+    value: StructuredValue,
+    isParallelBranch = false
+  ): void {
+    if (!this.debugStructured) {
+      return;
+    }
+    try {
+      console.error(`[PipelineExecutor][${phase}]`, {
+        stage: stageName,
+        stageIndex,
+        parallel: isParallelBranch
+      });
+      console.error('[PipelineExecutor][detail-start]', {
+        phase,
+        stage: stageName
+      });
+      console.error('[PipelineExecutor]', {
+        phase,
+        stage: stageName,
+        stageIndex,
+        parallel: isParallelBranch,
+        type: value?.type,
+        textSnippet: snippet(value?.text),
+        dataPreview: previewValue(value?.data)
+      });
+      console.error('[PipelineExecutor][detail-end]', {
+        phase,
+        stage: stageName
+      });
+    } catch (error) {
+      console.error('[PipelineExecutor][logStructuredStage:error]', {
+        phase,
+        stage: stageName,
+        stageIndex,
+        error: error instanceof Error ? error.message : error
+      });
+    }
+  }
+
+  private logStructuredValue(label: string, value: unknown): void {
+    if (!this.debugStructured) {
+      return;
+    }
+    try {
+      if (isStructuredValue(value)) {
+        console.error('[PipelineExecutor]', {
+          label,
+          type: value.type,
+          textSnippet: snippet(value.text),
+          dataPreview: previewValue(value.data)
+        });
+      } else {
+        console.error('[PipelineExecutor]', {
+          label,
+          typeofValue: typeof value,
+          preview: previewValue(value)
+        });
+      }
+    } catch (error) {
+      console.error('[PipelineExecutor][logStructuredValue:error]', {
+        label,
+        error: error instanceof Error ? error.message : error
+      });
+    }
+  }
 }
 
 function safeJSONStringify(value: unknown): string {
@@ -841,6 +942,39 @@ function extractStageValue(value: any): any {
   }
   if (isPipelineInput(value)) {
     return value.data;
+  }
+  return value;
+}
+
+function snippet(text: string | undefined, max: number = 120): string | undefined {
+  if (!text) {
+    return text;
+  }
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
+}
+
+function previewValue(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (isStructuredValue(value)) {
+    return {
+      type: value.type,
+      textSnippet: snippet(value.text, 60)
+    };
+  }
+  if (Array.isArray(value)) {
+    return {
+      length: value.length,
+      sample: value.slice(0, 3).map(item => (isStructuredValue(item) ? { type: item.type, text: snippet(item.text, 40) } : item))
+    };
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>);
+    return {
+      keys: keys.slice(0, 5),
+      size: keys.length
+    };
   }
   return value;
 }

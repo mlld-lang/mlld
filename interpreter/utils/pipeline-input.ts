@@ -2,7 +2,7 @@ import { MlldInterpreterError } from '@core/errors';
 import { llmxmlInstance } from './llmxml-instance';
 import { jsonToXml } from './json-to-xml';
 import type { StructuredValue, StructuredValueType } from './structured-value';
-import { STRUCTURED_VALUE_SYMBOL } from './structured-value';
+import { STRUCTURED_VALUE_SYMBOL, attachContextToStructuredValue } from './structured-value';
 
 export interface PipelineInput<T = unknown> extends StructuredValue<T> {
   readonly csv?: any[][];
@@ -229,7 +229,7 @@ export function createPipelineInput<T = unknown>(
     configurable: true
   });
 
-  return input;
+  return attachContextToStructuredValue(input) as PipelineInput<T>;
 }
 
 /**

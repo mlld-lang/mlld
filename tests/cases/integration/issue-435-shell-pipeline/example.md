@@ -4,6 +4,8 @@
   ]
 
 /exe @truncateTo(arr,max) = js {
+  console.log('[issue-435][truncateTo] raw arr:', arr);
+  console.log('[issue-435][truncateTo] max:', max);
   return arr.slice(0, max);
 }
 

@@ -1,4 +1,5 @@
-import type { SecurityDescriptor } from '@core/types/security';
+import type { SecurityDescriptor, DataLabel, TaintLevel } from '@core/types/security';
+import { makeSecurityDescriptor, normalizeSecurityDescriptor } from '@core/types/security';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 
@@ -15,6 +16,10 @@ export interface StructuredValueMetadata {
   source?: string;
   retries?: number;
   security?: SecurityDescriptor;
+  metrics?: {
+    tokens?: number;
+    length?: number;
+  };
   [key: string]: unknown;
 }
 
@@ -23,11 +28,23 @@ export interface StructuredValue<T = unknown> {
   text: string;
   data: T;
   metadata?: StructuredValueMetadata;
+  readonly ctx: StructuredValueContext;
   toString(): string;
   valueOf(): string;
   [Symbol.toPrimitive](hint?: string): string;
   readonly [STRUCTURED_VALUE_SYMBOL]: true;
 }
+
+export interface StructuredValueContext {
+  labels: readonly DataLabel[];
+  taint: TaintLevel;
+  sources: readonly string[];
+  tokens?: number;
+  length?: number;
+  type: StructuredValueType;
+}
+
+const STRUCTURED_VALUE_CTX_ATTACHED = Symbol('mlld.StructuredValueCtxAttached');
 
 export function isStructuredValue<T = unknown>(value: unknown): value is StructuredValue<T> {
   return Boolean(
@@ -90,7 +107,7 @@ export function wrapStructured<T>(
 ): StructuredValue<T> {
   if (isStructuredValue<T>(value)) {
     if (!type && !text && !metadata) {
-      return value;
+      return attachContextToStructuredValue(value);
     }
     if (process.env.MLLD_DEBUG_STRUCTURED === 'true') {
       try {
@@ -104,17 +121,19 @@ export function wrapStructured<T>(
         });
       } catch {}
     }
-    return createStructuredValue(
-      value.data,
-      type ?? value.type,
-      text ?? value.text,
-      metadata ?? value.metadata
+    return attachContextToStructuredValue(
+      createStructuredValue(
+        value.data,
+        type ?? value.type,
+        text ?? value.text,
+        metadata ?? value.metadata
+      )
     );
   }
 
   const resolvedType = type ?? 'text';
   const resolvedText = text ?? deriveText(value);
-  return createStructuredValue(value, resolvedType, resolvedText, metadata);
+  return attachContextToStructuredValue(createStructuredValue(value, resolvedType, resolvedText, metadata));
 }
 
 export function ensureStructuredValue(
@@ -137,6 +156,21 @@ export function ensureStructuredValue(
   if (typeof value === 'string') {
     const resolvedText = textOverride ?? value;
     return wrapStructured(value, typeHint ?? 'text', resolvedText, metadata);
+  }
+
+  if (typeof value === 'number') {
+    const resolvedText = textOverride ?? String(value);
+    return wrapStructured(value, typeHint ?? 'number', resolvedText, metadata);
+  }
+
+  if (typeof value === 'boolean') {
+    const resolvedText = textOverride ?? String(value);
+    return wrapStructured(value, typeHint ?? 'boolean', resolvedText, metadata);
+  }
+
+  if (typeof value === 'bigint') {
+    const resolvedText = textOverride ?? value.toString();
+    return wrapStructured(value, typeHint ?? 'bigint', resolvedText, metadata);
   }
 
   if (Array.isArray(value)) {
@@ -176,7 +210,7 @@ function createStructuredValue<T>(
     [STRUCTURED_VALUE_SYMBOL]: true as const
   };
 
-  return structuredValue;
+  return attachContextToStructuredValue(structuredValue);
 }
 
 function cloneMetadata(metadata?: StructuredValueMetadata): StructuredValueMetadata | undefined {
@@ -214,5 +248,42 @@ export const structuredValueUtils = {
   looksLikeJsonString,
   wrapStructured,
   isStructuredValue,
-  ensureStructuredValue
+  ensureStructuredValue,
+  attachContextToStructuredValue
 };
+
+export function attachContextToStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  if ((value as any)[STRUCTURED_VALUE_CTX_ATTACHED]) {
+    return value;
+  }
+  Object.defineProperty(value, STRUCTURED_VALUE_CTX_ATTACHED, {
+    value: true,
+    enumerable: false,
+    configurable: false
+  });
+  Object.defineProperty(value, 'ctx', {
+    enumerable: false,
+    configurable: true,
+    get() {
+      return buildStructuredValueContext(value);
+    }
+  });
+  return value;
+}
+
+function buildStructuredValueContext(value: StructuredValue): StructuredValueContext {
+  const descriptor =
+    normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined) ?? makeSecurityDescriptor();
+  const metrics = value.metadata?.metrics;
+  return Object.freeze({
+    labels: descriptor.labels ?? [],
+    taint: descriptor.taintLevel ?? 'unknown',
+    sources: descriptor.sources ?? [],
+    tokens: metrics?.tokens,
+    length: metrics?.length,
+    type: value.type
+  });
+}

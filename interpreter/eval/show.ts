@@ -444,6 +444,10 @@ export async function evaluateShow(
           if (STRUCTURED_COLLECTION_TYPES.has(item.type)) {
             return item.data;
           }
+          const dataView = item.data;
+          if (typeof dataView === 'number' || typeof dataView === 'boolean' || dataView === null) {
+            return dataView;
+          }
           return asText(item);
         }
         if (item && typeof item === 'object' && typeof (item as any).text === 'string' && typeof (item as any).type === 'string') {

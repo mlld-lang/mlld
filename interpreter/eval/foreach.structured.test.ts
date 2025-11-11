@@ -5,6 +5,7 @@ import { PathService } from '@services/fs/PathService';
 import { parse } from '@grammar/parser';
 import { evaluate } from '../core/interpreter';
 import type { ArrayVariable } from '@core/types/variable/VariableTypes';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 describe('evaluateForeachCommand (structured boundaries)', () => {
   let env: Environment;
@@ -33,7 +34,12 @@ describe('evaluateForeachCommand (structured boundaries)', () => {
 
     const value = foreachResult.value;
     expect(Array.isArray(value)).toBe(true);
-    expect(value).toEqual([
+    if (!Array.isArray(value)) {
+      return;
+    }
+
+    expect(value.every(item => isStructuredValue(item))).toBe(true);
+    expect(value.map(item => asData(item))).toEqual([
       { file: 1 },
       { file: 2 }
     ]);

@@ -305,10 +305,8 @@ async function prepareStructuredInput(
   };
 
   if (isStructuredValue(value)) {
-    if (incomingMetadata) {
-      return wrapStructured(value, value.type, value.text, mergedMetadata(value.metadata));
-    }
-    return value;
+    const normalizedData = sanitizeStructuredData(value.data);
+    return wrapStructured(normalizedData, value.type, value.text, mergedMetadata(value.metadata));
   }
 
   if (
@@ -320,12 +318,8 @@ async function prepareStructuredInput(
     typeof (value as any).text === 'string' &&
     typeof (value as any).type === 'string'
   ) {
-    return wrapStructured(
-      value as StructuredValue,
-      (value as any).type,
-      (value as any).text,
-      mergedMetadata((value as any).metadata)
-    );
+    const normalizedData = sanitizeStructuredData((value as any).data);
+    return wrapStructured(normalizedData, (value as any).type, (value as any).text, mergedMetadata((value as any).metadata));
   }
 
   if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
@@ -369,11 +363,13 @@ async function prepareStructuredInput(
   }
 
   if (Array.isArray(value)) {
-    return wrapStructured(value, 'array', undefined, incomingMetadata);
+    const normalizedArray = value.map(item => sanitizeStructuredData(item));
+    return wrapStructured(normalizedArray, 'array', undefined, incomingMetadata);
   }
 
   if (value && typeof value === 'object') {
-    return wrapStructured(value, 'object', undefined, incomingMetadata);
+    const normalizedObject = sanitizeStructuredData(value);
+    return wrapStructured(normalizedObject as Record<string, unknown>, 'object', undefined, incomingMetadata);
   }
 
   return ensureStructuredValue('', 'text', '', incomingMetadata);
@@ -393,6 +389,24 @@ function getAvailableFunctions(env: Environment): string[] {
   // For now, we'll just suggest checking /exe directives
   
   return funcs;
+}
+
+function sanitizeStructuredData(value: unknown): unknown {
+  if (isStructuredValue(value)) {
+    return sanitizeStructuredData(value.data);
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeStructuredData(item));
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of entries) {
+      result[key] = sanitizeStructuredData(val);
+    }
+    return result;
+  }
+  return value;
 }
 
 /**

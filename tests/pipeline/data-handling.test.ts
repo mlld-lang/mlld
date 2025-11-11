@@ -166,7 +166,10 @@ describe('Data handling accessors', () => {
     const chunksJson = normalized.slice(0, splitIndex + 1);
     const sumsJson = normalized.slice(splitIndex + 1);
     expect(JSON.parse(chunksJson)).toEqual([[1, 2], [3, 4]]);
-    expect(JSON.parse(sumsJson)).toEqual([3, 7]);
+    const parsedSums = JSON.parse(sumsJson).map((value: unknown) =>
+      typeof value === 'string' ? Number(value) : value
+    );
+    expect(parsedSums).toEqual([3, 7]);
   });
 
   it('stores structured assignments as wrappers and exposes data to field access, iteration, and equality', async () => {

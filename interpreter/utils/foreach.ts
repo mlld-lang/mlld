@@ -1,6 +1,7 @@
 import type { Environment } from '../env/Environment';
 import { evaluateForeachCommand, evaluateForeachSection } from '../eval/foreach';
 import { interpolate } from '../core/interpreter';
+import { isStructuredValue } from './structured-value';
 
 /**
  * Configuration options for foreach output formatting
@@ -56,13 +57,14 @@ export async function evaluateForeachAsText(
   
   // Convert results to strings
   const stringResults = normalizedResults.map(result => {
-    if (typeof result === 'string') {
-      return result;
-    } else if (typeof result === 'object') {
-      return JSON.stringify(result, null, 2);
-    } else {
-      return String(result);
+    const normalized = normalizeForeachResultValue(result);
+    if (typeof normalized === 'string') {
+      return normalized;
     }
+    if (typeof normalized === 'object') {
+      return JSON.stringify(normalized, null, 2);
+    }
+    return String(normalized);
   });
   
   // Apply template if provided
@@ -194,6 +196,41 @@ export function parseForeachOptions(withClause: any): ForeachOptions {
   }
   
   return options;
+}
+
+function normalizeForeachResultValue(value: unknown): unknown {
+  if (isStructuredValue(value)) {
+    return normalizeForeachResultValue(value.data);
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => normalizeForeachResultValue(item));
+  }
+  if (value && typeof value === 'object') {
+    if (isStructuredValueLike(value)) {
+      return normalizeForeachResultValue((value as any).data);
+    }
+    const entries = Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => [
+      key,
+      normalizeForeachResultValue(entryValue)
+    ]);
+    return Object.fromEntries(entries);
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function isStructuredValueLike(value: unknown): value is { data?: unknown } {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  return 'data' in (value as Record<string, unknown>) && 'text' in (value as Record<string, unknown>);
 }
 
 /**

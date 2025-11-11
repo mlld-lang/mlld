@@ -1010,7 +1010,7 @@ export async function evaluateExecInvocation(
     env.recordSecurityDescriptor(resultSecurityDescriptor);
   }
   
-  let result: string;
+  let result: unknown;
   
   // Handle template executables
   if (isTemplateExecutable(definition)) {
@@ -1023,7 +1023,9 @@ export async function evaluateExecInvocation(
         try {
           const parsed = JSON.parse(templateResult.trim());
           const typeHint = Array.isArray(parsed) ? 'array' : 'object';
-          result = wrapStructured(parsed, typeHint, templateResult);
+          result = wrapStructured(parsed, typeHint, templateResult, resultSecurityDescriptor
+            ? { security: resultSecurityDescriptor }
+            : undefined);
         } catch {
           result = templateResult;
         }
@@ -1032,6 +1034,12 @@ export async function evaluateExecInvocation(
       }
     } else {
       result = templateResult;
+    }
+
+    if (!isStructuredValue(result) && result && typeof result === 'object') {
+      const templateType = Array.isArray(result) ? 'array' : 'object';
+      const metadata = resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined;
+      result = wrapStructured(result as Record<string, unknown>, templateType, undefined, metadata);
     }
   }
   // Handle pipeline executables

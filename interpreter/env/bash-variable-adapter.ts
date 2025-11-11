@@ -5,6 +5,7 @@
 
 import type { Variable } from '@core/types/variable';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { resolveValue, ResolutionContext } from '@interpreter/utils/variable-resolution';
 import type { Environment } from './Environment';
 import * as fs from 'fs';
@@ -40,6 +41,10 @@ export async function adaptVariablesForBash(
 function convertToString(value: any): string {
   if (value === null || value === undefined) {
     return '';
+  }
+
+  if (isStructuredValue(value)) {
+    return asText(value);
   }
   
   if (typeof value === 'string') {

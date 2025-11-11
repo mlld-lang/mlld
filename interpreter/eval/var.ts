@@ -25,6 +25,7 @@ import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/
 import {
   createCapabilityContext,
   makeSecurityDescriptor,
+  mergeDescriptors,
   normalizeSecurityDescriptor
 } from '@core/types/security';
 import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
@@ -57,9 +58,28 @@ function extractSecurityDescriptorFromValue(value: unknown): SecurityDescriptor 
   if (isStructuredValue(value)) {
     return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
   }
+  if (Array.isArray(value)) {
+    const descriptors = value
+      .map(extractSecurityDescriptorFromValue)
+      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+    if (descriptors.length === 0) {
+      return undefined;
+    }
+    return mergeDescriptors(...descriptors);
+  }
   if (typeof value === 'object') {
     const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
-    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+    const direct = normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+    if (direct) {
+      return direct;
+    }
+    const nestedDescriptors = Object.values(value as Record<string, unknown>)
+      .map(extractSecurityDescriptorFromValue)
+      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+    if (nestedDescriptors.length === 0) {
+      return undefined;
+    }
+    return mergeDescriptors(...nestedDescriptors);
   }
   return undefined;
 }
@@ -714,7 +734,8 @@ export async function prepareVarAssignment(
     resolvedValue = await interpolateWithSecurity([valueNode]);
   }
 
-  mergeResolvedDescriptor(extractSecurityDescriptorFromValue(resolvedValue));
+  const resolvedValueDescriptor = extractSecurityDescriptorFromValue(resolvedValue);
+  mergeResolvedDescriptor(resolvedValueDescriptor);
 
   // Create and store the appropriate variable type
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
@@ -723,7 +744,7 @@ export async function prepareVarAssignment(
   const applySecurityMetadata = (base: any, existing?: SecurityDescriptor) =>
     VariableMetadataUtils.applySecurityMetadata(base, {
       labels: securityLabels,
-      existingDescriptor: existing
+      existingDescriptor: existing ?? resolvedValueDescriptor
     });
   
   // Mark if value came from a function for pipeline retryability
@@ -801,18 +822,14 @@ export async function prepareVarAssignment(
       isStructuredValue: true,
       structuredValueType: resolvedValue.type
     };
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(structuredMetadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(structuredMetadata, resolvedValueDescriptor);
 
     variable = createStructuredValueVariable(identifier, resolvedValue, source, finalMetadata);
 
   } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values - we need to preserve their types
     const { createPrimitiveVariable } = await import('@core/types/variable');
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(metadata);
     variable = createPrimitiveVariable(
       identifier,
       valueNode, // Use the actual primitive value
@@ -834,47 +851,35 @@ export async function prepareVarAssignment(
       });
     }
     
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(metadata);
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, finalMetadata);
     
   } else if (valueNode.type === 'object') {
     const isComplex = hasComplexValues(valueNode.properties);
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(metadata);
     variable = createObjectVariable(identifier, resolvedValue, isComplex, source, finalMetadata);
     
   } else if (valueNode.type === 'command') {
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(metadata);
     variable = createCommandResultVariable(identifier, resolvedValue, valueNode.command, source, 
       undefined, undefined, finalMetadata);
     
   } else if (valueNode.type === 'code') {
     // Need to get source code from the value node
     const sourceCode = valueNode.code || ''; // TODO: Verify how to extract source code
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(metadata);
     variable = createComputedVariable(identifier, resolvedValue, 
       valueNode.language || 'js', sourceCode, source, finalMetadata);
     
   } else if (valueNode.type === 'path') {
     const filePath = await interpolate(valueNode.segments, env);
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(metadata);
     variable = createFileContentVariable(identifier, resolvedValue, filePath, source, finalMetadata);
     
   } else if (valueNode.type === 'section') {
     const filePath = await interpolate(valueNode.path, env);
     const sectionName = await interpolate(valueNode.section, env);
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      labels: securityLabels
-    });
+    const finalMetadata = applySecurityMetadata(metadata);
     variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
       sectionName, 'hash', source, finalMetadata);
     
@@ -883,36 +888,21 @@ export async function prepareVarAssignment(
     // This handles cases like @user.name where resolvedValue is the field value
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
     if (typeof actualValue === 'string') {
-      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-        labels: securityLabels,
-        existingDescriptor: resolvedValue.metadata?.security
-      });
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValue.metadata?.security);
       variable = createSimpleTextVariable(identifier, actualValue, source, finalMetadata);
     } else if (typeof actualValue === 'number' || typeof actualValue === 'boolean' || actualValue === null) {
       const { createPrimitiveVariable } = await import('@core/types/variable');
-      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-        labels: securityLabels,
-        existingDescriptor: resolvedValue.metadata?.security
-      });
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValue.metadata?.security);
       variable = createPrimitiveVariable(identifier, actualValue, source, finalMetadata);
     } else if (Array.isArray(actualValue)) {
-      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-        labels: securityLabels,
-        existingDescriptor: resolvedValue.metadata?.security
-      });
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValue.metadata?.security);
       variable = createArrayVariable(identifier, actualValue, false, source, finalMetadata);
     } else if (typeof actualValue === 'object' && actualValue !== null) {
-      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-        labels: securityLabels,
-        existingDescriptor: resolvedValue.metadata?.security
-      });
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValue.metadata?.security);
       variable = createObjectVariable(identifier, actualValue, false, source, finalMetadata);
     } else {
       // Fallback to text
-      const finalMetadata = VariableMetadataUtils.applySecurityMetadata(metadata, {
-        labels: securityLabels,
-        existingDescriptor: resolvedValue.metadata?.security
-      });
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValue.metadata?.security);
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
     

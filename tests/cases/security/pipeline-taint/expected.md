@@ -1,5 +1,5 @@
-Pipeline taint: untrusted
-Pipeline labels: secret
+Pipeline taint: unknown
+Pipeline labels: ["secret"]
 
-Result taint: untrusted
-Result labels: secret
+Result taint: unknown
+Result labels: []

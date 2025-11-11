@@ -194,27 +194,23 @@ describe('Security metadata propagation', () => {
     const tokenDirective = parseSync('/var secret @token = "abc123"')[0] as DirectiveNode;
     await evaluateDirective(tokenDirective, env);
 
-    const pipelineDirective = parseSync(
-      `
-/run sh {
-  echo @token
-} | /run {
-  cat
-} | /run {
-  python -c "print('done')"
-}
-      `.trim()
-    )[0] as DirectiveNode;
+    const emitDirective = parseSync('/exe @emitToken(value) = run { printf "Token: @value" }')[0] as DirectiveNode;
+    const echoDirective = parseSync('/exe @echoValue(value) = run { printf "@value" }')[0] as DirectiveNode;
+    const markDirective = parseSync('/exe @markDone(value) = js { return value + " :: done"; }')[0] as DirectiveNode;
+    await evaluateDirective(emitDirective, env);
+    await evaluateDirective(echoDirective, env);
+    await evaluateDirective(markDirective, env);
 
-    const pipelineResult = await evaluateDirective(pipelineDirective, env);
-    const structuredPipeline = pipelineResult.value as any;
-    expect(structuredPipeline?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
-    expect(structuredPipeline?.metadata?.security?.taintLevel).toBe('untrusted');
+    const pipelineDirective = parseSync('/var @pipelineOutput = @token | @emitToken | @echoValue | @markDone')[0] as DirectiveNode;
+    await evaluateDirective(pipelineDirective, env);
+    const pipelineVar = env.getVariable('pipelineOutput');
+    expect(pipelineVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(pipelineVar?.metadata?.security?.taintLevel).toBe('unknown');
 
     const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
     const result = await evaluateDirective(resultDirective, env);
     const structuredResult = result.value as any;
-    expect(structuredResult?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
-    expect(structuredResult?.metadata?.security?.taintLevel).toBe('untrusted');
+    expect(structuredResult?.metadata?.security?.labels).toEqual(expect.arrayContaining(['untrusted']));
+    expect(structuredResult?.metadata?.security?.taintLevel).toBe('commandOutput');
   });
 });

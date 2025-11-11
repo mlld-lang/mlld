@@ -27,6 +27,7 @@ import {
   Variable
 } from './VariableTypes';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
+import { attachContextToStructuredValue } from '@interpreter/utils/structured-value';
 import { VariableMetadataUtils } from './VariableMetadata';
 import type { TokenEstimationOptions } from '@core/utils/token-metrics';
 
@@ -629,22 +630,27 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): StructuredValueVariable {
+    const structuredValue = attachContextToStructuredValue(value);
     const structuredMetadata: VariableMetadata = {
       ...metadata,
       isStructuredValue: true,
-      structuredValueType: value.type
+      structuredValueType: structuredValue.type
     };
 
-    const finalMetadata = applyTextMetrics(structuredMetadata, value.text);
+    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(structuredMetadata, {
+      existingDescriptor: structuredValue.metadata?.security
+    });
+
+    const finalMetadata = applyTextMetrics(securityAwareMetadata, structuredValue.text);
 
     return finalizeVariable({
       type: 'structured',
       name,
-      value,
+      value: structuredValue,
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata: finalMetadata || structuredMetadata
+      metadata: finalMetadata || securityAwareMetadata
     });
   }
 
