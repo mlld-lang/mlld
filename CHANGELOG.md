@@ -5,7 +5,11 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0-rc70 (unreleased)]
+
+### Added
+- `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
+- `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
 
 ### Fixed
 - Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
@@ -22,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Both `` ` `` and `::` templates now parse `<tags>` the same way (literal text when no `./*/@` present)
   - Grammar changes in `grammar/patterns/file-reference.peggy`, `grammar/base/unified-templates.peggy`, `grammar/base/unified-quotes.peggy`
 
+- **Parallel for loop circular reference detection**: Fixed false positive circular reference warnings when multiple parallel tasks load the same file
+  - Each parallel execution context now maintains its own interpolation stack for independent file loading
+  - Prevents `Warning: Circular reference detected` when parallel tasks legitimately reference the same shared file
+  - Real circular references (A includes B includes A) are still correctly detected via parent chain checking
+  - Regression test added in `tests/cases/regression/parallel-interpolation-stack/`
+- Inline pipeline effect detection now differentiates builtin `append` from user-defined commands, restoring stage execution for execs named `append`
+- Alligator syntax in for expressions: `for @f in @files => <@f>` and property access like `for @f in @files => <@f>.fm.title` now work correctly
+
 ### Changed
 - **Enhanced error message for `run sh` in `/exe`**: `errors/parse/exe-run-sh/error.md` now clearly explains the distinction between bare shell commands and shell scripts
   - Shows that bare commands (`/exe @cmd(x) = {echo "@x"}`) support @variable interpolation but are single-line only
@@ -33,20 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `<FILE_LOADING_GLOBS>` section with prominent glob pattern examples and array access patterns
   - Enhanced interpolation table to emphasize single quotes are literal (no interpolation)
   - Added "Variable scoping (security)" section explaining JS/Node blocks only access explicit parameters
-
-## [2.0.0-rc70]
-### Added
-- `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
-- `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
-
-### Fixed
-- **Parallel for loop circular reference detection**: Fixed false positive circular reference warnings when multiple parallel tasks load the same file
-  - Each parallel execution context now maintains its own interpolation stack for independent file loading
-  - Prevents `Warning: Circular reference detected` when parallel tasks legitimately reference the same shared file
-  - Real circular references (A includes B includes A) are still correctly detected via parent chain checking
-  - Regression test added in `tests/cases/regression/parallel-interpolation-stack/`
-- Inline pipeline effect detection now differentiates builtin `append` from user-defined commands, restoring stage execution for execs named `append`
-- Alligator syntax in for expressions: `for @f in @files => <@f>` and property access like `for @f in @files => <@f>.fm.title` now work correctly
 
 ## [2.0.0-rc69]
 ### Fixed

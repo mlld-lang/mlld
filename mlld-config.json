@@ -1,0 +1,20 @@
+{
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@devdocs/",
+        "resolver": "LOCAL",
+        "config": {
+          "basePath": "docs/dev"
+        }
+      },
+      {
+        "prefix": "@userdocs/",
+        "resolver": "LOCAL",
+        "config": {
+          "basePath": "docs/user"
+        }
+      }
+    ]
+  }
+}
