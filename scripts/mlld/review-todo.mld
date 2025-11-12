@@ -1,0 +1,100 @@
+/var @files = <todo/*.md>
+/exe @claude(prompt, @tools) = {/Users/adam/.claude/local/claude -p "@prompt" --allowedTools "@tools" --model sonnet}
+/var @readonly = "Glob,Grep,LS,ExitPlanMode,Read,NotebookRead,WebFetch,TodoWrite,WebSearch"
+
+/exe @reviewask(doc) = `
+<context>
+This codebase has gone through some refactors and updates since we wrote up the plan outlined in the document I'm going to share with you. Your goal is to assess whether the work outlined in this file is complete or still has relevance. Your attitude should be one focused on pragmatism and "yagni" while keeping an eye out for valuable improvements and impactful refactors.
+
+In order to give me confidence in your assessment and reduce the risk of hallucination, I want you to (A) assess your own confidence and (B) keep track of the files you actually review (evidence).
+</goal>
+
+Here's the file I'd like you to review:
+
+<file>
+# @doc.filename
+
+@doc.content
+</file>
+
+<resources>
+Developer-facing documentation is in docs/dev.
+</resources>
+
+<task>
+Your task is to review the portions of this codebase relevant to the document and assess the document.
+
+1. COMPLETION Is the document's outlined work "complete" — specifically in terms of the goal (if not the exact implementation).
+
+2. RELEVANCE: Is the problem or enhancement aimed to be addressed here still relevant?
+
+3. DOCS ADDITIONS NEEDED: If this work is NOT complete, N/A is a fine answer. IF this work IS complete, is there value in ensuring aspects of this are included in user/dev docs, assuming we are very yagni about docs except for cases where it's essential user docs or critical to understanding architecture decisions which wouldn't be able to be understood simply by reading the code.
+
+4. PRIORITY: From a pragmatic perspective, how high of a priority should taking action on #1, #2, and #3 be?
+
+5. CONFIDENCE: Assess your own confidence and list the files you reviewed as evidence (including using grep) and how they provide evidence supporting your conclusions. You may additional 
+
+You may also provide additional notes to elaborate on your findings. 
+
+In general, your output should be terse and to the point, leaning on direct references and citations instead of lengthy explanations. 
+
+Your content will be written to a markdown file. Use frontmatter at the top of your output to summarize your assessment.
+</task>
+
+<example_output>
+---
+reviewed: todo/some-file-name.md
+completion: PARTIAL
+relevance: LOW
+docsadditions: NONE
+priority: MEDIUM
+confidence: HIGH
+---
+
+# Review of todo/some-file-name.md
+
+## Completion: PARTIAL
+Description of why it's complete/partial/incomplete
+
+## Relevance: LOW 
+Additional work could be done on this, but it wouldn't have much impact at this point.
+
+## Priority: LOW
+Most of the work described here seems to have been made irrelevant by recent refactors.
+
+## Documentation work needed: NONE
+Bullet what (if anything) would be valuable to include in user and/or dev docs, even in the context of yagni.
+
+## Confidence: HIGH
+A list of the specific files you reviewed (including using grep)
+
+## notes
+Your notes and observations
+</example_output>
+
+IMPORTANT: Your output will be written directly to a markdown file so the first character of your output should be "---" as the start of frontmatter, with no comments before.
+`
+
+/exe @check(@response) = `
+Read the following and provide a ONE WORD response: true or false.
+
+The following output contains a frontmatter block and a review: true or false
+
+<output>
+@response
+</output>
+`
+
+/exe @slice(array, start, end) = js {(Array.isArray(array) ? array.slice(start, end) : [])}
+
+>> /var @somefiles = @slice(@files, 0, 3)
+
+/for @file in @files => output @claude(@reviewask(@file), @readonly) to "todo/@file.filename-review.md"
+
+>> /var @reviews = @file in @files => output @claude(@reviewask(@file), @readonly) to "todo/@file.filename-review.md"
+
+>> sketching 
+>> /var @approvals = @review in @reviews => @claude(@check(@review))
+
+>> create the same review process but provide the docs guide and ask about relevant docs and whether we've integrated 
+>> /for @file in @somefiles => output @claude(@docsask(@file), @readonly) to "todo/@file.filename-docs.md"

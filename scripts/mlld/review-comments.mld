@@ -1,0 +1,135 @@
+---
+description: Code comment and documentation review script for mlld codebase
+version: 1.0.0
+author: Claude
+---
+
+>> Load documentation guidelines
+
+/var @jsdoc_guidelines = <@base/docs/dev/JSDOC.md>
+
+>> Define file groups for review
+
+/var @eval_content = <@base/interpreter/eval/content-loader*.ts>
+/var @eval_imports = <@base/interpreter/eval/import/*.ts>
+/var @env_files = <@base/interpreter/env/*.ts>
+/var @env_executors = <@base/interpreter/env/executors/*.ts>
+/var @eval_core = [<@base/interpreter/eval/var.ts>, <@base/interpreter/eval/show.ts>, <@base/interpreter/eval/exe.ts>, <@base/interpreter/eval/when.ts>, <@base/interpreter/eval/for.ts>, <@base/interpreter/eval/output.ts>]
+/var @eval_directives = <@base/interpreter/eval/directive.ts>
+/var @pipeline_files = <@base/interpreter/eval/pipeline/*.ts>
+/var @core_files = <@base/interpreter/core/*.ts>
+/var @cli_files = <@base/cli/*.ts>
+/var @api_files = <@base/api/*.ts>
+/var @service_resolvers = <@base/services/resolvers/*.ts>
+/var @utils_files = <@base/interpreter/utils/*.ts>
+
+>> Group all file sets for review
+/var @file_sets = [
+  { "name": "Content Loading", "files": @eval_content, "notes": "Focus on WHY lazy evaluation is used, GOTCHA about metadata preservation, CONTEXT of file vs URL loading" },
+  { "name": "Import System", "files": @eval_imports, "notes": "Focus on SECURITY boundaries, WHY resolver chain works this way, GOTCHA about module vs path imports" },
+  { "name": "Environment Core", "files": @env_files, "notes": "Focus on WHY variable types are preserved, SECURITY of shadow environments, CONTEXT of child environments" },
+  { "name": "Executors", "files": @env_executors, "notes": "Focus on SECURITY of command execution, WHY different languages have different adapters, GOTCHA about parameter passing" },
+  { "name": "Core Directives", "files": @eval_core, "notes": "Focus on WHY direct evaluation, CONTEXT of environment state, GOTCHA about variable resolution" },
+  { "name": "Directive Base", "files": [@eval_directives], "notes": "Focus on WHY single recursive evaluate, CONTEXT of evaluation order, GOTCHA about AST arrays" },
+  { "name": "Pipeline System", "files": @pipeline_files, "notes": "Focus on WHY retry mechanism, CONTEXT of pipeline state, GOTCHA about metadata shelf" },
+  { "name": "Core Interpreter", "files": @core_files, "notes": "Focus on WHY abstraction patterns, CONTEXT of AST traversal, GOTCHA about interpolation contexts" },
+  { "name": "CLI", "files": @cli_files, "notes": "Focus on WHY command structure, CONTEXT of user interaction, SECURITY of file operations" },
+  { "name": "API", "files": @api_files, "notes": "Focus on WHY API design choices, CONTEXT of integration points, SECURITY boundaries" },
+  { "name": "Resolvers", "files": @service_resolvers, "notes": "Focus on WHY resolver priorities, CONTEXT of resolution chain, SECURITY of remote content" },
+  { "name": "Utils", "files": @utils_files, "notes": "Focus on WHY utility patterns, GOTCHA about type guards, CONTEXT of helper functions" }
+]
+
+>> Define review prompt template
+
+/exe @create_prompt(file, notes) = `Review this TypeScript file for code documentation improvements following our JSDOC guidelines:
+
+## File: @file.filename
+Path: @file.relative
+
+## Review Focus
+@notes
+
+## JSDOC Guidelines Summary
+- Use WHY comments for non-obvious design decisions
+- Use GOTCHA comments for behavior that might trip up developers  
+- Use CONTEXT comments for environment assumptions
+- Use SECURITY comments for boundaries and validation
+- Be specific and concise (2-4 lines per comment)
+- Don't document what's obvious from the code
+
+## Current Code
+\`\`\`typescript
+@file
+\`\`\`
+
+## Instructions
+1. Identify places where pragmatic JSDOC comments would add value
+2. Focus on the specific areas mentioned in "Review Focus"
+3. Suggest concrete comment additions with exact placement
+4. Only suggest comments that provide genuine insight beyond what the code shows
+5. Use the exact comment patterns from our guidelines (WHY:, GOTCHA:, CONTEXT:, SECURITY:)
+6. Return a structured response with specific line numbers and suggested comments
+7. Keep your response concise - maximum 5 key suggestions per file
+
+Format your response as a JSON object:
+{
+  "filename": "@file.filename",
+  "suggestions": [
+    {
+      "line": <number>,
+      "type": "WHY|GOTCHA|CONTEXT|SECURITY",
+      "comment": "The exact comment text to add",
+      "reason": "Brief explanation"
+    }
+  ]
+}`
+
+>> Claude executor for reviews
+
+/exe @claude(prompt) = run {claude -p "@prompt" --model haiku}
+
+>> Length checker
+
+/exe @len(str) = js { return str.toString().length }
+
+>> Retry logic with validation
+
+/exe @check_review(review, filename, p) = when [
+  @len(@review) < 1000 && @p.try < 3 => show `Retrying @filename (attempt @p.try)...`
+  @len(@review) < 1000 && @p.try < 3 => retry
+  @len(@review) < 1000 && @p.try == 3 => show `@filename failed after 3 attempts`
+  * => @review
+]
+
+/exe @save_review(review, filename) = when [
+  @review && @filename => show "Saving review to o-@filename-review.json"
+  @review && @filename => output @review to "@base/o-@filename-review.json"
+]
+
+>> Process a single file with Claude
+
+/exe @review_file(file, notes) = @claude(@create_prompt(@file, @notes)) | @check_review(@file.filename, @p) | @save_review(@file.filename)
+
+>> Process a file set
+
+/exe @process_file_set(file_set) = for @file in @file_set.files => @review_file(@file, @file_set.notes)
+
+>> Test execution - process first two file sets only
+
+/show `Starting Code Review...`
+
+/var @test_sets = @file_sets[3:4]
+
+/var @all_results = for @set in @test_sets => @process_file_set(@set)
+
+>> Output results
+
+/show `Review Complete`
+
+/for @result in @all_results => for @review in @result => show @review
+
+>> Full pipeline for all sets (ready to uncomment)
+
+>> To process ALL file sets, replace the test section above with:
+>> /var @all_results = for @set in @file_sets => @process_file_set(@set)
+>> /for @result in @all_results => /output @result to stdout
