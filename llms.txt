@@ -30,6 +30,7 @@
   <EXE_EXECUTABLES> ................ Defining shell/js/node/template/section executables; shadow env intro.
   <OUTPUT_DIRECTIVE> ............... Write to files/stdout/stderr with optional formats.
   <LOG_DIRECTIVE> .................. Syntactic sugar for /output to stdout; works in action contexts.
+  <APPEND_DIRECTIVE> ............... Append JSONL/plain records via /append or `| append` builtin.
 </COMMANDS>
 <CONTROL_FLOW>
   <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
@@ -869,7 +870,25 @@ Syntactic sugar for `/output to stdout`. Works in action contexts.
 ]
 ```
 
-</LOG_DIRECTIVE> </COMMANDS>
+</LOG_DIRECTIVE>
+
+<APPEND_DIRECTIVE>
+Append newline-delimited records via `/append` or the pipeline builtin `| append`.
+
+```mlld
+/append @record to "events.jsonl"        # JSON object per line (validated)
+/append "raw line" to "events.log"
+
+/var @runs = ["alpha","beta"]
+/var @_ = for @name in @runs => append @name to "pipeline.log"
+
+/var @_ = "done" | append "completion.log"
+/var @_ = "ignored" | append @runs to "runs.jsonl"
+```
+
+`.jsonl` enforces JSON serialization. Any other extension writes text. `.json` extensions are blocked.
+
+</APPEND_DIRECTIVE> </COMMANDS>
 
 <CONTROL_FLOW>
 <WHEN_DECISIONS>
