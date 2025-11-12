@@ -23,6 +23,8 @@ export async function extractDirectiveInputs(
       return extractShowInputs(directive, env);
     case 'output':
       return extractOutputInputs(directive, env);
+    case 'append':
+      return extractOutputInputs(directive, env);
     case 'run':
       return extractRunInputs(directive, env);
 

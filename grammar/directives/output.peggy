@@ -25,6 +25,48 @@
 // /output @variable to @resolver/path/file.md    <- resolver output
 // /output @variable to "file.json" as json       <- with format specification
 
+SlashAppend
+  = DirectiveContext "/append" _ source:OutputSource _ "to" _ target:OutputTargetFile format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+      helpers.debug('SlashAppend syntax matched', { source, target, format, ending });
+
+      const values = {
+        source: source.values,
+        target
+      };
+
+      const raw = {
+        source: source.raw,
+        target: target.raw
+      };
+
+      const meta = {
+        sourceType: source.type,
+        targetType: 'file',
+        hasSource: true,
+        ...(format ? { format, explicitFormat: true } : {})
+      };
+
+      helpers.processPipelineEnding(values, raw, meta, ending);
+
+      return helpers.createStructuredDirective(
+        'append',
+        'appendFile',
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+  / DirectiveContext "/append" _ OutputSource _ &{
+      const rest = input.substring(peg$currPos).trim();
+      return rest.length === 0 || rest.startsWith('\n');
+    } {
+      helpers.mlldError('Missing "to" keyword in /append directive. Use /append @var to "path".', 'to', location());
+    }
+  / DirectiveContext "/append" {
+      helpers.mlldError('/append syntax error. Expected: /append @source to "path".', '@', location());
+    }
+
 SlashOutput
   // Support for simple quoted path syntax without source - MUST come first to avoid OutputLiteral matching
   // BUT don't match if followed by bracket (that's the literal+bracket syntax)

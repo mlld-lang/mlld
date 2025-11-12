@@ -14,6 +14,7 @@ mlld's Peggy.js grammar uses abstraction-first design with hierarchical patterns
 
 Recent additions:
 - `||` marks parallel pipeline stages
+- `/append` directive and `append` pipeline builtin enable incremental file writes
 
 ## Principles
 

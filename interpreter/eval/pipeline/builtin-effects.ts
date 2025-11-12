@@ -1,5 +1,6 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand } from '@core/types';
+import { appendContentToFile } from '../append';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -7,7 +8,8 @@ import type { PipelineCommand } from '@core/types';
 const BUILTIN_EFFECTS = new Set<string>([
   'log', 'LOG',
   'output', 'OUTPUT',
-  'show', 'SHOW'
+  'show', 'SHOW',
+  'append', 'APPEND'
 ]);
 
 export function isBuiltinEffect(name: string): boolean {
@@ -176,6 +178,26 @@ export async function runBuiltinEffect(
         default:
           throw new Error(`Unknown output target type: ${String(target.type)}`);
       }
+    }
+
+    case 'append':
+    case 'APPEND': {
+      const args = effect.args ?? [];
+      const hasExplicitSource = Boolean(effect.meta?.hasExplicitSource);
+      const targetArgIndex = hasExplicitSource ? 1 : 0;
+      const target = args[targetArgIndex];
+
+      if (!target || typeof target !== 'object' || target.type !== 'file') {
+        throw new Error('append requires a file target');
+      }
+
+      let payload = stageOutput;
+      if (hasExplicitSource && args.length > 0) {
+        payload = await evaluateEffectArg(args[0], env);
+      }
+
+      await appendContentToFile(target, payload, env, { directiveKind: 'append' });
+      return;
     }
 
     // Placeholder for future effects like 'output' once grammar supports `to ...`

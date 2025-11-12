@@ -186,7 +186,7 @@ export async function evaluateOutput(
 /**
  * Evaluates the source content for output
  */
-async function evaluateOutputSource(
+export async function evaluateOutputSource(
   directive: DirectiveNode,
   env: Environment,
   sourceType: string,

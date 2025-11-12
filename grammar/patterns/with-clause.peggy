@@ -92,6 +92,7 @@ GroupCommandList
 // Uses UnifiedReferenceForPipeline to prevent nested pipelines
 PipelineCommand
   = PipelineBuiltinOutput
+  / PipelineBuiltinAppend
   / PipelineBuiltinShow
   / PipelineBuiltinLog
   / ref:UnifiedReferenceForPipeline {
@@ -170,7 +171,8 @@ PipelineBuiltinLog
         args: args,
         fields: [],
         rawIdentifier: 'log',
-        rawArgs: rawArgs
+        rawArgs: rawArgs,
+        meta: { isBuiltinEffect: true }
       };
     }
 
@@ -203,7 +205,8 @@ PipelineBuiltinShow
         args,
         fields: [],
         rawIdentifier: 'show',
-        rawArgs
+        rawArgs,
+        meta: { isBuiltinEffect: true }
       };
     }
 
@@ -234,7 +237,58 @@ PipelineBuiltinOutput
         args,
         fields: [],
         rawIdentifier: 'output',
-        rawArgs
+        rawArgs,
+        meta: { isBuiltinEffect: true, hasExplicitSource: !!src }
+      };
+    }
+
+// append [<source>] to <file target>
+PipelineBuiltinAppend
+  = "append" ![A-Za-z0-9_] _ src:OutputSource? _ "to" _ target:OutputTargetFile {
+      const idNode = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: 'append'
+      }, location());
+
+      let srcArg = null;
+      if (src) {
+        if (src.type === 'literal') {
+          srcArg = src.values;
+        } else if (src.type === 'variable') {
+          srcArg = src.values.identifier && src.values.identifier[0] ? src.values.identifier[0] : null;
+        } else if (src.type === 'exec') {
+          srcArg = src.values;
+        }
+      }
+
+      const args = srcArg ? [srcArg, target] : [target];
+
+      return {
+        identifier: [idNode],
+        args,
+        fields: [],
+        rawIdentifier: 'append',
+        rawArgs: [],
+        meta: {
+          isBuiltinEffect: true,
+          hasExplicitSource: !!src
+        }
+      };
+    }
+  / "append" ![A-Za-z0-9_] _ target:OutputTargetFile {
+      const idNode = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: 'append'
+      }, location());
+
+      return {
+        identifier: [idNode],
+        args: [target],
+        fields: [],
+        rawIdentifier: 'append',
+        rawArgs: [target.raw],
+        meta: {
+          isBuiltinEffect: true,
+          hasExplicitSource: false
+        }
       };
     }
 

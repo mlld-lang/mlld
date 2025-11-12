@@ -208,6 +208,7 @@ export type DirectiveKind =
   | 'exe'
   | 'path'
   | 'output'
+  | 'append'
   | 'when';
 
 export type DirectiveSubtype =
@@ -227,6 +228,8 @@ export type DirectiveSubtype =
   | 'runCommand' | 'runExec' | 'runCode'
   // Output subtypes
   | 'outputResolver' | 'outputFile' | 'outputCommand'
+  // Append subtypes
+  | 'appendFile'
   // When subtypes
   | 'whenSimple' | 'whenBlock' | 'whenMatch';
 

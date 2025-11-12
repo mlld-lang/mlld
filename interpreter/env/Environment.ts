@@ -1091,6 +1091,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     options?: {
       path?: string;
       source?: SourceLocation;
+      mode?: 'append' | 'write';
       metadata?: any;
     }
   ): void {
@@ -1128,6 +1129,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       content,
       path: options?.path,
       source: options?.source,
+      mode: options?.mode,
       metadata: options?.metadata,
       capability
     });

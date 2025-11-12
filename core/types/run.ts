@@ -30,6 +30,7 @@ export interface PipelineCommand {
   fields?: any[]; // Field access array
   rawIdentifier: string;
   rawArgs: string[];
+  meta?: Record<string, unknown>;
   // Optional inline effects attached to this functional stage.
   // These are pipeline builtin "effect" commands (e.g., @log) that should
   // execute after this stage succeeds, and do not count as stages themselves.

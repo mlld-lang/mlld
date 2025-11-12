@@ -37,6 +37,7 @@ export const DirectiveKind = {
   path: 'path',
   import: 'import',
   output: 'output',
+  append: 'append',
   when: 'when',
   // NO deprecated entries - clean break!
 } as const;

@@ -36,7 +36,12 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
     }
 
     const name = stage.rawIdentifier;
-    if (isBuiltinEffect(name)) {
+    const lowerName = typeof name === 'string' ? name.toLowerCase() : '';
+    const requiresMeta = lowerName === 'append';
+    const isInlineEffect = isBuiltinEffect(name) && (
+      (stage as PipelineCommand).meta?.isBuiltinEffect || !requiresMeta
+    );
+    if (isInlineEffect) {
       if (functional.length > 0) {
         const prev = functional[functional.length - 1];
         if (Array.isArray(prev)) {

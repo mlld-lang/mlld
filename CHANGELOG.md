@@ -33,12 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added "Variable scoping (security)" section explaining JS/Node blocks only access explicit parameters
 
 ## [2.0.0-rc70]
+### Added
+- `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
+
 ### Fixed
 - **Parallel for loop circular reference detection**: Fixed false positive circular reference warnings when multiple parallel tasks load the same file
   - Each parallel execution context now maintains its own interpolation stack for independent file loading
   - Prevents `Warning: Circular reference detected` when parallel tasks legitimately reference the same shared file
   - Real circular references (A includes B includes A) are still correctly detected via parent chain checking
   - Regression test added in `tests/cases/regression/parallel-interpolation-stack/`
+- Inline pipeline effect detection now differentiates builtin `append` from user-defined commands, restoring stage execution for execs named `append`
 
 ## [2.0.0-rc69]
 ### Fixed

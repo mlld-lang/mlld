@@ -11,6 +11,7 @@ export interface Effect {
   content: string;
   path?: string;  // For file effects
   source?: Location;  // For error reporting
+  mode?: 'append' | 'write';
   metadata?: any;  // For preserving LoadContentResult metadata, etc.
   capability?: CapabilityContext;
 }
@@ -72,7 +73,10 @@ export class DefaultEffectHandler implements EffectHandler {
         break;
         
       case 'file':
-        // Write to file
+        if (effect.mode === 'append') {
+          // Append operations already performed by evaluator
+          break;
+        }
         if (effect.path) {
           try {
             fs.writeFileSync(effect.path, effect.content);
@@ -103,6 +107,7 @@ export class DefaultEffectHandler implements EffectHandler {
 export class TestEffectHandler implements EffectHandler {
   collected: Effect[] = [];
   private documentBuffer: string[] = [];
+  public appendedFiles: Map<string, string[]> = new Map();
   
   handleEffect(effect: Effect): void {
     this.collected.push(effect);
@@ -110,6 +115,15 @@ export class TestEffectHandler implements EffectHandler {
     // Also maintain document buffer for testing
     if (effect.type === 'doc' || effect.type === 'both') {
       this.documentBuffer.push(effect.content);
+    }
+
+    if (effect.type === 'file' && effect.mode === 'append') {
+      const key = effect.path;
+      if (key) {
+        const entries = this.appendedFiles.get(key) ?? [];
+        entries.push(effect.content);
+        this.appendedFiles.set(key, entries);
+      }
     }
   }
   
@@ -140,6 +154,7 @@ export class TestEffectHandler implements EffectHandler {
   clear(): void {
     this.collected = [];
     this.documentBuffer = [];
+    this.appendedFiles.clear();
   }
 }
 

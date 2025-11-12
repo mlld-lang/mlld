@@ -11,6 +11,7 @@ import { evaluateRun } from './run';
 import { evaluateImport } from './import';
 import { evaluateWhen } from './when';
 import { evaluateOutput } from './output';
+import { evaluateAppend } from './append';
 import { evaluateVar, prepareVarAssignment, type VarAssignmentResult } from './var';
 import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
@@ -224,6 +225,7 @@ function buildOperationContext(
       applyImportMetadata(context, directive);
       break;
     case 'output':
+    case 'append':
       applyOutputMetadata(context, directive);
       break;
     case 'var':
@@ -257,6 +259,9 @@ async function dispatchDirective(
 
     case 'output':
       return await evaluateOutput(directive, env, evaluationContext);
+
+    case 'append':
+      return await evaluateAppend(directive, env, evaluationContext);
 
     case 'var':
       return await evaluateVar(directive, env, evaluationContext);

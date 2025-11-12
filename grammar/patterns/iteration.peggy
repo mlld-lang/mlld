@@ -91,6 +91,36 @@ ForSingleAction "for action"
         location: location()
       })];
     }
+  // Support for /append directive inside /for actions
+  / "append" _ source:OutputSource _ "to" _ target:OutputTargetFile format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+      const values = {
+        source: source.values,
+        target
+      };
+
+      const raw = {
+        source: source.raw,
+        target: target.raw
+      };
+
+      const meta = {
+        sourceType: source.type,
+        targetType: 'file',
+        hasSource: true,
+        ...(format ? { format, explicitFormat: true } : {})
+      };
+
+      helpers.processPipelineEnding(values, raw, meta, ending);
+
+      return [helpers.createStructuredDirective(
+        'append',
+        'appendFile',
+        values,
+        raw,
+        meta,
+        location()
+      )];
+    }
   // Special handling for /log directive - syntactic sugar for output to stderr
   / "log" _ source:OutputSource? {
       // Create stdout target automatically (same as /log directive)
