@@ -164,7 +164,7 @@ UnifiedBacktickTextSegment
 UnifiedBacktickChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / !("`" / "@" / "<" / (LineStartPredicate "/for") / (LineStartPredicate "/end")) char:. { return char; }
+  / !("`" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
 
 // Text inside double quotes (supports newlines)
 UnifiedDoubleQuotedText

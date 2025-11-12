@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
+
 - **Template `/for` loop greedy matching**: Inline `/for` loops in templates now only trigger at line start, not mid-line
   - Previously, mentioning `/for` in template text (e.g., "Use /for iteration") would trigger parse errors
   - Fixed `UnifiedBacktickChar` and `UnifiedDoubleColonTextSegment` to use `LineStartPredicate` for `/for` and `/end` detection

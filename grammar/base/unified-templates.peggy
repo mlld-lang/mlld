@@ -176,10 +176,10 @@ UnifiedTemplateChar
   / EscapeSequence
   / !((":::" / "{{" / "}}")) char:. { return char; }
 
-// Text for double colon templates (excludes ::, @, and <)
+// Text for double colon templates (excludes ::, @, and < only when it's a valid file ref or literal tag)
 // Only excludes /for and /end when they appear at line start
 UnifiedDoubleColonTextSegment "Double colon text segment"
-  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "@" / "<") char:. { return char; })+ {
+  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 

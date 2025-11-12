@@ -145,8 +145,28 @@ UnifiedAngleBracketContent "Unified angle bracket content"
 
 // Literal angle brackets when not a file reference
 // Used when content doesn't match file reference patterns (no . * or @)
+// Only matches short, self-contained literals to avoid greedy consumption
 AngleBracketLiteral "Literal angle bracket text"
-  = "<" chars:(!">" char:. { return char; })* ">" {
+  = "<" &{
+      // Semantic lookahead: only match if closing > is nearby (same line or within ~50 chars)
+      // This prevents greedy matching like <70% ... distant > later>
+      const rest = input.substring(peg$currPos);
+      const closingIndex = rest.indexOf('>');
+      if (closingIndex === -1) return false; // No closing >
+
+      const content = rest.substring(0, closingIndex);
+
+      // Fail if closing > is too far away (likely not a literal tag)
+      if (closingIndex > 100) return false;
+
+      // Fail if content contains newlines (likely spanning multiple logical elements)
+      if (/[\n\r]/.test(content)) return false;
+
+      // Fail if content looks like a file reference (has . * or @)
+      if (/[.*@]/.test(content)) return false;
+
+      return true;
+    } chars:(!">" char:. { return char; })* ">" {
       return helpers.createNode(NodeType.Text, {
         content: '<' + chars.join('') + '>',
         location: location()

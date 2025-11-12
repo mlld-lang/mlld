@@ -1,13 +1,12 @@
-/exe @fetchA() = "A"
-/exe @fetchB() = "B"
-/exe @fetchC() = "C"
+/exe @source() = when first [
+  @ctx.try == 1 => "draft"
+  * => "final"
+]
 
->> Leading || runs all three in parallel
-/var @results = || @fetchA() || @fetchB() || @fetchC()
-/show @results
+/exe @validator() = when first [
+  @ctx.input == "draft" => retry "missing title"
+  * => `Used hint: @ctx.hint`
+]
 
->> Works in /run directive too
-/run || @fetchA() || @fetchB() || @fetchC()
-
->> Control concurrency with (cap, delay) syntax
-/var @limited = || @fetchA() || @fetchB() || @fetchC() (2, 100ms)
+/var @result = @source() | @validator
+/show @result
