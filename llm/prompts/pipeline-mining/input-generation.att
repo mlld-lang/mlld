@@ -1,0 +1,70 @@
+# Task: Generate Complex Test Inputs for Pipeline Harness
+
+Based on CHANGELOG.md pipeline fixes (especially rc48-rc67), create input specimens
+that stress-test the bounds of:
+
+1. Shell escaping (special chars: backticks, \$, quotes, newlines)
+2. Large data (>128KB to trigger heredoc)
+3. Nested structures (arrays of arrays of objects)
+4. LoadContentResult with metadata
+5. JSON with control characters
+6. Embedded null bytes
+7. Mixed shell/JS contexts
+
+## Context Files to Review:
+- CHANGELOG.md (rc48 for heredoc, rc60-67 for structured data)
+- tests/pipeline/harness/inputs.ts (current inputs - follow this pattern!)
+- tests/cases/ (look for regression test fixtures)
+
+## Output File:
+
+Write new input builders to: tests/pipeline/harness/inputs-adversarial.ts
+
+## Pattern to Follow:
+
+Follow the existing pattern from inputs.ts:
+```typescript
+import { StructuredValue } from '@interpreter/structs/structured-value';
+
+/**
+ * Large JSON input >128KB to trigger heredoc path (rc48)
+ */
+export const largeJsonInput = () => {
+  const largeArray = Array.from({ length: 10000 }, (_, i) => ({
+    id: i,
+    name: `Item ${i}`,
+    data: 'x'.repeat(100),
+  }));
+
+  return {
+    type: 'json-large' as const,
+    description: 'JSON >128KB to trigger heredoc path (rc48)',
+    value: StructuredValue.json(largeArray),
+  };
+};
+
+/**
+ * Nested arrays of objects - rc60 stringification bug
+ */
+export const nestedArrayObjectInput = () => ({
+  type: 'nested-array-objects' as const,
+  description: 'Arrays of arrays of objects - rc60 bug',
+  value: StructuredValue.json([
+    [{ name: 'Alice' }, { name: 'Bob' }],
+    [{ name: 'Charlie' }, { name: 'Diana' }],
+  ]),
+});
+
+// ... more inputs
+```
+
+## Requirements:
+
+1. Write the file to: tests/pipeline/harness/inputs-adversarial.ts
+2. Import necessary types from existing harness code
+3. Follow the naming convention: xxxInput() functions
+4. Include JSDoc with CHANGELOG references
+5. Export all input builders
+6. Create at least 7-10 different adversarial inputs covering the categories above
+
+IMPORTANT: Do not just output to chat - write the file using the Write tool!

@@ -1,0 +1,82 @@
+# Task: Generate Adversarial Pipeline Stage Snippet
+
+You are helping create test stages for the mlld pipeline harness that reproduce historical bugs.
+
+## Bug Category: @category.name
+
+**Description**: @category.description
+
+**CHANGELOG References**: @category.changelog_refs
+
+## Context Files to Review:
+1. Read CHANGELOG.md sections for the referenced rc versions
+2. Look at tests/cases/ for related regression tests
+3. Review tests/pipeline/harness/stages.ts for existing patterns
+4. Review tests/pipeline/harness/inputs.ts for input patterns
+
+## Your Task:
+
+Create a stage snippet module in TypeScript that reproduces this bug pattern. The stage should:
+
+1. Export helper functions that can be composed in pipelines
+2. Deliberately exhibit the problematic behavior (stringify when it shouldn't, drop metadata, etc.)
+3. Include JSDoc comments explaining what bug it reproduces
+4. Export a stage definition using createStage() if appropriate
+5. Be importable from the main stages.ts or test file
+
+## Output Format:
+
+Write your stage snippet to: @category.output_file
+
+The file should include:
+- Imports from existing harness utilities
+- JSDoc explaining the CHANGELOG reference and what it reproduces
+- Helper function(s) that exhibit the buggy behavior
+- Exported stage definition(s) using createStage() with appropriate tags
+
+## Example Structure:
+
+```typescript
+/**
+ * Stages that reproduce rc60 shell interpolation bug where
+ * objects were converted to '[object Object]' in shell commands.
+ *
+ * @see CHANGELOG.md rc60
+ * @see https://github.com/mlld-lang/mlld/issues/435
+ */
+
+import type { StageDefinition } from '../types';
+
+/**
+ * Helper that reproduces the String() bug from rc60.
+ * Deliberately stringifies objects incorrectly.
+ */
+export function h_shell_stringify(input: any): string {
+  // Deliberately stringify like the old buggy behavior
+  if (typeof input === 'object' && input !== null) {
+    return String(input); // Returns '[object Object]' for objects
+  }
+  return String(input);
+}
+
+/**
+ * Stage that uses shell interpolation and triggers stringification.
+ */
+export const shellStringifyStage: StageDefinition = {
+  name: 'shell-stringify-object',
+  fn: '@h_shell_stringify',
+  tags: {
+    preservesData: false, // Intentionally downgrades
+    causesStringification: true,
+  },
+  description: 'Reproduces rc60 shell stringification bug',
+};
+```
+
+IMPORTANT:
+1. Write the file directly using the Write tool
+2. Set the file path to exactly: @category.output_file
+3. After writing, output a confirmation with the file path
+4. Make sure imports are correct (relative paths from stages/ directory)
+
+Do not just output code to chat - write the file!
