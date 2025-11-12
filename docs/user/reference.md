@@ -375,8 +375,8 @@ Chain operations with `|`:
 ```
 
 Built-in transformers:
-- `@json`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@json.strict` to require standard JSON or `@json.loose` to be explicit about relaxed parsing.
-- `@xml`: parse/format XML  
+- `@json`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@json.strict` to require standard JSON, `@json.loose` to be explicit about relaxed parsing, or `@json.llm` to extract JSON from LLM responses (code fences, prose). Returns `false` if no JSON found.
+- `@xml`: parse/format XML
 - `@csv`: parse/format CSV
 - `@md`: format as Markdown
 

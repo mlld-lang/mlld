@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc70]
 ### Added
 - `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
+- `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
 
 ### Fixed
 - **Parallel for loop circular reference detection**: Fixed false positive circular reference warnings when multiple parallel tasks load the same file

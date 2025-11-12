@@ -629,7 +629,7 @@ Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and
 <PIPELINES>
 Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). All `/exe` functions work in pipelines (native mlld, JS, shell). Stages access context via `@ctx` and pipeline history via `@p`.
 
-JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments).
+JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments), `@json.llm` (extract JSON from LLM responses with code fences/prose, returns false if none found).
 
 ```mlld
 /var @users = run {cat users.json} | @json | @csv
@@ -640,6 +640,7 @@ JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict J
 /var @relaxed = @input | @json.loose   # JSON5: single quotes, trailing commas, comments
 /var @strict = @input | @json.strict   # strict JSON only
 /var @auto = @input | @json            # loose mode with helpful errors
+/var @extracted = @llmResponse | @json.llm  # extract from code fences/prose, false if none
 
 # Native mlld functions in pipelines
 /exe @filterHigh(items) = for @item in @items => when [
