@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Real circular references (A includes B includes A) are still correctly detected via parent chain checking
   - Regression test added in `tests/cases/regression/parallel-interpolation-stack/`
 - Inline pipeline effect detection now differentiates builtin `append` from user-defined commands, restoring stage execution for execs named `append`
+- Alligator syntax in for expressions: `for @f in @files => <@f>` and property access like `for @f in @files => <@f>.fm.title` now work correctly
 
 ## [2.0.0-rc69]
 ### Fixed

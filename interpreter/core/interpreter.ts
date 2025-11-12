@@ -641,6 +641,46 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: result, env };
   }
 
+  // Handle load-content nodes (alligator syntax: <file>)
+  if (node.type === 'load-content') {
+    const result = await evaluateDataValue(node, env);
+    return { value: result, env };
+  }
+
+  // Handle FileReference nodes (<file> with field access or pipes)
+  if (node.type === 'FileReference') {
+    const fileRefNode = node as FileReferenceNode;
+    const { processContentLoader } = await import('../eval/content-loader');
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { accessField } = await import('../utils/field-access');
+    const { isStructuredValue, asData } = await import('../utils/structured-value');
+
+    // Convert FileReference to load-content structure
+    const loadContentNode = {
+      type: 'load-content' as const,
+      source: fileRefNode.source
+    };
+
+    // Load the content
+    let loadResult = await processContentLoader(loadContentNode, env);
+
+    // Extract data from StructuredValue if wrapped
+    if (isStructuredValue(loadResult)) {
+      loadResult = asData(loadResult);
+    }
+
+    // Process field access if present
+    if (fileRefNode.fields && fileRefNode.fields.length > 0) {
+      let result: any = loadResult;
+      for (const field of fileRefNode.fields) {
+        result = await accessField(result, field, { env });
+      }
+      return { value: result, env };
+    }
+
+    return { value: loadResult, env };
+  }
+
   // Handle command nodes (from run {command} in expressions)
   if (node.type === 'command') {
     // Reuse the same logic as in lazy-eval.ts
