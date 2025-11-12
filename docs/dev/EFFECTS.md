@@ -136,6 +136,7 @@ The system should support both:
 - `/append` mirrors `/output`'s source resolution but always targets files and enforces newline-delimited writes.
 - `.jsonl` targets must receive valid JSON; `.json` targets are blocked to avoid corrupt objects.
 - Both the directive and the pipeline `| append` operator append through `IFileSystemService.appendFile()` and emit a `'file'` effect with `mode: 'append'` so handlers can observe writes without duplicating them.
+- `IFileSystemService` implementations must provide `appendFile()` in addition to `writeFile()` so evaluators and builtin pipeline effects can perform the actual writes; the effect handler is notification-only for append operations.
 
 ## Implementation Plan
 

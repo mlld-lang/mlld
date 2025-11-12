@@ -211,6 +211,27 @@ Save content to files:
 /output @data to "status.json" as json
 ```
 
+### Appending Logs with `/append` and `| append`
+
+Write incremental data or plain text.
+
+```mlld
+/var @records = [
+  {"id": 1, "status": "ok"},
+  {"id": 2, "status": "retry"}
+]
+
+/for @record in @records => append @record to "jobs.jsonl"
+
+/show <jobs.jsonl>
+```
+
+`.jsonl` targets enforce JSON serialization for each record. Other extensions append raw text. `.json` extensions are blocked to avoid corrupting complete JSON documents.
+
+Any other extension will just append plain text to the file.
+
+You can also use pipes: `| append @result to "file.jsonl"`
+
 ### Loading Multiple Files
 
 Use globs to load multiple files:

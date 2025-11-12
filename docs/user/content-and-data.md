@@ -702,6 +702,21 @@ Generated: @now
 /output @config to "runtime-config.json" as json
 ```
 
+### Incremental JSONL Logging
+
+Capture long-running results without rewriting the full file:
+
+```mlld
+/var @checks = for @service in ["auth", "payments", "search"] =>
+  {"service": @service, "status": "ok", "timestamp": @now}
+
+/for @entry in @checks => append @entry to "health.jsonl"
+
+/show <health.jsonl>
+```
+
+Each append writes one compact JSON object followed by a newline. Use `.jsonl` when you want structured JSONL output. Any other extension (e.g., `.log`, `.txt`, `'.md`) is treated as plain text. `.json` files are blocked to prevent producing invalid JSON.
+
 ## Best Practices
 
 **File Loading:**

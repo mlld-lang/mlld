@@ -301,6 +301,17 @@ Write to files and streams:
 /output @config to "settings.yaml" as yaml
 ```
 
+### Append (`/append`)
+
+Append one record per call, preserving existing file content:
+
+```mlld
+/append @payload to "events.jsonl"
+/append "raw text entry" to "events.log"
+```
+
+`.jsonl` targets must receive valid JSON objects; anything else will use plain text. The pipeline form `| append "file.jsonl"` appends the prior stage output.
+
 ### Log (`/log`)
 
 Syntactic sugar for `/output...to stderr`
