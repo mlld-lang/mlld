@@ -22,6 +22,7 @@ import {
   type DataLabel,
   type CapabilityContext
 } from '@core/types/security';
+import { asText, isStructuredValue } from '../utils/structured-value';
 
 function buildTemplateAstFromContent(content: string): any[] {
   const ast: any[] = [];
@@ -783,10 +784,14 @@ function createExecWrapper(
       const argValue = args[i];
       if (argValue !== undefined) {
         // For template interpolation, we need string representation
-        const stringValue = typeof argValue === 'string' ? argValue :
-                           argValue === null || argValue === undefined ? String(argValue) :
-                           typeof argValue === 'object' ? JSON.stringify(argValue) :
-                           String(argValue);
+        const stringValue =
+          typeof argValue === 'string'
+            ? argValue
+            : argValue === null || argValue === undefined
+              ? String(argValue)
+              : typeof argValue === 'object'
+                ? (isStructuredValue(argValue) ? asText(argValue) : JSON.stringify(argValue))
+                : String(argValue);
         
         const paramVar = createSimpleTextVariable(
           paramName,

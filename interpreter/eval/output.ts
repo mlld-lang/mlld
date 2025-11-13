@@ -17,7 +17,7 @@ import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import type { DataLabel } from '@core/types/security';
@@ -473,6 +473,8 @@ async function evaluateSimpleVariableSource(
 
   if (typeof value === 'string') {
     return value;
+  } else if (isStructuredValue(value)) {
+    return asText(value);
   } else if (isLoadContentResult(value)) {
     // For LoadContentResult, output the content by default (matching /show behavior)
     return value.content;
