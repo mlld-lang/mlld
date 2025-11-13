@@ -30,7 +30,7 @@ import { InterpolationContext, EscapingStrategyFactory } from './interpolation-c
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, assertStructuredValue, isStructuredValue } from '@interpreter/utils/structured-value';
 import { normalizeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { classifyShellValue } from '@interpreter/utils/shell-value';
 import * as shellQuote from 'shell-quote';
@@ -798,7 +798,8 @@ async function resolveVariableValue(variable: Variable, env: Environment): Promi
     return variable.value.resolvedPath;
   } else if (isPipelineInput(variable)) {
     // Pipeline inputs return the text representation by default
-    return variable.value.text;
+    assertStructuredValue(variable.value, 'interpolate:pipeline-input');
+    return asText(variable.value);
   } else if (isExecutableVariable(variable)) {
     // Auto-execute executables when interpolated
     if (process.env.DEBUG_EXEC) {

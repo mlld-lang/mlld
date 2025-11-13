@@ -33,7 +33,7 @@ import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue, parseAndWrapJson } from '@interpreter/utils/structured-value';
+import { asText, assertStructuredValue, isStructuredValue, parseAndWrapJson } from '@interpreter/utils/structured-value';
 
 import { wrapExecResult } from '../utils/structured-exec';
 // Template normalization now handled in grammar - no longer needed here
@@ -264,7 +264,8 @@ export async function evaluateShow(
       value = variable.value;
     } else if (isPipelineInput(variable)) {
       // Pipeline input - use the text representation
-      value = variable.value.text;
+      assertStructuredValue(variable.value, 'show:pipeline-input');
+      value = asText(variable.value);
     } else if (isImported(variable)) {
       // Imported variable - use the value
       value = variable.value;

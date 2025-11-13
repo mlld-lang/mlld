@@ -16,7 +16,7 @@ import {
   createSimpleTextVariable,
   createObjectVariable
 } from '@core/types/variable';
-import { isStructuredValue, asData, asText } from '../utils/structured-value';
+import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
 
 /**
  * Compares two values according to mlld's when comparison rules
@@ -975,7 +975,8 @@ function isTruthy(value: any): boolean {
       // Command results are truthy if they have output
       return variable.value.trim().length > 0;
     } else if (isPipelineInput(variable)) {
-      return variable.value.text.length > 0;
+      assertStructuredValue(variable.value, 'when:isTruthy:pipeline-input');
+      return asText(variable.value).length > 0;
     }
     
     // For other variable types, use their value

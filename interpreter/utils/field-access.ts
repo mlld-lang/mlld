@@ -143,6 +143,10 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredWrapper.metadata;
           break;
         }
+        if (name === 'ctx') {
+          accessedValue = structuredWrapper.ctx;
+          break;
+        }
         if (
           loadResultMetadata &&
           typeof loadResultMetadata === 'object' &&

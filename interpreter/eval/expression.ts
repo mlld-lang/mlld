@@ -10,6 +10,7 @@ import {
   isCommandResult, 
   isPipelineInput 
 } from '@core/types/variable';
+import { asText, assertStructuredValue } from '../utils/structured-value';
 
 /**
  * Determines if a value is truthy according to mlld rules
@@ -36,7 +37,8 @@ export function isTruthy(value: any): boolean {
       // Command results are truthy if they have output
       return variable.value.trim().length > 0;
     } else if (isPipelineInput(variable)) {
-      return variable.value.text.length > 0;
+      assertStructuredValue(variable.value, 'expression:isTruthy:pipeline-input');
+      return asText(variable.value).length > 0;
     }
     
     // For other variable types, use their value

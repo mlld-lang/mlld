@@ -1,6 +1,7 @@
 import type { SecurityDescriptor, DataLabel, TaintLevel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
+import type { LoadContentResult } from '@core/types/load-content';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 
@@ -13,10 +14,19 @@ export type StructuredValueType =
   | 'xml'
   | (string & {});
 
+type StructuredValueLoadResult = Partial<LoadContentResult> & {
+  url?: string;
+  domain?: string;
+  title?: string;
+  description?: string;
+  [key: string]: unknown;
+};
+
 export interface StructuredValueMetadata {
   source?: string;
   retries?: number;
   security?: SecurityDescriptor;
+  loadResult?: StructuredValueLoadResult;
   metrics?: {
     tokens?: number;
     length?: number;
@@ -40,13 +50,30 @@ export interface StructuredValueContext {
   labels: readonly DataLabel[];
   taint: TaintLevel;
   sources: readonly string[];
+  policy: Readonly<Record<string, unknown>> | null;
+  filename?: string;
+  relative?: string;
+  absolute?: string;
+  url?: string;
+  domain?: string;
+  title?: string;
+  description?: string;
+  source?: string;
+  retries?: number;
+  tokest?: number;
   tokens?: number;
+  fm?: unknown;
+  json?: unknown;
   length?: number;
   type: StructuredValueType;
 }
 
 const STRUCTURED_VALUE_CTX_ATTACHED = Symbol('mlld.StructuredValueCtxAttached');
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
+const EMPTY_SOURCES: readonly string[] = Object.freeze([]);
+const DEV_ENV = typeof process !== 'undefined' ? process.env : undefined;
+const SHOULD_ASSERT_STRUCTURED =
+  DEV_ENV?.MLLD_DEV_ASSERTIONS === 'true' || DEV_ENV?.MLLD_DEBUG_STRUCTURED === 'true';
 
 export function isStructuredValue<T = unknown>(value: unknown): value is StructuredValue<T> {
   return Boolean(
@@ -280,7 +307,8 @@ export const structuredValueUtils = {
   attachContextToStructuredValue,
   collectParameterDescriptors,
   collectAndMergeParameterDescriptors,
-  extractSecurityDescriptor
+  extractSecurityDescriptor,
+  assertStructuredValue
 };
 
 export function attachContextToStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
@@ -309,15 +337,52 @@ function buildStructuredValueContext(value: StructuredValue): StructuredValueCon
   const descriptor =
     normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined) ?? makeSecurityDescriptor();
   const metrics = value.metadata?.metrics;
+  const loadResult = resolveLoadResultMetadata(value.metadata);
   const labels = normalizeLabelArray(descriptor?.labels);
+  const sources = descriptor?.sources ?? EMPTY_SOURCES;
   return Object.freeze({
     labels,
     taint: descriptor.taintLevel ?? 'unknown',
-    sources: descriptor.sources ?? [],
-    tokens: metrics?.tokens,
+    sources,
+    policy: descriptor.policyContext ?? null,
+    filename: loadResult?.filename,
+    relative: loadResult?.relative,
+    absolute: loadResult?.absolute,
+    url: loadResult?.url,
+    domain: loadResult?.domain,
+    title: loadResult?.title,
+    description: loadResult?.description,
+    source: value.metadata?.source,
+    retries: value.metadata?.retries,
+    tokest: loadResult?.tokest,
+    tokens: loadResult?.tokens ?? metrics?.tokens,
+    fm: loadResult?.fm,
+    json: loadResult?.json,
     length: metrics?.length,
     type: value.type
   });
+}
+
+function resolveLoadResultMetadata(metadata?: StructuredValueMetadata): StructuredValueLoadResult | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+  const loadResult = metadata.loadResult;
+  if (!loadResult || typeof loadResult !== 'object') {
+    return undefined;
+  }
+  return loadResult;
+}
+
+export function assertStructuredValue<T = unknown>(
+  value: unknown,
+  context?: string
+): asserts value is StructuredValue<T> {
+  if (!SHOULD_ASSERT_STRUCTURED || isStructuredValue<T>(value)) {
+    return;
+  }
+  const detail = context ? ` (${context})` : '';
+  throw new TypeError(`StructuredValue required${detail}`);
 }
 
 interface ParameterLookup {
