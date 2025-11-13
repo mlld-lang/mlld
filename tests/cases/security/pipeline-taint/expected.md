@@ -1,5 +1,5 @@
 Pipeline taint: unknown
 Pipeline labels: ["secret"]
 
-Result taint: unknown
+Result taint: commandOutput
 Result labels: []
