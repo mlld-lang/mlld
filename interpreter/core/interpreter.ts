@@ -993,25 +993,7 @@ export async function interpolate(
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as any, env);
       collectDescriptor(extractInterpolationDescriptor(result.value));
-      if (isStructuredValue(result.value) && result.value.type === 'array' && Array.isArray(result.value.data)) {
-        const arrayData = result.value.data as unknown[];
-        const allSimple = arrayData.every(item => item === null || item === undefined || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean');
-        if (allSimple) {
-          const joined = arrayData
-            .map(item => {
-              if (item === null || item === undefined) {
-                return '';
-              }
-              return String(item);
-            })
-            .join(',');
-          pushPart(joined);
-        } else {
-          pushPart(asText(result.value));
-        }
-      } else {
-        pushPart(asText(result.value));
-      }
+      pushPart(asText(result.value));
     } else if (node.type === 'InterpolationVar') {
       // Handle {{var}} style interpolation (from triple colon templates)
       const varName = node.identifier || node.name;
