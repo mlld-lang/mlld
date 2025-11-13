@@ -36,6 +36,7 @@ export const DirectiveKind = {
     output: 'output',
     append: 'append',
     when: 'when',
+    guard: 'guard',
     // NO deprecated entries - clean break!
 };
 export const helpers = {

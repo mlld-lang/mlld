@@ -209,7 +209,8 @@ export type DirectiveKind =
   | 'path'
   | 'output'
   | 'append'
-  | 'when';
+  | 'when'
+  | 'guard';
 
 export type DirectiveSubtype =
   // Import subtypes
@@ -231,7 +232,9 @@ export type DirectiveSubtype =
   // Append subtypes
   | 'appendFile'
   // When subtypes
-  | 'whenSimple' | 'whenBlock' | 'whenMatch';
+  | 'whenSimple' | 'whenBlock' | 'whenMatch'
+  // Guard subtype
+  | 'guard';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

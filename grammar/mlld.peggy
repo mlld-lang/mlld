@@ -211,6 +211,7 @@ Directive
     / SlashOutput   // Output directives (output routing)
     / SlashAppend   // Append directives (incremental file writing)
     / SlashWhen     // When directives (conditional execution)
+    / SlashGuard    // Guard directives (security policies)
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
 

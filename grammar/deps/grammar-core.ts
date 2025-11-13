@@ -39,6 +39,7 @@ export const DirectiveKind = {
   output: 'output',
   append: 'append',
   when: 'when',
+  guard: 'guard',
   // NO deprecated entries - clean break!
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
