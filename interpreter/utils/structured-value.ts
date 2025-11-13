@@ -45,6 +45,7 @@ export interface StructuredValueContext {
 }
 
 const STRUCTURED_VALUE_CTX_ATTACHED = Symbol('mlld.StructuredValueCtxAttached');
+const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 
 export function isStructuredValue<T = unknown>(value: unknown): value is StructuredValue<T> {
   return Boolean(
@@ -278,12 +279,25 @@ function buildStructuredValueContext(value: StructuredValue): StructuredValueCon
   const descriptor =
     normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined) ?? makeSecurityDescriptor();
   const metrics = value.metadata?.metrics;
+  const labels = normalizeLabelArray(descriptor?.labels);
   return Object.freeze({
-    labels: descriptor.labels ?? [],
+    labels,
     taint: descriptor.taintLevel ?? 'unknown',
     sources: descriptor.sources ?? [],
     tokens: metrics?.tokens,
     length: metrics?.length,
     type: value.type
   });
+}
+
+function normalizeLabelArray(
+  labels: readonly DataLabel[] | DataLabel | undefined | null
+): readonly DataLabel[] {
+  if (Array.isArray(labels)) {
+    return labels;
+  }
+  if (labels === undefined || labels === null) {
+    return EMPTY_LABELS;
+  }
+  return [labels];
 }

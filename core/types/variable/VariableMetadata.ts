@@ -22,6 +22,8 @@ import {
 } from '../security';
 import { buildTokenMetrics, type TokenEstimationOptions, type TokenMetrics } from '@core/utils/token-metrics';
 
+const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
+
 // =========================================================================
 // METADATA UTILITY FUNCTIONS
 // =========================================================================
@@ -362,13 +364,14 @@ export class VariableMetadataUtils {
     }
     const metrics = VariableMetadataUtils.computeMetricsForVariable(variable);
     const security = variable.metadata.security;
+    const labels = normalizeLabelArray(security?.labels);
     const tokenValue = metrics?.tokens ?? metrics?.tokest ?? undefined;
     const tokestValue = metrics?.tokest ?? metrics?.tokens ?? undefined;
     const context: VariableContextSnapshot = {
       name: variable.name,
       type: variable.type,
       definedAt: variable.definedAt,
-      labels: security?.labels ?? [],
+      labels,
       taint: security?.taintLevel ?? 'unknown',
       tokens: tokenValue,
       tokest: tokestValue,
@@ -418,6 +421,18 @@ export class VariableMetadataUtils {
       ...incoming
     };
   }
+}
+
+function normalizeLabelArray(
+  labels: readonly DataLabel[] | DataLabel | undefined | null
+): readonly DataLabel[] {
+  if (Array.isArray(labels)) {
+    return labels;
+  }
+  if (labels === undefined || labels === null) {
+    return EMPTY_LABELS;
+  }
+  return [labels];
 }
 
 // =========================================================================

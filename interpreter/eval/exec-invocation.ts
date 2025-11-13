@@ -1023,9 +1023,9 @@ export async function evaluateExecInvocation(
         try {
           const parsed = JSON.parse(templateResult.trim());
           const typeHint = Array.isArray(parsed) ? 'array' : 'object';
-          result = wrapStructured(parsed, typeHint, templateResult, resultSecurityDescriptor
-            ? { security: resultSecurityDescriptor }
-            : undefined);
+          result = wrapStructured(parsed, typeHint, templateResult, {
+            security: resultSecurityDescriptor
+          });
         } catch {
           result = templateResult;
         }

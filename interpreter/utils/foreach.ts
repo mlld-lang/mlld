@@ -46,7 +46,11 @@ export async function evaluateForeachAsText(
   }
   
   // If no results, return empty string
-  const normalizedResults = Array.isArray(results) ? results : [results];
+  const normalizedResults = Array.isArray(results)
+    ? results
+    : isStructuredValue(results) && Array.isArray(results.data)
+      ? results.data
+      : [results];
 
   if (normalizedResults.length === 0) {
     return '';

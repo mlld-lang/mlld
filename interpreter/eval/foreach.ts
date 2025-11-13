@@ -211,7 +211,7 @@ export async function evaluateForeachCommand(
       const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
 
       if (isStructuredValue(pipelineResult)) {
-        finalResults = asData(pipelineResult);
+        finalResults = pipelineResult;
       } else if (isVariable(pipelineResult)) {
         finalResults = await extractVariableValue(pipelineResult, env);
       } else {

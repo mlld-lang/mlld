@@ -888,7 +888,7 @@ export async function prepareVarAssignment(
     // This handles cases like @user.name where resolvedValue is the field value
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
     if (typeof actualValue === 'string') {
-      const finalMetadata = applySecurityMetadata(metadata, resolvedValue.metadata?.security);
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValueDescriptor);
       variable = createSimpleTextVariable(identifier, actualValue, source, finalMetadata);
     } else if (typeof actualValue === 'number' || typeof actualValue === 'boolean' || actualValue === null) {
       const { createPrimitiveVariable } = await import('@core/types/variable');
@@ -928,14 +928,14 @@ export async function prepareVarAssignment(
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
     if (typeof actualValue === 'object' && actualValue !== null) {
       if (Array.isArray(actualValue)) {
-        const finalMetadata = applySecurityMetadata(metadata);
+        const finalMetadata = applySecurityMetadata(metadata, resolvedValueDescriptor);
         variable = createArrayVariable(identifier, actualValue, false, source, finalMetadata);
       } else {
-        const finalMetadata = applySecurityMetadata(metadata);
+        const finalMetadata = applySecurityMetadata(metadata, resolvedValueDescriptor);
         variable = createObjectVariable(identifier, actualValue, false, source, finalMetadata);
       }
     } else {
-      const finalMetadata = applySecurityMetadata(metadata);
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValueDescriptor);
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
 
@@ -944,14 +944,14 @@ export async function prepareVarAssignment(
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
     if (typeof actualValue === 'object' && actualValue !== null) {
       if (Array.isArray(actualValue)) {
-        const finalMetadata = applySecurityMetadata(metadata);
+        const finalMetadata = applySecurityMetadata(metadata, resolvedValueDescriptor);
         variable = createArrayVariable(identifier, actualValue, false, source, finalMetadata);
       } else {
-        const finalMetadata = applySecurityMetadata(metadata);
+        const finalMetadata = applySecurityMetadata(metadata, resolvedValueDescriptor);
         variable = createObjectVariable(identifier, actualValue, false, source, finalMetadata);
       }
     } else {
-      const finalMetadata = applySecurityMetadata(metadata);
+      const finalMetadata = applySecurityMetadata(metadata, resolvedValueDescriptor);
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, finalMetadata);
     }
     
