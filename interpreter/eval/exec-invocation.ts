@@ -1261,7 +1261,9 @@ export async function evaluateExecInvocation(
           ? result
           : result === undefined || result === null
             ? ''
-            : JSON.stringify(result);
+            : isStructuredValue(result)
+              ? asText(result)
+              : JSON.stringify(result);
         const pipelineResult = await processPipeline({
           value: pipelineInput,
           env: execEnv,
