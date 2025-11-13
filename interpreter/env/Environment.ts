@@ -56,6 +56,7 @@ import { ContextManager, type PipelineContextSnapshot, type GuardContextSnapshot
 import { HookManager } from '../hooks/HookManager';
 import { guardPreHookStub } from '../hooks/stubs';
 import { taintPostHook } from '../hooks/taint-post-hook';
+import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 
 interface ImportBindingInfo {
   source: string;
@@ -121,6 +122,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private importResolver: IImportResolver;
   private contextManager: ContextManager;
   private hookManager: HookManager;
+  private guardRegistry: GuardRegistry;
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
@@ -234,9 +236,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (parent) {
       this.contextManager = parent.contextManager;
       this.hookManager = parent.hookManager;
+      this.guardRegistry = parent.guardRegistry.createChild();
     } else {
       this.contextManager = new ContextManager();
       this.hookManager = new HookManager();
+      this.guardRegistry = new GuardRegistry();
       this.registerBuiltinHooks();
     }
     
@@ -1155,6 +1159,25 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getHookManager(): HookManager {
     return this.hookManager;
+  }
+
+  getGuardRegistry(): GuardRegistry {
+    return this.guardRegistry;
+  }
+
+  serializeLocalGuards(): SerializedGuardDefinition[] {
+    return this.guardRegistry.serializeOwn();
+  }
+
+  serializeGuardsByNames(names: readonly string[]): SerializedGuardDefinition[] {
+    return this.guardRegistry.serializeByNames(names);
+  }
+
+  registerSerializedGuards(definitions: SerializedGuardDefinition[] | undefined | null): void {
+    if (!definitions || definitions.length === 0) {
+      return;
+    }
+    this.guardRegistry.importSerialized(definitions);
   }
 
   async withOpContext<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {

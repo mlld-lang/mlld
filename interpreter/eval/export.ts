@@ -1,4 +1,5 @@
 import type { ExportDirectiveNode } from '@core/types';
+import type { VariableReferenceNode } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { ExportManifest, type ExportManifestEntry } from './import/ExportManifest';
@@ -8,14 +9,14 @@ export async function evaluateExport(
   directive: ExportDirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
-  const exportNodes = directive.values?.exports ?? [];
+  const exportNodes = (directive.values?.exports ?? []) as VariableReferenceNode[];
 
     const filePath = env.getCurrentFilePath();
     const entries: ExportManifestEntry[] = [];
     let hasWildcard = false;
 
     for (const node of exportNodes) {
-      const identifier = typeof node?.identifier === 'string' ? node.identifier : '';
+      const identifier = node?.identifier ?? '';
       if (!identifier) continue;
 
       if (identifier === '*') {
@@ -24,7 +25,8 @@ export async function evaluateExport(
       }
 
       const location = astLocationToSourceLocation(node?.location, filePath);
-      entries.push({ name: identifier, location });
+      const kind = node?.valueType === 'guardExport' ? 'guard' : 'variable';
+      entries.push({ name: identifier, location, kind });
     }
 
     if (hasWildcard) {

@@ -10,11 +10,13 @@ import { MlldError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import type { SerializedGuardDefinition } from '../../guards';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
   frontmatter: Record<string, any> | null;
   childEnvironment: Environment;
+  guardDefinitions: SerializedGuardDefinition[];
 }
 
 /**
@@ -312,7 +314,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter: null,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: []
     };
   }
 
@@ -347,7 +350,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter: null,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: []
     };
   }
 
@@ -376,7 +380,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter: null,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: []
     };
   }
 
@@ -427,7 +432,7 @@ export class ModuleContentProcessor {
       });
     }
     const exportManifest = childEnv.getExportManifest();
-    const { moduleObject, frontmatter } = this.variableImporter.processModuleExports(
+    const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,
       { frontmatter: frontmatterData },
       undefined,
@@ -448,7 +453,8 @@ export class ModuleContentProcessor {
         return {
           moduleObject,
           frontmatter,
-          childEnvironment: childEnv
+          childEnvironment: childEnv,
+          guardDefinitions: guards
         };
       }
       let templateSyntax: 'doubleColon' | 'tripleColon' = 'doubleColon';
@@ -473,7 +479,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: guards
     };
   }
 

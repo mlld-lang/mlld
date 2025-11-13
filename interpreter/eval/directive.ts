@@ -17,6 +17,7 @@ import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
 import { evaluateForDirective } from './for';
 import { evaluateExport } from './export';
+import { evaluateGuard } from './guard';
 
 /**
  * Extract trace information from a directive
@@ -277,6 +278,9 @@ async function dispatchDirective(
 
     case 'export':
       return await evaluateExport(directive as any, env);
+
+    case 'guard':
+      return await evaluateGuard(directive, env);
 
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

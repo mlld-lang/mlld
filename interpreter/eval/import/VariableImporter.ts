@@ -25,6 +25,7 @@ import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironment
 import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
 import type { SourceLocation } from '@core/types';
+import type { SerializedGuardDefinition } from '../../guards';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -205,18 +206,19 @@ export class VariableImporter {
     skipModuleEnvSerialization?: boolean,
     manifest?: ExportManifest | null,
     childEnv?: Environment
-  ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
+  ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
 
     // Always start with auto-export of all top-level variables
     const moduleObject: Record<string, any> = {};
     const serializedMetadataMap: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>> = {};
-    const explicitNames = manifest?.hasEntries() ? manifest.getNames() : null;
+    const manifestEntries = manifest?.hasEntries() ? manifest.getEntries() : [];
+    const variableEntries = manifestEntries.filter(entry => entry.kind !== 'guard');
+    const guardEntries = manifestEntries.filter(entry => entry.kind === 'guard');
+    const explicitNames = variableEntries.length > 0 ? variableEntries.map(entry => entry.name) : null;
     const explicitExports = explicitNames ? new Set(explicitNames) : null;
     if (explicitNames && explicitNames.length > 0) {
-      // Fail fast if the manifest references names that never materialised in
-      // the child environment so authors receive a precise directive pointer.
       for (const name of explicitNames) {
         if (!childVars.has(name)) {
           const location = manifest?.getLocation(name);
@@ -237,6 +239,34 @@ export class VariableImporter {
         }
       }
     }
+
+    const guardNames = guardEntries.map(entry => entry.name);
+    if (guardNames.length > 0) {
+      if (!childEnv) {
+        throw new MlldImportError('Guard exports require a child environment', {
+          code: 'GUARD_EXPORT_CONTEXT',
+          details: { guards: guardNames }
+        });
+      }
+      for (const entry of guardEntries) {
+        const definition = childEnv.getGuardRegistry().getByName(entry.name);
+        if (!definition) {
+          const location = manifest?.getLocation(entry.name);
+          throw new MlldImportError(`Exported guard '${entry.name}' is not defined in this module`, {
+            code: 'EXPORTED_GUARD_NOT_FOUND',
+            context: {
+              guardName: entry.name,
+              location
+            },
+            details: {
+              filePath: location?.filePath,
+              variableName: entry.name
+            }
+          });
+        }
+      }
+    }
+
     const shouldSerializeModuleEnv = !skipModuleEnvSerialization;
     let moduleEnvSnapshot: Map<string, Variable> | null = null;
     const getModuleEnvSnapshot = () => {
@@ -340,9 +370,15 @@ export class VariableImporter {
       moduleObject.__metadata__ = serializedMetadataMap;
     }
     
+    const guards: SerializedGuardDefinition[] =
+      guardNames.length > 0 && childEnv
+        ? childEnv.serializeGuardsByNames(guardNames)
+        : [];
+
     return {
       moduleObject,
-      frontmatter
+      frontmatter,
+      guards
     };
   }
 
