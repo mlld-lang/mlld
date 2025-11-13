@@ -1,5 +1,5 @@
 ---
-updated: 2025-10-08
+updated: 2025-11-13
 tags: #arch, #data, #pipeline
 related-docs: docs/dev/PIPELINE.md, docs/dev/ALLIGATOR.md, docs/dev/INTERPRETER.md
 related-code: interpreter/utils/structured-value.ts, interpreter/eval/pipeline/*.ts
@@ -35,6 +35,29 @@ interface StructuredValue<T = unknown> {
     loadResult?: LoadContentResult;
     [key: string]: unknown;
   };
+
+  // Lazy context snapshot (Object.defineProperty getter)
+  ctx: {
+    labels: DataLabel[];
+    taint: TaintLevel;
+    sources: string[];
+    policy: PolicyContext | null;
+    filename?: string;
+    relative?: string;
+    absolute?: string;
+    url?: string;
+    domain?: string;
+    title?: string;
+    description?: string;
+    source?: string;
+    retries?: number;
+    tokens?: number;
+    tokest?: number;
+    fm?: Record<string, unknown> | undefined;
+    json?: unknown;
+    length?: number;
+    type: StructuredValueType;
+  };
   toString(): string;     // returns text
   valueOf(): string;
   [Symbol.toPrimitive](hint?: string): string;
@@ -46,9 +69,22 @@ interface StructuredValue<T = unknown> {
 Use these throughout the codebase:
 
 ```typescript
-asText(value)  // Returns wrapper.text or String(value)
-asData(value)  // Returns wrapper.data or value
+asText(value)                                  // Returns wrapper.text or String(value)
+asData(value)                                  // Returns wrapper.data or value
 wrapStructured(value, type, text?, metadata?)  // Creates wrapper
+attachContextToStructuredValue(value)          // Enables `.ctx` getter described above
+
+// Security metadata
+extractSecurityDescriptor(value, options?)     // Pull security metadata off Values or Variables
+collectParameterDescriptors(params, env)       // Gather parameter-level descriptors from Environment
+collectAndMergeParameterDescriptors(params, env) // Merge descriptors via env.mergeSecurityDescriptors
+
+// JSON detection
+looksLikeJsonString(text)                      // Cheap heuristic before attempting JSON.parse
+parseAndWrapJson(text, options?)               // Parse JSON and wrap, or return original text when not JSON
+
+// Development validation
+assertStructuredValue(value, context?)         // Throw when boundary requires StructuredValue and none provided
 ```
 
 ### Where Values Flow
@@ -100,6 +136,17 @@ wrapStructured(value, type, text?, metadata?)  // Creates wrapper
 - CLI/API output
 - Log messages
 - Heredoc byte counts
+- Arrays of StructuredValues (pipeline batches, foreach results) must convert nested wrappers before formatting:
+
+```typescript
+array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
+// Example: interpreter/eval/show.ts:630
+```
+
+### Context Snapshots (`.ctx`)
+
+- `StructuredValue.ctx` exposes a frozen object produced by `attachContextToStructuredValue()` (`interpreter/utils/structured-value.ts`). The snapshot includes security labels, taint level, policy context, provenance (filename, relative, absolute, url, domain, title, description), execution metadata (`source`, `retries`), metrics (`tokens`, `tokest`, `length`), plus helper fields such as `fm` and `json`. Every access recomputes from the latest metadata, so mutating `metadata` stays observable.
+- `Variable.ctx` comes from `VariableMetadataUtils.attachContext()` (`core/types/variable/VariableMetadata.ts`). The snapshot includes `name`, `type`, `definedAt`, security labels, taint, token metrics, array size, export status, sources, and policy context. Use `.ctx` instead of manually reading `variable.metadata` to avoid cache invalidation bugs.
 
 ### Stage Boundary Rules
 

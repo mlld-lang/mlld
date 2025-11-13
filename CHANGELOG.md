@@ -5,6 +5,39 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Phase 3.6 - Structured Data & Security Metadata (2025-11-12)
+
+### Fixed
+- Security metadata preserved through `/var` assignments
+- Issue #435: StructuredValue handling fully resolved
+- Display boundaries no longer leak wrapper objects
+- Foreach preserves and merges security descriptors
+- Template/executable taint tracking through pipelines
+
+### Added
+- `.ctx` property on StructuredValues (security, provenance, metrics)
+- `collectParameterDescriptors()` - centralized security collection
+- `extractSecurityDescriptor()` - extract from Values/Variables
+- `parseAndWrapJson()` - unified JSON detection and wrapping
+- `assertStructuredValue()` - dev-time boundary validation
+- Executables with shell commands auto-derive `commandOutput` taint
+
+### Changed
+- Display boundaries consistently use `asText()` helper
+- Arrays of StructuredValues map elements for clean display
+- Template interpolation simplified (removed comma-separated arrays)
+- JS/Node executors unwrap StructuredValues to native data
+
+### Removed
+- `createPipelineInput()` legacy pattern (migrated to `wrapStructured()`)
+- ~300 lines duplicate code (handlers, JSON cycles, formatters)
+- Unsafe `JSON.stringify()` at display boundaries
+
+### Security
+- Complete taint tracking through all boundaries
+- Foreach adds commandOutput taint to shell-based executables
+- Pipeline stages preserve security metadata end-to-end
+
 ## [2.0.0-rc70 (unreleased)]
 
 ### Added

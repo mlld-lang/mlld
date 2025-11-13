@@ -1,9 +1,9 @@
 ---
-updated: 2025-01-13
+updated: 2025-11-13
 tags: #arch, #pipeline, #retry, #interpreter
 related-docs: PIPELINE-ARCHITECTURE.md, RETRY-PLAN.md, docs/slash/var.md
 related-code: interpreter/eval/pipeline/*.ts, interpreter/eval/when-expression.ts
-related-types: core/types { PipelineState, RetryContext, PipelineInput }
+related-types: core/types { PipelineState, RetryContext, StructuredValue }
 ---
 
 # Pipeline Architecture in mlld
@@ -544,35 +544,29 @@ WithProperty
 
 The format property is parsed and passed through the evaluation chain.
 
-### Pipeline Input Wrapper
+### StructuredValue Wrapper
 
 **File**: `interpreter/utils/pipeline-input.ts`
 
 ```typescript
-export interface PipelineInput {
-  text: string;              // Raw text (always available)
-  type: string;              // Format type ("json", "csv", etc.)
-  readonly data?: any;       // Lazy-parsed data (format-specific)
-  readonly csv?: any[][];    // CSV-specific parsed data
-  readonly xml?: any;        // XML-specific parsed data
+export function buildPipelineStructuredValue(
+  text: string,
+  format: StructuredValueType = 'json'
+): StructuredValue {
+  const normalizedFormat = (format ?? 'json').toLowerCase();
+  // Format-specific parsing that ultimately calls wrapStructured(...)
 }
 ```
 
-### Lazy Parsing Implementation
+`buildPipelineStructuredValue()` centralizes format-aware parsing and always returns the result of `wrapStructured()`. The helper attaches extra metadata (format, parsed csv/xml payloads, structured type hints) and then delegates to `attachContextToStructuredValue()` so `.ctx` immediately exposes provenance and security labels. No lazy getters remain—the function eagerly parses when a structured representation exists, so stage code always receives a regular `StructuredValue`.
 
-Each format defines a getter that parses on first access:
+### Format Handling
 
-```typescript
-case 'json':
-  Object.defineProperty(input, 'data', {
-    get() {
-      if (this._parsed === undefined) {
-        this._parsed = JSON.parse(this.text);
-      }
-      return this._parsed;
-    }
-  });
-```
+- **JSON**: Trims the input, parses via `JSON.parse`, and records the detected structured type (array/object/primitive) in `metadata.structuredType`.
+- **CSV**: Uses the local CSV parser to produce a 2D array, stores it as both `.data` and a non-enumerable `csv` helper property, and wraps the original text for `.text`.
+- **XML**: Attempts to JSON-parse and convert via `jsonToXml()`, falling back to wrapping the literal text with minimal tagging; attaches the parsed tree via a non-enumerable `xml` helper property.
+- **Text**: Returns `wrapStructured(text, 'text', text)` so downstream consumers still see a StructuredValue wrapper.
+- **Empty strings**: Treated as text to avoid spurious JSON parse failures.
 
 ### Integration Points
 
@@ -581,66 +575,58 @@ case 'json':
    - Passes to pipeline executor
 
 2. **Pipeline Execution** (`interpreter/eval/pipeline.ts`):
-   - Creates wrapped inputs for pipeline parameters
-   - Marks variables with `isPipelineInput` metadata
+   - Uses `buildPipelineStructuredValue()` to produce StructuredValue inputs
+   - Stores wrappers in `structuredOutputs` and marks variables with `isPipelineInput` metadata for tracing
 
 3. **JavaScript/Node Execution**:
-   - Shadow environments pass wrapped objects to functions
-   - Functions receive the PipelineInput object directly
+   - `AutoUnwrapManager` passes `.data` into user functions (arrays/objects for structured formats, strings otherwise)
+   - `.ctx` remains available via the environment if functions need provenance or security metadata
 
 ### Format Implementations
 
 **JSON (Default)**:
 - Uses native `JSON.parse()`
-- Accessible via `input.data`
-- Throws on invalid JSON
+- `.data` is the parsed JSON value; `.text` preserves the exact input
+- Structured type hint stored in `metadata.structuredType`
 
 **CSV**:
 - Custom parser handling quoted values
-- Returns 2D array via `input.csv`
+- `.data` is a 2D array; `.csv` helper property mirrors the parsed rows
 - Handles escaped quotes and commas
 
 **XML**:
-- Uses `jsonToXml()` for JSON input
-- Falls back to wrapping text in `<DOCUMENT>` tags
-- Note: Full markdown-to-XML parsing requires async llmxml (see LLMXML-SYNC-ISSUE.md)
+- Converts JSON payloads via `jsonToXml()` when possible
+- Falls back to wrapping literal text with minimal tags
+- Non-enumerable `.xml` helper exposes the parsed tree
 
 **Text**:
-- No parsing - `input.data` returns raw text
-- Useful for plain text processing
+- Returns `wrapStructured(text, 'text', text)`
+- `.data` and `.text` both equal the original string for consistency
 
 ### Backwards Compatibility
 
 Functions expecting strings still work:
-- Pipeline input objects stringify to their text content
-- Old functions receive `input.text` transparently
-- No breaking changes for existing modules
+- StructuredValue wrappers return `.text` from `toString()`, so implicit string coercion keeps working
+- Existing modules that read plain strings continue to see the raw text when no `format` is specified
+- Stage implementations can fall back to `.text` explicitly even when a structured `.data` view exists
 
 ### Error Handling
 
-Parse errors are thrown when accessing parsed properties:
-```typescript
-try {
-  const data = input.data;  // Throws if invalid JSON
-} catch (e) {
-  // Handle parse error
-}
-```
+`buildPipelineStructuredValue()` throws `MlldInterpreterError` as soon as parsing fails (CSV, XML, JSON). Errors bubble before invoking the stage so retries and diagnostics reference the stage boundary instead of a later property access.
 
 ### Example Usage
 
 ```mlld
 # JSON format (default)
-@exec processUsers(input) = js [(
-  const users = input.data;  // Parsed JSON
+@exec processUsers(users) = js [(
+  // `users` is already parsed JSON (Array<{ name: string }>)
   return users.map(u => u.name).join(', ');
 )]
 
 @data names = @getUsers() with { format: "json", pipeline: [@processUsers] }
 
 # CSV format
-@exec analyzeCSV(input) = js [(
-  const rows = input.csv;  // 2D array
+@exec analyzeCSV(rows) = js [(
   const headers = rows[0];
   return `${rows.length - 1} records with ${headers.length} fields`;
 )]
@@ -653,9 +639,9 @@ try {
 1. **Grammar Parse**: `with { format: "json" }` → AST node
 2. **With Clause Eval**: Extract format from properties
 3. **Pipeline Setup**: Pass format to pipeline executor
-4. **Parameter Wrapping**: Create PipelineInput for params
-5. **Function Execution**: JS receives wrapped input
-6. **Lazy Parsing**: Parse only when accessed
+4. **Parameter Wrapping**: Call `buildPipelineStructuredValue()` (delegates to `wrapStructured()`) when `with { format }` is present
+5. **Function Execution**: JS receives StructuredValue-backed variables (or plain text when no format is provided)
+6. **StructuredValue Reuse**: No lazy parsing—wrappers already contain parsed `.data`
 
 ### Testing Strategy
 
@@ -689,14 +675,14 @@ The pipeline system uses `ResolutionContext.PipelineInput` to signal that Variab
 const stringValue = await resolveValue(variable.value, env, ResolutionContext.PipelineInput);
 ```
 
-### PipelineInput Variables
+### Structured Pipeline Variables
 
-Pipeline stages create special `PipelineInputVariable` types that preserve both the wrapped input and raw text:
+Pipeline stages create `PipelineInputVariable` entries to preserve both the StructuredValue wrapper and the original text snapshot:
 
 ```typescript
 export interface PipelineInputVariable extends BaseVariable {
   type: 'pipeline-input';
-  value: PipelineInput;      // The wrapped input object
+  value: StructuredValue;    // StructuredValue with format metadata
   format: 'json' | 'csv' | 'xml' | 'text';
   rawText: string;           // Original text for fallback
 }
@@ -771,24 +757,20 @@ export async function resolveValue(
 ): Promise<Variable | any>
 ```
 
-### PipelineInput Handling
+### StructuredValue Handling
 
-Pipeline inputs receive special handling to support format-aware parsing while maintaining backward compatibility:
+Pipeline inputs rely on StructuredValue helpers:
 
 ```typescript
-// PipelineInput objects have toString() for compatibility
-const input = createPipelineInput(text, format);
-console.log(String(input));  // Returns text property
-
-// But preserve structure for property access
-input.text    // Raw text
-input.data    // Parsed JSON (if format is json)
-input.csv     // Parsed CSV array (if format is csv)
+const input = buildPipelineStructuredValue(text, format);
+console.log(input.text);             // Raw string view
+console.log(input.data);             // Parsed JSON/CSV/XML when available
+console.log(input.metadata?.format); // Format hint for downstream logging
 ```
 
 ### String Interpolation Edge Case
 
-When PipelineInput objects are used in string interpolation, they must be handled specially to avoid JSON stringification:
+When StructuredValue pipeline inputs are used in string interpolation, they must be handled specially to avoid JSON stringification:
 
 ```mlld
 /exe @format() = {echo "Result: @input"}
@@ -796,16 +778,7 @@ When PipelineInput objects are used in string interpolation, they must be handle
 # Should output "Result: test" not "Result: {"text":"test","type":"text"}"
 ```
 
-This is handled in the interpolate function:
-
-```typescript
-// Check if this is a PipelineInput object
-if (isPipelineInput(value)) {
-  stringValue = value.toString();  // Uses toString() method
-} else {
-  stringValue = JSON.stringify(value);
-}
-```
+This is handled in interpolation code by checking for StructuredValue wrappers and calling `asText(value)` before JSON stringification, so wrapper metadata never leaks into display output.
 
 ### Variable Flow Example
 
