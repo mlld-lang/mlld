@@ -645,7 +645,12 @@ export async function evaluateShow(
 
       // Convert result to string appropriately
       if (isStructuredValue(result.value)) {
-        content = asText(result.value);
+        if (result.value.type === 'array' && Array.isArray(result.value.data)) {
+          const cleaned = result.value.data.map(item => (isStructuredValue(item) ? asText(item) : item));
+          content = JSONFormatter.stringify(cleaned, { pretty: true });
+        } else {
+          content = asText(result.value);
+        }
       } else if (typeof result.value === 'string') {
         content = result.value;
       } else if (result.value === null || result.value === undefined) {
@@ -680,7 +685,12 @@ export async function evaluateShow(
 
         // Convert result to string appropriately
         if (isStructuredValue(result.value)) {
-          content = asText(result.value);
+          if (result.value.type === 'array' && Array.isArray(result.value.data)) {
+            const cleaned = result.value.data.map(item => (isStructuredValue(item) ? asText(item) : item));
+            content = JSONFormatter.stringify(cleaned, { pretty: true });
+          } else {
+            content = asText(result.value);
+          }
         } else if (typeof result.value === 'string') {
           content = result.value;
         } else if (result.value === null || result.value === undefined) {
@@ -825,12 +835,11 @@ export async function evaluateShow(
     // Evaluate the exec invocation
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocation, env);
-    
     resultValue = result.value;
 
     // Convert result to string appropriately
     if (isStructuredValue(result.value)) {
-      content = asText(result.value);
+      content = formatForDisplay(result.value);
     } else if (typeof result.value === 'string') {
       content = result.value;
     } else if (result.value === null || result.value === undefined) {

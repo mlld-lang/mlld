@@ -1,7 +1,13 @@
 import type { Environment } from '../env/Environment';
 import { isExecutable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import type { SecurityDescriptor } from '@core/types/security';
+import {
+  asData,
+  ensureStructuredValue,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '@interpreter/utils/structured-value';
 
 function hasArrayData(value: unknown): value is { data: unknown[] } {
   if (!value || typeof value !== 'object') {
@@ -64,6 +70,7 @@ export async function evaluateForeachCommand(
   // 2. Evaluate all array arguments (use arrays property from AST)
   const { evaluateDataValue } = await import('./data-value-evaluator');
   const evaluatedArrays: any[][] = [];
+  const arraySecurityDescriptors: Array<SecurityDescriptor | undefined> = [];
   
   // Use the arrays property from the foreach AST node
   const arrayNodes = arrays || commandArgs;
@@ -71,6 +78,11 @@ export async function evaluateForeachCommand(
   for (let i = 0; i < arrayNodes.length; i++) {
     const arrayVar = arrayNodes[i];
     const arrayValue = await evaluateDataValue(arrayVar, env);
+    let sourceDescriptor = extractSecurityDescriptor(arrayValue);
+    if (!sourceDescriptor && arrayVar && typeof arrayVar === 'object' && arrayVar.type === 'VariableReference') {
+      const referencedVar = env.getVariable(arrayVar.identifier);
+      sourceDescriptor = referencedVar?.metadata?.security;
+    }
     if (isStructuredValue(arrayValue)) {
       let structuredData = asData(arrayValue) as unknown;
 
@@ -106,6 +118,7 @@ export async function evaluateForeachCommand(
       }
 
       evaluatedArrays.push(structuredData);
+      arraySecurityDescriptors.push(sourceDescriptor);
       continue;
     }
     
@@ -114,6 +127,7 @@ export async function evaluateForeachCommand(
     }
     
     evaluatedArrays.push(arrayValue);
+    arraySecurityDescriptors.push(sourceDescriptor);
   }
   
   // 3. Validate array inputs and performance limits
@@ -141,6 +155,19 @@ export async function evaluateForeachCommand(
   
   for (let i = 0; i < tuples.length; i++) {
     const tuple = tuples[i];
+    const decoratedTuple = tuple.map((value, index) => {
+      const descriptor = arraySecurityDescriptors[index];
+      if (descriptor) {
+        if (isStructuredValue(value)) {
+          return value;
+        }
+        return ensureStructuredValue(value, undefined, undefined, { security: descriptor });
+      }
+      if (isStructuredValue(value)) {
+        return value;
+      }
+      return value;
+    });
 
     try {
       // Create an ExecInvocation node with the current tuple values as arguments
@@ -148,7 +175,7 @@ export async function evaluateForeachCommand(
         type: 'ExecInvocation',
         commandRef: {
           identifier: commandName,
-          args: tuple // Use tuple values directly as arguments
+          args: decoratedTuple // Use tuple values with metadata attached
         },
         withClause: null
       };

@@ -610,8 +610,16 @@ export async function evaluateExe(
 
     const executableTypeForVariable = executableDef.type === 'code' ? 'code' : 'command';
 
-    const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(metadata, {
-      existingDescriptor: descriptor,
+  let executableDescriptor = descriptor;
+  if (executableDef.type === 'command') {
+    const commandTaintDescriptor = makeSecurityDescriptor({ taintLevel: 'commandOutput' });
+    executableDescriptor = executableDescriptor
+      ? env.mergeSecurityDescriptors(executableDescriptor, commandTaintDescriptor)
+      : commandTaintDescriptor;
+  }
+
+  const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      existingDescriptor: executableDescriptor,
       capability: capabilityContext
     });
 
