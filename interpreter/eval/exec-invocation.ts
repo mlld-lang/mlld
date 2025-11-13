@@ -25,10 +25,17 @@ import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCap
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
-import { asText, isStructuredValue, wrapStructured, looksLikeJsonString } from '../utils/structured-value';
+import {
+  asText,
+  isStructuredValue,
+  wrapStructured,
+  parseAndWrapJson,
+  collectAndMergeParameterDescriptors,
+  extractSecurityDescriptor
+} from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
-import { normalizeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import type { SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 
 /**
@@ -96,16 +103,80 @@ class SimpleMetadataShelf {
 // Module-level shelf instance
 const metadataShelf = new SimpleMetadataShelf();
 
-function extractSecurityDescriptor(value: unknown): SecurityDescriptor | undefined {
-  if (!value) return undefined;
-  if (isStructuredValue(value)) {
-    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
+type StringBuiltinMethod = 'toLowerCase' | 'toUpperCase' | 'trim';
+type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
+
+function ensureStringTarget(method: string, target: unknown): string {
+  if (typeof target === 'string') {
+    return target;
   }
-  if (typeof value === 'object') {
-    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
-    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
+}
+
+function ensureArrayTarget(method: string, target: unknown): unknown[] {
+  if (Array.isArray(target)) {
+    return target;
   }
-  return undefined;
+  throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
+}
+
+function handleStringBuiltin(method: StringBuiltinMethod, target: unknown): string {
+  const value = ensureStringTarget(method, target);
+  switch (method) {
+    case 'toLowerCase':
+      return value.toLowerCase();
+    case 'toUpperCase':
+      return value.toUpperCase();
+    case 'trim':
+      return value.trim();
+  }
+  throw new MlldInterpreterError(`Unsupported string builtin: ${method}`);
+}
+
+function handleLengthBuiltin(target: unknown): number {
+  if (typeof target === 'string' || Array.isArray(target)) {
+    return target.length;
+  }
+  throw new MlldInterpreterError(`Cannot call .length() on ${typeof target}`);
+}
+
+function handleJoinBuiltin(target: unknown, separator: unknown): string {
+  const value = ensureArrayTarget('join', target);
+  const joiner = separator !== undefined ? String(separator) : ',';
+  return value.join(joiner);
+}
+
+function handleSplitBuiltin(target: unknown, separator: unknown): string[] {
+  const value = ensureStringTarget('split', target);
+  const splitOn = separator !== undefined ? String(separator) : '';
+  return value.split(splitOn);
+}
+
+function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: unknown): boolean | number {
+  if (Array.isArray(target)) {
+    if (method === 'includes') {
+      return target.includes(arg);
+    }
+    if (method === 'indexOf') {
+      return target.indexOf(arg);
+    }
+    throw new MlldInterpreterError(`Cannot call .${method}() on array targets`);
+  }
+
+  const value = ensureStringTarget(method, target);
+  const searchValue = String(arg ?? '');
+
+  switch (method) {
+    case 'includes':
+      return value.includes(searchValue);
+    case 'indexOf':
+      return value.indexOf(searchValue);
+    case 'startsWith':
+      return value.startsWith(searchValue);
+    case 'endsWith':
+      return value.endsWith(searchValue);
+  }
+  throw new MlldInterpreterError(`Unsupported search builtin: ${method}`);
 }
 
 /**
@@ -266,6 +337,9 @@ export async function evaluateExecInvocation(
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
 
+      const targetDescriptor = extractSecurityDescriptor(objectValue);
+      mergeResultDescriptor(targetDescriptor);
+
       // Structured exec returns wrappers – convert them to plain data before method lookup
       if (isStructuredValue(objectValue)) {
         objectValue = objectValue.type === 'array' ? objectValue.data : asText(objectValue);
@@ -284,75 +358,25 @@ export async function evaluateExecInvocation(
       // Apply the builtin method
       let result: any;
       switch (commandName) {
-        case 'includes':
-          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
-            result = objectValue.includes(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .includes() on ${typeof objectValue}`);
-          }
+        case 'toLowerCase':
+        case 'toUpperCase':
+        case 'trim':
+          result = handleStringBuiltin(commandName, objectValue);
           break;
         case 'length':
-          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
-            result = objectValue.length;
-          } else {
-            throw new MlldInterpreterError(`Cannot call .length() on ${typeof objectValue}`);
-          }
-          break;
-        case 'indexOf':
-          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
-            result = objectValue.indexOf(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .indexOf() on ${typeof objectValue}`);
-          }
+          result = handleLengthBuiltin(objectValue);
           break;
         case 'join':
-          if (Array.isArray(objectValue)) {
-            result = objectValue.join(evaluatedArgs[0] || ',');
-          } else {
-            throw new MlldInterpreterError(`Cannot call .join() on ${typeof objectValue}`);
-          }
+          result = handleJoinBuiltin(objectValue, evaluatedArgs[0]);
           break;
         case 'split':
-          if (typeof objectValue === 'string') {
-            result = objectValue.split(evaluatedArgs[0] || '');
-          } else {
-            throw new MlldInterpreterError(`Cannot call .split() on ${typeof objectValue}`);
-          }
+          result = handleSplitBuiltin(objectValue, evaluatedArgs[0]);
           break;
-        case 'toLowerCase':
-          if (typeof objectValue === 'string') {
-            result = objectValue.toLowerCase();
-          } else {
-            throw new MlldInterpreterError(`Cannot call .toLowerCase() on ${typeof objectValue}`);
-          }
-          break;
-        case 'toUpperCase':
-          if (typeof objectValue === 'string') {
-            result = objectValue.toUpperCase();
-          } else {
-            throw new MlldInterpreterError(`Cannot call .toUpperCase() on ${typeof objectValue}`);
-          }
-          break;
-        case 'trim':
-          if (typeof objectValue === 'string') {
-            result = objectValue.trim();
-          } else {
-            throw new MlldInterpreterError(`Cannot call .trim() on ${typeof objectValue}`);
-          }
-          break;
-      case 'startsWith':
-        if (typeof objectValue === 'string') {
-          result = objectValue.startsWith(evaluatedArgs[0]);
-        } else {
-          throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
-        }
-        break;
+        case 'includes':
+        case 'indexOf':
+        case 'startsWith':
         case 'endsWith':
-          if (typeof objectValue === 'string') {
-            result = objectValue.endsWith(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .endsWith() on ${typeof objectValue}`);
-          }
+          result = handleSearchBuiltin(commandName as SearchBuiltinMethod, objectValue, evaluatedArgs[0]);
           break;
         default:
           throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
@@ -996,11 +1020,9 @@ export async function evaluateExecInvocation(
   if (variable.metadata?.security) {
     descriptorPieces.push(variable.metadata.security);
   }
-  for (const paramName of params) {
-    const paramVar = execEnv.getVariable(paramName);
-    if (paramVar?.metadata?.security) {
-      descriptorPieces.push(paramVar.metadata.security);
-    }
+  const mergedParamDescriptor = collectAndMergeParameterDescriptors(params, execEnv);
+  if (mergedParamDescriptor) {
+    descriptorPieces.push(mergedParamDescriptor);
   }
   if (descriptorPieces.length > 0) {
     resultSecurityDescriptor =
@@ -1019,19 +1041,11 @@ export async function evaluateExecInvocation(
     if (isStructuredValue(templateResult)) {
       result = templateResult;
     } else if (typeof templateResult === 'string') {
-      if (looksLikeJsonString(templateResult)) {
-        try {
-          const parsed = JSON.parse(templateResult.trim());
-          const typeHint = Array.isArray(parsed) ? 'array' : 'object';
-          result = wrapStructured(parsed, typeHint, templateResult, {
-            security: resultSecurityDescriptor
-          });
-        } catch {
-          result = templateResult;
-        }
-      } else {
-        result = templateResult;
-      }
+      const parsed = parseAndWrapJson(templateResult, {
+        metadata: resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined,
+        preserveText: true
+      });
+      result = parsed ?? templateResult;
     } else {
       result = templateResult;
     }
@@ -1207,17 +1221,10 @@ export async function evaluateExecInvocation(
         });
       }
       const commandOutput = await execEnv.executeCode(fallbackCommand, 'sh', codeParams);
-      // Try to parse as JSON if it looks like JSON
+      // Normalize structured output when possible
       if (typeof commandOutput === 'string') {
-        if (looksLikeJsonString(commandOutput)) {
-          try {
-            result = JSON.parse(commandOutput.trim());
-          } catch {
-            result = commandOutput;
-          }
-        } else {
-          result = commandOutput;
-        }
+        const parsed = parseAndWrapJson(commandOutput);
+        result = parsed ?? commandOutput;
       } else {
         result = commandOutput;
       }
@@ -1233,18 +1240,10 @@ export async function evaluateExecInvocation(
       const commandOptions = stdinInput !== undefined ? { env: envVars, input: stdinInput } : { env: envVars };
       const commandOutput = await execEnv.executeCommand(command, commandOptions);
       
-      // Try to parse as JSON if it looks like JSON
+      // Normalize structured output when possible
       if (typeof commandOutput === 'string') {
-        if (looksLikeJsonString(commandOutput)) {
-          try {
-            result = JSON.parse(commandOutput.trim());
-          } catch {
-            // Not valid JSON, use as-is
-            result = commandOutput;
-          }
-        } else {
-          result = commandOutput;
-        }
+        const parsed = parseAndWrapJson(commandOutput);
+        result = parsed ?? commandOutput;
       } else {
         result = commandOutput;
       }
@@ -1274,16 +1273,8 @@ export async function evaluateExecInvocation(
         });
 
         if (typeof pipelineResult === 'string') {
-          const trimmed = pipelineResult.trim();
-          if (trimmed) {
-            try {
-              result = JSON.parse(trimmed);
-            } catch {
-              result = pipelineResult;
-            }
-          } else {
-            result = pipelineResult;
-          }
+          const parsed = parseAndWrapJson(pipelineResult);
+          result = parsed ?? pipelineResult;
         } else {
           result = pipelineResult;
         }
@@ -1563,6 +1554,19 @@ export async function evaluateExecInvocation(
     ) {
       const payload = (result as any).data;
       result = wrapStructured(payload, (result as any).type, (result as any).text, (result as any).metadata);
+    }
+
+    const inputDescriptors = Object.values(variableMetadata)
+      .map(meta => meta?.metadata?.security as SecurityDescriptor | undefined)
+      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+
+    if (inputDescriptors.length > 0) {
+      const mergedInputDescriptor =
+        inputDescriptors.length === 1
+          ? inputDescriptors[0]
+          : env.mergeSecurityDescriptors(...inputDescriptors);
+      env.recordSecurityDescriptor(mergedInputDescriptor);
+      mergeResultDescriptor(mergedInputDescriptor);
     }
     
     // Clear the shelf to prevent memory leaks

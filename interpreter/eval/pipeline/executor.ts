@@ -14,7 +14,8 @@ import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import { asText, asData, isStructuredValue, wrapStructured } from '../../utils/structured-value';
-import { createPipelineInput, isPipelineInput } from '../../utils/pipeline-input';
+import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
+import { isPipelineInput } from '@core/types/variable/TypeGuards';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -839,7 +840,7 @@ export class PipelineExecutor {
       return cached;
     }
 
-    const wrapper = createPipelineInput<unknown>(fallbackText, 'text');
+    const wrapper = buildPipelineStructuredValue(fallbackText, 'text');
     this.structuredOutputs.set(stageIndex, wrapper);
     return wrapper;
   }

@@ -20,21 +20,7 @@ import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
-import { makeSecurityDescriptor, normalizeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
-
-function extractSecurityDescriptor(value: unknown): SecurityDescriptor | undefined {
-  if (!value) {
-    return undefined;
-  }
-  if (isStructuredValue(value)) {
-    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
-  }
-  if (typeof value === 'object') {
-    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
-    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
-  }
-  return undefined;
-}
+import type { DataLabel } from '@core/types/security';
 
 /**
  * Evaluates @output directive with enhanced syntax.

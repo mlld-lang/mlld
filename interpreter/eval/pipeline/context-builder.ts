@@ -10,8 +10,8 @@ import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
 import type { PipelineContextSnapshot } from '../../env/ContextManager';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
-import { createPipelineInput } from '../../utils/pipeline-input';
-import { wrapStructured, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
+import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
+import { wrapStructured, isStructuredValue, type StructuredValue, type StructuredValueType } from '../../utils/structured-value';
 
 /**
  * Simplified pipeline context interface
@@ -171,8 +171,7 @@ async function setSimplifiedInputVariable(
   let inputVar;
 
   if (format) {
-    // Create PipelineInput with format
-    const pipelineInputObj = createPipelineInput(input, format);
+    const pipelineInputObj = buildPipelineStructuredValue(input, format as StructuredValueType);
     
     inputVar = createPipelineInputVariable(
       'input',
@@ -284,7 +283,7 @@ function createSimplifiedPipelineContext(
     if (stageIndex !== null && structuredAccess) {
       return structuredAccess.getStageOutput(stageIndex, fallback ?? '');
     }
-    return createPipelineInput(fallback ?? '', 'text');
+    return buildPipelineStructuredValue(fallback ?? '', 'text');
   };
 
   const baseInput = context.outputs?.[0] ?? '';

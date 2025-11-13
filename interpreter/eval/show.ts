@@ -4,6 +4,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
+import { formatForDisplay } from '../utils/display-formatter';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 // Remove old type imports - we'll use only the new ones
@@ -32,9 +33,8 @@ import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue, looksLikeJsonString } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue, parseAndWrapJson } from '@interpreter/utils/structured-value';
 
-const STRUCTURED_COLLECTION_TYPES = new Set(['object', 'array', 'json']);
 import { wrapExecResult } from '../utils/structured-exec';
 // Template normalization now handled in grammar - no longer needed here
 
@@ -403,108 +403,32 @@ export async function evaluateShow(
      */
     const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
     value = await resolveValue(value, env, ResolutionContext.Display);
-    // Import LoadContentResult type check
-    const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
+    const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
+    const isNamespaceVariable = variable?.metadata?.isNamespace && !hadFieldAccess;
 
-    // Convert final value to string
-    if (typeof value === 'string') {
-      content = value;
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
-      // For primitives, just convert to string
-      content = String(value);
-    } else if (isLoadContentResult(value)) {
-      // For LoadContentResult, show the content by default
-      content = value.content;
-    } else if (isLoadContentResultArray(value)) {
-      // For array of LoadContentResult, concatenate content with double newlines
-      content = value.map(item => item.content).join('\n\n');
-    } else if (isStructuredValue(value)) {
-      if (value.type === 'array' && Array.isArray(value.data)) {
-        const printableArray = value.data.map(item =>
-          isStructuredValue(item)
-            ? (item.type === 'object' || item.type === 'array') ? item.data : asText(item)
-            : item
-        );
-        content = JSONFormatter.stringify(printableArray, { pretty: true, indent: 2 });
-      } else if (value.type === 'object' && value.data && typeof value.data === 'object') {
-        if (
-          (value.metadata && 'loadResult' in value.metadata && value.metadata.loadResult) ||
-          value.metadata?.source === 'load-content'
-        ) {
-          content = value.text;
-        } else {
-          content = JSONFormatter.stringify(value.data, { pretty: true });
-        }
-      } else {
-        content = value.text;
+    if (isNamespaceVariable && value && typeof value === 'object') {
+      if (process.env.DEBUG_NAMESPACE) {
+        logger.debug('Cleaning namespace for display:', {
+          varName: variable.name,
+          hasMetadata: !!variable.metadata,
+          isNamespace: variable.metadata?.isNamespace,
+          valueKeys: Object.keys(value)
+        });
       }
-    } else if (Array.isArray(value)) {
-      const printableArray = value.map(item => {
-        if (isStructuredValue(item)) {
-          if (STRUCTURED_COLLECTION_TYPES.has(item.type)) {
-            return item.data;
-          }
-          const dataView = item.data;
-          if (typeof dataView === 'number' || typeof dataView === 'boolean' || dataView === null) {
-            return dataView;
-          }
-          return asText(item);
-        }
-        if (item && typeof item === 'object' && typeof (item as any).text === 'string' && typeof (item as any).type === 'string') {
-          return (item as any).text;
-        }
-        return item;
-      });
-      value = printableArray;
-
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
+      content = JSONFormatter.stringifyNamespace(value);
+    } else if (value && typeof value === 'object' && (value as any).__executable) {
+      const params = (value as any).paramNames || [];
+      content = `<function(${params.join(', ')})>`;
+    } else {
+      if (Array.isArray(value) && process.env.MLLD_DEBUG === 'true') {
         logger.debug('show.ts: Formatting array:', {
           varName: variable.name,
           valueLength: value.length,
-          value: value,
-          isForeachSection: isForeachSection
+          value,
+          isForeachSection
         });
       }
-      
-      // Check if this is from a foreach-section expression
-      if (isForeachSection && value.every(item => typeof item === 'string')) {
-        // Join string array with double newlines for foreach-section results
-        content = value.join('\n\n');
-      } else {
-        // For other arrays, use JSON format (this preserves the original behavior)
-        // Use proper indentation for arrays (2 spaces)
-        const indent = 2;
-        
-        content = JSONFormatter.stringify(value, { pretty: true, indent });
-      }
-    } else if (value !== null && value !== undefined) {
-      // Check if this is a namespace object that needs special formatting
-      // BUT NOT if we've accessed a field on it - in that case, value is no longer the namespace
-      const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
-      if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
-        if (process.env.DEBUG_NAMESPACE) {
-          logger.debug('Cleaning namespace for display:', {
-            varName: variable.name,
-            hasMetadata: !!variable.metadata,
-            isNamespace: variable.metadata?.isNamespace,
-            valueKeys: Object.keys(value)
-          });
-        }
-        content = JSONFormatter.stringifyNamespace(value);
-      } else {
-        // Check if the top-level value itself is an executable that needs cleaning
-        if (value && typeof value === 'object' && value.__executable) {
-          const params = value.paramNames || [];
-          content = `<function(${params.join(', ')})>`;
-        } else {
-          // For objects, use JSON with custom replacer for VariableReference nodes
-          content = JSONFormatter.stringify(value, { pretty: true });
-        }
-      }
-    } else {
-      // Handle null/undefined
-      content = '';
+      content = formatForDisplay(value, { isForeachSection });
     }
     
     // Legacy path: only run when invocation is not present (avoid double-processing)
@@ -1146,14 +1070,9 @@ export async function evaluateShow(
       content = String(content);
     }
   } else if (typeof content === 'string') {
-    // Check if content is a JSON string that should be pretty-printed
-    try {
-      if (looksLikeJsonString(content)) {
-        const parsed = JSON.parse(content.trim());
-        content = JSONFormatter.stringify(parsed, { pretty: true });
-      }
-    } catch {
-      // Not valid JSON, keep original string
+    const parsed = parseAndWrapJson(content, { preserveText: true });
+    if (parsed && typeof parsed !== 'string' && isStructuredValue(parsed)) {
+      content = JSONFormatter.stringify(parsed.data, { pretty: true });
     }
   }
 

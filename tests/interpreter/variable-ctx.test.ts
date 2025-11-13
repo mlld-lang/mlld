@@ -11,7 +11,7 @@ import {
   createArrayVariable
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
-import { createPipelineInput } from '@interpreter/utils/pipeline-input';
+import { buildPipelineStructuredValue } from '@interpreter/utils/pipeline-input';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { createGuardInputHelper } from '../../interpreter/hooks/input-array-helper';
 
@@ -35,7 +35,7 @@ describe('variable .ctx namespace', () => {
 
   it('attaches metrics to pipeline input variables', () => {
     const source = VariableMetadataUtils.createSource('template', false, false);
-    const pipelineValue = createPipelineInput('{"foo":"bar"}', 'json');
+    const pipelineValue = buildPipelineStructuredValue('{"foo":"bar"}', 'json');
     const variable = createPipelineInputVariable(
       'input',
       pipelineValue,

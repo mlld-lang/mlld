@@ -1,26 +1,18 @@
->> Double-colon (default)
-/var @msg = ::Hello @name!::
-/var @doc = ::Use `npm test` before @env::
-/var @report = ::
-Status: @status
-Config: <@base/config.json>
-Data: @data|@json
-::
+>> Extract from code fence
+/var @llmResponse = `Here's your data:
+\`\`\`json
+{"name": "Alice", "status": "active"}
+\`\`\``
 
->> Backticks (alternative)
-/var @msg = `Hello @name!`
-/var @multi = `
-Line 1: @var
-Line 2: @other
-`
+/var @data = @llmResponse | @json.llm
+/show @data.name                                >> Alice
 
->> Double quotes (single-line only)
-/var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+>> Extract from inline prose
+/var @inline = `The result is {"count": 42} for this query.`
+/var @extracted = @inline | @json.llm
+/show @extracted.count                          >> 42
 
->> Triple-colon (Discord/social only)
-/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
-
->> Single quotes (literal)
-/var @literal = '@name stays literal'
+>> Returns false when no JSON found
+/var @text = `Just plain text, no JSON here.`
+/var @result = @text | @json.llm
+/show @result                                   >> false

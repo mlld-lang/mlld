@@ -1,0 +1,6 @@
+/var @checks = for @service in ["auth", "payments", "search"] =>
+  {"service": @service, "status": "ok", "timestamp": @now}
+
+/for @entry in @checks => append @entry to "health.jsonl"
+
+/show <health.jsonl>

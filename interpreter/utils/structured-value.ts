@@ -1,5 +1,6 @@
 import type { SecurityDescriptor, DataLabel, TaintLevel } from '@core/types/security';
-import { makeSecurityDescriptor, normalizeSecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
+import type { Variable } from '@core/types/variable';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 
@@ -86,6 +87,31 @@ export function looksLikeJsonString(value: unknown): value is string {
     (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
     (trimmed.startsWith('[') && trimmed.endsWith(']'))
   );
+}
+
+export interface ParseJsonOptions {
+  metadata?: StructuredValueMetadata;
+  preserveText?: boolean;
+  strict?: boolean;
+}
+
+export function parseAndWrapJson(
+  value: string,
+  options: ParseJsonOptions = {}
+): StructuredValue | string | undefined {
+  if (!looksLikeJsonString(value)) {
+    return options.strict ? undefined : value;
+  }
+
+  try {
+    const parsed = JSON.parse(value.trim());
+    const type: StructuredValueType =
+      Array.isArray(parsed) ? 'array' : typeof parsed === 'object' && parsed !== null ? 'object' : 'json';
+    const text = options.preserveText ? value : JSON.stringify(parsed);
+    return wrapStructured(parsed, type, text, options.metadata);
+  } catch {
+    return options.strict ? undefined : value;
+  }
 }
 
 export function wrapStructured<T>(
@@ -247,10 +273,14 @@ export const structuredValueUtils = {
   asText,
   asData,
   looksLikeJsonString,
+  parseAndWrapJson,
   wrapStructured,
   isStructuredValue,
   ensureStructuredValue,
-  attachContextToStructuredValue
+  attachContextToStructuredValue,
+  collectParameterDescriptors,
+  collectAndMergeParameterDescriptors,
+  extractSecurityDescriptor
 };
 
 export function attachContextToStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
@@ -288,6 +318,149 @@ function buildStructuredValueContext(value: StructuredValue): StructuredValueCon
     length: metrics?.length,
     type: value.type
   });
+}
+
+interface ParameterLookup {
+  getVariable(name: string): Variable | undefined;
+}
+
+interface ParameterMerge extends ParameterLookup {
+  mergeSecurityDescriptors: (...descriptors: SecurityDescriptor[]) => SecurityDescriptor;
+}
+
+export function collectParameterDescriptors(
+  params: readonly string[],
+  env: ParameterLookup
+): SecurityDescriptor[] {
+  const descriptors: SecurityDescriptor[] = [];
+  for (const name of params) {
+    const variable = env.getVariable(name);
+    const descriptor = variable?.metadata?.security;
+    if (descriptor) {
+      descriptors.push(descriptor);
+    }
+  }
+  return descriptors;
+}
+
+export function collectAndMergeParameterDescriptors(
+  params: readonly string[],
+  env: ParameterMerge
+): SecurityDescriptor | undefined {
+  const descriptors = collectParameterDescriptors(params, env);
+  if (descriptors.length === 0) {
+    return undefined;
+  }
+  if (descriptors.length === 1) {
+    return descriptors[0];
+  }
+  return env.mergeSecurityDescriptors(...descriptors);
+}
+
+export interface ExtractSecurityDescriptorOptions {
+  recursive?: boolean;
+  normalize?: boolean;
+  mergeArrayElements?: boolean;
+}
+
+export function extractSecurityDescriptor(
+  value: unknown,
+  options: ExtractSecurityDescriptorOptions = {}
+): SecurityDescriptor | undefined {
+  const resolvedOptions: Required<ExtractSecurityDescriptorOptions> = {
+    recursive: false,
+    normalize: true,
+    mergeArrayElements: false,
+    ...options
+  };
+  return extractDescriptorInternal(value, resolvedOptions, new WeakSet());
+}
+
+function extractDescriptorInternal(
+  value: unknown,
+  options: Required<ExtractSecurityDescriptorOptions>,
+  seen: WeakSet<object>
+): SecurityDescriptor | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (isStructuredValue(value)) {
+    return normalizeIfNeeded(value.metadata?.security as SecurityDescriptor | undefined, options.normalize);
+  }
+
+  if (isVariableLike(value)) {
+    return normalizeIfNeeded(value.metadata?.security as SecurityDescriptor | undefined, options.normalize);
+  }
+
+  if (!options.recursive || typeof value !== 'object') {
+    return undefined;
+  }
+
+  if (seen.has(value)) {
+    return undefined;
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    const descriptors = value
+      .map(item => extractDescriptorInternal(item, options, seen))
+      .filter(isSecurityDescriptor);
+    if (descriptors.length === 0) {
+      return undefined;
+    }
+    if (options.mergeArrayElements && descriptors.length > 1) {
+      return mergeDescriptors(...descriptors);
+    }
+    return descriptors[0];
+  }
+
+  const metadataDescriptor = normalizeIfNeeded(
+    (value as { metadata?: { security?: SecurityDescriptor } }).metadata?.security as SecurityDescriptor | undefined,
+    options.normalize
+  );
+  const nestedDescriptors = Object.values(value as Record<string, unknown>)
+    .map(item => extractDescriptorInternal(item, options, seen))
+    .filter(isSecurityDescriptor);
+
+  if (nestedDescriptors.length === 0) {
+    return metadataDescriptor;
+  }
+
+  if (metadataDescriptor) {
+    return mergeDescriptors(metadataDescriptor, ...nestedDescriptors);
+  }
+  if (nestedDescriptors.length === 1) {
+    return nestedDescriptors[0];
+  }
+  return mergeDescriptors(...nestedDescriptors);
+}
+
+function isSecurityDescriptor(value: SecurityDescriptor | undefined): value is SecurityDescriptor {
+  return Boolean(value);
+}
+
+function normalizeIfNeeded(
+  descriptor: SecurityDescriptor | undefined,
+  normalize: boolean
+): SecurityDescriptor | undefined {
+  if (!descriptor) {
+    return undefined;
+  }
+  return normalize ? normalizeSecurityDescriptor(descriptor) : descriptor;
+}
+
+function isVariableLike(value: unknown): value is Variable {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.type === 'string' &&
+    typeof candidate.name === 'string' &&
+    'value' in candidate &&
+    'source' in candidate
+  );
 }
 
 function normalizeLabelArray(

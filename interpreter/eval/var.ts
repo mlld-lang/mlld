@@ -22,13 +22,8 @@ import {
   createStructuredValueVariable
 } from '@core/types/variable';
 import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/security';
-import {
-  createCapabilityContext,
-  makeSecurityDescriptor,
-  mergeDescriptors,
-  normalizeSecurityDescriptor
-} from '@core/types/security';
-import { isStructuredValue, asText, asData } from '@interpreter/utils/structured-value';
+import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/security';
+import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
 export interface VarAssignmentResult {
@@ -49,39 +44,6 @@ function valueToString(value: unknown): string {
   if (isStructuredValue(value)) return asText(value);
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
-}
-
-function extractSecurityDescriptorFromValue(value: unknown): SecurityDescriptor | undefined {
-  if (!value) {
-    return undefined;
-  }
-  if (isStructuredValue(value)) {
-    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
-  }
-  if (Array.isArray(value)) {
-    const descriptors = value
-      .map(extractSecurityDescriptorFromValue)
-      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
-    if (descriptors.length === 0) {
-      return undefined;
-    }
-    return mergeDescriptors(...descriptors);
-  }
-  if (typeof value === 'object') {
-    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
-    const direct = normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
-    if (direct) {
-      return direct;
-    }
-    const nestedDescriptors = Object.values(value as Record<string, unknown>)
-      .map(extractSecurityDescriptorFromValue)
-      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
-    if (nestedDescriptors.length === 0) {
-      return undefined;
-    }
-    return mergeDescriptors(...nestedDescriptors);
-  }
-  return undefined;
 }
 
 /**
@@ -734,7 +696,10 @@ export async function prepareVarAssignment(
     resolvedValue = await interpolateWithSecurity([valueNode]);
   }
 
-  const resolvedValueDescriptor = extractSecurityDescriptorFromValue(resolvedValue);
+  const resolvedValueDescriptor = extractSecurityDescriptor(resolvedValue, {
+    recursive: true,
+    mergeArrayElements: true
+  });
   mergeResolvedDescriptor(resolvedValueDescriptor);
 
   // Create and store the appropriate variable type

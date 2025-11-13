@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, expect } from 'vitest';
 import { prepareValueForShadow, prepareParamsForShadow } from './variable-proxy';
 import { LoadContentResultImpl } from '../eval/load-content';
-import { createPipelineInput } from '@interpreter/utils/pipeline-input';
+import { buildPipelineStructuredValue } from '@interpreter/utils/pipeline-input';
 
 describe('prepareValueForShadow (structured)', () => {
   it('returns native LoadContentResult objects to shadow environments', () => {
@@ -20,7 +20,7 @@ describe('prepareValueForShadow (structured)', () => {
 
   it('unwraps pipeline inputs to plain data and records metadata', () => {
     const params = prepareParamsForShadow({
-      payload: createPipelineInput('[{"id":1},{"id":2}]', 'json')
+      payload: buildPipelineStructuredValue('[{"id":1},{"id":2}]', 'json')
     });
 
     expect(Array.isArray(params.payload)).toBe(true);

@@ -2,8 +2,8 @@ import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
-import { createPipelineInput } from '../../utils/pipeline-input';
-import { asText, isStructuredValue, wrapStructured, looksLikeJsonString, type StructuredValue } from '../../utils/structured-value';
+import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
+import { asText, isStructuredValue, wrapStructured, looksLikeJsonString, type StructuredValue, type StructuredValueType } from '../../utils/structured-value';
 import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
@@ -675,7 +675,7 @@ export async function executeCommandVariable(
           continue;
         } else {
           const resolvedText = typeof unwrappedStdin === 'string' ? unwrappedStdin : textValue;
-          const wrappedInput = createPipelineInput(resolvedText, format);
+          const wrappedInput = buildPipelineStructuredValue(resolvedText, format as StructuredValueType);
 
           const pipelineSource: VariableSource = {
             directive: 'var',
@@ -962,15 +962,11 @@ export async function executeCommandVariable(
       for (const paramName of execDef.paramNames) {
         const paramVar = execEnv.getVariable(paramName);
         if (paramVar) {
-          // Check if this is a pipeline input variable
           if (paramVar.type === 'pipeline-input') {
-            // PipelineInputVariable stores the PipelineInput object in value
             params[paramName] = paramVar.value;
           } else if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
-            // Legacy: Use the wrapped pipeline input from metadata
             params[paramName] = paramVar.metadata.pipelineInput;
           } else {
-            // Regular variable - use the value directly
             params[paramName] = paramVar.value;
           }
         }

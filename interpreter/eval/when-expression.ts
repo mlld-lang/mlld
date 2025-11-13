@@ -13,7 +13,7 @@ import { MlldWhenExpressionError } from '@core/errors';
 import { evaluate, interpolate } from '../core/interpreter';
 import { evaluateCondition } from './when';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue } from '../utils/structured-value';
+import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
 
 /**
  * Check if a condition is the 'none' literal
@@ -476,20 +476,13 @@ async function applyTailModifiers(
     const pipeEnv = env.createChild();
     
     // Set up pipeline input variable
-    const { createPipelineInputVariable } = await import('@core/types/variable');
-    const pipelineInput = {
-      text: String(result),
-      data: result,
-      toString: () => String(result)
-    };
-    
-    const pipelineVar = createPipelineInputVariable(
+    const { createStructuredValueVariable } = await import('@core/types/variable');
+    const structuredInput = ensureStructuredValue(result, undefined, String(result));
+    const pipelineVar = createStructuredValueVariable(
       '_pipelineInput',
-      pipelineInput,
-      'text',
-      String(result),
+      structuredInput,
       { directive: 'var', syntax: 'reference', hasInterpolation: false, isMultiLine: false },
-      0
+      { isPipelineInput: true, pipelineStage: 0 }
     );
     
     pipeEnv.setVariable('_pipelineInput', pipelineVar);
