@@ -1,0 +1,7 @@
+{
+  "name": "GuardError",
+  "guardName": "@shellSecretBlock",
+  "filter": "operation:run",
+  "reason": "Shell cannot print secrets",
+  "operation": "run"
+}

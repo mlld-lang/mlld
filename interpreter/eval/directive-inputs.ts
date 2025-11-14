@@ -1,10 +1,11 @@
-import type { DirectiveNode } from '@core/types';
+import type { DirectiveNode, ExecInvocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import {
   createSimpleTextVariable,
   type Variable,
   type VariableSource
 } from '@core/types/variable';
+import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
@@ -37,6 +38,14 @@ async function extractShowInputs(
   directive: DirectiveNode,
   env: Environment
 ): Promise<readonly Variable[]> {
+  const invocation = directive.values?.invocation as ExecInvocation | undefined;
+  if (invocation?.type === 'ExecInvocation') {
+    const execArgs = extractExecInvocationArgs(invocation, env);
+    if (execArgs.length > 0) {
+      return execArgs;
+    }
+  }
+
   const inputs: Variable[] = [];
   const varName = resolveShowVariableName(directive);
   if (!varName) {
@@ -172,11 +181,13 @@ async function extractRunInputs(
     if (!commandNodes) {
       return [];
     }
-    const commandText = await interpolate(
-      Array.isArray(commandNodes) ? commandNodes : [commandNodes],
-      env,
-      InterpolationContext.ShellCommand
-    );
+    const commandArray = Array.isArray(commandNodes) ? commandNodes : [commandNodes];
+    const commandText = await interpolate(commandArray, env, InterpolationContext.ShellCommand);
+    const referencedVariables = extractVariableReferences(commandArray);
+    const descriptors = referencedVariables
+      .map(name => env.getVariable(name)?.metadata?.security)
+      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+    const mergedDescriptor = descriptors.length > 0 ? env.mergeSecurityDescriptors(...descriptors) : undefined;
     const source: VariableSource = {
       directive: 'run',
       syntax: 'command',
@@ -185,8 +196,12 @@ async function extractRunInputs(
         commandNodes.some((node: any) => node?.type === 'Newline')
     };
     const variable = createSimpleTextVariable('__run_command__', commandText, source, {
-      isSystem: true
+      isSystem: true,
+      security: mergedDescriptor
     });
+    if (mergedDescriptor) {
+      env.recordSecurityDescriptor(mergedDescriptor);
+    }
     return [variable];
   }
 
@@ -195,6 +210,14 @@ async function extractRunInputs(
     directive.subtype === 'runExecInvocation' ||
     directive.subtype === 'runExecReference'
   ) {
+    const execInvocation = (directive.values?.execInvocation ??
+      directive.values?.execRef) as ExecInvocation | undefined;
+    if (execInvocation?.type === 'ExecInvocation') {
+      const execArgs = extractExecInvocationArgs(execInvocation, env);
+      if (execArgs.length > 0) {
+        return execArgs;
+      }
+    }
     const execName = resolveRunExecName(directive);
     if (!execName) {
       return [];
@@ -225,5 +248,64 @@ function resolveRunExecName(directive: DirectiveNode): string | undefined {
     return execRef.commandRef.identifier;
   }
 
+  return undefined;
+}
+
+function extractVariableReferences(nodes: any[], refs: string[] = []): string[] {
+  for (const node of nodes) {
+    if (!node || typeof node !== 'object') {
+      continue;
+    }
+    if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
+      refs.push(node.identifier);
+      continue;
+    }
+    if (node.type === 'VariableReferenceWithTail' && node.variable) {
+      const identifier = node.variable?.identifier;
+      if (typeof identifier === 'string') {
+        refs.push(identifier);
+      }
+      continue;
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        extractVariableReferences(value, refs);
+      }
+    }
+  }
+  return Array.from(new Set(refs));
+}
+
+function extractExecInvocationArgs(invocation: ExecInvocation, env: Environment): Variable[] {
+  const args = invocation.commandRef?.args ?? [];
+  const variables: Variable[] = [];
+  for (const arg of args) {
+    const identifier = resolveVariableIdentifier(arg);
+    if (!identifier) {
+      continue;
+    }
+    const variable = env.getVariable(identifier);
+    if (variable) {
+      VariableMetadataUtils.attachContext(variable);
+      variables.push(variable);
+    }
+  }
+  return variables;
+}
+
+function resolveVariableIdentifier(node: any): string | undefined {
+  if (!node) {
+    return undefined;
+  }
+  if (node.type === 'VariableReference') {
+    return node.identifier;
+  }
+  if (node.type === 'VariableReferenceWithTail') {
+    const inner = node.variable;
+    if (inner?.type === 'VariableReference') {
+      return inner.identifier;
+    }
+    return inner?.identifier;
+  }
   return undefined;
 }

@@ -418,7 +418,8 @@ async function evaluateGuard(options: {
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
     inputVariable = createArrayVariable('input', arrayValue as any[], true, GUARD_INPUT_SOURCE, {
-      isSystem: true
+      isSystem: true,
+      isReserved: true
     });
     contextLabels = options.operationSnapshot.aggregate.labels;
     contextSources = options.operationSnapshot.aggregate.sources;
@@ -583,7 +584,11 @@ function cloneVariableForGuard(variable: Variable): Variable {
   const clone: Variable = {
     ...variable,
     name: 'input',
-    metadata: variable.metadata ? { ...variable.metadata } : undefined
+    metadata: {
+      ...(variable.metadata ? { ...variable.metadata } : {}),
+      isReserved: true,
+      isSystem: true
+    }
   };
   if (clone.metadata?.ctxCache) {
     delete clone.metadata.ctxCache;

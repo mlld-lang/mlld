@@ -31,6 +31,7 @@ export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
   frontmatter: Record<string, any> | null;
   childEnvironment: Environment;
+  guardDefinitions: SerializedGuardDefinition[];
 }
 
 /**
@@ -193,7 +194,8 @@ export class VariableImporter {
       moduleObjectForImport,
       targetEnv,
       processingResult.childEnvironment,
-      serializedMetadata
+      serializedMetadata,
+      processingResult.guardDefinitions
     );
   }
 
@@ -650,7 +652,8 @@ export class VariableImporter {
     moduleObject: Record<string, any>,
     targetEnv: Environment,
     childEnv: Environment,
-    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
+    guardDefinitions?: SerializedGuardDefinition[]
   ): Promise<void> {
     if (directive.subtype === 'importAll') {
       throw new MlldImportError(
@@ -662,8 +665,18 @@ export class VariableImporter {
         }
       );
     } else if (directive.subtype === 'importNamespace') {
-      await this.handleNamespaceImport(directive, moduleObject, targetEnv, childEnv, metadataMap);
+      await this.handleNamespaceImport(
+        directive,
+        moduleObject,
+        targetEnv,
+        childEnv,
+        metadataMap,
+        guardDefinitions
+      );
     } else if (directive.subtype === 'importSelected') {
+      if (guardDefinitions && guardDefinitions.length > 0) {
+        targetEnv.registerSerializedGuards(guardDefinitions);
+      }
       await this.handleSelectedImport(directive, moduleObject, targetEnv, childEnv, metadataMap);
     } else {
       throw new Error(`Unknown import subtype: ${directive.subtype}`);
@@ -678,7 +691,8 @@ export class VariableImporter {
     moduleObject: Record<string, any>,
     targetEnv: Environment,
     childEnv: Environment,
-    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>
+    metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
+    guardDefinitions?: SerializedGuardDefinition[]
   ): Promise<void> {
     // For shorthand imports, namespace is stored as an array in values.namespace
     const namespaceNodes = directive.values?.namespace;
@@ -741,6 +755,9 @@ export class VariableImporter {
         env: targetEnv
       });
       this.setVariableWithImportBinding(targetEnv, alias, templateVar, bindingInfo);
+      if (guardDefinitions && guardDefinitions.length > 0) {
+        targetEnv.registerSerializedGuards(guardDefinitions);
+      }
       return;
     }
 
@@ -755,6 +772,9 @@ export class VariableImporter {
       targetEnv
     );
     this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
+    if (guardDefinitions && guardDefinitions.length > 0) {
+      targetEnv.registerSerializedGuards(guardDefinitions);
+    }
   }
 
   /**

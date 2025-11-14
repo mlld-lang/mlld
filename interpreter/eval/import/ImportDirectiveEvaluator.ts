@@ -407,7 +407,6 @@ export class ImportDirectiveEvaluator {
 
     // Import variables into environment
     await this.variableImporter.importVariables(processingResult, directive, env);
-    env.registerSerializedGuards(processingResult.guardDefinitions);
 
     return { value: undefined, env };
   }
@@ -459,7 +458,6 @@ export class ImportDirectiveEvaluator {
 
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
-      env.registerSerializedGuards(processingResult.guardDefinitions);
 
       return { value: undefined, env };
     } finally {

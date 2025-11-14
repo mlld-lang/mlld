@@ -1,0 +1,7 @@
+{
+  "name": "GuardError",
+  "guardName": "@secretExecBlock",
+  "filter": "data:secret",
+  "reason": "Secrets blocked in exec",
+  "operation": "exec-invocation"
+}

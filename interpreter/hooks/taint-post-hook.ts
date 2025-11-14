@@ -12,11 +12,13 @@ export const taintPostHook: PostHook = async (
   _directive: DirectiveNode,
   result: EvalResult,
   inputs: readonly unknown[],
-  env: Environment
+  env: Environment,
+  operation?: OperationContext
 ): Promise<EvalResult> => {
   const descriptors: SecurityDescriptor[] = [];
   collectInputDescriptors(inputs, descriptors);
   collectValueDescriptors(result.value, descriptors);
+  collectOperationLabels(operation, descriptors);
 
   if (descriptors.length > 0) {
     const merged = mergeDescriptors(...descriptors);
@@ -42,6 +44,21 @@ function collectInputDescriptors(
     }
     collectValueDescriptors(input, target);
   }
+}
+
+function collectOperationLabels(
+  operation: OperationContext | undefined,
+  target: SecurityDescriptor[]
+): void {
+  if (!operation?.labels || operation.labels.length === 0) {
+    return;
+  }
+
+  target.push({
+    labels: operation.labels,
+    taint: 'unknown',
+    sources: []
+  });
 }
 
 function collectValueDescriptors(

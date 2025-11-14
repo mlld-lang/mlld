@@ -1,0 +1,8 @@
+# Shared guard from module
+
+/guard @moduleSecretShield for secret = when [
+  @ctx.op.type == "show" => deny "Module guard blocks display"
+  * => allow
+]
+
+/export guard @moduleSecretShield

@@ -26,6 +26,8 @@ export async function handleExecGuardDenial(
   };
 
   const { evaluateWhenExpression } = await import('./when-expression');
+  const warning = formatGuardWarning(reason, deniedContext.guardFilter, deniedContext.guardName);
+  options.env.emitEffect('stderr', `${warning}\n`);
   const whenResult = await options.execEnv.withDeniedContext(deniedContext, async () =>
     evaluateWhenExpression(options.whenExprNode, options.execEnv, undefined, { denyMode: true })
   );
@@ -34,8 +36,6 @@ export async function handleExecGuardDenial(
     return null;
   }
 
-  const warning = formatGuardWarning(reason, deniedContext.guardFilter, deniedContext.guardName);
-  options.env.emitEffect('stderr', `${warning}\n`);
   return {
     ...whenResult,
     stderr: warning

@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { parseSync } from '@grammar/parser';
 import type { DirectiveNode } from '@core/types';
+import type { WhenExpressionNode } from '@core/types/when';
+import { GuardError } from '@core/errors/GuardError';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
@@ -9,6 +11,7 @@ import { createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
+import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -163,5 +166,173 @@ describe('guard pre-hook integration', () => {
       decision: 'retry',
       retryHint: 'try-again'
     });
+  });
+
+  it('sets @ctx.guard to null when no guards fire', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'plainVar',
+      createSimpleTextVariable(
+        'plainVar',
+        'hello',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const directive = parseSync('/show @plainVar')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+    const ctx = env.getContextManager().buildAmbientContext();
+    expect(ctx.guard).toBeNull();
+  });
+
+  it('populates guard context snapshots during evaluation', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @secretProtector for secret = when [ @ctx.op.type == "show" => deny "blocked secret" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'classified',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const ctxManager = env.getContextManager();
+    const snapshots: Record<string, unknown>[] = [];
+    const originalWithGuardContext = ctxManager.withGuardContext.bind(ctxManager);
+    const guardCtxSpy = vi
+      .spyOn(ctxManager, 'withGuardContext')
+      .mockImplementation(async (context, fn) => {
+        return await originalWithGuardContext(context, async () => {
+          snapshots.push(ctxManager.buildAmbientContext());
+          return await fn();
+        });
+      });
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked secret/);
+    guardCtxSpy.mockRestore();
+
+    expect(snapshots.length).toBeGreaterThan(0);
+    const guardSnapshot = snapshots[0].guard as any;
+    expect(guardSnapshot).toBeTruthy();
+    expect(guardSnapshot.try).toBe(1);
+    expect(guardSnapshot.labels).toContain('secret');
+  });
+
+  it('increments @ctx.guard.try across retries', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard @retryTracker for op:show = when [ @ctx.guard.try < 2 => retry "again" \n * => deny "done" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'retry me',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const ctxManager = env.getContextManager();
+    const attempts: number[] = [];
+    const originalWithGuardContext = ctxManager.withGuardContext.bind(ctxManager);
+    const guardCtxSpy = vi
+      .spyOn(ctxManager, 'withGuardContext')
+      .mockImplementation(async (context, fn) => {
+        return await originalWithGuardContext(context, async () => {
+          const snapshot = ctxManager.buildAmbientContext();
+          const guardState = snapshot.guard as any;
+          if (guardState?.try) {
+            attempts.push(guardState.try as number);
+          }
+          return await fn();
+        });
+      });
+
+    const pipelineSnapshot: PipelineContextSnapshot = {
+      stage: 1,
+      totalStages: 1,
+      currentCommand: 'stage-1',
+      input: 'retry me',
+      previousOutputs: [],
+      format: undefined,
+      attemptCount: 1,
+      attemptHistory: [],
+      hint: null,
+      hintHistory: [],
+      sourceRetryable: true
+    };
+
+    const directive = parseSync('/show @value')[0] as DirectiveNode;
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(directive, env))
+    ).rejects.toMatchObject({ decision: 'retry' });
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(directive, env))
+    ).rejects.toMatchObject({ decision: 'deny' });
+
+    guardCtxSpy.mockRestore();
+    expect(attempts).toEqual([1, 2]);
+  });
+
+  it('sets @ctx.denied when guard denial is handled inside exec when-blocks', async () => {
+    const env = createEnv();
+    const execEnv = env.createChild();
+    const effects = new TestEffectHandler();
+    env.setEffectHandler(effects);
+    execEnv.setEffectHandler(effects);
+
+    const execDirective = parseSync(
+      '/exe @processSecret(secretValue) = when [ denied => "Denied flag: @ctx.denied" \n * => @secretValue ]'
+    )[0] as DirectiveNode;
+    const whenExpr = execDirective.values?.content?.[0] as WhenExpressionNode;
+
+    const guardError = new GuardError({
+      decision: 'deny',
+      guardFilter: 'data:secret',
+      reason: 'Blocked exec',
+      operation: { type: 'exec-invocation' }
+    });
+
+    const handled = await handleExecGuardDenial(guardError, {
+      execEnv,
+      env,
+      whenExprNode: whenExpr
+    });
+
+    expect(handled).not.toBeNull();
+    expect(handled?.value).toContain('Denied flag: true');
   });
 });
