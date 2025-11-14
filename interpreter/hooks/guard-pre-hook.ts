@@ -13,6 +13,7 @@ import type { ArrayAggregateSnapshot } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isVariable } from '../utils/variable-resolution';
+import { interpreterLogger } from '@core/utils/logger';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -58,6 +59,124 @@ const GUARD_HELPER_SOURCE: VariableSource = {
 };
 
 const guardAttemptStores = new WeakMap<Environment, Map<string, GuardAttemptState>>();
+const GUARD_DEBUG_PREVIEW_LIMIT = 100;
+
+function isGuardDebugEnabled(): boolean {
+  const value = process.env.MLLD_DEBUG_GUARDS;
+  if (!value) {
+    return false;
+  }
+  return value === '1' || value.toLowerCase() === 'true';
+}
+
+function logGuardDebug(message: string, context?: Record<string, unknown>): void {
+  if (!isGuardDebugEnabled()) {
+    return;
+  }
+  ensureGuardLoggerLevel();
+  interpreterLogger.debug(message, context);
+}
+
+let guardLoggerPrimed = false;
+function ensureGuardLoggerLevel(): void {
+  if (guardLoggerPrimed) {
+    return;
+  }
+  guardLoggerPrimed = true;
+  try {
+    interpreterLogger.level = 'debug';
+  } catch {
+    // Ignore logger level adjustments in restricted environments
+  }
+}
+
+function formatGuardLabel(guard: GuardDefinition): string {
+  const label = guard.name ?? 'anonymous';
+  const filter = `${guard.filterKind}:${guard.filterValue}`;
+  return `${label} (for ${filter})`;
+}
+
+function formatOperationDescription(operation?: OperationContext): string {
+  if (!operation || !operation.type) {
+    return 'operation';
+  }
+  const base = operation.type.startsWith('/') ? operation.type : `/${operation.type}`;
+  const subtype = operation.subtype ? ` (${operation.subtype})` : '';
+  return `${base}${subtype}`;
+}
+
+function sanitizePreviewForLog(preview?: string | null): string | null {
+  if (!preview) {
+    return null;
+  }
+  if (preview.length <= GUARD_DEBUG_PREVIEW_LIMIT) {
+    return preview;
+  }
+  return `${preview.slice(0, GUARD_DEBUG_PREVIEW_LIMIT)}…`;
+}
+
+function logGuardEvaluationStart(options: {
+  guard: GuardDefinition;
+  directive: DirectiveNode;
+  operation: OperationContext;
+  scope: GuardScope;
+  attempt: number;
+  inputPreview?: string | null;
+}): void {
+  const operationDescription = formatOperationDescription(options.operation);
+  logGuardDebug(
+    `Guard ${formatGuardLabel(options.guard)} evaluating ${operationDescription}`,
+    {
+      guard: options.guard.name ?? null,
+      filter: `${options.guard.filterKind}:${options.guard.filterValue}`,
+      directive: options.directive.kind,
+      operationType: options.operation.type ?? null,
+      operationSubtype: options.operation.subtype ?? null,
+      scope: options.scope,
+      attempt: options.attempt,
+      inputPreview: sanitizePreviewForLog(options.inputPreview)
+    }
+  );
+}
+
+function logGuardDecisionEvent(options: {
+  guard: GuardDefinition;
+  directive: DirectiveNode;
+  operation: OperationContext;
+  scope: GuardScope;
+  attempt: number;
+  decision: GuardDecisionType;
+  reason?: string | null;
+  hint?: string | null;
+  inputPreview?: string | null;
+}): void {
+  const reason = options.reason ?? options.hint ?? 'No reason provided';
+  const operationDescription = formatOperationDescription(options.operation);
+  logGuardDebug(
+    `Guard decision: ${options.decision} (${reason}) on ${operationDescription}`,
+    {
+      guard: options.guard.name ?? null,
+      filter: `${options.guard.filterKind}:${options.guard.filterValue}`,
+      directive: options.directive.kind,
+      operationType: options.operation.type ?? null,
+      scope: options.scope,
+      attempt: options.attempt,
+      hint: options.hint ?? null,
+      inputPreview: sanitizePreviewForLog(options.inputPreview)
+    }
+  );
+  if (options.decision === 'retry') {
+    logGuardDebug(
+      `Guard retry attempt ${options.attempt} for ${formatGuardLabel(options.guard)}`,
+      {
+        guard: options.guard.name ?? null,
+        filter: `${options.guard.filterKind}:${options.guard.filterValue}`,
+        operationType: options.operation.type ?? null,
+        hint: options.hint ?? null
+      }
+    );
+  }
+}
 
 function getRootEnvironment(env: Environment): Environment {
   let current: Environment | undefined = env;
@@ -330,6 +449,15 @@ async function evaluateGuard(options: {
     hintHistory: attemptHistory.map(entry => entry.hint ?? null)
   };
 
+  logGuardEvaluationStart({
+    guard,
+    directive: options.directive,
+    operation,
+    scope,
+    attempt: attemptNumber,
+    inputPreview
+  });
+
   const action = await env.withGuardContext(guardContext, async () => {
     return await evaluateGuardBlock(guard.block, guardEnv);
   });
@@ -344,6 +472,19 @@ async function evaluateGuard(options: {
     attempt: attemptNumber,
     tries: attemptHistory
   });
+
+  logGuardDecisionEvent({
+    guard,
+    directive: options.directive,
+    operation,
+    scope,
+    attempt: attemptNumber,
+    decision: action.decision,
+    reason: action.decision === 'deny' ? action.message ?? null : null,
+    hint: action.decision === 'retry' ? action.message ?? null : null,
+    inputPreview
+  });
+
   if (action.decision === 'deny') {
     clearGuardAttemptState(attemptStore, attemptKey);
     return { action: 'abort', metadata };

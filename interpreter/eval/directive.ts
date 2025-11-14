@@ -406,7 +406,6 @@ function handleGuardDecision(
 
   if (decision.action === 'abort') {
     throw new GuardError({
-      message: info.baseMessage,
       decision: 'deny',
       guardName: info.guardName,
       guardFilter: info.guardFilter,
@@ -414,6 +413,7 @@ function handleGuardDecision(
       inputPreview: info.inputPreview ?? null,
       retryHint: info.retryHint,
       operation: operationContext,
+      reason: info.baseMessage,
       sourceLocation: directive.location ?? null,
       env
     });
@@ -433,7 +433,6 @@ function enforcePipelineGuardRetry(
   const pipelineContext = env.getPipelineContext();
   if (!pipelineContext) {
     throw new GuardError({
-      message: 'Cannot retry: guard retry requires pipeline context (non-pipeline retry deferred to Phase 7.3)',
       decision: 'deny',
       guardName: info.guardName,
       guardFilter: info.guardFilter,
@@ -441,15 +440,14 @@ function enforcePipelineGuardRetry(
       inputPreview: info.inputPreview ?? null,
       retryHint: info.retryHint,
       operation: operationContext,
+      reason: 'guard retry requires pipeline context (non-pipeline retry deferred to Phase 7.3)',
       sourceLocation: directive.location ?? null,
       env
     });
   }
 
   if (!canRetryWithinPipeline(pipelineContext)) {
-    const message = `Cannot retry: ${info.retryHint ?? 'guard requested retry'} (source not retryable)`;
     throw new GuardError({
-      message,
       decision: 'deny',
       guardName: info.guardName,
       guardFilter: info.guardFilter,
@@ -457,13 +455,13 @@ function enforcePipelineGuardRetry(
       inputPreview: info.inputPreview ?? null,
       retryHint: info.retryHint,
       operation: operationContext,
+      reason: `Cannot retry: ${info.retryHint ?? 'guard requested retry'} (source not retryable)`,
       sourceLocation: directive.location ?? null,
       env
     });
   }
 
   throw new GuardError({
-    message: info.baseMessage,
     decision: 'retry',
     guardName: info.guardName,
     guardFilter: info.guardFilter,
@@ -471,6 +469,7 @@ function enforcePipelineGuardRetry(
     inputPreview: info.inputPreview ?? null,
     retryHint: info.retryHint,
     operation: operationContext,
+    reason: info.baseMessage,
     sourceLocation: directive.location ?? null,
     env
   });
