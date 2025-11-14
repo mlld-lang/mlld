@@ -381,6 +381,16 @@ export class VariableMetadataUtils {
       exported: Boolean(variable.metadata.isImported),
       policy: security?.policyContext ?? null
     };
+    if (variable.type === 'array' && variable.metadata) {
+      const aggregate = (variable.metadata as any).arrayHelperAggregate;
+      if (aggregate) {
+        context.labels = aggregate.labels;
+        context.sources = aggregate.sources;
+        context.tokens = aggregate.tokens;
+        context.totalTokens = aggregate.totalTokens;
+        context.maxTokens = aggregate.maxTokens;
+      }
+    }
     variable.metadata.ctxCache = context;
     return context;
   }

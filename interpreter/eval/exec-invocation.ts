@@ -354,6 +354,12 @@ export async function evaluateExecInvocation(
         const evaluatedArg = await evaluateDataValue(arg, env);
         evaluatedArgs.push(evaluatedArg);
       }
+
+      const quantifierEvaluator = (objectValue as any)?.__mlldQuantifierEvaluator;
+      if (quantifierEvaluator && typeof quantifierEvaluator === 'function') {
+        const quantifierResult = quantifierEvaluator(commandName, evaluatedArgs);
+        return createEvalResult(quantifierResult, env);
+      }
       
       // Apply the builtin method
       let result: any;
@@ -893,6 +899,16 @@ export async function evaluateExecInvocation(
         }
       }
     }
+  }
+  
+  if (
+    variable.metadata?.isGuardHelper &&
+    typeof (variable.metadata as any).guardHelperImplementation === 'function'
+  ) {
+    const impl = (variable.metadata as any)
+      .guardHelperImplementation as (args: readonly unknown[]) => unknown | Promise<unknown>;
+    const helperResult = await impl(evaluatedArgs);
+    return createEvalResult(helperResult, env);
   }
   
   // Bind evaluated arguments to parameters

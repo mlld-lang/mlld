@@ -120,11 +120,11 @@ describe('Variable Proxy System', () => {
       // Helper functions work
       expect(helpers.isVariable(proxy)).toBe(true);
       expect(helpers.getType(proxy)).toBe('array');
-      expect(helpers.getMetadata(proxy)).toEqual({ arrayType: 'load-content' });
+      expect(helpers.getMetadata(proxy)).toMatchObject({ arrayType: 'load-content' });
       
       // Direct property access works
       expect(proxy[helpers.TYPE]).toBe('array');
-      expect(proxy[helpers.METADATA]).toEqual({ arrayType: 'load-content' });
+      expect(proxy[helpers.METADATA]).toMatchObject({ arrayType: 'load-content' });
     });
   });
 });

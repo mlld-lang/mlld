@@ -1,4 +1,5 @@
 import type { SourceLocation } from '@core/types';
+import type { DataLabel } from '@core/types/security';
 
 export interface OperationContext {
   /** Directive or operation type (e.g., "var", "run", "output") */
@@ -37,6 +38,9 @@ export interface GuardContextSnapshot {
   attempt: number;
   tries?: ReadonlyArray<Record<string, unknown>>;
   max?: number;
+  input?: unknown;
+  labels?: readonly DataLabel[];
+  sources?: readonly string[];
 }
 
 export interface SecuritySnapshotLike {
@@ -158,14 +162,26 @@ export class ContextManager {
 
     const ctxValue: Record<string, unknown> = {
       ...pipelineFields.root,
-      labels: security ? Array.from(security.labels) : [],
-      sources: security ? Array.from(security.sources) : [],
+      labels: guardContext?.labels
+        ? Array.from(guardContext.labels)
+        : security
+          ? Array.from(security.labels)
+          : [],
+      sources: guardContext?.sources
+        ? Array.from(guardContext.sources)
+        : security
+          ? Array.from(security.sources)
+          : [],
       taintLevel: security?.taintLevel ?? 'unknown',
       policy: security?.policy ?? null,
       operation: currentOperation ?? null,
       op: currentOperation ?? null,
       guard: guardContext ?? null
     };
+
+    if (guardContext?.input !== undefined) {
+      ctxValue.input = guardContext.input;
+    }
 
     if (pipelineFields.pipe) {
       ctxValue.pipe = pipelineFields.pipe;

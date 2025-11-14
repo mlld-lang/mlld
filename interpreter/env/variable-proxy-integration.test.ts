@@ -122,7 +122,7 @@ describe('Variable Proxy Integration', () => {
       expect(output.hasHelpers).toBe(true);
       expect(output.isVariable).toBe(true);
       expect(output.type).toBe('array');
-      expect(output.metadata).toEqual({
+      expect(output.metadata).toMatchObject({
         arrayType: 'load-content',
         isSystem: true,
         isParameter: true

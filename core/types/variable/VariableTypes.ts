@@ -12,6 +12,7 @@ import type {
 } from '@interpreter/utils/structured-value';
 import type { CapabilityContext, SecurityDescriptor, DataLabel, TaintLevel } from '../security';
 import type { TokenMetricSource } from '@core/utils/token-metrics';
+import type { QuantifierHelper } from './ArrayHelpers';
 
 // =========================================================================
 // BASE TYPES
@@ -102,13 +103,15 @@ export interface VariableContextSnapshot {
   definedAt?: SourceLocation;
   labels: readonly DataLabel[];
   taint: TaintLevel;
-  tokens?: number;
+  tokens?: number | number[];
   tokest?: number;
   length?: number;
   size?: number;
   sources: readonly string[];
   exported?: boolean;
   policy?: Readonly<Record<string, unknown>> | null;
+  totalTokens?: () => number;
+  maxTokens?: () => number;
 }
 
 // =========================================================================
@@ -222,6 +225,12 @@ export interface ArrayVariable extends BaseVariable {
   value: unknown[];
   isComplex?: boolean; // Contains embedded directives
   metadata?: VariableMetadata;
+  any?: QuantifierHelper;
+  all?: QuantifierHelper;
+  none?: QuantifierHelper;
+  raw?: readonly unknown[];
+  totalTokens?: () => number;
+  maxTokens?: () => number;
 }
 
 // =========================================================================

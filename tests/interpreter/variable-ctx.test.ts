@@ -13,7 +13,7 @@ import {
 import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { buildPipelineStructuredValue } from '@interpreter/utils/pipeline-input';
 import { makeSecurityDescriptor } from '@core/types/security';
-import { createGuardInputHelper } from '../../interpreter/hooks/input-array-helper';
+import { createGuardInputHelper } from '@core/types/variable/ArrayHelpers';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');

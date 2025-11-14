@@ -57,7 +57,19 @@ export interface FieldAccessOptions {
 export async function accessField(value: any, field: FieldAccessNode, options?: FieldAccessOptions): Promise<any | FieldAccessResult> {
   // CRITICAL: Variable metadata properties whitelist
   // Only these properties access the Variable itself, not its value
-  const VARIABLE_METADATA_PROPS = ['type', 'isComplex', 'source', 'metadata', 'ctx'];
+  const VARIABLE_METADATA_PROPS = [
+    'type',
+    'isComplex',
+    'source',
+    'metadata',
+    'ctx',
+    'any',
+    'all',
+    'none',
+    'raw',
+    'totalTokens',
+    'maxTokens'
+  ];
 
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;

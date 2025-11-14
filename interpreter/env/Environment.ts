@@ -54,7 +54,7 @@ import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { ExportManifest } from '../eval/import/ExportManifest';
 import { ContextManager, type PipelineContextSnapshot, type GuardContextSnapshot, type OperationContext } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
-import { guardPreHookStub } from '../hooks/stubs';
+import { guardPreHook } from '../hooks/guard-pre-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 
@@ -1199,7 +1199,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   private registerBuiltinHooks(): void {
-    this.hookManager.registerPre(guardPreHookStub);
+    this.hookManager.registerPre(guardPreHook);
     this.hookManager.registerPost(taintPostHook);
   }
   

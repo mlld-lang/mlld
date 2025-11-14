@@ -29,6 +29,7 @@ import {
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 import { attachContextToStructuredValue } from '@interpreter/utils/structured-value';
 import { VariableMetadataUtils } from './VariableMetadata';
+import { attachArrayHelpers } from './ArrayHelpers';
 import type { TokenEstimationOptions } from '@core/utils/token-metrics';
 
 function finalizeVariable<T extends Variable>(variable: T): T {
@@ -433,7 +434,7 @@ export class VariableFactory {
     source: VariableSource,
     metadata?: VariableMetadata
   ): ArrayVariable {
-    return finalizeVariable({
+    const arrayVariable = finalizeVariable({
       type: 'array',
       name,
       value,
@@ -442,7 +443,9 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
-    });
+    }) as ArrayVariable;
+    attachArrayHelpers(arrayVariable);
+    return arrayVariable;
   }
 
   // =========================================================================

@@ -7,7 +7,7 @@ import { isVariable } from '../utils/variable-resolution';
 import {
   createGuardInputHelper,
   type GuardInputHelper
-} from './input-array-helper';
+} from '@core/types/variable/ArrayHelpers';
 
 export type HookDecisionAction = 'continue' | 'abort' | 'retry';
 

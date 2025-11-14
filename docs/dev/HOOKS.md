@@ -123,10 +123,10 @@ result = await hookManager.runPost(directive, result, extractedInputs, env, oper
 - Merges descriptors and records in environment
 - Traverses nested objects/arrays to find all descriptors
 
-**guardPreHookStub** (`interpreter/hooks/stubs.ts`)
-- Placeholder pre-hook that always returns continue
-- Registered automatically in Environment.registerBuiltinHooks()
-- Will be replaced with real guard evaluation in Phase 4.0
+**guardPreHook** (`interpreter/hooks/guard-pre-hook.ts`)
+- Enforces registered guards before directive execution
+- Resolves per-input and per-operation guard definitions, injects guard helpers, and can abort or request retries
+- Registered automatically via `Environment.registerBuiltinHooks()`
 
 ### OperationContext
 
@@ -151,7 +151,7 @@ interface OperationContext {
 2. Build operation context (buildOperationContext)
 3. Extract inputs (extractDirectiveInputs or prepareVarAssignment)
 4. → Run pre-hooks (HookManager.runPre)
-5.   ├─ guardPreHookStub (currently just returns continue)
+5.   ├─ guardPreHook (evaluates guard definitions across directives)
 6.   └─ First non-continue → abort or retry
 7. → Evaluate directive (directive-specific evaluator)
 8. → Run post-hooks (HookManager.runPost)
@@ -189,7 +189,7 @@ For /var directives, the variable is pre-computed via prepareVarAssignment and p
 - Taint: `interpreter/hooks/taint-post-hook.ts`
 - Context: `interpreter/env/ContextManager.ts`
 - Input extraction: `interpreter/eval/directive-inputs.ts`
-- Helpers: `interpreter/hooks/input-array-helper.ts`
+ - Helpers: `core/types/variable/ArrayHelpers.ts`
 
 **Debug approach**:
 - Add logging in HookManager.runPre/runPost to trace hook execution
