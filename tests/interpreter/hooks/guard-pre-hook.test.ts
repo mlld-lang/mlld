@@ -7,6 +7,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
+import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -68,5 +69,98 @@ describe('guard pre-hook integration', () => {
 
     const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/secret output blocked/);
+  });
+
+  it('rejects guard retry outside pipeline context', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for op:show = when [ * => retry "need pipeline" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'hello',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const directive = parseSync('/show @value')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toMatchObject({
+      message: expect.stringContaining('guard retry requires pipeline context'),
+      decision: 'deny'
+    });
+  });
+
+  it('tracks guard retry attempts across pipeline retries', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for op:show = when [ @ctx.guard.try < 2 => retry "try-again" \n * => deny "finished" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'hello',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor()
+        }
+      )
+    );
+
+    const pipelineSnapshot: PipelineContextSnapshot = {
+      stage: 2,
+      totalStages: 3,
+      currentCommand: 'stage-2',
+      input: 'hello',
+      previousOutputs: [],
+      format: undefined,
+      attemptCount: 1,
+      attemptHistory: [],
+      hint: null,
+      hintHistory: [],
+      sourceRetryable: true
+    };
+
+    const directive = parseSync('/show @value')[0] as DirectiveNode;
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(directive, env))
+    ).rejects.toMatchObject({
+      decision: 'retry',
+      retryHint: 'try-again'
+    });
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(directive, env))
+    ).rejects.toMatchObject({
+      decision: 'deny',
+      message: expect.stringContaining('finished')
+    });
+
+    await expect(
+      env.withPipeContext(pipelineSnapshot, async () => evaluateDirective(directive, env))
+    ).rejects.toMatchObject({
+      decision: 'retry',
+      retryHint: 'try-again'
+    });
   });
 });

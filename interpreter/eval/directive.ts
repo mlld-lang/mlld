@@ -2,8 +2,11 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { getTextContent } from '../utils/type-guard-helpers';
-import type { OperationContext } from '../env/ContextManager';
+import type { OperationContext, PipelineContextSnapshot } from '../env/ContextManager';
 import { extractDirectiveInputs } from './directive-inputs';
+import type { HookDecision } from '../hooks/HookManager';
+import type { GuardScope } from '@core/types/guard';
+import { GuardError } from '@core/errors/GuardError';
 
 // Import specific evaluators
 import { evaluatePath } from './path';
@@ -129,15 +132,7 @@ export async function evaluateDirective(
         extractedInputs = await extractDirectiveInputs(directive, env);
       }
       const preDecision = await hookManager.runPre(directive, extractedInputs, env, operationContext);
-
-      if (preDecision.action === 'abort') {
-        const reason = preDecision.metadata?.reason ?? 'Operation aborted by hook';
-        throw new Error(reason);
-      }
-
-      if (preDecision.action === 'retry') {
-        throw new Error('Hook retry decisions are not supported in Phase 3.5 scaffolding');
-      }
+      handleGuardDecision(preDecision, directive, env, operationContext);
 
       const mergedContext = mergeEvaluationContext(
         context,
@@ -368,4 +363,126 @@ function summarizeNodes(nodes: unknown): string | undefined {
     return undefined;
   }
   return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
+}
+
+interface GuardDecisionInfo {
+  guardName: string | null;
+  guardFilter?: string;
+  scope?: GuardScope;
+  inputPreview?: string | null;
+  retryHint?: string | null;
+  baseMessage: string;
+}
+
+function handleGuardDecision(
+  decision: HookDecision,
+  directive: DirectiveNode,
+  env: Environment,
+  operationContext: OperationContext
+): void {
+  if (!decision || decision.action === 'continue') {
+    return;
+  }
+
+  const metadata = decision.metadata ?? {};
+  const guardName =
+    typeof metadata.guardName === 'string' || metadata.guardName === null
+      ? (metadata.guardName as string | null)
+      : null;
+  const info: GuardDecisionInfo = {
+    guardName,
+    guardFilter: typeof metadata.guardFilter === 'string' ? metadata.guardFilter : undefined,
+    scope: metadata.scope as GuardScope | undefined,
+    inputPreview:
+      typeof metadata.inputPreview === 'string' ? metadata.inputPreview : undefined,
+    retryHint: typeof metadata.hint === 'string' ? metadata.hint : undefined,
+    baseMessage:
+      typeof metadata.reason === 'string' && metadata.reason.length > 0
+        ? (metadata.reason as string)
+        : decision.action === 'abort'
+          ? 'Operation aborted by guard'
+          : 'Guard requested retry'
+  };
+
+  if (decision.action === 'abort') {
+    throw new GuardError({
+      message: info.baseMessage,
+      decision: 'deny',
+      guardName: info.guardName,
+      guardFilter: info.guardFilter,
+      scope: info.scope,
+      inputPreview: info.inputPreview ?? null,
+      retryHint: info.retryHint,
+      operation: operationContext,
+      sourceLocation: directive.location ?? null,
+      env
+    });
+  }
+
+  if (decision.action === 'retry') {
+    enforcePipelineGuardRetry(info, directive, env, operationContext);
+  }
+}
+
+function enforcePipelineGuardRetry(
+  info: GuardDecisionInfo,
+  directive: DirectiveNode,
+  env: Environment,
+  operationContext: OperationContext
+): never {
+  const pipelineContext = env.getPipelineContext();
+  if (!pipelineContext) {
+    throw new GuardError({
+      message: 'Cannot retry: guard retry requires pipeline context (non-pipeline retry deferred to Phase 7.3)',
+      decision: 'deny',
+      guardName: info.guardName,
+      guardFilter: info.guardFilter,
+      scope: info.scope,
+      inputPreview: info.inputPreview ?? null,
+      retryHint: info.retryHint,
+      operation: operationContext,
+      sourceLocation: directive.location ?? null,
+      env
+    });
+  }
+
+  if (!canRetryWithinPipeline(pipelineContext)) {
+    const message = `Cannot retry: ${info.retryHint ?? 'guard requested retry'} (source not retryable)`;
+    throw new GuardError({
+      message,
+      decision: 'deny',
+      guardName: info.guardName,
+      guardFilter: info.guardFilter,
+      scope: info.scope,
+      inputPreview: info.inputPreview ?? null,
+      retryHint: info.retryHint,
+      operation: operationContext,
+      sourceLocation: directive.location ?? null,
+      env
+    });
+  }
+
+  throw new GuardError({
+    message: info.baseMessage,
+    decision: 'retry',
+    guardName: info.guardName,
+    guardFilter: info.guardFilter,
+    scope: info.scope,
+    inputPreview: info.inputPreview ?? null,
+    retryHint: info.retryHint,
+    operation: operationContext,
+    sourceLocation: directive.location ?? null,
+    env
+  });
+}
+
+function canRetryWithinPipeline(context: PipelineContextSnapshot): boolean {
+  if (!context) {
+    return false;
+  }
+  const stageNumber = typeof context.stage === 'number' ? context.stage : 0;
+  if (stageNumber > 1) {
+    return true;
+  }
+  return Boolean(context.sourceRetryable);
 }

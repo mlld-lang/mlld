@@ -8,6 +8,7 @@ import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
 import { createStageEnvironment } from './context-builder';
+import { GuardError } from '@core/errors/GuardError';
 import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
@@ -246,7 +247,8 @@ export class PipelineExecutor {
           capturePipelineContext: snapshot => {
             pipelineSnapshot = snapshot;
           },
-          skipSetPipelineContext: true
+          skipSetPipelineContext: true,
+          sourceRetryable: this.isRetryable
         }
       );
       if (!pipelineSnapshot) {
@@ -264,6 +266,16 @@ export class PipelineExecutor {
             this.rateLimiter.reset();
             break;
           } catch (err: any) {
+            if (err instanceof GuardError) {
+              if (err.decision === 'retry') {
+                return {
+                  type: 'retry',
+                  reason: err.message,
+                  hint: err.retryHint
+                };
+              }
+              throw err;
+            }
             if (isRateLimitError(err)) {
               if (process.env.MLLD_DEBUG === 'true') {
                 logger.warn('Rate limit detected, retrying with backoff');
@@ -642,7 +654,8 @@ export class PipelineExecutor {
               capturePipelineContext: snapshot => {
                 pipelineSnapshot = snapshot;
               },
-              skipSetPipelineContext: true
+              skipSetPipelineContext: true,
+              sourceRetryable: this.isRetryable
             }
           );
 

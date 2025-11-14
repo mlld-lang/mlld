@@ -24,6 +24,7 @@ export type { ResolverErrorDetails } from './ResolverError';
 export { MlldWhenExpressionError } from './MlldWhenExpressionError';
 export type { WhenExpressionErrorDetails } from './MlldWhenExpressionError';
 export { DeprecationError } from './DeprecationError';
+export { GuardError } from './GuardError';
 
 // Export error message collections
 export * from './messages/index'; 

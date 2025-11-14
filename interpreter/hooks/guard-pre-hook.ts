@@ -3,7 +3,7 @@ import type { GuardDefinition, GuardScope } from '../guards';
 import type { Environment } from '../env/Environment';
 import type { OperationContext } from '../env/ContextManager';
 import type { HookDecision, PreHook } from './HookManager';
-import type { GuardBlockNode, GuardActionNode } from '@core/types/guard';
+import type { GuardBlockNode, GuardActionNode, GuardDecisionType } from '@core/types/guard';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createArrayVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
@@ -30,6 +30,17 @@ interface OperationSnapshot {
   variables: readonly Variable[];
 }
 
+interface GuardAttemptEntry {
+  attempt: number;
+  decision: GuardDecisionType;
+  hint?: string | null;
+}
+
+interface GuardAttemptState {
+  nextAttempt: number;
+  history: GuardAttemptEntry[];
+}
+
 const DEFAULT_GUARD_MAX = 3;
 
 const GUARD_INPUT_SOURCE: VariableSource = {
@@ -45,6 +56,98 @@ const GUARD_HELPER_SOURCE: VariableSource = {
   hasInterpolation: false,
   isMultiLine: false
 };
+
+const guardAttemptStores = new WeakMap<Environment, Map<string, GuardAttemptState>>();
+
+function getRootEnvironment(env: Environment): Environment {
+  let current: Environment | undefined = env;
+  while (current.getParent()) {
+    current = current.getParent();
+  }
+  return current!;
+}
+
+function getAttemptStore(env: Environment): Map<string, GuardAttemptState> {
+  const root = getRootEnvironment(env);
+  let store = guardAttemptStores.get(root);
+  if (!store) {
+    store = new Map();
+    guardAttemptStores.set(root, store);
+  }
+  return store;
+}
+
+function buildVariableIdentity(variable?: Variable): string {
+  if (!variable) {
+    return 'operation';
+  }
+  const definedAt = (variable.metadata as any)?.definedAt;
+  const location =
+    definedAt && typeof definedAt === 'object'
+      ? `${definedAt.filePath ?? ''}:${definedAt.line ?? ''}:${definedAt.column ?? ''}`
+      : '';
+  return `${variable.name ?? 'input'}::${location}`;
+}
+
+function buildOperationIdentity(operation: OperationContext): string {
+  const trace = (operation.metadata?.trace as string | undefined) ?? '';
+  return `${trace}:${operation.type}:${operation.name ?? ''}`;
+}
+
+function buildGuardAttemptKey(
+  guard: GuardDefinition,
+  operation: OperationContext,
+  scope: GuardScope,
+  variable?: Variable
+): string {
+  return `${buildOperationIdentity(operation)}::${guard.id}::${scope}::${buildVariableIdentity(variable)}`;
+}
+
+function truncatePreview(value: string, limit = 160): string {
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, limit)}…`;
+}
+
+function buildVariablePreview(variable: Variable): string | null {
+  try {
+    const value = (variable as any).value;
+    if (typeof value === 'string') {
+      return truncatePreview(value);
+    }
+    if (value && typeof value === 'object') {
+      if (typeof (value as any).text === 'string') {
+        return truncatePreview((value as any).text);
+      }
+      return truncatePreview(JSON.stringify(value));
+    }
+    if (value === null || value === undefined) {
+      return null;
+    }
+    return truncatePreview(String(value));
+  } catch {
+    return null;
+  }
+}
+
+function buildInputPreview(
+  scope: GuardScope,
+  perInput?: PerInputCandidate,
+  operationSnapshot?: OperationSnapshot
+): string | null {
+  if (scope === 'perInput' && perInput) {
+    return buildVariablePreview(perInput.variable);
+  }
+  if (scope === 'perOperation' && operationSnapshot) {
+    return `Array(len=${operationSnapshot.variables.length})`;
+  }
+  return null;
+}
+
+function clearGuardAttemptState(store: Map<string, GuardAttemptState>, key: string): void {
+  store.delete(key);
+}
 
 export const guardPreHook: PreHook = async (
   directive,
@@ -178,10 +281,16 @@ async function evaluateGuard(options: {
 }): Promise<HookDecision | null> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
+  const attemptStore = getAttemptStore(env);
+  const attemptKey = buildGuardAttemptKey(guard, operation, scope, options.perInput?.variable);
+  const attemptState = attemptStore.get(attemptKey);
+  const attemptNumber = attemptState?.nextAttempt ?? 1;
+  const attemptHistory = attemptState ? attemptState.history.slice() : [];
 
   let inputVariable: Variable;
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
+  const inputPreview = buildInputPreview(scope, options.perInput, options.operationSnapshot) ?? null;
 
   if (scope === 'perInput' && options.perInput) {
     inputVariable = cloneVariableForGuard(options.perInput.variable);
@@ -210,12 +319,15 @@ async function evaluateGuard(options: {
 
   const guardContext = {
     name: guard.name,
-    attempt: 1,
-    tries: [],
+    attempt: attemptNumber,
+    try: attemptNumber,
+    tries: attemptHistory.map(entry => ({ ...entry })),
     max: DEFAULT_GUARD_MAX,
     input: inputVariable,
     labels: contextLabels,
-    sources: contextSources
+    sources: contextSources,
+    inputPreview,
+    hintHistory: attemptHistory.map(entry => entry.hint ?? null)
   };
 
   const action = await env.withGuardContext(guardContext, async () => {
@@ -223,16 +335,39 @@ async function evaluateGuard(options: {
   });
 
   if (!action || action.decision === 'allow') {
+    clearGuardAttemptState(attemptStore, attemptKey);
     return null;
   }
 
-  const metadata = buildDecisionMetadata(action, guard);
+  const metadata = buildDecisionMetadata(action, guard, {
+    inputPreview,
+    attempt: attemptNumber,
+    tries: attemptHistory
+  });
   if (action.decision === 'deny') {
+    clearGuardAttemptState(attemptStore, attemptKey);
     return { action: 'abort', metadata };
   }
   if (action.decision === 'retry') {
-    return { action: 'retry', metadata };
+    const entry: GuardAttemptEntry = {
+      attempt: attemptNumber,
+      decision: 'retry',
+      hint: action.message ?? null
+    };
+    const updatedHistory = [...attemptHistory, entry];
+    attemptStore.set(attemptKey, {
+      nextAttempt: attemptNumber + 1,
+      history: updatedHistory
+    });
+    const retryMetadata = buildDecisionMetadata(action, guard, {
+      hint: action.message ?? null,
+      inputPreview,
+      attempt: attemptNumber,
+      tries: updatedHistory
+    });
+    return { action: 'retry', metadata: retryMetadata };
   }
+  clearGuardAttemptState(attemptStore, attemptKey);
   return null;
 }
 
@@ -255,7 +390,16 @@ async function evaluateGuardBlock(
   return undefined;
 }
 
-function buildDecisionMetadata(action: GuardActionNode, guard: GuardDefinition): Record<string, unknown> {
+function buildDecisionMetadata(
+  action: GuardActionNode,
+  guard: GuardDefinition,
+  extras?: {
+    hint?: string | null;
+    inputPreview?: string | null;
+    attempt?: number;
+    tries?: GuardAttemptEntry[];
+  }
+): Record<string, unknown> {
   const guardId = guard.name ?? `${guard.filterKind}:${guard.filterValue}`;
   const reason =
     action.message ??
@@ -263,13 +407,35 @@ function buildDecisionMetadata(action: GuardActionNode, guard: GuardDefinition):
       ? `Guard ${guardId} denied operation`
       : `Guard ${guardId} requested retry`);
 
-  return {
+  const metadata: Record<string, unknown> = {
     reason,
     guardName: guard.name ?? null,
     guardFilter: `${guard.filterKind}:${guard.filterValue}`,
     scope: guard.scope,
     decision: action.decision
   };
+
+  if (extras?.hint !== undefined) {
+    metadata.hint = extras.hint;
+  }
+
+  if (extras?.inputPreview !== undefined) {
+    metadata.inputPreview = extras.inputPreview;
+  }
+
+  if (extras?.attempt !== undefined) {
+    metadata.attempt = extras.attempt;
+  }
+
+  if (extras?.tries) {
+    metadata.tries = extras.tries.map(entry => ({
+      attempt: entry.attempt,
+      decision: entry.decision,
+      hint: entry.hint ?? null
+    }));
+  }
+
+  return metadata;
 }
 
 function cloneVariableForGuard(variable: Variable): Variable {

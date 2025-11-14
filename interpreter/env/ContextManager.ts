@@ -31,16 +31,20 @@ export interface PipelineContextSnapshot {
   attemptHistory?: unknown[];
   hint?: string | null;
   hintHistory?: unknown[];
+  sourceRetryable?: boolean;
 }
 
 export interface GuardContextSnapshot {
   name?: string;
   attempt: number;
+  try?: number;
   tries?: ReadonlyArray<Record<string, unknown>>;
   max?: number;
   input?: unknown;
   labels?: readonly DataLabel[];
   sources?: readonly string[];
+  inputPreview?: string | null;
+  hintHistory?: ReadonlyArray<string | null>;
 }
 
 export interface SecuritySnapshotLike {

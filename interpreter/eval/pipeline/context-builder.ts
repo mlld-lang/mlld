@@ -47,6 +47,7 @@ export interface SimplifiedPipelineContext {
 interface StageEnvironmentOptions {
   capturePipelineContext?(context: PipelineContextSnapshot): void;
   skipSetPipelineContext?: boolean;
+  sourceRetryable?: boolean;
 }
 
 export async function createStageEnvironment(
@@ -124,7 +125,8 @@ export async function createStageEnvironment(
     attemptHistory: context.history,
     // Provide hint info for ambient @ctx.hint
     hint: normalizedHint,
-    hintHistory: context.hintHistory || []
+    hintHistory: context.hintHistory || [],
+    sourceRetryable: options?.sourceRetryable ?? false
   };
 
   options?.capturePipelineContext?.(pipelineContextSnapshot);
