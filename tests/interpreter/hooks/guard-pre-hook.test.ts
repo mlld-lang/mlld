@@ -8,6 +8,7 @@ import { evaluateDirective } from '@interpreter/eval/directive';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
+import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');

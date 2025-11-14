@@ -18,6 +18,8 @@ import {
 } from '@core/types/variable';
 import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
 
+const DENIED_KEYWORD = 'denied';
+
 /**
  * Compares two values according to mlld's when comparison rules
  * WHY: mlld has specific comparison semantics that differ from JavaScript's ===.
@@ -672,6 +674,8 @@ export async function evaluateCondition(
   env: Environment,
   variableName?: string
 ): Promise<boolean> {
+  const deniedContext = env.getContextManager().peekDeniedContext();
+  const deniedState = Boolean(deniedContext?.denied);
 
   // Handle new WhenCondition wrapper nodes from unified expressions
   if (condition.length === 1 && condition[0].type === 'WhenCondition') {
@@ -689,12 +693,19 @@ export async function evaluateCondition(
   if (condition.length === 1 && condition[0].type === 'UnaryExpression') {
     const unaryNode = condition[0] as any;
     if (unaryNode.operator === '!') {
+      if (isDeniedLiteralNode(unaryNode.operand)) {
+        return !deniedState;
+      }
       const innerCondition = [unaryNode.operand];
       
       // Evaluate the inner condition and negate the result
       const innerResult = await evaluateCondition(innerCondition, env, variableName);
       return !innerResult;
     }
+  }
+
+  if (condition.length === 1 && isDeniedLiteralNode(condition[0])) {
+    return deniedState;
   }
   
   // Check if this is an expression node (BinaryExpression, TernaryExpression, UnaryExpression)
@@ -943,6 +954,89 @@ export async function evaluateCondition(
   
   // Convert result to boolean
   return isTruthy(finalValue);
+}
+
+function isDeniedLiteralNode(node: BaseMlldNode | undefined): boolean {
+  if (!node) {
+    return false;
+  }
+  if (node.type === 'Literal' && typeof (node as any).value === 'string') {
+    return (node as any).value.toLowerCase() === DENIED_KEYWORD;
+  }
+  if (node.type === 'Text' && typeof (node as any).content === 'string') {
+    return (node as any).content.trim().toLowerCase() === DENIED_KEYWORD;
+  }
+  if (
+    node.type === 'VariableReference' &&
+    typeof (node as any).identifier === 'string' &&
+    (node as any).identifier.toLowerCase() === DENIED_KEYWORD
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isDeniedField(field: any): boolean {
+  if (!field) {
+    return false;
+  }
+  if (typeof field.name === 'string' && field.name.toLowerCase() === DENIED_KEYWORD) {
+    return true;
+  }
+  if (typeof field.identifier === 'string' && field.identifier.toLowerCase() === DENIED_KEYWORD) {
+    return true;
+  }
+  return false;
+}
+
+export function conditionTargetsDenied(condition: BaseMlldNode[]): boolean {
+  const visited = new Set<BaseMlldNode>();
+  const stack = [...condition];
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') {
+      continue;
+    }
+    if (visited.has(node)) {
+      continue;
+    }
+    visited.add(node);
+
+    if (isDeniedLiteralNode(node)) {
+      return true;
+    }
+
+    if ((node as any).type === 'VariableReference') {
+      const identifier = typeof (node as any).identifier === 'string'
+        ? (node as any).identifier.toLowerCase()
+        : '';
+      if (identifier === DENIED_KEYWORD) {
+        return true;
+      }
+      if (
+        identifier === 'ctx' &&
+        Array.isArray((node as any).fields) &&
+        (node as any).fields.some(isDeniedField)
+      ) {
+        return true;
+      }
+    }
+
+    for (const value of Object.values(node as any)) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item && typeof item === 'object' && 'type' in item) {
+            stack.push(item as BaseMlldNode);
+          }
+        }
+      } else if (value && typeof value === 'object' && 'type' in value) {
+        stack.push(value as BaseMlldNode);
+      }
+    }
+  }
+
+  return false;
 }
 
 /**

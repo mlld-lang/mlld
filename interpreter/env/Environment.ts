@@ -52,7 +52,13 @@ import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { ExportManifest } from '../eval/import/ExportManifest';
-import { ContextManager, type PipelineContextSnapshot, type GuardContextSnapshot, type OperationContext } from './ContextManager';
+import {
+  ContextManager,
+  type PipelineContextSnapshot,
+  type GuardContextSnapshot,
+  type OperationContext,
+  type DeniedContextSnapshot
+} from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
@@ -1196,6 +1202,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     fn: () => Promise<T> | T
   ): Promise<T> {
     return this.contextManager.withGuardContext(context, fn);
+  }
+
+  async withDeniedContext<T>(
+    context: DeniedContextSnapshot,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withDeniedContext(context, fn);
   }
 
   private registerBuiltinHooks(): void {

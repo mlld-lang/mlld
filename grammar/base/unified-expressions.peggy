@@ -94,6 +94,7 @@ UnifiedAtomicExpression
       });
     }
   / NoneLiteral  // NoneLiteral already returns a properly formatted Literal node
+  / DeniedLiteral  // DeniedLiteral maps to @ctx.denied during evaluation
 
 // Method call on the result of an exec invocation
 // Example: @helper(@input).includes("APPROVE")

@@ -11,9 +11,13 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { MlldWhenExpressionError } from '@core/errors';
 import { evaluate, interpolate } from '../core/interpreter';
-import { evaluateCondition } from './when';
+import { evaluateCondition, conditionTargetsDenied } from './when';
 import { logger } from '@core/utils/logger';
 import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+
+export interface WhenExpressionOptions {
+  denyMode?: boolean;
+}
 
 /**
  * Check if a condition is the 'none' literal
@@ -68,7 +72,8 @@ function validateNonePlacement(conditions: WhenConditionPair[]): void {
 export async function evaluateWhenExpression(
   node: WhenExpressionNode,
   env: Environment,
-  context?: EvaluationContext
+  context?: EvaluationContext,
+  options?: WhenExpressionOptions
 ): Promise<EvalResult> {
   // console.error('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
   
@@ -76,6 +81,8 @@ export async function evaluateWhenExpression(
   validateNonePlacement(node.conditions);
   
   const errors: Error[] = [];
+  const denyMode = Boolean(options?.denyMode);
+  let deniedHandlerRan = false;
   
   // Check if we have a "first" modifier (stop after first match)
   const isFirstMode = node.meta?.modifier === 'first';
@@ -87,17 +94,22 @@ export async function evaluateWhenExpression(
   let hasValueProducingMatch = false;  // Track if any condition produced an actual return value (not just side effects)
   let lastNoneValue: any = null;
   let accumulatedEnv = env;
+  const buildResult = (value: unknown, environment: Environment): EvalResult => ({
+    value,
+    env: environment,
+    metadata: deniedHandlerRan ? { deniedHandlerRan: true } : undefined
+  });
   
   // Empty conditions array - return null
   if (node.conditions.length === 0) {
-    return { value: null, env };
+    return buildResult(null, env);
   }
   
   // Check if any condition has an action
   const hasAnyAction = node.conditions.some(c => c.action && c.action.length > 0);
   if (!hasAnyAction) {
     logger.warn('WhenExpression has no actions defined');
-    return { value: null, env };
+    return buildResult(null, env);
   }
   
   // Check all actions for code blocks upfront
@@ -132,6 +144,10 @@ export async function evaluateWhenExpression(
       continue;
     }
 
+    if (denyMode && !conditionTargetsDenied(pair.condition)) {
+      continue;
+    }
+
     
     
     try {
@@ -150,6 +166,10 @@ export async function evaluateWhenExpression(
         // Condition matched - evaluate the action
         hasMatch = true;
         hasNonNoneMatch = true;
+        const matchedDeniedCondition = conditionTargetsDenied(pair.condition);
+        if (matchedDeniedCondition) {
+          deniedHandlerRan = true;
+        }
         
         if (!pair.action || pair.action.length === 0) {
           // No action for this condition - continue to next
@@ -201,7 +221,7 @@ export async function evaluateWhenExpression(
               }
               // In "first" mode, return immediately after first match
               if (isFirstMode) {
-                return { value, env: accumulatedEnv };
+                return buildResult(value, accumulatedEnv);
               }
               lastMatchValue = value;
               hasMatch = true;
@@ -347,7 +367,7 @@ export async function evaluateWhenExpression(
 
           // In "first" mode, return immediately after first match
           if (isFirstMode) {
-            return { value, env: accumulatedEnv };
+            return buildResult(value, accumulatedEnv);
           }
 
           // For bare when, save the value and continue evaluating
@@ -389,7 +409,7 @@ export async function evaluateWhenExpression(
   }
   
   // Second pass: Evaluate none conditions if no value-producing conditions matched
-  if (!hasValueProducingMatch) {
+  if (!hasValueProducingMatch && !denyMode) {
     for (let i = 0; i < node.conditions.length; i++) {
       const pair = node.conditions[i];
       
@@ -421,9 +441,9 @@ export async function evaluateWhenExpression(
         accumulatedEnv.mergeChild(actionEnv);
 
         // In "first" mode, return immediately after first none match
-        if (isFirstMode) {
-          return { value, env: accumulatedEnv };
-        }
+          if (isFirstMode) {
+            return buildResult(value, accumulatedEnv);
+          }
 
         // For bare when, save the none value and continue
         lastNoneValue = value;
@@ -445,7 +465,7 @@ export async function evaluateWhenExpression(
   
   // If we had any matches, return the last match value with accumulated environment
   if (hasMatch) {
-    return { value: lastMatchValue, env: accumulatedEnv };
+    return buildResult(lastMatchValue, accumulatedEnv);
   }
   
   // If we collected errors and no condition matched, report them
@@ -458,7 +478,7 @@ export async function evaluateWhenExpression(
   }
   
   // No conditions matched - return null
-  return { value: null, env: accumulatedEnv };
+  return buildResult(null, accumulatedEnv);
 }
 
 /**

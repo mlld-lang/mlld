@@ -54,6 +54,15 @@ NoneLiteral "none literal"
       });
     }
 
+DeniedLiteral "denied literal"
+  = "denied" ![a-zA-Z0-9_] {
+      return helpers.createNode('Literal', {
+        value: 'denied',
+        valueType: 'denied',
+        location: location()
+      });
+    }
+
 // Retry literal - signals pipeline retry
 RetryLiteral "Retry Literal"
   = "retry" { 

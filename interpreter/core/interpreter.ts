@@ -185,6 +185,7 @@ export interface EvalResult {
   stdout?: string;
   stderr?: string;
   exitCode?: number;
+  metadata?: Record<string, unknown>;
 }
 
 /**

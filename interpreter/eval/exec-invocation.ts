@@ -37,6 +37,10 @@ import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import type { SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
+import { GuardError } from '@core/errors/GuardError';
+import type { GuardErrorDetails } from '@core/errors/GuardError';
+import type { WhenExpressionNode } from '@core/types/when';
+import { handleExecGuardDenial } from './guard-denial-handler';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -1313,7 +1317,21 @@ export async function evaluateExecInvocation(
       
       // Evaluate the when expression with the parameter environment
       const { evaluateWhenExpression } = await import('./when-expression');
-      const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
+      let whenResult: EvalResult;
+      try {
+        whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
+      } catch (error) {
+        const handled = await handleExecGuardDenial(error, {
+          definition,
+          execEnv,
+          env,
+          whenExprNode
+        });
+        if (handled) {
+          return handled;
+        }
+        throw error;
+      }
       let value: any = whenResult.value;
       // Unwrap tagged show effects for non-pipeline exec-invocation (so /run echoes value)
       if (value && typeof value === 'object' && (value as any).__whenEffect === 'show') {

@@ -399,12 +399,12 @@ function handleGuardDecision(
     baseMessage:
       typeof metadata.reason === 'string' && metadata.reason.length > 0
         ? (metadata.reason as string)
-        : decision.action === 'abort'
+        : decision.action === 'abort' || decision.action === 'deny'
           ? 'Operation aborted by guard'
           : 'Guard requested retry'
   };
 
-  if (decision.action === 'abort') {
+  if (decision.action === 'abort' || decision.action === 'deny') {
     throw new GuardError({
       decision: 'deny',
       guardName: info.guardName,

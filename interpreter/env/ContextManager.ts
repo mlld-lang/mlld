@@ -45,6 +45,15 @@ export interface GuardContextSnapshot {
   sources?: readonly string[];
   inputPreview?: string | null;
   hintHistory?: ReadonlyArray<string | null>;
+  reason?: string | null;
+  guardFilter?: string | null;
+}
+
+export interface DeniedContextSnapshot {
+  denied: boolean;
+  reason?: string | null;
+  guardName?: string | null;
+  guardFilter?: string | null;
 }
 
 export interface SecuritySnapshotLike {
@@ -69,6 +78,7 @@ export class ContextManager {
   private readonly opStack: OperationContext[] = [];
   private readonly pipelineStack: PipelineContextSnapshot[] = [];
   private readonly guardStack: GuardContextSnapshot[] = [];
+  private readonly deniedStack: DeniedContextSnapshot[] = [];
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -153,6 +163,30 @@ export class ContextManager {
     }
   }
 
+  pushDeniedContext(context: DeniedContextSnapshot): void {
+    this.deniedStack.push(Object.freeze({ ...context }));
+  }
+
+  popDeniedContext(): DeniedContextSnapshot | undefined {
+    return this.deniedStack.pop();
+  }
+
+  peekDeniedContext(): DeniedContextSnapshot | undefined {
+    if (this.deniedStack.length === 0) {
+      return undefined;
+    }
+    return this.deniedStack[this.deniedStack.length - 1];
+  }
+
+  async withDeniedContext<T>(context: DeniedContextSnapshot, fn: () => Promise<T> | T): Promise<T> {
+    this.pushDeniedContext(context);
+    try {
+      return await Promise.resolve(fn());
+    } finally {
+      this.popDeniedContext();
+    }
+  }
+
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
     if (options.testOverride !== undefined) {
       return options.testOverride as Record<string, unknown>;
@@ -163,6 +197,7 @@ export class ContextManager {
     const currentOperation = this.peekOperation() ?? security?.operation;
     const pipelineFields = this.buildPipelineFields(pipeline);
     const guardContext = this.peekGuardContext();
+    const deniedContext = this.peekDeniedContext();
 
     const ctxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -180,11 +215,33 @@ export class ContextManager {
       policy: security?.policy ?? null,
       operation: currentOperation ?? null,
       op: currentOperation ?? null,
-      guard: guardContext ?? null
+      guard: guardContext ?? (deniedContext ? {} : null)
     };
+
+    if (deniedContext) {
+      ctxValue.denied = true;
+    } else {
+      ctxValue.denied = false;
+    }
 
     if (guardContext?.input !== undefined) {
       ctxValue.input = guardContext.input;
+    }
+
+    if (ctxValue.guard) {
+      const guardValue = { ...(guardContext ?? {}) } as Record<string, unknown>;
+      if (deniedContext) {
+        guardValue.reason = deniedContext.reason ?? guardValue.reason ?? null;
+        guardValue.name = guardValue.name ?? deniedContext.guardName ?? null;
+        guardValue.filter = deniedContext.guardFilter ?? (guardValue as any).filter ?? null;
+      }
+      ctxValue.guard = guardValue;
+    } else if (deniedContext) {
+      ctxValue.guard = {
+        reason: deniedContext.reason ?? null,
+        name: deniedContext.guardName ?? null,
+        filter: deniedContext.guardFilter ?? null
+      };
     }
 
     if (pipelineFields.pipe) {

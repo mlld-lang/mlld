@@ -487,7 +487,7 @@ async function evaluateGuard(options: {
 
   if (action.decision === 'deny') {
     clearGuardAttemptState(attemptStore, attemptKey);
-    return { action: 'abort', metadata };
+    return { action: 'deny', metadata };
   }
   if (action.decision === 'retry') {
     const entry: GuardAttemptEntry = {
