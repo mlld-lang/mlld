@@ -3,7 +3,15 @@ import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
-import { asText, isStructuredValue, wrapStructured, looksLikeJsonString, type StructuredValue, type StructuredValueType } from '../../utils/structured-value';
+import {
+  asText,
+  isStructuredValue,
+  wrapStructured,
+  looksLikeJsonString,
+  normalizeWhenShowEffect,
+  type StructuredValue,
+  type StructuredValueType
+} from '../../utils/structured-value';
 import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
@@ -864,21 +872,11 @@ export async function executeCommandVariable(
         return 'retry';
       }
       
-      // If when-expression produced a side-effect show inside a pipeline,
-      // propagate the input forward (so the stage doesn't terminate) while
-      // still letting the effect line be emitted by the action itself.
-      const inPipeline = !!env.getPipelineContext();
-      const showEffect =
-        resultValue &&
-        typeof resultValue === 'object' &&
-        (resultValue as any).__whenEffect === 'show';
-      const structuredShowEffect =
-        isStructuredValue(resultValue) &&
-        resultValue.data &&
-        typeof resultValue.data === 'object' &&
-        (resultValue.data as any).__whenEffect === 'show';
+      const normalized = normalizeWhenShowEffect(resultValue);
+      resultValue = normalized.normalized;
 
-      if (inPipeline && (showEffect || structuredShowEffect)) {
+      const inPipeline = !!env.getPipelineContext();
+      if (inPipeline && normalized.hadShowEffect) {
         // If this is the last stage, suppress echo to avoid showing seed text.
         // If there are more stages, propagate input forward to keep pipeline alive.
         const pctx = env.getPipelineContext?.();
@@ -898,14 +896,6 @@ export async function executeCommandVariable(
           resultValue = String(resultValue);
         }
       }
-      // Unwrap tagged show effects for non-pipeline contexts
-      if (showEffect) {
-        resultValue = (resultValue as any).text ?? '';
-      } else if (structuredShowEffect) {
-        const data = (resultValue as any).data;
-        resultValue = (data as any)?.text ?? asText(resultValue);
-      }
-      
       // Return the result in the configured format
       return finalizeResult(resultValue ?? '');
     } else if (execDef.language === 'mlld-foreach') {

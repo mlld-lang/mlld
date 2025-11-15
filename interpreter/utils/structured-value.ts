@@ -515,6 +515,36 @@ function normalizeIfNeeded(
   return normalize ? normalizeSecurityDescriptor(descriptor) : descriptor;
 }
 
+export interface WhenShowEffectResult {
+  normalized: unknown;
+  hadShowEffect: boolean;
+  text?: string;
+}
+
+/**
+ * Normalize when-expression show effects so that callers receive the text version
+ * while retaining knowledge that the value originated from a side-effect show.
+ */
+export function normalizeWhenShowEffect(value: unknown): WhenShowEffectResult {
+  if (value && typeof value === 'object' && (value as Record<string, unknown>).__whenEffect === 'show') {
+    const text = typeof (value as { text?: string }).text === 'string' ? (value as { text?: string }).text : '';
+    return { normalized: text, hadShowEffect: true, text };
+  }
+
+  if (isStructuredValue(value)) {
+    const data = asData(value);
+    if (data && typeof data === 'object' && (data as Record<string, unknown>).__whenEffect === 'show') {
+      const text =
+        typeof (data as { text?: string }).text === 'string'
+          ? (data as { text?: string }).text
+          : asText(value);
+      return { normalized: text, hadShowEffect: true, text };
+    }
+  }
+
+  return { normalized: value, hadShowEffect: false };
+}
+
 function isVariableLike(value: unknown): value is Variable {
   if (!value || typeof value !== 'object') {
     return false;

@@ -18,7 +18,7 @@ import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
-import { asText, isStructuredValue } from '../utils/structured-value';
+import { asText, normalizeWhenShowEffect } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 
 /**
@@ -681,14 +681,8 @@ export async function evaluateRun(
         const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
         // If the when-expression tagged a side-effect show, unwrap to its text
         // so /run echoes it as output (tests expect duplicate lines).
-        const rawValue = whenResult.value as any;
-        if (rawValue && typeof rawValue === 'object' && (rawValue as any).__whenEffect === 'show') {
-          setOutput((rawValue as any).text ?? '');
-        } else if (isStructuredValue(rawValue) && rawValue.data && typeof rawValue.data === 'object' && (rawValue.data as any).__whenEffect === 'show') {
-          setOutput((rawValue.data as any).text ?? asText(rawValue));
-        } else {
-          setOutput(rawValue);
-        }
+        const normalized = normalizeWhenShowEffect(whenResult.value);
+        setOutput(normalized.normalized);
         
         logger.debug('🎯 mlld-when result:', {
           outputType: typeof outputValue,

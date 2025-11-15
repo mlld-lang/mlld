@@ -307,6 +307,70 @@ describe('guard pre-hook integration', () => {
     expect(attempts).toEqual([1, 2]);
   });
 
+  it('blocks secrets passed into exe invocations', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for secret = when [ @ctx.op.type == "exe" => deny "blocked secret" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const exeDirective = parseSync('/exe @renderSecret(key) = `Secret: @key`')[0] as DirectiveNode;
+    await evaluateDirective(exeDirective, env);
+
+    env.setVariable(
+      'apiKey',
+      createSimpleTextVariable(
+        'apiKey',
+        'sk-live-123',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @renderSecret(@apiKey)')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked secret/);
+  });
+
+  it('allows exe invocations when inputs lack guarded labels', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for secret = when [ @ctx.op.type == "exe" => deny "blocked secret" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const exeDirective = parseSync('/exe @renderSecret(key) = `Secret: @key`')[0] as DirectiveNode;
+    await evaluateDirective(exeDirective, env);
+
+    env.setVariable(
+      'plain',
+      createSimpleTextVariable(
+        'plain',
+        'value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['public'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @renderSecret(@plain)')[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+    const ctx = env.getContextManager().buildAmbientContext();
+    expect(ctx.guard).toBeNull();
+  });
+
   it('sets @ctx.denied when guard denial is handled inside exec when-blocks', async () => {
     const env = createEnv();
     const execEnv = env.createChild();
@@ -323,7 +387,7 @@ describe('guard pre-hook integration', () => {
       decision: 'deny',
       guardFilter: 'data:secret',
       reason: 'Blocked exec',
-      operation: { type: 'exec-invocation' }
+      operation: { type: 'exe' }
     });
 
     const handled = await handleExecGuardDenial(guardError, {

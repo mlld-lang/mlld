@@ -194,13 +194,12 @@ describe('Variable Proxy Integration', () => {
       const output = typeof unwrappedResult.data === 'string'
         ? JSON.parse(unwrappedResult.data)
         : unwrappedResult.data;
-      
       // Verify
       expect(output.name).toBe('Alice');
       expect(output.age).toBe(30);
       expect(output.active).toBe(true);
       expect(output.type).toBe('object');
-      expect(output.metadata).toEqual({ 
+      expect(output.metadata).toMatchObject({ 
         source: 'api',
         isSystem: true,
         isParameter: true

@@ -1,7 +1,7 @@
 # Guard Deny Handled
 
 /guard @secretExecBlock for secret = when [
-  @ctx.op.type == "exec-invocation" => deny "Secrets cannot be displayed"
+  @ctx.op.type == "exe" => deny "Secrets cannot be displayed"
   * => allow
 ]
 

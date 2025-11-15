@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/types';
+import type { HookableNode } from '@core/types/hooks';
 import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { OperationContext } from '../env/ContextManager';
@@ -21,7 +21,7 @@ export interface HookInputHelpers {
 }
 
 export type PreHook = (
-  directive: DirectiveNode,
+  node: HookableNode,
   inputs: readonly unknown[],
   env: Environment,
   operation?: OperationContext,
@@ -29,7 +29,7 @@ export type PreHook = (
 ) => Promise<HookDecision>;
 
 export type PostHook = (
-  directive: DirectiveNode,
+  node: HookableNode,
   result: EvalResult,
   inputs: readonly unknown[],
   env: Environment,
@@ -53,14 +53,14 @@ export class HookManager {
   }
 
   async runPre(
-    directive: DirectiveNode,
+    node: HookableNode,
     inputs: readonly unknown[],
     env: Environment,
     operation?: OperationContext
   ): Promise<HookDecision> {
     for (const hook of this.preHooks) {
       const helpers = this.buildInputHelpers(inputs);
-      const decision = await hook(directive, inputs, env, operation, helpers);
+      const decision = await hook(node, inputs, env, operation, helpers);
       if (decision.action !== 'continue') {
         return decision;
       }
@@ -69,7 +69,7 @@ export class HookManager {
   }
 
   async runPost(
-    directive: DirectiveNode,
+    node: HookableNode,
     result: EvalResult,
     inputs: readonly unknown[],
     env: Environment,
@@ -77,7 +77,7 @@ export class HookManager {
   ): Promise<EvalResult> {
     let current = result;
     for (const hook of this.postHooks) {
-      current = await hook(directive, current, inputs, env, operation);
+      current = await hook(node, current, inputs, env, operation);
     }
     return current;
   }

@@ -1,4 +1,3 @@
-import type { DirectiveNode } from '@core/types';
 import type { GuardDefinition, GuardScope } from '../guards';
 import type { Environment } from '../env/Environment';
 import type { OperationContext } from '../env/ContextManager';
@@ -14,6 +13,8 @@ import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isVariable } from '../utils/variable-resolution';
 import { interpreterLogger } from '@core/utils/logger';
+import type { HookableNode } from '@core/types/hooks';
+import { isDirectiveHookTarget } from '@core/types/hooks';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -117,7 +118,7 @@ function sanitizePreviewForLog(preview?: string | null): string | null {
 
 function logGuardEvaluationStart(options: {
   guard: GuardDefinition;
-  directive: DirectiveNode;
+  node: HookableNode;
   operation: OperationContext;
   scope: GuardScope;
   attempt: number;
@@ -129,7 +130,7 @@ function logGuardEvaluationStart(options: {
     {
       guard: options.guard.name ?? null,
       filter: `${options.guard.filterKind}:${options.guard.filterValue}`,
-      directive: options.directive.kind,
+      target: describeHookTarget(options.node),
       operationType: options.operation.type ?? null,
       operationSubtype: options.operation.subtype ?? null,
       scope: options.scope,
@@ -141,7 +142,7 @@ function logGuardEvaluationStart(options: {
 
 function logGuardDecisionEvent(options: {
   guard: GuardDefinition;
-  directive: DirectiveNode;
+  node: HookableNode;
   operation: OperationContext;
   scope: GuardScope;
   attempt: number;
@@ -157,7 +158,7 @@ function logGuardDecisionEvent(options: {
     {
       guard: options.guard.name ?? null,
       filter: `${options.guard.filterKind}:${options.guard.filterValue}`,
-      directive: options.directive.kind,
+      target: describeHookTarget(options.node),
       operationType: options.operation.type ?? null,
       scope: options.scope,
       attempt: options.attempt,
@@ -176,6 +177,10 @@ function logGuardDecisionEvent(options: {
       }
     );
   }
+}
+
+function describeHookTarget(node: HookableNode): string {
+  return isDirectiveHookTarget(node) ? node.kind : 'exe';
 }
 
 function getRootEnvironment(env: Environment): Environment {
@@ -269,13 +274,13 @@ function clearGuardAttemptState(store: Map<string, GuardAttemptState>, key: stri
 }
 
 export const guardPreHook: PreHook = async (
-  directive,
+  node,
   inputs,
   env,
   operation,
   helpers
 ): Promise<HookDecision> => {
-  if (!operation || directive.kind === 'guard') {
+  if (!operation || (isDirectiveHookTarget(node) && node.kind === 'guard')) {
     return { action: 'continue' };
   }
 
@@ -283,7 +288,7 @@ export const guardPreHook: PreHook = async (
   const variableInputs = inputs.filter(isVariable);
 
   const perInputCandidates = buildPerInputCandidates(registry, variableInputs);
-  const operationGuards = collectOperationGuards(registry, directive, operation);
+  const operationGuards = collectOperationGuards(registry, operation);
 
   if (perInputCandidates.length === 0 && operationGuards.length === 0) {
     return { action: 'continue' };
@@ -292,7 +297,7 @@ export const guardPreHook: PreHook = async (
   for (const candidate of perInputCandidates) {
     for (const guard of candidate.guards) {
       const decision = await evaluateGuard({
-        directive,
+        node,
         env,
         guard,
         operation,
@@ -309,7 +314,7 @@ export const guardPreHook: PreHook = async (
     const opSnapshot = buildOperationSnapshot(variableInputs);
     for (const guard of operationGuards) {
       const decision = await evaluateGuard({
-        directive,
+        node,
         env,
         guard,
         operation,
@@ -359,10 +364,9 @@ function buildPerInputCandidates(
 
 function collectOperationGuards(
   registry: ReturnType<Environment['getGuardRegistry']>,
-  directive: DirectiveNode,
   operation: OperationContext
 ): GuardDefinition[] {
-  const keys = buildOperationKeys(directive, operation);
+  const keys = buildOperationKeys(operation);
   const seen = new Set<string>();
   const results: GuardDefinition[] = [];
 
@@ -390,7 +394,7 @@ function buildOperationSnapshot(inputs: readonly Variable[]): OperationSnapshot 
 }
 
 async function evaluateGuard(options: {
-  directive: DirectiveNode;
+  node: HookableNode;
   env: Environment;
   guard: GuardDefinition;
   operation: OperationContext;
@@ -430,9 +434,7 @@ async function evaluateGuard(options: {
   guardEnv.setVariable('input', inputVariable);
 
   injectGuardHelpers(guardEnv, {
-    directive: options.directive,
     operation,
-    guardHelper: options.operationSnapshot?.helper ?? options.guardHelper,
     labels: contextLabels,
     operationLabels: operation.labels ?? []
   });
@@ -452,7 +454,7 @@ async function evaluateGuard(options: {
 
   logGuardEvaluationStart({
     guard,
-    directive: options.directive,
+    node: options.node,
     operation,
     scope,
     attempt: attemptNumber,
@@ -471,12 +473,13 @@ async function evaluateGuard(options: {
   const metadata = buildDecisionMetadata(action, guard, {
     inputPreview,
     attempt: attemptNumber,
-    tries: attemptHistory
+    tries: attemptHistory,
+    inputVariable
   });
 
   logGuardDecisionEvent({
     guard,
-    directive: options.directive,
+    node: options.node,
     operation,
     scope,
     attempt: attemptNumber,
@@ -505,7 +508,8 @@ async function evaluateGuard(options: {
       hint: action.message ?? null,
       inputPreview,
       attempt: attemptNumber,
-      tries: updatedHistory
+      tries: updatedHistory,
+      inputVariable
     });
     return { action: 'retry', metadata: retryMetadata };
   }
@@ -540,6 +544,7 @@ function buildDecisionMetadata(
     inputPreview?: string | null;
     attempt?: number;
     tries?: GuardAttemptEntry[];
+    inputVariable?: Variable;
   }
 ): Record<string, unknown> {
   const guardId = guard.name ?? `${guard.filterKind}:${guard.filterValue}`;
@@ -577,6 +582,10 @@ function buildDecisionMetadata(
     }));
   }
 
+  if (extras?.inputVariable) {
+    metadata.guardInput = extras.inputVariable;
+  }
+
   return metadata;
 }
 
@@ -599,13 +608,12 @@ function cloneVariableForGuard(variable: Variable): Variable {
 function injectGuardHelpers(
   guardEnv: Environment,
   options: {
-    directive: DirectiveNode;
     operation: OperationContext;
     labels: readonly DataLabel[];
     operationLabels: readonly string[];
   }
 ): void {
-  const opKeys = buildOperationKeySet(options.directive, options.operation);
+  const opKeys = buildOperationKeySet(options.operation);
   const opLabels = new Set(options.operationLabels.map(label => label.toLowerCase()));
   const inputLabels = new Set(options.labels.map(label => label.toLowerCase()));
 
@@ -662,31 +670,42 @@ function createGuardHelperExecutable(
   return execVar;
 }
 
-function buildOperationKeys(
-  directive: DirectiveNode,
-  operation: OperationContext
-): string[] {
+function buildOperationKeys(operation: OperationContext): string[] {
   const keys = new Set<string>();
-  keys.add(operation.type);
-
-  if (directive.kind === 'run') {
-    if (directive.subtype === 'runCommand') {
-      keys.add('cmd');
-    } else if (directive.subtype === 'runCode') {
-      const language = (directive.meta?.language as string | undefined)?.toLowerCase();
-      if (language) {
-        keys.add(language);
+  if (operation.type) {
+    keys.add(operation.type.toLowerCase());
+  }
+  if (operation.subtype) {
+    keys.add(operation.subtype.toLowerCase());
+  }
+  if (operation.type === 'run') {
+    const runSubtype =
+      typeof operation.metadata === 'object' && operation.metadata
+        ? (operation.metadata as Record<string, unknown>).runSubtype
+        : undefined;
+    if (typeof runSubtype === 'string') {
+      keys.add(runSubtype.toLowerCase());
+      if (runSubtype === 'runCommand') {
+        keys.add('cmd');
+      } else if (runSubtype.startsWith('runExec')) {
+        keys.add('exec');
+      } else if (runSubtype === 'runCode') {
+        const language =
+          typeof operation.metadata === 'object' && operation.metadata
+            ? (operation.metadata as Record<string, unknown>).language
+            : undefined;
+        if (typeof language === 'string' && language.length > 0) {
+          keys.add(language.toLowerCase());
+        }
       }
-    } else if (directive.subtype?.startsWith('runExec')) {
-      keys.add('exec');
     }
   }
 
   return Array.from(keys);
 }
 
-function buildOperationKeySet(directive: DirectiveNode, operation: OperationContext): Set<string> {
-  const keys = buildOperationKeys(directive, operation);
+function buildOperationKeySet(operation: OperationContext): Set<string> {
+  const keys = buildOperationKeys(operation);
   const normalized = new Set<string>();
   for (const key of keys) {
     normalized.add(key.toLowerCase());

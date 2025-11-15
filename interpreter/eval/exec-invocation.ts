@@ -14,6 +14,7 @@ import {
   createStructuredValueVariable,
   VariableMetadataUtils
 } from '@core/types/variable';
+import type { Variable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
@@ -31,7 +32,8 @@ import {
   wrapStructured,
   parseAndWrapJson,
   collectAndMergeParameterDescriptors,
-  extractSecurityDescriptor
+  extractSecurityDescriptor,
+  normalizeWhenShowEffect
 } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
@@ -41,6 +43,8 @@ import { GuardError } from '@core/errors/GuardError';
 import type { GuardErrorDetails } from '@core/errors/GuardError';
 import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
+import type { OperationContext } from '../env/ContextManager';
+import { handleGuardDecision } from '../hooks/hook-decision-handler';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -693,6 +697,18 @@ export async function evaluateExecInvocation(
   if (!definition) {
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
   }
+
+  let whenExprNode: WhenExpressionNode | null = null;
+  if (definition.language === 'mlld-when') {
+    const candidate =
+      Array.isArray(definition.codeTemplate) && definition.codeTemplate.length > 0
+        ? (definition.codeTemplate[0] as WhenExpressionNode | undefined)
+        : undefined;
+    if (!candidate || candidate.type !== 'WhenExpression') {
+      throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
+    }
+    whenExprNode = candidate;
+  }
   
   // Create a child environment for parameter substitution
   let execEnv = env.createChild();
@@ -914,7 +930,27 @@ export async function evaluateExecInvocation(
     const helperResult = await impl(evaluatedArgs);
     return createEvalResult(helperResult, env);
   }
-  
+
+  const guardInputs = originalVariables.filter(
+    (input): input is Variable => Boolean(input)
+  );
+  const hookManager = env.getHookManager();
+  const execDescriptor = variable.metadata?.security as SecurityDescriptor | undefined;
+  const operationContext: OperationContext = {
+    type: 'exe',
+    name: variable.name ?? commandName,
+    labels: execDescriptor?.labels,
+    location: node.location ?? null,
+    metadata: {
+      executableType: definition.type,
+      command: commandName
+    }
+  };
+  const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
+    return hookManager.runPost(node, result, guardInputs, env, operationContext);
+  };
+
+  return await env.withOpContext(operationContext, async () => {
   // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
@@ -1050,6 +1086,40 @@ export async function evaluateExecInvocation(
         ? descriptorPieces[0]
         : env.mergeSecurityDescriptors(...descriptorPieces);
     env.recordSecurityDescriptor(resultSecurityDescriptor);
+  }
+
+  const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
+  const guardInputVariable =
+    preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
+  try {
+    await handleGuardDecision(preDecision, node, env, operationContext);
+  } catch (error) {
+    if (guardInputVariable) {
+      const existingInput = execEnv.getVariable('input');
+      if (!existingInput) {
+        const clonedInput: Variable = {
+          ...(guardInputVariable as Variable),
+          name: 'input',
+          metadata: {
+            ...(guardInputVariable as Variable).metadata,
+            isSystem: true,
+            isParameter: true
+          }
+        };
+        execEnv.setParameterVariable('input', clonedInput);
+      }
+    }
+    if (whenExprNode) {
+      const handled = await handleExecGuardDenial(error, {
+        execEnv,
+        env,
+        whenExprNode
+      });
+      if (handled) {
+        return finalizeResult(handled);
+      }
+    }
+    throw error;
   }
   
   let result: unknown;
@@ -1307,39 +1377,30 @@ export async function evaluateExecInvocation(
   else if (isCodeExecutable(definition)) {
     // Special handling for mlld-when expressions
     if (definition.language === 'mlld-when') {
-      // console.log('🎯 EXEC-INVOCATION MLLD-WHEN HANDLER CALLED');
-      
-      // The codeTemplate contains the WhenExpression node
-      const whenExprNode = definition.codeTemplate[0];
-      if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
+      const activeWhenExpr = whenExprNode;
+      if (!activeWhenExpr) {
         throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
       }
-      
+
       // Evaluate the when expression with the parameter environment
       const { evaluateWhenExpression } = await import('./when-expression');
       let whenResult: EvalResult;
       try {
-        whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
+        whenResult = await evaluateWhenExpression(activeWhenExpr, execEnv);
       } catch (error) {
         const handled = await handleExecGuardDenial(error, {
-          definition,
           execEnv,
           env,
-          whenExprNode
+          whenExprNode: activeWhenExpr
         });
         if (handled) {
-          return handled;
+          const finalHandled = await finalizeResult(handled);
+          return finalHandled;
         }
         throw error;
       }
-      let value: any = whenResult.value;
-      // Unwrap tagged show effects for non-pipeline exec-invocation (so /run echoes value)
-      if (value && typeof value === 'object' && (value as any).__whenEffect === 'show') {
-        value = (value as any).text ?? '';
-      } else if (isStructuredValue(value) && value.data && typeof value.data === 'object' && (value.data as any).__whenEffect === 'show') {
-        value = (value.data as any).text ?? asText(value);
-      }
-      result = value;
+      const normalization = normalizeWhenShowEffect(whenResult.value);
+      result = normalization.normalized;
       // Update execEnv to the result which contains merged nodes
       execEnv = whenResult.env;
     } else if (definition.language === 'mlld-foreach') {
@@ -1964,9 +2025,17 @@ export async function evaluateExecInvocation(
         };
         mergeResultDescriptor(combinedDescriptor);
       }
-      return applyWithClause(pipelineValue, { ...node.withClause, pipeline: undefined }, execEnv);
+      const withClauseResult = await applyWithClause(
+        pipelineValue,
+        { ...node.withClause, pipeline: undefined },
+        execEnv
+      );
+      const finalWithClauseResult = await finalizeResult(withClauseResult);
+      return finalWithClauseResult;
     } else {
-      return applyWithClause(result, node.withClause, execEnv);
+      const withClauseResult = await applyWithClause(result, node.withClause, execEnv);
+      const finalWithClauseResult = await finalizeResult(withClauseResult);
+      return finalWithClauseResult;
     }
   }
   
@@ -1979,7 +2048,9 @@ export async function evaluateExecInvocation(
       });
     } catch {}
   }
-  return createEvalResult(result, execEnv);
+    const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
+    return finalEvalResult;
+  });
 }
 
 /**

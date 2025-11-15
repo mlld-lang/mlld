@@ -10,11 +10,11 @@ related-types: HookManager { PreHook, PostHook, HookDecision, HookInputHelpers }
 
 ## tldr
 
-mlld's hook system enables pre-execution and post-execution extensions at directive boundaries. Pre-hooks inspect inputs and can abort operations (guard insertion point). Post-hooks transform results and propagate metadata (taint tracking). Hooks receive extracted inputs, operation context, and optional input helpers for analysis.
+mlld's hook system enables pre-execution and post-execution extensions at evaluation boundaries (directives and user-defined exe invocations). Pre-hooks inspect inputs and can abort operations (guard insertion point). Post-hooks transform results and propagate metadata (taint tracking). Hooks receive extracted inputs, operation context, and optional input helpers for analysis.
 
 ## Principles
 
-- Hooks execute at directive boundaries (before/after each directive evaluation)
+- Hooks execute at evaluation boundaries (before/after directives and user-defined exe invocations)
 - Pre-hooks run in registration order, first non-continue action stops chain
 - Post-hooks run in registration order, transform results sequentially
 - Hooks receive extracted inputs (any type), operation context, and optional helpers
@@ -24,10 +24,12 @@ mlld's hook system enables pre-execution and post-execution extensions at direct
 
 ### Hook Types
 
-**PreHook** - Executes before directive evaluation
+Hook signatures accept a `HookableNode`, which is a discriminated union of `DirectiveNode` and `ExecInvocationNode`. Hooks see the same API regardless of which evaluation boundary triggered them; use type guards when node-specific data is required.
+
+**PreHook** - Executes before directive or exe evaluation
 ```typescript
 type PreHook = (
-  directive: DirectiveNode,
+  node: HookableNode,
   inputs: readonly unknown[],
   env: Environment,
   operation?: OperationContext,
@@ -42,10 +44,10 @@ interface HookDecision {
 }
 ```
 
-**PostHook** - Executes after directive evaluation
+**PostHook** - Executes after directive or exe evaluation
 ```typescript
 type PostHook = (
-  directive: DirectiveNode,
+  node: HookableNode,
   result: EvalResult,
   inputs: readonly unknown[],
   env: Environment,
@@ -97,7 +99,7 @@ interface GuardInputHelper {
 
 ### Integration Point
 
-**directive.ts** - Main integration in `evaluateDirective()`:
+**directive.ts** - Directive integration in `evaluateDirective()`:
 ```typescript
 // Build operation context and extract inputs
 const operationContext = buildOperationContext(directive, traceInfo);
@@ -114,6 +116,28 @@ if (preDecision.action === 'abort') {
 // Line 149: Post-hooks
 result = await hookManager.runPost(directive, result, extractedInputs, env, operationContext);
 ```
+
+**exec-invocation.ts** - Expression integration in `evaluateExecInvocation()`:
+```typescript
+const guardInputs = originalVariables.filter(Boolean) as Variable[];
+const operationContext: OperationContext = {
+  type: 'exe',
+  name: variable.name ?? commandName,
+  labels: execDescriptor?.labels,
+  location: node.location ?? null,
+  metadata: { executableType: definition.type, command: commandName }
+};
+
+return env.withOpContext(operationContext, async () => {
+  const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
+  await handleGuardDecision(preDecision, node, env, operationContext);
+
+  // Execute user-defined /exe body...
+
+  return hookManager.runPost(node, result, guardInputs, env, operationContext);
+});
+```
+Hooks run only for user-defined `/exe` functions. Built-in helpers and guard helper executables short-circuit before hook execution to avoid recursion.
 
 ### Built-in Hooks
 
@@ -147,16 +171,27 @@ interface OperationContext {
 ### Hook Lifecycle
 
 ```
+Directive boundary
 1. evaluateDirective() called
 2. Build operation context (buildOperationContext)
 3. Extract inputs (extractDirectiveInputs or prepareVarAssignment)
 4. → Run pre-hooks (HookManager.runPre)
-5.   ├─ guardPreHook (evaluates guard definitions across directives)
+5.   ├─ guardPreHook evaluates guard definitions
 6.   └─ First non-continue → abort or retry
 7. → Evaluate directive (directive-specific evaluator)
 8. → Run post-hooks (HookManager.runPost)
 9.   └─ taint-post-hook collects and merges security descriptors
-10. Return result (potentially transformed by post-hooks)
+
+Exe boundary
+1. evaluateExecInvocation() called
+2. Collect original argument Variables (guardInputs)
+3. Build operation context `{ type: 'exe', ... }`
+4. → Run pre-hooks (HookManager.runPre)
+5.   ├─ guardPreHook evaluates guard definitions
+6.   └─ First non-continue → abort or retry
+7. → Execute user-defined /exe implementation
+8. → Run post-hooks (HookManager.runPost)
+9.   └─ taint-post-hook propagates taint to exe result
 ```
 
 ### Input Extraction
@@ -174,12 +209,13 @@ For /var directives, the variable is pre-computed via prepareVarAssignment and p
 
 ## Gotchas
 
-- Hooks are non-reentrant - if a hook triggers directive evaluation, hooks don't re-run for nested directive
+- Hooks are non-reentrant - if a hook triggers directive evaluation, hooks don't re-run for nested directive/exe
 - Pre-hook first non-continue action stops chain (abort or retry)
 - Post-hooks ALL run sequentially - each can transform the result
 - Inputs can be any type (not just Variables) - check with isVariable()
 - Operation context is optional in hook signatures - may be undefined
-- HookInputHelpers only provided when ALL inputs are Variables
+- HookInputHelpers only provided when ALL inputs are Variables (true for exe guard inputs that reference direct Variables)
+- Hooks fire for user-defined `/exe` functions only; built-in helpers and guard helper executables bypass hook execution
 
 ## Debugging
 

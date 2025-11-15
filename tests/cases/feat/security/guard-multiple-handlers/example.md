@@ -1,7 +1,7 @@
 # Guard Multiple Handlers
 
 /guard @secretExecBlock for secret = when [
-  @ctx.op.type == "exec-invocation" => deny "Secrets cannot be logged"
+  @ctx.op.type == "exe" => deny "Secrets cannot be logged"
   * => allow
 ]
 

@@ -3,6 +3,7 @@ import type { GuardErrorDetails } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { WhenExpressionNode } from '@core/types/when';
+import { normalizeWhenShowEffect } from '../utils/structured-value';
 
 export async function handleExecGuardDenial(
   error: unknown,
@@ -32,12 +33,18 @@ export async function handleExecGuardDenial(
     evaluateWhenExpression(options.whenExprNode, options.execEnv, undefined, { denyMode: true })
   );
 
-  if (!whenResult.metadata?.deniedHandlerRan) {
+  const normalization = normalizeWhenShowEffect(whenResult.value);
+  const normalizedResult = {
+    ...whenResult,
+    value: normalization.hadShowEffect ? undefined : normalization.normalized
+  };
+
+  if (!normalizedResult.metadata?.deniedHandlerRan) {
     return null;
   }
 
   return {
-    ...whenResult,
+    ...normalizedResult,
     stderr: warning
   };
 }
