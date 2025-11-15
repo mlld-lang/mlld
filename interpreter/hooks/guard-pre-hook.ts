@@ -1,6 +1,6 @@
 import type { GuardDefinition, GuardScope } from '../guards';
 import type { Environment } from '../env/Environment';
-import type { OperationContext } from '../env/ContextManager';
+import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { HookDecision, PreHook } from './HookManager';
 import type { GuardBlockNode, GuardActionNode, GuardDecisionType } from '@core/types/guard';
 import type { Variable, VariableSource } from '@core/types/variable';
@@ -439,7 +439,7 @@ async function evaluateGuard(options: {
     operationLabels: operation.labels ?? []
   });
 
-  const guardContext = {
+  const guardContext: GuardContextSnapshot = {
     name: guard.name,
     attempt: attemptNumber,
     try: attemptNumber,
@@ -451,6 +451,8 @@ async function evaluateGuard(options: {
     inputPreview,
     hintHistory: attemptHistory.map(entry => entry.hint ?? null)
   };
+
+  const contextSnapshotForMetadata = cloneGuardContextSnapshot(guardContext);
 
   logGuardEvaluationStart({
     guard,
@@ -474,7 +476,8 @@ async function evaluateGuard(options: {
     inputPreview,
     attempt: attemptNumber,
     tries: attemptHistory,
-    inputVariable
+    inputVariable,
+    contextSnapshot: contextSnapshotForMetadata
   });
 
   logGuardDecisionEvent({
@@ -509,7 +512,8 @@ async function evaluateGuard(options: {
       inputPreview,
       attempt: attemptNumber,
       tries: updatedHistory,
-      inputVariable
+      inputVariable,
+      contextSnapshot: contextSnapshotForMetadata
     });
     return { action: 'retry', metadata: retryMetadata };
   }
@@ -545,6 +549,7 @@ function buildDecisionMetadata(
     attempt?: number;
     tries?: GuardAttemptEntry[];
     inputVariable?: Variable;
+    contextSnapshot?: GuardContextSnapshot;
   }
 ): Record<string, unknown> {
   const guardId = guard.name ?? `${guard.filterKind}:${guard.filterValue}`;
@@ -586,6 +591,10 @@ function buildDecisionMetadata(
     metadata.guardInput = extras.inputVariable;
   }
 
+  if (extras?.contextSnapshot) {
+    metadata.guardContext = extras.contextSnapshot;
+  }
+
   return metadata;
 }
 
@@ -603,6 +612,30 @@ function cloneVariableForGuard(variable: Variable): Variable {
     delete clone.metadata.ctxCache;
   }
   return clone;
+}
+
+function cloneGuardContextSnapshot(context: GuardContextSnapshot): GuardContextSnapshot {
+  const cloned: GuardContextSnapshot = {
+    ...context,
+    tries: context.tries ? context.tries.map(entry => ({ ...entry })) : undefined,
+    labels: context.labels ? [...context.labels] : undefined,
+    sources: context.sources ? [...context.sources] : undefined,
+    hintHistory: context.hintHistory ? [...context.hintHistory] : undefined
+  };
+  if (context.input !== undefined) {
+    cloned.input = cloneGuardContextInput(context.input);
+  }
+  return cloned;
+}
+
+function cloneGuardContextInput(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(item => (isVariable(item) ? cloneVariableForGuard(item) : item));
+  }
+  if (isVariable(value as Variable)) {
+    return cloneVariableForGuard(value as Variable);
+  }
+  return value;
 }
 
 function injectGuardHelpers(

@@ -8,6 +8,8 @@ import { PathService } from '@services/fs/PathService';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { GuardError } from '@core/errors/GuardError';
 import { handleExecGuardDenial, formatGuardWarning } from '@interpreter/eval/guard-denial-handler';
+import { createSimpleTextVariable } from '@core/types/variable';
+import type { VariableSource } from '@core/types/variable';
 
 function createEnv(): {
   env: Environment;
@@ -106,6 +108,60 @@ describe('handleExecGuardDenial', () => {
     expect(firstIndex).toBeGreaterThanOrEqual(0);
     expect(secondIndex).toBeGreaterThan(firstIndex);
     expect(result?.metadata?.deniedHandlerRan).toBe(true);
+  });
+
+  it('exposes guard context inside denied handlers', async () => {
+    const { env, execEnv, effects } = createEnv();
+    const whenExpr = parseWhenExpression(`
+/exe @process(value) = when [
+  denied => show "Guard input: @ctx.guard.input"
+  denied => show "Param value: @value"
+  * => show "Process"
+]
+    `);
+
+    const source: VariableSource = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const guardInput = createSimpleTextVariable(
+      'value',
+      'sk-live-ctx',
+      source,
+      { isSystem: true, isReserved: true }
+    );
+    execEnv.setParameterVariable('value', guardInput);
+
+    const guardContext = {
+      name: '@secretGuard',
+      attempt: 1,
+      try: 1,
+      tries: [],
+      max: 3,
+      input: guardInput,
+      labels: ['secret'],
+      sources: [],
+      hintHistory: []
+    };
+
+    const error = new GuardError({
+      decision: 'deny',
+      reason: 'Secret blocked',
+      guardFilter: 'data:secret',
+      guardContext,
+      guardInput
+    });
+
+    const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
+    expect(result).not.toBeNull();
+    const outputs = effects
+      .getAll()
+      .filter(effect => effect.type === 'both')
+      .map(effect => effect.content.trim());
+    expect(outputs).toContain('Guard input: sk-live-ctx');
+    expect(outputs).toContain('Param value: sk-live-ctx');
   });
 
   it('formats guard warnings with fallback identifier', () => {

@@ -9,7 +9,7 @@
 
 /exe @auditSecret(secretValue) = when [
   denied => show "First handler saw: @ctx.guard.reason"
-  denied => show "Second handler recorded input: @input"
+  denied => show "Second handler recorded input: @secretValue"
   * => show `Secret: @secretValue`
 ]
 

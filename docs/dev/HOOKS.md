@@ -91,6 +91,7 @@ interface GuardInputHelper {
 - Manages @ctx namespace state (@ctx.op, @ctx.pipe, @ctx.guard)
 - Push/pop context stacks for nested operations
 - Builds ambient @ctx object with security and pipeline state
+- Provides guard context snapshots so denied handlers can access the guarded Variable via `@ctx.guard.input` (alias `@ctx.input`)
 
 **extractDirectiveInputs** (`interpreter/eval/directive-inputs.ts`)
 - Extracts inputs from directives (Variables or other values)
