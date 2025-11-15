@@ -13,6 +13,7 @@ import type {
 import type { CapabilityContext, SecurityDescriptor, DataLabel, TaintLevel } from '../security';
 import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
+import type { ExecutableDefinition } from '../executable';
 
 // =========================================================================
 // BASE TYPES
@@ -28,6 +29,11 @@ export interface BaseVariable {
   definedAt?: SourceLocation;
   source: VariableSource;
   ctx?: VariableContextSnapshot;
+  internal?: VariableInternalMetadata;
+  /**
+   * @deprecated Legacy metadata property. Use `.ctx`/`.internal` instead.
+   */
+  metadata?: VariableMetadata;
 }
 
 /**
@@ -97,13 +103,13 @@ export interface VariableMetrics {
   source?: TokenMetricSource;
 }
 
-export interface VariableContextSnapshot {
-  name: string;
-  type: VariableTypeDiscriminator;
+export interface VariableContext {
+  name?: string;
+  type?: VariableTypeDiscriminator;
   definedAt?: SourceLocation;
   labels: readonly DataLabel[];
   taint: TaintLevel;
-  tokens?: number | number[];
+  tokens?: number | readonly number[];
   tokest?: number;
   length?: number;
   size?: number;
@@ -112,6 +118,46 @@ export interface VariableContextSnapshot {
   policy?: Readonly<Record<string, unknown>> | null;
   totalTokens?: () => number;
   maxTokens?: () => number;
+  filename?: string;
+  relative?: string;
+  absolute?: string;
+  url?: string;
+  domain?: string;
+  title?: string;
+  description?: string;
+  source?: string;
+  retries?: number;
+  fm?: unknown;
+  json?: unknown;
+}
+
+export type VariableContextSnapshot = VariableContext;
+
+export interface VariableInternalMetadata extends Record<string, unknown> {
+  executableDef?: ExecutableDefinition;
+  transformerImplementation?: (...args: unknown[]) => unknown;
+  transformerVariants?: Record<string, unknown>;
+  isBuiltinTransformer?: boolean;
+  sourceFunction?: unknown;
+  capturedModuleEnv?: Map<string, Variable>;
+  capturedShadowEnvs?: unknown;
+  arrayType?: 'renamed-content' | 'load-content-result' | 'regular' | string;
+  joinSeparator?: string;
+  customToString?: () => string;
+  customToJSON?: () => any;
+  contentGetter?: () => string | Promise<string>;
+  isLazy?: boolean;
+  needsResolution?: boolean;
+  pipelineInput?: unknown;
+  pipelineStage?: number;
+  isPipelineInput?: boolean;
+  headerTransform?: {
+    applied: boolean;
+    template: string;
+  };
+  templateAst?: any[];
+  configType?: string;
+  itemType?: string;
 }
 
 // =========================================================================

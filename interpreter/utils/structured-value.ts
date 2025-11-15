@@ -34,11 +34,14 @@ export interface StructuredValueMetadata {
   [key: string]: unknown;
 }
 
+export interface StructuredValueInternal extends Record<string, unknown> {}
+
 export interface StructuredValue<T = unknown> {
   type: StructuredValueType;
   text: string;
   data: T;
   metadata?: StructuredValueMetadata;
+  internal?: StructuredValueInternal;
   readonly ctx: StructuredValueContext;
   toString(): string;
   valueOf(): string;

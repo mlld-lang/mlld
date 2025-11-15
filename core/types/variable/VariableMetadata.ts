@@ -340,6 +340,21 @@ export class VariableMetadataUtils {
     if ((variable as any).__ctxAttached) {
       return variable;
     }
+    const descriptor = Object.getOwnPropertyDescriptor(variable, 'ctx');
+    if (descriptor && !descriptor.get && !descriptor.set) {
+      Object.defineProperty(variable, 'ctx', {
+        value: variable.ctx,
+        enumerable: false,
+        configurable: true,
+        writable: true
+      });
+      Object.defineProperty(variable, '__ctxAttached', {
+        value: true,
+        enumerable: false,
+        configurable: false
+      });
+      return variable;
+    }
     Object.defineProperty(variable, '__ctxAttached', {
       value: true,
       enumerable: false,
