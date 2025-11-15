@@ -139,6 +139,7 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
   transformerVariants?: Record<string, unknown>;
   isBuiltinTransformer?: boolean;
   sourceFunction?: unknown;
+  isRetryable?: boolean;
   capturedModuleEnv?: Map<string, Variable>;
   capturedShadowEnvs?: unknown;
   arrayType?: 'renamed-content' | 'load-content-result' | 'regular' | string;
