@@ -263,12 +263,6 @@ async function evaluateInvocationSource(
     );
   }
   
-  if (variable.metadata?.security) {
-  }
-  
-  if (variable.metadata?.security) {
-  }
-  
   // For any variable with args, treat it as an invocation
   if (args.length > 0) {
     // Create an ExecInvocation node and use the standard evaluator
@@ -529,9 +523,6 @@ async function evaluateCommandSource(
       `Variable ${cmdName} is not a command`,
       directive.location
     );
-  }
-  
-  if (cmdVariable.metadata?.security) {
   }
   
   // Create a child environment for parameter substitution

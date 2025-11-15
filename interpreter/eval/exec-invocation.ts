@@ -14,7 +14,7 @@ import {
   createStructuredValueVariable,
   VariableMetadataUtils
 } from '@core/types/variable';
-import type { Variable } from '@core/types/variable';
+import type { Variable, VariableContext } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
@@ -35,10 +35,12 @@ import {
   extractSecurityDescriptor,
   normalizeWhenShowEffect
 } from '../utils/structured-value';
+import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import type { SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 import { GuardError } from '@core/errors/GuardError';
 import type { GuardErrorDetails } from '@core/errors/GuardError';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -223,14 +225,11 @@ export async function evaluateExecInvocation(
   ): EvalResult => {
     const wrapped = wrapExecResult(value, options);
     if (resultSecurityDescriptor) {
-      const existing = wrapped.metadata?.security as SecurityDescriptor | undefined;
+      const existing = getStructuredSecurityDescriptor(wrapped);
       const merged = existing
         ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
         : resultSecurityDescriptor;
-      wrapped.metadata = {
-        ...(wrapped.metadata ?? {}),
-        security: merged
-      };
+      setStructuredSecurityDescriptor(wrapped, merged);
     }
     return {
       value: wrapped,
@@ -935,7 +934,7 @@ export async function evaluateExecInvocation(
     (input): input is Variable => Boolean(input)
   );
   const hookManager = env.getHookManager();
-  const execDescriptor = variable.metadata?.security as SecurityDescriptor | undefined;
+  const execDescriptor = getVariableSecurityDescriptor(variable);
   const operationContext: OperationContext = {
     type: 'exe',
     name: variable.name ?? commandName,
@@ -1073,8 +1072,9 @@ export async function evaluateExecInvocation(
 
   // Capture descriptors from executable definition and parameters
   const descriptorPieces: SecurityDescriptor[] = [];
-  if (variable.metadata?.security) {
-    descriptorPieces.push(variable.metadata.security);
+  const variableDescriptor = getVariableSecurityDescriptor(variable);
+  if (variableDescriptor) {
+    descriptorPieces.push(variableDescriptor);
   }
   const mergedParamDescriptor = collectAndMergeParameterDescriptors(params, execEnv);
   if (mergedParamDescriptor) {
@@ -1522,6 +1522,7 @@ export async function evaluateExecInvocation(
             type: paramVar.type,
             subtype: subtype,
             metadata: paramVar.metadata,
+            ctx: paramVar.ctx,
             isVariable: true
           };
         }
@@ -1587,6 +1588,7 @@ export async function evaluateExecInvocation(
             type: capturedVar.type,
             subtype,
             metadata: capturedVar.metadata,
+            ctx: capturedVar.ctx,
             isVariable: true
           };
         }
@@ -1654,7 +1656,7 @@ export async function evaluateExecInvocation(
     }
 
     const inputDescriptors = Object.values(variableMetadata)
-      .map(meta => meta?.metadata?.security as SecurityDescriptor | undefined)
+      .map(meta => getSecurityDescriptorFromCarrier(meta))
       .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
 
     if (inputDescriptors.length > 0) {
@@ -1929,14 +1931,11 @@ export async function evaluateExecInvocation(
   
   if (resultSecurityDescriptor) {
     const structured = wrapExecResult(result);
-    const existing = structured.metadata?.security as SecurityDescriptor | undefined;
+    const existing = getStructuredSecurityDescriptor(structured);
     const merged = existing
       ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
       : resultSecurityDescriptor;
-    structured.metadata = {
-      ...(structured.metadata ?? {}),
-      security: merged
-    };
+    setStructuredSecurityDescriptor(structured, merged);
     result = structured;
   }
 
@@ -2012,17 +2011,14 @@ export async function evaluateExecInvocation(
       
       // Still need to handle other withClause features (trust, needs)
       let pipelineValue = wrapPipelineResult(pipelineResult);
-      const pipelineDescriptor = pipelineValue.metadata?.security as SecurityDescriptor | undefined;
+      const pipelineDescriptor = getStructuredSecurityDescriptor(pipelineValue);
       const combinedDescriptor = pipelineDescriptor
         ? (resultSecurityDescriptor
             ? env.mergeSecurityDescriptors(pipelineDescriptor, resultSecurityDescriptor)
             : pipelineDescriptor)
         : resultSecurityDescriptor;
       if (combinedDescriptor) {
-        pipelineValue.metadata = {
-          ...(pipelineValue.metadata ?? {}),
-          security: combinedDescriptor
-        };
+        setStructuredSecurityDescriptor(pipelineValue, combinedDescriptor);
         mergeResultDescriptor(combinedDescriptor);
       }
       const withClauseResult = await applyWithClause(
@@ -2051,6 +2047,63 @@ export async function evaluateExecInvocation(
     const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
     return finalEvalResult;
   });
+}
+
+type SecurityCarrier = {
+  ctx?: VariableContext | StructuredValueContext;
+  metadata?: { security?: SecurityDescriptor };
+};
+
+function getVariableSecurityDescriptor(variable?: Variable): SecurityDescriptor | undefined {
+  if (!variable) {
+    return undefined;
+  }
+  return getSecurityDescriptorFromCarrier({ ctx: variable.ctx, metadata: variable.metadata });
+}
+
+function getStructuredSecurityDescriptor(
+  value?: { ctx?: StructuredValueContext; metadata?: { security?: SecurityDescriptor } }
+): SecurityDescriptor | undefined {
+  return getSecurityDescriptorFromCarrier(value);
+}
+
+function setStructuredSecurityDescriptor(
+  value: { metadata?: { security?: SecurityDescriptor } },
+  descriptor?: SecurityDescriptor
+): void {
+  if (!descriptor) {
+    return;
+  }
+  value.metadata = {
+    ...(value.metadata ?? {}),
+    security: descriptor
+  };
+}
+
+function getSecurityDescriptorFromCarrier(carrier?: SecurityCarrier): SecurityDescriptor | undefined {
+  if (!carrier) {
+    return undefined;
+  }
+  const ctxDescriptor = descriptorFromCtx(carrier.ctx);
+  if (ctxDescriptor) {
+    return ctxDescriptor;
+  }
+  return carrier.metadata?.security as SecurityDescriptor | undefined;
+}
+
+function descriptorFromCtx(
+  ctx?: VariableContext | StructuredValueContext
+): SecurityDescriptor | undefined {
+  if (!ctx) {
+    return undefined;
+  }
+  const labels = Array.isArray(ctx.labels) ? ctx.labels : [];
+  const sources = Array.isArray(ctx.sources) ? ctx.sources : [];
+  const taint = (ctx as any).taint ?? 'unknown';
+  if (labels.length === 0 && sources.length === 0 && taint === 'unknown') {
+    return undefined;
+  }
+  return ctxToSecurityDescriptor(ctx as VariableContext);
 }
 
 /**

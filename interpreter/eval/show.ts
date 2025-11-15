@@ -36,20 +36,29 @@ import { logger } from '@core/utils/logger';
 import { asText, assertStructuredValue, isStructuredValue, parseAndWrapJson } from '@interpreter/utils/structured-value';
 
 import { wrapExecResult } from '../utils/structured-exec';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 // Template normalization now handled in grammar - no longer needed here
 
 function extractDescriptorFromVariable(variable: Variable | undefined): SecurityDescriptor | undefined {
-  return variable?.metadata?.security;
+  if (!variable?.ctx) {
+    return undefined;
+  }
+  return ctxToSecurityDescriptor(variable.ctx);
 }
 
 function extractDescriptorFromValue(value: unknown): SecurityDescriptor | undefined {
   if (!value) return undefined;
   if (isStructuredValue(value)) {
-    return value.metadata?.security as SecurityDescriptor | undefined;
+    return value.ctx ? ctxToSecurityDescriptor(value.ctx) : undefined;
   }
   if (typeof value === 'object') {
-    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
-    return metadata?.security;
+    const descriptor =
+      'ctx' in (value as Record<string, unknown>) && (value as any).ctx
+        ? ctxToSecurityDescriptor((value as any).ctx)
+        : undefined;
+    if (descriptor) {
+      return descriptor;
+    }
   }
   return undefined;
 }
@@ -213,9 +222,9 @@ export async function evaluateShow(
           if (process.env.MLLD_DEBUG === 'true') {
             logger.debug('Interpolation result:', { value });
           }
-        } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
-          // GOTCHA: Some legacy paths store template AST in metadata
-          value = await interpolate(variable.metadata.templateAst, env);
+        } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
+          // GOTCHA: Some legacy paths store template AST in internal metadata
+          value = await interpolate(variable.internal.templateAst, env);
         }
       }
     } else if (isObject(variable)) {
@@ -405,14 +414,14 @@ export async function evaluateShow(
     const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
     value = await resolveValue(value, env, ResolutionContext.Display);
     const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
-    const isNamespaceVariable = variable?.metadata?.isNamespace && !hadFieldAccess;
+    const isNamespaceVariable = variable?.internal?.isNamespace && !hadFieldAccess;
 
     if (isNamespaceVariable && value && typeof value === 'object') {
       if (process.env.DEBUG_NAMESPACE) {
         logger.debug('Cleaning namespace for display:', {
           varName: variable.name,
-          hasMetadata: !!variable.metadata,
-          isNamespace: variable.metadata?.isNamespace,
+          hasMetadata: !!variable.internal,
+          isNamespace: variable.internal?.isNamespace,
           valueKeys: Object.keys(value)
         });
       }
