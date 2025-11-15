@@ -14,9 +14,10 @@ import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
-import { asText, asData, isStructuredValue, wrapStructured } from '../../utils/structured-value';
+import { asText, asData, isStructuredValue, wrapStructured, type StructuredValueContext } from '../../utils/structured-value';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { isPipelineInput } from '@core/types/variable/TypeGuards';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -706,7 +707,7 @@ export class PipelineExecutor {
         stages: structuredResults
       });
       const stageDescriptors = structuredResults
-        .map(result => result.metadata?.security as SecurityDescriptor | undefined)
+        .map(result => getStructuredSecurityDescriptor(result))
         .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
       const aggregatedDescriptor = stageDescriptors.length > 0
         ? mergeDescriptors(...stageDescriptors)
@@ -727,7 +728,7 @@ export class PipelineExecutor {
     context: StageContext,
     structuredInput: StructuredValue
   ): SecurityDescriptor | undefined {
-    const inputDescriptor = structuredInput.metadata?.security as SecurityDescriptor | undefined;
+    const inputDescriptor = getStructuredSecurityDescriptor(structuredInput);
     const labels = (command as any)?.securityLabels as DataLabel[] | undefined;
     const labelDescriptor = labels && labels.length > 0 ? makeSecurityDescriptor({ labels }) : undefined;
     const descriptor = mergeDescriptors(inputDescriptor, labelDescriptor);
@@ -796,7 +797,7 @@ export class PipelineExecutor {
     if (!descriptor) {
       return value;
     }
-    const existing = value.metadata?.security as SecurityDescriptor | undefined;
+    const existing = getStructuredSecurityDescriptor(value);
     const merged = existing ? mergeDescriptors(existing, descriptor) : descriptor;
     return wrapStructured(
       value,
@@ -991,4 +992,14 @@ function previewValue(value: unknown): unknown {
     };
   }
   return value;
+}
+
+function getStructuredSecurityDescriptor(value: StructuredValue | undefined): SecurityDescriptor | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value.ctx) {
+    return ctxToSecurityDescriptor(value.ctx as StructuredValueContext);
+  }
+  return value.metadata?.security as SecurityDescriptor | undefined;
 }

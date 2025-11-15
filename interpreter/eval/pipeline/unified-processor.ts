@@ -67,6 +67,7 @@ export async function processPipeline(
   context: UnifiedPipelineContext
 ): Promise<any> {
   const { value, env, node, directive, identifier } = context;
+  const sourceNode = getSourceFunctionFromValue(value);
   const descriptorFromValue = extractSecurityDescriptor(value, {
     recursive: true,
     mergeArrayElements: true
@@ -138,14 +139,14 @@ export async function processPipeline(
     logger.debug('[processPipeline] Checking for synthetic source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
-      hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata),
-      hasSourceFunction: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata && value.metadata.sourceFunction),
+      hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && (value as any).metadata),
+      hasSourceFunction: !!sourceNode,
       valueType: value && typeof value === 'object' && 'type' in value ? value.type : typeof value
     });
   }
   
   // Normalize pipeline - prepend source stage if retryable
-  const normalizedPipeline = detected.isRetryable && value?.metadata?.sourceFunction
+  const normalizedPipeline = detected.isRetryable && sourceNode
     ? [SOURCE_STAGE, ...detected.pipeline]
     : detected.pipeline;
 
@@ -161,9 +162,8 @@ export async function processPipeline(
   
   // Create source function for retrying stage 0 if applicable
   let sourceFunction: (() => Promise<string | StructuredValue>) | undefined;
-  if (detected.isRetryable && value?.metadata?.sourceFunction) {
+  if (detected.isRetryable && sourceNode) {
     // Create a function that re-executes the source AST node
-    const sourceNode = value.metadata.sourceFunction;
     sourceFunction = async () => {
       // Re-evaluate the source node to get fresh input
       if (sourceNode.type === 'ExecInvocation') {
@@ -420,4 +420,18 @@ export function needsPipelineProcessing(
     directive?.values?.withClause?.pipeline ||
     directive?.meta?.withClause?.pipeline
   );
+}
+
+function getSourceFunctionFromValue(value: unknown): any | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const candidate = value as { internal?: Record<string, unknown>; metadata?: Record<string, unknown> };
+  if (candidate.internal && candidate.internal.sourceFunction) {
+    return candidate.internal.sourceFunction;
+  }
+  if (candidate.metadata && candidate.metadata.sourceFunction) {
+    return candidate.metadata.sourceFunction;
+  }
+  return undefined;
 }
