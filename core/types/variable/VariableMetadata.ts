@@ -331,8 +331,16 @@ export class VariableMetadataUtils {
       variable.metadata = {};
     }
     variable.metadata.metrics = metrics;
+    if (!variable.ctx) {
+      VariableMetadataUtils.attachContext(variable);
+    }
+    if (variable.ctx) {
+      variable.ctx.length = metrics.length;
+      variable.ctx.tokest = metrics.tokest;
+      variable.ctx.tokens = metrics.tokens ?? metrics.tokest;
+    }
     if (variable.metadata.ctxCache) {
-      delete variable.metadata.ctxCache;
+      variable.metadata.ctxCache = variable.ctx as VariableContextSnapshot;
     }
   }
 

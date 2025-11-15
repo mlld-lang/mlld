@@ -105,6 +105,20 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
     variable.metadata = {};
   }
   (variable.metadata as any).arrayHelperAggregate = aggregate;
+
+  // Update .ctx snapshot to include aggregate info for consumers and tests
+  const ctx = ensureContext(variable);
+  ctx.labels = aggregate.labels;
+  ctx.sources = aggregate.sources;
+  ctx.tokens = aggregate.tokens;
+  ctx.totalTokens = aggregate.totalTokens;
+  ctx.maxTokens = aggregate.maxTokens;
+  if (Array.isArray(variable.value)) {
+    ctx.size = variable.value.length;
+  }
+  if (variable.metadata?.ctxCache) {
+    variable.metadata.ctxCache = ctx;
+  }
 }
 
 export function buildArrayAggregate(values: readonly unknown[]): ArrayAggregateSnapshot {

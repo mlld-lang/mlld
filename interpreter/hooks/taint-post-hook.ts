@@ -1,12 +1,15 @@
 import type { DirectiveNode } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
 import { mergeDescriptors } from '@core/types/security';
-import type { Variable } from '@core/types/variable';
+import type { Variable, VariableContext } from '@core/types/variable';
 import type { EvalResult } from '../core/interpreter';
 import type { Environment } from '../env/Environment';
 import { isStructuredValue } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { PostHook } from './HookManager';
+import type { OperationContext } from '../env/ContextManager';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import type { StructuredValueContext } from '@interpreter/utils/structured-value';
 
 export const taintPostHook: PostHook = async (
   _directive: DirectiveNode,
@@ -36,10 +39,7 @@ function collectInputDescriptors(
 ): void {
   for (const input of inputs) {
     if (isVariable(input)) {
-      const descriptor = input.metadata?.security;
-      if (descriptor) {
-        target.push(descriptor);
-      }
+      pushVariableDescriptor(input, target);
       continue;
     }
     collectValueDescriptors(input, target);
@@ -56,7 +56,7 @@ function collectOperationLabels(
 
   target.push({
     labels: operation.labels,
-    taint: 'unknown',
+    taintLevel: 'unknown',
     sources: []
   });
 }
@@ -71,18 +71,12 @@ function collectValueDescriptors(
   }
 
   if (isVariable(value)) {
-    const descriptor = value.metadata?.security;
-    if (descriptor) {
-      target.push(descriptor);
-    }
+    pushVariableDescriptor(value, target);
     return;
   }
 
   if (isStructuredValue(value)) {
-    const descriptor = value.metadata?.security as SecurityDescriptor | undefined;
-    if (descriptor) {
-      target.push(descriptor);
-    }
+    pushStructuredDescriptor(value, target);
     return;
   }
 
@@ -103,13 +97,56 @@ function collectValueDescriptors(
   }
   seen.add(obj);
 
-  const metadata = obj.metadata as { security?: SecurityDescriptor } | undefined;
-  if (metadata?.security) {
-    target.push(metadata.security);
+  const descriptor = extractDescriptorFromObject(obj);
+  if (descriptor) {
+    target.push(descriptor);
     return;
   }
 
   for (const key of Object.keys(obj)) {
     collectValueDescriptors(obj[key], target, seen);
   }
+}
+
+function pushVariableDescriptor(variable: Variable, target: SecurityDescriptor[]): void {
+  const descriptor =
+    descriptorFromCtx(variable.ctx) ?? (variable.metadata?.security as SecurityDescriptor | undefined);
+  if (descriptor) {
+    target.push(descriptor);
+  }
+}
+
+function pushStructuredDescriptor(
+  value: { ctx?: VariableContext | StructuredValueContext; metadata?: { security?: SecurityDescriptor } },
+  target: SecurityDescriptor[]
+): void {
+  const descriptor =
+    descriptorFromCtx(value.ctx) ?? (value.metadata?.security as SecurityDescriptor | undefined);
+  if (descriptor) {
+    target.push(descriptor);
+  }
+}
+
+function extractDescriptorFromObject(value: Record<string, unknown>): SecurityDescriptor | undefined {
+  const ctx = value.ctx as VariableContext | undefined;
+  const descriptorFromContext = descriptorFromCtx(ctx);
+  if (descriptorFromContext) {
+    return descriptorFromContext;
+  }
+  const metadata = value.metadata as { security?: SecurityDescriptor } | undefined;
+  return metadata?.security;
+}
+
+function descriptorFromCtx(
+  ctx?: VariableContext | StructuredValueContext
+): SecurityDescriptor | undefined {
+  if (!ctx) {
+    return undefined;
+  }
+  const hasLabels = Array.isArray(ctx.labels) && ctx.labels.length > 0;
+  const hasSources = Array.isArray(ctx.sources) && ctx.sources.length > 0;
+  if (!hasLabels && !hasSources && ctx.taint === 'unknown') {
+    return undefined;
+  }
+  return ctxToSecurityDescriptor(ctx);
 }
