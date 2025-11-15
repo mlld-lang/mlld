@@ -153,6 +153,8 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
   pipelineStage?: number;
   isPipelineInput?: boolean;
   importPath?: string;
+  isNamespace?: boolean;
+  isSystem?: boolean;
   headerTransform?: {
     applied: boolean;
     template: string;

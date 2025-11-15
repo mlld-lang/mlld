@@ -516,7 +516,8 @@ export async function evaluateRun(
     }
     
     // Get the executable definition from metadata
-    const definition = execVar.metadata?.executableDef as ExecutableDefinition;
+    const definition =
+      (execVar.internal?.executableDef ?? execVar.metadata?.executableDef) as ExecutableDefinition | undefined;
     if (!definition) {
       // For field access, provide more helpful error message
       const fullPath = identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0

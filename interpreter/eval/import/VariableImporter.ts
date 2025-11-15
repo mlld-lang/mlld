@@ -26,6 +26,7 @@ import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
 import type { SourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -310,26 +311,25 @@ export class VariableImporter {
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
 
-        // Serialize shadow environments if present (Maps don't serialize to JSON)
-        let serializedMetadata = { ...execVar.metadata };
-        if (serializedMetadata.capturedShadowEnvs) {
-          serializedMetadata = {
-            ...serializedMetadata,
-            capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+        // Serialize internal fields (shadow envs, module envs) since Maps do not JSON-serialize
+        let serializedInternal: Record<string, unknown> = { ...(execVar.internal ?? {}) };
+        if (serializedInternal.capturedShadowEnvs) {
+          serializedInternal = {
+            ...serializedInternal,
+            capturedShadowEnvs: this.serializeShadowEnvs(serializedInternal.capturedShadowEnvs)
           };
         }
-        // Serialize module environment if present
         if (shouldSerializeModuleEnv) {
-          const capturedEnv = serializedMetadata.capturedModuleEnv instanceof Map
-            ? serializedMetadata.capturedModuleEnv
-            : getModuleEnvSnapshot();
-          serializedMetadata = {
-            ...serializedMetadata,
+          const capturedEnv =
+            serializedInternal.capturedModuleEnv instanceof Map
+              ? serializedInternal.capturedModuleEnv
+              : getModuleEnvSnapshot();
+          serializedInternal = {
+            ...serializedInternal,
             capturedModuleEnv: this.serializeModuleEnv(capturedEnv)
           };
         } else {
-          // Remove capturedModuleEnv to avoid recursion
-          delete serializedMetadata.capturedModuleEnv;
+          delete serializedInternal.capturedModuleEnv;
         }
         
         // Export executable with all necessary metadata
@@ -337,8 +337,8 @@ export class VariableImporter {
           __executable: true,
           value: execVar.value,
           // paramNames removed - they're already in executableDef and shouldn't be exposed as imports
-          executableDef: execVar.metadata?.executableDef,
-          metadata: serializedMetadata
+          executableDef: execVar.internal?.executableDef,
+          internal: serializedInternal
         };
       } else if (variable.type === 'template') {
         const templateVar = variable as TemplateVariable;
@@ -348,7 +348,7 @@ export class VariableImporter {
           content: templateVar.value,
           templateSyntax: templateVar.templateSyntax,
           parameters: templateVar.parameters,
-          templateAst: templateVar.metadata?.templateAst || (Array.isArray(templateVar.value) ? templateVar.value : undefined)
+          templateAst: templateVar.internal?.templateAst || (Array.isArray(templateVar.value) ? templateVar.value : undefined)
         };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
@@ -359,11 +359,18 @@ export class VariableImporter {
         moduleObject[name] = variable.value;
       }
 
-      const mergedDescriptor = mergeDescriptors(variable.metadata?.security, envDescriptor);
-      const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(variable.metadata, {
-        existingDescriptor: mergedDescriptor
-      });
-      const serializedMetadata = VariableMetadataUtils.serializeSecurityMetadata(metadataWithSecurity);
+      const descriptor = variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined;
+      const mergedDescriptor = descriptor && envDescriptor
+        ? mergeDescriptors(descriptor, envDescriptor)
+        : descriptor ?? envDescriptor;
+      const metadataForSerialization: VariableMetadata = {};
+      if (mergedDescriptor) {
+        metadataForSerialization.security = mergedDescriptor;
+      }
+      if (variable.metadata?.capability) {
+        metadataForSerialization.capability = variable.metadata.capability;
+      }
+      const serializedMetadata = VariableMetadataUtils.serializeSecurityMetadata(metadataForSerialization);
       if (serializedMetadata) {
         serializedMetadataMap[name] = serializedMetadata;
       }
@@ -469,14 +476,20 @@ export class VariableImporter {
         hasInterpolation: true,
         isMultiLine: true
       };
-      const tmplMetadata = buildMetadata({ templateAst: (value as any).templateAst });
+      const tmplMetadata = buildMetadata();
+      const templateOptions = {
+        metadata: tmplMetadata,
+        internal: {
+          templateAst: (value as any).templateAst
+        }
+      };
       return createTemplateVariable(
         name,
         (value as any).content,
         (value as any).parameters,
         (value as any).templateSyntax === 'tripleColon' ? 'tripleColon' : 'doubleColon',
         templateSource,
-        tmplMetadata
+        templateOptions
       );
     }
 
@@ -610,7 +623,6 @@ export class VariableImporter {
       {
         isImported: true,
         importPath,
-        isNamespace: true,
         definedAt: { line: 0, column: 0, filePath: importPath },
         namespaceMetadata: metadataMap
       },
@@ -619,13 +631,17 @@ export class VariableImporter {
         existingDescriptor: snapshotDescriptor
       }
     );
+    const namespaceOptions = {
+      metadata,
+      internal: { isNamespace: true }
+    };
 
     return createObjectVariable(
       alias,
       moduleObject,
       isComplex, // Mark as complex if it contains AST nodes or executables
       source,
-      metadata
+      namespaceOptions
     );
   }
 
@@ -864,47 +880,52 @@ export class VariableImporter {
     // );
     
     // NEW CODE: Ensure all metadata is preserved
-    let originalMetadata = value.metadata || {};
-    
+    let originalInternal = value.internal || value.metadata || {};
+
     // Deserialize shadow environments if present
-    if (originalMetadata.capturedShadowEnvs) {
-      originalMetadata = {
-        ...originalMetadata,
-        capturedShadowEnvs: this.deserializeShadowEnvs(originalMetadata.capturedShadowEnvs)
+    if (originalInternal.capturedShadowEnvs) {
+      originalInternal = {
+        ...originalInternal,
+        capturedShadowEnvs: this.deserializeShadowEnvs(originalInternal.capturedShadowEnvs)
       };
     }
 
     // Deserialize module environment if present
-    if (originalMetadata.capturedModuleEnv) {
-      const deserializedEnv = this.deserializeModuleEnv(originalMetadata.capturedModuleEnv);
+    if (originalInternal.capturedModuleEnv) {
+      const deserializedEnv = this.deserializeModuleEnv(originalInternal.capturedModuleEnv);
 
       // IMPORTANT: Each executable in the module env needs to have access to the full env
       // This allows command-refs to find their siblings
       for (const [_, variable] of deserializedEnv) {
-        if (variable.type === 'executable' && variable.metadata) {
-          // Give each executable in the module env access to all siblings
-          variable.metadata.capturedModuleEnv = deserializedEnv;
+        if (variable.type === 'executable') {
+          variable.internal = {
+            ...(variable.internal ?? {}),
+            capturedModuleEnv: deserializedEnv
+          };
         }
       }
 
-      originalMetadata = {
-        ...originalMetadata,
+      originalInternal = {
+        ...originalInternal,
         capturedModuleEnv: deserializedEnv
       };
     }
     
     const enhancedMetadata = {
       ...metadata,
-      ...originalMetadata, // Preserve ALL original metadata including capturedShadowEnvs
       isImported: true,
-      importPath: metadata.importPath,
-      executableDef // This is what actually matters for execution
+      importPath: metadata.importPath
     };
 
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(enhancedMetadata, {
       labels: securityLabels,
       existingDescriptor: enhancedMetadata.security
     });
+
+    const finalInternal = {
+      ...(originalInternal as Record<string, unknown>),
+      executableDef
+    };
 
     const execVariable = createExecutableVariable(
       name,
@@ -913,7 +934,10 @@ export class VariableImporter {
       paramNames,
       undefined, // No language here - it's in executableDef
       source,
-      finalMetadata
+      {
+        metadata: finalMetadata,
+        internal: finalInternal
+      }
     );
     
     return execVariable;
@@ -993,7 +1017,7 @@ export class VariableImporter {
    */
   private isLegitimateVariableForExport(variable: Variable): boolean {
     // System variables (like @fm) should not be exported
-    if (variable.metadata?.isSystem) {
+    if (variable.internal?.isSystem || variable.metadata?.isSystem) {
       return false;
     }
     

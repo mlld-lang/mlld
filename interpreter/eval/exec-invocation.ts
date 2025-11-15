@@ -920,12 +920,14 @@ export async function evaluateExecInvocation(
     }
   }
   
+  const guardHelperImpl =
+    (variable.internal as any)?.guardHelperImplementation ??
+    (variable.metadata as any)?.guardHelperImplementation;
   if (
-    variable.metadata?.isGuardHelper &&
-    typeof (variable.metadata as any).guardHelperImplementation === 'function'
+    ((variable.internal as any)?.isGuardHelper || (variable.metadata as any)?.isGuardHelper) &&
+    typeof guardHelperImpl === 'function'
   ) {
-    const impl = (variable.metadata as any)
-      .guardHelperImplementation as (args: readonly unknown[]) => unknown | Promise<unknown>;
+    const impl = guardHelperImpl as (args: readonly unknown[]) => unknown | Promise<unknown>;
     const helperResult = await impl(evaluatedArgs);
     return createEvalResult(helperResult, env);
   }

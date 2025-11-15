@@ -403,8 +403,9 @@ function createTypedPipelineVariable(
 
 function resolveExecutableLanguage(commandVar: any, execDef: any): string | undefined {
   if (execDef?.language) return String(execDef.language);
-  if (commandVar?.metadata?.executableDef?.language) {
-    return String(commandVar.metadata.executableDef.language);
+  const metadataDef = commandVar?.internal?.executableDef ?? commandVar?.metadata?.executableDef;
+  if (metadataDef?.language) {
+    return String(metadataDef.language);
   }
   if (commandVar?.value?.language) {
     return String(commandVar.value.language);
@@ -550,8 +551,9 @@ export async function executeCommandVariable(
   
   if (commandVar && commandVar.type === 'executable' && commandVar.value) {
     // Check if we have the full ExecutableDefinition in metadata
-    if (commandVar.metadata?.executableDef) {
-      execDef = commandVar.metadata.executableDef;
+    const storedDef = commandVar.internal?.executableDef ?? commandVar.metadata?.executableDef;
+    if (storedDef) {
+      execDef = storedDef;
       
       // Also copy paramNames from the variable if not in execDef
       if (!execDef.paramNames && commandVar.paramNames) {

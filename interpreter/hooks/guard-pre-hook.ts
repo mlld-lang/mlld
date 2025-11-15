@@ -693,13 +693,15 @@ function createGuardHelperExecutable(
     'javascript',
     GUARD_HELPER_SOURCE,
     {
-      isSystem: true
+      metadata: { isSystem: true }
     }
   );
-  const metadata = execVar.metadata ?? (execVar.metadata = {});
-  metadata.executableDef = execVar.value;
-  (metadata as any).isGuardHelper = true;
-  (metadata as any).guardHelperImplementation = implementation;
+  execVar.internal = {
+    ...(execVar.internal ?? {}),
+    executableDef: execVar.value,
+    isGuardHelper: true,
+    guardHelperImplementation: implementation
+  };
   return execVar;
 }
 

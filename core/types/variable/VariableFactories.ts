@@ -772,14 +772,15 @@ export class VariableFactory {
     metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ExecutableVariable {
     const init = normalizeFactoryOptions(metadataOrOptions);
-    return finalizeVariable({
+    const executableDefinition = {
+      type,
+      template,
+      language
+    };
+    const variable = finalizeVariable({
       type: 'executable',
       name,
-      value: {
-        type,
-        template,
-        language
-      },
+      value: executableDefinition,
       paramNames,
       source,
       createdAt: Date.now(),
@@ -788,6 +789,19 @@ export class VariableFactory {
       internal: init.internal,
       metadata: init.metadata
     });
+    if (init.internal?.executableDef === undefined) {
+      variable.internal = {
+        ...(variable.internal ?? {}),
+        executableDef: executableDefinition
+      };
+    }
+    if (variable.internal?.executableDef && (!variable.metadata || !(variable.metadata as any).executableDef)) {
+      variable.metadata = {
+        ...(variable.metadata ?? {}),
+        executableDef: variable.internal.executableDef
+      };
+    }
+    return variable;
   }
 
   /**
