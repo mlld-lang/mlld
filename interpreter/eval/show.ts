@@ -33,7 +33,13 @@ import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
-import { asText, assertStructuredValue, isStructuredValue, parseAndWrapJson } from '@interpreter/utils/structured-value';
+import {
+  asText,
+  assertStructuredValue,
+  isStructuredValue,
+  parseAndWrapJson,
+  applySecurityDescriptorToStructuredValue
+} from '@interpreter/utils/structured-value';
 
 import { wrapExecResult } from '../utils/structured-exec';
 import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
@@ -1129,10 +1135,7 @@ export async function evaluateShow(
       : undefined;
   const wrapped = wrapExecResult(baseValue, wrapOptions);
   if (resultDescriptor) {
-    wrapped.metadata = {
-      ...(wrapped.metadata || {}),
-      security: resultDescriptor
-    };
+    applySecurityDescriptorToStructuredValue(wrapped, resultDescriptor);
   }
   return { value: wrapped, env };
 }

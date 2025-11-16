@@ -333,6 +333,21 @@ export const structuredValueUtils = {
   assertStructuredValue
 };
 
+export function applySecurityDescriptorToStructuredValue(
+  value: StructuredValue,
+  descriptor: SecurityDescriptor
+): void {
+  const normalized = normalizeSecurityDescriptor(descriptor) ?? makeSecurityDescriptor();
+  value.metadata = {
+    ...(value.metadata ?? {}),
+    security: normalized
+  };
+  value.ctx.labels = normalized.labels ? [...normalized.labels] : [];
+  value.ctx.taint = normalized.taintLevel ?? 'unknown';
+  value.ctx.sources = normalized.sources ? [...normalized.sources] : [];
+  value.ctx.policy = normalized.policyContext ?? null;
+}
+
 function ensureStructuredValueState<T>(value: StructuredValue<T>): StructuredValue<T> {
   defineStructuredCtx(value, value.metadata, value.type);
   defineStructuredInternal(value, value.internal);

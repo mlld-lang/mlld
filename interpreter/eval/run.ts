@@ -18,7 +18,11 @@ import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
-import { asText, normalizeWhenShowEffect } from '../utils/structured-value';
+import {
+  asText,
+  normalizeWhenShowEffect,
+  applySecurityDescriptorToStructuredValue
+} from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 
 /**
@@ -152,10 +156,7 @@ export async function evaluateRun(
   const setOutput = (value: unknown) => {
     const wrapped = wrapExecResult(value);
     if (pendingOutputDescriptor) {
-      wrapped.metadata = {
-        ...(wrapped.metadata || {}),
-        security: wrapped.metadata?.security ?? pendingOutputDescriptor
-      };
+      applySecurityDescriptorToStructuredValue(wrapped, wrapped.metadata?.security ?? pendingOutputDescriptor);
       pendingOutputDescriptor = undefined;
     }
     outputValue = wrapped;

@@ -141,6 +141,7 @@ export async function resolveVariable(
         const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
         const evaluatedValue = await evaluateDataValue(variable.value, env);
         
+        const evaluatedAt = Date.now();
         // Create a new Variable with the evaluated value
         return {
           ...variable,
@@ -148,10 +149,12 @@ export async function resolveVariable(
           metadata: {
             ...variable.metadata,
             wasEvaluated: true,
-            evaluatedAt: Date.now()
+            evaluatedAt
           },
           internal: {
-            ...(variable.internal ?? {})
+            ...(variable.internal ?? {}),
+            wasEvaluated: true,
+            evaluatedAt
           }
         } as Variable;
       }

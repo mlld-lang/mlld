@@ -42,7 +42,7 @@ describe('Guard Minimal Reproduction', () => {
             console.error('.type:', input?.type);
             console.error('.name:', input?.name);
             console.error('.value:', input?.value);
-            console.error('.metadata:', safeStringify(input?.metadata));
+            console.error('.ctx:', safeStringify(input?.ctx));
             console.error('.ctx exists?:', input?.ctx !== undefined);
             if (input?.ctx) {
               console.error('.ctx.labels:', input.ctx.labels);

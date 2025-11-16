@@ -44,7 +44,7 @@ describe('Alligator structured behaviour', () => {
     const varValue = variable?.value;
     expect(isStructuredValue(varValue)).toBe(true);
     if (isStructuredValue(varValue)) {
-      expect(varValue.metadata?.filename).toBe('README.md');
+      expect(varValue.ctx.filename).toBe('README.md');
       expect(asText(varValue)).toContain('Body text.');
     }
 
@@ -57,7 +57,7 @@ describe('Alligator structured behaviour', () => {
     const showResult = await evaluateShow(showNode, env);
     expect(isStructuredValue(showResult.value)).toBe(true);
     if (isStructuredValue(showResult.value)) {
-      expect(showResult.value.metadata?.filename).toBe('README.md');
+      expect(showResult.value.ctx.filename).toBe('README.md');
       expect(asText(showResult.value)).toContain('Body text.');
     }
   });

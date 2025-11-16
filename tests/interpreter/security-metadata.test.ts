@@ -27,8 +27,8 @@ describe('Security metadata propagation', () => {
     await evaluateVar(directive, env);
 
     const variable = env.getVariable('foo');
-    expect(variable?.metadata?.security).toBeDefined();
-    expect(variable!.metadata!.security!.labels).toEqual(['secret', 'untrusted']);
+    expect(variable?.ctx).toBeDefined();
+    expect(variable?.ctx.labels).toEqual(['secret', 'untrusted']);
   });
 
   it('restores serialized metadata during import reconstruction', () => {
@@ -42,7 +42,7 @@ describe('Security metadata propagation', () => {
       securityLabels: ['secret']
     });
 
-    expect(variable.metadata?.security?.labels || []).toEqual(['secret']);
+    expect(variable.ctx.labels).toEqual(['secret']);
   });
 
   it('propagates descriptors through pipeline stages', async () => {
@@ -72,7 +72,7 @@ describe('Security metadata propagation', () => {
       identifier: 'input'
     });
 
-    expect(result.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(result.ctx?.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
   it('wraps /show output and effects with capability metadata', async () => {
@@ -96,7 +96,8 @@ describe('Security metadata propagation', () => {
     const result = await evaluateShow(directive, env);
 
     expect(result.value).toBeDefined();
-    expect((result.value as any).metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    const showValue = result.value as any;
+    expect(showValue.ctx?.labels).toEqual(expect.arrayContaining(['secret']));
     expect(handler.collected[0]?.capability?.security.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
@@ -168,13 +169,13 @@ describe('Security metadata propagation', () => {
     await evaluateExe(exeDirective, env);
 
     const execVar = env.getVariable('emit');
-    expect(execVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(execVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
 
     const invocationDirective = parseSync('/var @result = @emit()')[0] as DirectiveNode;
     await evaluateVar(invocationDirective, env);
 
     const resultVar = env.getVariable('result');
-    expect(resultVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(resultVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
   it('merges descriptors during template interpolation', async () => {
@@ -186,7 +187,7 @@ describe('Security metadata propagation', () => {
     await evaluateVar(templateDirective, env);
 
     const messageVar = env.getVariable('message');
-    expect(messageVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(messageVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
   it('propagates pipeline taint and labels into structured outputs and downstream results', async () => {
@@ -204,13 +205,13 @@ describe('Security metadata propagation', () => {
     const pipelineDirective = parseSync('/var @pipelineOutput = @token | @emitToken | @echoValue | @markDone')[0] as DirectiveNode;
     await evaluateDirective(pipelineDirective, env);
     const pipelineVar = env.getVariable('pipelineOutput');
-    expect(pipelineVar?.metadata?.security?.labels).toEqual(expect.arrayContaining(['secret']));
-    expect(pipelineVar?.metadata?.security?.taintLevel).toBe('unknown');
+    expect(pipelineVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(pipelineVar?.ctx.taint).toBe('unknown');
 
     const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
     const result = await evaluateDirective(resultDirective, env);
     const structuredResult = result.value as any;
-    expect(structuredResult?.metadata?.security?.labels).toEqual(expect.arrayContaining(['untrusted']));
-    expect(structuredResult?.metadata?.security?.taintLevel).toBe('commandOutput');
+    expect(structuredResult?.ctx?.labels).toEqual(expect.arrayContaining(['untrusted']));
+    expect(structuredResult?.ctx?.taint).toBe('commandOutput');
   });
 });

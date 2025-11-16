@@ -162,6 +162,11 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
   templateAst?: any[];
   configType?: string;
   itemType?: string;
+  wasEvaluated?: boolean;
+  evaluatedAt?: number;
+  fromGlobPattern?: boolean;
+  globPattern?: string;
+  fileCount?: number;
 }
 
 // =========================================================================

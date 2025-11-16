@@ -27,7 +27,6 @@ describe('variable .ctx namespace', () => {
 
     const foo = env.getVariable('foo');
     expect(foo).toBeDefined();
-    expect(foo?.metadata?.metrics?.tokest).toBeGreaterThan(0);
     expect(foo?.ctx?.tokest).toBeGreaterThan(0);
     expect(foo?.ctx?.tokens).toBe(foo?.ctx?.tokest);
     expect(foo?.ctx?.length).toBe(11);
@@ -45,7 +44,6 @@ describe('variable .ctx namespace', () => {
       1
     );
 
-    expect(variable.metadata?.metrics?.tokest).toBeGreaterThan(0);
     expect(variable.ctx?.tokest).toBeGreaterThan(0);
   });
 

@@ -80,7 +80,7 @@ describe('ExecInvocation env injection for command executables', () => {
     } as any;
 
     // Sanity: executable def present
-    expect(((env as any).getVariable('constant') as any).metadata?.executableDef).toBeDefined();
+    expect(((env as any).getVariable('constant') as any).internal?.executableDef).toBeDefined();
     const res = await evaluateExecInvocation(invocation, env);
     expect(capturedEnv && Object.keys(capturedEnv).length).toBe(0); // no env injected
     expect(called).toBeGreaterThan(0); // ensure command path executed
@@ -113,7 +113,7 @@ describe('ExecInvocation env injection for command executables', () => {
     } as any;
 
     // Sanity: executable def present
-    expect(((env as any).getVariable('usesEnv') as any).metadata?.executableDef).toBeDefined();
+    expect(((env as any).getVariable('usesEnv') as any).internal?.executableDef).toBeDefined();
     const res = await evaluateExecInvocation(invocation, env);
     expect(capturedEnv).toBeDefined();
     expect(Object.keys(capturedEnv!)).toEqual(['data']);

@@ -80,8 +80,8 @@ describe('Variable Resolution Strategy', () => {
       
       expect(isVariable(result)).toBe(true);
       if (isVariable(result)) {
-        expect(result.metadata?.wasEvaluated).toBe(true);
-        expect(result.metadata?.evaluatedAt).toBeDefined();
+        expect(result.internal?.wasEvaluated).toBe(true);
+        expect(result.internal?.evaluatedAt).toBeDefined();
       }
     });
   });

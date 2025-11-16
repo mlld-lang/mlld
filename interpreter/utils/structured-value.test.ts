@@ -36,7 +36,7 @@ describe('parseAndWrapJson', () => {
     expect(wrapped && isStructuredValue(wrapped)).toBe(true);
     expect((wrapped as any).type).toBe('object');
     expect((wrapped as any).data).toEqual({ name: 'Ada' });
-    expect((wrapped as any).metadata).toMatchObject(metadata);
+    expect((wrapped as any).ctx.source).toBe('test-helper');
   });
 
   it('returns original value when string is not JSON (non-strict)', () => {

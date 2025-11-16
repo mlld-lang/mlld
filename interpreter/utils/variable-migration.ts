@@ -76,9 +76,37 @@ export function extractVariableValue(variable: Variable): any {
  * Creates a Variable that preserves RenamedContentArray behavior
  */
 export function createRenamedContentVariable(
-  items: string[], 
+  items: string[],
   metadata?: Partial<ArrayVariable['metadata']>
 ): ArrayVariable {
+  const customToString = function() {
+    return items.join('\n\n');
+  };
+  const customToJSON = function() {
+    return [...items];
+  };
+  const baseInternal = {
+    arrayType: 'renamed-content',
+    joinSeparator: '\n\n',
+    customToString,
+    customToJSON
+  };
+  const internalOverrides: Partial<typeof baseInternal> & {
+    fromGlobPattern?: boolean;
+    globPattern?: string;
+    fileCount?: number;
+  } = {};
+  if (metadata) {
+    if (metadata.fromGlobPattern !== undefined) {
+      internalOverrides.fromGlobPattern = metadata.fromGlobPattern;
+    }
+    if (metadata.globPattern !== undefined) {
+      internalOverrides.globPattern = metadata.globPattern;
+    }
+    if (metadata.fileCount !== undefined) {
+      internalOverrides.fileCount = metadata.fileCount;
+    }
+  }
   return {
     type: 'array',
     name: metadata?.name || 'renamed-content',
@@ -94,15 +122,13 @@ export function createRenamedContentVariable(
     metadata: {
       arrayType: 'renamed-content',
       joinSeparator: '\n\n',
-      customToString: function() { return items.join('\n\n'); },
-      customToJSON: function() { return [...items]; },
+      customToString,
+      customToJSON,
       ...metadata
     },
     internal: {
-      arrayType: 'renamed-content',
-      joinSeparator: '\n\n',
-      customToString: function() { return items.join('\n\n'); },
-      customToJSON: function() { return [...items]; }
+      ...baseInternal,
+      ...internalOverrides
     }
   };
 }
@@ -126,6 +152,22 @@ export function createLoadContentResultVariable(
   const contentGetterFunc = function() {
     return items.map(item => item.content).join('\n\n');
   };
+  const internalOverrides: {
+    fromGlobPattern?: boolean;
+    globPattern?: string;
+    fileCount?: number;
+  } = {};
+  if (metadata) {
+    if (metadata.fromGlobPattern !== undefined) {
+      internalOverrides.fromGlobPattern = metadata.fromGlobPattern;
+    }
+    if (metadata.globPattern !== undefined) {
+      internalOverrides.globPattern = metadata.globPattern;
+    }
+    if (metadata.fileCount !== undefined) {
+      internalOverrides.fileCount = metadata.fileCount;
+    }
+  }
   
   return {
     type: 'array',
@@ -152,7 +194,8 @@ export function createLoadContentResultVariable(
       joinSeparator: '\n\n',
       customToString: toStringFunc,
       customToJSON: toJSONFunc,
-      contentGetter: contentGetterFunc
+      contentGetter: contentGetterFunc,
+      ...internalOverrides
     }
   };
 }

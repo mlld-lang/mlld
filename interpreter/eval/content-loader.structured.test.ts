@@ -35,9 +35,8 @@ describe('processContentLoader (structured)', () => {
     expect(isStructuredValue(result)).toBe(true);
     if (isStructuredValue(result)) {
       expect(result.type).toBe('object');
-      expect(result.metadata?.source).toBe('load-content');
-      expect(result.metadata?.filename).toBe('README.md');
-      expect(result.ctx?.filename).toBe('README.md');
+      expect(result.ctx.source).toBe('load-content');
+      expect(result.ctx.filename).toBe('README.md');
       expect(asText(result)).toContain('# Test');
       expect((result.data as any).filename).toBe('README.md');
     }
@@ -69,8 +68,8 @@ describe('processContentLoader (structured)', () => {
     if (isStructuredValue(result)) {
       expect(result.type).toBe('object');
       expect(asText(result)).toContain('Install instructions here');
-      expect(result.metadata?.source).toBe('load-content');
-      expect(result.metadata?.filename).toBe('README.md');
+      expect(result.ctx.source).toBe('load-content');
+      expect(result.ctx.filename).toBe('README.md');
     }
   });
 
