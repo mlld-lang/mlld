@@ -17,7 +17,7 @@ mlld treats structured data (arrays, objects, JSON) as first-class values via `S
 - Structured values flow end-to-end through pipelines, contexts, and variables
 - Display boundaries (templates, CLI, `/show`) coerce to `.text` automatically
 - Computation boundaries (foreach, JS stages, comparisons) access `.data`
-- Metadata (filenames, retries, loader info) flows via `.metadata`
+- Runtime metadata (filenames, retries, loader info) flows via `.ctx`
 - String coercion is safe and predictable: `toString()` returns `.text`
 
 ## Details
@@ -29,15 +29,7 @@ interface StructuredValue<T = unknown> {
   type: 'text' | 'json' | 'array' | 'object' | 'csv' | 'xml' | (string & {});
   text: string;           // canonical string representation
   data: T;                // structured view (parsed)
-  metadata?: {
-    source?: string;
-    retries?: number;
-    loadResult?: LoadContentResult;
-    [key: string]: unknown;
-  };
-
-  // Lazy context snapshot (Object.defineProperty getter)
-  ctx: {
+  ctx: {                  // user-facing runtime context (mirrors Variable.ctx)
     labels: DataLabel[];
     taint: TaintLevel;
     sources: string[];
@@ -58,6 +50,15 @@ interface StructuredValue<T = unknown> {
     length?: number;
     type: StructuredValueType;
   };
+  internal?: {            // implementation surface (transforms, helpers, capture info)
+    [key: string]: unknown;
+  };
+  metadata?: {            // legacy snapshot (read-only; slated for removal)
+    source?: string;
+    retries?: number;
+    loadResult?: LoadContentResult;
+    [key: string]: unknown;
+  };
   toString(): string;     // returns text
   valueOf(): string;
   [Symbol.toPrimitive](hint?: string): string;
@@ -72,7 +73,7 @@ Use these throughout the codebase:
 asText(value)                                  // Returns wrapper.text or String(value)
 asData(value)                                  // Returns wrapper.data or value
 wrapStructured(value, type, text?, metadata?)  // Creates wrapper
-attachContextToStructuredValue(value)          // Enables `.ctx` getter described above
+ensureStructuredValue(value, type?, text?)     // Normalizes unknown input to a StructuredValue
 
 // Security metadata
 extractSecurityDescriptor(value, options?)     // Pull security metadata off Values or Variables
@@ -106,7 +107,7 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 
 **Content Loaders**
 - `/load-content` returns wrappers with parsed `.data` and original text
-- Loader metadata (filenames, URLs) preserved in `.metadata.loadResult`
+- Loader metadata (filenames, URLs) lands directly in `.ctx` (flattened from `LoadContentResult`)
 - Transformers (`@json`, `@yaml`) forward native arrays/objects in `.data`
   - `@json` uses JSON5 for relaxed parsing (single quotes, trailing commas, comments) and exposes `@json.loose`/`@json.strict` variants for explicit control.
 
@@ -143,15 +144,16 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 // Example: interpreter/eval/show.ts:630
 ```
 
-### Context Snapshots (`.ctx`)
+### Context Snapshots (`.ctx`) and `.internal`
 
-- `StructuredValue.ctx` exposes a frozen object produced by `attachContextToStructuredValue()` (`interpreter/utils/structured-value.ts`). The snapshot includes security labels, taint level, policy context, provenance (filename, relative, absolute, url, domain, title, description), execution metadata (`source`, `retries`), metrics (`tokens`, `tokest`, `length`), plus helper fields such as `fm` and `json`. Every access recomputes from the latest metadata, so mutating `metadata` stays observable.
+- `StructuredValue.ctx` is a real property populated when the wrapper is created (see `interpreter/utils/structured-value.ts`). The snapshot includes security labels, taint level, policy context, provenance (filename, relative, absolute, url, domain, title, description), execution metadata (`source`, `retries`), metrics (`tokens`, `tokest`, `length`), plus helper fields such as `fm` and `json`. Consumers mutate `.ctx` directly when they need to update provenance or retry counts.
+- `StructuredValue.internal` holds mlld-specific details (custom serialization hooks, transformer information, lazy loaders). Treat it as implementation detail; surface only what the interpreter needs.
 - `Variable.ctx` comes from `VariableMetadataUtils.attachContext()` (`core/types/variable/VariableMetadata.ts`). The snapshot includes `name`, `type`, `definedAt`, security labels, taint, token metrics, array size, export status, sources, and policy context. Use `.ctx` instead of manually reading `variable.metadata` to avoid cache invalidation bugs.
 
 ### Stage Boundary Rules
 
 - **Unwrap at stage boundaries only** - Stages work with plain JS values; use `asData()`/`asText()` right before execution
-- **Preserve metadata** - Don't strip `.metadata` or convert wrappers to raw JSON unless at display boundary
+- **Preserve metadata** - Don't strip `.ctx` or convert wrappers to raw JSON unless at display boundary
 - **Avoid deep unwrap helpers** - Call helpers at appropriate boundaries, not recursively through nested objects
 
 ### Common Fix Patterns

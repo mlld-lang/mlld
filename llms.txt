@@ -330,7 +330,7 @@ Angle brackets load file contents (not filenames). Works in variables, templates
 /var @authorEmail = <package.json>.author.email
 
 # Globs + "as" templates
-/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
 ```
 
 Data flows as native types:
@@ -522,7 +522,7 @@ Angle brackets load, quotes store literal paths. Field access and globs are supp
 ```mlld
 /var @author = <package.json>.author
 /var @firstEmail = <data.json>.users[0].email
-/var @md = <docs/*.md> as "# <>.filename"
+/var @md = <docs/*.md> as "# <>.ctx.filename"
 ```
 
 AST selection: add `{ ... }` inside the angle brackets to pull specific definitions or usages.
@@ -539,9 +539,11 @@ AST selection: add `{ ... }` inside the angle brackets to pull specific definiti
 
 Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
 
-File metadata fields: `content` (default), `filename`, `relative`, `absolute`, `tokens`, `tokest`, `fm` (frontmatter), `json` (for .json files)
+Metadata lives under `.ctx` (e.g., `@file.ctx.filename`); shorthand like `@file.filename` still maps to the same fields for backward compatibility.
 
-URL metadata fields: All file fields plus: `url`, `domain`, `title`, `description`, `html`, `text`, `md`, `headers`, `status`, `contentType`
+File metadata fields: `.ctx.content` (default), `.ctx.filename`, `.ctx.relative`, `.ctx.absolute`, `.ctx.tokens`, `.ctx.tokest`, `.ctx.fm` (frontmatter), `.ctx.json` (for .json files)
+
+URL metadata fields: All file fields plus `.ctx.url`, `.ctx.domain`, `.ctx.title`, `.ctx.description`, `.ctx.html`, `.ctx.text`, `.ctx.md`, `.ctx.headers`, `.ctx.status`, `.ctx.contentType`
 </FILE_LOADING>
 
 <FILE_LOADING_GLOBS>
@@ -551,18 +553,18 @@ Glob patterns load multiple files at once. Use `<path/**/*.ext>` to match recurs
 # Load all markdown files
 /var @docs = <docs/**/*.md>
 /show @docs.length                    # number of files loaded
-/show @docs[0].filename               # first file's name
+/show @docs[0].ctx.filename           # first file's name
 /show @docs[0].content                # first file's content
 
 # Generate table of contents
-/var @toc = <docs/**/*.md> as "- [<>.fm.title](<>.relative)"
+/var @toc = <docs/**/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
 
 # Find specific test directories
 /var @tests = <tests/**/example.md>   # all example.md files
-/var @dirs = @tests.map(t => t.relative.replace("/example.md", ""))
+/var @dirs = @tests.map(t => t.ctx.relative.replace("/example.md", ""))
 
 # Field access on each file
-/for @doc in @docs => show @doc.fm.title
+/for @doc in @docs => show @doc.ctx.fm.title
 ```
 
 Glob metadata (each matched file has):

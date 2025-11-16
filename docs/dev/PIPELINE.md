@@ -185,8 +185,8 @@ Transformers work as executable variables in pipelines:
 
 ```typescript
 // Special handling in pipeline.ts
-if (commandVar?.metadata?.isBuiltinTransformer) {
-  const result = await commandVar.metadata.transformerImplementation(input);
+if (commandVar?.internal?.isBuiltinTransformer) {
+  const result = await commandVar.internal.transformerImplementation(input);
   const normalized = normalizeTransformerResult(commandVar.name, result);
   return finalizeResult(normalized.value, normalized.options);
 }
@@ -206,7 +206,7 @@ Pipeline stages automatically preserve LoadContentResult metadata through JavaSc
 ```mlld
 # Metadata (filename, frontmatter) preserved even after transformation
 /var @result = <doc.md> | @uppercase | @addFooter
-# @result still has .filename, .fm properties available
+# @result still has .ctx.filename, .ctx.fm properties available
 ```
 
 **Implementation**: Pipeline execution wraps JS functions with `AutoUnwrapManager.executeWithPreservation()` - arrays use exact content matching, single files get metadata auto-reattached to transformed content.
@@ -558,7 +558,7 @@ export function buildPipelineStructuredValue(
 }
 ```
 
-`buildPipelineStructuredValue()` centralizes format-aware parsing and always returns the result of `wrapStructured()`. The helper attaches extra metadata (format, parsed csv/xml payloads, structured type hints) and then delegates to `attachContextToStructuredValue()` so `.ctx` immediately exposes provenance and security labels. No lazy getters remain—the function eagerly parses when a structured representation exists, so stage code always receives a regular `StructuredValue`.
+`buildPipelineStructuredValue()` centralizes format-aware parsing and always returns the result of `wrapStructured()`. The helper attaches extra metadata (format, parsed csv/xml payloads, structured type hints) and `wrapStructured()` now materializes `.ctx` immediately, so provenance and security labels are available without lazy getters. The function eagerly parses when a structured representation exists, so stage code always receives a regular `StructuredValue`.
 
 ### Format Handling
 
@@ -765,7 +765,7 @@ Pipeline inputs rely on StructuredValue helpers:
 const input = buildPipelineStructuredValue(text, format);
 console.log(input.text);             // Raw string view
 console.log(input.data);             // Parsed JSON/CSV/XML when available
-console.log(input.metadata?.format); // Format hint for downstream logging
+console.log(input.ctx.filename);     // Metadata view (filename, provenance, tokens, etc.)
 ```
 
 ### String Interpolation Edge Case

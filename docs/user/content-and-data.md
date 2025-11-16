@@ -8,7 +8,7 @@ Load files with `<file.txt>`, work with data structures using dot notation, tran
 /var @config = <config.json>             >> Load and parse JSON
 /show @config.database.host              >> Access nested fields
 /var @files = <docs/*.md>                >> Load multiple files
-/show @files[0].filename                  >> Access file metadata
+/show @files[0].ctx.filename              >> Access file metadata via .ctx
 ```
 
 ## File Loading
@@ -44,7 +44,7 @@ Use standard glob patterns to load multiple files:
 
 >> Access individual files
 /show @docs[0].content                    >> First file's content
-/show @docs[0].filename                   >> First file's name
+/show @docs[0].ctx.filename               >> First file's name
 ```
 
 ### Section Extraction
@@ -59,10 +59,10 @@ Extract specific sections from markdown files:
 /var @apis = <docs/*.md # API Reference>
 
 >> Rename sections with 'as'
-/var @modules = <*.md # Overview> as "## <>.filename Overview"
+/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"
 ```
 
-The `<>` placeholder in `as` templates represents each file's metadata.
+The `<>` placeholder in `as` templates represents each file's StructuredValue; use `.ctx` to read metadata.
 
 ### AST-Based Code Selection
 
@@ -80,26 +80,26 @@ Use curly braces after a file path to pull specific definitions or usages from s
 
 ## File Metadata
 
-Every loaded file provides metadata through properties:
+Every loaded file exposes metadata through its `.ctx` namespace:
 
 ```mlld
 /var @file = <package.json>
 
 >> Basic metadata
-/show @file.filename                     >> "package.json"
-/show @file.relative                     >> "./package.json" 
-/show @file.absolute                     >> Full path
+/show @file.ctx.filename                 >> "package.json"
+/show @file.ctx.relative                 >> "./package.json" 
+/show @file.ctx.absolute                 >> Full path
 
 >> Token counting
-/show @file.tokest                       >> Estimated tokens (fast)
-/show @file.tokens                       >> Exact tokens
+/show @file.ctx.tokest                   >> Estimated tokens (fast)
+/show @file.ctx.tokens                   >> Exact tokens
 
 >> Content access
 /show @file.content                      >> File contents (explicit)
 /show @file                              >> Same as above (implicit)
 ```
 
-**Note:** Loaded files are `StructuredValue` objects with both `.text` (content string) and `.data` (rich metadata object) properties. Display automatically uses `.text`, while code can access `.data` for structured information.
+**Note:** Loaded files are `StructuredValue` objects with `.text` (string view), `.data` (parsed payload, such as JSON objects), and `.ctx` (runtime metadata like filenames, provenance, token counts, frontmatter, and parsed JSON). Display automatically uses `.text`, while code can inspect `.data` or `.ctx` depending on whether it needs content or metadata. Short aliases such as `@file.filename` still resolve to `.ctx.filename`, but `.ctx` is the canonical namespace going forward.
 
 ### JSON File Metadata
 
@@ -123,12 +123,12 @@ Access YAML frontmatter from markdown files:
 ```mlld
 /var @post = <blog/post.md>
 
-/show @post.fm.title                     >> Post title
-/show @post.fm.author                    >> Author name
-/show @post.fm.tags                      >> Array of tags
+/show @post.ctx.fm.title                 >> Post title
+/show @post.ctx.fm.author                >> Author name
+/show @post.ctx.fm.tags                  >> Array of tags
 
 >> Conditional processing
-/when @post.fm.published => show @post.content
+/when @post.ctx.fm.published => show @post.content
 ```
 
 ## URL Loading
@@ -139,14 +139,14 @@ Load content directly from URLs:
 /var @page = <https://example.com/data.json>
 
 >> URL-specific metadata
-/show @page.url                          >> Full URL
-/show @page.domain                       >> "example.com"
-/show @page.status                       >> HTTP status code
-/show @page.title                        >> Page title (if HTML)
+/show @page.ctx.url                      >> Full URL
+/show @page.ctx.domain                   >> "example.com"
+/show @page.ctx.status                   >> HTTP status code
+/show @page.ctx.title                    >> Page title (if HTML)
 
 >> HTML is converted to markdown
 /show @page.content                      >> Markdown version
-/show @page.html                         >> Original HTML
+/show @page.ctx.html                     >> Original HTML
 ```
 
 ## Variables and Data Structures

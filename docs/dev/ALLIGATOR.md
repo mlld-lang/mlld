@@ -14,7 +14,7 @@ The alligator syntax (`<file>` or `<pattern>`) in mlld provides powerful content
 
 **Conceptually**: Think of `<file>` as returning content directly - that's its primary purpose. The metadata (filename, frontmatter, etc.) is available when you need it, but content is the default.
 
-**Implementation detail**: Under the hood, mlld stores the result in a `StructuredValue`. The wrapper's `.data` contains the parsed `LoadContentResult` (or plain string), `.text` mirrors `.content`, and `.metadata.loadResult` preserves the original `LoadContentResult` object. The `.ctx` getter flattens common metadata (filename, relative path, url, token counts), so `<file>.ctx.filename` is always available even after the wrapper flows through pipelines.
+**Implementation detail**: Under the hood, mlld stores the result in a `StructuredValue`. The wrapper's `.data` contains the parsed `LoadContentResult` (or plain string), `.text` mirrors `.content`, and `.ctx` flattens common metadata (filename, relative path, url, token counts) so `<file>.ctx.filename` is always available even after the wrapper flows through pipelines. Use `asData(@file)` whenever you need the original `LoadContentResult` object.
 
 ## Basic Syntax
 
@@ -115,9 +115,8 @@ End of document.
 
 ## Metadata Surfaces
 
-- `.metadata.loadResult` stores the raw `LoadContentResult` (single file) or array, including filenames, absolute paths, URLs, headers, and HTTP status.
-- `.ctx` exposes those fields plus token metrics via a frozen snapshot: `filename`, `relative`, `absolute`, `url`, `domain`, `title`, `description`, `tokens`, `tokest`, `fm`, and provenance such as `source` and `retries`.
-- `.data` contains the parsed `LoadContentResult` object (or array). Call `asData(value)` to inspect metadata-rich structures without losing wrappers.
+- `.ctx` surfaces canonical metadata (`filename`, `relative`, `absolute`, `url`, `domain`, `title`, `description`, `tokens`, `tokest`, `fm`, provenance fields such as `source` and `retries`) as mutable runtime state.
+- `.data` contains the parsed `LoadContentResult` object (or array). Call `asData(value)` when you need loader-specific helpers such as `fm`, `json`, `headers`, or HTTP status.
 - `.text` mirrors the user-visible content string, ensuring display paths never see `[object Object]`.
 
 Example:
@@ -160,7 +159,7 @@ When LoadContentResult objects are passed to JavaScript functions, they automati
 
 ### LoadContentResult
 
-Single file loads create a `StructuredValue` whose `.metadata.loadResult` stores the `LoadContentResult` object:
+Single file loads create a `StructuredValue` whose `.data` stores the `LoadContentResult` object:
 - `.text` equals the file content
 - `.ctx.filename`, `.ctx.relative`, `.ctx.absolute`, and `.ctx.url` surface path info
 - `asData(@file).fm` exposes frontmatter
@@ -169,7 +168,7 @@ Single file loads create a `StructuredValue` whose `.metadata.loadResult` stores
 
 Glob patterns create a `StructuredValue` that wraps a `LoadContentResultArray`:
 - `.text` concatenates contents with double newlines
-- `.ctx.length` reports the number of entries while `.metadata.loadResult` keeps the raw array
+- `.ctx.length` reports the number of entries while `asData(@files)` keeps the raw array
 - Each element stays tagged so downstream pipelines retain provenance
 
 ### RenamedContentArray
@@ -181,19 +180,19 @@ When using the `as "pattern"` syntax:
 
 ## Variable Type Preservation
 
-The mlld type system preserves special behaviors through Variable metadata:
+The mlld type system preserves special behaviors through Variable internal metadata:
 
 ```typescript
-// Variables store metadata about array types
+// Variables store array type hints inside .internal
 {
   type: 'array',
-  metadata: {
+  internal: {
     arrayType: 'load-content-result' | 'renamed-content'
   }
 }
 ```
 
-This metadata enables the interpreter to:
+This internal metadata enables the interpreter to:
 1. Preserve custom toString() and content getters
 2. Apply correct behavior during template interpolation
 3. Maintain type information through variable resolution
@@ -233,7 +232,7 @@ The interpreter preserves array behaviors through:
    - Uses `extractVariableValue` from variable-migration
 
 2. **Variable Resolution** (`/interpreter/utils/variable-resolution.ts`):
-   - Checks for special array types via metadata
+   - Checks for special array types via `.internal.arrayType`
    - Preserves behaviors during value extraction
 
 3. **Template Interpolation** (`/interpreter/core/interpreter.ts`):
@@ -246,12 +245,12 @@ The interpreter preserves array behaviors through:
 // Check for special array types
 function isLoadContentResultArray(value: any): value is LoadContentResultArray {
   return Array.isArray(value) && 
-         value.__variable?.metadata?.arrayType === 'load-content-result';
+         value.__variable?.internal?.arrayType === 'load-content-result';
 }
 
 function isRenamedContentArray(value: any): value is RenamedContentArray {
   return Array.isArray(value) && 
-         value.__variable?.metadata?.arrayType === 'renamed-content';
+         value.__variable?.internal?.arrayType === 'renamed-content';
 }
 ```
 
@@ -310,7 +309,7 @@ Generated by mlld
 ## Content Load Object Types
 
 ### LoadContentResult
-Single file load result with rich metadata, now stored inside `.metadata.loadResult` and flattened via `.ctx`:
+Single file load result with rich metadata stored inside `.data` and flattened via `.ctx`:
 - `content`: File contents (auto-unwrapped in JS/Node functions)
 - `filename`, `relative`, `absolute`, `url`, `domain`, `title`, `description`: Access with `@file.ctx.<field>`
 - `tokest`/`tokens`: Token metrics available via `.ctx`
@@ -323,7 +322,7 @@ Array of LoadContentResult objects:
 - Auto-unwraps to array of content strings in JS/Node
 - Custom `toString()` joins with `\n\n`
 - `.content` getter returns concatenated content
-- `.metadata.loadResult` preserves the original array so `.ctx.length` and provenance remain consistent
+- `asData(@files)` preserves the original array so `.ctx.length` and provenance remain consistent
 
 ### RenamedContentArray
 Created by rename patterns (`<*.md> as "pattern"`):
@@ -332,9 +331,9 @@ Created by rename patterns (`<*.md> as "pattern"`):
 
 ### LoadContentResultURL
 Extended LoadContentResult for URLs:
-- All LoadContentResult properties accessible through `.metadata.loadResult`
-- `url`, `domain`, `title`, `description`, `status`, `statusText`, `contentType`
-- `text`, `md`, `html`: Converted formats via `asData(@urlResult)`
+- All LoadContentResult properties accessible through `asData(@urlResult)`
+- `.ctx.url`, `.ctx.domain`, `.ctx.title`, `.ctx.description`, `.ctx.status`, `.ctx.contentType`
+- `.ctx.html`, `.ctx.text`, `.ctx.md`: Converted formats available without touching `.text`
 
 ## Auto-unwrapping Behavior
 

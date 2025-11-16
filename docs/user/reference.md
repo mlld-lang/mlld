@@ -247,16 +247,18 @@ Load file contents with angle brackets:
 File metadata access:
 
 ```mlld
-/var @filename = <package.json>.filename
-/var @tokens = <large-file.md>.tokens
-/var @frontmatter = <doc.md>.fm.title
+/var @filename = <package.json>.ctx.filename
+/var @tokens = <large-file.md>.ctx.tokens
+/var @frontmatter = <doc.md>.ctx.fm.title
 ```
+
+Aliases like `<doc.md>.filename` still resolve to `.ctx.filename`, but `.ctx` is the preferred namespace.
 
 Glob patterns:
 
 ```mlld
 /var @allDocs = <docs/*.md>
-/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
 ```
 
 ### Imports (`/import`)

@@ -226,16 +226,16 @@ When is a path not a path? When it's inside an alligator!
 <https://example.com/page>   << gets the page contents
 ```
 
-And once you've got it, you might want to get some metadata, too. And if it's json or a markdown file with yaml frontmatter, that's addressable as well:
+And once you've got it, you might want to get some metadata, too. And if it's json or a markdown file with yaml frontmatter, that's addressable through `.ctx` as well:
 
 ```mlld
-<path/to/file.md>.filename   << gets the filename, stunningly
-<path/to/file.md>.relative   << absolute path 
-<path/to/file.md>.fm.title   << frontmatter field 'title'
-<path/to/file.md>.tokens     << tokens 
+<path/to/file.md>.ctx.filename   << gets the filename, stunningly
+<path/to/file.md>.ctx.relative   << absolute path 
+<path/to/file.md>.ctx.fm.title   << frontmatter field 'title'
+<path/to/file.md>.ctx.tokens     << tokens 
 ```
 
-You can also get `.absolute` path, `.domain` for site domain, `.ext` for file extension. 
+You can also get `.ctx.absolute` path, `.ctx.domain` for site domain, `.ctx.ext` for file extension (aliases like `.filename` still map to `.ctx.filename` for convenience). 
 
 Oh, and of course alligator globs are a thing, so you can do:
 
