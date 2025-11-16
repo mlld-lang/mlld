@@ -4,6 +4,8 @@ import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
+const STRUCTURED_VALUE_CTX_INITIALIZED = Symbol('mlld.StructuredValueCtxInitialized');
+const STRUCTURED_VALUE_INTERNAL_INITIALIZED = Symbol('mlld.StructuredValueInternalInitialized');
 
 export type StructuredValueType =
   | 'text'
@@ -57,7 +59,7 @@ export interface StructuredValue<T = unknown> {
   data: T;
   metadata?: StructuredValueMetadata;
   internal?: StructuredValueInternal;
-  readonly ctx: StructuredValueContext;
+  ctx: StructuredValueContext;
   toString(): string;
   valueOf(): string;
   [Symbol.toPrimitive](hint?: string): string;
@@ -89,7 +91,6 @@ export interface StructuredValueContext {
   type: StructuredValueType;
 }
 
-const STRUCTURED_VALUE_CTX_ATTACHED = Symbol('mlld.StructuredValueCtxAttached');
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 const EMPTY_SOURCES: readonly string[] = Object.freeze([]);
 const DEV_ENV = typeof process !== 'undefined' ? process.env : undefined;
@@ -182,7 +183,7 @@ export function wrapStructured<T>(
 ): StructuredValue<T> {
   if (isStructuredValue<T>(value)) {
     if (!type && !text && !metadata) {
-      return attachContextToStructuredValue(value);
+      return ensureStructuredValueState(value);
     }
     if (process.env.MLLD_DEBUG_STRUCTURED === 'true') {
       try {
@@ -196,19 +197,17 @@ export function wrapStructured<T>(
         });
       } catch {}
     }
-    return attachContextToStructuredValue(
-      createStructuredValue(
-        value.data,
-        type ?? value.type,
-        text ?? value.text,
-        metadata ?? value.metadata
-      )
+    return createStructuredValue(
+      value.data,
+      type ?? value.type,
+      text ?? value.text,
+      metadata ?? value.metadata
     );
   }
 
   const resolvedType = type ?? 'text';
   const resolvedText = text ?? deriveText(value);
-  return attachContextToStructuredValue(createStructuredValue(value, resolvedType, resolvedText, metadata));
+  return createStructuredValue(value, resolvedType, resolvedText, metadata);
 }
 
 export function ensureStructuredValue(
@@ -221,7 +220,7 @@ export function ensureStructuredValue(
     if (typeHint || textOverride || metadata) {
       return wrapStructured(value, typeHint, textOverride, metadata);
     }
-    return value;
+    return ensureStructuredValueState(value);
   }
 
   if (value === null || value === undefined) {
@@ -268,11 +267,12 @@ function createStructuredValue<T>(
 ): StructuredValue<T> {
   const resolvedText = text ?? '';
   const resolvedMetadata = cloneMetadata(metadata);
-  const structuredValue: StructuredValue<T> = {
+  const structuredValue = {
     type,
     text: resolvedText,
     data,
     metadata: resolvedMetadata,
+    [STRUCTURED_VALUE_SYMBOL]: true as const,
     toString() {
       return resolvedText;
     },
@@ -281,11 +281,13 @@ function createStructuredValue<T>(
     },
     [Symbol.toPrimitive]() {
       return resolvedText;
-    },
-    [STRUCTURED_VALUE_SYMBOL]: true as const
-  };
+    }
+  } as StructuredValue<T>;
 
-  return attachContextToStructuredValue(structuredValue);
+  defineStructuredCtx(structuredValue, resolvedMetadata, type);
+  defineStructuredInternal(structuredValue, {});
+  markStructuredValueInitialized(structuredValue);
+  return structuredValue;
 }
 
 function cloneMetadata(metadata?: StructuredValueMetadata): StructuredValueMetadata | undefined {
@@ -325,64 +327,134 @@ export const structuredValueUtils = {
   wrapStructured,
   isStructuredValue,
   ensureStructuredValue,
-  attachContextToStructuredValue,
   collectParameterDescriptors,
   collectAndMergeParameterDescriptors,
   extractSecurityDescriptor,
   assertStructuredValue
 };
 
-export function attachContextToStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  if ((value as any)[STRUCTURED_VALUE_CTX_ATTACHED]) {
-    return value;
-  }
-  Object.defineProperty(value, STRUCTURED_VALUE_CTX_ATTACHED, {
-    value: true,
-    enumerable: false,
-    configurable: false
-  });
-  Object.defineProperty(value, 'ctx', {
-    enumerable: false,
-    configurable: true,
-    get() {
-      return buildStructuredValueContext(value);
-    }
-  });
+function ensureStructuredValueState<T>(value: StructuredValue<T>): StructuredValue<T> {
+  defineStructuredCtx(value, value.metadata, value.type);
+  defineStructuredInternal(value, value.internal);
+  markStructuredValueInitialized(value);
   return value;
 }
 
-function buildStructuredValueContext(value: StructuredValue): StructuredValueContext {
-  const descriptor =
-    normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined) ?? makeSecurityDescriptor();
-  const metrics = value.metadata?.metrics;
-  const loadResult = resolveLoadResultMetadata(value.metadata);
-  const flattenedFilename = value.metadata?.filename as string | undefined;
-  const flattenedRelative = value.metadata?.relative as string | undefined;
-  const flattenedAbsolute = value.metadata?.absolute as string | undefined;
-  const flattenedUrl = value.metadata?.url as string | undefined;
-  const flattenedDomain = value.metadata?.domain as string | undefined;
-  const flattenedTitle = value.metadata?.title as string | undefined;
-  const flattenedDescription = value.metadata?.description as string | undefined;
-  const flattenedStatus = value.metadata?.status as number | undefined;
-  const flattenedHeaders = value.metadata?.headers as Record<string, unknown> | undefined;
-  const flattenedTokest = (value.metadata?.tokest as number | undefined) ?? metrics?.tokest;
-  const flattenedTokens =
-    (value.metadata?.tokens as number | undefined) ?? metrics?.tokens ?? loadResult?.tokens;
-  const flattenedFm = value.metadata?.fm ?? loadResult?.fm;
-  const flattenedJson = value.metadata?.json ?? loadResult?.json;
+function defineStructuredCtx<T>(
+  value: StructuredValue<T>,
+  metadata: StructuredValueMetadata | undefined,
+  type: StructuredValueType
+): void {
+  if ((value as any)[STRUCTURED_VALUE_CTX_INITIALIZED]) {
+    return;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'ctx');
+  if (descriptor?.get) {
+    const derived = descriptor.get.call(value) as StructuredValueContext;
+    setCtx(value, derived);
+    return;
+  }
+  if (descriptor && 'value' in descriptor && descriptor.value) {
+    if (!descriptor.enumerable && descriptor.writable !== false) {
+      (value as any)[STRUCTURED_VALUE_CTX_INITIALIZED] = true;
+      return;
+    }
+    setCtx(value, descriptor.value as StructuredValueContext);
+    return;
+  }
+  setCtx(value, buildCtxFromMetadata(metadata, type));
+}
+
+function setCtx<T>(value: StructuredValue<T>, ctx: StructuredValueContext | undefined): void {
+  const resolvedCtx: StructuredValueContext =
+    ctx ?? buildCtxFromMetadata(value.metadata, value.type);
+  if (!resolvedCtx.type) {
+    resolvedCtx.type = value.type;
+  }
+  Object.defineProperty(value, 'ctx', {
+    value: resolvedCtx,
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+  (value as any)[STRUCTURED_VALUE_CTX_INITIALIZED] = true;
+}
+
+function defineStructuredInternal<T>(
+  value: StructuredValue<T>,
+  initial: StructuredValueInternal | undefined
+): void {
+  if ((value as any)[STRUCTURED_VALUE_INTERNAL_INITIALIZED]) {
+    return;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'internal');
+  if (descriptor?.get) {
+    const derived = descriptor.get.call(value) as StructuredValueInternal;
+    setInternal(value, derived ?? {});
+    return;
+  }
+  if (descriptor && 'value' in descriptor && descriptor.value) {
+    if (!descriptor.enumerable && descriptor.writable !== false) {
+      (value as any)[STRUCTURED_VALUE_INTERNAL_INITIALIZED] = true;
+      return;
+    }
+    setInternal(value, descriptor.value as StructuredValueInternal);
+    return;
+  }
+  setInternal(value, initial ?? {});
+}
+
+function setInternal<T>(value: StructuredValue<T>, internal: StructuredValueInternal): void {
+  Object.defineProperty(value, 'internal', {
+    value: internal,
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+  (value as any)[STRUCTURED_VALUE_INTERNAL_INITIALIZED] = true;
+}
+
+function markStructuredValueInitialized<T>(value: StructuredValue<T>): void {
+  if (!(value as any)[STRUCTURED_VALUE_CTX_INITIALIZED]) {
+    setCtx(value, buildCtxFromMetadata(value.metadata, value.type));
+  }
+  if (!(value as any)[STRUCTURED_VALUE_INTERNAL_INITIALIZED]) {
+    setInternal(value, value.internal ?? {});
+  }
+}
+
+function buildCtxFromMetadata(
+  metadata: StructuredValueMetadata | undefined,
+  type: StructuredValueType
+): StructuredValueContext {
+  const descriptor = normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  const normalizedDescriptor = descriptor ?? makeSecurityDescriptor();
+  const metrics = metadata?.metrics;
+  const loadResult = extractLoadResult(metadata);
+  const flattenedFilename = metadata?.filename as string | undefined;
+  const flattenedRelative = metadata?.relative as string | undefined;
+  const flattenedAbsolute = metadata?.absolute as string | undefined;
+  const flattenedUrl = metadata?.url as string | undefined;
+  const flattenedDomain = metadata?.domain as string | undefined;
+  const flattenedTitle = metadata?.title as string | undefined;
+  const flattenedDescription = metadata?.description as string | undefined;
+  const flattenedStatus = metadata?.status as number | undefined;
+  const flattenedHeaders = metadata?.headers as Record<string, unknown> | undefined;
+  const flattenedTokest = (metadata?.tokest as number | undefined) ?? metrics?.tokest;
+  const flattenedTokens = (metadata?.tokens as number | undefined) ?? metrics?.tokens ?? loadResult?.tokens;
+  const flattenedFm = metadata?.fm ?? loadResult?.fm;
+  const flattenedJson = metadata?.json ?? loadResult?.json;
   const flattenedLength =
-    (value.metadata?.length as number | undefined) ?? metrics?.length ?? loadResult?.content?.length;
-  const flattenedHtml = value.metadata?.html as string | undefined;
-  const labels = normalizeLabelArray(descriptor?.labels);
-  const sources = descriptor?.sources ?? EMPTY_SOURCES;
-  return Object.freeze({
+    (metadata?.length as number | undefined) ?? metrics?.length ?? loadResult?.content?.length;
+  const flattenedHtml = metadata?.html as string | undefined;
+  const labels = normalizeLabelArray(normalizedDescriptor.labels);
+  const sources = normalizedDescriptor.sources ?? EMPTY_SOURCES;
+
+  return {
     labels,
-    taint: descriptor.taintLevel ?? 'unknown',
+    taint: normalizedDescriptor.taintLevel ?? 'unknown',
     sources,
-    policy: descriptor.policyContext ?? null,
+    policy: normalizedDescriptor.policyContext ?? null,
     filename: flattenedFilename ?? loadResult?.filename,
     relative: flattenedRelative ?? loadResult?.relative,
     absolute: flattenedAbsolute ?? loadResult?.absolute,
@@ -393,18 +465,20 @@ function buildStructuredValueContext(value: StructuredValue): StructuredValueCon
     status: flattenedStatus,
     headers: flattenedHeaders,
     html: flattenedHtml,
-    source: value.metadata?.source,
-    retries: value.metadata?.retries,
+    source: metadata?.source,
+    retries: metadata?.retries,
     tokest: flattenedTokest ?? loadResult?.tokest,
     tokens: flattenedTokens,
     fm: flattenedFm,
     json: flattenedJson,
     length: flattenedLength,
-    type: value.type
-  });
+    type
+  };
 }
 
-function resolveLoadResultMetadata(metadata?: StructuredValueMetadata): StructuredValueLoadResult | undefined {
+function extractLoadResult(
+  metadata?: StructuredValueMetadata
+): StructuredValueLoadResult | undefined {
   if (!metadata) {
     return undefined;
   }

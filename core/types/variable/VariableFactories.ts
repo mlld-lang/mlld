@@ -29,7 +29,7 @@ import {
   VariableInternalMetadata
 } from './VariableTypes';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
-import { attachContextToStructuredValue } from '@interpreter/utils/structured-value';
+import { ensureStructuredValue } from '@interpreter/utils/structured-value';
 import { metadataToCtx, metadataToInternal } from '@interpreter/utils/metadata-migration';
 import { VariableMetadataUtils } from './VariableMetadata';
 import { attachArrayHelpers } from './ArrayHelpers';
@@ -844,7 +844,7 @@ export class VariableFactory {
     source: VariableSource,
     metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): StructuredValueVariable {
-    const structuredValue = attachContextToStructuredValue(value);
+    const structuredValue = ensureStructuredValue(value);
     const enrichedInput = enrichStructuredMetadata(metadataOrOptions, structuredValue);
     const baseMetadata = isFactoryInitOptions(enrichedInput)
       ? enrichedInput.metadata
