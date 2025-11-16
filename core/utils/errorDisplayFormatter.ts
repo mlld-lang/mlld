@@ -325,6 +325,8 @@ export class ErrorDisplayFormatter {
       if (key === 'peggyFormatted') continue;
       // Skip mlldLocation as it's used for arrow indicators
       if (key === 'mlldLocation') continue;
+      // Directive trace has its own formatted section
+      if (key === 'directiveTrace') continue;
       if (value === undefined || value === null) continue;
 
       // Format location objects specially with smart paths
