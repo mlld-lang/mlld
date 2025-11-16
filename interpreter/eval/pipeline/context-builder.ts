@@ -181,11 +181,18 @@ async function setSimplifiedInputVariable(
       format as 'json' | 'csv' | 'xml' | 'text',
       input,
       inputSource,
-      1,
-      {
-        metadata: { isSystem: true }
-      }
+      1
     );
+    inputVar.internal = {
+      ...(inputVar.internal ?? {}),
+      isSystem: true,
+      isPipelineParameter: true
+    };
+    if (inputVar.metadata) {
+      inputVar.metadata.isSystem = true;
+    } else {
+      inputVar.metadata = { isSystem: true };
+    }
   } else if (structuredInput && isStructuredValue(structuredInput)) {
     const structuredVar = createStructuredValueVariable(
       'input',
@@ -193,7 +200,7 @@ async function setSimplifiedInputVariable(
       inputSource,
       {
         metadata: { isSystem: true },
-        internal: { isPipelineParameter: true }
+        internal: { isSystem: true, isPipelineParameter: true }
       }
     );
     env.setParameterVariable('input', structuredVar);
@@ -206,7 +213,7 @@ async function setSimplifiedInputVariable(
       inputSource,
       {
         metadata: { isSystem: true },
-        internal: { isPipelineParameter: true }
+        internal: { isSystem: true, isPipelineParameter: true }
       }
     );
   }
@@ -248,7 +255,7 @@ function setSimplifiedPipelineVariable(
     inputSource,
     {
       metadata: { isSystem: true },
-      internal: { isPipelineContext: true }
+      internal: { isSystem: true, isPipelineContext: true }
     }
   );
   

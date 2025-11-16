@@ -1012,12 +1012,16 @@ export class VariableImporter {
 
   /**
    * Check if a variable is a legitimate mlld variable that can be exported/imported.
-   * System variables (marked with metadata.isSystem) are excluded from exports to prevent
-   * namespace collisions when importing multiple modules with system variables like @fm.
+   * System variables (tracked via internal.isSystem, with legacy metadata fallback) are excluded
+   * to prevent namespace collisions when importing multiple modules with system variables like @fm.
    */
   private isLegitimateVariableForExport(variable: Variable): boolean {
     // System variables (like @fm) should not be exported
-    if (variable.internal?.isSystem || variable.metadata?.isSystem) {
+    const isSystem =
+      variable.internal?.isSystem ??
+      (variable.metadata?.isSystem ?? false);
+
+    if (isSystem) {
       return false;
     }
     

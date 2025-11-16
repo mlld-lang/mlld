@@ -641,14 +641,14 @@ export function createFieldAccessVariable(
   if (result.isVariable && isVariable(result.value)) {
     return result.value;
   }
-  
+  const internalSource = source ?? result.parentVariable?.source;
   // Create a computed Variable to preserve context
   return {
     type: 'computed',
     name: result.accessPath.join('.'),
     value: result.value,
-    metadata: {
-      source,
+    internal: {
+      source: internalSource,
       parentVariable: result.parentVariable,
       accessPath: result.accessPath,
       fieldAccess: true
