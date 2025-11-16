@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc70 (unreleased)]
 
 ### Added
+- **ctx/internal migration guide**: `docs/dev/MIGRATION_CTX_INTERNAL.md` explains how to replace `variable.metadata.*` access with `.ctx` / `.internal`, update StructuredValue checks, and modernize tests/proxies.
+- StructuredValue `.ctx`/`.internal` surfaces now power all provenance, security, and behavior metadata; helpers (`applySecurityDescriptorToStructuredValue`, `metadataToCtx`) keep ctx in sync automatically.
+- `MLLD_METADATA_GUARD=warn|error` env flag emits/throws when `Variable.metadata` is accessed; `tests/migration/metadata-to-ctx.test.ts` locks this behavior down ahead of the breaking removal.
 - `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
 - `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
 
