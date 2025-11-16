@@ -149,6 +149,9 @@ export async function resolveVariable(
             ...variable.metadata,
             wasEvaluated: true,
             evaluatedAt: Date.now()
+          },
+          internal: {
+            ...(variable.internal ?? {})
           }
         } as Variable;
       }
@@ -215,9 +218,14 @@ export async function extractVariableValue(
     // Check if this is an array with custom behaviors (LoadContentResultArray, RenamedContentArray)
     // WHY: Special array types have behaviors (toString, content getter) that must be preserved
     //      during value extraction to maintain proper output formatting
-    if (variable.type === 'array' && variable.metadata?.arrayType && 
-        (variable.metadata.arrayType === 'renamed-content' || 
-         variable.metadata.arrayType === 'load-content-result')) {
+    const arrayType =
+      (variable.internal as Record<string, unknown> | undefined)?.arrayType ??
+      variable.metadata?.arrayType;
+    if (
+      variable.type === 'array' &&
+      arrayType &&
+      (arrayType === 'renamed-content' || arrayType === 'load-content-result')
+    ) {
       // Use the variable-migration extractVariableValue to preserve behaviors
       const { extractVariableValue: extractWithBehaviors } = await import('./variable-migration');
       return extractWithBehaviors(variable);

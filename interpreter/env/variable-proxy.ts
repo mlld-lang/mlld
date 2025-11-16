@@ -61,16 +61,20 @@ export function createVariableProxy(variable: Variable): any {
           
         // Special handling for toString to preserve custom behavior
         case 'toString':
-          if (variable.metadata?.customToString) {
+          const customToString =
+            variable.internal?.customToString ?? variable.metadata?.customToString;
+          if (customToString) {
             // Bind the custom toString to the target
-            return variable.metadata.customToString.bind(target);
+            return customToString.bind(target);
           }
           return Reflect.get(target, prop, receiver);
           
         // Special handling for toJSON
         case 'toJSON':
-          if (variable.metadata?.customToJSON) {
-            return variable.metadata.customToJSON;
+          const customToJSON =
+            variable.internal?.customToJSON ?? variable.metadata?.customToJSON;
+          if (customToJSON) {
+            return customToJSON;
           }
           return Reflect.get(target, prop, receiver);
           
@@ -140,7 +144,8 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
           isVariable: true,
           type: value.type,
           subtype: (value as any).primitiveType,
-          metadata: value.metadata || {}
+          metadata: value.metadata || {},
+          ctx: value.ctx
         });
       }
       return value.value;
@@ -155,6 +160,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
         isVariable: false,
         type: wrapped.type,
         metadata: wrapped.metadata || {},
+        ctx: wrapped.ctx,
         text: wrapped.text
       });
     }
@@ -167,6 +173,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
         isVariable: false,
         type: value.type,
         metadata: value.metadata || {},
+        ctx: value.ctx,
         text: value.text
       });
     }
