@@ -109,19 +109,17 @@ function collectValueDescriptors(
 }
 
 function pushVariableDescriptor(variable: Variable, target: SecurityDescriptor[]): void {
-  const descriptor =
-    descriptorFromCtx(variable.ctx) ?? (variable.metadata?.security as SecurityDescriptor | undefined);
+  const descriptor = descriptorFromCtx(variable.ctx);
   if (descriptor) {
     target.push(descriptor);
   }
 }
 
 function pushStructuredDescriptor(
-  value: { ctx?: VariableContext | StructuredValueContext; metadata?: { security?: SecurityDescriptor } },
+  value: { ctx?: VariableContext | StructuredValueContext },
   target: SecurityDescriptor[]
 ): void {
-  const descriptor =
-    descriptorFromCtx(value.ctx) ?? (value.metadata?.security as SecurityDescriptor | undefined);
+  const descriptor = descriptorFromCtx(value.ctx);
   if (descriptor) {
     target.push(descriptor);
   }
@@ -133,8 +131,7 @@ function extractDescriptorFromObject(value: Record<string, unknown>): SecurityDe
   if (descriptorFromContext) {
     return descriptorFromContext;
   }
-  const metadata = value.metadata as { security?: SecurityDescriptor } | undefined;
-  return metadata?.security;
+  return undefined;
 }
 
 function descriptorFromCtx(

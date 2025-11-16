@@ -23,6 +23,7 @@ import {
   normalizeWhenShowEffect,
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
+import { ctxToSecurityDescriptor, hasSecurityContext } from '@interpreter/utils/metadata-migration';
 import { coerceValueForStdin } from '../utils/shell-value';
 
 /**
@@ -156,7 +157,12 @@ export async function evaluateRun(
   const setOutput = (value: unknown) => {
     const wrapped = wrapExecResult(value);
     if (pendingOutputDescriptor) {
-      applySecurityDescriptorToStructuredValue(wrapped, wrapped.metadata?.security ?? pendingOutputDescriptor);
+      const existingDescriptor =
+        wrapped.ctx && hasSecurityContext(wrapped.ctx) ? ctxToSecurityDescriptor(wrapped.ctx) : undefined;
+      const descriptor = existingDescriptor
+        ? env.mergeSecurityDescriptors(existingDescriptor, pendingOutputDescriptor)
+        : pendingOutputDescriptor;
+      applySecurityDescriptorToStructuredValue(wrapped, descriptor);
       pendingOutputDescriptor = undefined;
     }
     outputValue = wrapped;
@@ -409,7 +415,7 @@ export async function evaluateRun(
         throw new Error(`Base variable not found: ${varRef.identifier}`);
       }
       
-      const variantMap = baseVar.metadata?.transformerVariants as Record<string, any> | undefined;
+      const variantMap = baseVar.internal?.transformerVariants as Record<string, any> | undefined;
       let value: any;
       let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
 
@@ -517,14 +523,13 @@ export async function evaluateRun(
     }
     
     // Get the executable definition from metadata
-    const definition =
-      (execVar.internal?.executableDef ?? execVar.metadata?.executableDef) as ExecutableDefinition | undefined;
+    const definition = execVar.internal?.executableDef as ExecutableDefinition | undefined;
     if (!definition) {
       // For field access, provide more helpful error message
       const fullPath = identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0
         ? `${(identifierNode as VariableReference).identifier}.${(identifierNode as VariableReference).fields.map(f => f.value).join('.')}`
         : commandName;
-      throw new Error(`Executable ${fullPath} has no definition in metadata`);
+      throw new Error(`Executable ${fullPath} has no definition (missing executableDef)`);
     }
     
     // Get arguments from the run directive
@@ -656,7 +661,7 @@ export async function evaluateRun(
       
       // Pass captured shadow environments to code execution
       const codeParams = { ...argValues };
-      const capturedEnvs = execVar.metadata?.capturedShadowEnvs;
+      const capturedEnvs = execVar.internal?.capturedShadowEnvs;
       if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
                            definition.language === 'node' || definition.language === 'nodejs')) {
         (codeParams as any).__capturedShadowEnvs = capturedEnvs;

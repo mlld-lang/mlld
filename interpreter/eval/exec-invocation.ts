@@ -33,7 +33,8 @@ import {
   parseAndWrapJson,
   collectAndMergeParameterDescriptors,
   extractSecurityDescriptor,
-  normalizeWhenShowEffect
+  normalizeWhenShowEffect,
+  applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
 import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
@@ -987,6 +988,11 @@ export async function evaluateExecInvocation(
             ...originalVar.metadata,
             isSystem: true,
             isParameter: true
+          },
+          internal: {
+            ...(originalVar.internal ?? {}),
+            isSystem: true,
+            isParameter: true
           }
         };
         
@@ -998,7 +1004,7 @@ export async function evaluateExecInvocation(
           logger.debug(`Using original Variable for param ${paramName}:`, {
             type: paramVar.type,
             subtype: subtype,
-            hasMetadata: !!paramVar.metadata
+            hasMetadata: !!paramVar.internal
           });
         }
       }
@@ -1112,6 +1118,11 @@ export async function evaluateExecInvocation(
           name: 'input',
           metadata: {
             ...(guardInputVariable as Variable).metadata,
+            isSystem: true,
+            isParameter: true
+          },
+          internal: {
+            ...((guardInputVariable as Variable).internal ?? {}),
             isSystem: true,
             isParameter: true
           }
@@ -1784,16 +1795,8 @@ export async function evaluateExecInvocation(
       // Create a child environment that can access the referenced command
       const refEnv = env.createChild();
       // Set the captured module env so getVariable can find the command
-      if (
-        variable?.internal?.capturedModuleEnv instanceof Map ||
-        variable?.metadata?.capturedModuleEnv instanceof Map
-      ) {
-        const captured =
-          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
-          (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
-        if (captured instanceof Map) {
-          refEnv.setCapturedModuleEnv(captured);
-        }
+      if (variable?.internal?.capturedModuleEnv instanceof Map) {
+        refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
       }
 
       // No commandArgs means just pass through the current invocation's args
@@ -2087,14 +2090,13 @@ export async function evaluateExecInvocation(
 
 type SecurityCarrier = {
   ctx?: VariableContext | StructuredValueContext;
-  metadata?: { security?: SecurityDescriptor };
 };
 
 function getVariableSecurityDescriptor(variable?: Variable): SecurityDescriptor | undefined {
   if (!variable) {
     return undefined;
   }
-  return getSecurityDescriptorFromCarrier({ ctx: variable.ctx, metadata: variable.metadata });
+  return getSecurityDescriptorFromCarrier({ ctx: variable.ctx });
 }
 
 function getStructuredSecurityDescriptor(
@@ -2104,27 +2106,20 @@ function getStructuredSecurityDescriptor(
 }
 
 function setStructuredSecurityDescriptor(
-  value: { metadata?: { security?: SecurityDescriptor } },
+  value: { ctx?: StructuredValueContext },
   descriptor?: SecurityDescriptor
 ): void {
-  if (!descriptor) {
+  if (!descriptor || !value || typeof value !== 'object') {
     return;
   }
-  value.metadata = {
-    ...(value.metadata ?? {}),
-    security: descriptor
-  };
+  applySecurityDescriptorToStructuredValue(value as LegacyStructuredValue, descriptor);
 }
 
 function getSecurityDescriptorFromCarrier(carrier?: SecurityCarrier): SecurityDescriptor | undefined {
   if (!carrier) {
     return undefined;
   }
-  const ctxDescriptor = descriptorFromCtx(carrier.ctx);
-  if (ctxDescriptor) {
-    return ctxDescriptor;
-  }
-  return carrier.metadata?.security as SecurityDescriptor | undefined;
+  return descriptorFromCtx(carrier.ctx);
 }
 
 function descriptorFromCtx(
