@@ -27,34 +27,83 @@ function cloneArray<T>(value?: readonly T[]): readonly T[] {
   return Object.freeze([...value]);
 }
 
+function applyFlattenedLoadMetadata(
+  ctx: VariableContext,
+  metadata?: Record<string, unknown>
+): void {
+  if (!metadata) {
+    return;
+  }
+  if (typeof metadata.filename === 'string') {
+    ctx.filename = metadata.filename;
+  }
+  if (typeof metadata.relative === 'string') {
+    ctx.relative = metadata.relative;
+  }
+  if (typeof metadata.absolute === 'string') {
+    ctx.absolute = metadata.absolute;
+  }
+  if (typeof metadata.url === 'string') {
+    ctx.url = metadata.url;
+  }
+  if (typeof metadata.domain === 'string') {
+    ctx.domain = metadata.domain;
+  }
+  if (typeof metadata.title === 'string') {
+    ctx.title = metadata.title;
+  }
+  if (typeof metadata.description === 'string') {
+    ctx.description = metadata.description;
+  }
+  if (typeof metadata.tokest === 'number') {
+    ctx.tokest = metadata.tokest;
+  }
+  if (typeof metadata.tokens === 'number') {
+    ctx.tokens = metadata.tokens;
+  }
+  if (metadata.fm !== undefined) {
+    ctx.fm = metadata.fm;
+  }
+  if (metadata.json !== undefined) {
+    ctx.json = metadata.json;
+  }
+  if (typeof metadata.length === 'number') {
+    ctx.length = metadata.length;
+  }
+}
+
 export function metadataToCtx(metadata?: VariableMetadata): VariableContext {
   const descriptor =
     normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined) ??
     makeSecurityDescriptor();
   const metrics = metadata?.metrics;
-  const loadResult = (metadata?.loadResult ?? {}) as LegacyLoadResult;
+  const loadResult = metadata?.loadResult as (LoadContentResult & Partial<LegacyLoadResult>) | undefined;
 
   const ctx: VariableContext = {
     labels: descriptor.labels ? cloneArray(descriptor.labels) : EMPTY_LABELS,
     taint: descriptor.taintLevel ?? 'unknown',
     sources: descriptor.sources ? cloneArray(descriptor.sources) : EMPTY_SOURCES,
     policy: descriptor.policyContext ?? null,
-    filename: loadResult.filename,
-    relative: loadResult.relative,
-    absolute: loadResult.absolute,
-    url: loadResult.url,
-    domain: loadResult.domain,
-    title: loadResult.title,
-    description: loadResult.description,
-    tokest: metrics?.tokest ?? loadResult.tokest,
-    tokens: metrics?.tokens ?? loadResult.tokens,
-    fm: loadResult.fm,
-    json: loadResult.json,
-    length: metrics?.length,
     source: metadata?.source,
     retries: metadata?.retries,
     exported: Boolean(metadata?.isImported)
   };
+
+  applyFlattenedLoadMetadata(ctx, metadata as Record<string, unknown> | undefined);
+
+  if (loadResult) {
+    flattenLoadResultToCtx(ctx, loadResult);
+  }
+
+  if (metrics?.tokest !== undefined && ctx.tokest === undefined) {
+    ctx.tokest = metrics.tokest;
+  }
+  if (metrics?.tokens !== undefined && ctx.tokens === undefined) {
+    ctx.tokens = metrics.tokens;
+  }
+  if (metrics?.length !== undefined && ctx.length === undefined) {
+    ctx.length = metrics.length;
+  }
 
   const aggregate = (metadata as Record<string, any> | undefined)?.arrayHelperAggregate;
   if (aggregate) {

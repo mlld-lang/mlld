@@ -31,6 +31,21 @@ export interface StructuredValueMetadata {
     tokens?: number;
     length?: number;
   };
+  filename?: string;
+  relative?: string;
+  absolute?: string;
+  url?: string;
+  domain?: string;
+  title?: string;
+  description?: string;
+  status?: number;
+  headers?: Record<string, unknown>;
+  fm?: unknown;
+  json?: unknown;
+  tokest?: number;
+  tokens?: number;
+  length?: number;
+  html?: string;
   [key: string]: unknown;
 }
 
@@ -61,6 +76,9 @@ export interface StructuredValueContext {
   domain?: string;
   title?: string;
   description?: string;
+  status?: number;
+  headers?: Record<string, unknown>;
+  html?: string;
   source?: string;
   retries?: number;
   tokest?: number;
@@ -341,6 +359,23 @@ function buildStructuredValueContext(value: StructuredValue): StructuredValueCon
     normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined) ?? makeSecurityDescriptor();
   const metrics = value.metadata?.metrics;
   const loadResult = resolveLoadResultMetadata(value.metadata);
+  const flattenedFilename = value.metadata?.filename as string | undefined;
+  const flattenedRelative = value.metadata?.relative as string | undefined;
+  const flattenedAbsolute = value.metadata?.absolute as string | undefined;
+  const flattenedUrl = value.metadata?.url as string | undefined;
+  const flattenedDomain = value.metadata?.domain as string | undefined;
+  const flattenedTitle = value.metadata?.title as string | undefined;
+  const flattenedDescription = value.metadata?.description as string | undefined;
+  const flattenedStatus = value.metadata?.status as number | undefined;
+  const flattenedHeaders = value.metadata?.headers as Record<string, unknown> | undefined;
+  const flattenedTokest = (value.metadata?.tokest as number | undefined) ?? metrics?.tokest;
+  const flattenedTokens =
+    (value.metadata?.tokens as number | undefined) ?? metrics?.tokens ?? loadResult?.tokens;
+  const flattenedFm = value.metadata?.fm ?? loadResult?.fm;
+  const flattenedJson = value.metadata?.json ?? loadResult?.json;
+  const flattenedLength =
+    (value.metadata?.length as number | undefined) ?? metrics?.length ?? loadResult?.content?.length;
+  const flattenedHtml = value.metadata?.html as string | undefined;
   const labels = normalizeLabelArray(descriptor?.labels);
   const sources = descriptor?.sources ?? EMPTY_SOURCES;
   return Object.freeze({
@@ -348,20 +383,23 @@ function buildStructuredValueContext(value: StructuredValue): StructuredValueCon
     taint: descriptor.taintLevel ?? 'unknown',
     sources,
     policy: descriptor.policyContext ?? null,
-    filename: loadResult?.filename,
-    relative: loadResult?.relative,
-    absolute: loadResult?.absolute,
-    url: loadResult?.url,
-    domain: loadResult?.domain,
-    title: loadResult?.title,
-    description: loadResult?.description,
+    filename: flattenedFilename ?? loadResult?.filename,
+    relative: flattenedRelative ?? loadResult?.relative,
+    absolute: flattenedAbsolute ?? loadResult?.absolute,
+    url: flattenedUrl ?? loadResult?.url,
+    domain: flattenedDomain ?? loadResult?.domain,
+    title: flattenedTitle ?? loadResult?.title,
+    description: flattenedDescription ?? loadResult?.description,
+    status: flattenedStatus,
+    headers: flattenedHeaders,
+    html: flattenedHtml,
     source: value.metadata?.source,
     retries: value.metadata?.retries,
-    tokest: loadResult?.tokest,
-    tokens: loadResult?.tokens ?? metrics?.tokens,
-    fm: loadResult?.fm,
-    json: loadResult?.json,
-    length: metrics?.length,
+    tokest: flattenedTokest ?? loadResult?.tokest,
+    tokens: flattenedTokens,
+    fm: flattenedFm,
+    json: flattenedJson,
+    length: flattenedLength,
     type: value.type
   });
 }

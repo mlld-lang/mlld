@@ -20,16 +20,13 @@ function createMetadata(): VariableMetadata {
       sources: ['pipeline'],
       policyContext: { allow: false }
     }),
-    loadResult: {
-      content: 'body',
-      filename: 'README.md',
-      relative: './README.md',
-      absolute: '/abs/README.md',
-      tokest: 10,
-      tokens: 11,
-      fm: { title: 'Doc' },
-      json: { data: true }
-    },
+    filename: 'README.md',
+    relative: './README.md',
+    absolute: '/abs/README.md',
+    tokest: 10,
+    tokens: 11,
+    fm: { title: 'Doc' },
+    json: { data: true },
     retries: 2,
     source: 'test-source',
     metrics: {

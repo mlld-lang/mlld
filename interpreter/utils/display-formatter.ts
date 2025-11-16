@@ -37,7 +37,11 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
     }
 
     if (data && typeof data === 'object') {
-      if (value.metadata?.source === 'load-content' || value.metadata?.loadResult) {
+      if (
+        value.metadata?.source === 'load-content' ||
+        Boolean(value.ctx?.filename) ||
+        Boolean(value.ctx?.url)
+      ) {
         return value.text;
       }
       return JSONFormatter.stringify(data, { pretty, indent });

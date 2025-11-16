@@ -18,6 +18,8 @@ import { asText, asData, isStructuredValue, wrapStructured, type StructuredValue
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { isPipelineInput } from '@core/types/variable/TypeGuards';
 import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { wrapLoadContentValue } from '../../utils/load-content-structured';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -775,12 +777,16 @@ export class PipelineExecutor {
       return wrapped;
     }
 
+    if (isLoadContentResult(output) || isLoadContentResultArray(output)) {
+      const wrapped = wrapLoadContentValue(output);
+      this.logStructuredValue('normalize:wrapped', wrapped);
+      return wrapped;
+    }
+
     if (typeof output === 'object') {
       const maybeText = typeof (output as any).content === 'string' ? (output as any).content : undefined;
       const text = maybeText ?? safeJSONStringify(output);
-      const wrapped = wrapStructured(output, 'object', text, {
-        loadResult: maybeText ? output : undefined
-      });
+      const wrapped = wrapStructured(output, 'object', text);
       this.logStructuredValue('normalize:wrapped', wrapped);
       return wrapped;
     }

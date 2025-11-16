@@ -98,7 +98,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // Extract the raw value if we have a Variable
   let rawValue = isVariable(value) ? value.value : value;
   const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
-  const loadResultMetadata = structuredWrapper?.metadata?.loadResult;
+  const structuredCtx = (structuredWrapper?.ctx ?? undefined) as Record<string, unknown> | undefined;
   if (structuredWrapper) {
     rawValue = structuredWrapper.data;
   }
@@ -161,12 +161,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         if (
-          loadResultMetadata &&
-          typeof loadResultMetadata === 'object' &&
-          loadResultMetadata !== null &&
-          name in (loadResultMetadata as Record<string, unknown>)
+          structuredCtx &&
+          typeof structuredCtx === 'object' &&
+          name in structuredCtx &&
+          structuredCtx[name] !== undefined
         ) {
-          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          accessedValue = structuredCtx[name];
           break;
         }
       }
@@ -208,12 +208,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
       if (typeof rawValue !== 'object' || rawValue === null) {
         if (
-          loadResultMetadata &&
-          typeof loadResultMetadata === 'object' &&
-          loadResultMetadata !== null &&
-          name in (loadResultMetadata as Record<string, unknown>)
+          structuredCtx &&
+          typeof structuredCtx === 'object' &&
+          name in structuredCtx &&
+          structuredCtx[name] !== undefined
         ) {
-          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          accessedValue = structuredCtx[name];
           break;
         }
         const chain = [...(options?.parentPath || []), name];
@@ -349,12 +349,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle regular objects (including Variables with type: 'object')
       if (!(name in rawValue)) {
         if (
-          loadResultMetadata &&
-          typeof loadResultMetadata === 'object' &&
-          loadResultMetadata !== null &&
-          name in (loadResultMetadata as Record<string, unknown>)
+          structuredCtx &&
+          typeof structuredCtx === 'object' &&
+          name in structuredCtx &&
+          structuredCtx[name] !== undefined
         ) {
-          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          accessedValue = structuredCtx[name];
           break;
         }
         if (options?.returnUndefinedForMissing) {

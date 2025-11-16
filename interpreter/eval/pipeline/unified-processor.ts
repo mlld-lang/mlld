@@ -24,6 +24,8 @@ import {
   type StructuredValueMetadata
 } from '../../utils/structured-value';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
+import { wrapLoadContentValue } from '../../utils/load-content-structured';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 /**
  * Context for pipeline processing
@@ -331,22 +333,13 @@ async function prepareStructuredInput(
     }
   }
 
-  const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-  if (isLoadContentResult(value)) {
+  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
+    const wrapped = wrapLoadContentValue(value);
     return wrapStructured(
-      value,
-      'object',
-      value.content ?? '',
-      mergedMetadata({ loadResult: value })
-    );
-  }
-
-  if (isLoadContentResultArray(value)) {
-    return wrapStructured(
-      value,
-      'array',
-      value.content ?? '',
-      mergedMetadata({ loadResult: value })
+      wrapped,
+      wrapped.type,
+      wrapped.text,
+      mergedMetadata(wrapped.metadata)
     );
   }
 

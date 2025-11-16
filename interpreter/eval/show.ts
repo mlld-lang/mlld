@@ -908,24 +908,21 @@ export async function evaluateShow(
     // Use the content loader to process the node
     const { processContentLoader } = await import('./content-loader');
     const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { wrapLoadContentValue } = await import('../utils/load-content-structured');
     const loadResult = await processContentLoader(loadContentNode, env);
-    
-    resultValue = loadResult;
-    
+
     // Handle different return types from processContentLoader
-    if (typeof loadResult === 'string') {
+    if (isLoadContentResult(loadResult) || isLoadContentResultArray(loadResult)) {
+      const structured = wrapLoadContentValue(loadResult);
+      resultValue = structured;
+      content = asText(structured);
+    } else if (isStructuredValue(loadResult)) {
+      resultValue = loadResult;
+      content = asText(loadResult);
+    } else if (typeof loadResult === 'string') {
       // Backward compatibility - plain string
       content = loadResult;
-    } else if (isLoadContentResult(loadResult)) {
-      // Single file with metadata - use content
-      content = loadResult.content;
-    } else if (isLoadContentResultArray(loadResult)) {
-      // Multiple files from glob - join their contents
-      content = loadResult.map(r => r.content).join('\n\n');
-    } else if (loadResult && typeof loadResult === 'object' && 'content' in (loadResult as any) && typeof (loadResult as any).content === 'string') {
-      content = (loadResult as any).content;
-    } else if (isStructuredValue(loadResult)) {
-      content = asText(loadResult);
+      resultValue = loadResult;
     } else {
       try {
         content = String(loadResult ?? '');

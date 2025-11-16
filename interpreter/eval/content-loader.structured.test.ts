@@ -37,7 +37,7 @@ describe('processContentLoader (structured)', () => {
       expect(result.type).toBe('object');
       expect(result.metadata?.source).toBe('load-content');
       expect(result.metadata?.filename).toBe('README.md');
-      expect(result.metadata?.loadResult).toBeDefined();
+      expect(result.ctx?.filename).toBe('README.md');
       expect(asText(result)).toContain('# Test');
       expect((result.data as any).filename).toBe('README.md');
     }
@@ -93,8 +93,7 @@ describe('processContentLoader (structured)', () => {
       expect(result.type).toBe('array');
       expect(Array.isArray(result.data)).toBe(true);
       expect(result.data).toEqual([{ value: 1 }, { value: 2 }]);
-      expect(result.metadata?.loadResult).toBeDefined();
-      expect((result.metadata?.loadResult as any).filename).toBe('data.json');
+      expect(result.ctx?.filename).toBe('data.json');
       expect(asText(result)).toBe('[{"value":1},{"value":2}]');
     }
   });
