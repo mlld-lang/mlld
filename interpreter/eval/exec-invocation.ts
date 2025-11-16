@@ -499,37 +499,43 @@ export async function evaluateExecInvocation(
     // Handle __executable objects from resolved imports
     if (typeof variable === 'object' && variable !== null && '__executable' in variable && variable.__executable) {
       // Deserialize shadow environments if needed
-      let metadata = variable.metadata || {};
-      if (metadata.capturedShadowEnvs && typeof metadata.capturedShadowEnvs === 'object') {
+      let serializedInternal =
+        (variable.internal as Record<string, unknown> | undefined) ??
+        (variable.metadata as Record<string, unknown> | undefined) ??
+        {};
+      if (serializedInternal.capturedShadowEnvs && typeof serializedInternal.capturedShadowEnvs === 'object') {
         // Check if it needs deserialization (is plain object, not Map)
-        const needsDeserialization = Object.entries(metadata.capturedShadowEnvs).some(
+        const needsDeserialization = Object.entries(serializedInternal.capturedShadowEnvs).some(
           ([lang, env]) => env && !(env instanceof Map)
         );
 
         if (needsDeserialization) {
-          metadata = {
-            ...metadata,
-            capturedShadowEnvs: deserializeShadowEnvs(metadata.capturedShadowEnvs)
+          serializedInternal = {
+            ...serializedInternal,
+            capturedShadowEnvs: deserializeShadowEnvs(serializedInternal.capturedShadowEnvs)
           };
         }
       }
 
       // Deserialize module environment if needed
-      if (metadata.capturedModuleEnv && !(metadata.capturedModuleEnv instanceof Map)) {
+      if (serializedInternal.capturedModuleEnv && !(serializedInternal.capturedModuleEnv instanceof Map)) {
         // Import the VariableImporter to reuse the proper deserialization logic
         const { VariableImporter } = await import('./import/VariableImporter');
         const importer = new VariableImporter(null); // ObjectResolver not needed for this
-        const moduleEnvMap = importer.deserializeModuleEnv(metadata.capturedModuleEnv);
+        const moduleEnvMap = importer.deserializeModuleEnv(serializedInternal.capturedModuleEnv);
 
         // Each executable in the module env needs access to the full env
         for (const [_, variable] of moduleEnvMap) {
-          if (variable.type === 'executable' && variable.metadata) {
-            variable.metadata.capturedModuleEnv = moduleEnvMap;
+          if (variable.type === 'executable') {
+            variable.internal = {
+              ...(variable.internal ?? {}),
+              capturedModuleEnv: moduleEnvMap
+            };
           }
         }
 
-        metadata = {
-          ...metadata,
+        serializedInternal = {
+          ...serializedInternal,
           capturedModuleEnv: moduleEnvMap
         };
       }
@@ -549,8 +555,10 @@ export async function evaluateExecInvocation(
           isMultiLine: false
         },
         {
-          executableDef: variable.executableDef,
-          ...metadata
+          internal: {
+            executableDef: variable.executableDef,
+            ...serializedInternal
+          }
         }
       );
     }
@@ -568,7 +576,7 @@ export async function evaluateExecInvocation(
   }
   
   // Special handling for built-in transformers
-  if (variable.metadata?.isBuiltinTransformer && variable.metadata?.transformerImplementation) {
+  if (variable.internal?.isBuiltinTransformer && variable.internal?.transformerImplementation) {
     // Args were already extracted above
     
     // Special handling for @typeof - we need the Variable object, not just the value
@@ -608,7 +616,7 @@ export async function evaluateExecInvocation(
               }
             } else if (varObj.type === 'executable') {
               // Get executable type from metadata
-              const execDef = varObj.metadata?.executableDef;
+      const execDef = varObj.internal?.executableDef;
               if (execDef && 'type' in execDef) {
                 typeInfo = `executable (${execDef.type})`;
               }
@@ -620,7 +628,7 @@ export async function evaluateExecInvocation(
             }
             
             // Pass the type info with a special marker
-            const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+            const result = await variable.internal.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
             const normalized = normalizeTransformerResult(commandName, result);
             const resolvedValue = normalized.value;
             const wrapOptions = normalized.options;
@@ -664,7 +672,7 @@ export async function evaluateExecInvocation(
     }
     
     // Call the transformer implementation directly
-    const result = await variable.metadata.transformerImplementation(inputValue);
+    const result = await variable.internal.transformerImplementation(inputValue);
     const normalized = normalizeTransformerResult(commandName, result);
     const resolvedValue = normalized.value;
     const wrapOptions = normalized.options;
@@ -692,7 +700,7 @@ export async function evaluateExecInvocation(
   }
   
   // Get the full executable definition from metadata
-  const definition = variable.metadata?.executableDef as ExecutableDefinition;
+  const definition = variable.internal?.executableDef as ExecutableDefinition;
   if (!definition) {
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
   }
@@ -713,8 +721,8 @@ export async function evaluateExecInvocation(
   let execEnv = env.createChild();
 
   // Set captured module environment for variable lookup fallback
-  if (variable?.metadata?.capturedModuleEnv instanceof Map) {
-    execEnv.setCapturedModuleEnv(variable.metadata.capturedModuleEnv);
+  if (variable?.internal?.capturedModuleEnv instanceof Map) {
+    execEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
   }
 
   // Handle command arguments - args were already extracted above
@@ -792,8 +800,8 @@ export async function evaluateExecInvocation(
             if (isTemplate(variable)) {
               if (Array.isArray(value)) {
                 value = await interpolate(value, env);
-              } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
-                value = await interpolate(variable.metadata.templateAst, env);
+      } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
+        value = await interpolate(variable.internal.templateAst, env);
               }
             }
             
@@ -1344,7 +1352,11 @@ export async function evaluateExecInvocation(
     if (definition.withClause) {
       if (definition.withClause.needs) {
         const checker = new DefaultDependencyChecker();
-        await checkDependencies(definition.withClause.needs, checker, variable.metadata?.definedAt || node.location);
+        await checkDependencies(
+          definition.withClause.needs,
+          checker,
+          variable.ctx?.definedAt || variable.metadata?.definedAt || node.location
+        );
       }
 
       if (definition.withClause.pipeline && definition.withClause.pipeline.length > 0) {
@@ -1363,7 +1375,7 @@ export async function evaluateExecInvocation(
           format: definition.withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandName,
-          location: variable.metadata?.definedAt || node.location
+          location: variable.ctx?.definedAt || variable.metadata?.definedAt || node.location
         });
 
         if (typeof pipelineResult === 'string') {
@@ -1562,12 +1574,15 @@ export async function evaluateExecInvocation(
     }
 
     // NEW: Pass captured shadow environments for JS/Node execution
+    const capturedModuleEnv =
+      (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
+      (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
     if (
-      variable.metadata?.capturedModuleEnv instanceof Map &&
+      capturedModuleEnv instanceof Map &&
       (definition.language === 'js' || definition.language === 'javascript' ||
         definition.language === 'node' || definition.language === 'nodejs')
     ) {
-      for (const [capturedName, capturedVar] of variable.metadata.capturedModuleEnv) {
+      for (const [capturedName, capturedVar] of capturedModuleEnv) {
         if (codeParams[capturedName] !== undefined) {
           continue;
         }
@@ -1598,7 +1613,8 @@ export async function evaluateExecInvocation(
     }
 
     // NEW: Pass captured shadow environments for JS/Node execution
-    const capturedEnvs = variable.metadata?.capturedShadowEnvs;
+    const capturedEnvs =
+      variable.internal?.capturedShadowEnvs ?? (variable.metadata as Record<string, unknown> | undefined)?.capturedShadowEnvs;
     if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
                          definition.language === 'node' || definition.language === 'nodejs')) {
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
@@ -1684,8 +1700,10 @@ export async function evaluateExecInvocation(
     // Look up the referenced command
     // First check in the captured module environment (for imported executables)
     let refCommand = null;
-    if (variable?.metadata?.capturedModuleEnv) {
-      const capturedEnv = variable.metadata.capturedModuleEnv;
+    if (variable?.internal?.capturedModuleEnv || variable?.metadata?.capturedModuleEnv) {
+      const capturedEnv =
+        (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
+        (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
       if (capturedEnv instanceof Map) {
         // If it's a Map, we have proper Variables
         refCommand = capturedEnv.get(refName);
@@ -1736,8 +1754,16 @@ export async function evaluateExecInvocation(
       // Create a child environment that can access the referenced command
       const refEnv = env.createChild();
       // Set the captured module env so getVariable can find the command
-      if (variable?.metadata?.capturedModuleEnv instanceof Map) {
-        refEnv.setCapturedModuleEnv(variable.metadata.capturedModuleEnv);
+      if (
+        variable?.internal?.capturedModuleEnv instanceof Map ||
+        variable?.metadata?.capturedModuleEnv instanceof Map
+      ) {
+        const captured =
+          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
+          (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
+        if (captured instanceof Map) {
+          refEnv.setCapturedModuleEnv(captured);
+        }
       }
 
       // Create a new invocation node for the referenced command with the evaluated args
@@ -1758,8 +1784,16 @@ export async function evaluateExecInvocation(
       // Create a child environment that can access the referenced command
       const refEnv = env.createChild();
       // Set the captured module env so getVariable can find the command
-      if (variable?.metadata?.capturedModuleEnv instanceof Map) {
-        refEnv.setCapturedModuleEnv(variable.metadata.capturedModuleEnv);
+      if (
+        variable?.internal?.capturedModuleEnv instanceof Map ||
+        variable?.metadata?.capturedModuleEnv instanceof Map
+      ) {
+        const captured =
+          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
+          (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
+        if (captured instanceof Map) {
+          refEnv.setCapturedModuleEnv(captured);
+        }
       }
 
       // No commandArgs means just pass through the current invocation's args

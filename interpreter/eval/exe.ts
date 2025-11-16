@@ -121,10 +121,13 @@ export async function evaluateExe(
         if (funcVar.value.type === 'code' && 
             (funcVar.value.language === 'javascript' || funcVar.value.language === 'js')) {
           // Get the executable definition from metadata
-          const execDef = (funcVar.metadata as any)?.executableDef;
+          const execDef =
+            (funcVar.internal as any)?.executableDef ?? (funcVar.metadata as any)?.executableDef;
           if (execDef && execDef.type === 'code') {
             // NEW: Pass captured shadow envs through the definition
-            (execDef as any).capturedShadowEnvs = (funcVar.metadata as any)?.capturedShadowEnvs;
+            (execDef as any).capturedShadowEnvs =
+              (funcVar.internal as any)?.capturedShadowEnvs ??
+              (funcVar.metadata as any)?.capturedShadowEnvs;
             effectiveWrapper = createSyncJsWrapper(funcName, execDef, env);
           }
         }
@@ -148,12 +151,15 @@ export async function evaluateExe(
         const funcName = ref.identifier;
         const funcVar = env.getVariable(funcName);
         
-        if (funcVar && funcVar.type === 'executable' && funcVar.metadata) {
-          // Update the metadata to include captured shadow environments
-          (funcVar.metadata as any).capturedShadowEnvs = capturedEnvs;
-          
+        if (funcVar && funcVar.type === 'executable') {
+          // Update internal metadata to include captured shadow environments
+          funcVar.internal = {
+            ...(funcVar.internal ?? {}),
+            capturedShadowEnvs: capturedEnvs
+          };
           // Also update the executableDef if it exists
-          const execDef = (funcVar.metadata as any).executableDef;
+          const execDef =
+            (funcVar.internal as any)?.executableDef ?? (funcVar.metadata as any)?.executableDef;
           if (execDef) {
             (execDef as any).capturedShadowEnvs = capturedEnvs;
           }
@@ -775,7 +781,8 @@ function createExecWrapper(
 ): Function {
   return async function(...args: any[]) {
     // Get the executable definition from metadata
-    const definition = (execVar.metadata as any)?.executableDef;
+    const definition =
+      (execVar.internal as any)?.executableDef ?? (execVar.metadata as any)?.executableDef;
     if (!definition) {
       throw new Error(`Executable ${execName} has no definition in metadata`);
     }
@@ -884,7 +891,8 @@ function createExecWrapper(
       
       // NEW CODE: Pass captured shadow environments to executors
       // Get captured shadow environments from executable metadata
-      const capturedEnvs = (execVar.metadata as any)?.capturedShadowEnvs;
+      const capturedEnvs =
+        (execVar.internal as any)?.capturedShadowEnvs ?? (execVar.metadata as any)?.capturedShadowEnvs;
       
       
       // For JS/Node execution, pass captured envs through params

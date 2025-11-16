@@ -445,7 +445,9 @@ export async function resolveCommandReference(
       return null;
     }
     
-    const variantMap = baseVar.metadata?.transformerVariants as Record<string, any> | undefined;
+    const variantMap =
+      (baseVar.internal?.transformerVariants as Record<string, unknown> | undefined) ??
+      (baseVar.metadata?.transformerVariants as Record<string, unknown> | undefined);
     let value: any;
     let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
 
@@ -527,9 +529,9 @@ export async function executeCommandVariable(
   };
 
   // Built-in transformer handling
-  if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
+  if (commandVar && commandVar.internal?.isBuiltinTransformer && commandVar.internal?.transformerImplementation) {
     try {
-      const result = await commandVar.metadata.transformerImplementation(stdinInput || '');
+      const result = await commandVar.internal.transformerImplementation(stdinInput || '');
       const normalized = normalizeTransformerResult(commandVar?.name, result);
       return finalizeResult(normalized.value, normalized.options);
     } catch (error) {
@@ -590,7 +592,7 @@ export async function executeCommandVariable(
         hasTemplateContent: !!execDef?.templateContent,
         hasTemplate: !!execDef?.template,
         language: execDef?.language,
-        fromMetadata: !!commandVar.metadata?.executableDef
+        fromMetadata: !!commandVar.internal?.executableDef
       });
     }
   } else if (commandVar && (commandVar.type === 'command' || commandVar.type === 'code' || commandVar.type === 'template') && (commandVar.commandTemplate || commandVar.codeTemplate || commandVar.templateContent)) {
@@ -826,7 +828,7 @@ export async function executeCommandVariable(
       if (withClause.needs) {
         const { checkDependencies, DefaultDependencyChecker } = await import('../dependencies');
         const checker = new DefaultDependencyChecker();
-        await checkDependencies(withClause.needs, checker, commandVar.metadata?.definedAt);
+        await checkDependencies(withClause.needs, checker, commandVar.ctx?.definedAt || commandVar.metadata?.definedAt);
       }
 
       if (withClause.pipeline && withClause.pipeline.length > 0) {
@@ -838,7 +840,7 @@ export async function executeCommandVariable(
           format: withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandVar?.name,
-          location: commandVar.metadata?.definedAt
+          location: commandVar.ctx?.definedAt || commandVar.metadata?.definedAt
         });
         if (processed === 'retry') {
           return 'retry';
@@ -956,8 +958,12 @@ export async function executeCommandVariable(
         if (paramVar) {
           if (paramVar.type === 'pipeline-input') {
             params[paramName] = paramVar.value;
-          } else if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
-            params[paramName] = paramVar.metadata.pipelineInput;
+          } else if (
+            (paramVar.internal?.isPipelineInput && paramVar.internal?.pipelineInput) ||
+            (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput)
+          ) {
+            params[paramName] =
+              paramVar.internal?.pipelineInput ?? paramVar.metadata?.pipelineInput;
           } else {
             params[paramName] = paramVar.value;
           }

@@ -232,11 +232,23 @@ export function createTransformerVariable(
   return {
     type: 'executable',
     name,
-    value: executableDef,
+    value: {
+      ...executableDef,
+      template: executableDef.codeTemplate
+    },
     metadata: {
       isSystem: true,
       isBuiltinTransformer: true,
       transformerImplementation: implementation,
+      description,
+      isUppercase,
+      executableDef
+    },
+    internal: {
+      executableDef,
+      isBuiltinTransformer: true,
+      transformerImplementation: implementation,
+      transformerVariants: undefined,
       description,
       isUppercase
     }
