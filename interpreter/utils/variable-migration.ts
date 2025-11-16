@@ -15,11 +15,15 @@ export function extractVariableValue(variable: Variable): any {
   let value = variable.value;
   
   // For arrays with custom toString behavior
-  if (variable.type === 'array' && variable.metadata?.customToString) {
+  const internalMeta = variable.internal as Record<string, unknown> | undefined;
+  const customToString =
+    (internalMeta?.customToString as (() => string) | undefined) ??
+    (variable.metadata?.customToString as (() => string) | undefined);
+  if (variable.type === 'array' && customToString) {
     if (Array.isArray(value)) {
       // Preserve the custom toString method
       Object.defineProperty(value, 'toString', {
-        value: variable.metadata.customToString,
+        value: customToString,
         enumerable: false,
         configurable: true
       });
@@ -27,10 +31,13 @@ export function extractVariableValue(variable: Variable): any {
   }
   
   // For arrays with custom toJSON behavior
-  if (variable.type === 'array' && variable.metadata?.customToJSON) {
+  const customToJSON =
+    (internalMeta?.customToJSON as (() => unknown) | undefined) ??
+    (variable.metadata?.customToJSON as (() => unknown) | undefined);
+  if (variable.type === 'array' && customToJSON) {
     if (Array.isArray(value)) {
       Object.defineProperty(value, 'toJSON', {
-        value: variable.metadata.customToJSON,
+        value: customToJSON,
         enumerable: false,
         configurable: true
       });
@@ -38,10 +45,13 @@ export function extractVariableValue(variable: Variable): any {
   }
   
   // For LoadContentResultArray, add the content getter
-  if (variable.type === 'array' && variable.metadata?.contentGetter) {
+  const contentGetter =
+    (internalMeta?.contentGetter as (() => string) | undefined) ??
+    (variable.metadata?.contentGetter as (() => string) | undefined);
+  if (variable.type === 'array' && contentGetter) {
     if (Array.isArray(value)) {
       Object.defineProperty(value, 'content', {
-        get: variable.metadata.contentGetter,
+        get: contentGetter,
         enumerable: false,
         configurable: true
       });
@@ -87,6 +97,12 @@ export function createRenamedContentVariable(
       customToString: function() { return items.join('\n\n'); },
       customToJSON: function() { return [...items]; },
       ...metadata
+    },
+    internal: {
+      arrayType: 'renamed-content',
+      joinSeparator: '\n\n',
+      customToString: function() { return items.join('\n\n'); },
+      customToJSON: function() { return [...items]; }
     }
   };
 }
@@ -130,6 +146,13 @@ export function createLoadContentResultVariable(
       customToJSON: toJSONFunc,
       contentGetter: contentGetterFunc,
       ...metadata
+    },
+    internal: {
+      arrayType: 'load-content-result',
+      joinSeparator: '\n\n',
+      customToString: toStringFunc,
+      customToJSON: toJSONFunc,
+      contentGetter: contentGetterFunc
     }
   };
 }

@@ -190,8 +190,10 @@ export class VariableManager implements IVariableManager {
           const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
           throw VariableRedefinitionError.forImportConflict(
             name,
-            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            existing.ctx?.definedAt ||
+              existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.ctx?.definedAt ||
+              variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
             importPath,
             existingIsImported
           );
@@ -199,8 +201,10 @@ export class VariableManager implements IVariableManager {
           // Same-file redefinition
           throw VariableRedefinitionError.forSameFile(
             name,
-            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+            existing.ctx?.definedAt ||
+              existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.ctx?.definedAt ||
+              variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
           );
         }
       }
@@ -219,8 +223,10 @@ export class VariableManager implements IVariableManager {
         
         throw VariableRedefinitionError.forImportConflict(
           name,
-          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          existing.ctx?.definedAt ||
+            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          variable.ctx?.definedAt ||
+            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
           importPath,
           isExistingImported
         );
@@ -240,8 +246,10 @@ export class VariableManager implements IVariableManager {
       const existing = this.variables.get(name)!;
       throw VariableRedefinitionError.forSameFile(
         name,
-        existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-        variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+        existing.ctx?.definedAt ||
+          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+        variable.ctx?.definedAt ||
+          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
       );
     }
     
@@ -386,11 +394,15 @@ export class VariableManager implements IVariableManager {
       `@${resolverName}`, // Placeholder value
       placeholderSource,
       {
-        isReserved: true,
-        isResolver: true,
-        resolverName: resolverName,
-        needsResolution: true, // Flag indicating this needs async resolution
-        definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+        metadata: {
+          isReserved: true,
+          isResolver: true,
+          resolverName: resolverName,
+          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+        },
+        internal: {
+          needsResolution: true
+        }
       }
     );
   }

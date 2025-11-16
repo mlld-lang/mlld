@@ -551,10 +551,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.reservedNames.add(transformer.name);
 
       if (transformer.variants && transformer.variants.length > 0) {
+        const lowerInternal = (lowerVar.internal ??= {});
+        const upperInternal = (upperVar.internal ??= {});
+        const lowerVariantMap =
+          (lowerInternal.transformerVariants as Record<string, any> | undefined) ??
+          (lowerInternal.transformerVariants = {});
+        const upperVariantMap =
+          (upperInternal.transformerVariants as Record<string, any> | undefined) ??
+          (upperInternal.transformerVariants = {});
         const lowerMetadata = (lowerVar.metadata ??= {} as any);
         const upperMetadata = (upperVar.metadata ??= {} as any);
-        const lowerVariantMap = lowerMetadata.transformerVariants ?? (lowerMetadata.transformerVariants = {} as Record<string, any>);
-        const upperVariantMap = upperMetadata.transformerVariants ?? (upperMetadata.transformerVariants = {} as Record<string, any>);
+        lowerMetadata.transformerVariants ??= lowerVariantMap;
+        upperMetadata.transformerVariants ??= upperVariantMap;
         for (const variant of transformer.variants) {
           const lowerVariant = createTransformerVariable(
             `${transformer.name}.${variant.field}`,
@@ -961,8 +969,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Check cache first
     const cached = this.cacheManager.getResolverVariable(name);
-    if (cached && cached.metadata && 'needsResolution' in cached.metadata && !cached.metadata.needsResolution) {
-      return cached;
+    if (cached) {
+      const needsResolution =
+        (cached.internal && 'needsResolution' in cached.internal
+          ? cached.internal.needsResolution
+          : undefined) ??
+        (cached.metadata && 'needsResolution' in cached.metadata
+          ? (cached.metadata as Record<string, unknown>).needsResolution
+          : undefined);
+      if (needsResolution === false) {
+        return cached;
+      }
     }
     
     // Get the resolver manager
@@ -999,19 +1016,25 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         hasInterpolation: false,
         isMultiLine: false
       };
-      const resolvedVar = varType === 'data' ?
-        createObjectVariable(name, varValue, true, resolverSource, {
-          isReserved: true,
-          isResolver: true,
-          resolverName: name,
-          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-        }) :
-        createSimpleTextVariable(name, varValue, resolverSource, {
-          isReserved: true,
-          isResolver: true,
-          resolverName: name,
-          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-        });
+      const resolvedVar = varType === 'data'
+        ? createObjectVariable(name, varValue, true, resolverSource, {
+            metadata: {
+              isReserved: true,
+              isResolver: true,
+              resolverName: name,
+              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+            },
+            internal: { needsResolution: false }
+          })
+        : createSimpleTextVariable(name, varValue, resolverSource, {
+            metadata: {
+              isReserved: true,
+              isResolver: true,
+              resolverName: name,
+              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+            },
+            internal: { needsResolution: false }
+          });
       
       // Cache the resolved variable
       this.cacheManager.setResolverVariable(name, resolvedVar);

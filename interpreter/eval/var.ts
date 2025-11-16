@@ -1042,9 +1042,9 @@ export async function prepareVarAssignment(
         identifier,
         variableType: variable.type,
         hasMetadata: !!variable.metadata,
-        isRetryable: variable.metadata?.isRetryable || false,
-        hasSourceFunction: !!(variable.metadata?.sourceFunction),
-        sourceNodeType: variable.metadata?.sourceFunction?.type
+        isRetryable: variable.internal?.isRetryable || false,
+        hasSourceFunction: !!(variable.internal?.sourceFunction),
+        sourceNodeType: (variable.internal?.sourceFunction as any)?.type
       });
     }
     // Process through unified pipeline (handles detection, validation, execution)
@@ -1055,21 +1055,21 @@ export async function prepareVarAssignment(
       directive,
       identifier,
       location: directive.location,
-      isRetryable: variable.metadata?.isRetryable || false
+      isRetryable: variable.internal?.isRetryable || false
     });
   }
   
   // If pipeline was executed, result will be a string
   // Create new variable with the result
-  if (typeof result === 'string' && result !== variable.value) {
-    const options = applySecurityOptions(
-      {
-        metadata: { ...(variable.metadata ?? {}), ...baseMetadata },
-        ctx: { ...(variable.ctx ?? {}), ...baseCtx },
-        internal: { ...(variable.internal ?? {}), ...baseInternal }
-      },
-      variable.metadata?.security
-    );
+    if (typeof result === 'string' && result !== variable.value) {
+      const options = applySecurityOptions(
+        {
+          metadata: { ...(variable.metadata ?? {}), ...baseMetadata },
+          ctx: { ...(variable.ctx ?? {}), ...baseCtx },
+          internal: { ...(variable.internal ?? {}), ...baseInternal }
+        },
+        variable.metadata?.security
+      );
     variable = createSimpleTextVariable(identifier, result, source, options);
   } else if (isStructuredValue(result)) {
     const options = applySecurityOptions(
