@@ -62,6 +62,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     'isComplex',
     'source',
     'metadata',
+    'internal',
     'ctx',
     'any',
     'all',

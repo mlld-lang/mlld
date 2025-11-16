@@ -2,12 +2,14 @@ import type { Environment } from '../env/Environment';
 import { isExecutable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import type { SecurityDescriptor } from '@core/types/security';
+import { mergeDescriptors } from '@core/types/security';
 import {
   asData,
   ensureStructuredValue,
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 
 function hasArrayData(value: unknown): value is { data: unknown[] } {
   if (!value || typeof value !== 'object') {
@@ -77,11 +79,22 @@ export async function evaluateForeachCommand(
   
   for (let i = 0; i < arrayNodes.length; i++) {
     const arrayVar = arrayNodes[i];
+    if (process.env.MLLD_DEBUG_FOREACH === 'true') {
+      console.error('[foreach] array node type:', arrayVar?.type);
+    }
     const arrayValue = await evaluateDataValue(arrayVar, env);
     let sourceDescriptor = extractSecurityDescriptor(arrayValue);
-    if (!sourceDescriptor && arrayVar && typeof arrayVar === 'object' && arrayVar.type === 'VariableReference') {
-      const referencedVar = env.getVariable(arrayVar.identifier);
-      sourceDescriptor = referencedVar?.metadata?.security;
+    if (!sourceDescriptor && arrayVar && typeof arrayVar === 'object') {
+      let referencedName: string | undefined;
+      if ('identifier' in arrayVar && typeof arrayVar.identifier === 'string') {
+        referencedName = arrayVar.identifier;
+      } else if ('variable' in arrayVar && arrayVar.variable?.identifier) {
+        referencedName = arrayVar.variable.identifier;
+      }
+      const referencedVar = referencedName ? env.getVariable(referencedName) : undefined;
+      sourceDescriptor =
+        (referencedVar?.ctx ? ctxToSecurityDescriptor(referencedVar.ctx) : undefined) ??
+        (referencedVar?.metadata?.security as SecurityDescriptor | undefined);
     }
     if (isStructuredValue(arrayValue)) {
       let structuredData = asData(arrayValue) as unknown;
@@ -153,6 +166,15 @@ export async function evaluateForeachCommand(
   const { evaluateExecInvocation } = await import('./exec-invocation');
   const results: any[] = [];
   
+  const mergeTupleDescriptor = (): SecurityDescriptor | undefined => {
+    let descriptor: SecurityDescriptor | undefined;
+    for (const candidate of arraySecurityDescriptors) {
+      if (!candidate) continue;
+      descriptor = descriptor ? mergeDescriptors(descriptor, candidate) : candidate;
+    }
+    return descriptor;
+  };
+
   for (let i = 0; i < tuples.length; i++) {
     const tuple = tuples[i];
     const decoratedTuple = tuple.map((value, index) => {
@@ -182,7 +204,21 @@ export async function evaluateForeachCommand(
       
       // Use the standard exec invocation evaluator
       const result = await evaluateExecInvocation(execInvocationNode as any, env);
-      results.push(result.value);
+      const tupleDescriptor = mergeTupleDescriptor();
+      let structuredResult = isStructuredValue(result.value)
+        ? result.value
+        : ensureStructuredValue(result.value);
+      if (tupleDescriptor) {
+        const existingDescriptor = extractSecurityDescriptor(structuredResult);
+        const merged = existingDescriptor
+          ? mergeDescriptors(existingDescriptor, tupleDescriptor)
+          : tupleDescriptor;
+        structuredResult = ensureStructuredValue(structuredResult, structuredResult.type, structuredResult.text, {
+          ...(structuredResult.metadata || {}),
+          security: merged
+        });
+      }
+      results.push(structuredResult);
     } catch (error) {
       // Include iteration context in error message
       const params = cmdVariable.paramNames || definition.paramNames || [];
@@ -222,7 +258,9 @@ export async function evaluateForeachCommand(
         hasInterpolation: false,
         isMultiLine: false
       },
-      { isBatchInput: true }
+      {
+        internal: { isBatchInput: true }
+      }
     );
 
     try {

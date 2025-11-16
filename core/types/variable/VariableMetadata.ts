@@ -407,8 +407,12 @@ export class VariableMetadataUtils {
     if (variable.type === 'array' && variable.metadata) {
       const aggregate = (variable.metadata as any).arrayHelperAggregate;
       if (aggregate) {
-        context.labels = aggregate.labels;
-        context.sources = aggregate.sources;
+        const hasAggregateContexts =
+          Array.isArray(aggregate.contexts) && aggregate.contexts.length > 0;
+        if (hasAggregateContexts) {
+          context.labels = aggregate.labels;
+          context.sources = aggregate.sources;
+        }
         context.tokens = aggregate.tokens;
         context.totalTokens = aggregate.totalTokens;
         context.maxTokens = aggregate.maxTokens;

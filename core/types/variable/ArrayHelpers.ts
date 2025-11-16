@@ -108,9 +108,16 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
 
   // Update .ctx snapshot to include aggregate info for consumers and tests
   const ctx = ensureContext(variable);
-  ctx.labels = aggregate.labels;
-  ctx.sources = aggregate.sources;
-  ctx.tokens = aggregate.tokens;
+  const hasAggregateContexts = aggregate.contexts.length > 0;
+
+  if (hasAggregateContexts) {
+    ctx.labels = aggregate.labels;
+    ctx.sources = aggregate.sources;
+    ctx.tokens = aggregate.tokens;
+  } else if (!ctx.tokens) {
+    ctx.tokens = aggregate.tokens;
+  }
+
   ctx.totalTokens = aggregate.totalTokens;
   ctx.maxTokens = aggregate.maxTokens;
   if (Array.isArray(variable.value)) {
