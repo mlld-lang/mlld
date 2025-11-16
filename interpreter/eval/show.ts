@@ -1,4 +1,5 @@
 import type { DirectiveNode } from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -92,6 +93,8 @@ export async function evaluateShow(
   let content = '';
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
   
+  const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
+
   if (directive.subtype === 'showVariable') {
     // Handle variable reference - supports both unified AST and legacy structure
     let variableNode: any;
@@ -373,7 +376,7 @@ export async function evaluateShow(
             const { FieldAccessError } = await import('@core/errors');
             throw new FieldAccessError(`Variable not found for index: ${field.value}`,
               { baseValue: value, fieldAccessChain: [], failedAtIndex: 0, failedKey: String(field.value) },
-              { sourceLocation: directive.location, env }
+              { sourceLocation: directiveLocation, env }
             );
           }
           // Get the actual value to use as index
@@ -386,14 +389,14 @@ export async function evaluateShow(
           const fieldResult = await accessField(value, resolvedField, { 
             preserveContext: true,
             env,
-            sourceLocation: directive.location
+            sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         } else {
           const fieldResult = await accessField(value, field, { 
             preserveContext: true,
             env,
-            sourceLocation: directive.location
+            sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         }
@@ -959,7 +962,7 @@ export async function evaluateShow(
     
     // Execute the command and capture output for display
     const executionContext = {
-      sourceLocation: directive.location,
+      sourceLocation: directiveLocation,
       directiveNode: directive,
       filePath: env.getCurrentFilePath(),
       directiveType: 'show'  // Mark as show for context
@@ -1014,7 +1017,7 @@ export async function evaluateShow(
     
     // Execute code and capture output for display
     const executionContext = {
-      sourceLocation: directive.location,
+      sourceLocation: directiveLocation,
       directiveNode: directive,
       filePath: env.getCurrentFilePath(),
       directiveType: 'show'  // Mark as show for context

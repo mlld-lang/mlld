@@ -19,6 +19,7 @@ import type {
   FieldAccessNode,
   CondensedPipe
 } from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import type { Environment } from '../env/Environment';
@@ -534,6 +535,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     // Handle field access if present
     if (node.fields && node.fields.length > 0) {
       const { accessField } = await import('../utils/field-access');
+      const fieldAccessLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
       
       // accessField handles Variable extraction internally when needed
       // No need to manually extract here
@@ -555,7 +557,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
             env,
-            sourceLocation: node.location
+            sourceLocation: fieldAccessLocation
           });
           resolvedValue = (fieldResult as any).value;
         } else {
@@ -563,7 +565,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
             env,
-            sourceLocation: node.location
+            sourceLocation: fieldAccessLocation
           });
           resolvedValue = (fieldResult as any).value;
         }

@@ -1,4 +1,5 @@
 import type { ExecInvocation, WithClause } from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
@@ -256,6 +257,7 @@ export async function evaluateExecInvocation(
   if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
     logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
   }
+  const nodeSourceLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
   
   // Get the command name from the command reference or legacy format
   let commandName: string;
@@ -401,7 +403,7 @@ export async function evaluateExecInvocation(
       if (postFieldsBuiltin && postFieldsBuiltin.length > 0) {
         const { accessField } = await import('../utils/field-access');
         for (const f of postFieldsBuiltin) {
-          result = await accessField(result, f, { env, sourceLocation: node.location });
+          result = await accessField(result, f, { env, sourceLocation: nodeSourceLocation });
         }
       }
       
@@ -1936,7 +1938,7 @@ export async function evaluateExecInvocation(
       const { accessField } = await import('../utils/field-access');
       let current: any = result;
       for (const f of postFields) {
-        current = await accessField(current, f, { env, sourceLocation: node.location });
+        current = await accessField(current, f, { env, sourceLocation: nodeSourceLocation });
       }
       result = current;
     } catch (e) {
