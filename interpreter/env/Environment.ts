@@ -643,13 +643,21 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get the execution directory (where commands run)
+   * If we have an inferred project root, use that for command execution.
+   * Otherwise fall back to the script's directory.
    */
   getExecutionDirectory(): string {
     const context = this.getPathContext();
     if (context) {
-      return context.executionDirectory;
+      // If we have an inferred project root (different from file directory),
+      // use it as the working directory for commands
+      if (context.projectRoot && context.projectRoot !== context.fileDirectory) {
+        return context.projectRoot;
+      }
+      // Otherwise use the file's directory (script location)
+      return context.fileDirectory;
     }
-    // In legacy mode, use basePath
+    // Fallback in legacy mode
     return this.basePath;
   }
   

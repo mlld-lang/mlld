@@ -1,3 +1,3 @@
-/var @filename = <package.json>.filename
-/var @tokens = <large-file.md>.tokens
-/var @frontmatter = <doc.md>.fm.title
+/var @filename = <package.json>.ctx.filename
+/var @tokens = <large-file.md>.ctx.tokens
+/var @frontmatter = <doc.md>.ctx.fm.title

@@ -191,6 +191,16 @@ export const builtinTransformers: TransformerDefinition[] = [
         field: 'llm',
         description: 'Extract JSON from LLM responses (code fences, prose). Returns false if no JSON found.',
         implementation: makeJsonTransformer('llm')
+      },
+      {
+        field: 'fromlist',
+        description: 'Convert plain text list (one item per line) to JSON array',
+        implementation: (input: string) => {
+          return input
+            .split('\n')
+            .map(line => line.trimEnd())
+            .filter(line => line.length > 0);
+        }
       }
     ]
   },

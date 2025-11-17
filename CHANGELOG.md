@@ -21,12 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `parseAndWrapJson()` - unified JSON detection and wrapping
 - `assertStructuredValue()` - dev-time boundary validation
 - Executables with shell commands auto-derive `commandOutput` taint
+- `@json.fromlist` transformer converts plain text lists (one item per line) to JSON arrays
 
 ### Changed
 - Display boundaries consistently use `asText()` helper
 - Arrays of StructuredValues map elements for clean display
 - Template interpolation simplified (removed comma-separated arrays)
 - JS/Node executors unwrap StructuredValues to native data
+- Shell commands now run from project root when @base is inferred, otherwise from script directory
 
 ### Removed
 - `createPipelineInput()` legacy pattern (migrated to `wrapStructured()`)
