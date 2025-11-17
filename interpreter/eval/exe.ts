@@ -633,7 +633,12 @@ export async function evaluateExe(
       executableDef.paramNames || [],
       language,
       source,
-      metadataWithSecurity
+      {
+        metadata: metadataWithSecurity,
+        internal: {
+          executableDef
+        }
+      }
     );
 
     // Set the actual template/command content
