@@ -23,7 +23,7 @@ import {
   normalizeWhenShowEffect,
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
-import { ctxToSecurityDescriptor, hasSecurityContext } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
 import { coerceValueForStdin } from '../utils/shell-value';
 
 /**

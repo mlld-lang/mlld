@@ -14,7 +14,7 @@ import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
 import type { DataLabel, TaintLevel, SecurityDescriptor } from '@core/types/security';
 import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
 export interface IVariableManager {
   // Core variable operations

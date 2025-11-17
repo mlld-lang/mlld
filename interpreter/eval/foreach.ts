@@ -9,7 +9,7 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
 function hasArrayData(value: unknown): value is { data: unknown[] } {
   if (!value || typeof value !== 'object') {

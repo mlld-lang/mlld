@@ -30,7 +30,7 @@ import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/
 import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
-import { updateCtxFromDescriptor } from '@interpreter/utils/metadata-migration';
+import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
 
 export interface VarAssignmentResult {
   identifier: string;

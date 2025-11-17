@@ -42,7 +42,7 @@ import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import type { SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { GuardError } from '@core/errors/GuardError';
 import type { GuardErrorDetails } from '@core/errors/GuardError';
 import type { WhenExpressionNode } from '@core/types/when';

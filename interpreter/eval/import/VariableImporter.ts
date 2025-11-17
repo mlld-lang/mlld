@@ -26,7 +26,7 @@ import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
 import type { SourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;

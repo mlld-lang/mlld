@@ -10,7 +10,7 @@ import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
 /**
  * Extract and evaluate directive inputs for hook consumption.

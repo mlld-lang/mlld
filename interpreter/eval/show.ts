@@ -43,7 +43,7 @@ import {
 } from '@interpreter/utils/structured-value';
 
 import { wrapExecResult } from '../utils/structured-exec';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 // Template normalization now handled in grammar - no longer needed here
 
 function extractDescriptorFromVariable(variable: Variable | undefined): SecurityDescriptor | undefined {

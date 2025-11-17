@@ -17,7 +17,7 @@ import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/paralle
 import { asText, asData, isStructuredValue, wrapStructured, type StructuredValueContext } from '../../utils/structured-value';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { isPipelineInput } from '@core/types/variable/TypeGuards';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 

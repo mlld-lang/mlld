@@ -30,7 +30,7 @@ import {
 } from './VariableTypes';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 import { ensureStructuredValue } from '@interpreter/utils/structured-value';
-import { metadataToCtx, metadataToInternal } from '@interpreter/utils/metadata-migration';
+import { legacyMetadataToCtx, legacyMetadataToInternal } from './CtxHelpers';
 import { VariableMetadataUtils } from './VariableMetadata';
 import { attachArrayHelpers } from './ArrayHelpers';
 import type { TokenEstimationOptions } from '@core/utils/token-metrics';
@@ -49,7 +49,15 @@ interface NormalizedFactoryState {
 
 function finalizeVariable<T extends Variable>(variable: T): T {
   if (!variable.ctx) {
-    variable.ctx = metadataToCtx((variable as any).metadata);
+    const legacyMetadata = (variable as Record<string, unknown>).metadata as VariableMetadata | undefined;
+    variable.ctx = legacyMetadata
+      ? legacyMetadataToCtx(legacyMetadata)
+      : {
+          labels: [],
+          taint: 'unknown',
+          sources: [],
+          policy: null
+        };
   }
   if (variable.ctx) {
     variable.ctx.name = variable.name;
@@ -79,8 +87,16 @@ function normalizeFactoryOptions(
 ): NormalizedFactoryState {
   const { legacyMetadata, ctxOverrides, internalOverrides } = extractFactoryInput(metadataOrOptions);
   const metadata = applyTextMetrics(legacyMetadata, text, tokenOptions);
-  const ctx = Object.assign({}, metadataToCtx(metadata), ctxOverrides);
-  const internal = Object.assign({}, metadataToInternal(metadata), internalOverrides);
+  const ctx = Object.assign(
+    metadata ? legacyMetadataToCtx(metadata) : {
+      labels: [],
+      taint: 'unknown',
+      sources: [],
+      policy: null
+    },
+    ctxOverrides
+  );
+  const internal = Object.assign(metadata ? legacyMetadataToInternal(metadata) : {}, internalOverrides);
   return { metadata, ctx, internal };
 }
 

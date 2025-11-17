@@ -8,7 +8,7 @@ import { isStructuredValue } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { PostHook } from './HookManager';
 import type { OperationContext } from '../env/ContextManager';
-import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import type { StructuredValueContext } from '@interpreter/utils/structured-value';
 
 export const taintPostHook: PostHook = async (
