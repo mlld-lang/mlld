@@ -343,8 +343,8 @@ export class FastTypeGuards {
    * Check if variable type requires lazy evaluation
    */
   static requiresLazyEvaluation(variable: Variable): boolean {
-    return isTemplate(variable) || 
+    return isTemplate(variable) ||
            isPipelineInput(variable) ||
-           (isImported(variable) && variable.metadata?.isComplex);
+           (isImported(variable) && variable.internal?.isComplex);
   }
 }

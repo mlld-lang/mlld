@@ -328,10 +328,10 @@ export class VariableMetadataUtils {
   }
 
   static assignMetrics(variable: Variable, metrics: VariableMetrics): void {
-    if (!variable.metadata) {
-      variable.metadata = {};
+    if (!variable.internal) {
+      variable.internal = {};
     }
-    variable.metadata.metrics = metrics;
+    variable.internal.metrics = metrics;
     if (!variable.ctx) {
       VariableMetadataUtils.attachContext(variable);
     }
@@ -340,8 +340,8 @@ export class VariableMetadataUtils {
       variable.ctx.tokest = metrics.tokest;
       variable.ctx.tokens = metrics.tokens ?? metrics.tokest;
     }
-    if (variable.metadata.ctxCache) {
-      variable.metadata.ctxCache = variable.ctx as VariableContextSnapshot;
+    if (variable.internal.ctxCache) {
+      variable.internal.ctxCache = variable.ctx as VariableContextSnapshot;
     }
   }
 
@@ -349,8 +349,8 @@ export class VariableMetadataUtils {
     if ((variable as any).__ctxAttached) {
       return variable;
     }
-    if (!variable.metadata) {
-      variable.metadata = {};
+    if (!variable.internal) {
+      variable.internal = {};
     }
     attachMetadataGuard(variable);
     const descriptor = Object.getOwnPropertyDescriptor(variable, 'ctx');
@@ -384,15 +384,15 @@ export class VariableMetadataUtils {
   }
 
   private static buildVariableContext(variable: Variable): VariableContextSnapshot {
-    if (!variable.metadata) {
-      variable.metadata = {};
+    if (!variable.internal) {
+      variable.internal = {};
     }
-    if (variable.metadata.ctxCache) {
-      return variable.metadata.ctxCache;
+    if (variable.internal.ctxCache) {
+      return variable.internal.ctxCache;
     }
     const metrics = VariableMetadataUtils.computeMetricsForVariable(variable);
-    const security = variable.metadata.security;
-    const labels = normalizeLabelArray(security?.labels);
+    const ctxSnapshot = variable.ctx ?? {};
+    const labels = normalizeLabelArray(ctxSnapshot.labels);
     const tokenValue = metrics?.tokens ?? metrics?.tokest ?? undefined;
     const tokestValue = metrics?.tokest ?? metrics?.tokens ?? undefined;
     const context: VariableContextSnapshot = {
@@ -400,17 +400,17 @@ export class VariableMetadataUtils {
       type: variable.type,
       definedAt: variable.definedAt,
       labels,
-      taint: security?.taintLevel ?? 'unknown',
+      taint: ctxSnapshot.taint ?? 'unknown',
       tokens: tokenValue,
       tokest: tokestValue,
       length: metrics?.length,
       size: Array.isArray(variable.value) ? variable.value.length : undefined,
-      sources: security?.sources ?? [],
-      exported: Boolean(variable.metadata.isImported),
-      policy: security?.policyContext ?? null
+      sources: ctxSnapshot.sources ?? [],
+      exported: Boolean(ctxSnapshot.exported),
+      policy: ctxSnapshot.policy ?? null
     };
-    if (variable.type === 'array' && variable.metadata) {
-      const aggregate = (variable.metadata as any).arrayHelperAggregate;
+    if (variable.type === 'array' && variable.internal) {
+      const aggregate = (variable.internal as any).arrayHelperAggregate;
       if (aggregate) {
         const hasAggregateContexts =
           Array.isArray(aggregate.contexts) && aggregate.contexts.length > 0;
@@ -423,13 +423,13 @@ export class VariableMetadataUtils {
         context.maxTokens = aggregate.maxTokens;
       }
     }
-    variable.metadata.ctxCache = context;
+    variable.internal.ctxCache = context;
     return context;
   }
 
   private static computeMetricsForVariable(variable: Variable): VariableMetrics | undefined {
-    if (variable.metadata?.metrics) {
-      return variable.metadata.metrics;
+    if (variable.internal?.metrics) {
+      return variable.internal.metrics;
     }
 
     if (typeof variable.value === 'string') {

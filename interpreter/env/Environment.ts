@@ -1,5 +1,5 @@
 import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, PipelineInput, VariableMetadata } from '@core/types/variable';
+import type { Variable, VariableSource, PipelineInput } from '@core/types/variable';
 import { 
   createSimpleTextVariable, 
   createObjectVariable, 
@@ -507,10 +507,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
               isMultiLine: false
             },
             {
-              isReserved: true,
-              isPrefixPath: true,
-              prefixConfig: prefixConfig,
-              definedAt: { line: 0, column: 0, filePath: '<prefix-config>' }
+              ctx: {
+                definedAt: { line: 0, column: 0, filePath: '<prefix-config>' }
+              },
+              internal: {
+                isReserved: true,
+                isPrefixPath: true,
+                prefixConfig: prefixConfig
+              }
             }
           );
           this.variableManager.setVariable(prefixName, pathVar);
@@ -559,10 +563,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         const upperVariantMap =
           (upperInternal.transformerVariants as Record<string, any> | undefined) ??
           (upperInternal.transformerVariants = {});
-        const lowerMetadata = (lowerVar.metadata ??= {} as any);
-        const upperMetadata = (upperVar.metadata ??= {} as any);
-        lowerMetadata.transformerVariants ??= lowerVariantMap;
-        upperMetadata.transformerVariants ??= upperVariantMap;
         for (const variant of transformer.variants) {
           const lowerVariant = createTransformerVariable(
             `${transformer.name}.${variant.field}`,
@@ -973,8 +973,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         false, // Not complex, it's just a string
         debugSource,
         {
-          isReserved: true,
-          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          ctx: {
+            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          },
+          internal: {
+            isReserved: true
+          }
         }
       );
       return debugVar;
@@ -983,13 +987,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Check cache first
     const cached = this.cacheManager.getResolverVariable(name);
     if (cached) {
-      const needsResolution =
-        (cached.internal && 'needsResolution' in cached.internal
-          ? cached.internal.needsResolution
-          : undefined) ??
-        (cached.metadata && 'needsResolution' in cached.metadata
-          ? (cached.metadata as Record<string, unknown>).needsResolution
-          : undefined);
+      const needsResolution = cached.internal?.needsResolution;
       if (needsResolution === false) {
         return cached;
       }
@@ -1031,22 +1029,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       };
       const resolvedVar = varType === 'data'
         ? createObjectVariable(name, varValue, true, resolverSource, {
-            metadata: {
+            ctx: {
+              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+            },
+            internal: {
               isReserved: true,
               isResolver: true,
               resolverName: name,
-              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-            },
-            internal: { needsResolution: false }
+              needsResolution: false
+            }
           })
         : createSimpleTextVariable(name, varValue, resolverSource, {
-            metadata: {
+            ctx: {
+              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+            },
+            internal: {
               isReserved: true,
               isResolver: true,
               resolverName: name,
-              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-            },
-            internal: { needsResolution: false }
+              needsResolution: false
+            }
           });
       
       // Cache the resolved variable
@@ -1102,11 +1104,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       data,
       true, // Frontmatter can be complex
       frontmatterSource,
-      { 
-        isSystem: true, 
-        immutable: true,
-        source: 'frontmatter',
-        definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
+      {
+        ctx: {
+          source: 'frontmatter',
+          definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
+        },
+        internal: {
+          isSystem: true,
+          immutable: true
+        }
       }
     );
     

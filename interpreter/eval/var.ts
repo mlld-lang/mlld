@@ -178,6 +178,26 @@ export async function prepareVarAssignment(
     return text;
   };
 
+  /**
+   * Extract security descriptor from a value (Variable, StructuredValue, or plain value)
+   */
+  const extractSecurityFromValue = (value: any): SecurityDescriptor | undefined => {
+    if (!value) return undefined;
+    // Check if it's a Variable with .ctx
+    if (typeof value === 'object' && 'ctx' in value && value.ctx) {
+      const ctx = value.ctx;
+      if (ctx.labels || ctx.taint) {
+        return {
+          labels: ctx.labels,
+          taint: ctx.taint,
+          sources: ctx.sources,
+          policy: ctx.policy
+        } as SecurityDescriptor;
+      }
+    }
+    return undefined;
+  };
+
   const finalizeVariable = (variable: Variable): Variable => {
     const descriptor = resolvedSecurityDescriptor
       ? env.mergeSecurityDescriptors(baseDescriptor, resolvedSecurityDescriptor)
@@ -188,14 +208,20 @@ export async function prepareVarAssignment(
       metadata: { identifier },
       operation: operationMetadata
     });
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(variable.metadata, {
+    // Extract existing security from variable's ctx
+    const existingSecurity = extractSecurityFromValue(variable);
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(existingSecurity ? { security: existingSecurity } : undefined, {
       existingDescriptor: descriptor,
       capability: capabilityContext
     });
-    return VariableMetadataUtils.attachContext({
-      ...variable,
-      metadata: finalMetadata
-    });
+    // Update ctx from the final security descriptor
+    if (!variable.ctx) {
+      variable.ctx = {};
+    }
+    if (finalMetadata.security) {
+      updateCtxFromDescriptor(variable.ctx, finalMetadata.security);
+    }
+    return VariableMetadataUtils.attachContext(variable);
   };
 
 
@@ -711,14 +737,12 @@ export async function prepareVarAssignment(
   // Create and store the appropriate variable type
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
   const source = createVariableSource(valueNode, directive);
-  const baseMetadata: VariableMetadata = { definedAt: location };
   const baseCtx: Partial<VariableContext> = { definedAt: location };
   const baseInternal: Partial<VariableInternalMetadata> = {};
 
   const cloneFactoryOptions = (
     overrides?: Partial<VariableFactoryInitOptions>
   ): VariableFactoryInitOptions => ({
-    metadata: { ...baseMetadata, ...(overrides?.metadata ?? {}) },
     ctx: { ...baseCtx, ...(overrides?.ctx ?? {}) },
     internal: { ...baseInternal, ...(overrides?.internal ?? {}) }
   });
@@ -728,11 +752,12 @@ export async function prepareVarAssignment(
     existing?: SecurityDescriptor
   ): VariableFactoryInitOptions => {
     const options = cloneFactoryOptions(overrides);
-    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(options.metadata, {
+    // Apply security metadata (still uses legacy metadata internally)
+    const finalMetadata = VariableMetadataUtils.applySecurityMetadata(undefined, {
       labels: securityLabels,
       existingDescriptor: existing ?? resolvedValueDescriptor
     });
-    options.metadata = finalMetadata;
+    // Update ctx from security descriptor
     if (finalMetadata?.security) {
       updateCtxFromDescriptor(options.ctx ?? (options.ctx = {}), finalMetadata.security);
     }
@@ -796,16 +821,16 @@ export async function prepareVarAssignment(
       });
     }
     const overrides: Partial<VariableFactoryInitOptions> = {
-      metadata: { ...(resolvedValue.metadata ?? {}), ...baseMetadata },
       ctx: { ...(resolvedValue.ctx ?? {}), ...baseCtx },
       internal: { ...(resolvedValue.internal ?? {}), ...baseInternal }
     };
-    const options = applySecurityOptions(overrides, resolvedValue.metadata?.security);
+    // Preserve security from existing variable
+    const existingSecurity = extractSecurityFromValue(resolvedValue);
+    const options = applySecurityOptions(overrides, existingSecurity);
     variable = {
       ...resolvedValue,
       name: identifier,
       definedAt: location,
-      metadata: options.metadata,
       ctx: options.ctx,
       internal: options.internal
     };
@@ -813,7 +838,7 @@ export async function prepareVarAssignment(
   } else if (isStructuredValue(resolvedValue)) {
     const options = applySecurityOptions(
       {
-        metadata: {
+        internal: {
           isStructuredValue: true,
           structuredValueType: resolvedValue.type
         }
@@ -882,28 +907,29 @@ export async function prepareVarAssignment(
     // For VariableReference nodes, create variable based on resolved value type
     // This handles cases like @user.name where resolvedValue is the field value
     const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
+    const existingSecurity = extractSecurityFromValue(resolvedValue);
     if (typeof actualValue === 'string') {
       const options = applySecurityOptions(undefined, resolvedValueDescriptor);
       variable = createSimpleTextVariable(identifier, actualValue, source, options);
     } else if (typeof actualValue === 'number' || typeof actualValue === 'boolean' || actualValue === null) {
-      const options = applySecurityOptions(undefined, resolvedValue.metadata?.security);
+      const options = applySecurityOptions(undefined, existingSecurity);
       variable = createPrimitiveVariable(identifier, actualValue, source, options);
     } else if (Array.isArray(actualValue)) {
-      const options = applySecurityOptions(undefined, resolvedValue.metadata?.security);
+      const options = applySecurityOptions(undefined, existingSecurity);
       variable = createArrayVariable(identifier, actualValue, false, source, options);
     } else if (typeof actualValue === 'object' && actualValue !== null) {
-      const options = applySecurityOptions(undefined, resolvedValue.metadata?.security);
+      const options = applySecurityOptions(undefined, existingSecurity);
       variable = createObjectVariable(identifier, actualValue, false, source, options);
     } else {
       // Fallback to text
-      const options = applySecurityOptions(undefined, resolvedValue.metadata?.security);
+      const options = applySecurityOptions(undefined, existingSecurity);
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
     }
     
   } else if (valueNode.type === 'load-content') {
     const structuredValue = wrapLoadContentValue(resolvedValue);
     const options = applySecurityOptions({
-      metadata: {
+      internal: {
         structuredValueMetadata: structuredValue.metadata
       }
     });
@@ -1041,7 +1067,8 @@ export async function prepareVarAssignment(
       console.error('[var.ts] Calling processPipeline:', {
         identifier,
         variableType: variable.type,
-        hasMetadata: !!variable.metadata,
+        hasCtx: !!variable.ctx,
+        hasInternal: !!variable.internal,
         isRetryable: variable.internal?.isRetryable || false,
         hasSourceFunction: !!(variable.internal?.sourceFunction),
         sourceNodeType: (variable.internal?.sourceFunction as any)?.type
@@ -1062,23 +1089,23 @@ export async function prepareVarAssignment(
   // If pipeline was executed, result will be a string
   // Create new variable with the result
     if (typeof result === 'string' && result !== variable.value) {
+      const existingSecurity = extractSecurityFromValue(variable);
       const options = applySecurityOptions(
         {
-          metadata: { ...(variable.metadata ?? {}), ...baseMetadata },
           ctx: { ...(variable.ctx ?? {}), ...baseCtx },
           internal: { ...(variable.internal ?? {}), ...baseInternal }
         },
-        variable.metadata?.security
+        existingSecurity
       );
     variable = createSimpleTextVariable(identifier, result, source, options);
   } else if (isStructuredValue(result)) {
+    const existingSecurity = extractSecurityFromValue(variable);
     const options = applySecurityOptions(
       {
-        metadata: { ...(variable.metadata ?? {}), ...baseMetadata, isPipelineResult: true },
         ctx: { ...(variable.ctx ?? {}), ...baseCtx },
-        internal: { ...(variable.internal ?? {}), ...baseInternal }
+        internal: { ...(variable.internal ?? {}), ...baseInternal, isPipelineResult: true }
       },
-      variable.metadata?.security
+      existingSecurity
     );
     variable = createStructuredValueVariable(identifier, result, source, options);
   }

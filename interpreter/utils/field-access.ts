@@ -132,7 +132,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             rawValue &&
             typeof rawValue === 'object' &&
             name in (rawValue as any) &&
-            structuredWrapper.metadata?.source !== 'load-content'
+            structuredWrapper.ctx?.source !== 'load-content'
           ) {
             accessedValue = (rawValue as any)[name];
           } else {

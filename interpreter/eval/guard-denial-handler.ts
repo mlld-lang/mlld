@@ -49,7 +49,7 @@ export async function handleExecGuardDenial(
     value: normalization.hadShowEffect ? undefined : normalization.normalized
   };
 
-  if (!normalizedResult.metadata?.deniedHandlerRan) {
+  if (!normalizedResult.internal?.deniedHandlerRan) {
     return null;
   }
 

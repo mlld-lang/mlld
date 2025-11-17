@@ -461,7 +461,7 @@ export async function evaluateRun(
         const fullName = `${varRef.identifier}.${varRef.fields.map(f => f.value).join('.')}`;
         
         // Deserialize shadow environments if present (convert objects back to Maps)
-        let capturedShadowEnvs = value.metadata?.capturedShadowEnvs;
+        let capturedShadowEnvs = value.internal?.capturedShadowEnvs;
         if (capturedShadowEnvs && typeof capturedShadowEnvs === 'object') {
           const deserialized: any = {};
           for (const [lang, shadowObj] of Object.entries(capturedShadowEnvs)) {
@@ -490,8 +490,11 @@ export async function evaluateRun(
           },
           createdAt: Date.now(),
           modifiedAt: Date.now(),
-          metadata: {
-            ...(value.metadata || {}),
+          ctx: {
+            ...(value.ctx || {})
+          },
+          internal: {
+            ...(value.internal || {}),
             executableDef: value.executableDef,
             // CRITICAL: Preserve captured shadow environments from imports (deserialized)
             capturedShadowEnvs: capturedShadowEnvs
@@ -770,7 +773,7 @@ export async function evaluateRun(
       const enableStage0 = !!sourceNodeForPipeline;
       const pipelineInput = outputValue;
       const valueForPipeline = enableStage0
-        ? { value: pipelineInput, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
+        ? { value: pipelineInput, ctx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;
       const pipelineResult = await processPipeline({
         value: valueForPipeline,

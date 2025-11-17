@@ -103,16 +103,18 @@ export class LocalResolver implements Resolver {
       const mldMdPath = path.join(config.basePath, relativePath + '.mld.md');
       if (await this.fileSystem.exists(mldMdPath)) {
         const content = await this.fileSystem.readFile(mldMdPath, 'utf8');
+        const metadata = {
+          source: `file://${mldMdPath}`,
+          mimeType: 'text/x-mlld-module',
+          size: Buffer.byteLength(content, 'utf8'),
+          timestamp: new Date(),
+          taintLevel: 'localFile' as TaintLevel
+        };
         return {
           content,
           contentType: 'module',
-          metadata: {
-            source: `file://${mldMdPath}`,
-            mimeType: 'text/x-mlld-module',
-            size: Buffer.byteLength(content, 'utf8'),
-            timestamp: new Date(),
-            taintLevel: 'localFile' as TaintLevel
-          }
+          ctx: metadata,
+          metadata
         };
       }
     }
@@ -256,16 +258,19 @@ export class LocalResolver implements Resolver {
       // Detect content type
       const contentType = await this.detectContentType(fullPath, content);
 
+      const metadata = {
+        source: `file://${fullPath}`,
+        timestamp: new Date(),  // Use current time since IFileSystemService doesn't provide mtime
+        taintLevel: 'localFile' as TaintLevel,
+        size: content.length,  // Calculate size from content
+        mimeType: this.getMimeType(fullPath)
+      };
+
       return {
         content,
         contentType,
-        metadata: {
-          source: `file://${fullPath}`,
-          timestamp: new Date(),  // Use current time since IFileSystemService doesn't provide mtime
-          taintLevel: 'localFile' as TaintLevel,
-          size: content.length,  // Calculate size from content
-          mimeType: this.getMimeType(fullPath)
-        }
+        ctx: metadata,
+        metadata
       };
     } catch (error) {
       if (error.code === 'ENOENT' || error.message?.includes('File not found')) {

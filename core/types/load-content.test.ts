@@ -16,7 +16,7 @@ describe('Load Content Type Guards', () => {
       // Tag with __variable metadata
       const variable: Partial<ArrayVariable> = {
         type: 'array',
-        metadata: {
+        internal: {
           arrayType: 'renamed-content'
         }
       };
@@ -40,7 +40,7 @@ describe('Load Content Type Guards', () => {
       // Tag with different arrayType
       const variable: Partial<ArrayVariable> = {
         type: 'array',
-        metadata: {
+        internal: {
           arrayType: 'load-content-result'
         }
       };

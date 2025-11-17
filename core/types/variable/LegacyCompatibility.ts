@@ -44,7 +44,7 @@ export class LegacyVariableConverter {
       type: this.mapToLegacyType(variable.type),
       name: variable.name,
       value: this.extractLegacyValue(variable),
-      metadata: variable.metadata
+      metadata: { ...variable.ctx, ...variable.internal }
     };
   }
 
@@ -69,7 +69,8 @@ export class LegacyVariableConverter {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       source: defaultSource,
-      metadata: legacy.metadata
+      ctx: legacy.metadata || {},
+      internal: legacy.metadata || {}
     };
 
     // Create appropriate variable type based on legacy type
@@ -102,7 +103,8 @@ export class LegacyVariableConverter {
           type: 'command-result',
           value: String(legacy.value),
           command: legacy.metadata?.command || '',
-          ...baseVariable
+          ...baseVariable,
+          ctx: { ...baseVariable.ctx }
         };
 
       case 'path':
@@ -127,7 +129,9 @@ export class LegacyVariableConverter {
             isModule: legacy.metadata?.isModule || false,
             variableName: legacy.name
           },
-          ...baseVariable
+          ...baseVariable,
+          ctx: { ...baseVariable.ctx, importPath: legacy.metadata?.importPath },
+          internal: { ...baseVariable.internal, originalType: legacy.metadata?.originalType }
         };
 
       case 'executable':
@@ -340,7 +344,7 @@ export class LegacyVariableConverter {
       report.byType[variable.type] = (report.byType[variable.type] || 0) + 1;
 
       // Check for complex cases
-      if (variable.metadata?.isComplex) {
+      if (variable.metadata?.isComplex || variable.metadata?.isNamespace) {
         report.complexVariables.push(variable.name);
       }
 
@@ -383,7 +387,7 @@ export class LegacyVariableConverter {
           return 'template';
         } else if (legacyVariable.metadata?.hasInterpolation) {
           return 'interpolated-text';
-        } else if (legacyVariable.metadata?.filePath) {
+        } else if (legacyVariable.metadata?.filename || legacyVariable.metadata?.filePath) {
           return legacyVariable.metadata.sectionName ? 'section-content' : 'file-content';
         }
       }

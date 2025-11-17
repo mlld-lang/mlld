@@ -97,6 +97,15 @@ const DEV_ENV = typeof process !== 'undefined' ? process.env : undefined;
 const SHOULD_ASSERT_STRUCTURED =
   DEV_ENV?.MLLD_DEV_ASSERTIONS === 'true' || DEV_ENV?.MLLD_DEBUG_STRUCTURED === 'true';
 
+function ctxToSecurityDescriptor(ctx: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null }): SecurityDescriptor {
+  return makeSecurityDescriptor({
+    labels: ctx.labels ? [...ctx.labels] : [],
+    taintLevel: ctx.taint as TaintLevel | undefined,
+    sources: ctx.sources ? [...ctx.sources] : [],
+    policyContext: ctx.policy ?? undefined
+  });
+}
+
 export function isStructuredValue<T = unknown>(value: unknown): value is StructuredValue<T> {
   return Boolean(
     value &&
@@ -530,9 +539,9 @@ export function collectParameterDescriptors(
   const descriptors: SecurityDescriptor[] = [];
   for (const name of params) {
     const variable = env.getVariable(name);
-    const descriptor = variable?.metadata?.security;
-    if (descriptor) {
-      descriptors.push(descriptor);
+    const ctxDescriptor = variable?.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined;
+    if (ctxDescriptor) {
+      descriptors.push(ctxDescriptor);
     }
   }
   return descriptors;
@@ -581,11 +590,13 @@ function extractDescriptorInternal(
   }
 
   if (isStructuredValue(value)) {
-    return normalizeIfNeeded(value.metadata?.security as SecurityDescriptor | undefined, options.normalize);
+    const descriptor = ctxToSecurityDescriptor(value.ctx);
+    return normalizeIfNeeded(descriptor, options.normalize);
   }
 
   if (isVariableLike(value)) {
-    return normalizeIfNeeded(value.metadata?.security as SecurityDescriptor | undefined, options.normalize);
+    const descriptor = value.ctx ? ctxToSecurityDescriptor(value.ctx) : undefined;
+    return normalizeIfNeeded(descriptor, options.normalize);
   }
 
   if (!options.recursive || typeof value !== 'object') {
@@ -610,10 +621,10 @@ function extractDescriptorInternal(
     return descriptors[0];
   }
 
-  const metadataDescriptor = normalizeIfNeeded(
-    (value as { metadata?: { security?: SecurityDescriptor } }).metadata?.security as SecurityDescriptor | undefined,
-    options.normalize
-  );
+  const candidate = value as { metadata?: { security?: SecurityDescriptor }; ctx?: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null } };
+  const metadataDescriptor = candidate.ctx
+    ? normalizeIfNeeded(ctxToSecurityDescriptor(candidate.ctx as any), options.normalize)
+    : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, options.normalize);
   const nestedDescriptors = Object.values(value as Record<string, unknown>)
     .map(item => extractDescriptorInternal(item, options, seen))
     .filter(isSecurityDescriptor);

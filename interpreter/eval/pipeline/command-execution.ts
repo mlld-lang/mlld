@@ -372,7 +372,7 @@ function createTypedPipelineVariable(
     hasInterpolation: false,
     isMultiLine: false
   };
-  const metadata: Record<string, any> = {
+  const internal: Record<string, any> = {
     isPipelineParameter: true,
     pipelineOriginal: originalText,
     pipelineFormat: 'json'
@@ -380,16 +380,16 @@ function createTypedPipelineVariable(
 
   if (Array.isArray(parsedValue)) {
     const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
-    metadata.pipelineType = 'array';
-    metadata.customToString = () => originalText;
-    return createArrayVariable(paramName, bridged, false, pipelineSource, metadata);
+    internal.pipelineType = 'array';
+    internal.customToString = () => originalText;
+    return createArrayVariable(paramName, bridged, false, pipelineSource, internal);
   }
 
   if (parsedValue && typeof parsedValue === 'object') {
     const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
-    metadata.pipelineType = 'object';
-    metadata.customToString = () => originalText;
-    return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, metadata);
+    internal.pipelineType = 'object';
+    internal.customToString = () => originalText;
+    return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, internal);
   }
 
   const textSource: VariableSource = {
@@ -403,7 +403,7 @@ function createTypedPipelineVariable(
 
 function resolveExecutableLanguage(commandVar: any, execDef: any): string | undefined {
   if (execDef?.language) return String(execDef.language);
-  const metadataDef = commandVar?.internal?.executableDef ?? commandVar?.metadata?.executableDef;
+  const metadataDef = commandVar?.internal?.executableDef;
   if (metadataDef?.language) {
     return String(metadataDef.language);
   }
@@ -446,8 +446,7 @@ export async function resolveCommandReference(
     }
     
     const variantMap =
-      (baseVar.internal?.transformerVariants as Record<string, unknown> | undefined) ??
-      (baseVar.metadata?.transformerVariants as Record<string, unknown> | undefined);
+      (baseVar.internal?.transformerVariants as Record<string, unknown> | undefined);
     let value: any;
     let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
 
@@ -552,8 +551,8 @@ export async function executeCommandVariable(
   let execDef: any;
   
   if (commandVar && commandVar.type === 'executable' && commandVar.value) {
-    // Check if we have the full ExecutableDefinition in metadata
-    const storedDef = commandVar.internal?.executableDef ?? commandVar.metadata?.executableDef;
+    // Check if we have the full ExecutableDefinition in internal
+    const storedDef = commandVar.internal?.executableDef;
     if (storedDef) {
       execDef = storedDef;
       
@@ -828,7 +827,7 @@ export async function executeCommandVariable(
       if (withClause.needs) {
         const { checkDependencies, DefaultDependencyChecker } = await import('../dependencies');
         const checker = new DefaultDependencyChecker();
-        await checkDependencies(withClause.needs, checker, commandVar.ctx?.definedAt || commandVar.metadata?.definedAt);
+        await checkDependencies(withClause.needs, checker, commandVar.ctx?.definedAt);
       }
 
       if (withClause.pipeline && withClause.pipeline.length > 0) {
@@ -840,7 +839,7 @@ export async function executeCommandVariable(
           format: withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandVar?.name,
-          location: commandVar.ctx?.definedAt || commandVar.metadata?.definedAt
+          location: commandVar.ctx?.definedAt
         });
         if (processed === 'retry') {
           return 'retry';
@@ -959,11 +958,10 @@ export async function executeCommandVariable(
           if (paramVar.type === 'pipeline-input') {
             params[paramName] = paramVar.value;
           } else if (
-            (paramVar.internal?.isPipelineInput && paramVar.internal?.pipelineInput) ||
-            (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput)
+            (paramVar.internal?.isPipelineInput && paramVar.internal?.pipelineInput)
           ) {
             params[paramName] =
-              paramVar.internal?.pipelineInput ?? paramVar.metadata?.pipelineInput;
+              paramVar.internal?.pipelineInput;
           } else {
             params[paramName] = paramVar.value;
           }

@@ -915,11 +915,11 @@ function extractInterpolationDescriptor(value: unknown): SecurityDescriptor | un
     return undefined;
   }
   if (isStructuredValue(value)) {
-    return normalizeSecurityDescriptor(value.metadata?.security as SecurityDescriptor | undefined);
+    return normalizeSecurityDescriptor(value.ctx as SecurityDescriptor | undefined);
   }
   if (typeof value === 'object') {
-    const metadata = (value as { metadata?: { security?: SecurityDescriptor } }).metadata;
-    return normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+    const ctx = (value as { ctx?: SecurityDescriptor }).ctx;
+    return normalizeSecurityDescriptor(ctx as SecurityDescriptor | undefined);
   }
   return undefined;
 }
@@ -1021,7 +1021,7 @@ export async function interpolate(
         pushPart(`{{${varName}}}`); // Keep unresolved with {{}} syntax
         continue;
       }
-      collectDescriptor(variable.metadata?.security as SecurityDescriptor | undefined);
+      collectDescriptor(variable.ctx as SecurityDescriptor | undefined);
       
       /**
        * Extract Variable value for string interpolation
@@ -1085,7 +1085,7 @@ export async function interpolate(
         continue;
       }
 
-      collectDescriptor(variable.metadata?.security as SecurityDescriptor | undefined);
+      collectDescriptor(variable.ctx as SecurityDescriptor | undefined);
 
       // Extract value based on variable type using new type guards
       let value: unknown = '';
@@ -1138,7 +1138,7 @@ export async function interpolate(
       }
       
       // Special handling for lazy reserved variables like DEBUG
-      if (value === null && variable.metadata?.isReserved && variable.metadata?.isLazy) {
+      if (value === null && variable.internal?.isReserved && variable.internal?.isLazy) {
         // Need to resolve this as a resolver variable
         const resolverVar = await env.getResolverVariable(varName);
         if (resolverVar && resolverVar.value !== null) {
@@ -1366,7 +1366,8 @@ export async function interpolate(
             isArray: Array.isArray(value),
             length: value.length,
             hasVariable: '__variable' in value,
-            variableMetadata: (value as any).__variable?.metadata,
+            variableCtx: (value as any).__variable?.ctx,
+            variableInternal: (value as any).__variable?.internal,
             isRenamedContentArray: isRenamedContentArray(value),
             isLoadContentResultArray: isLoadContentResultArray(value),
             hasContent: 'content' in value,
@@ -1419,7 +1420,7 @@ export async function interpolate(
         } else if (isLoadContentResultArray(value)) {
           // For array of LoadContentResult, concatenate content with double newlines
           stringValue = value.map(item => item.content).join('\n\n');
-        } else if (variable && variable.metadata?.isNamespace && node.fields?.length === 0) {
+        } else if (variable && variable.internal?.isNamespace && node.fields?.length === 0) {
           // Check if this is a namespace object (only if no field access)
           const { JSONFormatter } = await import('./json-formatter');
           stringValue = JSONFormatter.stringifyNamespace(value);

@@ -211,13 +211,20 @@ export async function evaluateExecInvocation(
 
   const createParameterMetadata = (value: unknown) => {
     const descriptor = extractSecurityDescriptor(value);
-    if (!descriptor) {
-      return { isSystem: true, isParameter: true };
-    }
-    return VariableMetadataUtils.applySecurityMetadata(
-      { isSystem: true, isParameter: true },
-      { existingDescriptor: descriptor }
-    );
+    const metadata = descriptor
+      ? VariableMetadataUtils.applySecurityMetadata(
+          undefined,
+          { existingDescriptor: descriptor }
+        )
+      : undefined;
+
+    return {
+      metadata,
+      internal: {
+        isSystem: true,
+        isParameter: true
+      }
+    };
   };
 
   const createEvalResult = (
@@ -504,7 +511,6 @@ export async function evaluateExecInvocation(
       // Deserialize shadow environments if needed
       let serializedInternal =
         (variable.internal as Record<string, unknown> | undefined) ??
-        (variable.metadata as Record<string, unknown> | undefined) ??
         {};
       if (serializedInternal.capturedShadowEnvs && typeof serializedInternal.capturedShadowEnvs === 'object') {
         // Check if it needs deserialization (is plain object, not Map)
@@ -932,10 +938,9 @@ export async function evaluateExecInvocation(
   }
   
   const guardHelperImpl =
-    (variable.internal as any)?.guardHelperImplementation ??
-    (variable.metadata as any)?.guardHelperImplementation;
+    (variable.internal as any)?.guardHelperImplementation;
   if (
-    ((variable.internal as any)?.isGuardHelper || (variable.metadata as any)?.isGuardHelper) &&
+    (variable.internal as any)?.isGuardHelper &&
     typeof guardHelperImpl === 'function'
   ) {
     const impl = guardHelperImpl as (args: readonly unknown[]) => unknown | Promise<unknown>;
@@ -986,11 +991,7 @@ export async function evaluateExecInvocation(
         paramVar = {
           ...originalVar,
           name: paramName,
-          metadata: {
-            ...originalVar.metadata,
-            isSystem: true,
-            isParameter: true
-          },
+          ctx: { ...originalVar.ctx },
           internal: {
             ...(originalVar.internal ?? {}),
             isSystem: true,
@@ -1118,11 +1119,7 @@ export async function evaluateExecInvocation(
         const clonedInput: Variable = {
           ...(guardInputVariable as Variable),
           name: 'input',
-          metadata: {
-            ...(guardInputVariable as Variable).metadata,
-            isSystem: true,
-            isParameter: true
-          },
+          ctx: { ...(guardInputVariable as Variable).ctx },
           internal: {
             ...((guardInputVariable as Variable).internal ?? {}),
             isSystem: true,
@@ -1368,7 +1365,7 @@ export async function evaluateExecInvocation(
         await checkDependencies(
           definition.withClause.needs,
           checker,
-          variable.ctx?.definedAt || variable.metadata?.definedAt || node.location
+          variable.ctx?.definedAt || node.location
         );
       }
 
@@ -1388,7 +1385,7 @@ export async function evaluateExecInvocation(
           format: definition.withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandName,
-          location: variable.ctx?.definedAt || variable.metadata?.definedAt || node.location
+          location: variable.ctx?.definedAt || node.location
         });
 
         if (typeof pipelineResult === 'string') {
@@ -1503,7 +1500,10 @@ export async function evaluateExecInvocation(
             codeParams[paramName] = prepareValueForShadow(paramVar);
           }
         } else {
-          // Other languages (JS, Python) get proxies for rich type info
+          // Other languages (JS, Python, Node, etc.) get deferred conversion to proxies
+          // so that prepareParamsForShadow can record primitive metadata.
+          let variableForShadow: Variable = paramVar;
+
           // But first, check if it's a complex Variable that needs resolution
           if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
             // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
@@ -1514,7 +1514,7 @@ export async function evaluateExecInvocation(
               value: resolvedValue,
               isComplex: false
             };
-            codeParams[paramName] = prepareValueForShadow(resolvedVar);
+            variableForShadow = resolvedVar;
           } else {
             // Store metadata on shelf before unwrapping
             metadataShelf.storeMetadata(paramVar.value);
@@ -1529,12 +1529,13 @@ export async function evaluateExecInvocation(
                 // Update type based on unwrapped value
                 type: Array.isArray(unwrappedValue) ? 'array' : 'text'
               };
-              codeParams[paramName] = prepareValueForShadow(unwrappedVar);
+              variableForShadow = unwrappedVar;
             } else {
-              // No unwrapping needed, use original
-              codeParams[paramName] = prepareValueForShadow(paramVar);
+              variableForShadow = paramVar;
             }
           }
+
+          codeParams[paramName] = variableForShadow;
         }
         
         // Store metadata for primitives that can't be proxied (only for non-bash languages)
@@ -1548,8 +1549,8 @@ export async function evaluateExecInvocation(
           variableMetadata[paramName] = {
             type: paramVar.type,
             subtype: subtype,
-            metadata: paramVar.metadata,
             ctx: paramVar.ctx,
+            internal: paramVar.internal,
             isVariable: true
           };
         }
@@ -1562,7 +1563,7 @@ export async function evaluateExecInvocation(
           logger.debug(`Variable passing for ${paramName}:`, {
             variableType: paramVar.type,
             variableSubtype: subtype,
-            hasMetadata: !!paramVar.metadata,
+            hasInternal: !!paramVar.internal,
             isPrimitive: paramVar.value === null || typeof paramVar.value !== 'object',
             language: definition.language
           });
@@ -1588,8 +1589,7 @@ export async function evaluateExecInvocation(
 
     // NEW: Pass captured shadow environments for JS/Node execution
     const capturedModuleEnv =
-      (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
-      (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
+      (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
     if (
       capturedModuleEnv instanceof Map &&
       (definition.language === 'js' || definition.language === 'javascript' ||
@@ -1608,7 +1608,7 @@ export async function evaluateExecInvocation(
           continue;
         }
 
-        codeParams[capturedName] = prepareValueForShadow(capturedVar);
+        codeParams[capturedName] = capturedVar;
 
         if ((capturedVar.value === null || typeof capturedVar.value !== 'object') && capturedVar.type !== 'executable') {
           const subtype = capturedVar.type === 'primitive' && 'primitiveType' in capturedVar
@@ -1617,7 +1617,6 @@ export async function evaluateExecInvocation(
           variableMetadata[capturedName] = {
             type: capturedVar.type,
             subtype,
-            metadata: capturedVar.metadata,
             ctx: capturedVar.ctx,
             isVariable: true
           };
@@ -1627,7 +1626,7 @@ export async function evaluateExecInvocation(
 
     // NEW: Pass captured shadow environments for JS/Node execution
     const capturedEnvs =
-      variable.internal?.capturedShadowEnvs ?? (variable.metadata as Record<string, unknown> | undefined)?.capturedShadowEnvs;
+      variable.internal?.capturedShadowEnvs;
     if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
                          definition.language === 'node' || definition.language === 'nodejs')) {
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
@@ -1713,10 +1712,9 @@ export async function evaluateExecInvocation(
     // Look up the referenced command
     // First check in the captured module environment (for imported executables)
     let refCommand = null;
-    if (variable?.internal?.capturedModuleEnv || variable?.metadata?.capturedModuleEnv) {
+    if (variable?.internal?.capturedModuleEnv) {
       const capturedEnv =
-        (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
-        (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
+        (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
       if (capturedEnv instanceof Map) {
         // If it's a Map, we have proper Variables
         refCommand = capturedEnv.get(refName);
@@ -1768,12 +1766,10 @@ export async function evaluateExecInvocation(
       const refEnv = env.createChild();
       // Set the captured module env so getVariable can find the command
       if (
-        variable?.internal?.capturedModuleEnv instanceof Map ||
-        variable?.metadata?.capturedModuleEnv instanceof Map
+        variable?.internal?.capturedModuleEnv instanceof Map
       ) {
         const captured =
-          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined) ??
-          (variable.metadata?.capturedModuleEnv as Map<string, Variable> | undefined);
+          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
         if (captured instanceof Map) {
           refEnv.setCapturedModuleEnv(captured);
         }
@@ -1958,12 +1954,6 @@ export async function evaluateExecInvocation(
           ? 'object'
           : 'text';
       const structured = wrapStructured(extracted as any, typeHint as any);
-      if (result.metadata) {
-        structured.metadata = {
-          ...structured.metadata,
-          variableMetadata: result.metadata
-        };
-      }
       result = structured;
     }
   }

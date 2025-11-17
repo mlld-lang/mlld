@@ -49,7 +49,7 @@ interface NormalizedFactoryState {
 
 function finalizeVariable<T extends Variable>(variable: T): T {
   if (!variable.ctx) {
-    variable.ctx = metadataToCtx(variable.metadata);
+    variable.ctx = metadataToCtx((variable as any).metadata);
   }
   if (variable.ctx) {
     variable.ctx.name = variable.name;
@@ -795,9 +795,9 @@ export class VariableFactory {
         executableDef: executableDefinition
       };
     }
-    if (variable.internal?.executableDef && (!variable.metadata || !(variable.metadata as any).executableDef)) {
-      variable.metadata = {
-        ...(variable.metadata ?? {}),
+    if (variable.internal?.executableDef && (!(variable as any).metadata || !((variable as any).metadata as any).executableDef)) {
+      (variable as any).metadata = {
+        ...((variable as any).metadata ?? {}),
         executableDef: variable.internal.executableDef
       };
     }
@@ -1049,7 +1049,7 @@ export class VariableFactory {
   ): T {
     return {
       ...variable,
-      metadata: { ...variable.metadata, ...newMetadata },
+      metadata: { ...(variable as any).metadata, ...newMetadata },
       modifiedAt: Date.now()
     } as T;
   }

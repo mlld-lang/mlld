@@ -97,7 +97,7 @@ export async function evaluateWhenExpression(
   const buildResult = (value: unknown, environment: Environment): EvalResult => ({
     value,
     env: environment,
-    metadata: deniedHandlerRan ? { deniedHandlerRan: true } : undefined
+    internal: deniedHandlerRan ? { deniedHandlerRan: true } : undefined
   });
   
   // Empty conditions array - return null

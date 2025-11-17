@@ -93,8 +93,7 @@ export async function evaluateForeachCommand(
       }
       const referencedVar = referencedName ? env.getVariable(referencedName) : undefined;
       sourceDescriptor =
-        (referencedVar?.ctx ? ctxToSecurityDescriptor(referencedVar.ctx) : undefined) ??
-        (referencedVar?.metadata?.security as SecurityDescriptor | undefined);
+        (referencedVar?.ctx ? ctxToSecurityDescriptor(referencedVar.ctx) : undefined);
     }
     if (isStructuredValue(arrayValue)) {
       let structuredData = asData(arrayValue) as unknown;
@@ -214,7 +213,6 @@ export async function evaluateForeachCommand(
           ? mergeDescriptors(existingDescriptor, tupleDescriptor)
           : tupleDescriptor;
         structuredResult = ensureStructuredValue(structuredResult, structuredResult.type, structuredResult.text, {
-          ...(structuredResult.metadata || {}),
           security: merged
         });
       }

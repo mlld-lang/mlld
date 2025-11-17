@@ -99,27 +99,30 @@ export class ObjectReferenceResolver {
       const execVar = referencedVar as ExecutableVariable;
       
       // Serialize shadow environments if present (Maps don't serialize to JSON)
-      let serializedMetadata = execVar.metadata;
-      if (serializedMetadata?.capturedShadowEnvs) {
-        serializedMetadata = {
-          ...serializedMetadata,
-          capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+      let serializedCtx = { ...execVar.ctx };
+      let serializedInternal = { ...execVar.internal };
+
+      if (execVar.internal?.capturedShadowEnvs) {
+        serializedInternal = {
+          ...serializedInternal,
+          capturedShadowEnvs: this.serializeShadowEnvs(execVar.internal.capturedShadowEnvs)
         };
       }
       // Serialize module environment if present
-      if (serializedMetadata?.capturedModuleEnv) {
-        serializedMetadata = {
-          ...serializedMetadata,
-          capturedModuleEnv: this.serializeModuleEnv(serializedMetadata.capturedModuleEnv)
+      if (execVar.internal?.capturedModuleEnv) {
+        serializedInternal = {
+          ...serializedInternal,
+          capturedModuleEnv: this.serializeModuleEnv(execVar.internal.capturedModuleEnv)
         };
       }
-      
+
       const result = {
         __executable: true,
         value: execVar.value,
         paramNames: execVar.paramNames,
-        executableDef: execVar.metadata?.executableDef,
-        metadata: serializedMetadata
+        executableDef: execVar.internal?.executableDef,
+        ctx: serializedCtx,
+        internal: serializedInternal
       };
       return result;
     } else {
@@ -127,7 +130,8 @@ export class ObjectReferenceResolver {
         return {
           __arraySnapshot: true,
           value: referencedVar.value,
-          metadata: referencedVar.metadata,
+          ctx: referencedVar.ctx,
+          internal: referencedVar.internal,
           isComplex: (referencedVar as any).isComplex === true,
           name: referencedVar.name
         };
@@ -169,22 +173,25 @@ export class ObjectReferenceResolver {
     for (const [name, variable] of moduleEnv) {
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
-        let serializedMetadata = { ...execVar.metadata };
-        if (serializedMetadata.capturedShadowEnvs) {
-          serializedMetadata = {
-            ...serializedMetadata,
-            capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+        let serializedCtx = { ...execVar.ctx };
+        let serializedInternal = { ...execVar.internal };
+
+        if (serializedInternal.capturedShadowEnvs) {
+          serializedInternal = {
+            ...serializedInternal,
+            capturedShadowEnvs: this.serializeShadowEnvs(serializedInternal.capturedShadowEnvs)
           };
         }
         // Skip capturedModuleEnv only for items IN the module env to avoid recursion
-        delete serializedMetadata.capturedModuleEnv;
+        delete serializedInternal.capturedModuleEnv;
 
         result[name] = {
           __executable: true,
           value: execVar.value,
           paramNames: execVar.paramNames,
-          executableDef: execVar.metadata?.executableDef,
-          metadata: serializedMetadata
+          executableDef: execVar.internal?.executableDef,
+          ctx: serializedCtx,
+          internal: serializedInternal
         };
       } else {
         // For other variables, export the value directly

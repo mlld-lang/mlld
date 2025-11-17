@@ -39,13 +39,15 @@ export class NowResolver implements Resolver {
     
     // Variable or path context - return ISO timestamp as text
     if (!config?.context || config.context === 'variable' || config.context === 'path') {
+      const metadata = {
+        source: 'now',
+        timestamp: currentTime
+      };
       return {
         content: currentTime.toISOString(),
         contentType: 'text',
-        metadata: {
-          source: 'now',
-          timestamp: currentTime
-        }
+        ctx: metadata,
+        metadata
       };
     }
     
@@ -78,13 +80,15 @@ export class NowResolver implements Resolver {
         }
       }
       
+      const metadata = {
+        source: 'now',
+        timestamp: currentTime
+      };
       return {
         content: JSON.stringify(exports),
         contentType: 'data',
-        metadata: {
-          source: 'now',
-          timestamp: currentTime
-        }
+        ctx: metadata,
+        metadata
       };
     }
     

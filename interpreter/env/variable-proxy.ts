@@ -14,6 +14,24 @@ import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
+function cloneValue<T>(input: T | undefined): T | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(input);
+    } catch {
+      // Fall through to JSON cloning
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(input));
+  } catch {
+    return input;
+  }
+}
+
 /**
  * Special property names for Variable introspection
  */
@@ -51,7 +69,10 @@ export function createVariableProxy(variable: Variable): any {
           return variable.subtype;
           
         case VARIABLE_PROXY_PROPS.METADATA:
-          return variable.metadata || {};
+          return {
+            ctx: variable.ctx,
+            internal: variable.internal
+          };
           
         case VARIABLE_PROXY_PROPS.VARIABLE:
           return variable;
@@ -61,8 +82,7 @@ export function createVariableProxy(variable: Variable): any {
           
         // Special handling for toString to preserve custom behavior
         case 'toString':
-          const customToString =
-            variable.internal?.customToString ?? variable.metadata?.customToString;
+          const customToString = variable.internal?.customToString;
           if (customToString) {
             // Bind the custom toString to the target
             return customToString.bind(target);
@@ -71,8 +91,7 @@ export function createVariableProxy(variable: Variable): any {
           
         // Special handling for toJSON
         case 'toJSON':
-          const customToJSON =
-            variable.internal?.customToJSON ?? variable.metadata?.customToJSON;
+          const customToJSON = variable.internal?.customToJSON;
           if (customToJSON) {
             return customToJSON;
           }
@@ -144,8 +163,8 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
           isVariable: true,
           type: value.type,
           subtype: (value as any).primitiveType,
-          metadata: value.metadata || {},
-          ctx: value.ctx
+          ctx: value.ctx,
+          internal: value.internal
         });
       }
       return value.value;
@@ -159,8 +178,8 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       recordPrimitiveMetadata(target, key, {
         isVariable: false,
         type: wrapped.type,
-        metadata: wrapped.metadata || {},
         ctx: wrapped.ctx,
+        internal: wrapped.internal,
         text: wrapped.text
       });
     }
@@ -172,8 +191,8 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       recordPrimitiveMetadata(target, key, {
         isVariable: false,
         type: value.type,
-        metadata: value.metadata || {},
         ctx: value.ctx,
+        internal: value.internal,
         text: value.text
       });
     }
@@ -232,7 +251,18 @@ export function getVariableType(value: any): string | undefined {
  * @param primitiveMetadata - Optional metadata for primitive values that can't be proxied
  */
 export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
-  return {
+  const getProxyVariable = (value: any) => {
+    if (isVariableProxy(value)) {
+      try {
+        return value[VARIABLE_PROXY_PROPS.VARIABLE] as Variable | undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+
+  const helpers = {
     // Type checking - also check primitive metadata
     isVariable: (value: any, name?: string) => {
       // First check if it's a proxy
@@ -266,19 +296,35 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
     VARIABLE: VARIABLE_PROXY_PROPS.VARIABLE,
     
     // Metadata helpers - also check primitive metadata
-    getMetadata: (value: any, name?: string) => {
-      if (isVariableProxy(value)) {
-        try {
-          return value[VARIABLE_PROXY_PROPS.METADATA];
-        } catch {
-          return undefined;
-        }
+    getCtx: (value: any, name?: string) => {
+      const proxyVariable = getProxyVariable(value);
+      if (proxyVariable) {
+        return cloneValue(proxyVariable.ctx);
       }
-      // Check primitive metadata
       if (name && primitiveMetadata && primitiveMetadata[name]) {
-        return primitiveMetadata[name].metadata || {};
+        return cloneValue(primitiveMetadata[name].ctx);
       }
       return undefined;
+    },
+
+    getInternal: (value: any, name?: string) => {
+      const proxyVariable = getProxyVariable(value);
+      if (proxyVariable) {
+        return cloneValue(proxyVariable.internal);
+      }
+      if (name && primitiveMetadata && primitiveMetadata[name]) {
+        return cloneValue(primitiveMetadata[name].internal);
+      }
+      return undefined;
+    },
+
+    getMetadata: (value: any, name?: string) => {
+      const ctx = helpers.getCtx(value, name);
+      const internal = helpers.getInternal(value, name);
+      if (!ctx && !internal) {
+        return undefined;
+      }
+      return { ctx, internal };
     },
     
     // Get subtype - also check primitive metadata
@@ -299,27 +345,24 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
     
     // Get the full Variable object - or reconstruct from metadata
     getVariable: (value: any, name?: string) => {
-      if (isVariableProxy(value)) {
-        try {
-          return value[VARIABLE_PROXY_PROPS.VARIABLE];
-        } catch {
-          return undefined;
-        }
+      const proxyVariable = getProxyVariable(value);
+      if (proxyVariable) {
+        return proxyVariable;
       }
-      // Check primitive metadata
       if (name && primitiveMetadata && primitiveMetadata[name]) {
         const meta = primitiveMetadata[name];
-        // Reconstruct a Variable-like object
         return {
           name,
           value,
           type: meta.type,
           subtype: meta.subtype,
-          metadata: meta.metadata,
+          ctx: meta.ctx || {},
+          internal: meta.internal || {},
           isVariable: true
         };
       }
       return undefined;
     }
-  };
+  } as const;
+  return helpers;
 }

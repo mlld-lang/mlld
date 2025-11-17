@@ -3,12 +3,14 @@ import type { Environment } from '../env/Environment';
 import {
   createSimpleTextVariable,
   type Variable,
-  type VariableSource
+  type VariableSource,
+  type SecurityDescriptor
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 
 /**
  * Extract and evaluate directive inputs for hook consumption.
@@ -185,7 +187,10 @@ async function extractRunInputs(
     const commandText = await interpolate(commandArray, env, InterpolationContext.ShellCommand);
     const referencedVariables = extractVariableReferences(commandArray);
     const descriptors = referencedVariables
-      .map(name => env.getVariable(name)?.metadata?.security)
+      .map(name => {
+        const variable = env.getVariable(name);
+        return variable ? ctxToSecurityDescriptor(variable.ctx) : undefined;
+      })
       .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
     const mergedDescriptor = descriptors.length > 0 ? env.mergeSecurityDescriptors(...descriptors) : undefined;
     const source: VariableSource = {
@@ -196,8 +201,8 @@ async function extractRunInputs(
         commandNodes.some((node: any) => node?.type === 'Newline')
     };
     const variable = createSimpleTextVariable('__run_command__', commandText, source, {
-      isSystem: true,
-      security: mergedDescriptor
+      ctx: mergedDescriptor || {},
+      internal: { isSystem: true }
     });
     if (mergedDescriptor) {
       env.recordSecurityDescriptor(mergedDescriptor);

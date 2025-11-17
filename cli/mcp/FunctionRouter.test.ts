@@ -35,12 +35,12 @@ async function createEnvironment(source: string): Promise<Environment> {
 
   for (const variable of environment.getAllVariables().values()) {
     if (variable.type !== 'executable') continue;
-    const meta = variable.metadata as Record<string, unknown> | undefined;
-    if (meta?.isSystem || meta?.isBuiltinTransformer) continue;
-    if (!meta) {
-      variable.metadata = { capturedModuleEnv: moduleEnv };
-    } else if (!meta.capturedModuleEnv) {
-      meta.capturedModuleEnv = moduleEnv;
+    const internal = variable.internal;
+    if (internal?.isSystem || internal?.isBuiltinTransformer) continue;
+    if (!internal) {
+      variable.internal = { capturedModuleEnv: moduleEnv };
+    } else if (!internal.capturedModuleEnv) {
+      internal.capturedModuleEnv = moduleEnv;
     }
   }
 
@@ -120,7 +120,7 @@ describe('FunctionRouter', () => {
     expect(envVar).toBeDefined();
 
     const exported = environment.getVariable('showVar');
-    expect(exported?.metadata?.capturedModuleEnv).toBeInstanceOf(Map);
+    expect(exported?.internal?.capturedModuleEnv).toBeInstanceOf(Map);
 
     const router = new FunctionRouter({ environment });
     const result = await router.executeFunction('show_var', {});

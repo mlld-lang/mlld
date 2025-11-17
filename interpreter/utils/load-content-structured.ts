@@ -136,8 +136,8 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     const variableMetadata = hasVariableMetadata(value) ? getVariableMetadata(value) : undefined;
     const metadata = buildMetadata(
       baseMetadata,
-      variableMetadata?.metadata
-        ? { variableMetadata: variableMetadata.metadata }
+      variableMetadata?.ctx
+        ? { variableMetadata: variableMetadata.ctx }
         : undefined
     );
 

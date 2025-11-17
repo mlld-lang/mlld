@@ -10,16 +10,14 @@ function buildVariable(): Variable {
     isMultiLine: false
   };
   return createSimpleTextVariable('example', 'value', source, {
-    security: {
-      labels: ['secret'],
-      taintLevel: 'unknown',
-      sources: [],
-      policyContext: null
-    }
+    ctx: {
+      labels: ['secret']
+    },
+    internal: {}
   });
 }
 
-describe('Variable metadata deprecation guard', () => {
+describe('Variable ctx/internal API', () => {
   const originalEnv = process.env.MLLD_METADATA_GUARD;
 
   beforeEach(() => {
@@ -34,16 +32,17 @@ describe('Variable metadata deprecation guard', () => {
     }
   });
 
-  it('keeps metadata accessible when guard is disabled', () => {
+  it('keeps ctx and internal accessible when guard is disabled', () => {
     const variable = buildVariable();
-    expect(variable.metadata).toBeDefined();
-    expect(variable.metadata?.security?.labels).toEqual(['secret']);
-    // Updating metadata still works
-    variable.metadata = { custom: true } as any;
-    expect(variable.metadata?.custom).toBe(true);
+    expect(variable.ctx).toBeDefined();
+    expect(variable.internal).toBeDefined();
+    expect(variable.ctx?.labels).toEqual(['secret']);
+    // Updating ctx still works
+    variable.ctx = { ...variable.ctx, labels: ['public'] };
+    expect(variable.ctx?.labels).toEqual(['public']);
   });
 
-  it('throws helpful error when guard mode is error', () => {
+  it('throws helpful error when accessing deprecated metadata when guard mode is error', () => {
     process.env.MLLD_METADATA_GUARD = 'error';
     const variable = buildVariable();
     expect(() => {

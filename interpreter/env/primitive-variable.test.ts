@@ -77,7 +77,7 @@ describe('Primitive Variable Type Handling', () => {
               value: text,
               type: mlld.getType(text, 'text'),
               isVariable: mlld.isVariable(text, 'text'),
-              metadata: mlld.getMetadata(text, 'text')
+              internal: mlld.getInternal(text, 'text')
             };
           ` }]
         }
@@ -105,8 +105,8 @@ describe('Primitive Variable Type Handling', () => {
     expect(output.value).toBe('Hello, World!');
     expect(output.type).toBe('simple-text');
     expect(output.isVariable).toBe(true);
-    // Metadata includes parameter info when passed to functions
-    expect(output.metadata).toHaveProperty('isParameter', true);
+    // internal includes parameter info when passed to functions
+    expect(output.internal).toHaveProperty('isParameter', true);
   });
 
   it('should preserve type information for number primitives', async () => {

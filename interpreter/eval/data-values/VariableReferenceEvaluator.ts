@@ -315,7 +315,7 @@ export class VariableReferenceEvaluator {
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
       // If the variable has complex metadata indicating it needs further evaluation
-      if ((variable as Variable).metadata?.isComplex) {
+      if ((variable as Variable).internal?.isComplex) {
         // For complex variables, we need to evaluate the raw value
         result = await this.evaluateDataValue(result, env);
       }

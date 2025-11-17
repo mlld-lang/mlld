@@ -141,7 +141,7 @@ export async function processPipeline(
     logger.debug('[processPipeline] Checking for synthetic source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
-      hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && (value as any).metadata),
+      hasMetadata: !!(value && typeof value === 'object' && ('ctx' in value || 'internal' in value) && ((value as any).ctx || (value as any).internal)),
       hasSourceFunction: !!sourceNode,
       valueType: value && typeof value === 'object' && 'type' in value ? value.type : typeof value
     });
@@ -320,8 +320,8 @@ async function prepareStructuredInput(
     return wrapStructured(normalizedData, (value as any).type, (value as any).text, mergedMetadata((value as any).metadata));
   }
 
-  if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
-    const metadata = mergedMetadata(value.metadata as StructuredValueMetadata | undefined);
+  if (value && typeof value === 'object' && 'value' in value && ('ctx' in value || 'internal' in value)) {
+    const metadata = mergedMetadata(undefined);
     return prepareStructuredInput(value.value, env, metadata);
   }
 
@@ -419,12 +419,9 @@ function getSourceFunctionFromValue(value: unknown): any | undefined {
   if (!value || typeof value !== 'object') {
     return undefined;
   }
-  const candidate = value as { internal?: Record<string, unknown>; metadata?: Record<string, unknown> };
+  const candidate = value as { internal?: Record<string, unknown> };
   if (candidate.internal && candidate.internal.sourceFunction) {
     return candidate.internal.sourceFunction;
-  }
-  if (candidate.metadata && candidate.metadata.sourceFunction) {
-    return candidate.metadata.sourceFunction;
   }
   return undefined;
 }

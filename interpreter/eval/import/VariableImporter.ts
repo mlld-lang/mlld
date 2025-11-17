@@ -367,8 +367,8 @@ export class VariableImporter {
       if (mergedDescriptor) {
         metadataForSerialization.security = mergedDescriptor;
       }
-      if (variable.metadata?.capability) {
-        metadataForSerialization.capability = variable.metadata.capability;
+      if (variable.internal?.capability) {
+        metadataForSerialization.capability = variable.internal.capability;
       }
       const serializedMetadata = VariableMetadataUtils.serializeSecurityMetadata(metadataForSerialization);
       if (serializedMetadata) {
@@ -1012,14 +1012,12 @@ export class VariableImporter {
 
   /**
    * Check if a variable is a legitimate mlld variable that can be exported/imported.
-   * System variables (tracked via internal.isSystem, with legacy metadata fallback) are excluded
+   * System variables (tracked via internal.isSystem) are excluded
    * to prevent namespace collisions when importing multiple modules with system variables like @fm.
    */
   private isLegitimateVariableForExport(variable: Variable): boolean {
     // System variables (like @fm) should not be exported
-    const isSystem =
-      variable.internal?.isSystem ??
-      (variable.metadata?.isSystem ?? false);
+    const isSystem = variable.internal?.isSystem ?? false;
 
     if (isSystem) {
       return false;

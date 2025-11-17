@@ -150,15 +150,17 @@ export class GitHubResolver implements Resolver {
     const cached = this.getCached(cacheKey, config.cacheTimeout);
     if (cached) {
       const contentType = await this.detectContentType(path, cached.content);
+      const metadata = {
+        source: `github://${config.repository}/${path}`,
+        timestamp: new Date(),
+        taintLevel: 'networkCached' as TaintLevel,
+        author: owner
+      };
       return {
         content: cached.content,
         contentType,
-        metadata: {
-          source: `github://${config.repository}/${path}`,
-          timestamp: new Date(),
-          taintLevel: 'networkCached' as TaintLevel,
-          author: owner
-        }
+        ctx: metadata,
+        metadata
       };
     }
 
@@ -177,16 +179,18 @@ export class GitHubResolver implements Resolver {
       });
 
       const contentType = await this.detectContentType(path, content);
+      const metadata = {
+        source: `github://${config.repository}/${path}`,
+        timestamp: new Date(),
+        taintLevel: 'networkLive' as TaintLevel,
+        author: owner,
+        mimeType: this.getMimeType(path)
+      };
       return {
         content,
         contentType,
-        metadata: {
-          source: `github://${config.repository}/${path}`,
-          timestamp: new Date(),
-          taintLevel: 'networkLive' as TaintLevel,
-          author: owner,
-          mimeType: this.getMimeType(path)
-        }
+        ctx: metadata,
+        metadata
       };
     } catch (error) {
       const err = error as { status?: number; message?: string };

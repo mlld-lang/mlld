@@ -188,18 +188,13 @@ async function setSimplifiedInputVariable(
       isSystem: true,
       isPipelineParameter: true
     };
-    if (inputVar.metadata) {
-      inputVar.metadata.isSystem = true;
-    } else {
-      inputVar.metadata = { isSystem: true };
-    }
   } else if (structuredInput && isStructuredValue(structuredInput)) {
     const structuredVar = createStructuredValueVariable(
       'input',
       structuredInput,
       inputSource,
       {
-        metadata: { isSystem: true },
+        ctx: {},
         internal: { isSystem: true, isPipelineParameter: true }
       }
     );
@@ -212,7 +207,7 @@ async function setSimplifiedInputVariable(
       input,
       inputSource,
       {
-        metadata: { isSystem: true },
+        ctx: {},
         internal: { isSystem: true, isPipelineParameter: true }
       }
     );
@@ -254,7 +249,7 @@ function setSimplifiedPipelineVariable(
     false,
     inputSource,
     {
-      metadata: { isSystem: true },
+      ctx: {},
       internal: { isSystem: true, isPipelineContext: true }
     }
   );

@@ -6,7 +6,7 @@
  */
 
 import { MlldNode } from './nodes';
-import { VariableMetadata } from './index';
+import { VariableContext, VariableInternal } from './index';
 import type { PipelineStage } from './run';
 
 /**
@@ -113,7 +113,8 @@ export interface ExecutableVariable {
   type: 'executable';
   name: string;
   value: ExecutableDefinition;
-  metadata?: VariableMetadata;
+  ctx: VariableContext;
+  internal?: VariableInternal;
 }
 
 /**
@@ -167,16 +168,17 @@ export function isTextSourced(def: ExecutableDefinition): boolean {
 export function createExecutableVariable(
   name: string,
   definition: ExecutableDefinition,
-  metadata?: Partial<VariableMetadata>
+  options?: { ctx?: Partial<VariableContext>; internal?: Partial<VariableInternal> }
 ): ExecutableVariable {
   return {
     type: 'executable',
     name,
     value: definition,
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
+    ctx: {
+      ...options?.ctx
+    },
+    internal: {
+      ...options?.internal
     }
   };
 }

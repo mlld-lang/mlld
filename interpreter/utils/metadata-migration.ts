@@ -101,6 +101,9 @@ export function metadataToCtx(metadata?: VariableMetadata): VariableContext {
   if (metrics?.tokens !== undefined && ctx.tokens === undefined) {
     ctx.tokens = metrics.tokens;
   }
+  if (ctx.tokens === undefined && ctx.tokest !== undefined) {
+    ctx.tokens = ctx.tokest;
+  }
   if (metrics?.length !== undefined && ctx.length === undefined) {
     ctx.length = metrics.length;
   }

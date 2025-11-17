@@ -101,10 +101,10 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
     defineHelperProperty(target, 'maxTokens', aggregate.maxTokens);
   }
 
-  if (!variable.metadata) {
-    variable.metadata = {};
+  if (!variable.internal) {
+    variable.internal = {};
   }
-  (variable.metadata as any).arrayHelperAggregate = aggregate;
+  (variable.internal as any).arrayHelperAggregate = aggregate;
 
   // Update .ctx snapshot to include aggregate info for consumers and tests
   const ctx = ensureContext(variable);
@@ -123,8 +123,8 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   if (Array.isArray(variable.value)) {
     ctx.size = variable.value.length;
   }
-  if (variable.metadata?.ctxCache) {
-    variable.metadata.ctxCache = ctx;
+  if (variable.internal?.ctxCache) {
+    variable.internal.ctxCache = ctx;
   }
 }
 

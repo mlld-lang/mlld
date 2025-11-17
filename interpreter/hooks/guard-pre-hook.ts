@@ -205,7 +205,7 @@ function buildVariableIdentity(variable?: Variable): string {
   if (!variable) {
     return 'operation';
   }
-  const definedAt = (variable.metadata as any)?.definedAt;
+  const definedAt = variable.ctx?.definedAt;
   const location =
     definedAt && typeof definedAt === 'object'
       ? `${definedAt.filePath ?? ''}:${definedAt.line ?? ''}:${definedAt.column ?? ''}`
@@ -337,9 +337,8 @@ function buildPerInputCandidates(
   const results: PerInputCandidate[] = [];
 
   for (const variable of inputs) {
-    const descriptor = variable.metadata?.security;
-    const labels = Array.isArray(descriptor?.labels) ? descriptor!.labels : [];
-    const sources = Array.isArray(descriptor?.sources) ? descriptor!.sources : [];
+    const labels = Array.isArray(variable.ctx?.labels) ? variable.ctx.labels : [];
+    const sources = Array.isArray(variable.ctx?.sources) ? variable.ctx.sources : [];
 
     const seen = new Set<string>();
     const guards: GuardDefinition[] = [];
@@ -602,14 +601,17 @@ function cloneVariableForGuard(variable: Variable): Variable {
   const clone: Variable = {
     ...variable,
     name: 'input',
-    metadata: {
-      ...(variable.metadata ? { ...variable.metadata } : {}),
+    ctx: {
+      ...(variable.ctx ?? {})
+    },
+    internal: {
+      ...(variable.internal ?? {}),
       isReserved: true,
       isSystem: true
     }
   };
-  if (clone.metadata?.ctxCache) {
-    delete clone.metadata.ctxCache;
+  if (clone.ctx?.ctxCache) {
+    delete clone.ctx.ctxCache;
   }
   return clone;
 }
@@ -693,7 +695,8 @@ function createGuardHelperExecutable(
     'javascript',
     GUARD_HELPER_SOURCE,
     {
-      metadata: { isSystem: true }
+      ctx: {},
+      internal: { isSystem: true }
     }
   );
   execVar.internal = {

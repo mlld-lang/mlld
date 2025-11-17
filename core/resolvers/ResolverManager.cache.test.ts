@@ -36,7 +36,7 @@ class TestResolver implements Resolver {
     // Return content that includes the call count to verify caching
     return {
       content: `Module content for ${ref} (call #${currentCount})`,
-      metadata: {
+      ctx: {
         source: `test://${ref}`,
         timestamp: new Date(),
         size: 100
@@ -94,8 +94,8 @@ describe('ResolverManager with Cache Integration', () => {
       expect(result1.resolverName).toBe('test');
       expect(testResolver.getCallCount()).toBe(1);
       
-      // Verify hash was added to metadata
-      expect(result1.content.metadata?.hash).toBeDefined();
+      // Verify hash was added to ctx
+      expect(result1.content.ctx?.hash).toBeDefined();
       
       // Verify lock file was updated
       const lockEntry = lockFile.getModule('@test/module1');
@@ -106,7 +106,7 @@ describe('ResolverManager with Cache Integration', () => {
     it('should use cache for subsequent resolutions', async () => {
       // First resolution
       const result1 = await manager.resolve('@test/module1');
-      const hash1 = result1.content.metadata?.hash;
+      const hash1 = result1.content.ctx?.hash;
       
       // Second resolution - should use cache
       const result2 = await manager.resolve('@test/module1');
@@ -115,7 +115,7 @@ describe('ResolverManager with Cache Integration', () => {
       expect(result2.content.content).toBe(result1.content.content);
       expect(result2.content.content).toContain('call #1'); // Still first call
       expect(result2.resolverName).toBe('cache'); // Resolved from cache
-      expect(result2.content.metadata?.hash).toBe(hash1);
+      expect(result2.content.ctx?.hash).toBe(hash1);
       
       // Resolver should not have been called again
       expect(testResolver.getCallCount()).toBe(1);
@@ -233,7 +233,7 @@ describe('ResolverManager with Cache Integration', () => {
           this.callCount++;
           return {
             content: `Slow content for ${ref}`,
-            metadata: {
+            ctx: {
               source: `slow://${ref}`,
               timestamp: new Date(),
               size: 100

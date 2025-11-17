@@ -17,8 +17,7 @@ export function extractVariableValue(variable: Variable): any {
   // For arrays with custom toString behavior
   const internalMeta = variable.internal as Record<string, unknown> | undefined;
   const customToString =
-    (internalMeta?.customToString as (() => string) | undefined) ??
-    (variable.metadata?.customToString as (() => string) | undefined);
+    (internalMeta?.customToString as (() => string) | undefined);
   if (variable.type === 'array' && customToString) {
     if (Array.isArray(value)) {
       // Preserve the custom toString method
@@ -32,8 +31,7 @@ export function extractVariableValue(variable: Variable): any {
   
   // For arrays with custom toJSON behavior
   const customToJSON =
-    (internalMeta?.customToJSON as (() => unknown) | undefined) ??
-    (variable.metadata?.customToJSON as (() => unknown) | undefined);
+    (internalMeta?.customToJSON as (() => unknown) | undefined);
   if (variable.type === 'array' && customToJSON) {
     if (Array.isArray(value)) {
       Object.defineProperty(value, 'toJSON', {
@@ -46,8 +44,7 @@ export function extractVariableValue(variable: Variable): any {
   
   // For LoadContentResultArray, add the content getter
   const contentGetter =
-    (internalMeta?.contentGetter as (() => string) | undefined) ??
-    (variable.metadata?.contentGetter as (() => string) | undefined);
+    (internalMeta?.contentGetter as (() => string) | undefined);
   if (variable.type === 'array' && contentGetter) {
     if (Array.isArray(value)) {
       Object.defineProperty(value, 'content', {
@@ -75,9 +72,22 @@ export function extractVariableValue(variable: Variable): any {
 /**
  * Creates a Variable that preserves RenamedContentArray behavior
  */
+type RenamedContentOptions = {
+  name?: string;
+  ctx?: Partial<ArrayVariable['ctx']>;
+  internal?: {
+    fromGlobPattern?: boolean;
+    globPattern?: string;
+    fileCount?: number;
+  };
+  fromGlobPattern?: boolean;
+  globPattern?: string;
+  fileCount?: number;
+};
+
 export function createRenamedContentVariable(
   items: string[],
-  metadata?: Partial<ArrayVariable['metadata']>
+  options?: RenamedContentOptions
 ): ArrayVariable {
   const customToString = function() {
     return items.join('\n\n');
@@ -91,25 +101,29 @@ export function createRenamedContentVariable(
     customToString,
     customToJSON
   };
-  const internalOverrides: Partial<typeof baseInternal> & {
-    fromGlobPattern?: boolean;
-    globPattern?: string;
-    fileCount?: number;
-  } = {};
-  if (metadata) {
-    if (metadata.fromGlobPattern !== undefined) {
-      internalOverrides.fromGlobPattern = metadata.fromGlobPattern;
+  const internalOverrides: Record<string, unknown> = {};
+  const internalSource = options?.internal ?? {};
+  const legacySource = options ?? {};
+
+  const applyOverride = (
+    key: 'fromGlobPattern' | 'globPattern' | 'fileCount',
+    source: Record<string, unknown>
+  ) => {
+    if (Object.prototype.hasOwnProperty.call(source, key) && (source as any)[key] !== undefined) {
+      internalOverrides[key] = (source as any)[key];
     }
-    if (metadata.globPattern !== undefined) {
-      internalOverrides.globPattern = metadata.globPattern;
-    }
-    if (metadata.fileCount !== undefined) {
-      internalOverrides.fileCount = metadata.fileCount;
-    }
-  }
+  };
+
+  applyOverride('fromGlobPattern', internalSource);
+  applyOverride('globPattern', internalSource);
+  applyOverride('fileCount', internalSource);
+  applyOverride('fromGlobPattern', legacySource);
+  applyOverride('globPattern', legacySource);
+  applyOverride('fileCount', legacySource);
+
   return {
     type: 'array',
-    name: metadata?.name || 'renamed-content',
+    name: options?.name ?? options?.ctx?.name ?? 'renamed-content',
     value: items,
     source: {
       directive: 'var',
@@ -119,12 +133,8 @@ export function createRenamedContentVariable(
     },
     createdAt: Date.now(),
     modifiedAt: Date.now(),
-    metadata: {
-      arrayType: 'renamed-content',
-      joinSeparator: '\n\n',
-      customToString,
-      customToJSON,
-      ...metadata
+    ctx: {
+      ...options?.ctx
     },
     internal: {
       ...baseInternal,
@@ -136,9 +146,22 @@ export function createRenamedContentVariable(
 /**
  * Creates a Variable that preserves LoadContentResultArray behavior
  */
+type LoadContentOptions = {
+  name?: string;
+  ctx?: Partial<ArrayVariable['ctx']>;
+  internal?: {
+    fromGlobPattern?: boolean;
+    globPattern?: string;
+    fileCount?: number;
+  };
+  fromGlobPattern?: boolean;
+  globPattern?: string;
+  fileCount?: number;
+};
+
 export function createLoadContentResultVariable(
-  items: LoadContentResult[], 
-  metadata?: Partial<ArrayVariable['metadata']>
+  items: LoadContentResult[],
+  options?: LoadContentOptions
 ): ArrayVariable {
   // Define the functions outside to avoid circular references
   const toStringFunc = function() {
@@ -152,26 +175,29 @@ export function createLoadContentResultVariable(
   const contentGetterFunc = function() {
     return items.map(item => item.content).join('\n\n');
   };
-  const internalOverrides: {
-    fromGlobPattern?: boolean;
-    globPattern?: string;
-    fileCount?: number;
-  } = {};
-  if (metadata) {
-    if (metadata.fromGlobPattern !== undefined) {
-      internalOverrides.fromGlobPattern = metadata.fromGlobPattern;
+  const internalOverrides: Record<string, unknown> = {};
+  const internalSource = options?.internal ?? {};
+  const legacySource = options ?? {};
+
+  const applyOverride = (
+    key: 'fromGlobPattern' | 'globPattern' | 'fileCount',
+    source: Record<string, unknown>
+  ) => {
+    if (Object.prototype.hasOwnProperty.call(source, key) && (source as any)[key] !== undefined) {
+      internalOverrides[key] = (source as any)[key];
     }
-    if (metadata.globPattern !== undefined) {
-      internalOverrides.globPattern = metadata.globPattern;
-    }
-    if (metadata.fileCount !== undefined) {
-      internalOverrides.fileCount = metadata.fileCount;
-    }
-  }
+  };
+
+  applyOverride('fromGlobPattern', internalSource);
+  applyOverride('globPattern', internalSource);
+  applyOverride('fileCount', internalSource);
+  applyOverride('fromGlobPattern', legacySource);
+  applyOverride('globPattern', legacySource);
+  applyOverride('fileCount', legacySource);
   
   return {
     type: 'array',
-    name: metadata?.name || 'load-content-result',
+    name: options?.name ?? options?.ctx?.name ?? 'load-content-result',
     value: items,
     source: {
       directive: 'var',
@@ -181,13 +207,8 @@ export function createLoadContentResultVariable(
     },
     createdAt: Date.now(),
     modifiedAt: Date.now(),
-    metadata: {
-      arrayType: 'load-content-result',
-      joinSeparator: '\n\n',
-      customToString: toStringFunc,
-      customToJSON: toJSONFunc,
-      contentGetter: contentGetterFunc,
-      ...metadata
+    ctx: {
+      ...options?.ctx
     },
     internal: {
       arrayType: 'load-content-result',
@@ -224,14 +245,14 @@ export function getVariableMetadata(value: unknown): Variable | undefined {
  * Type guard that checks if a Variable is a RenamedContentArray Variable
  */
 export function isRenamedContentVariable(variable: Variable): boolean {
-  return variable.type === 'array' && 
-         variable.metadata?.arrayType === 'renamed-content';
+  return variable.type === 'array' &&
+         variable.internal?.arrayType === 'renamed-content';
 }
 
 /**
  * Type guard that checks if a Variable is a LoadContentResultArray Variable
  */
 export function isLoadContentResultVariable(variable: Variable): boolean {
-  return variable.type === 'array' && 
-         variable.metadata?.arrayType === 'load-content-result';
+  return variable.type === 'array' &&
+         variable.internal?.arrayType === 'load-content-result';
 }

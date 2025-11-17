@@ -312,7 +312,7 @@ export async function evaluateForExpression(
     isMultiLine: false
   };
 
-  const metadata: any = {
+  const metadata: Record<string, unknown> = {
     sourceExpression: expr.expression,
     iterationVariable: expr.variable.identifier
   };
@@ -326,13 +326,17 @@ export async function evaluateForExpression(
   }
 
   if (Array.isArray(finalResults)) {
-    metadata.arrayType = 'for-expression-result';
     return createArrayVariable(
       'for-result',
       finalResults,
       false,
       variableSource,
-      metadata
+      {
+        metadata,
+        internal: {
+          arrayType: 'for-expression-result'
+        }
+      }
     );
   }
 

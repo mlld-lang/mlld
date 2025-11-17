@@ -40,8 +40,8 @@ export class AdvancedTypeDetection {
     if (isExecutable(variable)) return true;
     if (isImported(variable)) {
       const imported = variable as ImportedVariable;
-      return imported.originalType === 'executable' || 
-             imported.metadata?.originalType === 'executable';
+      return imported.originalType === 'executable' ||
+             imported.internal?.originalType === 'executable';
     }
     return false;
   }
@@ -51,8 +51,8 @@ export class AdvancedTypeDetection {
    * This is used to determine if a variable needs special handling
    */
   static detectComplexVariable(variable: Variable): boolean {
-    // Check metadata first
-    if (variable.metadata?.isComplex) {
+    // Check internal first
+    if (variable.internal?.isComplex) {
       return true;
     }
 
@@ -112,7 +112,7 @@ export class AdvancedTypeDetection {
     }
 
     const imported = variable as ImportedVariable;
-    
+
     // Create a synthetic variable representing the imported content
     return {
       type: imported.originalType,
@@ -121,7 +121,8 @@ export class AdvancedTypeDetection {
       source: imported.source,
       createdAt: imported.createdAt,
       modifiedAt: imported.modifiedAt,
-      metadata: imported.metadata
+      ctx: { ...imported.ctx },
+      internal: { ...imported.internal }
     } as Variable;
   }
 
@@ -386,7 +387,7 @@ export class AdvancedTypeDetection {
     // Additional complexity factors
     if (this.hasInterpolation(variable)) score += 1;
     if (this.detectComplexVariable(variable)) score += 2;
-    if (variable.metadata?.isImported) score += 1;
+    if (variable.ctx?.isImported) score += 1;
     
     const dependencies = this.getVariableDependencies(variable);
     score += dependencies.length * 0.5;

@@ -1,4 +1,4 @@
-import type { Variable, VariableSource, VariableMetadata } from '@core/types/variable';
+import type { Variable, VariableSource } from '@core/types/variable';
 import { 
   createSimpleTextVariable, 
   createObjectVariable, 
@@ -14,6 +14,7 @@ import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
 import type { DataLabel, TaintLevel, SecurityDescriptor } from '@core/types/security';
 import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
+import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 
 export interface IVariableManager {
   // Core variable operations
@@ -162,7 +163,7 @@ export class VariableManager implements IVariableManager {
     }
     // Check if the name is reserved (but allow system variables to be set)
     const reservedNames = this.deps.getReservedNames();
-    if (reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
+    if (reservedNames.has(name) && !variable.internal?.isReserved && !variable.internal?.isSystem) {
       throw new Error(`Cannot create variable '@${name}': this name is already reserved by the system or a resolver prefix`);
     }
     
@@ -179,21 +180,19 @@ export class VariableManager implements IVariableManager {
       // Only throw collision errors if both variables are legitimate mlld types
       if (isLegitimateVariable && existingIsLegitimate) {
         // Check if this is an import conflict (one imported, one local)
-        const existingIsImported = Boolean(existing.metadata?.isImported);
-        const newIsImported = Boolean(variable.metadata?.isImported);
+        const existingIsImported = Boolean(existing.ctx?.isImported);
+        const newIsImported = Boolean(variable.ctx?.isImported);
         
         if (existingIsImported !== newIsImported) {
           if (process.env.MLLD_DEBUG === 'true') {
             console.error(`[setVariable] import conflict name=${name}, existingIsImported=${existingIsImported}, newIsImported=${newIsImported}`);
           }
           // Import vs local conflict
-          const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
+          const importPath = existingIsImported ? existing.ctx?.importPath : variable.ctx?.importPath;
           throw VariableRedefinitionError.forImportConflict(
             name,
-            existing.ctx?.definedAt ||
-              existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.ctx?.definedAt ||
-              variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
             importPath,
             existingIsImported
           );
@@ -201,10 +200,8 @@ export class VariableManager implements IVariableManager {
           // Same-file redefinition
           throw VariableRedefinitionError.forSameFile(
             name,
-            existing.ctx?.definedAt ||
-              existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.ctx?.definedAt ||
-              variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+            existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
           );
         }
       }
@@ -218,15 +215,13 @@ export class VariableManager implements IVariableManager {
       
       // Only throw collision errors if both variables are legitimate mlld types
       if (isLegitimateVariable && existingIsLegitimate) {
-        const isExistingImported = existing.metadata?.isImported || false;
-        const importPath = existing.metadata?.importPath;
-        
+        const isExistingImported = existing.ctx?.isImported || false;
+        const importPath = existing.ctx?.importPath;
+
         throw VariableRedefinitionError.forImportConflict(
           name,
-          existing.ctx?.definedAt ||
-            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          variable.ctx?.definedAt ||
-            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
           importPath,
           isExistingImported
         );
@@ -246,10 +241,8 @@ export class VariableManager implements IVariableManager {
       const existing = this.variables.get(name)!;
       throw VariableRedefinitionError.forSameFile(
         name,
-        existing.ctx?.definedAt ||
-          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-        variable.ctx?.definedAt ||
-          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+        existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+        variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
       );
     }
     
@@ -264,9 +257,13 @@ export class VariableManager implements IVariableManager {
       const testCtxVar = this.variables.get('test_ctx') || this.deps.getParent()?.getVariable('test_ctx');
       if (testCtxVar) {
         return createObjectVariable('ctx', testCtxVar.value, false, undefined, {
-          isReserved: true,
-          isReadOnly: true,
-          definedAt: { line: 0, column: 0, filePath: '<context>' }
+          ctx: {
+            definedAt: { line: 0, column: 0, filePath: '<context>' }
+          },
+          internal: {
+            isReserved: true,
+            isReadOnly: true
+          }
         });
       }
 
@@ -278,9 +275,13 @@ export class VariableManager implements IVariableManager {
         : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
       return createObjectVariable('ctx', ctxValue, false, undefined, {
-        isReserved: true,
-        isReadOnly: true,
-        definedAt: { line: 0, column: 0, filePath: '<context>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<context>' }
+        },
+        internal: {
+          isReserved: true,
+          isReadOnly: true
+        }
       });
     }
 
@@ -291,9 +292,11 @@ export class VariableManager implements IVariableManager {
     const parent = this.deps.getParent();
     
     if (variable) {
-      this.deps.recordSecurityDescriptor?.(variable.metadata?.security);
+      this.deps.recordSecurityDescriptor?.(
+        variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+      );
       // Special handling for lazy variables like @debug
-      if (variable.metadata && 'isLazy' in variable.metadata && variable.metadata.isLazy && variable.value === null) {
+      if (variable.internal && 'isLazy' in variable.internal && variable.internal.isLazy && variable.value === null) {
         // For lazy variables, we need to compute the value
         if (name === 'debug') {
           const debugValue = this.deps.createDebugObject(3); // Use markdown format
@@ -312,7 +315,9 @@ export class VariableManager implements IVariableManager {
       if (capturedEnv && capturedEnv.has(name)) {
         variable = capturedEnv.get(name);
         if (variable) {
-          this.deps.recordSecurityDescriptor?.(variable.metadata?.security);
+          this.deps.recordSecurityDescriptor?.(
+            variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+          );
           return variable;
         }
       }
@@ -321,7 +326,9 @@ export class VariableManager implements IVariableManager {
     // Check parent scope for regular variables
     const parentVar = parent?.getVariable(name);
     if (parentVar) {
-      this.deps.recordSecurityDescriptor?.(parentVar.metadata?.security);
+      this.deps.recordSecurityDescriptor?.(
+        parentVar.ctx ? ctxToSecurityDescriptor(parentVar.ctx) : undefined
+      );
       return parentVar;
     }
     
@@ -394,13 +401,13 @@ export class VariableManager implements IVariableManager {
       `@${resolverName}`, // Placeholder value
       placeholderSource,
       {
-        metadata: {
-          isReserved: true,
-          isResolver: true,
-          resolverName: resolverName,
+        ctx: {
           definedAt: { line: 0, column: 0, filePath: '<resolver>' }
         },
         internal: {
+          isReserved: true,
+          isResolver: true,
+          resolverName: resolverName,
           needsResolution: true
         }
       }
@@ -493,8 +500,12 @@ export class VariableManager implements IVariableManager {
       getTimeValue(),
       nowSource,
       {
-        isReserved: true,
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        },
+        internal: {
+          isReserved: true
+        }
       }
     );
     // Direct assignment for reserved variables during initialization
@@ -514,9 +525,13 @@ export class VariableManager implements IVariableManager {
       false, // Not complex
       debugSource,
       {
-        isReserved: true,
-        isLazy: true, // Indicates value should be computed on access
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        },
+        internal: {
+          isReserved: true,
+          isLazy: true
+        }
       }
     );
     // Direct assignment for reserved variables during initialization
@@ -538,8 +553,12 @@ export class VariableManager implements IVariableManager {
       true, // Is absolute
       baseSource,
       {
-        isReserved: true,
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        },
+        internal: {
+          isReserved: true
+        }
       }
     );
     // Direct assignment for reserved variables during initialization
@@ -581,37 +600,39 @@ export class VariableManager implements IVariableManager {
       isMultiLine: false
     };
     
-    const metadata: VariableMetadata = {
-      isReserved: true,
+    const ctxData = {
       definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+    };
+    const internalData = {
+      isReserved: true
     };
     
     // If we have both stdin and env vars, merge them
     if (stdinData !== null && Object.keys(envVars).length > 0) {
       if (typeof stdinData === 'object' && stdinData !== null && !Array.isArray(stdinData)) {
         // Merge objects (env vars take precedence)
-        return createObjectVariable('input', { ...stdinData, ...envVars }, true, inputSource, metadata);
+        return createObjectVariable('input', { ...stdinData, ...envVars }, true, inputSource, { ctx: ctxData, internal: internalData });
       } else {
         // Stdin is not an object, create object with separate fields
         return createObjectVariable('input', {
           stdin: stdinData,
           ...envVars
-        }, true, inputSource, metadata);
+        }, true, inputSource, { ctx: ctxData, internal: internalData });
       }
     }
-    
+
     // If we only have env vars
     if (Object.keys(envVars).length > 0) {
-      return createObjectVariable('input', envVars, true, inputSource, metadata);
+      return createObjectVariable('input', envVars, true, inputSource, { ctx: ctxData, internal: internalData });
     }
-    
+
     // If we only have stdin
     if (stdinData !== null) {
       if (typeof stdinData === 'object' && stdinData !== null) {
-        return createObjectVariable('input', stdinData, true, inputSource, metadata);
+        return createObjectVariable('input', stdinData, true, inputSource, { ctx: ctxData, internal: internalData });
       } else {
         // Simple text
-        return createSimpleTextVariable('input', stdinData, textSource, metadata);
+        return createSimpleTextVariable('input', stdinData, textSource, { ctx: ctxData, internal: internalData });
       }
     }
     
@@ -626,7 +647,7 @@ export class VariableManager implements IVariableManager {
    */
   private isLegitimateVariableType(variable: Variable): boolean {
     // System variables (like frontmatter) should not participate in collision detection
-    if (variable.metadata?.isSystem || variable.metadata?.isReserved) {
+    if (variable.internal?.isSystem || variable.internal?.isReserved) {
       return false;
     }
     

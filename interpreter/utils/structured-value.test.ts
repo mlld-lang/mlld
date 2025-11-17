@@ -17,6 +17,12 @@ const SOURCE: VariableSource = {
 };
 
 function createVariable(name: string, descriptor?: ReturnType<typeof makeSecurityDescriptor>): Variable {
+  const ctx = {
+    labels: descriptor?.labels ?? [],
+    taint: descriptor?.taintLevel ?? 'unknown',
+    sources: descriptor?.sources ?? [],
+    policy: descriptor?.policyContext ?? null
+  };
   return {
     type: 'simple-text',
     name,
@@ -24,7 +30,8 @@ function createVariable(name: string, descriptor?: ReturnType<typeof makeSecurit
     source: SOURCE,
     createdAt: Date.now(),
     modifiedAt: Date.now(),
-    metadata: descriptor ? { security: descriptor } : undefined
+    ctx,
+    internal: {}
   };
 }
 

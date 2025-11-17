@@ -45,7 +45,14 @@ describe('Variable Proxy System', () => {
       
       // Special properties work
       expect(proxy[VARIABLE_PROXY_PROPS.TYPE]).toBe('object');
-      expect(proxy[VARIABLE_PROXY_PROPS.METADATA]).toEqual({});
+      const metadata = proxy[VARIABLE_PROXY_PROPS.METADATA];
+      expect(metadata?.ctx).toEqual(
+        expect.objectContaining({
+          name: 'obj',
+          type: 'object'
+        })
+      );
+      expect(metadata?.internal).toEqual({});
     });
     
     it('should preserve custom toString behavior', () => {
@@ -120,11 +127,13 @@ describe('Variable Proxy System', () => {
       // Helper functions work
       expect(helpers.isVariable(proxy)).toBe(true);
       expect(helpers.getType(proxy)).toBe('array');
-      expect(helpers.getMetadata(proxy)).toMatchObject({ arrayType: 'load-content' });
+      const helperMetadata = helpers.getMetadata(proxy);
+      expect(helperMetadata?.internal).toMatchObject({ arrayType: 'load-content' });
       
       // Direct property access works
       expect(proxy[helpers.TYPE]).toBe('array');
-      expect(proxy[helpers.METADATA]).toMatchObject({ arrayType: 'load-content' });
+      const proxyMetadata = proxy[helpers.METADATA];
+      expect(proxyMetadata?.internal).toMatchObject({ arrayType: 'load-content' });
     });
   });
 });

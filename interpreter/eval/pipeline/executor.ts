@@ -809,7 +809,7 @@ export class PipelineExecutor {
       value,
       value.type,
       value.text,
-      { ...(value.metadata || {}), security: merged }
+      { security: merged }
     );
   }
 
@@ -1007,5 +1007,5 @@ function getStructuredSecurityDescriptor(value: StructuredValue | undefined): Se
   if (value.ctx) {
     return ctxToSecurityDescriptor(value.ctx as StructuredValueContext);
   }
-  return value.metadata?.security as SecurityDescriptor | undefined;
+  return undefined;
 }

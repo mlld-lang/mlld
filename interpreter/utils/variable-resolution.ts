@@ -146,11 +146,7 @@ export async function resolveVariable(
         return {
           ...variable,
           value: evaluatedValue,
-          metadata: {
-            ...variable.metadata,
-            wasEvaluated: true,
-            evaluatedAt
-          },
+          ctx: { ...variable.ctx },
           internal: {
             ...(variable.internal ?? {}),
             wasEvaluated: true,
@@ -221,9 +217,7 @@ export async function extractVariableValue(
     // Check if this is an array with custom behaviors (LoadContentResultArray, RenamedContentArray)
     // WHY: Special array types have behaviors (toString, content getter) that must be preserved
     //      during value extraction to maintain proper output formatting
-    const arrayType =
-      (variable.internal as Record<string, unknown> | undefined)?.arrayType ??
-      variable.metadata?.arrayType;
+    const arrayType = variable.internal?.arrayType;
     if (
       variable.type === 'array' &&
       arrayType &&

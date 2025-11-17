@@ -53,7 +53,7 @@ describe('handleExecGuardDenial', () => {
     const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
     expect(result).not.toBeNull();
     expect(result?.value).toBe('Denied fallback');
-    expect(result?.metadata?.deniedHandlerRan).toBe(true);
+    expect(result?.internal?.deniedHandlerRan).toBe(true);
     expect(effects.getErrors()).toContain('[Guard Warning] Displays disabled');
     const handlerOutputs = effects
       .getAll()
@@ -107,7 +107,7 @@ describe('handleExecGuardDenial', () => {
     const secondIndex = outputs.indexOf('second denied handler');
     expect(firstIndex).toBeGreaterThanOrEqual(0);
     expect(secondIndex).toBeGreaterThan(firstIndex);
-    expect(result?.metadata?.deniedHandlerRan).toBe(true);
+    expect(result?.internal?.deniedHandlerRan).toBe(true);
   });
 
   it('exposes guard context inside denied handlers', async () => {
@@ -130,7 +130,10 @@ describe('handleExecGuardDenial', () => {
       'value',
       'sk-live-ctx',
       source,
-      { isSystem: true, isReserved: true }
+      {
+        ctx: {},
+        internal: { isSystem: true, isReserved: true }
+      }
     );
     execEnv.setParameterVariable('value', guardInput);
 

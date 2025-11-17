@@ -38,7 +38,7 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
 
     if (data && typeof data === 'object') {
       if (
-        value.metadata?.source === 'load-content' ||
+        value.ctx?.source === 'load-content' ||
         Boolean(value.ctx?.filename) ||
         Boolean(value.ctx?.url)
       ) {
