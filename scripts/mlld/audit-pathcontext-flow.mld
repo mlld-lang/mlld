@@ -1,0 +1,58 @@
+>> PathContext injection audit (focus on files referencing PathContext)
+
+/var @rawFiles = run {rg -l "PathContext" @base/api @base/core @base/interpreter @base/cli @base/tests --glob '*.ts'}
+/exe @splitLines(text) = js {
+  if (text === null || text === undefined) return [];
+  const value = typeof text === 'string' ? text : String(text);
+  if (!value) return [];
+  return value
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
+/var @allFiles = @splitLines(@rawFiles)
+/var @limit = 60
+/exe @applyLimit(list, limit) = js {
+  const lim = Number(limit) || 0;
+  return lim > 0 ? list.slice(0, lim) : list;
+}
+/var @files = @applyLimit(@allFiles, @limit)
+/show "Auditing @files.length files for PathContext propagation"
+
+/exe @claude(prompt) = run @prompt | {claude -p --model claude-haiku-4-5}
+
+/exe @serializeFileList(files) = js { return JSON.stringify(files, null, 2); }
+/show "Files under review:\n@serializeFileList(@files)"
+
+/exe @analysisPrompt(filePath) = `
+You are auditing PathContext usage in the mlld repository.
+
+# Task
+For the given TypeScript file, analyze how PathContext, PathContextBuilder, or related context/config objects are used. Focus on:
+- Whether the file reads or mutates PathContext
+- How variables/helpers are injected or propagated (parent → child environments, resolvers, builders)
+- Any risks where dynamic variable injection could fail (missing propagation, shadow envs, caches)
+- Any references to taint/security metadata tied to PathContext
+
+# Output format (JSON)
+{
+  "file": "<path>",
+  "touchPoints": ["list key functions/lines handling PathContext"],
+  "propagationRisks": ["describe risks or say []"],
+  "notes": ["any other observations relevant to dynamic variable injection"],
+  "confidence": 0-100
+}
+
+# File: @filePath
+<file_content>
+<@base/@filePath>
+</file_content>
+
+Return ONLY JSON.
+`
+
+/var @results = for 40 parallel @file in @files => @claude(@analysisPrompt(@file)) | @json.llm | log
+
+/output @results to "@base/tmp/audit-pathcontext-flow.json"
+/show "PathContext audit written to tmp/audit-pathcontext-flow.json"

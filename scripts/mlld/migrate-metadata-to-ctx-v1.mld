@@ -1,0 +1,173 @@
+---
+description: Migrate .metadata references to .ctx/.internal across TypeScript codebase
+author: adam
+version: 1.0.0
+---
+
+>> Load migration guide
+/var @migrationGuide = <@base/todo/plan-ctx-internal.md>
+
+>> Get all TypeScript files with .metadata references
+/show @base
+/var @rawFiles = run {rg -l '\.metadata' -g '*.ts' -g '!node_modules'} | @json.fromlist
+/show @rawFiles
+/var @allFiles = for @f in @rawFiles => <@base/@f>
+/show @allFiles
+
+/show "Found @allFiles.length total files with .metadata references"
+
+>> Test on first 10 files
+>> /var @files = @allFiles[0:10]
+/var @files = @allFiles
+/show "Testing on first @files.length files"
+
+>> Define LLM executables
+/exe @sonnet(request) = run @request | { claude -p --model claude-sonnet-4-5 --allowedTools Write }
+/exe @haiku(request) = run @request | { claude -p --model claude-haiku-4-5 --allowedTools Write }
+
+>> Build migration request template
+/exe @buildRequest(filepath, fileContent) = `
+You are migrating a TypeScript file from legacy .metadata API to new .ctx/.internal API.
+
+<migration_guide>
+Migration patterns from plan-ctx-internal.md:
+
+## Simple Mechanical Replacements (89% of changes):
+
+1. Security metadata:
+   - .metadata.security.labels → .ctx.labels
+   - .metadata.security.taintLevel → .ctx.taint
+   - .metadata.security.sources → .ctx.sources
+   - .metadata.security.policyContext → .ctx.policy
+
+2. Load content metadata (USE SHORTHAND - cleaner):
+   - .metadata.loadResult.filename → .filename (shorthand preferred)
+   - .metadata.loadResult.relative → .relative (shorthand preferred)
+   - .metadata.loadResult.absolute → .absolute (shorthand preferred)
+   - .metadata.loadResult.url → .url (shorthand preferred)
+   - .metadata.loadResult.domain → .domain (shorthand preferred)
+   - .metadata.loadResult.tokens → .tokens (shorthand preferred)
+   - .metadata.loadResult.tokest → .tokest (shorthand preferred)
+   - .metadata.loadResult.fm → .fm (shorthand preferred)
+   - .metadata.loadResult.json → .json (shorthand preferred)
+
+   Note: .ctx.filename also works but shorthand is cleaner. Both are equivalent.
+
+3. Execution metadata:
+   - .metadata.retries → .ctx.retries
+   - .metadata.source → .ctx.source
+
+4. Internal implementation:
+   - .metadata.executableDef → .internal.executableDef
+   - .metadata.capturedModuleEnv → .internal.capturedModuleEnv
+   - .metadata.capturedShadowEnvs → .internal.capturedShadowEnvs
+   - .metadata.transformerImplementation → .internal.transformerImplementation
+   - .metadata.transformerVariants → .internal.transformerVariants
+   - .metadata.isBuiltinTransformer → .internal.isBuiltinTransformer
+   - .metadata.customToString → .internal.customToString
+   - .metadata.customToJSON → .internal.customToJSON
+   - .metadata.contentGetter → .internal.contentGetter
+   - .metadata.arrayType → .internal.arrayType
+   - .metadata.configType → .internal.configType
+   - .metadata.itemType → .internal.itemType
+   - .metadata.isLazy → .internal.isLazy
+   - .metadata.needsResolution → .internal.needsResolution
+   - .metadata.pipelineInput → .internal.pipelineInput
+   - .metadata.sourceFunction → .internal.sourceFunction
+
+## Careful Handling (11% of changes):
+
+1. Security descriptor extraction (use helper):
+   - OLD: variable.metadata.security
+   - NEW: ctxToSecurityDescriptor(variable.ctx)
+   - Import: import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+
+2. Security descriptor updates (use helper):
+   - OLD: variable.metadata.security = descriptor
+   - NEW: updateCtxFromDescriptor(variable.ctx, descriptor)
+   - Import: import { updateCtxFromDescriptor } from '@interpreter/utils/metadata-migration';
+
+3. Check if has security context:
+   - OLD: if (metadata?.security)
+   - NEW: if (hasSecurityContext(ctx)) OR if (ctx.labels.length > 0)
+   - Import: import { hasSecurityContext } from '@interpreter/utils/metadata-migration';
+
+4. Conditional checks - simplify chains:
+   - OLD: if (metadata?.security?.labels?.includes(...))
+   - NEW: if (ctx.labels.includes(...))
+   - OLD: if (metadata?.loadResult?.filename)
+   - NEW: if (ctx.filename)
+
+5. LoadContentResult flattening:
+   - OLD: value.metadata.loadResult = { filename: '...', ... }
+   - NEW: Flatten into ctx: flattenLoadResultToCtx(value.ctx, loadResult)
+   - Import: import { flattenLoadResultToCtx } from '@interpreter/utils/metadata-migration';
+
+## Available Helper Functions:
+
+Import from '@interpreter/utils/metadata-migration':
+- ctxToSecurityDescriptor(ctx): VariableContext → SecurityDescriptor
+- updateCtxFromDescriptor(ctx, descriptor): void (updates ctx fields)
+- hasSecurityContext(ctx): boolean
+- serializeSecurityContext(ctx): object
+- flattenLoadResultToCtx(ctx, loadResult): void
+</migration_guide>
+
+<file_to_migrate>
+File: @filepath
+Estimated tokens: @fileContent.ctx.tokest
+
+Content:
+@fileContent
+</file_to_migrate>
+
+<critical_instructions>
+1. ONLY modify the file at: @filepath
+2. Use the Write tool to write the migrated version to @filepath
+3. Migrate ALL .metadata references to .ctx or .internal following the patterns above
+4. **IMPORTANT - Shorthand vs Explicit**:
+   - LoadContentResult fields: Use SHORTHAND (.filename, .relative, .url, .tokens, .fm, etc.) - cleaner
+   - Security fields: Use EXPLICIT .ctx (.ctx.labels, .ctx.taint, .ctx.sources) - clearer
+   - Internal fields: Always .internal (.internal.executableDef, .internal.arrayType, etc.)
+5. Add imports if using helper functions (ctxToSecurityDescriptor, updateCtxFromDescriptor, etc.)
+6. Preserve all other code unchanged (logic, formatting, comments)
+7. DO NOT touch any other files besides @filepath
+8. After writing the file, return an empty response (the Write tool handles the output)
+</critical_instructions>
+
+<verification>
+After migration, the file should:
+- Have zero .metadata references (except in comments/strings)
+- Use .ctx for user-facing metadata (labels, taint, filename, tokens, etc.)
+- Use .internal for implementation details (executableDef, capturedModuleEnv, etc.)
+- Import helper functions if needed for security descriptor conversion
+- Compile without TypeScript errors
+- Preserve all existing logic and behavior
+</verification>
+`
+
+>> Migrate one file (load, route to model, execute)
+/exe @migrate(filepath) = when [
+  * => @content = <@filepath>
+  * => @tokest = @content.ctx.tokest
+  * => @request = @buildRequest(@filepath, @content)
+  @tokest > 2000 => @sonnet(@request)
+  * => @haiku(@request)
+]
+
+>> Execute migration in parallel
+/show "Starting parallel migration..."
+
+/var @results = for 40 parallel @filepath in @files => @migrate(@filepath)
+
+/show `
+=== TEST MIGRATION COMPLETE ===
+Files migrated: @files.length of @allFiles.length total
+
+Next steps:
+1. Review changes: git diff
+2. Check migration quality in migrated files
+3. Run tests: npm test
+4. If successful, update script to process all @allFiles.length files
+5. Check remaining references: rg '\\.metadata' --type ts | wc -l
+`
