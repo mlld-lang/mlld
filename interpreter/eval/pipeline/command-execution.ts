@@ -432,23 +432,39 @@ export async function resolveCommandReference(
   if (!command.identifier || command.identifier.length === 0) {
     return null;
   }
-  
+
   // Use the first node (should be a VariableReference node)
   const varRefNode = command.identifier[0];
-  
+
   // Check if this is a variable reference with field access
   if (varRefNode.type === 'VariableReference') {
     const varRef = varRefNode as any;
-    const baseVar = env.getVariable(varRef.identifier);
-    
+
+    let baseVar = env.getVariable(varRef.identifier);
+    let parsedFields: any[] = [];
+
+    // If not found and identifier contains a dot, try splitting for transformer variants
+    // This handles cases where the grammar outputs dotted names like "json.fromlist"
+    if (!baseVar && varRef.identifier.includes('.')) {
+      const parts = varRef.identifier.split('.');
+      const baseName = parts[0];
+      const fieldPath = parts.slice(1);
+
+      baseVar = env.getVariable(baseName);
+      if (baseVar && fieldPath.length > 0) {
+        // Store the parsed fields for processing below
+        parsedFields = fieldPath.map(value => ({ type: 'field', value }));
+      }
+    }
+
     if (!baseVar) {
       return null;
     }
-    
+
     const variantMap =
       (baseVar.internal?.transformerVariants as Record<string, unknown> | undefined);
     let value: any;
-    let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
+    let remainingFields = parsedFields.length > 0 ? parsedFields : (Array.isArray(varRef.fields) ? [...varRef.fields] : []);
 
     if (variantMap && remainingFields.length > 0) {
       const firstField = remainingFields[0];

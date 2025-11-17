@@ -1,0 +1,8 @@
+/var @greeting = "Hello from module"
+/var @count = 42
+
+This text is in the imported module and should NOT appear in stdout.
+
+More content that should be suppressed during import.
+
+/exe @sayHello() = `@greeting`

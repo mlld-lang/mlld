@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Display boundaries no longer leak wrapper objects
 - Foreach preserves and merges security descriptors
 - Template/executable taint tracking through pipelines
+- Module content suppression during imports - text, code fences, and markdown from imported modules no longer appear in stdout
+- Shell pipe detection now respects quoted strings - pipe characters inside quoted arguments no longer incorrectly trigger pipe handling
+- Transformer variant resolution in pipelines - `@json.fromlist`, `@json.llm`, `@json.loose`, and `@json.strict` now work correctly in all pipeline contexts
 
 ### Added
 - `.ctx` property on StructuredValues (security, provenance, metrics)

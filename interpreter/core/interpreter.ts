@@ -1094,19 +1094,31 @@ export async function interpolate(
       const { isExecutableVariable } = await import('@core/types/variable');
       
       // Special handling for executable variables with field access
-      if (isExecutableVariable(variable) && node.fields && node.fields.length > 0) {
+      let fieldsToProcess = node.fields || [];
+      if (isExecutableVariable(variable) && fieldsToProcess.length > 0) {
         // For executable variables with field access, we need to handle it specially
         // The test expects executables to have a 'type' property that returns 'executable'
-        const field = node.fields[0];
+        const field = fieldsToProcess[0];
         if (field.type === 'field' && field.value === 'type') {
           value = 'executable';
           // Skip the rest of field processing since we handled it
-          node.fields = node.fields.slice(1);
-        } else {
-          // For other fields on executables, throw a more helpful error
-          throw new Error(`Cannot access field '${field.value}' on executable ${variable.name}. Executables can only be invoked.`);
+          fieldsToProcess = fieldsToProcess.slice(1);
+        } else if (field.type === 'field') {
+          // Check if this is a transformer variant (e.g., @json.fromlist)
+          const variants = variable.internal?.transformerVariants as Record<string, MlldVariable> | undefined;
+          if (variants && field.value in variants) {
+            // Replace the variable with the variant and skip the field
+            variable = variants[field.value];
+            fieldsToProcess = fieldsToProcess.slice(1);
+            // Continue processing with the variant variable
+          } else {
+            // For other fields on executables, throw a more helpful error
+            throw new Error(`Cannot access field '${field.value}' on executable ${variable.name}. Executables can only be invoked.`);
+          }
         }
-      } else {
+      }
+
+      if (!isExecutableVariable(variable) || fieldsToProcess.length === 0) {
         // Use the already imported resolveVariableValue function
         try {
           if (process.env.MLLD_DEBUG === 'true') {
@@ -1147,9 +1159,9 @@ export async function interpolate(
       }
       
       // Handle field access if present
-      if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
+      if (fieldsToProcess.length > 0 && typeof value === 'object' && value !== null) {
         const { accessField } = await import('../utils/field-access');
-        for (const field of node.fields) {
+        for (const field of fieldsToProcess) {
           // Handle variableIndex type - need to resolve the variable first
           if (field.type === 'variableIndex') {
             const indexVar = env.getVariable(field.value);

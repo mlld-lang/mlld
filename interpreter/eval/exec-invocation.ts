@@ -575,10 +575,42 @@ export async function evaluateExecInvocation(
     // Regular command lookup
     variable = env.getVariable(commandName);
     if (!variable) {
-      throw new MlldInterpreterError(`Command not found: ${commandName}`);
+      // Try splitting on dot to handle variant access (e.g., "json.fromlist" -> "json" + variant "fromlist")
+      if (commandName.includes('.')) {
+        const parts = commandName.split('.');
+        const baseName = parts[0];
+        const variantName = parts.slice(1).join('.');
+
+        const baseVar = env.getVariable(baseName);
+        if (baseVar) {
+          const variants = baseVar.internal?.transformerVariants as Record<string, MlldVariable> | undefined;
+          if (variants && variantName in variants) {
+            variable = variants[variantName];
+          }
+        }
+      }
+
+      if (!variable) {
+        throw new MlldInterpreterError(`Command not found: ${commandName}`);
+      }
+    }
+
+    // Check if this is a transformer variant access (e.g., @json.fromlist)
+    if (isExecutableVariable(variable) && node.commandRef) {
+      const varRef = (node.commandRef as any).identifier?.[0] || node.commandRef;
+      if (varRef && varRef.type === 'VariableReference' && varRef.fields && varRef.fields.length > 0) {
+        const field = varRef.fields[0];
+        if (field.type === 'field') {
+          const variants = variable.internal?.transformerVariants as Record<string, MlldVariable> | undefined;
+          if (variants && field.value in variants) {
+            // Replace the variable with the variant
+            variable = variants[field.value];
+          }
+        }
+      }
     }
   }
-  
+
   // Ensure it's an executable variable
   if (!isExecutableVariable(variable)) {
     throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);

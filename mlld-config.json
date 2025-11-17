@@ -2,6 +2,15 @@
   "resolvers": {
     "prefixes": [
       {
+        "prefix": "@local/",
+        "resolver": "LOCAL",
+        "type": "input",
+        "priority": 20,
+        "config": {
+          "basePath": "./llm/modules"
+        }
+      },
+      {
         "prefix": "@devdocs/",
         "resolver": "LOCAL",
         "config": {
@@ -16,5 +25,6 @@
         }
       }
     ]
-  }
+  },
+  "scriptDir": "llm/run"
 }

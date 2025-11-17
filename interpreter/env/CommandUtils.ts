@@ -163,7 +163,20 @@ export class CommandUtils {
       /python\s+[^|&;]+\.py/,
       /node\s+[^|&;]+\.js/
     ];
-    
+
     return stderrProducers.some(pattern => pattern.test(command));
+  }
+
+  /**
+   * Check if command contains an actual pipe operator (quote-aware)
+   * Uses shell-quote to properly detect pipes vs pipe characters in strings
+   */
+  static hasPipeOperator(command: string): boolean {
+    const parsed = shellQuote.parse(command);
+    return parsed.some(token =>
+      typeof token === 'object' &&
+      'op' in token &&
+      token.op === '|'
+    );
   }
 }

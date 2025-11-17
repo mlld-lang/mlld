@@ -899,18 +899,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   getVariable(name: string): Variable | undefined {
-    // First check local variables
-    const localVar = this.variableManager.getVariable(name);
-    if (localVar) {
-      return localVar;
-    }
-
-    // Fall back to captured module environment if available
-    if (this.capturedModuleEnv) {
-      return this.capturedModuleEnv.get(name);
-    }
-
-    return undefined;
+    // Delegate entirely to VariableManager which handles local, captured, and parent lookups
+    return this.variableManager.getVariable(name);
   }
 
   /**
@@ -1149,6 +1139,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   ): void {
     if (!this.effectHandler) {
       console.error('[WARNING] No effect handler available!');
+      return;
+    }
+
+    // Suppress doc effects when importing to prevent module content from appearing in stdout
+    if (type === 'doc' && this.isImportingContent) {
       return;
     }
     const snapshot = this.getSecuritySnapshot();
