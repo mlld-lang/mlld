@@ -47,9 +47,9 @@ interface NormalizedFactoryState {
   internal: VariableInternalMetadata;
 }
 
-function finalizeVariable<T extends Variable>(variable: T): T {
+function finalizeVariable<T extends Variable>(variable: T & { metadata?: VariableMetadata }): T {
+  const legacyMetadata = variable.metadata;
   if (!variable.ctx) {
-    const legacyMetadata = (variable as Record<string, unknown>).metadata as VariableMetadata | undefined;
     variable.ctx = legacyMetadata
       ? legacyMetadataToCtx(legacyMetadata)
       : {
@@ -68,6 +68,9 @@ function finalizeVariable<T extends Variable>(variable: T): T {
   }
   if (!variable.internal) {
     variable.internal = {};
+  }
+  if ('metadata' in variable) {
+    delete (variable as Record<string, unknown>).metadata;
   }
   return VariableMetadataUtils.attachContext(variable);
 }
@@ -468,8 +471,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -493,8 +495,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -521,8 +522,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -554,8 +554,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -585,8 +584,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -614,8 +612,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -639,8 +636,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     }) as ArrayVariable;
     attachArrayHelpers(arrayVariable);
     return arrayVariable;
@@ -673,8 +669,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -702,8 +697,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -737,8 +731,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -770,8 +763,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -802,19 +794,12 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
     if (init.internal?.executableDef === undefined) {
       variable.internal = {
         ...(variable.internal ?? {}),
         executableDef: executableDefinition
-      };
-    }
-    if (variable.internal?.executableDef && (!(variable as any).metadata || !((variable as any).metadata as any).executableDef)) {
-      (variable as any).metadata = {
-        ...((variable as any).metadata ?? {}),
-        executableDef: variable.internal.executableDef
       };
     }
     return variable;
@@ -846,8 +831,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata ?? baseMetadata
+      internal: init.internal ?? baseMetadata
     });
   }
 
@@ -883,8 +867,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata ?? securityAwareMetadata
+      internal: init.internal ?? securityAwareMetadata
     });
   }
 
@@ -907,8 +890,7 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ctx: init.ctx,
-      internal: init.internal,
-      metadata: init.metadata
+      internal: init.internal
     });
   }
 
@@ -1054,20 +1036,6 @@ export class VariableFactory {
       valid: errors.length === 0,
       errors
     };
-  }
-
-  /**
-   * Clone a variable with updated metadata
-   */
-  static cloneWithMetadata<T extends import('./VariableTypes').Variable = import('./VariableTypes').Variable>(
-    variable: T,
-    newMetadata: VariableMetadata
-  ): T {
-    return {
-      ...variable,
-      metadata: { ...(variable as any).metadata, ...newMetadata },
-      modifiedAt: Date.now()
-    } as T;
   }
 
   /**

@@ -30,10 +30,6 @@ export interface BaseVariable {
   source: VariableSource;
   ctx?: VariableContextSnapshot;
   internal?: VariableInternalMetadata;
-  /**
-   * @deprecated Legacy metadata property. Use `.ctx`/`.internal` instead.
-   */
-  metadata?: VariableMetadata;
 }
 
 /**

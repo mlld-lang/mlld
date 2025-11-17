@@ -5,7 +5,6 @@
  */
 
 import { VariableSource, VariableMetadata, type Variable, type VariableMetrics, type VariableContextSnapshot } from './VariableTypes';
-import { attachMetadataGuard } from './MetadataGuard';
 import type {
   CapabilityContext,
   SecurityDescriptor,
@@ -352,7 +351,6 @@ export class VariableMetadataUtils {
     if (!variable.internal) {
       variable.internal = {};
     }
-    attachMetadataGuard(variable);
     const descriptor = Object.getOwnPropertyDescriptor(variable, 'ctx');
     if (descriptor && !descriptor.get && !descriptor.set) {
       Object.defineProperty(variable, 'ctx', {
