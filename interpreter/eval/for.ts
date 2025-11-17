@@ -345,7 +345,7 @@ export async function evaluateForExpression(
       'for-result',
       null,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -358,7 +358,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults as number | boolean | null,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -367,7 +367,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -377,7 +377,7 @@ export async function evaluateForExpression(
       finalResults,
       false,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -385,6 +385,6 @@ export async function evaluateForExpression(
     'for-result',
     String(finalResults),
     variableSource,
-    metadata
+    { ctx: metadata }
   );
 }

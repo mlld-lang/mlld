@@ -382,14 +382,14 @@ function createTypedPipelineVariable(
     const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
     internal.pipelineType = 'array';
     internal.customToString = () => originalText;
-    return createArrayVariable(paramName, bridged, false, pipelineSource, internal);
+    return createArrayVariable(paramName, bridged, false, pipelineSource, { internal });
   }
 
   if (parsedValue && typeof parsedValue === 'object') {
     const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
     internal.pipelineType = 'object';
     internal.customToString = () => originalText;
-    return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, internal);
+    return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, { internal });
   }
 
   const textSource: VariableSource = {
@@ -398,7 +398,7 @@ function createTypedPipelineVariable(
     hasInterpolation: false,
     isMultiLine: false
   };
-  return createSimpleTextVariable(paramName, originalText, textSource, { isPipelineParameter: true });
+  return createSimpleTextVariable(paramName, originalText, textSource, { internal: { isPipelineParameter: true } });
 }
 
 function resolveExecutableLanguage(commandVar: any, execDef: any): string | undefined {
@@ -679,7 +679,7 @@ export async function executeCommandVariable(
             paramName,
             resolvedText,
             textSource,
-            { isPipelineParameter: true }
+            { internal: { isPipelineParameter: true } }
           );
 
           execEnv.setParameterVariable(paramName, textVar);
@@ -701,7 +701,7 @@ export async function executeCommandVariable(
             format as 'json' | 'csv' | 'xml' | 'text',
             resolvedText,
             pipelineSource,
-            pipelineCtx?.stage
+            { internal: { pipelineStage: pipelineCtx?.stage } }
           );
 
           execEnv.setParameterVariable(paramName, pipelineVar);
@@ -719,9 +719,7 @@ export async function executeCommandVariable(
               hasInterpolation: false,
               isMultiLine: false
             },
-            {
-              isParameter: true
-            }
+            { internal: { isParameter: true } }
           );
           execEnv.setParameterVariable(paramName, structuredVar);
           continue;
@@ -755,7 +753,7 @@ export async function executeCommandVariable(
               hasInterpolation: false,
               isMultiLine: false
             },
-            { isParameter: true }
+            { internal: { isParameter: true } }
           );
           execEnv.setParameterVariable(paramName, structuredVar);
         } else if (Array.isArray(paramValue)) {
@@ -769,7 +767,7 @@ export async function executeCommandVariable(
               hasInterpolation: false,
               isMultiLine: false
             },
-            { isParameter: true }
+            { internal: { isParameter: true } }
           );
           execEnv.setParameterVariable(paramName, paramVar);
         } else if (paramValue !== null && typeof paramValue === 'object') {
@@ -783,9 +781,11 @@ export async function executeCommandVariable(
               hasInterpolation: false,
               isMultiLine: false
             },
-            { 
-              isParameter: true,
-              isPipelineContext: paramValue.stage !== undefined
+            {
+              internal: {
+                isParameter: true,
+                isPipelineContext: paramValue.stage !== undefined
+              }
             }
           );
           
@@ -797,12 +797,12 @@ export async function executeCommandVariable(
             hasInterpolation: false,
             isMultiLine: false
           };
-          
+
           const paramVar = createSimpleTextVariable(
             paramName,
             String(paramValue),
             paramSource,
-            { isParameter: true }
+            { internal: { isParameter: true } }
           );
           
           execEnv.setParameterVariable(paramName, paramVar);

@@ -819,8 +819,10 @@ function createExecWrapper(
             isMultiLine: false
           },
           {
-            isSystem: true,
-            isParameter: true
+            internal: {
+              isSystem: true,
+              isParameter: true
+            }
           }
         );
         execEnv.setParameterVariable(paramName, paramVar);

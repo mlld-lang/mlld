@@ -121,8 +121,10 @@ export class ForeachSectionEvaluator {
             hasInterpolation: false,
             isMultiLine: false
           }, {
-            isParameter: true,
-            isFullyEvaluated: true
+            internal: {
+              isParameter: true,
+              isFullyEvaluated: true
+            }
           }) :
           createObjectVariable(actualArrayVariable, item, {
             directive: 'var',
@@ -130,8 +132,10 @@ export class ForeachSectionEvaluator {
             hasInterpolation: false,
             isMultiLine: false
           }, {
-            isParameter: true,
-            isFullyEvaluated: true
+            internal: {
+              isParameter: true,
+              isFullyEvaluated: true
+            }
           });
         childEnv.setParameterVariable(actualArrayVariable, itemVar);
         

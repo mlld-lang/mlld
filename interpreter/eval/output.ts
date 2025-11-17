@@ -317,8 +317,10 @@ async function evaluateInvocationSource(
             isMultiLine: false
           },
           {
-            isSystem: true,
-            isParameter: true
+            internal: {
+              isSystem: true,
+              isParameter: true
+            }
           }
         );
         childEnv.set(paramName, paramVar);
@@ -543,8 +545,10 @@ async function evaluateCommandSource(
           isMultiLine: false
         },
         {
-          isSystem: true,
-          isParameter: true
+          internal: {
+            isSystem: true,
+            isParameter: true
+          }
         }
       );
       cmdChildEnv.setParameterVariable(paramName, paramVar);

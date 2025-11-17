@@ -640,16 +640,24 @@ async function evaluateAnyMatch(
         // Create a variable from the condition value
         const variable = typeof conditionValue === 'string' ?
           createSimpleTextVariable(variableName, conditionValue, {
-            directive: 'var',
-            syntax: 'quoted',
-            hasInterpolation: false,
-            isMultiLine: false
+            ctx: {
+              source: {
+                directive: 'var',
+                syntax: 'quoted',
+                hasInterpolation: false,
+                isMultiLine: false
+              }
+            }
           }) :
           createObjectVariable(variableName, conditionValue, {
-            directive: 'var',
-            syntax: 'object',
-            hasInterpolation: false,
-            isMultiLine: false
+            ctx: {
+              source: {
+                directive: 'var',
+                syntax: 'object',
+                hasInterpolation: false,
+                isMultiLine: false
+              }
+            }
           });
         env.setVariable(variableName, variable);
       }

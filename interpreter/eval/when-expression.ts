@@ -502,7 +502,7 @@ async function applyTailModifiers(
       '_pipelineInput',
       structuredInput,
       { directive: 'var', syntax: 'reference', hasInterpolation: false, isMultiLine: false },
-      { isPipelineInput: true, pipelineStage: 0 }
+      { internal: { isPipelineInput: true, pipelineStage: 0 } }
     );
     
     pipeEnv.setVariable('_pipelineInput', pipelineVar);
