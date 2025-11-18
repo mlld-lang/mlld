@@ -129,6 +129,29 @@ function cloneVariableWithNewValue(
   return cloned;
 }
 
+function cloneGuardCandidateForParameter(
+  name: string,
+  candidate: Variable,
+  argValue: unknown,
+  fallback: string | undefined
+): Variable {
+  const cloned: Variable = {
+    ...candidate,
+    name,
+    value: argValue ?? fallback ?? candidate.value,
+    ctx: candidate.ctx ? { ...candidate.ctx } : undefined,
+    internal: {
+      ...(candidate.internal ?? {}),
+      isSystem: true,
+      isParameter: true
+    }
+  };
+  if (cloned.ctx?.ctxCache) {
+    delete cloned.ctx.ctxCache;
+  }
+  return cloned;
+}
+
 type StringBuiltinMethod = 'toLowerCase' | 'toUpperCase' | 'trim';
 type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
 
@@ -1048,22 +1071,29 @@ export async function evaluateExecInvocation(
   // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
-    const argValue = evaluatedArgs[i]; // Use the preserved type value
+    const argValue = evaluatedArgs[i];
     const argStringValue = evaluatedArgStrings[i];
-    
-    if (argValue !== undefined) {
-      const originalVar = originalVariables[i];
-      const isShellCode =
-        definition.type === 'code' &&
-        typeof definition.language === 'string' &&
-        (definition.language === 'bash' || definition.language === 'sh');
+    const originalVar = originalVariables[i];
+    const guardCandidate = guardVariableCandidates[i];
+    const isShellCode =
+      definition.type === 'code' &&
+      typeof definition.language === 'string' &&
+      (definition.language === 'bash' || definition.language === 'sh');
+    const allowOriginalReuse = Boolean(originalVar) && !isShellCode && definition.type !== 'command';
 
+    if (guardCandidate && (!originalVar || !allowOriginalReuse)) {
+      const candidateClone = cloneGuardCandidateForParameter(paramName, guardCandidate, argValue, argStringValue);
+      execEnv.setParameterVariable(paramName, candidateClone);
+      continue;
+    }
+
+    if (argValue !== undefined) {
       const paramVar = createParameterVariable({
         name: paramName,
         value: argValue,
         stringValue: argStringValue,
         originalVariable: originalVar,
-        allowOriginalReuse: Boolean(originalVar) && !isShellCode && definition.type !== 'command',
+        allowOriginalReuse,
         metadataFactory: createParameterMetadata,
         origin: 'exec-param'
       });

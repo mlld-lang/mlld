@@ -2,4 +2,4 @@ Pipeline taint: unknown
 Pipeline labels: ["secret"]
 
 Result taint: commandOutput
-Result labels: []
+Result labels: ["secret"]

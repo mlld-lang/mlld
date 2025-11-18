@@ -194,6 +194,32 @@ describe('guard pre-hook integration', () => {
     expect(ctx.guard).toBeNull();
   });
 
+  it('denies /run commands that interpolate expression-derived secrets', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for secret = when [ @ctx.op.type == "run" => deny "blocked secret run" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'secret',
+      createSimpleTextVariable(
+        'secret',
+        'value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        { security: makeSecurityDescriptor({ labels: ['secret'] }) }
+      )
+    );
+
+    const directive = parseSync('/run {curl "@secret.trim()"}')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked secret run/);
+  });
+
   it('populates guard context snapshots during evaluation', async () => {
     const env = createEnv();
     const guardDirective = parseSync(

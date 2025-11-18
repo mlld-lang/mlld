@@ -13,6 +13,8 @@ import { getTextContent } from '../utils/type-guard-helpers';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 
+type AstValue = Record<string, unknown> & { type?: string };
+
 /**
  * Extract and evaluate directive inputs for hook consumption.
  * Implementation is incremental per directive; directives without
@@ -120,6 +122,14 @@ async function extractOutputInputs(
     return [];
   }
 
+  const execInvocation = findExecInvocation(sourceNode);
+  if (execInvocation) {
+    const execArgs = extractExecInvocationArgs(execInvocation, env);
+    if (execArgs.length > 0) {
+      return materializeGuardInputs(execArgs);
+    }
+  }
+
   const hasArgs =
     Boolean(sourceNode.args && Array.isArray(sourceNode.args) && sourceNode.args.length > 0) ||
     directive.subtype === 'outputInvocation' ||
@@ -186,12 +196,9 @@ async function extractRunInputs(
     }
     const commandArray = Array.isArray(commandNodes) ? commandNodes : [commandNodes];
     const commandText = await interpolate(commandArray, env, InterpolationContext.ShellCommand);
-    const referencedVariables = extractVariableReferences(commandArray);
+    const referencedVariables = collectVariablesFromNodes(commandArray, env);
     const descriptors = referencedVariables
-      .map(name => {
-        const variable = env.getVariable(name);
-        return variable ? ctxToSecurityDescriptor(variable.ctx) : undefined;
-      })
+      .map(variable => (variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined))
       .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
     const mergedDescriptor = descriptors.length > 0 ? env.mergeSecurityDescriptors(...descriptors) : undefined;
     const source: VariableSource = {
@@ -257,61 +264,110 @@ function resolveRunExecName(directive: DirectiveNode): string | undefined {
   return undefined;
 }
 
-function extractVariableReferences(nodes: any[], refs: string[] = []): string[] {
-  for (const node of nodes) {
-    if (!node || typeof node !== 'object') {
-      continue;
-    }
-    if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
-      refs.push(node.identifier);
-      continue;
-    }
-    if (node.type === 'VariableReferenceWithTail' && node.variable) {
-      const identifier = node.variable?.identifier;
-      if (typeof identifier === 'string') {
-        refs.push(identifier);
-      }
-      continue;
-    }
-    for (const value of Object.values(node)) {
-      if (Array.isArray(value)) {
-        extractVariableReferences(value, refs);
-      }
-    }
-  }
-  return Array.from(new Set(refs));
-}
-
 function extractExecInvocationArgs(invocation: ExecInvocation, env: Environment): Variable[] {
   const args = invocation.commandRef?.args ?? [];
-  const variables: Variable[] = [];
-  for (const arg of args) {
-    const identifier = resolveVariableIdentifier(arg);
-    if (!identifier) {
-      continue;
-    }
-    const variable = env.getVariable(identifier);
-    if (variable) {
-      VariableMetadataUtils.attachContext(variable);
-      variables.push(variable);
-    }
-  }
-  return variables;
+  return collectVariablesFromNodes(args, env);
 }
 
-function resolveVariableIdentifier(node: any): string | undefined {
-  if (!node) {
+function collectVariablesFromNodes(nodes: readonly unknown[], env: Environment): Variable[] {
+  const bucket = new Map<string, Variable>();
+  const seen = new WeakSet<object>();
+  for (const node of nodes) {
+    visitNodeForVariables(node as AstValue, env, bucket, seen);
+  }
+  return Array.from(bucket.values());
+}
+
+function findExecInvocation(candidate: unknown): ExecInvocation | undefined {
+  if (!candidate || typeof candidate !== 'object') {
     return undefined;
   }
-  if (node.type === 'VariableReference') {
-    return node.identifier;
+  const typed = candidate as AstValue;
+  if (typed.type === 'ExecInvocation') {
+    return typed as ExecInvocation;
   }
-  if (node.type === 'VariableReferenceWithTail') {
-    const inner = node.variable;
-    if (inner?.type === 'VariableReference') {
-      return inner.identifier;
+  for (const value of Object.values(typed)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const found = findExecInvocation(entry);
+        if (found) {
+          return found;
+        }
+      }
+      continue;
     }
-    return inner?.identifier;
+    if (value && typeof value === 'object') {
+      const found = findExecInvocation(value);
+      if (found) {
+        return found;
+      }
+    }
   }
   return undefined;
+}
+
+function visitNodeForVariables(
+  node: AstValue | undefined,
+  env: Environment,
+  bucket: Map<string, Variable>,
+  seen: WeakSet<object>
+): void {
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+  if (seen.has(node)) {
+    return;
+  }
+  seen.add(node);
+
+  switch (node.type) {
+    case 'VariableReference':
+      addVariableByIdentifier(node.identifier, env, bucket);
+      break;
+    case 'VariableReferenceWithTail':
+      visitNodeForVariables(node.variable as AstValue, env, bucket, seen);
+      break;
+    case 'TemplateVariable':
+      addVariableByIdentifier(node.identifier, env, bucket);
+      break;
+    case 'ExecInvocation': {
+      const commandRef = (node as { commandRef?: AstValue & { args?: unknown[]; objectReference?: AstValue } }).commandRef;
+      if (commandRef?.objectReference) {
+        visitNodeForVariables(commandRef.objectReference as AstValue, env, bucket, seen);
+      }
+      const execArgs = commandRef?.args ?? [];
+      for (const arg of execArgs) {
+        visitNodeForVariables(arg as AstValue, env, bucket, seen);
+      }
+      break;
+    }
+  }
+
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        visitNodeForVariables(entry as AstValue, env, bucket, seen);
+      }
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      visitNodeForVariables(value as AstValue, env, bucket, seen);
+    }
+  }
+}
+
+function addVariableByIdentifier(
+  identifier: unknown,
+  env: Environment,
+  bucket: Map<string, Variable>
+): void {
+  if (typeof identifier !== 'string' || bucket.has(identifier)) {
+    return;
+  }
+  const variable = env.getVariable(identifier);
+  if (!variable) {
+    return;
+  }
+  VariableMetadataUtils.attachContext(variable);
+  bucket.set(identifier, variable);
 }

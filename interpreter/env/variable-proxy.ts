@@ -364,5 +364,9 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
       return undefined;
     }
   } as const;
-  return helpers;
+
+  return {
+    ...helpers,
+    ctx: helpers.getCtx
+  };
 }
