@@ -10,13 +10,25 @@ import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { MlldWhenExpressionError } from '@core/errors';
-import { evaluate, interpolate } from '../core/interpreter';
+import { evaluate } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied } from './when';
 import { logger } from '@core/utils/logger';
 import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
+}
+
+type InterpolateFn = typeof import('../core/interpreter').interpolate;
+let cachedInterpolateFn: InterpolateFn | null = null;
+
+async function getInterpolateFn(): Promise<InterpolateFn> {
+  if (!cachedInterpolateFn) {
+    const module = await import('../core/interpreter');
+    cachedInterpolateFn = module.interpolate;
+  }
+  return cachedInterpolateFn;
 }
 
 /**
@@ -150,9 +162,9 @@ export async function evaluateWhenExpression(
 
     
     
-    try {
-      // Evaluate the condition
-      const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
+      try {
+        // Evaluate the condition
+        const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
@@ -175,7 +187,6 @@ export async function evaluateWhenExpression(
           // No action for this condition - continue to next
           continue;
         }
-        
         try {
           // Special-case: detect retry with optional hint without evaluating side-effects
           // Pattern: action starts with a RetryLiteral, optionally followed by a Text node (hint)
@@ -197,12 +208,11 @@ export async function evaluateWhenExpression(
                   } else {
                     // String/function/exec/template hint → interpolate to plain string
                     // Check if the first node is a wrapper with content
+                    const interpolateFn = await getInterpolateFn();
                     if (firstNode && typeof firstNode === 'object' && 'content' in firstNode && Array.isArray(firstNode.content)) {
-                      // Unwrap and interpolate the content
-                      hintValue = await interpolate(firstNode.content, hintEnv);
+                      hintValue = await interpolateFn(firstNode.content, hintEnv);
                     } else {
-                      // Interpolate the nodes directly
-                      hintValue = await interpolate(hintNodes as any, hintEnv);
+                      hintValue = await interpolateFn(hintNodes as any, hintEnv);
                     }
                     if (typeof hintValue !== 'string') {
                       // Defensive: ensure non-object hints are plain strings
@@ -226,7 +236,6 @@ export async function evaluateWhenExpression(
               lastMatchValue = value;
               hasMatch = true;
               hasValueProducingMatch = true;  // action produces a value
-              // Merge nodes from accumulatedEnv childless (no child changes here)
               continue;
             }
           }
@@ -251,13 +260,28 @@ export async function evaluateWhenExpression(
           // evaluate each action in a child env and merge resulting variable
           // bindings back into the accumulatedEnv after evaluation.
           const actionEnv = accumulatedEnv.createChild();
-          // FIXED: Suppress side effects in when expressions used in /exe functions
-          // Side effects should be handled by the calling context (e.g., /show @func())
-          // Evaluate the action in normal directive context so effects stream.
-          // We avoid forcing isExpression here to preserve effect emission.
-          const actionResult = await evaluate(pair.action, actionEnv, context);
-          
-          let value = actionResult.value;
+          let actionResult: EvalResult | null = null;
+          let value: unknown;
+          const wrapperCandidate =
+            pair.action.length === 1 &&
+            pair.action[0] &&
+            typeof pair.action[0] === 'object' &&
+            !('type' in (pair.action[0] as BaseMlldNode)) &&
+            Array.isArray((pair.action[0] as any).content)
+              ? (pair.action[0] as { content: any[] })
+              : null;
+
+          if (wrapperCandidate) {
+            const interpolateFn = await getInterpolateFn();
+            value = await interpolateFn(wrapperCandidate.content, actionEnv, InterpolationContext.Template);
+          } else {
+            // FIXED: Suppress side effects in when expressions used in /exe functions
+            // Side effects should be handled by the calling context (e.g., /show @func())
+            // Evaluate the action in normal directive context so effects stream.
+            // We avoid forcing isExpression here to preserve effect emission.
+            actionResult = await evaluate(pair.action, actionEnv, context);
+            value = actionResult.value;
+          }
 
           if (isStructuredValue(value)) {
             value = value.type === 'array' || value.type === 'object' ? value.data : asText(value);
@@ -267,7 +291,8 @@ export async function evaluateWhenExpression(
           // Normalize wrapped string nodes (quotes/backticks) into plain strings
           if (value && typeof value === 'object' && 'wrapperType' in value && Array.isArray((value as any).content)) {
             try {
-              value = await interpolate((value as any).content, actionEnv);
+              const interpolateFn = await getInterpolateFn();
+              value = await interpolateFn((value as any).content, actionEnv);
             } catch {
               // If interpolation fails, fallback to string coercion
               value = String(value as any);
@@ -292,7 +317,8 @@ export async function evaluateWhenExpression(
               if (value && typeof value === 'object') {
                 // Unwrap template-like values
                 if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
-                  value = await interpolate((value as any).content, actionEnv);
+                  const interpolateFn = await getInterpolateFn();
+                  value = await interpolateFn((value as any).content, actionEnv);
                 } else if ('type' in (value as any)) {
                   const { extractVariableValue } = await import('../utils/variable-resolution');
                   const extracted = await extractVariableValue(value as any, actionEnv);
@@ -307,14 +333,6 @@ export async function evaluateWhenExpression(
               value = String(value ?? '');
             }
           }
-
-          // Debug: What did we get back?
-          // console.error('🔍 WHEN-EXPRESSION action result:', {
-          //   valueType: typeof value,
-          //   valuePreview: String(value).substring(0, 50),
-          //   actionKind: Array.isArray(pair.action) && pair.action[0] ? pair.action[0].kind : 'unknown'
-          // });
-          
           if (Array.isArray(pair.action) && pair.action.length === 1) {
             const singleAction = pair.action[0];
             if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
@@ -355,15 +373,17 @@ export async function evaluateWhenExpression(
           }
           
           // Apply tail modifiers if present
+          const executionEnv = actionResult?.env ?? actionEnv;
+
           if (node.withClause && node.withClause.pipes) {
-            value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
+            value = await applyTailModifiers(value, node.withClause.pipes, executionEnv);
           }
           
           // Merge variable assignments from this action back into the
           // accumulated environment so subsequent actions can see them.
           // We use mergeChild to merge variables; since actions are evaluated
           // with isExpression=true, no user-facing nodes are produced.
-          accumulatedEnv.mergeChild(actionEnv);
+          accumulatedEnv.mergeChild(executionEnv);
 
           // In "first" mode, return immediately after first match
           if (isFirstMode) {
