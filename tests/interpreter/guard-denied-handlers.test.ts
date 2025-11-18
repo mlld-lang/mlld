@@ -10,6 +10,8 @@ import { GuardError } from '@core/errors/GuardError';
 import { handleExecGuardDenial, formatGuardWarning } from '@interpreter/eval/guard-denial-handler';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
+import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { makeSecurityDescriptor } from '@core/types/security';
 
 function createEnv(): {
   env: Environment;
@@ -51,6 +53,7 @@ describe('handleExecGuardDenial', () => {
     });
 
     const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
+    console.log('RESULT', result);
     expect(result).not.toBeNull();
     expect(result?.value).toBe('Denied fallback');
     expect(result?.internal?.deniedHandlerRan).toBe(true);
@@ -165,6 +168,40 @@ describe('handleExecGuardDenial', () => {
       .map(effect => effect.content.trim());
     expect(outputs).toContain('Guard input: sk-live-ctx');
     expect(outputs).toContain('Param value: sk-live-ctx');
+  });
+
+  it('materializes provenance-only guard inputs for denied handlers', async () => {
+    const { env, execEnv, effects } = createEnv();
+    const whenExpr = parseWhenExpression(`
+/exe @process() = when [
+  denied => "Guard input seen: @ctx.guard.input"
+  * => "Process"
+]
+    `);
+
+    const expressionValue = {
+      text: 'trimmed-secret',
+      toString() {
+        return this.text;
+      },
+      toJSON() {
+        return this.text;
+      }
+    };
+    setExpressionProvenance(expressionValue, makeSecurityDescriptor({ labels: ['secret'] }));
+
+    const error = new GuardError({
+      decision: 'deny',
+      reason: 'Secret blocked',
+      guardFilter: 'data:secret',
+      guardInput: expressionValue
+    });
+
+    const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
+    expect(result).not.toBeNull();
+    const injectedInput = execEnv.getVariable('input');
+    expect(injectedInput?.ctx?.labels).toEqual(['secret']);
+    expect(String(injectedInput?.value)).toContain('trimmed-secret');
   });
 
   it('formats guard warnings with fallback identifier', () => {

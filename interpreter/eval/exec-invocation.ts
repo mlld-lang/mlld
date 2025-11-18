@@ -112,6 +112,23 @@ class SimpleMetadataShelf {
 // Module-level shelf instance
 const metadataShelf = new SimpleMetadataShelf();
 
+function cloneVariableWithNewValue(
+  source: Variable,
+  value: unknown,
+  fallback: string
+): Variable {
+  const cloned: Variable = {
+    ...source,
+    value: value ?? fallback,
+    ctx: source.ctx ? { ...source.ctx } : undefined,
+    internal: { ...(source.internal ?? {}) }
+  };
+  if (cloned.ctx?.ctxCache) {
+    delete cloned.ctx.ctxCache;
+  }
+  return cloned;
+}
+
 type StringBuiltinMethod = 'toLowerCase' | 'toUpperCase' | 'trim';
 type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
 
@@ -933,7 +950,9 @@ export async function evaluateExecInvocation(
   }
   
   // Track original Variables for arguments
-  const originalVariables: (any | undefined)[] = [];
+  const originalVariables: (Variable | undefined)[] = new Array(args.length);
+  const guardVariableCandidates: (Variable | undefined)[] = new Array(args.length);
+  const expressionSourceVariables: (Variable | undefined)[] = new Array(args.length);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
@@ -948,6 +967,7 @@ export async function evaluateExecInvocation(
           originalVariables[i] = undefined;
         } else {
           originalVariables[i] = variable;
+          guardVariableCandidates[i] = variable;
         }
         
         if (process.env.MLLD_DEBUG === 'true') {
@@ -961,6 +981,24 @@ export async function evaluateExecInvocation(
             variableSubtype: subtype,
             isPrimitive: typeof variable.value !== 'object' || variable.value === null
           });
+        }
+      }
+    } else if (
+      arg &&
+      typeof arg === 'object' &&
+      'type' in arg &&
+      arg.type === 'ExecInvocation'
+    ) {
+      const objectRef = (arg.commandRef as any)?.objectReference;
+      if (
+        objectRef &&
+        typeof objectRef === 'object' &&
+        objectRef.type === 'VariableReference' &&
+        objectRef.identifier
+      ) {
+        const baseVariable = env.getVariable(objectRef.identifier);
+        if (baseVariable) {
+          expressionSourceVariables[i] = baseVariable;
         }
       }
     }
@@ -977,7 +1015,19 @@ export async function evaluateExecInvocation(
     return createEvalResult(helperResult, env);
   }
 
-  const guardInputs = materializeGuardInputs(originalVariables, { nameHint: '__guard_input__' });
+  for (let i = 0; i < args.length; i++) {
+    if (!guardVariableCandidates[i] && expressionSourceVariables[i]) {
+      const source = expressionSourceVariables[i]!;
+      const cloned = cloneVariableWithNewValue(
+        source,
+        evaluatedArgs[i],
+        evaluatedArgStrings[i]
+      );
+      guardVariableCandidates[i] = cloned;
+    }
+  }
+
+  const guardInputs = materializeGuardInputs(guardVariableCandidates, { nameHint: '__guard_input__' });
   const hookManager = env.getHookManager();
   const execDescriptor = getVariableSecurityDescriptor(variable);
   const operationContext: OperationContext = {

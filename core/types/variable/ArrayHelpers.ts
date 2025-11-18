@@ -53,8 +53,12 @@ export interface GuardInputHelper {
   none: QuantifierHelper;
 }
 
+export interface ArrayAggregateOptions {
+  nameHint?: string;
+}
+
 export function createGuardInputHelper(inputs: readonly Variable[]): GuardInputHelper {
-  const aggregate = buildArrayAggregate(inputs);
+  const aggregate = buildArrayAggregate(inputs, { nameHint: '__guard_input__' });
   const quantifiers = createQuantifierHelpers(aggregate.contexts);
   return {
     raw: inputs,
@@ -85,7 +89,9 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   });
 
   const arrayValues = Array.isArray(variable.value) ? variable.value : [];
-  const aggregate = buildArrayAggregate(arrayValues);
+  const aggregate = buildArrayAggregate(arrayValues, {
+    nameHint: variable.name ?? '__array_helper__'
+  });
   const quantifiers = createQuantifierHelpers(aggregate.contexts);
 
   const helperTargets: unknown[] = [variable];
@@ -129,13 +135,17 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   }
 }
 
-export function buildArrayAggregate(values: readonly unknown[]): ArrayAggregateSnapshot {
+export function buildArrayAggregate(
+  values: readonly unknown[],
+  options?: ArrayAggregateOptions
+): ArrayAggregateSnapshot {
+  const nameHint = options?.nameHint ?? '__array_helper__';
   const variables = values
     .map(value => {
       if (isVariableLike(value)) {
         return value as Variable;
       }
-      return materializeExpressionValue(value, { name: '__guard_input__' });
+      return materializeExpressionValue(value, { name: nameHint });
     })
     .filter((value): value is Variable => Boolean(value));
   const contexts = variables.map(ensureContext);

@@ -384,7 +384,7 @@ function collectOperationGuards(
 }
 
 function buildOperationSnapshot(inputs: readonly Variable[]): OperationSnapshot {
-  const aggregate = buildArrayAggregate(inputs);
+  const aggregate = buildArrayAggregate(inputs, { nameHint: '__guard_input__' });
   return {
     labels: aggregate.labels,
     sources: aggregate.sources,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { parseSync } from '@grammar/parser';
-import type { DirectiveNode } from '@core/types';
+import type { DirectiveNode, ExecInvocation } from '@core/types';
 import type { WhenExpressionNode } from '@core/types/when';
 import { GuardError } from '@core/errors/GuardError';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -12,6 +12,7 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
+import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -238,6 +239,44 @@ describe('guard pre-hook integration', () => {
     expect(guardSnapshot).toBeTruthy();
     expect(guardSnapshot.try).toBe(1);
     expect(guardSnapshot.labels).toContain('secret');
+  });
+
+  it('guards expression arguments passed into exe parameters', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for secret = when [ @ctx.op.type == "exe" => deny "expressions blocked" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const varDirective = parseSync('/var secret @apiKey = "sk-test-abc"')[0] as DirectiveNode;
+    await evaluateDirective(varDirective, env);
+
+    const exeDirective = parseSync(
+      '/exe network @send(value) = when [ * => show "sent" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(exeDirective, env);
+
+    const trimInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: {
+        name: 'trim',
+        objectReference: {
+          type: 'VariableReference',
+          identifier: 'apiKey'
+        },
+        args: []
+      }
+    };
+
+    const sendInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: {
+        identifier: [{ type: 'VariableReference', identifier: 'send' }],
+        args: [trimInvocation]
+      }
+    };
+
+    await expect(evaluateExecInvocation(sendInvocation, env)).rejects.toThrow('expressions blocked');
   });
 
   it('increments @ctx.guard.try across retries', async () => {

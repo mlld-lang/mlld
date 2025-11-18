@@ -7,6 +7,7 @@ import type { GuardContextSnapshot } from '../env/ContextManager';
 import { normalizeWhenShowEffect } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { Variable } from '@core/types/variable';
+import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 
 export async function handleExecGuardDenial(
   error: unknown,
@@ -60,16 +61,34 @@ export async function handleExecGuardDenial(
 }
 
 function maybeInjectGuardInputVariable(execEnv: Environment, value: unknown) {
-  if (!value || typeof value !== 'object') {
+  if (value === undefined || value === null) {
     return;
   }
   const existingInput = execEnv.getVariable?.('input');
   if (existingInput) {
     return;
   }
-  if (isVariable(value as Variable)) {
-    execEnv.setVariable('input', value as Variable);
+
+  const variable =
+    (isVariable(value as Variable) ? (value as Variable) : undefined) ??
+    materializeExpressionValue(value, { name: 'input' });
+
+  if (!variable) {
+    return;
   }
+
+  const clonedInput: Variable = {
+    ...variable,
+    name: 'input',
+    ctx: { ...(variable.ctx ?? {}) },
+    internal: {
+      ...(variable.internal ?? {}),
+      isSystem: true,
+      isParameter: true
+    }
+  };
+
+  execEnv.setParameterVariable('input', clonedInput);
 }
 
 export function formatGuardWarning(
