@@ -10,6 +10,7 @@ import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
 import { asData, asText, isStructuredValue } from './structured-value';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
 const STRING_TEXT_ACCESSORS = new Set(['text', 'content']);
@@ -562,6 +563,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         failedKey: String((field as any).type || 'unknown')
       });
   }
+
+  const provenanceSource = parentVariable ?? structuredWrapper ?? value;
+  if (provenanceSource) {
+    inheritExpressionProvenance(accessedValue, provenanceSource);
+  }
   
   // Check if we need to return context-preserving result
   if (options?.preserveContext) {
@@ -626,7 +632,7 @@ export async function accessFields(
       isVariable: isVariable(current)
     };
   }
-  
+
   return current;
 }
 

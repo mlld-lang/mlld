@@ -14,6 +14,7 @@ import {
 import { interpolate } from '../../core/interpreter';
 import { accessField, accessFields } from '../../utils/field-access';
 import { logger } from '@core/utils/logger';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
 /**
  * Handles evaluation of variable references and related operations.
@@ -154,6 +155,7 @@ export class VariableReferenceEvaluator {
     
     // Extract the actual value
     let result = await this.extractVariableValue(variable, env);
+    this.attachProvenance(result, variable as Variable);
     
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
@@ -237,6 +239,8 @@ export class VariableReferenceEvaluator {
     }
     
     // Apply field access if present
+    this.attachProvenance(result, variable as Variable);
+
     if (varRef.fields && varRef.fields.length > 0) {
       // DEBUG: Log what we're about to access  
       if (process.env.MLLD_DEBUG === 'true') {
@@ -300,6 +304,7 @@ export class VariableReferenceEvaluator {
     
     // Extract value using new type guards
     let result = await this.extractVariableValue(variable, env);
+    this.attachProvenance(result, variable);
     
     // DEBUG: Log what we extracted
     if (process.env.MLLD_DEBUG === 'true') {
@@ -436,7 +441,7 @@ export class VariableReferenceEvaluator {
       const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
       result = await extractVariableValue(variable, env);
     }
-    
+    inheritExpressionProvenance(result, variable);
     return result;
   }
 
@@ -457,5 +462,12 @@ export class VariableReferenceEvaluator {
     const resolvedPath = await interpolate(value.segments || [], env);
     const content = await env.fileSystem.readFile(resolvedPath);
     return content;
+  }
+
+  private attachProvenance(value: unknown, source?: Variable): void {
+    if (!source) {
+      return;
+    }
+    inheritExpressionProvenance(value, source);
   }
 }

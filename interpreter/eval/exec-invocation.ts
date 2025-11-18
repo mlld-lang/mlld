@@ -32,6 +32,7 @@ import {
   normalizeWhenShowEffect,
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
@@ -352,10 +353,11 @@ export async function evaluateExecInvocation(
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
       let objectValue: any;
+      let objectVar: Variable | undefined;
 
       if (commandRefWithObject.objectReference) {
         const objectRef = commandRefWithObject.objectReference;
-        const objectVar = env.getVariable(objectRef.identifier);
+        objectVar = env.getVariable(objectRef.identifier);
         if (!objectVar) {
           throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
         }
@@ -391,7 +393,8 @@ export async function evaluateExecInvocation(
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
 
-      const targetDescriptor = extractSecurityDescriptor(objectValue);
+      const targetDescriptor =
+        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) || extractSecurityDescriptor(objectValue);
       mergeResultDescriptor(targetDescriptor);
 
       // Structured exec returns wrappers – convert them to plain data before method lookup
@@ -422,6 +425,7 @@ export async function evaluateExecInvocation(
         case 'toUpperCase':
         case 'trim':
           result = handleStringBuiltin(commandName, objectValue);
+          inheritExpressionProvenance(result, objectVar ?? objectValue);
           break;
         case 'length':
           result = handleLengthBuiltin(objectValue);
@@ -454,6 +458,7 @@ export async function evaluateExecInvocation(
       const normalized = normalizeTransformerResult(commandName, result);
       const resolvedValue = normalized.value;
       const wrapOptions = normalized.options;
+      inheritExpressionProvenance(resolvedValue, objectVar ?? objectValue);
 
       // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
       if (node.withClause) {

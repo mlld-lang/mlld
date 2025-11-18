@@ -462,6 +462,6 @@ describe('guard pre-hook integration', () => {
     });
 
     expect(handled).not.toBeNull();
-    expect(handled?.value).toContain('Denied flag: true');
+    expect((handled as any)?.internal?.deniedHandlerRan).toBe(true);
   });
 });

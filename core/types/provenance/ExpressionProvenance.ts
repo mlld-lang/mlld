@@ -2,7 +2,7 @@ import { makeSecurityDescriptor, normalizeSecurityDescriptor, type SecurityDescr
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import type { VariableSource } from '@core/types/variable/VariableTypes';
-import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateCtxFromDescriptor, ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
 const provenanceStore = new WeakMap<object, SecurityDescriptor>();
 
@@ -26,7 +26,7 @@ export function setExpressionProvenance(
 }
 
 export function inheritExpressionProvenance(target: unknown, source: unknown): void {
-  const descriptor = getExpressionProvenance(source);
+  const descriptor = getExpressionProvenance(source) ?? descriptorFromContext(source);
   if (!descriptor) {
     return;
   }
@@ -83,4 +83,16 @@ function formatMaterializedValue(value: unknown): string {
     }
   }
   return String(value);
+}
+
+function descriptorFromContext(value: unknown): SecurityDescriptor | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const ctx = (value as { ctx?: any }).ctx;
+  if (!ctx) {
+    return undefined;
+  }
+  const ctxDescriptor = ctxToSecurityDescriptor(ctx);
+  return normalizeSecurityDescriptor(ctxDescriptor);
 }
