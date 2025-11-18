@@ -592,6 +592,37 @@ export const helpers = {
             location
         });
     },
+    attachPostFields(exec, post) {
+        if (!post || post.length === 0) {
+            return exec;
+        }
+        let current = exec;
+        const remainingFields = [];
+        for (const entry of post) {
+            if (entry?.type === 'methodCall') {
+                const methodRef = {
+                    name: entry.name,
+                    identifier: [
+                        this.createNode(NodeType.Text, {
+                            content: entry.name,
+                            location: entry.location
+                        })
+                    ],
+                    args: entry.args || [],
+                    isCommandReference: true,
+                    objectSource: current
+                };
+                current = this.createExecInvocation(methodRef, null, entry.location);
+            }
+            else {
+                remainingFields.push(entry);
+            }
+        }
+        if (remainingFields.length > 0) {
+            return { ...current, fields: remainingFields };
+        }
+        return current;
+    },
     /**
      * Get the command name from an ExecInvocation node
      */

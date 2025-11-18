@@ -101,7 +101,7 @@ UnifiedAtomicExpression
 // Note: We intentionally keep this here (base) so WhenConditionAdapter (UnifiedExpression)
 // can parse it in simple /when forms.
 ExecResultMethodCall
-  = "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:AnyFieldAccess* {
+  = "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:PostFieldAccess* {
       // Build the base exec invocation: @func(args)
       const baseRef = {
         name: func,
@@ -123,7 +123,7 @@ ExecResultMethodCall
       };
 
       const exec = helpers.createExecInvocation(methodRef, null, location());
-      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
+      return helpers.attachPostFields(exec, post);
     }
 
 // Array operations for advanced filtering and manipulation

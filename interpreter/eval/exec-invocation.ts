@@ -153,7 +153,19 @@ function cloneGuardCandidateForParameter(
   return cloned;
 }
 
-type StringBuiltinMethod = 'toLowerCase' | 'toUpperCase' | 'trim' | 'slice';
+type StringBuiltinMethod =
+  | 'toLowerCase'
+  | 'toUpperCase'
+  | 'trim'
+  | 'slice'
+  | 'substring'
+  | 'substr'
+  | 'replace'
+  | 'replaceAll'
+  | 'padStart'
+  | 'padEnd'
+  | 'repeat';
+type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort';
 type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
 
 function ensureStringTarget(method: string, target: unknown): string {
@@ -170,11 +182,7 @@ function ensureArrayTarget(method: string, target: unknown): unknown[] {
   throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
 }
 
-function handleStringBuiltin(
-  method: StringBuiltinMethod,
-  target: unknown,
-  args: unknown[] = []
-): string {
+function handleStringBuiltin(method: StringBuiltinMethod, target: unknown, args: unknown[] = []): string {
   const value = ensureStringTarget(method, target);
   switch (method) {
     case 'toLowerCase':
@@ -188,8 +196,69 @@ function handleStringBuiltin(
       const end = args.length > 1 ? Number(args[1]) : undefined;
       return value.slice(start ?? undefined, end ?? undefined);
     }
+    case 'substring': {
+      const start = args.length > 0 ? Number(args[0]) : 0;
+      const end = args.length > 1 ? Number(args[1]) : undefined;
+      return value.substring(start, end ?? undefined);
+    }
+    case 'substr': {
+      const start = args.length > 0 ? Number(args[0]) : 0;
+      const length = args.length > 1 && args[1] !== undefined ? Number(args[1]) : undefined;
+      return length !== undefined ? value.substr(start, length) : value.substr(start);
+    }
+    case 'replace': {
+      const searchValue = args[0] instanceof RegExp ? args[0] : String(args[0] ?? '');
+      const replaceValue = String(args[1] ?? '');
+      return value.replace(searchValue as any, replaceValue);
+    }
+    case 'replaceAll': {
+      const searchValue = args[0] instanceof RegExp ? args[0] : String(args[0] ?? '');
+      const replaceValue = String(args[1] ?? '');
+      if (searchValue instanceof RegExp && !searchValue.global) {
+        return value.replace(new RegExp(searchValue.source, `${searchValue.flags}g`), replaceValue);
+      }
+      return value.replaceAll(searchValue as any, replaceValue);
+    }
+    case 'padStart': {
+      const targetLength = args.length > 0 ? Number(args[0]) : value.length;
+      const padStringArg = args.length > 1 ? String(args[1]) : ' ';
+      return value.padStart(targetLength, padStringArg);
+    }
+    case 'padEnd': {
+      const targetLength = args.length > 0 ? Number(args[0]) : value.length;
+      const padStringArg = args.length > 1 ? String(args[1]) : ' ';
+      return value.padEnd(targetLength, padStringArg);
+    }
+    case 'repeat': {
+      const count = args.length > 0 ? Number(args[0]) : 0;
+      return value.repeat(count);
+    }
   }
   throw new MlldInterpreterError(`Unsupported string builtin: ${method}`);
+}
+
+function handleArrayBuiltin(method: ArrayBuiltinMethod, target: unknown, args: unknown[] = []): unknown[] {
+  const array = ensureArrayTarget(method, target);
+  switch (method) {
+    case 'slice': {
+      const start = args.length > 0 ? Number(args[0]) : undefined;
+      const end = args.length > 1 ? Number(args[1]) : undefined;
+      return array.slice(start ?? undefined, end ?? undefined);
+    }
+    case 'concat':
+      return array.concat(...args);
+    case 'reverse':
+      return [...array].reverse();
+    case 'sort': {
+      const cloned = [...array];
+      const comparator = args[0];
+      if (typeof comparator === 'function') {
+        return cloned.sort(comparator as (a: unknown, b: unknown) => number);
+      }
+      return cloned.sort();
+    }
+  }
+  throw new MlldInterpreterError(`Unsupported array builtin: ${method}`);
 }
 
 function handleLengthBuiltin(target: unknown): number {
@@ -358,7 +427,29 @@ export async function evaluateExecInvocation(
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     // Check if this is a builtin method call (e.g., @list.includes())
-    const builtinMethods = ['includes', 'length', 'indexOf', 'join', 'split', 'toLowerCase', 'toUpperCase', 'trim', 'startsWith', 'endsWith'];
+    const builtinMethods = [
+      'includes',
+      'length',
+      'indexOf',
+      'join',
+      'split',
+      'toLowerCase',
+      'toUpperCase',
+      'trim',
+      'slice',
+      'substring',
+      'substr',
+      'replace',
+      'replaceAll',
+      'padStart',
+      'padEnd',
+      'repeat',
+      'startsWith',
+      'endsWith',
+      'concat',
+      'reverse',
+      'sort'
+    ];
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
       let objectValue: any;
@@ -423,33 +514,58 @@ export async function evaluateExecInvocation(
 
       const quantifierEvaluator = (objectValue as any)?.__mlldQuantifierEvaluator;
       if (quantifierEvaluator && typeof quantifierEvaluator === 'function') {
-        const quantifierResult = quantifierEvaluator(commandName, evaluatedArgs);
-        return createEvalResult(quantifierResult, env);
-      }
-      
-      // Apply the builtin method
-      let result: any;
-      switch (commandName) {
-        case 'toLowerCase':
-        case 'toUpperCase':
-        case 'trim':
-        case 'slice':
-          result = handleStringBuiltin(commandName, objectValue, evaluatedArgs);
-          inheritExpressionProvenance(result, objectVar ?? objectValue);
-          break;
-        case 'length':
-          result = handleLengthBuiltin(objectValue);
-          break;
-        case 'join':
-          result = handleJoinBuiltin(objectValue, evaluatedArgs[0]);
-          break;
-        case 'split':
-          result = handleSplitBuiltin(objectValue, evaluatedArgs[0]);
-          break;
-        case 'includes':
-        case 'indexOf':
-        case 'startsWith':
-        case 'endsWith':
+      const quantifierResult = quantifierEvaluator(commandName, evaluatedArgs);
+      return createEvalResult(quantifierResult, env);
+    }
+    
+    // Apply the builtin method
+    let result: any;
+    const propagateResult = (output: unknown): void => {
+      inheritExpressionProvenance(output, objectVar ?? objectValue);
+    };
+    switch (commandName) {
+      case 'toLowerCase':
+      case 'toUpperCase':
+      case 'trim':
+      case 'substring':
+      case 'substr':
+      case 'replace':
+      case 'replaceAll':
+      case 'padStart':
+      case 'padEnd':
+      case 'repeat':
+        result = handleStringBuiltin(commandName as StringBuiltinMethod, objectValue, evaluatedArgs);
+        propagateResult(result);
+        break;
+      case 'slice':
+        if (Array.isArray(objectValue)) {
+          result = handleArrayBuiltin('slice', objectValue, evaluatedArgs);
+        } else {
+          result = handleStringBuiltin('slice', objectValue, evaluatedArgs);
+        }
+        propagateResult(result);
+        break;
+      case 'concat':
+      case 'reverse':
+      case 'sort':
+        result = handleArrayBuiltin(commandName as ArrayBuiltinMethod, objectValue, evaluatedArgs);
+        propagateResult(result);
+        break;
+      case 'length':
+        result = handleLengthBuiltin(objectValue);
+        break;
+      case 'join':
+        result = handleJoinBuiltin(objectValue, evaluatedArgs[0]);
+        propagateResult(result);
+        break;
+      case 'split':
+        result = handleSplitBuiltin(objectValue, evaluatedArgs[0]);
+        propagateResult(result);
+        break;
+      case 'includes':
+      case 'indexOf':
+      case 'startsWith':
+      case 'endsWith':
           result = handleSearchBuiltin(commandName as SearchBuiltinMethod, objectValue, evaluatedArgs[0]);
           break;
         default:

@@ -157,3 +157,25 @@ AnyFieldAccess
   = FieldAccess
   / NumericFieldAccess
   / ArrayAccess
+
+// Extended field access for trailing method calls (e.g., .slice(0, 4))
+MethodCallAccess
+  = DotSeparator methodStart:("" { return peg$currPos; }) method:BaseIdentifier "(" args:CommandArgumentList? _ ")" {
+      return {
+        type: 'methodCall',
+        name: method,
+        args: args || [],
+        location: {
+          start: {
+            offset: methodStart,
+            line: location().start.line,
+            column: location().start.column + 1
+          },
+          end: location().end
+        }
+      };
+    }
+
+PostFieldAccess
+  = MethodCallAccess
+  / AnyFieldAccess
