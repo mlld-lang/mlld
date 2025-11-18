@@ -23,6 +23,7 @@ VarRHSContent "var assignment value"
   / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
+  / InlineShowDirective         // show actions used inline (for expressions)
   / PrimitiveValue              // Direct primitives: 42, true, false, null, and strings WITHOUT pipes
 
 // Expression that definitely has an operator (to avoid matching simple variables)
@@ -353,6 +354,11 @@ NestedDirective
         directive: 'run',
         command: cmd
       };
+  }
+
+InlineShowDirective
+  = "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
+      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
     }
 
 // Command content inside brackets

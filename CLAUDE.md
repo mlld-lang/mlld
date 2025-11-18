@@ -29,6 +29,11 @@ Agents dispatched with the 'Task' tool can sometimes perform work you did not in
 npm run build        # Build the project
 npm test <dir>       # Run tests for a specific section of code
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
+npm run test:case -- <fixture-path>  # Run specific fixture test(s) by path
+                     # Examples:
+                     #   npm run test:case -- feat
+                     #   npm run test:case -- feat/alligator
+                     #   npm run test:case -- feat/alligator/glob-concat
 npm run ast -- '<mlld syntax>'  # Shows AST for any valid mlld syntax
 npm run ast -- file.mld         # Shows AST for a file (auto-detects if file exists)
 cat file.mld | npm run ast      # Shows AST from stdin

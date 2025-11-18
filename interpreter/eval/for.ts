@@ -11,7 +11,13 @@ import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
-import { asData, asText, isStructuredValue, looksLikeJsonString } from '../utils/structured-value';
+import {
+  asData,
+  asText,
+  isStructuredValue,
+  looksLikeJsonString,
+  normalizeWhenShowEffect
+} from '../utils/structured-value';
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown, env: Environment): Variable {
@@ -228,6 +234,10 @@ export async function evaluateForExpression(
         } else {
           exprResult = branchValue;
         }
+
+        // Preserve directive-produced text (e.g., show/run) when they tag side effects
+        exprResult = normalizeWhenShowEffect(exprResult).normalized;
+
         if (typeof exprResult === 'string' && looksLikeJsonString(exprResult)) {
           try {
             exprResult = JSON.parse(exprResult.trim());

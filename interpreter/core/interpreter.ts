@@ -720,8 +720,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   throw new Error(`Unknown node type: ${node.type}`);
 }
 
-const interpolateImpl = createInterpolator(() => ({ evaluate }));
-export { interpolateImpl as interpolate };
+const interpolate = createInterpolator(() => ({ evaluate }));
+export { interpolate };
 
 /**
  * Evaluate a document node (contains multiple child nodes)

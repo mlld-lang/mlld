@@ -38,6 +38,66 @@ function isNoneCondition(condition: any): boolean {
   return condition?.type === 'Literal' && condition?.valueType === 'none';
 }
 
+async function normalizeActionValue(value: unknown, actionEnv: Environment): Promise<unknown> {
+  let normalized = value;
+
+  if (isStructuredValue(normalized)) {
+    normalized =
+      normalized.type === 'array' || normalized.type === 'object'
+        ? normalized.data
+        : asText(normalized);
+  }
+
+  if (
+    normalized &&
+    typeof normalized === 'object' &&
+    'wrapperType' in (normalized as Record<string, unknown>) &&
+    Array.isArray((normalized as { content?: unknown[] }).content)
+  ) {
+    try {
+      const interpolateFn = await getInterpolateFn();
+      normalized = await interpolateFn((normalized as { content: any[] }).content, actionEnv);
+    } catch {
+      normalized = String(normalized as any);
+    }
+  }
+
+  if (normalized && typeof normalized === 'object' && 'type' in (normalized as Record<string, unknown>)) {
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    try {
+      normalized = await extractVariableValue(normalized as any, actionEnv);
+    } catch (error) {
+      logger.debug('Could not extract variable value in when expression:', error);
+    }
+  }
+
+  if (typeof normalized !== 'string') {
+    try {
+      if (normalized && typeof normalized === 'object') {
+        if (
+          'wrapperType' in (normalized as Record<string, unknown>) &&
+          Array.isArray((normalized as { content?: unknown[] }).content)
+        ) {
+          const interpolateFn = await getInterpolateFn();
+          normalized = await interpolateFn((normalized as { content: any[] }).content, actionEnv);
+        } else if ('type' in (normalized as Record<string, unknown>)) {
+          const { extractVariableValue } = await import('../utils/variable-resolution');
+          const extracted = await extractVariableValue(normalized as any, actionEnv);
+          normalized = typeof extracted === 'string' ? extracted : JSON.stringify(extracted);
+        } else {
+          normalized = JSON.stringify(normalized);
+        }
+      } else {
+        normalized = String(normalized ?? '');
+      }
+    } catch {
+      normalized = String(normalized ?? '');
+    }
+  }
+
+  return normalized;
+}
+
 /**
  * Validate that 'none' conditions are placed correctly in a when block
  */
@@ -282,57 +342,7 @@ export async function evaluateWhenExpression(
             actionResult = await evaluate(pair.action, actionEnv, context);
             value = actionResult.value;
           }
-
-          if (isStructuredValue(value)) {
-            value = value.type === 'array' || value.type === 'object' ? value.data : asText(value);
-          }
-          
-
-          // Normalize wrapped string nodes (quotes/backticks) into plain strings
-          if (value && typeof value === 'object' && 'wrapperType' in value && Array.isArray((value as any).content)) {
-            try {
-              const interpolateFn = await getInterpolateFn();
-              value = await interpolateFn((value as any).content, actionEnv);
-            } catch {
-              // If interpolation fails, fallback to string coercion
-              value = String(value as any);
-            }
-          }
-          
-          // Extract Variable values if needed (but keep effects working)
-          if (value && typeof value === 'object' && 'type' in value) {
-            // This looks like a Variable object - extract its value
-            const { extractVariableValue } = await import('../utils/variable-resolution');
-            try {
-              value = await extractVariableValue(value, actionEnv);
-            } catch (e) {
-              // If extraction fails, keep the original value
-              logger.debug('Could not extract variable value in when expression:', e);
-            }
-          }
-          
-          // Coerce non-string values to strings for expression returns
-          if (typeof value !== 'string') {
-            try {
-              if (value && typeof value === 'object') {
-                // Unwrap template-like values
-                if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
-                  const interpolateFn = await getInterpolateFn();
-                  value = await interpolateFn((value as any).content, actionEnv);
-                } else if ('type' in (value as any)) {
-                  const { extractVariableValue } = await import('../utils/variable-resolution');
-                  const extracted = await extractVariableValue(value as any, actionEnv);
-                  value = typeof extracted === 'string' ? extracted : JSON.stringify(extracted);
-                } else {
-                  value = JSON.stringify(value);
-                }
-              } else {
-                value = String(value ?? '');
-              }
-            } catch {
-              value = String(value ?? '');
-            }
-          }
+          value = await normalizeActionValue(value, actionEnv);
           if (Array.isArray(pair.action) && pair.action.length === 1) {
             const singleAction = pair.action[0];
             if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
@@ -451,6 +461,7 @@ export async function evaluateWhenExpression(
         const actionResult = await evaluate(pair.action, actionEnv, context);
         
         let value = actionResult.value;
+        value = await normalizeActionValue(value, actionEnv);
         
         // Apply tail modifiers if present
         if (node.withClause && node.withClause.pipes) {
