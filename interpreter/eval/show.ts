@@ -92,6 +92,15 @@ export async function evaluateShow(
   let resultValue: unknown | undefined;
   let content = '';
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+  let interpolatedDescriptor: SecurityDescriptor | undefined;
+  const collectInterpolatedDescriptor = (descriptor?: SecurityDescriptor): void => {
+    if (!descriptor) {
+      return;
+    }
+    interpolatedDescriptor = interpolatedDescriptor
+      ? env.mergeSecurityDescriptors(interpolatedDescriptor, descriptor)
+      : descriptor;
+  };
   
   const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
 
@@ -227,13 +236,17 @@ export async function evaluateShow(
               astArray: value
             });
           }
-          value = await interpolate(value, env);
+          value = await interpolate(value, env, undefined, {
+            collectSecurityDescriptor: collectInterpolatedDescriptor
+          });
           if (process.env.MLLD_DEBUG === 'true') {
             logger.debug('Interpolation result:', { value });
           }
         } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
           // GOTCHA: Some legacy paths store template AST in internal metadata
-          value = await interpolate(variable.internal.templateAst, env);
+          value = await interpolate(variable.internal.templateAst, env, undefined, {
+            collectSecurityDescriptor: collectInterpolatedDescriptor
+          });
         }
       }
     } else if (isObject(variable)) {
@@ -517,7 +530,9 @@ export async function evaluateShow(
       resolvedPath = pathValue;
     } else if (Array.isArray(pathValue)) {
       // Array of path nodes
-      resolvedPath = await interpolate(pathValue, env);
+      resolvedPath = await interpolate(pathValue, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
     } else {
       throw new Error('Invalid path type in add directive');
     }
@@ -543,7 +558,9 @@ export async function evaluateShow(
     }
     
     // Get the section title
-    const sectionTitle = await interpolate(sectionTitleNodes, env);
+    const sectionTitle = await interpolate(sectionTitleNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Handle both string paths (URLs) and node arrays
     let resolvedPath: string;
@@ -552,7 +569,9 @@ export async function evaluateShow(
       resolvedPath = pathValue;
     } else if (Array.isArray(pathValue)) {
       // Array of path nodes
-      resolvedPath = await interpolate(pathValue, env);
+      resolvedPath = await interpolate(pathValue, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
     } else {
       throw new Error('Invalid path type in add section directive');
     }
@@ -582,7 +601,9 @@ export async function evaluateShow(
     // Handle rename if newTitle is specified
     const newTitleNodes = directive.values?.newTitle;
     if (newTitleNodes) {
-      const newTitle = await interpolate(newTitleNodes, env);
+      const newTitle = await interpolate(newTitleNodes, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
       // Replace the original section title with the new one
       const lines = content.split('\n');
       if (lines.length > 0 && lines[0].match(/^#+\s/)) {
@@ -626,7 +647,9 @@ export async function evaluateShow(
     
     
     // Interpolate the template
-    content = await interpolate(templateNodes, env);
+    content = await interpolate(templateNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Handle pipeline if present
     if (directive.values?.pipeline) {
@@ -639,7 +662,9 @@ export async function evaluateShow(
     // Handle section extraction if specified
     const sectionNodes = directive.values?.section;
     if (sectionNodes && Array.isArray(sectionNodes)) {
-      const section = await interpolate(sectionNodes, env);
+      const section = await interpolate(sectionNodes, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
       if (section) {
         content = extractSection(content, section);
       }
@@ -732,7 +757,9 @@ export async function evaluateShow(
     }
     
     // Get the template name
-    const templateName = await interpolate(templateNameNodes, env);
+    const templateName = await interpolate(templateNameNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Look up the template
     const template = env.getVariable(templateName);
@@ -821,7 +848,9 @@ export async function evaluateShow(
     if (!templateNodes) {
       throw new Error(`Template ${templateName} has no template content`);
     }
-    content = await interpolate(templateNodes, childEnv);
+    content = await interpolate(templateNodes, childEnv, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Template normalization is now handled in the grammar at parse time
     
@@ -943,7 +972,9 @@ export async function evaluateShow(
     // Handle rename if newTitle is specified (for section extraction)
     const newTitleNodes = directive.values?.newTitle;
     if (newTitleNodes && loadContentNode.options?.section) {
-      const newTitle = await interpolate(newTitleNodes, env);
+      const newTitle = await interpolate(newTitleNodes, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
       content = applyHeaderTransform(content, newTitle);
     }
     
@@ -958,7 +989,9 @@ export async function evaluateShow(
     const { InterpolationContext } = await import('../core/interpolation-context');
     
     // Interpolate command (resolve variables) with shell command context
-    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Execute the command and capture output for display
     const executionContext = {
@@ -1041,7 +1074,9 @@ export async function evaluateShow(
     
     
     // Process the content using the standard interpolation
-    content = await interpolate(templateNodes, env);
+    content = await interpolate(templateNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     
   } else {
@@ -1113,6 +1148,7 @@ export async function evaluateShow(
 
   const snapshot = env.getSecuritySnapshot();
   const resultDescriptor = mergeDescriptors(
+    interpolatedDescriptor,
     extractDescriptorFromValue(resultValue),
     snapshot
       ? makeSecurityDescriptor({

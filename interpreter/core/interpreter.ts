@@ -356,7 +356,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     }
     
     if (contentToInterpolate) {
-      const interpolated = await interpolate(contentToInterpolate, env);
+      const interpolated = await interpolateWithSecurityRecording(contentToInterpolate, env);
       return { value: interpolated, env };
     }
   }
@@ -488,7 +488,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           
           // Interpolate the command template
-          const command = await interpolate(commandTemplate as InterpolationNode[], env);
+          const command = await interpolateWithSecurityRecording(commandTemplate as InterpolationNode[], env);
           
           if (args.length > 0) {
             // TODO: Implement proper argument interpolation
@@ -511,7 +511,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           
           // Interpolate the code template
-          const code = await interpolate(codeTemplate as InterpolationNode[], env);
+          const code = await interpolateWithSecurityRecording(codeTemplate as InterpolationNode[], env);
           
           const result = await env.executeCode(
             code,
@@ -701,7 +701,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       commandStr = node.command || '';
     } else if (Array.isArray(node.command)) {
       // Interpolate the command array
-      commandStr = await interpolate(node.command, env) || '';
+      const interpolatedCommand = await interpolateWithSecurityRecording(node.command, env);
+      commandStr = interpolatedCommand || '';
     } else {
       commandStr = '';
     }
@@ -722,6 +723,29 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
 
 const interpolate = createInterpolator(() => ({ evaluate }));
 export { interpolate };
+
+async function interpolateWithSecurityRecording(
+  nodes: any,
+  env: Environment,
+  context?: InterpolationContext
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1
+        ? descriptors[0]
+        : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Evaluate a document node (contains multiple child nodes)

@@ -153,6 +153,23 @@ export async function evaluateRun(
   let outputValue: unknown;
   let outputText: string;
   let pendingOutputDescriptor: SecurityDescriptor | undefined;
+  const mergePendingDescriptor = (descriptor?: SecurityDescriptor): void => {
+    if (!descriptor) {
+      return;
+    }
+    pendingOutputDescriptor = pendingOutputDescriptor
+      ? env.mergeSecurityDescriptors(pendingOutputDescriptor, descriptor)
+      : descriptor;
+  };
+  const interpolateWithPendingDescriptor = async (
+    nodes: any,
+    interpolationContext: InterpolationContext = InterpolationContext.Default,
+    targetEnv: Environment = env
+  ): Promise<string> => {
+    return interpolate(nodes, targetEnv, interpolationContext, {
+      collectSecurityDescriptor: mergePendingDescriptor
+    });
+  };
 
   const setOutput = (value: unknown) => {
     const wrapped = wrapExecResult(value);
@@ -202,7 +219,9 @@ export async function evaluateRun(
     
     const preExtractedCommand = getPreExtractedRunCommand(context);
     // Interpolate command (resolve variables) with shell command context
-    const command = preExtractedCommand ?? await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+    const command =
+      preExtractedCommand ??
+      (await interpolateWithPendingDescriptor(commandNodes, InterpolationContext.ShellCommand));
     const commandTaint = deriveCommandTaint({ command });
     pendingOutputDescriptor = makeSecurityDescriptor({
       taintLevel: commandTaint.level,
@@ -559,7 +578,7 @@ export async function evaluateRun(
           argValue = String(arg);
         } else if (arg && typeof arg === 'object' && 'type' in arg) {
           // Node object - interpolate normally
-          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValue = await interpolateWithPendingDescriptor([arg], InterpolationContext.Default);
         } else {
           // Fallback
           argValue = String(arg);
@@ -585,7 +604,11 @@ export async function evaluateRun(
       });
       
       // Interpolate the command template with parameters
-      const command = await interpolate(cleanTemplate, tempEnv, InterpolationContext.ShellCommand);
+      const command = await interpolateWithPendingDescriptor(
+        cleanTemplate,
+        InterpolationContext.ShellCommand,
+        tempEnv
+      );
       
       // NEW: Security check for exec commands
       const security = env.getSecurityManager();
@@ -653,7 +676,11 @@ export async function evaluateRun(
       }
       
       // Interpolate executable code templates with parameters (canonical behavior)
-      const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.ShellCommand);
+      const code = await interpolateWithPendingDescriptor(
+        definition.codeTemplate,
+        InterpolationContext.ShellCommand,
+        tempEnv
+      );
       if (process.env.DEBUG_EXEC) {
         logger.debug('run.ts code execution debug:', {
           codeTemplate: definition.codeTemplate,
@@ -710,7 +737,12 @@ export async function evaluateRun(
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
       
-      setOutput(await interpolate(definition.template, tempEnv, InterpolationContext.Default));
+      const templateOutput = await interpolateWithPendingDescriptor(
+        definition.template,
+        InterpolationContext.Default,
+        tempEnv
+      );
+      setOutput(templateOutput);
     } else {
       throw new Error(`Unsupported executable type: ${definition.type}`);
     }

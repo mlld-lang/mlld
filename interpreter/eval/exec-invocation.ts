@@ -153,7 +153,7 @@ function cloneGuardCandidateForParameter(
   return cloned;
 }
 
-type StringBuiltinMethod = 'toLowerCase' | 'toUpperCase' | 'trim';
+type StringBuiltinMethod = 'toLowerCase' | 'toUpperCase' | 'trim' | 'slice';
 type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
 
 function ensureStringTarget(method: string, target: unknown): string {
@@ -170,7 +170,11 @@ function ensureArrayTarget(method: string, target: unknown): unknown[] {
   throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
 }
 
-function handleStringBuiltin(method: StringBuiltinMethod, target: unknown): string {
+function handleStringBuiltin(
+  method: StringBuiltinMethod,
+  target: unknown,
+  args: unknown[] = []
+): string {
   const value = ensureStringTarget(method, target);
   switch (method) {
     case 'toLowerCase':
@@ -179,6 +183,11 @@ function handleStringBuiltin(method: StringBuiltinMethod, target: unknown): stri
       return value.toUpperCase();
     case 'trim':
       return value.trim();
+    case 'slice': {
+      const start = args.length > 0 ? Number(args[0]) : undefined;
+      const end = args.length > 1 ? Number(args[1]) : undefined;
+      return value.slice(start ?? undefined, end ?? undefined);
+    }
   }
   throw new MlldInterpreterError(`Unsupported string builtin: ${method}`);
 }
@@ -424,7 +433,8 @@ export async function evaluateExecInvocation(
         case 'toLowerCase':
         case 'toUpperCase':
         case 'trim':
-          result = handleStringBuiltin(commandName, objectValue);
+        case 'slice':
+          result = handleStringBuiltin(commandName, objectValue, evaluatedArgs);
           inheritExpressionProvenance(result, objectVar ?? objectValue);
           break;
         case 'length':

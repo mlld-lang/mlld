@@ -114,6 +114,35 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
   return baseSource;
 }
 
+type DescriptorCollector = (descriptor?: SecurityDescriptor) => void;
+
+async function interpolateAndCollect(
+  nodes: any,
+  env: Environment,
+  mergeDescriptor?: DescriptorCollector,
+  interpolationContext: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  if (!mergeDescriptor) {
+    return interpolate(nodes, env, interpolationContext);
+  }
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, interpolationContext, {
+    collectSecurityDescriptor: collected => {
+      if (collected) {
+        descriptors.push(collected);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1
+        ? descriptors[0]
+        : env.mergeSecurityDescriptors(...descriptors);
+    mergeDescriptor(merged);
+  }
+  return text;
+}
+
 /**
  * Evaluate @var directives.
  * This is the unified variable assignment directive that replaces @text and @data.
@@ -156,26 +185,11 @@ export async function prepareVarAssignment(
       ? env.mergeSecurityDescriptors(resolvedSecurityDescriptor, descriptor)
       : descriptor;
   };
-  const interpolateWithSecurity = async (
+  const interpolateWithSecurity = (
     nodes: any,
     interpolationContext: InterpolationContext = InterpolationContext.Default
   ): Promise<string> => {
-    const descriptors: SecurityDescriptor[] = [];
-    const text = await interpolate(nodes, env, interpolationContext, {
-      collectSecurityDescriptor: collected => {
-        if (collected) {
-          descriptors.push(collected);
-        }
-      }
-    });
-    if (descriptors.length > 0) {
-      const merged =
-        descriptors.length === 1
-          ? descriptors[0]
-          : env.mergeSecurityDescriptors(...descriptors);
-      mergeResolvedDescriptor(merged);
-    }
-    return text;
+    return interpolateAndCollect(nodes, env, mergeResolvedDescriptor, interpolationContext);
   };
 
   /**
@@ -294,14 +308,14 @@ export async function prepareVarAssignment(
         if (item && typeof item === 'object') {
           if ('content' in item && Array.isArray(item.content)) {
             // This is wrapped content (like from a string literal)
-            const interpolated = await interpolate(item.content, env);
+            const interpolated = await interpolateWithSecurity(item.content);
             processedItems.push(interpolated);
           } else if (item.type === 'Text' && 'content' in item) {
             // Direct text content
             processedItems.push(item.content);
           } else if (typeof item === 'object' && item.type) {
             // Other node types - evaluate them
-            const evaluated = await evaluateArrayItem(item, env);
+            const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor);
             processedItems.push(evaluated);
           } else {
             // Primitive values
@@ -340,7 +354,7 @@ export async function prepareVarAssignment(
           // Each property value might need interpolation
           if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
             // Handle wrapped string content (quotes, backticks, etc.)
-            processedObject[key] = await interpolate(propValue.content as any, env);
+            processedObject[key] = await interpolateWithSecurity(propValue.content as any);
           } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
             // Handle array values in objects
             const processedArray = [];
@@ -354,7 +368,7 @@ export async function prepareVarAssignment(
             }
             
             for (const item of (propValue.items || [])) {
-              const evaluated = await evaluateArrayItem(item, env);
+              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor);
               processedArray.push(evaluated);
             }
             processedObject[key] = processedArray;
@@ -363,13 +377,13 @@ export async function prepareVarAssignment(
             const nestedObj: Record<string, any> = {};
             if (propValue.properties) {
               for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
-                nestedObj[nestedKey] = await evaluateArrayItem(nestedValue, env);
+                nestedObj[nestedKey] = await evaluateArrayItem(nestedValue, env, mergeResolvedDescriptor);
               }
             }
             processedObject[key] = nestedObj;
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
-            processedObject[key] = await evaluateArrayItem(propValue, env);
+            processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
           } else {
             // For primitive types (numbers, booleans, null, strings), use as-is
             processedObject[key] = propValue;
@@ -381,8 +395,8 @@ export async function prepareVarAssignment(
     
   } else if (valueNode.type === 'section') {
     // Section extraction: [file.md # Section]
-    const filePath = await interpolate(valueNode.path, env);
-    const sectionName = await interpolate(valueNode.section, env);
+    const filePath = await interpolateWithSecurity(valueNode.path);
+    const sectionName = await interpolateWithSecurity(valueNode.section);
     
     // Read file and extract section
     const fileContent = await env.readFile(filePath);
@@ -400,7 +414,7 @@ export async function prepareVarAssignment(
     
     // Check if we have an asSection modifier in the withClause
     if (directive.values?.withClause?.asSection) {
-      const newHeader = await interpolate(directive.values.withClause.asSection, env);
+      const newHeader = await interpolateWithSecurity(directive.values.withClause.asSection);
       resolvedValue = applyHeaderTransform(resolvedValue, newHeader);
     }
     
@@ -427,7 +441,7 @@ export async function prepareVarAssignment(
     
   } else if (valueNode.type === 'path') {
     // Path dereference: [README.md]
-    const filePath = await interpolate(valueNode.segments, env);
+    const filePath = await interpolateWithSecurity(valueNode.segments);
     resolvedValue = await env.readFile(filePath);
     
   } else if (valueNode.type === 'code') {
@@ -477,7 +491,10 @@ export async function prepareVarAssignment(
       // Regular command without withClause: execute directly
       if (Array.isArray(valueNode.command)) {
         // New: command is an array of AST nodes that need interpolation
-        const interpolatedCommand = await interpolate(valueNode.command, env, InterpolationContext.ShellCommand);
+        const interpolatedCommand = await interpolateWithSecurity(
+          valueNode.command,
+          InterpolationContext.ShellCommand
+        );
         resolvedValue = await env.executeCommand(interpolatedCommand);
       } else {
         // Legacy: command is a raw string (for backward compatibility)
@@ -892,13 +909,13 @@ export async function prepareVarAssignment(
       valueNode.language || 'js', sourceCode, source, options);
     
   } else if (valueNode.type === 'path') {
-    const filePath = await interpolate(valueNode.segments, env);
+    const filePath = await interpolateWithSecurity(valueNode.segments);
     const options = applySecurityOptions();
     variable = createFileContentVariable(identifier, resolvedValue, filePath, source, options);
     
   } else if (valueNode.type === 'section') {
-    const filePath = await interpolate(valueNode.path, env);
-    const sectionName = await interpolate(valueNode.section, env);
+    const filePath = await interpolateWithSecurity(valueNode.path);
+    const sectionName = await interpolateWithSecurity(valueNode.section);
     const options = applySecurityOptions();
     variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
       sectionName, 'hash', source, options);
@@ -1219,7 +1236,11 @@ function hasComplexArrayItems(items: any[]): boolean {
  * This function evaluates items that will be stored in arrays, preserving Variables
  * instead of extracting their values immediately.
  */
-async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
+async function evaluateArrayItem(
+  item: any,
+  env: Environment,
+  collectDescriptor?: DescriptorCollector
+): Promise<any> {
   if (!item || typeof item !== 'object') {
     return item;
   }
@@ -1237,12 +1258,12 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
   // This includes strings in objects: {"name": "alice"} where "alice" becomes
   // {content: [{type: 'Text', content: 'alice'}], wrapperType: 'doubleQuote'}
   if ('content' in item && Array.isArray(item.content) && 'wrapperType' in item) {
-    return await interpolate(item.content, env);
+    return await interpolateAndCollect(item.content, env, collectDescriptor);
   }
 
   // Also handle the case where we just have content array without wrapperType
   if ('content' in item && Array.isArray(item.content)) {
-    return await interpolate(item.content, env);
+    return await interpolateAndCollect(item.content, env, collectDescriptor);
   }
   
   // Handle raw Text nodes that may appear in objects
@@ -1258,7 +1279,7 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
         continue;
       }
-      nestedObj[key] = await evaluateArrayItem(value, env);
+      nestedObj[key] = await evaluateArrayItem(value, env, collectDescriptor);
     }
     return nestedObj;
   }
@@ -1275,7 +1296,7 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       // Nested array
       const nestedItems = [];
       for (const nestedItem of (item.items || [])) {
-        nestedItems.push(await evaluateArrayItem(nestedItem, env));
+        nestedItems.push(await evaluateArrayItem(nestedItem, env, collectDescriptor));
       }
       return nestedItems;
 
@@ -1284,7 +1305,7 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       const processedObject: Record<string, any> = {};
       if (item.properties) {
         for (const [key, propValue] of Object.entries(item.properties)) {
-          processedObject[key] = await evaluateArrayItem(propValue, env);
+          processedObject[key] = await evaluateArrayItem(propValue, env, collectDescriptor);
         }
       }
       return processedObject;
@@ -1306,15 +1327,18 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
 
     case 'path':
       // Path node in array - read the file content
-      const { interpolate: pathInterpolate } = await import('../core/interpreter');
-      const filePath = await pathInterpolate(item.segments || [item], env);
+      const filePath = await interpolateAndCollect(item.segments || [item], env, collectDescriptor);
       const fileContent = await env.readFile(filePath);
       return fileContent;
 
     case 'SectionExtraction':
       // Section extraction in array
-      const sectionName = await interpolate(item.section, env);
-      const sectionFilePath = await interpolate(item.path.segments || [item.path], env);
+      const sectionName = await interpolateAndCollect(item.section, env, collectDescriptor);
+      const sectionFilePath = await interpolateAndCollect(
+        item.path.segments || [item.path],
+        env,
+        collectDescriptor
+      );
       const sectionFileContent = await env.readFile(sectionFilePath);
       
       // Use standard section extraction
@@ -1348,13 +1372,13 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
           if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
             continue;
           }
-          plainObj[key] = await evaluateArrayItem(value, env);
+          plainObj[key] = await evaluateArrayItem(value, env, collectDescriptor);
         }
         return plainObj;
       }
       
       // Try to interpolate as a node array
-      return await interpolate([item], env);
+      return await interpolateAndCollect([item], env, collectDescriptor);
   }
 }
 
