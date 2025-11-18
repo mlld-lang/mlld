@@ -703,7 +703,7 @@ export async function prepareVarAssignment(
     // Handle expression nodes
     const { evaluateUnifiedExpression } = await import('./expressions');
     const result = await evaluateUnifiedExpression(valueNode, env);
-    resolvedValue = result;
+    resolvedValue = result.value;
     
   } else if (valueNode && valueNode.type === 'ForExpression') {
     // Handle for expressions: for @item in @collection => expression

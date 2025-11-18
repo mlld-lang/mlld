@@ -5,6 +5,7 @@ import type {
   VariableContextSnapshot
 } from './VariableTypes';
 import { VariableMetadataUtils } from './VariableMetadata';
+import { materializeExpressionValue } from '../provenance/ExpressionProvenance';
 
 type QuantifierType = 'any' | 'all' | 'none';
 const QUANTIFIER_EVALUATOR = '__mlldQuantifierEvaluator';
@@ -129,7 +130,14 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
 }
 
 export function buildArrayAggregate(values: readonly unknown[]): ArrayAggregateSnapshot {
-  const variables = values.filter(isVariableLike) as Variable[];
+  const variables = values
+    .map(value => {
+      if (isVariableLike(value)) {
+        return value as Variable;
+      }
+      return materializeExpressionValue(value, { name: '__guard_input__' });
+    })
+    .filter((value): value is Variable => Boolean(value));
   const contexts = variables.map(ensureContext);
   const tokenValues = contexts.map(ctx => ctx.tokens ?? ctx.tokest ?? 0);
   const tokens = Object.freeze(tokenValues.slice()) as readonly number[];

@@ -15,6 +15,7 @@ import { isVariable } from '../utils/variable-resolution';
 import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget } from '@core/types/hooks';
+import { materializeGuardInputs } from '../utils/guard-inputs';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -285,7 +286,7 @@ export const guardPreHook: PreHook = async (
   }
 
   const registry = env.getGuardRegistry();
-  const variableInputs = inputs.filter(isVariable);
+  const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
 
   const perInputCandidates = buildPerInputCandidates(registry, variableInputs);
   const operationGuards = collectOperationGuards(registry, operation);

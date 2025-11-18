@@ -1248,6 +1248,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.contextManager.withDeniedContext(context, fn);
   }
 
+  pushExecutionContext(type: string, context: unknown): void {
+    this.contextManager.pushGenericContext(type, context);
+  }
+
+  popExecutionContext<T = unknown>(type: string): T | undefined {
+    return this.contextManager.popGenericContext<T>(type);
+  }
+
+  getExecutionContext<T = unknown>(type: string): T | undefined {
+    return this.contextManager.peekGenericContext<T>(type);
+  }
+
+  async withExecutionContext<T>(
+    type: string,
+    context: unknown,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withGenericContext(type, context, fn);
+  }
+
   private registerBuiltinHooks(): void {
     this.hookManager.registerPre(guardPreHook);
     this.hookManager.registerPost(taintPostHook);

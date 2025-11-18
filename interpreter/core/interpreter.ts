@@ -1660,8 +1660,30 @@ async function interpolateFileReference(
       // Handle file not found or access errors gracefully by returning empty string
       if (error.code === 'ENOENT') {
         console.error(`Warning: File not found - '${resolvedPath}'`);
-        // Check if the path looks like it might be relative
-        if (!resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
+
+        // Check for failed variable interpolation
+        if (resolvedPath.includes('@')) {
+          const varMatches = resolvedPath.match(/@(\w+)/g);
+          if (varMatches && varMatches.length > 0) {
+            console.error('');
+            for (const match of varMatches) {
+              const varName = match.substring(1);
+              try {
+                const actualValue = env.getVariable(varName);
+                const valueType = actualValue?.type || typeof actualValue;
+                const valuePreview = JSON.stringify(actualValue, null, 2).substring(0, 200);
+                console.error(`Variable @${varName} is a ${valueType} containing:`);
+                console.error(valuePreview);
+              } catch {
+                console.error(`Variable @${varName} is not in scope or failed to retrieve.`);
+              }
+            }
+            console.error(`\nContent loaders like <path> need a string path or array of paths.`);
+            console.error(`Did you mean to use the variable directly (without angle brackets)?`);
+            console.error('');
+          }
+        } else if (!resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
+          // Check if the path looks like it might be relative
           console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`);
         }
         return '';
@@ -1670,6 +1692,30 @@ async function interpolateFileReference(
         return '';
       } else {
         console.error(`Warning: Failed to load file '${resolvedPath}': ${error.message}`);
+
+        // Check for failed variable interpolation
+        if (resolvedPath.includes('@')) {
+          const varMatches = resolvedPath.match(/@(\w+)/g);
+          if (varMatches && varMatches.length > 0) {
+            console.error('');
+            for (const match of varMatches) {
+              const varName = match.substring(1);
+              try {
+                const actualValue = env.getVariable(varName);
+                const valueType = actualValue?.type || typeof actualValue;
+                const valuePreview = JSON.stringify(actualValue, null, 2).substring(0, 200);
+                console.error(`Variable @${varName} is a ${valueType} containing:`);
+                console.error(valuePreview);
+              } catch {
+                console.error(`Variable @${varName} is not in scope or failed to retrieve.`);
+              }
+            }
+            console.error(`\nContent loaders like <path> need a string path or array of paths.`);
+            console.error(`Did you mean to use the variable directly (without angle brackets)?`);
+            console.error('');
+          }
+        }
+
         // Check if the path looks like it might be relative
         if (!resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
           console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`);

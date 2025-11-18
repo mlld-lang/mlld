@@ -2,6 +2,7 @@ import type { SecurityDescriptor, DataLabel, TaintLevel } from '@core/types/secu
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
+import { getExpressionProvenance } from './expression-provenance';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 const STRUCTURED_VALUE_CTX_INITIALIZED = Symbol('mlld.StructuredValueCtxInitialized');
@@ -587,6 +588,11 @@ function extractDescriptorInternal(
 ): SecurityDescriptor | undefined {
   if (value === null || value === undefined) {
     return undefined;
+  }
+
+  const provenanceDescriptor = getExpressionProvenance(value);
+  if (provenanceDescriptor) {
+    return normalizeIfNeeded(provenanceDescriptor, options.normalize);
   }
 
   if (isStructuredValue(value)) {

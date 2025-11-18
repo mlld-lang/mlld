@@ -11,6 +11,7 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { materializeGuardInputs } from '../utils/guard-inputs';
 
 /**
  * Extract and evaluate directive inputs for hook consumption.
@@ -44,7 +45,7 @@ async function extractShowInputs(
   if (invocation?.type === 'ExecInvocation') {
     const execArgs = extractExecInvocationArgs(invocation, env);
     if (execArgs.length > 0) {
-      return execArgs;
+      return materializeGuardInputs(execArgs);
     }
   }
 
@@ -57,7 +58,7 @@ async function extractShowInputs(
   if (variable) {
     inputs.push(variable);
   }
-  return inputs;
+  return materializeGuardInputs(inputs);
 }
 
 function resolveShowVariableName(directive: DirectiveNode): string | undefined {
@@ -138,7 +139,7 @@ async function extractOutputInputs(
     return [];
   }
 
-  return [variable];
+  return materializeGuardInputs([variable]);
 }
 
 function resolveOutputVariableName(sourceNode: any): string | undefined {
@@ -220,7 +221,7 @@ async function extractRunInputs(
     if (execInvocation?.type === 'ExecInvocation') {
       const execArgs = extractExecInvocationArgs(execInvocation, env);
       if (execArgs.length > 0) {
-        return execArgs;
+        return materializeGuardInputs(execArgs);
       }
     }
     const execName = resolveRunExecName(directive);
@@ -228,7 +229,7 @@ async function extractRunInputs(
       return [];
     }
     const execVar = env.getVariable(execName);
-    return execVar ? [execVar] : [];
+    return execVar ? materializeGuardInputs([execVar]) : [];
   }
 
   return [];

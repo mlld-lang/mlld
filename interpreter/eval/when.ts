@@ -721,9 +721,10 @@ export async function evaluateCondition(
     const node = condition[0];
     if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
       const { evaluateUnifiedExpression } = await import('./expressions');
-      let result: unknown;
+      let resultValue: unknown;
       try {
-        result = await evaluateUnifiedExpression(node as any, env);
+        const expressionResult = await evaluateUnifiedExpression(node as any, env);
+        resultValue = expressionResult.value;
       } catch (err) {
         // Add operator and operand previews for helpful diagnostics
         const op = (node as any).operator || (node as any).test?.type || node.type;
@@ -744,12 +745,12 @@ export async function evaluateCondition(
           ]
         } as any);
       }
-      const truthy = isTruthy(result);
+      const truthy = isTruthy(resultValue);
       if (process.env.MLLD_DEBUG === 'true') {
         try {
           console.error('[evaluateCondition] expression node result:', {
             nodeType: node.type,
-            result,
+            result: resultValue,
             truthy
           });
         } catch {}

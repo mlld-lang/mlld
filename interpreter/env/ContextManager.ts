@@ -79,6 +79,7 @@ export class ContextManager {
   private readonly pipelineStack: PipelineContextSnapshot[] = [];
   private readonly guardStack: GuardContextSnapshot[] = [];
   private readonly deniedStack: DeniedContextSnapshot[] = [];
+  private readonly genericContexts: Map<string, unknown[]> = new Map();
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -249,6 +250,43 @@ export class ContextManager {
     }
 
     return ctxValue;
+  }
+
+  pushGenericContext(type: string, context: unknown): void {
+    if (!this.genericContexts.has(type)) {
+      this.genericContexts.set(type, []);
+    }
+    const stack = this.genericContexts.get(type)!;
+    stack.push(context);
+  }
+
+  popGenericContext<T = unknown>(type: string): T | undefined {
+    const stack = this.genericContexts.get(type);
+    if (!stack || stack.length === 0) {
+      return undefined;
+    }
+    return stack.pop() as T | undefined;
+  }
+
+  peekGenericContext<T = unknown>(type: string): T | undefined {
+    const stack = this.genericContexts.get(type);
+    if (!stack || stack.length === 0) {
+      return undefined;
+    }
+    return stack[stack.length - 1] as T | undefined;
+  }
+
+  async withGenericContext<T>(
+    type: string,
+    context: unknown,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    this.pushGenericContext(type, context);
+    try {
+      return await Promise.resolve(fn());
+    } finally {
+      this.popGenericContext(type);
+    }
   }
 
   private buildPipelineFields(pipeline?: PipelineContextSnapshot): {

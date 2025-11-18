@@ -8,11 +8,6 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import {
   isExecutableVariable,
-  createSimpleTextVariable,
-  createObjectVariable,
-  createArrayVariable,
-  createPrimitiveVariable,
-  createStructuredValueVariable,
   VariableMetadataUtils
 } from '@core/types/variable';
 import type { Variable, VariableContext } from '@core/types/variable';
@@ -49,6 +44,8 @@ import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
 import type { OperationContext } from '../env/ContextManager';
 import { handleGuardDecision } from '../hooks/hook-decision-handler';
+import { materializeGuardInputs } from '../utils/guard-inputs';
+import { createParameterVariable } from '../utils/parameter-factory';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -980,9 +977,7 @@ export async function evaluateExecInvocation(
     return createEvalResult(helperResult, env);
   }
 
-  const guardInputs = originalVariables.filter(
-    (input): input is Variable => Boolean(input)
-  );
+  const guardInputs = materializeGuardInputs(originalVariables, { nameHint: '__guard_input__' });
   const hookManager = env.getHookManager();
   const execDescriptor = getVariableSecurityDescriptor(variable);
   const operationContext: OperationContext = {
@@ -1007,117 +1002,25 @@ export async function evaluateExecInvocation(
     const argStringValue = evaluatedArgStrings[i];
     
     if (argValue !== undefined) {
-      let paramVar;
-      
-      // Check if we have the original Variable
       const originalVar = originalVariables[i];
       const isShellCode =
         definition.type === 'code' &&
         typeof definition.language === 'string' &&
         (definition.language === 'bash' || definition.language === 'sh');
 
-      const shouldReuseOriginal = originalVar && !isShellCode && definition.type !== 'command';
+      const paramVar = createParameterVariable({
+        name: paramName,
+        value: argValue,
+        stringValue: argStringValue,
+        originalVariable: originalVar,
+        allowOriginalReuse: Boolean(originalVar) && !isShellCode && definition.type !== 'command',
+        metadataFactory: createParameterMetadata,
+        origin: 'exec-param'
+      });
 
-      if (shouldReuseOriginal) {
-        // Use the original Variable directly, just update the name
-        paramVar = {
-          ...originalVar,
-          name: paramName,
-          ctx: { ...originalVar.ctx },
-          internal: {
-            ...(originalVar.internal ?? {}),
-            isSystem: true,
-            isParameter: true
-          }
-        };
-        
-        if (process.env.MLLD_DEBUG === 'true') {
-          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
-            ? (paramVar as any).primitiveType 
-            : paramVar.subtype;
-            
-          logger.debug(`Using original Variable for param ${paramName}:`, {
-            type: paramVar.type,
-            subtype: subtype,
-            hasMetadata: !!paramVar.internal
-          });
-        }
+      if (paramVar) {
+        execEnv.setParameterVariable(paramName, paramVar);
       }
-      // Create appropriate variable type based on actual data
-      else {
-        const preservedValue = argValue !== undefined ? argValue : argStringValue;
-        const paramMetadata = createParameterMetadata(preservedValue);
-
-        if (isStructuredValue(preservedValue)) {
-          paramVar = createStructuredValueVariable(
-            paramName,
-            preservedValue,
-            {
-              directive: 'var',
-              syntax: 'reference',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            paramMetadata
-          );
-        } else if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
-          // Object type - preserve structure
-          paramVar = createObjectVariable(
-            paramName,
-            preservedValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'object',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            paramMetadata
-          );
-        } else if (Array.isArray(preservedValue)) {
-          // Array type - preserve structure
-          paramVar = createArrayVariable(
-            paramName,
-            preservedValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'array',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            paramMetadata
-          );
-        } else if (typeof preservedValue === 'number' || typeof preservedValue === 'boolean' || preservedValue === null) {
-          // Primitive types - create appropriate Variable type
-          paramVar = createPrimitiveVariable(
-            paramName,
-            preservedValue,
-            {
-              directive: 'var',
-              syntax: 'literal',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            paramMetadata
-          );
-        } else {
-          // String or undefined - use SimpleTextVariable
-          paramVar = createSimpleTextVariable(
-            paramName,
-            argStringValue,
-            {
-              directive: 'var',
-              syntax: 'quoted',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            paramMetadata
-          );
-        }
-      }
-      
-      execEnv.setParameterVariable(paramName, paramVar);
     }
   }
 
