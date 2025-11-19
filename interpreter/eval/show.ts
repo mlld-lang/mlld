@@ -6,6 +6,7 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
 import { formatForDisplay } from '../utils/display-formatter';
+import { materializeDisplayValue } from '../utils/display-materialization';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 // Remove old type imports - we'll use only the new ones
@@ -46,30 +47,6 @@ import { wrapExecResult } from '../utils/structured-exec';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 // Template normalization now handled in grammar - no longer needed here
 import { resolveDirectiveExecInvocation } from './directive-replay';
-
-function extractDescriptorFromVariable(variable: Variable | undefined): SecurityDescriptor | undefined {
-  if (!variable?.ctx) {
-    return undefined;
-  }
-  return ctxToSecurityDescriptor(variable.ctx);
-}
-
-function extractDescriptorFromValue(value: unknown): SecurityDescriptor | undefined {
-  if (!value) return undefined;
-  if (isStructuredValue(value)) {
-    return value.ctx ? ctxToSecurityDescriptor(value.ctx) : undefined;
-  }
-  if (typeof value === 'object') {
-    const descriptor =
-      'ctx' in (value as Record<string, unknown>) && (value as any).ctx
-        ? ctxToSecurityDescriptor((value as any).ctx)
-        : undefined;
-    if (descriptor) {
-      return descriptor;
-    }
-  }
-  return undefined;
-}
 
 /**
  * Evaluate /show directives.
@@ -1138,6 +1115,8 @@ export async function evaluateShow(
     resultValue = content;
   }
 
+  const displayMaterialized = materializeDisplayValue(content, undefined, resultValue);
+  content = displayMaterialized.text;
   const textForWrapper = content;
 
   if (!content.endsWith('\n')) {
@@ -1147,7 +1126,7 @@ export async function evaluateShow(
   const snapshot = env.getSecuritySnapshot();
   const resultDescriptor = mergeDescriptors(
     interpolatedDescriptor,
-    extractDescriptorFromValue(resultValue),
+    displayMaterialized.descriptor,
     snapshot
       ? makeSecurityDescriptor({
           labels: snapshot.labels,
@@ -1162,7 +1141,7 @@ export async function evaluateShow(
   // In expression contexts (like when expressions), we only return the value
   if (!context?.isExpression) {
     // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
-  env.emitEffect('both', content, { source: directive.location });
+    env.emitEffect('both', content, { source: directive.location });
   }
 
   const baseValue = resultValue ?? textForWrapper;
