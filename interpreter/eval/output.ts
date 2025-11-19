@@ -18,7 +18,7 @@ import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
-import { materializeDisplayValue } from '../utils/display-materialization';
+import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
@@ -522,9 +522,11 @@ async function evaluateSimpleVariableSource(
   const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
   
   // Convert value to string
-  if (structuredWrapper && value === structuredWrapper.data) {
+  if (structuredWrapper && (!sourceFields || sourceFields.length === 0)) {
     return { rawValue: structuredWrapper, text: structuredWrapper.text };
   }
+
+  value = resolveNestedValue(value, { preserveProvenance: true });
 
   const rawValue = value;
 

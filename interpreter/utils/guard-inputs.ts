@@ -1,6 +1,7 @@
 import type { Variable } from '@core/types/variable';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from './variable-resolution';
+import { resolveNestedValue } from './display-materialization';
 
 export interface GuardInputOptions {
   nameHint?: string;
@@ -16,7 +17,8 @@ export function materializeGuardInputs(
       if (isVariable(value)) {
         return value;
       }
-      return materializeExpressionValue(value, { name: nameHint });
+      const normalized = resolveNestedValue(value, { preserveProvenance: true });
+      return materializeExpressionValue(normalized, { name: nameHint });
     })
     .filter((value): value is Variable => Boolean(value));
 }
