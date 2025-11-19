@@ -112,6 +112,18 @@ class SimpleMetadataShelf {
 
 // Module-level shelf instance
 const metadataShelf = new SimpleMetadataShelf();
+const chainDebugEnabled = process.env.MLLD_DEBUG_CHAINING === '1';
+function chainDebug(message: string, payload?: Record<string, unknown>): void {
+  if (!chainDebugEnabled) {
+    return;
+  }
+  try {
+    const serialized = payload ? ` ${JSON.stringify(payload)}` : '';
+    process.stdout.write(`[CHAIN] ${message}${serialized}\n`);
+  } catch {
+    process.stdout.write(`[CHAIN] ${message}\n`);
+  }
+}
 
 function cloneVariableWithNewValue(
   source: Variable,
@@ -493,6 +505,12 @@ export async function evaluateExecInvocation(
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
 
+      chainDebug('builtin invocation start', {
+        commandName,
+        hasObjectSource: Boolean(commandRefWithObject.objectSource),
+        hasObjectReference: Boolean(commandRefWithObject.objectReference)
+      });
+
       const targetDescriptor =
         (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) || extractSecurityDescriptor(objectValue);
       mergeResultDescriptor(targetDescriptor);
@@ -503,6 +521,19 @@ export async function evaluateExecInvocation(
       } else if (LegacyStructuredValue.isStructuredValue?.(objectValue)) {
         objectValue = objectValue.text;
       }
+
+      chainDebug('resolved object value', {
+        commandName,
+        objectType: Array.isArray(objectValue) ? 'array' : typeof objectValue,
+        preview:
+          typeof objectValue === 'string'
+            ? objectValue.slice(0, 80)
+            : Array.isArray(objectValue)
+            ? `[array length=${objectValue.length}]`
+            : objectValue && typeof objectValue === 'object'
+            ? '[object]'
+            : objectValue
+      });
       
       // Evaluate arguments
       const evaluatedArgs: any[] = [];
@@ -591,6 +622,10 @@ export async function evaluateExecInvocation(
         if (node.withClause.pipeline) {
           const { processPipeline } = await import('./pipeline/unified-processor');
           const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
+          chainDebug('applying builtin pipeline', {
+            commandName,
+            pipelineLength: node.withClause.pipeline.length
+          });
           const pipelineResult = await processPipeline({
             value: pipelineInputValue,
             env,

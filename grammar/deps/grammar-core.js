@@ -597,7 +597,11 @@ export const helpers = {
             return exec;
         }
         let current = exec;
-        const remainingFields = [];
+        const tail = current.withClause || null;
+        if (tail) {
+            current = { ...current, withClause: null };
+        }
+        const additionalFields = [];
         for (const entry of post) {
             if (entry?.type === 'methodCall') {
                 const methodRef = {
@@ -615,13 +619,29 @@ export const helpers = {
                 current = this.createExecInvocation(methodRef, null, entry.location);
             }
             else {
-                remainingFields.push(entry);
+                additionalFields.push(entry);
             }
         }
-        if (remainingFields.length > 0) {
-            return { ...current, fields: remainingFields };
+        if (additionalFields.length > 0) {
+            const existingFields = current.fields || [];
+            current = {
+                ...current,
+                fields: [...existingFields, ...additionalFields]
+            };
+        }
+        if (tail) {
+            current = { ...current, withClause: tail };
         }
         return current;
+    },
+    applyTail(exec, tail) {
+        if (!tail) {
+            return exec;
+        }
+        return {
+            ...exec,
+            withClause: tail
+        };
     },
     /**
      * Get the command name from an ExecInvocation node

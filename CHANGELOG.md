@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `assertStructuredValue()` - dev-time boundary validation
 - Executables with shell commands auto-derive `commandOutput` taint
 - `@json.fromlist` transformer converts plain text lists (one item per line) to JSON arrays
+- Chained builtin methods on variables - string methods (slice, substring, substr, replace, replaceAll, padStart, padEnd, repeat, split, join) and array methods (slice, concat, reverse, sort) now work in chains like `@secret.trim().slice(0, 6)` with provenance preserved
 
 ### Changed
 - Display boundaries consistently use `asText()` helper
