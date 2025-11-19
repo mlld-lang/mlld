@@ -1181,6 +1181,8 @@ Step-by-step & guarded execution:
 ]
 ```
 
+Guards work on expressions and transformations—labels are preserved through helper chains, templates, iterators, and pipelines.
+
 </PATTERNS>
 
 <CONFIGURATION>

@@ -120,6 +120,11 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 - `/show` pretty-prints structured values while preserving `.text`
 - CLI/API output emits `.text` by default
 
+**Guards & Provenance**
+- `ExpressionProvenance` tags every evaluator result (helpers, templates, iterators, pipelines, JS/Node stages) so the registry always knows which Variable produced the primitive that user code sees.
+- Guard extraction surfaces (`materializeGuardInputs`, `materializeDisplayValue`, directive replay helpers) call `materializeExpressionValue()` before invoking guard hooks, ensuring `/show`, `/run`, `/output`, `/append`, pipeline stages, and iterator bodies provide real Variables with `.ctx.labels` and `.ctx.tokens` even when the script only manipulates strings or arrays.
+- `/run sh` heredocs, denied-handler replays, and manual retry loops reuse the same provenance handles because directive replay never mutates env state; guard hooks therefore observe consistent metadata whether they block raw heredoc payloads or allow sanitized retries.
+
 **JavaScript Stages**
 - Shadow parameter preparation unwraps wrappers to native values
 - `__mlldPrimitiveMetadata` records wrapper info for AutoUnwrapManager
