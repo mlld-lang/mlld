@@ -25,6 +25,7 @@ import {
 } from '../../utils/structured-value';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
+import { resolveNestedValue } from '../../utils/display-materialization';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 /**
@@ -381,21 +382,7 @@ function getAvailableFunctions(env: Environment): string[] {
 }
 
 function sanitizeStructuredData(value: unknown): unknown {
-  if (isStructuredValue(value)) {
-    return sanitizeStructuredData(value.data);
-  }
-  if (Array.isArray(value)) {
-    return value.map(item => sanitizeStructuredData(item));
-  }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>);
-    const result: Record<string, unknown> = {};
-    for (const [key, val] of entries) {
-      result[key] = sanitizeStructuredData(val);
-    }
-    return result;
-  }
-  return value;
+  return resolveNestedValue(value, { preserveProvenance: true });
 }
 
 /**

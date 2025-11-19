@@ -23,6 +23,7 @@ import {
   normalizeWhenShowEffect,
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
+import { materializeDisplayValue } from '../utils/display-materialization';
 import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
@@ -841,7 +842,17 @@ export async function evaluateRun(
   
   // Emit effect only for top-level run directives (not data/RHS contexts)
   if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef) {
-    env.emitEffect('both', displayText);
+    const materializedEffect = materializeDisplayValue(
+      outputValue,
+      undefined,
+      outputValue,
+      displayText
+    );
+    const effectText = materializedEffect.text;
+    if (materializedEffect.descriptor) {
+      env.recordSecurityDescriptor(materializedEffect.descriptor);
+    }
+    env.emitEffect('both', effectText);
   }
   
   // Return the output value
