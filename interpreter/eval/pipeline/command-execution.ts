@@ -133,26 +133,6 @@ function sanitizeJsonStringControlChars(input: string): string {
   return changed ? result : input;
 }
 
-function unwrapStructuredDeep(value: any): any {
-  if (isStructuredValue(value)) {
-    return unwrapStructuredDeep(value.data);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => unwrapStructuredDeep(item));
-  }
-
-  if (value && typeof value === 'object') {
-    const result: Record<string, any> = {};
-    for (const [key, val] of Object.entries(value)) {
-      result[key] = unwrapStructuredDeep(val);
-    }
-    return result;
-  }
-
-  return value;
-}
-
 /**
  * Maintain text/data duality on parsed pipeline values.
  * WHY: Pipelines auto-parse JSON for native stages but downstream

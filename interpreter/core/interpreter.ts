@@ -31,6 +31,7 @@ import { parseFrontmatter } from '../utils/frontmatter-parser';
 import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { asText, assertStructuredValue, isStructuredValue } from '@interpreter/utils/structured-value';
+import { materializeDisplayValue } from '../utils/display-materialization';
 import type { SecurityDescriptor } from '@core/types/security';
 import { classifyShellValue } from '@interpreter/utils/shell-value';
 import {
@@ -251,11 +252,19 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
           if (isText(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isNewline(n)) {
             env.emitEffect('doc', '\n');
           } else if (isCodeFence(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isMlldRunBlock(n) && !n.error) {
             // MlldRunBlock content is evaluated, not emitted directly
             // The evaluation will emit its own effects
@@ -304,11 +313,19 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
           if (isText(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isNewline(n)) {
             env.emitEffect('doc', '\n');
           } else if (isCodeFence(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isMlldRunBlock(n) && !n.error) {
             // MlldRunBlock content is evaluated, not emitted directly
             // The evaluation will emit its own effects

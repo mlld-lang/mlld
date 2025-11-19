@@ -8,6 +8,7 @@ import { normalizeWhenShowEffect } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { Variable } from '@core/types/variable';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
+import { materializeDisplayValue } from '../utils/display-materialization';
 
 export async function handleExecGuardDenial(
   error: unknown,
@@ -34,7 +35,11 @@ export async function handleExecGuardDenial(
 
   const { evaluateWhenExpression } = await import('./when-expression');
   const warning = formatGuardWarning(reason, deniedContext.guardFilter, deniedContext.guardName);
-  options.env.emitEffect('stderr', `${warning}\n`);
+  const materializedWarning = materializeDisplayValue(`${warning}\n`, undefined, warning);
+  options.env.emitEffect('stderr', materializedWarning.text);
+  if (materializedWarning.descriptor) {
+    options.env.recordSecurityDescriptor(materializedWarning.descriptor);
+  }
   maybeInjectGuardInputVariable(options.execEnv, guardInput ?? guardContext?.input);
   const runHandlers = async () =>
     options.execEnv.withDeniedContext(deniedContext, async () =>

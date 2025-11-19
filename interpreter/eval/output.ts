@@ -526,8 +526,6 @@ async function evaluateSimpleVariableSource(
     return { rawValue: structuredWrapper, text: structuredWrapper.text };
   }
 
-  value = resolveNestedValue(value, { preserveProvenance: true });
-
   const rawValue = value;
 
   if (typeof value === 'string') {
