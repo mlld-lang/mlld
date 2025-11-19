@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - StructuredValue `.ctx`/`.internal` surfaces now power all provenance, security, and behavior metadata; helpers (`applySecurityDescriptorToStructuredValue`, `metadataToCtx`) keep ctx in sync automatically.
 - `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
 - `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
+- **Expression tracking** – Provenance preservation now spans builtin helpers, templates, iterators, pipelines, and directive guard extraction so guard hooks see security labels through every transformation.
+  - Guards catch `@secret.trim()`, nested field access (`@config.api.key`), template interpolation, and pipeline outputs derived from labeled data.
+  - 155 evaluators audited; every expression surface now attaches or inherits provenance via the registry without boxing.
+  - Fixtures under `tests/cases/security/expression-tracking/` cover chained helpers, iterator bodies, nested field access, and `/run` with pipelines to lock the behavior down.
 
 ### Fixed
 - Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
