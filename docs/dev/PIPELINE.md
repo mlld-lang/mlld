@@ -146,6 +146,12 @@ During evaluation:
 
 Batch pipelines reuse the existing retry logic: they execute after iteration completes, never mark themselves retryable, and inherit parallel stage semantics (including `||` groups and caps). Tests under `tests/cases/feat/batch-pipeline/` cover flattening, scalar aggregation, mixed per-item/batch phases, and foreach ordering.
 
+### Iterator-Sourced Pipelines
+
+- `/for` and `foreach` evaluators run `normalizeIterableValue` (`interpreter/eval/for-utils.ts`) before storing iteration results or creating batch inputs. The helper unwraps StructuredValues and Variables into plain arrays/objects while tagging every normalized value with `ExpressionProvenance`. Loop bodies, `/for` expression arrays, foreach tuples, and the batch inputs built via `createArrayVariable('for-batch-input', …)` therefore expose ordinary JavaScript values to user code while provenance metadata stays available for guard hooks and ArrayHelpers.
+- Guard and pipeline consumers materialize descriptors on demand. `materializeGuardInputs()` turns provenance-marked primitives back into Variables for guard evaluation, and `processPipeline()` receives the array variable produced by the iterator, so batch stages still see the structured wrapper when they call `asData()`/`asText()`.
+- `@pipeline`/`@p` entries always hold `StructuredValue` wrappers. Indexing (`@p[0]`, `@p[-1]`, etc.) returns the wrapper, and interpolation relies on the wrapper’s coercion helpers to emit `.text`. Treat pipeline context values as structured even when an iterator upstream worked with plain JavaScript arrays.
+
 ## Built-in Transformers
 
 mlld includes built-in transformers that integrate seamlessly with the pipeline system.

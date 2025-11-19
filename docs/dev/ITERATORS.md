@@ -70,21 +70,14 @@ Key characteristics:
 
 ### Variable Type Preservation
 
-Both iterators preserve Variable wrappers to maintain type information:
+- Loop-scoped bindings stay Variables when the source value already carries a wrapper. `/for` assigns the normalized value into the iteration variable, so guard helpers and field access keep the original metadata. Executable references (e.g., function arrays) are preserved as Variables on purpose; `normalizeIterableValue` skips executable Variables so higher-order patterns (function composition fixtures) continue to work.
+- Foreach parameter binding uses the same rule set: strings become text Variables, objects/arrays become object/array Variables, and executables stay executable Variables so parameterized helpers can run them.
 
-```typescript
-// /for - preserves Variable wrappers
-childEnv.set(varName, value);  // value may be a Variable
+### Plain Value Contract
 
-// foreach - creates appropriate Variable types
-if (typeof paramValue === 'string') {
-  childEnv.setVariable(paramName, {
-    type: 'text',
-    name: paramName,
-    value: paramValue,
-    definedAt: null
-  });
-}
+- `/for` and `foreach` call `normalizeIterableValue` (`interpreter/eval/for-utils.ts`) on every collection before iteration. The helper unwraps StructuredValues and Variables into plain JavaScript arrays/objects while attaching provenance via `ExpressionProvenance`. User-visible data (loop bodies, `/for` expression results, foreach tuples, batch inputs) therefore contains raw values without `.data` detours.
+- Provenance-aware consumers materialize labels on demand. Guard hooks run `materializeGuardInputs()` to build Variables from the provenance registry, and ArrayHelpers/when-conditions continue to see `.ctx.labels` even though the loop returned primitives.
+- Normalization stops at executable Variables so higher-order helpers receive callable objects. Keep function arrays in executable form when assembling operation lists; the helper preserves them automatically.
 
 ### Evaluation Patterns
 

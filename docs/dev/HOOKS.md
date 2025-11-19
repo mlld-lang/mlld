@@ -77,6 +77,8 @@ interface GuardInputHelper {
   all: QuantifierHelper;   // Check if ALL inputs match condition
   none: QuantifierHelper;  // Check if NO inputs match condition
 }
+
+- Guard hooks only operate on Variables. `materializeGuardInputs()` (`interpreter/utils/guard-inputs.ts`) receives arbitrary values, passes existing Variables through, and uses `materializeExpressionValue()` to convert provenance-tagged primitives (from iterators, pipelines, etc.) into synthetic Variables. Plain values that lack provenance are filtered out, so guard logic always sees inputs with `ctx.labels`, token counts, and source metadata. This is why iterators normalize user-facing data to plain arrays while still tagging each element via `ExpressionProvenance`.
 ```
 
 ### Key Components

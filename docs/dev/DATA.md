@@ -105,6 +105,10 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 - Field access (`.foo`, `.bar`) operates on `.data`
 - AutoUnwrapManager preserves metadata through JS/Node transformations
 
+**Iterators**
+- `/for` and `foreach` normalize collection inputs via `normalizeIterableValue` (`interpreter/eval/for-utils.ts`) so loop bodies, `/for` expression arrays, foreach tuples, and batch inputs expose plain JavaScript arrays/objects. The helper unwraps StructuredValues and Variable wrappers but immediately tags the normalized values with `ExpressionProvenance`, allowing guard hooks and ArrayHelpers to materialize Variables later without leaking wrappers into user code.
+- Iterator outputs feed pipelines through `createArrayVariable('for-batch-input', …)`; the variable stores the normalized array value, and provenance metadata flows through the WeakMap so guard filters and `.ctx.labels` stay accurate even though the outward-facing data is plain.
+
 **Content Loaders**
 - `/load-content` returns wrappers with parsed `.data` and original text
 - Loader metadata (filenames, URLs) lands directly in `.ctx` (flattened from `LoadContentResult`)

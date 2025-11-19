@@ -49,6 +49,8 @@ Transformers execute at `exec-invocation.ts:534`:
 3. Normalize result via `normalizeTransformerResult`
 4. Wrap in structured value for pipeline continuity
 
+- Transformer outputs always flow back into the pipeline as `StructuredValue` wrappers. `normalizeTransformerResult()` feeds the value into `wrapExecResult()`, so `@pipeline[n]` and downstream stages never handle raw primitives. Iterators provide plain arrays/objects to transformers (after `normalizeIterableValue` runs), but as soon as a transformer finishes, the interpreter restores the wrapper and provenance metadata before storing the stage output.
+
 ### LLM Extraction Transformer
 
 `@json.llm` extracts JSON from LLM responses:
