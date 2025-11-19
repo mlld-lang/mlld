@@ -15,7 +15,9 @@ import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 
 function createEnv(): Environment {
-  return new Environment(new MemoryFileSystem(), new PathService(), '/');
+  const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+  env.setEffectHandler(new TestEffectHandler());
+  return env;
 }
 
 describe('guard pre-hook integration', () => {
