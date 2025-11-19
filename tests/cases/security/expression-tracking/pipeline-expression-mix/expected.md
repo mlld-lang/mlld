@@ -1,5 +1,5 @@
 condensed: blocked: Guard blocked
 
-blocked: Guard blocked
-
+explicit: blocked: Guard blocked
+show pipeline:
 blocked: Guard blocked

@@ -1,5 +1,5 @@
 /guard for secret = when [
-  @ctx.op.name == "process" => deny "Guard blocked"
+  @ctx.op.subtype == "process" => deny "Guard blocked"
   * => allow
 ]
 
@@ -10,11 +10,11 @@
 
 /var secret @token = "  sk-98765  "
 /var @helper = @token.trim().slice(0, 8)
-
-/show `condensed: {{ @helper | @process }}`
+/var @condensedResult = @helper | @process
+/show `condensed: @condensedResult`
 
 /var @tailPipeline = @token.trim() with { pipeline: [@process] }
-/show @tailPipeline
+/show `explicit: @tailPipeline`
 
-/var @explicit = ::{{ @helper }}:: with { pipeline: [@process] }
-/show @explicit
+/show "show pipeline:"
+/show @helper with { pipeline: [@process] }

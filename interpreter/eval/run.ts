@@ -21,7 +21,8 @@ import { wrapExecResult } from '../utils/structured-exec';
 import {
   asText,
   normalizeWhenShowEffect,
-  applySecurityDescriptorToStructuredValue
+  applySecurityDescriptorToStructuredValue,
+  extractSecurityDescriptor
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
 import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
@@ -155,6 +156,7 @@ export async function evaluateRun(
   let outputValue: unknown;
   let outputText: string;
   let pendingOutputDescriptor: SecurityDescriptor | undefined;
+  let lastOutputDescriptor: SecurityDescriptor | undefined;
   const mergePendingDescriptor = (descriptor?: SecurityDescriptor): void => {
     if (!descriptor) {
       return;
@@ -182,7 +184,10 @@ export async function evaluateRun(
         ? env.mergeSecurityDescriptors(existingDescriptor, pendingOutputDescriptor)
         : pendingOutputDescriptor;
       applySecurityDescriptorToStructuredValue(wrapped, descriptor);
+      lastOutputDescriptor = descriptor;
       pendingOutputDescriptor = undefined;
+    } else {
+      lastOutputDescriptor = undefined;
     }
     outputValue = wrapped;
     outputText = asText(wrapped as any);
@@ -807,6 +812,15 @@ export async function evaluateRun(
       const valueForPipeline = enableStage0
         ? { value: pipelineInput, ctx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;
+      const outputDescriptor = lastOutputDescriptor ?? extractSecurityDescriptor(pipelineInput, {
+        recursive: true,
+        mergeArrayElements: true
+      });
+      const pipelineDescriptorHint = pendingOutputDescriptor
+        ? outputDescriptor
+          ? env.mergeSecurityDescriptors(pendingOutputDescriptor, outputDescriptor)
+          : pendingOutputDescriptor
+        : outputDescriptor;
       const pipelineResult = await processPipeline({
         value: valueForPipeline,
         env,
@@ -814,7 +828,8 @@ export async function evaluateRun(
         pipeline: withClause.pipeline,
         format: withClause.format as string | undefined,
         isRetryable: enableStage0,
-        location: directive.location
+        location: directive.location,
+        descriptorHint: pipelineDescriptorHint
       });
       setOutput(pipelineResult);
     }
