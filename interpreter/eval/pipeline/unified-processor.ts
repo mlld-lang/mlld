@@ -185,24 +185,33 @@ export async function processPipeline(
   // Create source function for retrying stage 0 if applicable
   let sourceFunction: (() => Promise<string | StructuredValue>) | undefined;
   if (detected.isRetryable && sourceNode) {
+    const attachDescriptorToRetryInput = (value: unknown): string | StructuredValue => {
+      if (!pipelineDescriptor) {
+        return value as string | StructuredValue;
+      }
+      const wrapped = isStructuredValue(value) ? value : wrapExecResult(value);
+      applySecurityDescriptorToStructuredValue(wrapped, pipelineDescriptor);
+      setExpressionProvenance(wrapped, pipelineDescriptor);
+      return wrapped;
+    };
     // Create a function that re-executes the source AST node
     sourceFunction = async () => {
       // Re-evaluate the source node to get fresh input
       if (sourceNode.type === 'ExecInvocation') {
         const { evaluateExecInvocation } = await import('../exec-invocation');
         const result = await evaluateExecInvocation(sourceNode, env);
-        return wrapExecResult(result.value);
+        return attachDescriptorToRetryInput(result.value);
       } else if (sourceNode.type === 'command') {
         const { evaluateCommand } = await import('../run');
         const result = await evaluateCommand(sourceNode, env);
         if (structuredEnabled) {
-          return wrapExecResult(result.value);
+          return attachDescriptorToRetryInput(result.value);
         }
-        return String(result.value);
+        return attachDescriptorToRetryInput(String(result.value));
       } else if (sourceNode.type === 'code') {
         const { evaluateCodeExecution } = await import('../code-execution');
         const result = await evaluateCodeExecution(sourceNode, env);
-        return wrapExecResult(result.value);
+        return attachDescriptorToRetryInput(result.value);
       }
       // Fallback - return original input
       return input;

@@ -388,7 +388,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             value,
             env,
             node,
-            identifier: node.identifier
+            identifier: node.identifier,
+            descriptorHint: variable?.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
           });
           if (typeof value === 'string') {
             const strategy = EscapingStrategyFactory.getStrategy(context);

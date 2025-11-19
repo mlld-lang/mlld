@@ -79,6 +79,24 @@ export async function evaluateShow(
       ? env.mergeSecurityDescriptors(interpolatedDescriptor, descriptor)
       : descriptor;
   };
+  const mergePipelineDescriptor = (
+    ...values: (SecurityDescriptor | undefined)[]
+  ): SecurityDescriptor | undefined => {
+    const descriptors = values.filter(Boolean) as SecurityDescriptor[];
+    if (descriptors.length === 0) {
+      return undefined;
+    }
+    if (descriptors.length === 1) {
+      return descriptors[0];
+    }
+    return env.mergeSecurityDescriptors(...descriptors);
+  };
+  const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
+    if (!variable?.ctx) {
+      return undefined;
+    }
+    return ctxToSecurityDescriptor(variable.ctx);
+  };
   
   const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
 
@@ -324,14 +342,15 @@ export async function evaluateShow(
     if (!(directive as any)?.values?.invocation) {
       if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
         const { processPipeline } = await import('./pipeline/unified-processor');
-        const initialInput = typeof value === 'string' ? value : String(value ?? '');
         const processed = await processPipeline({
-          value: initialInput,
+          value,
           env,
+          node: variableNode,
           directive,
           pipeline: variableNode.withClause.pipeline,
           identifier: varName,
-          location: directive.location
+          location: directive.location,
+          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
         });
         value = processed;
         if (isStructuredValue(processed)) {
@@ -448,10 +467,12 @@ export async function evaluateShow(
         const processed = await processPipeline({
           value: content,
           env,
+          node: variableNode,
           directive,
           pipeline: variableNode.withClause.pipeline,
           identifier: varName,
-          location: directive.location
+          location: directive.location,
+          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
         });
       value = processed;
         if (isStructuredValue(processed)) {
@@ -477,7 +498,8 @@ export async function evaluateShow(
           node: invocationNode,
           directive,
           identifier: varName || 'show',
-          location: directive.location
+          location: directive.location,
+          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
         });
       value = processed;
         if (isStructuredValue(processed)) {
@@ -1072,7 +1094,8 @@ export async function evaluateShow(
       directive,
       pipeline,
       identifier: 'show-tail',
-      location: directive.location
+      location: directive.location,
+      descriptorHint: interpolatedDescriptor
     });
     resultValue = processed;
     if (isStructuredValue(processed)) {

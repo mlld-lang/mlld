@@ -406,6 +406,17 @@ Stage 0 is special - it has no previous stage. When stage 1 requests retry of st
 # @review CANNOT retry @answer - will throw error
 ```
 
+#### Stage 0 Provenance + Descriptor Hints
+
+`processPipeline()` now accepts an explicit `descriptorHint`. Callers that materialize expression values into plain strings (e.g., `/show` display text, `/var` condensed pipes, interpolation, and the `VariableReferenceEvaluator`) forward descriptors from the original variable or interpolation context so Stage 0 never relies on AST fallbacks. The unified processor merges descriptor sources in this order:
+
+1. `descriptorHint` supplied by the caller
+2. Extracted descriptor from the value (including StructuredValues and Variables)
+3. AST-derived descriptor (`extractDescriptorFromAst`)
+4. Directive-level labels (`directive.meta.securityLabels`)
+
+Every stage result flows through `finalizeStageOutput()`, which merges the stage input descriptor, raw output descriptor, existing wrapper metadata, inline labels, and the caller-provided hints before calling `setExpressionProvenance()`. Stage retries reuse the same descriptor: when Stage 0 re-executes its source function (`PipelineExecutor.executeCommand` → `applySourceDescriptor`), the freshly wrapped value is immediately tagged with the cached `pipelineDescriptor`. Even when the source rewraps a primitive (e.g., `/show` content string), `attachDescriptorToRetryInput()` promotes it to a `StructuredValue` so subsequent retries still carry the labels that guard hooks expect.
+
 #### Why No Nested Retries?
 
 Nested retries are not supported because they represent pathological cases. In pipeline A → B → C, if C retries B and then B requests retry of A:

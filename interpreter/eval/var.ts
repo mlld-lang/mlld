@@ -30,7 +30,7 @@ import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/
 import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
-import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateCtxFromDescriptor, ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -184,6 +184,24 @@ export async function prepareVarAssignment(
     resolvedSecurityDescriptor = resolvedSecurityDescriptor
       ? env.mergeSecurityDescriptors(resolvedSecurityDescriptor, descriptor)
       : descriptor;
+  };
+  const mergePipelineDescriptor = (
+    ...descriptors: (SecurityDescriptor | undefined)[]
+  ): SecurityDescriptor | undefined => {
+    const resolved = descriptors.filter(Boolean) as SecurityDescriptor[];
+    if (resolved.length === 0) {
+      return undefined;
+    }
+    if (resolved.length === 1) {
+      return resolved[0];
+    }
+    return env.mergeSecurityDescriptors(...resolved);
+  };
+  const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
+    if (!variable?.ctx) {
+      return undefined;
+    }
+    return ctxToSecurityDescriptor(variable.ctx);
   };
   const interpolateWithSecurity = (
     nodes: any,
@@ -599,7 +617,8 @@ export async function prepareVarAssignment(
         env,
         node: valueNode,
         identifier,
-        location: directive.location
+        location: directive.location,
+        descriptorHint: mergePipelineDescriptor(descriptorFromVariable(sourceVar), resolvedSecurityDescriptor)
       });
       
       resolvedValue = result;
@@ -710,7 +729,8 @@ export async function prepareVarAssignment(
         env,
         node: varWithTail,
         identifier: varWithTail.identifier,
-        location: directive.location
+        location: directive.location,
+        descriptorHint: mergePipelineDescriptor(descriptorFromVariable(sourceVar), resolvedSecurityDescriptor)
       });
     }
     

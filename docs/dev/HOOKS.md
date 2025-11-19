@@ -154,6 +154,7 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
 - Enforces registered guards before directive execution
 - Resolves per-input and per-operation guard definitions, injects guard helpers, and can abort or request retries
 - Registered automatically via `Environment.registerBuiltinHooks()`
+- `PipelineExecutor.executeCommandVariable()` always passes `hookOptions.guard`, so every pipeline stage (including the synthetic `__source__`) runs through the guard hook path with an OperationContext seeded from the merged stage descriptor. Descriptor hints supplied to `processPipeline()` and the provenance assembled in `finalizeStageOutput()` flow into `@ctx.op.labels`, giving guard rules the same label set that downstream stages receive even when Stage 0 started with a plain string.
 
 ### OperationContext
 
