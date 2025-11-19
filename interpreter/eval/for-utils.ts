@@ -1,27 +1,58 @@
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from '../utils/variable-resolution';
 import { asData, isStructuredValue } from '../utils/structured-value';
 
-export function toIterable(value: unknown): Iterable<[string | null, unknown]> | null {
-  // Handle Variable wrappers first
+function attachProvenance(target: unknown, source: unknown): void {
+  if (!target || typeof target !== 'object') {
+    return;
+  }
+  inheritExpressionProvenance(target, source);
+}
+
+export function normalizeIterableValue(value: unknown): unknown {
   if (isVariable(value)) {
-    // Recursively handle the wrapped value
-    return toIterable(value.value);
+    if ((value as Variable).type === 'executable') {
+      return value;
+    }
+    const normalized = normalizeIterableValue(value.value);
+    attachProvenance(normalized, value);
+    return normalized;
   }
 
   if (isStructuredValue(value)) {
-    return toIterable(asData(value));
+    const normalized = normalizeIterableValue(asData(value));
+    attachProvenance(normalized, value);
+    return normalized;
   }
-  
-  // Handle arrays - preserve Variable items
+
   if (Array.isArray(value)) {
-    return value.map((item, index) => [String(index), item]); // Use index as key for arrays
+    const normalizedArray = value.map(item => normalizeIterableValue(item));
+    attachProvenance(normalizedArray, value);
+    return normalizedArray;
   }
-  
-  // Handle objects
+
   if (value && typeof value === 'object') {
-    return Object.entries(value); // Values may be Variables
+    const normalizedObject: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      normalizedObject[key] = normalizeIterableValue(entry);
+    }
+    attachProvenance(normalizedObject, value);
+    return normalizedObject;
   }
-  
-  // Not iterable
+
+  return value;
+}
+
+export function toIterable(value: unknown): Iterable<[string | null, unknown]> | null {
+  const normalized = normalizeIterableValue(value);
+
+  if (Array.isArray(normalized)) {
+    return normalized.map((item, index) => [String(index), item]);
+  }
+
+  if (normalized && typeof normalized === 'object') {
+    return Object.entries(normalized as Record<string, unknown>);
+  }
+
   return null;
 }

@@ -10,6 +10,8 @@ import {
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { normalizeIterableValue } from './for-utils';
+import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
 function hasArrayData(value: unknown): value is { data: unknown[] } {
   if (!value || typeof value !== 'object') {
@@ -99,7 +101,6 @@ export async function evaluateForeachCommand(
       let structuredData = asData(arrayValue) as unknown;
 
       if (!Array.isArray(structuredData)) {
-        // Some structured wrappers store nested structured data (e.g., PipelineInput)
         if (hasArrayData(structuredData)) {
           structuredData = structuredData.data;
         } else if (typeof structuredData === 'string') {
@@ -129,7 +130,9 @@ export async function evaluateForeachCommand(
         throw new Error(`Argument ${i + 1} to foreach must be an array, got structured ${arrayValue.type}`);
       }
 
-      evaluatedArrays.push(structuredData);
+      const normalizedStructured = normalizeIterableValue(structuredData);
+      attachDescriptorRecursively(normalizedStructured, sourceDescriptor);
+      evaluatedArrays.push(normalizedStructured);
       arraySecurityDescriptors.push(sourceDescriptor);
       continue;
     }
@@ -138,7 +141,9 @@ export async function evaluateForeachCommand(
       throw new Error(`Argument ${i + 1} to foreach must be an array, got ${typeof arrayValue}`);
     }
     
-    evaluatedArrays.push(arrayValue);
+    const normalizedArray = normalizeIterableValue(arrayValue);
+    attachDescriptorRecursively(normalizedArray, sourceDescriptor);
+    evaluatedArrays.push(normalizedArray);
     arraySecurityDescriptors.push(sourceDescriptor);
   }
   
@@ -176,19 +181,6 @@ export async function evaluateForeachCommand(
 
   for (let i = 0; i < tuples.length; i++) {
     const tuple = tuples[i];
-    const decoratedTuple = tuple.map((value, index) => {
-      const descriptor = arraySecurityDescriptors[index];
-      if (descriptor) {
-        if (isStructuredValue(value)) {
-          return value;
-        }
-        return ensureStructuredValue(value, undefined, undefined, { security: descriptor });
-      }
-      if (isStructuredValue(value)) {
-        return value;
-      }
-      return value;
-    });
 
     try {
       // Create an ExecInvocation node with the current tuple values as arguments
@@ -196,7 +188,7 @@ export async function evaluateForeachCommand(
         type: 'ExecInvocation',
         commandRef: {
           identifier: commandName,
-          args: decoratedTuple // Use tuple values with metadata attached
+          args: tuple
         },
         withClause: null
       };
@@ -390,4 +382,24 @@ function cartesianProduct(arrays: any[][]): any[][] {
   }
   
   return result;
+}
+
+function attachDescriptorRecursively(
+  value: unknown,
+  descriptor?: SecurityDescriptor
+): void {
+  if (!descriptor || !value || typeof value !== 'object') {
+    return;
+  }
+  setExpressionProvenance(value, descriptor);
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      attachDescriptorRecursively(entry, descriptor);
+    }
+    return;
+  }
+
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    attachDescriptorRecursively(child, descriptor);
+  }
 }
