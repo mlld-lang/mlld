@@ -16,7 +16,8 @@ export interface ResolveNestedValueOptions {
 export function materializeDisplayValue(
   value: unknown,
   options?: DisplayFormatOptions,
-  descriptorSource?: unknown
+  descriptorSource?: unknown,
+  textOverride?: string
 ): MaterializedDisplayValue {
   const provenanceSource = descriptorSource ?? value;
   const descriptor =
@@ -25,7 +26,7 @@ export function materializeDisplayValue(
       recursive: true,
       mergeArrayElements: true
     });
-  const text = formatForDisplay(value, options);
+  const text = textOverride !== undefined ? textOverride : formatForDisplay(value, options);
   return { text, descriptor };
 }
 
