@@ -1,5 +1,5 @@
 /guard @shadowSecretBlock for secret = when [
-  @ctx.op.subtype == "processShadow" => deny "Shadow env secret blocked"
+  @ctx.op.name == "processShadow" => deny "Shadow env secret blocked"
   * => allow
 ]
 

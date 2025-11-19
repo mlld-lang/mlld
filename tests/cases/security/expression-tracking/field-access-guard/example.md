@@ -1,5 +1,11 @@
 /guard @configSecretBlock for secret = when [
-  * => deny "Nested field secrets blocked"
+  @ctx.op.name == "emitConfigSecret" => deny "Nested field secrets blocked"
+  * => allow
+]
+
+/exe @emitConfigSecret(value) = when [
+  denied => show `guard result: @ctx.guard.reason`
+  * => show `nested: @value`
 ]
 
 /var secret @config = {
@@ -8,4 +14,4 @@
   }
 }
 
-/show @config.api.key
+/show @emitConfigSecret(@config.api.key)

@@ -1,1 +1,1 @@
-Guard blocked operation: Nested field secrets blocked
+guard result: Nested field secrets blocked

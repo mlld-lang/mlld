@@ -1,7 +1,12 @@
 /guard @trimChainBlock for secret = when [
-  * => deny "No secrets via chained helpers"
+  @ctx.op.name == "emitTrimmed" => deny "No secrets via chained helpers"
+  * => allow
+]
+
+/exe @emitTrimmed(value) = when [
+  denied => show `guard result: @ctx.guard.reason`
+  * => show `allowed: @value`
 ]
 
 /var secret @key = "  sk-trim-98765  "
-/var @trimmed = @key.trim().slice(0, 5)
-/show @trimmed
+/show @emitTrimmed(@key.trim().slice(0, 5))
