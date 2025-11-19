@@ -195,12 +195,31 @@ async function extractRunInputs(
       return [];
     }
     const commandArray = Array.isArray(commandNodes) ? commandNodes : [commandNodes];
-    const commandText = await interpolate(commandArray, env, InterpolationContext.ShellCommand);
+    const interpolatedDescriptors: SecurityDescriptor[] = [];
+    const commandText = await interpolate(commandArray, env, InterpolationContext.ShellCommand, {
+      collectSecurityDescriptor: descriptor => {
+        if (descriptor) {
+          interpolatedDescriptors.push(descriptor);
+        }
+      }
+    });
     const referencedVariables = collectVariablesFromNodes(commandArray, env);
-    const descriptors = referencedVariables
+    const referencedDescriptors = referencedVariables
       .map(variable => (variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined))
       .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
-    const mergedDescriptor = descriptors.length > 0 ? env.mergeSecurityDescriptors(...descriptors) : undefined;
+    const interpolationDescriptor =
+      interpolatedDescriptors.length === 1
+        ? interpolatedDescriptors[0]
+        : interpolatedDescriptors.length > 1
+          ? env.mergeSecurityDescriptors(...interpolatedDescriptors)
+          : undefined;
+    let mergedDescriptor =
+      referencedDescriptors.length > 0 ? env.mergeSecurityDescriptors(...referencedDescriptors) : undefined;
+    if (interpolationDescriptor) {
+      mergedDescriptor = mergedDescriptor
+        ? env.mergeSecurityDescriptors(mergedDescriptor, interpolationDescriptor)
+        : interpolationDescriptor;
+    }
     const source: VariableSource = {
       directive: 'run',
       syntax: 'command',

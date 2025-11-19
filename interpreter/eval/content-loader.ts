@@ -16,7 +16,30 @@ import { createRenamedContentVariable, createLoadContentResultVariable, extractV
 import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
+import { InterpolationContext } from '../core/interpolation-context';
+import type { SecurityDescriptor } from '@core/types/security';
 
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const { interpolate } = await import('../core/interpreter');
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 /**
  * Check if a path contains glob patterns
  */
@@ -598,9 +621,7 @@ async function reconstructPath(pathNode: any, env: Environment): Promise<string>
   const hasVariables = pathNode.segments.some((seg: any) => seg.type === 'VariableReference');
   
   if (hasVariables) {
-    // Import interpolate function to handle variable references
-    const { interpolate } = await import('../core/interpreter');
-    const interpolated = await interpolate(pathNode.segments, env);
+    const interpolated = await interpolateAndRecord(pathNode.segments, env);
     return interpolated.trim();
   }
 
@@ -649,13 +670,9 @@ async function extractSectionName(sectionNode: any, env: Environment): Promise<s
     return identifier.content;
   } else if (identifier.type === 'VariableReference') {
     // Import interpolate function
-    const { interpolate } = await import('../core/interpreter');
-    // Handle variable reference as section name
-    return await interpolate([identifier], env);
+    return await interpolateAndRecord([identifier], env);
   } else if (Array.isArray(identifier)) {
-    // Handle array of nodes (with potential variable interpolation)
-    const { interpolate } = await import('../core/interpreter');
-    return await interpolate(identifier, env);
+    return await interpolateAndRecord(identifier, env);
   }
 
   throw new MlldError('Unable to extract section name', {
@@ -700,8 +717,6 @@ async function extractSection(content: string, sectionName: string, renamedTitle
         
         
         // Create an environment for interpolation with the file context bound to <>
-        const { interpolate } = await import('../core/interpreter');
-        
         // Process the template parts, replacing placeholders with actual values
         const processedParts: any[] = [];
         for (const part of renamedTitle.parts || []) {
@@ -748,7 +763,7 @@ async function extractSection(content: string, sectionName: string, renamedTitle
             sectionName: sectionName
           });
         }
-        finalTitle = await interpolate(processedParts, env);
+        finalTitle = await interpolateAndRecord(processedParts, env);
       } else {
         // It's a plain string (legacy behavior)
         finalTitle = renamedTitle;
@@ -856,7 +871,7 @@ async function applyTransformToResults(
   transform: any,
   env: Environment
 ): Promise<string[]> {
-  const { interpolate } = await import('../core/interpreter');
+  // Interpolate the processed template for each result
   const transformed: string[] = [];
   
   
@@ -914,7 +929,7 @@ async function applyTransformToResults(
     }
     
     // Interpolate the processed template
-    const transformedContent = await interpolate(processedParts, childEnv);
+    const transformedContent = await interpolateAndRecord(processedParts, childEnv);
     transformed.push(transformedContent);
   }
   
@@ -926,7 +941,6 @@ async function applyTemplateToAstResults(
   transform: any,
   env: Environment
 ): Promise<string[]> {
-  const { interpolate } = await import('../core/interpreter');
   const transformed: string[] = [];
 
   for (const result of results) {
@@ -966,7 +980,7 @@ async function applyTemplateToAstResults(
     }
 
     const childEnv = env.createChild();
-    const transformedContent = await interpolate(processedParts, childEnv);
+    const transformedContent = await interpolateAndRecord(processedParts, childEnv);
     transformed.push(transformedContent);
   }
 

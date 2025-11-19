@@ -20,9 +20,32 @@ import {
   createCapabilityContext,
   makeSecurityDescriptor,
   type DataLabel,
-  type CapabilityContext
+  type CapabilityContext,
+  type SecurityDescriptor
 } from '@core/types/security';
 import { asText, isStructuredValue } from '../utils/structured-value';
+import { InterpolationContext } from '../core/interpolation-context';
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 function buildTemplateAstFromContent(content: string): any[] {
   const ast: any[] = [];
@@ -241,7 +264,7 @@ export async function evaluateExe(
         } catch {}
 
         if (!refName) {
-          refName = await interpolate(commandRef as any, env);
+          refName = await interpolateAndRecord(commandRef as any, env);
         }
 
         const args = directive.values?.args || [];
@@ -322,7 +345,7 @@ export async function evaluateExe(
     }
     
     // Get the resolver path (it's a literal string, not interpolated)
-    const resolverPath = await interpolate(resolverNodes, env);
+    const resolverPath = await interpolateAndRecord(resolverNodes, env);
     
     // Get parameter names if any
     const params = directive.values?.params || [];
@@ -839,7 +862,11 @@ function createExecWrapper(
       }
       
       // Interpolate the command template with parameters
-      const command = await interpolate(commandTemplate, execEnv);
+      const command = await interpolateAndRecord(
+        commandTemplate,
+        execEnv,
+        InterpolationContext.ShellCommand
+      );
       
       // Build environment variables from parameters for shell execution
       const envVars: Record<string, string> = {};
@@ -861,7 +888,7 @@ function createExecWrapper(
       }
       
       // Interpolate the code template with parameters
-      const code = await interpolate(codeTemplate, execEnv);
+      const code = await interpolateAndRecord(codeTemplate, execEnv);
       
       // Build params object for code execution
       const codeParams: Record<string, any> = {};
@@ -924,7 +951,7 @@ function createExecWrapper(
       }
       
       // Interpolate the template with parameters
-      result = await interpolate(templateNodes, execEnv);
+      result = await interpolateAndRecord(templateNodes, execEnv);
     } else if (definition.type === 'section') {
       // Extract section from file
       throw new Error(`Section executables cannot be invoked from shadow environments yet`);

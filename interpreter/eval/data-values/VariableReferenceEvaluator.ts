@@ -15,6 +15,29 @@ import { interpolate } from '../../core/interpreter';
 import { accessField, accessFields } from '../../utils/field-access';
 import { logger } from '@core/utils/logger';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import type { SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../../core/interpolation-context';
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Handles evaluation of variable references and related operations.
@@ -104,7 +127,7 @@ export class VariableReferenceEvaluator {
     
     // Handle template interpolation
     if (isTemplateValue(value)) {
-      return await interpolate(value, env);
+      return await interpolateAndRecord(value, env);
     }
     
     // Handle ExecInvocation nodes
@@ -124,7 +147,7 @@ export class VariableReferenceEvaluator {
     
     // Handle content arrays (like template content)
     if (value && typeof value === 'object' && value.content && Array.isArray(value.content)) {
-      return await interpolate(value.content, env);
+      return await interpolateAndRecord(value.content, env);
     }
     
     // Handle executable code objects (from imported executable variables)
@@ -459,7 +482,7 @@ export class VariableReferenceEvaluator {
    */
   private async evaluatePathNode(value: any, env: Environment): Promise<any> {
     // Resolve path segments and read file
-    const resolvedPath = await interpolate(value.segments || [], env);
+    const resolvedPath = await interpolateAndRecord(value.segments || [], env);
     const content = await env.fileSystem.readFile(resolvedPath);
     return content;
   }

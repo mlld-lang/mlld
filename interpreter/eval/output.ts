@@ -20,7 +20,38 @@ import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
-import type { DataLabel } from '@core/types/security';
+import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../core/interpolation-context';
+
+function mergeInterpolatedDescriptors(
+  env: Environment,
+  descriptors: SecurityDescriptor[]
+): SecurityDescriptor | undefined {
+  if (descriptors.length === 0) {
+    return undefined;
+  }
+  return descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+}
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  const merged = mergeInterpolatedDescriptors(env, descriptors);
+  if (merged) {
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Evaluates @output directive with enhanced syntax.
@@ -187,7 +218,7 @@ export async function evaluateOutputSource(
       // All literal sources should now be arrays of nodes from UnifiedQuoteOrTemplate
       if (Array.isArray(source)) {
         const { interpolate } = await import('../core/interpreter');
-        return await interpolate(source, env);
+    return await interpolateAndRecord(source, env);
       }
       
       // Fallback for any unexpected format
@@ -292,7 +323,7 @@ async function evaluateInvocationSource(
     const childEnv = env.createChild();
     
     // For regular text variables, interpolate the string
-    return await childEnv.interpolate(templateContent);
+    return await interpolateAndRecord(templateContent, childEnv);
     
   } else if (isExecutable(variable)) {
     // It's an executable - need to invoke it properly
@@ -330,12 +361,12 @@ async function evaluateInvocationSource(
     // Execute based on the type
     let result: string;
     if (definition.type === 'template') {
-      result = await interpolate(definition.template, childEnv);
+      result = await interpolateAndRecord(definition.template, childEnv);
     } else if (definition.type === 'command') {
-      const command = await interpolate(definition.commandTemplate, childEnv);
+      const command = await interpolateAndRecord(definition.commandTemplate, childEnv);
       result = await childEnv.executeCommand(command);
     } else if (definition.type === 'code') {
-      const code = await interpolate(definition.codeTemplate, childEnv);
+      const code = await interpolateAndRecord(definition.codeTemplate, childEnv);
       result = await childEnv.executeCode(code, definition.language || 'javascript');
     } else {
       throw new MlldOutputError(
@@ -381,7 +412,7 @@ async function evaluateSimpleVariableSource(
     // Gracefully handle template-as-array passed directly
     const parts = directive.values.source as any[];
     const { interpolate } = await import('../core/interpreter');
-    return await interpolate(parts as any, env);
+    return await interpolateAndRecord(parts as any, env);
   } else {
     throw new MlldOutputError(
       'Invalid source structure for variable output',
@@ -595,7 +626,7 @@ async function outputToFile(
   
   
   // Evaluate the file path
-  const pathResult = await interpolate(target.path, env);
+  const pathResult = await interpolateAndRecord(target.path, env);
   let targetPath = String(pathResult);
   
   

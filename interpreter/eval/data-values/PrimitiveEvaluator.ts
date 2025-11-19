@@ -3,6 +3,30 @@ import type { DataValue } from '@core/types/var';
 import { isDirectiveValue, isPrimitiveValue } from '@core/types/var';
 import { evaluate } from '../../core/interpreter';
 import { EvaluationStateManager } from './EvaluationStateManager';
+import type { SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../../core/interpolation-context';
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const { interpolate } = await import('../../core/interpreter');
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Handles evaluation of primitive data values and simple AST nodes.
@@ -63,8 +87,7 @@ export class PrimitiveEvaluator {
     
     // Handle wrapped string values (quotes, backticks, or brackets)
     if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
-      const { interpolate } = await import('../../core/interpreter');
-      return await interpolate(value.content, env);
+      return await interpolateAndRecord(value.content, env);
     }
     
     // Handle command objects (from run directives in objects)
@@ -89,8 +112,7 @@ export class PrimitiveEvaluator {
       commandStr = value.command;
     } else if (Array.isArray(value.command)) {
       // Interpolate the command array
-      const { interpolate } = await import('../../core/interpreter');
-      commandStr = await interpolate(value.command, env);
+      commandStr = await interpolateAndRecord(value.command, env, InterpolationContext.ShellCommand);
     } else {
       throw new Error('Invalid command format in command object evaluation');
     }

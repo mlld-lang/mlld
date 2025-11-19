@@ -9,7 +9,7 @@ import { interpolate, evaluate } from '../../core/interpreter';
 import { MlldError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import type { SerializedGuardDefinition } from '../../guards';
 
 export interface ModuleProcessingResult {
@@ -278,7 +278,23 @@ export class ModuleContentProcessor {
     let processedContent = content;
     const sectionNodes = directive.values?.section;
     if (sectionNodes && Array.isArray(sectionNodes)) {
-      const section = await interpolate(sectionNodes, this.env);
+      const descriptors: SecurityDescriptor[] = [];
+      const section = await interpolate(sectionNodes, this.env, undefined, {
+        collectSecurityDescriptor: descriptor => {
+          if (descriptor) {
+            descriptors.push(descriptor);
+          }
+        }
+      });
+      const merged =
+        descriptors.length === 1
+          ? descriptors[0]
+          : descriptors.length > 1
+            ? this.env.mergeSecurityDescriptors(...descriptors)
+            : undefined;
+      if (merged) {
+        this.env.recordSecurityDescriptor(merged);
+      }
       if (section) {
         processedContent = this.extractSectionContent(content, section);
       }

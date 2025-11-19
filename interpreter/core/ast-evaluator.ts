@@ -1,5 +1,24 @@
 import { Environment } from '@interpreter/env/Environment';
 import { SourceLocation } from '@core/types/astTypes';
+import type { SecurityDescriptor } from '@core/types/security';
+
+async function interpolateAndRecord(nodes: any, env: Environment): Promise<string> {
+  const { interpolate } = await import('@interpreter/core/interpreter');
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, undefined, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 export interface ArrayNode {
   type: 'array';
@@ -145,8 +164,7 @@ export class ASTEvaluator {
     
     // Handle wrapped content that wasn't normalized (complex interpolation needed)
     if (normalized && typeof normalized === 'object' && 'wrapperType' in normalized && 'content' in normalized) {
-      const { interpolate } = await import('@interpreter/core/interpreter');
-      return await interpolate(normalized.content, env);
+      return await interpolateAndRecord(normalized.content, env);
     }
     
     // Primitives and other values

@@ -1,6 +1,7 @@
 import type { Environment } from '../env/Environment';
 import { evaluateForeachCommand, evaluateForeachSection } from '../eval/foreach';
 import { interpolate } from '../core/interpreter';
+import type { SecurityDescriptor } from '@core/types/security';
 import { isStructuredValue } from './structured-value';
 
 /**
@@ -97,7 +98,22 @@ export async function evaluateForeachAsText(
         
         // Parse and interpolate the template
         const templateNodes = parseTemplateString(finalOptions.template!);
-        return await interpolate(templateNodes, childEnv);
+        const descriptors: SecurityDescriptor[] = [];
+        const interpolated = await interpolate(templateNodes, childEnv, undefined, {
+          collectSecurityDescriptor: descriptor => {
+            if (descriptor) {
+              descriptors.push(descriptor);
+            }
+          }
+        });
+        if (descriptors.length > 0) {
+          const merged =
+            descriptors.length === 1
+              ? descriptors[0]
+              : childEnv.mergeSecurityDescriptors(...descriptors);
+          childEnv.recordSecurityDescriptor(merged);
+        }
+        return interpolated;
       })
     );
     

@@ -1,6 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand } from '@core/types';
 import { appendContentToFile } from '../append';
+import type { SecurityDescriptor } from '@core/types/security';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -20,15 +21,42 @@ export function getBuiltinEffects(): string[] {
   return Array.from(new Set(Array.from(BUILTIN_EFFECTS).map(n => n.toLowerCase()))).sort();
 }
 
+function recordInterpolatedDescriptors(env: Environment, descriptors: SecurityDescriptor[]): void {
+  if (descriptors.length === 0) {
+    return;
+  }
+  const merged =
+    descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+  env.recordSecurityDescriptor(merged);
+}
+
 // Evaluate a single effect argument into a string using the stage environment
 async function evaluateEffectArg(arg: any, env: Environment): Promise<string> {
   // UnifiedArgumentList items can be Text nodes, VariableReference, nested exec, objects, arrays, etc.
   // We reuse interpolate for a best-effort string evaluation.
   const { interpolate } = await import('../../core/interpreter');
   if (Array.isArray(arg)) {
-    return String(await interpolate(arg, env));
+    const descriptors: SecurityDescriptor[] = [];
+    const value = await interpolate(arg, env, undefined, {
+      collectSecurityDescriptor: descriptor => {
+        if (descriptor) {
+          descriptors.push(descriptor);
+        }
+      }
+    });
+    recordInterpolatedDescriptors(env, descriptors);
+    return String(value);
   }
-  return String(await interpolate([arg], env));
+  const descriptors: SecurityDescriptor[] = [];
+  const value = await interpolate([arg], env, undefined, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  recordInterpolatedDescriptors(env, descriptors);
+  return String(value);
 }
 
 // Execute a builtin effect. Returns void; throws on error to abort the pipeline.
@@ -106,11 +134,27 @@ export async function runBuiltinEffect(
           const path = await import('path');
           let resolvedPath = '';
           if (Array.isArray(target.path)) {
-            resolvedPath = await interpolate(target.path, env);
+            const descriptors: SecurityDescriptor[] = [];
+            resolvedPath = await interpolate(target.path, env, undefined, {
+              collectSecurityDescriptor: descriptor => {
+                if (descriptor) {
+                  descriptors.push(descriptor);
+                }
+              }
+            });
+            recordInterpolatedDescriptors(env, descriptors);
           } else if (typeof target.path === 'string') {
             resolvedPath = target.path;
           } else if (target.values) {
-            resolvedPath = await interpolate(target.values, env);
+            const descriptors: SecurityDescriptor[] = [];
+            resolvedPath = await interpolate(target.values, env, undefined, {
+              collectSecurityDescriptor: descriptor => {
+                if (descriptor) {
+                  descriptors.push(descriptor);
+                }
+              }
+            });
+            recordInterpolatedDescriptors(env, descriptors);
           }
           if (!resolvedPath) {
             throw new Error('output file target requires a non-empty path');

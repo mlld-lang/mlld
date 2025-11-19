@@ -7,6 +7,7 @@ import { evaluateOutputSource } from './output';
 import { formatJSONL } from './output-shared';
 import { MlldDirectiveError } from '@core/errors';
 import * as path from 'path';
+import type { SecurityDescriptor } from '@core/types/security';
 
 interface AppendOptions {
   location?: SourceLocation;
@@ -102,7 +103,23 @@ async function resolveAppendPath(
   target: OutputTargetFile,
   env: Environment
 ): Promise<string> {
-  const interpolated = await interpolate(target.path, env);
+  const descriptors: SecurityDescriptor[] = [];
+  const interpolated = await interpolate(target.path, env, undefined, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  const merged =
+    descriptors.length === 1
+      ? descriptors[0]
+      : descriptors.length > 1
+        ? env.mergeSecurityDescriptors(...descriptors)
+        : undefined;
+  if (merged) {
+    env.recordSecurityDescriptor(merged);
+  }
   let resolvedPath = String(interpolated);
 
   if (!resolvedPath) {

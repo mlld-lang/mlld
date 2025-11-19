@@ -4,9 +4,33 @@ import type { DataValue } from '@core/types/var';
 import { isDirectiveValue, isVariableReferenceValue, isTemplateValue } from '@core/types/var';
 import { evaluate } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
+import type { SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../core/interpolation-context';
 
 // Simple cache to prevent double evaluation of the same directive
 const evaluationCache = new WeakMap<DirectiveNode, any>();
+
+async function interpolateWithDescriptor(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const { interpolate } = await import('../core/interpreter');
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Evaluate embedded directives within a data value.
@@ -26,8 +50,7 @@ export async function evaluateDataValue(
   // This needs to be before other object checks because these objects don't have a type field
   if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
     // This is a wrapped string (quotes, backticks, or brackets)
-    const { interpolate } = await import('../core/interpreter');
-    return await interpolate(value.content, env);
+    return await interpolateWithDescriptor(value.content, env);
   }
   
   // Handle command objects (from run directives in objects)
@@ -39,8 +62,7 @@ export async function evaluateDataValue(
       commandStr = value.command;
     } else if (Array.isArray(value.command)) {
       // Interpolate the command array
-      const { interpolate } = await import('../core/interpreter');
-      commandStr = await interpolate(value.command, env);
+      commandStr = await interpolateWithDescriptor(value.command, env);
     } else {
       throw new Error('Invalid command format in lazy evaluation');
     }
@@ -75,8 +97,7 @@ export async function evaluateDataValue(
       commandStr = value.command || '';
     } else if (Array.isArray(value.command)) {
       // Interpolate the command array
-      const { interpolate } = await import('../core/interpreter');
-      commandStr = await interpolate(value.command, env) || '';
+      commandStr = (await interpolateWithDescriptor(value.command, env)) || '';
     } else {
       commandStr = '';
     }
@@ -88,7 +109,7 @@ export async function evaluateDataValue(
   if (value?.type === 'path') {
     // Resolve path segments and read file
     const { interpolate } = await import('../core/interpreter');
-    const resolvedPath = await interpolate(value.segments || [], env);
+    const resolvedPath = await interpolateWithDescriptor(value.segments || [], env);
     logger.debug('About to read file', {
       resolvedPath,
       pathNode: value
@@ -144,8 +165,7 @@ export async function evaluateDataValue(
   // Handle other content arrays (like template content)
   if (value?.content && Array.isArray(value.content)) {
     // This might be a template with Text nodes
-    const { interpolate } = await import('../core/interpreter');
-    return await interpolate(value.content, env);
+    return await interpolateWithDescriptor(value.content, env);
   }
   
   // Handle variable references (should be resolved by interpolation)
