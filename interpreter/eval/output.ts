@@ -22,6 +22,7 @@ import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../core/interpolation-context';
+import { resolveDirectiveExecInvocation } from './directive-replay';
 
 function mergeInterpolatedDescriptors(
   env: Environment,
@@ -311,8 +312,7 @@ async function evaluateInvocationSource(
     };
     
     // Use the standard exec invocation evaluator
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execNode as any, env);
+    const result = await resolveDirectiveExecInvocation(directive, env, execNode as any);
     return String(result.value);
     
   } else if (isTextLike(variable)) {
@@ -602,8 +602,7 @@ async function evaluateExecSource(
   // Handle ExecInvocation nodes
   const execInvocationNode = directive.values.source || directive.values.execInvocation;
   if (execInvocationNode && execInvocationNode.type === 'ExecInvocation') {
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execInvocationNode, env);
+    const result = await resolveDirectiveExecInvocation(directive, env, execInvocationNode);
     return String(result.value);
   } else {
     throw new MlldOutputError(

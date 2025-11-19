@@ -22,6 +22,7 @@ import { evaluateExe } from './exe';
 import { evaluateForDirective } from './for';
 import { evaluateExport } from './export';
 import { evaluateGuard } from './guard';
+import { clearDirectiveReplay } from './directive-replay';
 
 /**
  * Extract trace information from a directive
@@ -180,6 +181,7 @@ export async function evaluateDirective(
   } finally {
     // Always pop the directive from the trace
     env.popDirective();
+    clearDirectiveReplay(directive);
   }
 }
 

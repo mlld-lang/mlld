@@ -45,6 +45,7 @@ import {
 import { wrapExecResult } from '../utils/structured-exec';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 // Template normalization now handled in grammar - no longer needed here
+import { resolveDirectiveExecInvocation } from './directive-replay';
 
 function extractDescriptorFromVariable(variable: Variable | undefined): SecurityDescriptor | undefined {
   if (!variable?.ctx) {
@@ -681,8 +682,7 @@ export async function evaluateShow(
     const commandRef = invocation.commandRef as any;
     if (commandRef && (commandRef.objectReference || commandRef.objectSource)) {
       // This is a method call like @list.includes() - evaluate directly
-      const { evaluateExecInvocation } = await import('./exec-invocation');
-      const result = await evaluateExecInvocation(invocation, env);
+      const result = await resolveDirectiveExecInvocation(directive, env, invocation);
       
       resultValue = result.value;
 
@@ -721,8 +721,7 @@ export async function evaluateShow(
       // Handle based on variable type
       if (isExecutableVar(variable)) {
         // This is an executable invocation - use exec-invocation handler
-        const { evaluateExecInvocation } = await import('./exec-invocation');
-        const result = await evaluateExecInvocation(invocation, env);
+        const result = await resolveDirectiveExecInvocation(directive, env, invocation);
         
         resultValue = result.value;
 
@@ -880,8 +879,7 @@ export async function evaluateShow(
     }
     
     // Evaluate the exec invocation
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execInvocation, env);
+    const result = await resolveDirectiveExecInvocation(directive, env, execInvocation);
     resultValue = result.value;
 
     // Convert result to string appropriately

@@ -12,6 +12,7 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { materializeGuardInputs } from '../utils/guard-inputs';
+import { replayInlineExecInvocations } from './directive-replay';
 
 type AstValue = Record<string, unknown> & { type?: string };
 
@@ -43,11 +44,26 @@ async function extractShowInputs(
   directive: DirectiveNode,
   env: Environment
 ): Promise<readonly Variable[]> {
+  const inlineInvocations: ExecInvocation[] = [];
   const invocation = directive.values?.invocation as ExecInvocation | undefined;
   if (invocation?.type === 'ExecInvocation') {
-    const execArgs = extractExecInvocationArgs(invocation, env);
-    if (execArgs.length > 0) {
-      return materializeGuardInputs(execArgs);
+    inlineInvocations.push(invocation);
+  }
+  const execInvocation = directive.values?.execInvocation as ExecInvocation | undefined;
+  if (execInvocation?.type === 'ExecInvocation') {
+    inlineInvocations.push(execInvocation);
+  }
+
+  if (inlineInvocations.length > 0) {
+    const guardValues: Variable[] = [];
+    guardValues.push(
+      ...(await replayInlineExecInvocations(directive, env, inlineInvocations))
+    );
+    for (const inv of inlineInvocations) {
+      guardValues.push(...extractExecInvocationArgs(inv, env));
+    }
+    if (guardValues.length > 0) {
+      return materializeGuardInputs(guardValues);
     }
   }
 
@@ -124,9 +140,12 @@ async function extractOutputInputs(
 
   const execInvocation = findExecInvocation(sourceNode);
   if (execInvocation) {
-    const execArgs = extractExecInvocationArgs(execInvocation, env);
-    if (execArgs.length > 0) {
-      return materializeGuardInputs(execArgs);
+    const guardValues = [
+      ...(await replayInlineExecInvocations(directive, env, [execInvocation])),
+      ...extractExecInvocationArgs(execInvocation, env)
+    ];
+    if (guardValues.length > 0) {
+      return materializeGuardInputs(guardValues);
     }
   }
 
@@ -245,9 +264,12 @@ async function extractRunInputs(
     const execInvocation = (directive.values?.execInvocation ??
       directive.values?.execRef) as ExecInvocation | undefined;
     if (execInvocation?.type === 'ExecInvocation') {
-      const execArgs = extractExecInvocationArgs(execInvocation, env);
-      if (execArgs.length > 0) {
-        return materializeGuardInputs(execArgs);
+      const guardValues = [
+        ...(await replayInlineExecInvocations(directive, env, [execInvocation])),
+        ...extractExecInvocationArgs(execInvocation, env)
+      ];
+      if (guardValues.length > 0) {
+        return materializeGuardInputs(guardValues);
       }
     }
     const execName = resolveRunExecName(directive);

@@ -194,7 +194,7 @@ describe('guard pre-hook integration', () => {
     expect(ctx.guard).toBeNull();
   });
 
-  it('denies /run commands that interpolate expression-derived secrets', async () => {
+it('denies /run commands that interpolate expression-derived secrets', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
       '/guard for secret = when [ @ctx.op.type == "run" => deny "blocked secret run" \n * => allow ]'
@@ -465,3 +465,20 @@ describe('guard pre-hook integration', () => {
     expect((handled as any)?.internal?.deniedHandlerRan).toBe(true);
   });
 });
+
+  it('denies inline exec values surfaced through /show directives', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for secret = when [\n        @ctx.op.type == "show" => deny "blocked inline secret"\n        * => allow\n      ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const secretDirective = parseSync('/var secret @secretValue = "api-token"')[0] as DirectiveNode;
+    await evaluateDirective(secretDirective, env);
+
+    const execDirective = parseSync('/exe @leakSecret() = ::@secretValue::')[0] as DirectiveNode;
+    await evaluateDirective(execDirective, env);
+
+    const directive = parseSync('/show @leakSecret()')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked inline secret/);
+  });

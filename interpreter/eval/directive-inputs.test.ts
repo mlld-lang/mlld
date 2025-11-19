@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { DirectiveNode, ExecInvocation } from '@core/types';
 import { extractDirectiveInputs } from './directive-inputs';
 import { Environment } from '../env/Environment';
@@ -6,6 +6,10 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
+
+vi.mock('./directive-replay', () => ({
+  replayInlineExecInvocations: vi.fn(async () => [])
+}));
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');

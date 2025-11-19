@@ -25,6 +25,7 @@ import {
 } from '../utils/structured-value';
 import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
 import { coerceValueForStdin } from '../utils/shell-value';
+import { resolveDirectiveExecInvocation } from './directive-replay';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -754,8 +755,7 @@ export async function evaluateRun(
     }
     
     // Evaluate the exec invocation
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execInvocation, env);
+    const result = await resolveDirectiveExecInvocation(directive, env, execInvocation);
     setOutput(result.value);
     sourceNodeForPipeline = execInvocation;
     
@@ -767,8 +767,7 @@ export async function evaluateRun(
     }
 
     // Evaluate the exec invocation
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execRef, env);
+    const result = await resolveDirectiveExecInvocation(directive, env, execRef);
     setOutput(result.value);
     sourceNodeForPipeline = execRef;
 
