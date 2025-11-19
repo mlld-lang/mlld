@@ -521,6 +521,13 @@ export async function evaluateExecInvocation(
     let result: any;
     const propagateResult = (output: unknown): void => {
       inheritExpressionProvenance(output, objectVar ?? objectValue);
+      const sourceDescriptor =
+        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) || extractSecurityDescriptor(objectValue);
+      if (sourceDescriptor) {
+        resultSecurityDescriptor = resultSecurityDescriptor
+          ? env.mergeSecurityDescriptors(resultSecurityDescriptor, sourceDescriptor)
+          : sourceDescriptor;
+      }
     };
     switch (commandName) {
       case 'toLowerCase':

@@ -8,6 +8,7 @@ import {
   type VariableFactoryInitOptions
 } from '@core/types/variable/VariableFactories';
 import { isStructuredValue } from '../utils/structured-value';
+import { materializeExpressionValue } from './expression-provenance';
 
 export interface ParameterFactoryOptions {
   name: string;
@@ -129,4 +130,74 @@ export function createParameterVariable(
     },
     metadata
   );
+}
+
+export interface PipelineParameterFactoryOptions extends ParameterFactoryOptions {
+  pipelineStage?: number;
+  isPipelineInput?: boolean;
+}
+
+export function createPipelineParameterVariable(
+  options: PipelineParameterFactoryOptions
+): Variable | undefined {
+  const {
+    name,
+    value,
+    stringValue,
+    originalVariable,
+    allowOriginalReuse,
+    metadataFactory,
+    pipelineStage,
+    isPipelineInput
+  } = options;
+
+  if (originalVariable && allowOriginalReuse) {
+    return {
+      ...originalVariable,
+      name,
+      ctx: { ...(originalVariable.ctx ?? {}) },
+      internal: {
+        ...(originalVariable.internal ?? {}),
+        isSystem: true,
+        isParameter: true,
+        isPipelineParameter: Boolean(isPipelineInput),
+        pipelineStage
+      }
+    };
+  }
+
+  const provenanceVariable =
+    materializeExpressionValue(value, { name }) ??
+    (stringValue !== undefined ? materializeExpressionValue(stringValue, { name }) : undefined);
+  if (provenanceVariable) {
+    return {
+      ...provenanceVariable,
+      internal: {
+        ...(provenanceVariable.internal ?? {}),
+        isSystem: true,
+        isParameter: true,
+        isPipelineParameter: Boolean(isPipelineInput),
+        pipelineStage
+      }
+    };
+  }
+
+  const resolvedMetadataFactory = (val: unknown) => {
+    const base = metadataFactory ? metadataFactory(val) : undefined;
+    return {
+      ...base,
+      internal: {
+        ...(base?.internal ?? {}),
+        isParameter: true,
+        isPipelineParameter: Boolean(isPipelineInput),
+        pipelineStage
+      }
+    };
+  };
+
+  return createParameterVariable({
+    ...options,
+    metadataFactory: resolvedMetadataFactory,
+    origin: options.origin ?? 'pipeline'
+  });
 }

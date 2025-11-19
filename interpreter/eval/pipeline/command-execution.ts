@@ -1,7 +1,8 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
-import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
+import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
+import { createPipelineParameterVariable } from '../../utils/parameter-factory';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import {
   asText,
@@ -381,6 +382,73 @@ function createTypedPipelineVariable(
   return createSimpleTextVariable(paramName, originalText, textSource, { internal: { isPipelineParameter: true } });
 }
 
+interface AssignPipelineParameterOptions {
+  name: string;
+  value: unknown;
+  originalVariable?: Variable;
+  pipelineStage?: number;
+  isPipelineInput?: boolean;
+  markPipelineContext?: boolean;
+}
+
+function assignPipelineParameter(
+  targetEnv: Environment,
+  options: AssignPipelineParameterOptions
+): void {
+  const variable = createPipelineParameterVariable({
+    name: options.name,
+    value: options.value,
+    origin: 'pipeline',
+    originalVariable: options.originalVariable,
+    allowOriginalReuse: Boolean(options.originalVariable),
+    pipelineStage: options.pipelineStage,
+    isPipelineInput: options.isPipelineInput
+  });
+
+  if (!variable) {
+    return;
+  }
+
+  if (options.markPipelineContext) {
+    variable.internal = {
+      ...(variable.internal ?? {}),
+      isPipelineContext: true
+    };
+  }
+
+  targetEnv.setParameterVariable(options.name, variable);
+}
+
+function normalizePipelineParameterValue(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (isStructuredValue(value)) {
+    return value;
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === 'object') {
+    const candidate = value as { type?: string; content?: unknown };
+    if (candidate && candidate.type === 'Text' && candidate.content !== undefined) {
+      return candidate.content;
+    }
+    if (candidate && candidate.content !== undefined) {
+      return candidate.content;
+    }
+    return value;
+  }
+  return String(value);
+}
+
+function isPipelineContextCandidate(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && 'stage' in (value as Record<string, unknown>));
+}
+
 function resolveExecutableLanguage(commandVar: any, execDef: any): string | undefined {
   if (execDef?.language) return String(execDef.language);
   const metadataDef = commandVar?.internal?.executableDef;
@@ -648,7 +716,13 @@ export async function executeCommandVariable(
 
         if (hasNativeStructuredInput) {
           const typedVar = createTypedPipelineVariable(paramName, structuredInput.data, textValue);
-          execEnv.setParameterVariable(paramName, typedVar);
+          assignPipelineParameter(execEnv, {
+            name: paramName,
+            value: typedVar.value,
+            originalVariable: typedVar,
+            pipelineStage: pipelineCtx?.stage,
+            isPipelineInput: true
+          });
           continue;
         }
 
@@ -659,7 +733,13 @@ export async function executeCommandVariable(
             const parsed = parseStructuredJson(candidate);
             if (parsed !== null) {
               const typedVar = createTypedPipelineVariable(paramName, parsed, candidate);
-              execEnv.setParameterVariable(paramName, typedVar);
+              assignPipelineParameter(execEnv, {
+                name: paramName,
+                value: typedVar.value,
+                originalVariable: typedVar,
+                pipelineStage: pipelineCtx?.stage,
+                isPipelineInput: true
+              });
               continue;
             }
           }
@@ -678,7 +758,13 @@ export async function executeCommandVariable(
             { internal: { isPipelineParameter: true } }
           );
 
-          execEnv.setParameterVariable(paramName, textVar);
+          assignPipelineParameter(execEnv, {
+            name: paramName,
+            value: textVar.value,
+            originalVariable: textVar,
+            pipelineStage: pipelineCtx?.stage,
+            isPipelineInput: true
+          });
           continue;
         } else {
           const resolvedText = typeof unwrappedStdin === 'string' ? unwrappedStdin : textValue;
@@ -700,109 +786,23 @@ export async function executeCommandVariable(
             { internal: { pipelineStage: pipelineCtx?.stage } }
           );
 
-          execEnv.setParameterVariable(paramName, pipelineVar);
+          assignPipelineParameter(execEnv, {
+            name: paramName,
+            value: pipelineVar.value,
+            originalVariable: pipelineVar,
+            pipelineStage: pipelineCtx?.stage,
+            isPipelineInput: true
+          });
           continue;
         }
       } else {
-        // Regular parameter handling
-        if (isStructuredValue(argValue)) {
-          const structuredVar = createStructuredValueVariable(
-            paramName,
-            argValue,
-            {
-              directive: 'var',
-              syntax: 'reference',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            { internal: { isParameter: true } }
-          );
-          execEnv.setParameterVariable(paramName, structuredVar);
-          continue;
-        }
-
-        let paramValue: any;
-        
-        if (argValue === null) {
-          paramValue = '';
-        } else if (typeof argValue === 'string' || typeof argValue === 'number' || typeof argValue === 'boolean') {
-          paramValue = argValue;
-        } else if (argValue && typeof argValue === 'object') {
-          if (!Array.isArray(argValue) && argValue.type === 'Text' && argValue.content !== undefined) {
-            paramValue = argValue.content;
-          } else if (!Array.isArray(argValue) && argValue.content !== undefined) {
-            paramValue = argValue.content;
-          } else {
-            paramValue = argValue;
-          }
-        } else {
-          paramValue = String(argValue);
-        }
-        
-        if (isStructuredValue(paramValue)) {
-          const structuredVar = createStructuredValueVariable(
-            paramName,
-            paramValue,
-            {
-              directive: 'var',
-              syntax: 'reference',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            { internal: { isParameter: true } }
-          );
-          execEnv.setParameterVariable(paramName, structuredVar);
-        } else if (Array.isArray(paramValue)) {
-          const paramVar = createArrayVariable(
-            paramName,
-            paramValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'array',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            { internal: { isParameter: true } }
-          );
-          execEnv.setParameterVariable(paramName, paramVar);
-        } else if (paramValue !== null && typeof paramValue === 'object') {
-          const paramVar = createObjectVariable(
-            paramName,
-            paramValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'object',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            {
-              internal: {
-                isParameter: true,
-                isPipelineContext: paramValue.stage !== undefined
-              }
-            }
-          );
-          
-          execEnv.setParameterVariable(paramName, paramVar);
-        } else {
-          const paramSource: VariableSource = {
-            directive: 'var',
-            syntax: 'quoted',
-            hasInterpolation: false,
-            isMultiLine: false
-          };
-
-          const paramVar = createSimpleTextVariable(
-            paramName,
-            String(paramValue),
-            paramSource,
-            { internal: { isParameter: true } }
-          );
-          
-          execEnv.setParameterVariable(paramName, paramVar);
-        }
+        const normalizedValue = normalizePipelineParameterValue(argValue);
+        assignPipelineParameter(execEnv, {
+          name: paramName,
+          value: normalizedValue,
+          pipelineStage: pipelineCtx?.stage,
+          markPipelineContext: isPipelineContextCandidate(normalizedValue)
+        });
       }
     }
   }

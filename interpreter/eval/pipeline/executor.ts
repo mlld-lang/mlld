@@ -14,12 +14,26 @@ import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
-import { asText, asData, isStructuredValue, wrapStructured, type StructuredValueContext } from '../../utils/structured-value';
+import {
+  asText,
+  asData,
+  isStructuredValue,
+  wrapStructured,
+  extractSecurityDescriptor,
+  applySecurityDescriptorToStructuredValue,
+  type StructuredValueContext
+} from '../../utils/structured-value';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { isPipelineInput } from '@core/types/variable/TypeGuards';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
+
+interface StageExecutionResult {
+  result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
+  labelDescriptor?: SecurityDescriptor;
+}
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
@@ -96,8 +110,9 @@ export class PipelineExecutor {
   async execute(initialInput: string | StructuredValue, options: { returnStructured: true }): Promise<StructuredValue>;
   async execute(initialInput: string | StructuredValue, options?: ExecuteOptions): Promise<string | StructuredValue> {
     const initialWrapper = isStructuredValue(initialInput)
-      ? wrapStructured(initialInput)
+      ? cloneStructuredValue(initialInput)
       : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));
+    this.applySourceDescriptor(initialWrapper, initialInput);
 
     // Store initial input for synthetic source stage
     this.initialInputText = initialWrapper.text;
@@ -262,10 +277,11 @@ export class PipelineExecutor {
       const stageOpContext = this.createPipelineOperationContext(command, stageIndex, context);
 
       const executeStage = async (): Promise<StageResult> => {
-        let output: any;
+        let stageExecution: StageExecutionResult | undefined;
         while (true) {
           try {
-            output = await this.executeCommand(command, input, structuredInput, stageEnv!);
+            stageExecution = await this.executeCommand(command, input, structuredInput, stageEnv!);
+            const output = stageExecution.result;
             this.rateLimiter.reset();
             break;
           } catch (err: any) {
@@ -290,6 +306,10 @@ export class PipelineExecutor {
           }
         }
 
+        if (!stageExecution) {
+          throw new Error('Pipeline command did not produce a result');
+        }
+        const output = stageExecution.result;
         if (this.isRetrySignal(output)) {
           if (process.env.MLLD_DEBUG === 'true') {
             console.error('[PipelineExecutor] Retry detected at stage', context.stage);
@@ -313,7 +333,13 @@ export class PipelineExecutor {
             stageIndex
           });
         }
-        normalized = this.attachSecurityMetadata(normalized, stageDescriptor);
+        normalized = this.finalizeStageOutput(
+          normalized,
+          structuredInput,
+          output,
+          stageDescriptor,
+          stageExecution?.labelDescriptor
+        );
         this.structuredOutputs.set(stageIndex, normalized);
         this.finalOutput = normalized;
         this.lastStageIndex = stageIndex;
@@ -363,7 +389,7 @@ export class PipelineExecutor {
     input: string,
     structuredInput: StructuredValue,
     stageEnv: Environment
-  ): Promise<StructuredValue | string | { value: 'retry'; hint?: any; from?: number }> {
+  ): Promise<StageExecutionResult> {
     // Special handling for synthetic __source__ stage
     if (command.rawIdentifier === '__source__') {
       const firstTime = !this.sourceExecutedOnce;
@@ -378,8 +404,7 @@ export class PipelineExecutor {
       }
       
       if (firstTime) {
-        // First execution - return the already-computed initial input text
-      return this.initialInputText;
+        return { result: this.initialInputText };
       }
       
       // Retry execution - need to call source function
@@ -393,17 +418,18 @@ export class PipelineExecutor {
         console.error('[PipelineExecutor] Source function returned fresh input:', fresh);
       }
       const freshWrapper = isStructuredValue(fresh)
-        ? wrapStructured(fresh)
+        ? cloneStructuredValue(fresh)
         : wrapStructured(fresh, 'text', typeof fresh === 'string' ? fresh : safeJSONStringify(fresh));
+      this.applySourceDescriptor(freshWrapper, fresh);
       this.initialOutput = freshWrapper;
       this.finalOutput = freshWrapper;
       this.initialInputText = freshWrapper.text;
-      return freshWrapper.text;
+      return { result: freshWrapper.text };
     }
 
     // Synthetic identity stage for pipelines that only have inline effects
     if (command.rawIdentifier === '__identity__') {
-      return input;
+      return { result: input };
     }
     
     // Resolve the command reference
@@ -428,7 +454,9 @@ export class PipelineExecutor {
       return await this.executeCommandVariable(commandVar, args, stageEnv, input, structuredInput);
     });
 
-    return result;
+    const labelDescriptor = this.buildCommandLabelDescriptor(command, commandVar);
+
+    return { result, labelDescriptor };
   }
 
   /**
@@ -462,6 +490,28 @@ export class PipelineExecutor {
     }
 
     return evaluatedArgs;
+  }
+
+  private buildCommandLabelDescriptor(
+    command: PipelineCommand,
+    commandVar: any
+  ): SecurityDescriptor | undefined {
+    const descriptors: SecurityDescriptor[] = [];
+    const inlineLabels = (command as any)?.securityLabels as DataLabel[] | undefined;
+    if (inlineLabels && inlineLabels.length > 0) {
+      descriptors.push(makeSecurityDescriptor({ labels: inlineLabels }));
+    }
+    const variableLabels = Array.isArray(commandVar?.ctx?.labels) ? (commandVar.ctx.labels as DataLabel[]) : undefined;
+    if (variableLabels && variableLabels.length > 0) {
+      descriptors.push(makeSecurityDescriptor({ labels: variableLabels }));
+    }
+    if (descriptors.length === 0) {
+      return undefined;
+    }
+    if (descriptors.length === 1) {
+      return descriptors[0];
+    }
+    return this.env.mergeSecurityDescriptors(...descriptors);
   }
 
   /**
@@ -637,7 +687,7 @@ export class PipelineExecutor {
         commands,
         Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
         async (cmd) => {
-          const branchInput = wrapStructured(sharedStructuredInput);
+          const branchInput = cloneStructuredValue(sharedStructuredInput);
           this.logStructuredStage('input', cmd.rawIdentifier, stageIndex, branchInput, true);
           let pipelineSnapshot: PipelineContextSnapshot | undefined;
           const subEnv = await createStageEnvironment(
@@ -671,17 +721,23 @@ export class PipelineExecutor {
 
           const branchOpContext = this.createPipelineOperationContext(cmd, stageIndex, context);
 
-          const executeBranch = async (): Promise<StructuredValue | { value: 'retry'; hint?: any; from?: number }> => {
+          const executeBranch = async (): Promise<{ normalized: StructuredValue; labels?: SecurityDescriptor } | { value: 'retry'; hint?: any; from?: number }> => {
             try {
-              const raw = await this.executeCommand(cmd, input, branchInput, subEnv);
-              if (this.isRetrySignal(raw)) {
-                return raw;
+              const stageExecution = await this.executeCommand(cmd, input, branchInput, subEnv);
+              if (this.isRetrySignal(stageExecution.result)) {
+                return stageExecution.result as RetrySignal;
               }
-              let normalized = this.normalizeOutput(raw);
+              let normalized = this.normalizeOutput(stageExecution.result);
               this.logStructuredStage('output', cmd.rawIdentifier, stageIndex, normalized, true);
-              normalized = this.attachSecurityMetadata(normalized, stageDescriptor);
+              normalized = this.finalizeStageOutput(
+                normalized,
+                branchInput,
+                stageExecution.result,
+                stageDescriptor,
+                stageExecution.labelDescriptor
+              );
               await this.runInlineEffects(cmd, normalized, subEnv);
-              return normalized;
+              return { normalized, labels: stageExecution.labelDescriptor };
             } catch (err) {
               throw err;
             }
@@ -697,24 +753,24 @@ export class PipelineExecutor {
         { ordered: true, paceMs: this.delayMs }
       );
 
-      const retrySignal = results.find(res => this.isRetrySignal(res));
+      const retrySignal = results.find(res => this.isRetrySignal(res as any));
       if (retrySignal) {
         return { type: 'error', error: new Error('retry not supported in parallel stage') };
       }
 
-      const structuredResults = results as StructuredValue[];
-      const aggregatedData = structuredResults.map(result => extractStageValue(result));
+      const branchPayloads = results as Array<{ normalized: StructuredValue; labels?: SecurityDescriptor }>;
+      const aggregatedData = branchPayloads.map(result => extractStageValue(result.normalized));
       const aggregatedText = safeJSONStringify(aggregatedData);
       const aggregatedBase = wrapStructured(aggregatedData, 'array', aggregatedText, {
-        stages: structuredResults
+        stages: branchPayloads.map(result => result.normalized)
       });
-      const stageDescriptors = structuredResults
-        .map(result => getStructuredSecurityDescriptor(result))
+      const stageDescriptors = branchPayloads
+        .map(result => result.labels ?? getStructuredSecurityDescriptor(result.normalized))
         .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
       const aggregatedDescriptor = stageDescriptors.length > 0
         ? mergeDescriptors(...stageDescriptors)
         : undefined;
-      const aggregated = this.attachSecurityMetadata(aggregatedBase, aggregatedDescriptor);
+      const aggregated = this.finalizeStageOutput(aggregatedBase, sharedStructuredInput, aggregatedData, aggregatedDescriptor);
       this.structuredOutputs.set(stageIndex, aggregated);
       this.finalOutput = aggregated;
       this.lastStageIndex = stageIndex;
@@ -728,16 +784,13 @@ export class PipelineExecutor {
     command: PipelineCommand,
     stageIndex: number,
     context: StageContext,
-    structuredInput: StructuredValue
+    _structuredInput: StructuredValue
   ): SecurityDescriptor | undefined {
-    const inputDescriptor = getStructuredSecurityDescriptor(structuredInput);
     const labels = (command as any)?.securityLabels as DataLabel[] | undefined;
-    const labelDescriptor = labels && labels.length > 0 ? makeSecurityDescriptor({ labels }) : undefined;
-    const descriptor = mergeDescriptors(inputDescriptor, labelDescriptor);
-    if (descriptor) {
-      return descriptor;
+    if (labels && labels.length > 0) {
+      return makeSecurityDescriptor({ labels });
     }
-    return inputDescriptor || labelDescriptor || makeSecurityDescriptor();
+    return undefined;
   }
 
   private normalizeOutput(output: any): StructuredValue {
@@ -796,21 +849,78 @@ export class PipelineExecutor {
     return wrapped;
   }
 
-  private attachSecurityMetadata(
+  private finalizeStageOutput(
     value: StructuredValue,
-    descriptor?: SecurityDescriptor
+    stageInput: StructuredValue,
+    rawOutput: unknown,
+    ...descriptorHints: (SecurityDescriptor | undefined)[]
   ): StructuredValue {
-    if (!descriptor) {
-      return value;
+    const descriptor = this.mergeStageDescriptors(value, stageInput, rawOutput, descriptorHints);
+    if (descriptor) {
+      applySecurityDescriptorToStructuredValue(value, descriptor);
+      setExpressionProvenance(value, descriptor);
     }
-    const existing = getStructuredSecurityDescriptor(value);
-    const merged = existing ? mergeDescriptors(existing, descriptor) : descriptor;
-    return wrapStructured(
-      value,
-      value.type,
-      value.text,
-      { security: merged }
-    );
+    return value;
+  }
+
+  private mergeStageDescriptors(
+    normalizedValue: StructuredValue,
+    stageInput: StructuredValue,
+    rawOutput: unknown,
+    descriptorHints: (SecurityDescriptor | undefined)[] = []
+  ): SecurityDescriptor | undefined {
+    const descriptors: SecurityDescriptor[] = [];
+    const inputDescriptor = extractSecurityDescriptor(stageInput, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (inputDescriptor) {
+      descriptors.push(inputDescriptor);
+    }
+
+    const rawDescriptor = extractSecurityDescriptor(rawOutput ?? normalizedValue, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (rawDescriptor) {
+      descriptors.push(rawDescriptor);
+    }
+
+    const existingDescriptor = getStructuredSecurityDescriptor(normalizedValue);
+    if (existingDescriptor) {
+      descriptors.push(existingDescriptor);
+    }
+
+    for (const hint of descriptorHints) {
+      if (hint) {
+        descriptors.push(hint);
+      }
+    }
+
+    if (descriptors.length === 0) {
+      return undefined;
+    }
+
+    if (descriptors.length === 1) {
+      return descriptors[0];
+    }
+
+    return this.env.mergeSecurityDescriptors(...descriptors);
+  }
+
+  private applySourceDescriptor(
+    wrapper: StructuredValue,
+    source: unknown
+  ): void {
+    const descriptor = extractSecurityDescriptor(source, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (!descriptor) {
+      return;
+    }
+    applySecurityDescriptorToStructuredValue(wrapper, descriptor);
+    setExpressionProvenance(wrapper, descriptor);
   }
 
   /**
@@ -1008,4 +1118,10 @@ function getStructuredSecurityDescriptor(value: StructuredValue | undefined): Se
     return ctxToSecurityDescriptor(value.ctx as StructuredValueContext);
   }
   return undefined;
+}
+
+function cloneStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
+  const cloned = wrapStructured(value);
+  inheritExpressionProvenance(cloned, value);
+  return cloned;
 }

@@ -12,6 +12,7 @@ import type { PipelineContextSnapshot } from '../../env/ContextManager';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { wrapStructured, isStructuredValue, type StructuredValue, type StructuredValueType } from '../../utils/structured-value';
+import { inheritExpressionProvenance } from '../../utils/expression-provenance';
 
 /**
  * Simplified pipeline context interface
@@ -139,7 +140,9 @@ export async function createStageEnvironment(
   const stageEnv = env.createChild();
   
   // Set @input variable
-  await setSimplifiedInputVariable(stageEnv, input, wrapStructured(structuredInput), format);
+  const pipelineInputWrapper = wrapStructured(structuredInput);
+  inheritExpressionProvenance(pipelineInputWrapper, structuredInput);
+  await setSimplifiedInputVariable(stageEnv, input, pipelineInputWrapper, format);
   
   // Set @pipeline / @p variable
   setSimplifiedPipelineVariable(

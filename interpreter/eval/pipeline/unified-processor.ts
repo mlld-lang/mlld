@@ -20,9 +20,12 @@ import {
   isStructuredValue,
   wrapStructured,
   extractSecurityDescriptor,
+  applySecurityDescriptorToStructuredValue,
   type StructuredValue,
   type StructuredValueMetadata
 } from '../../utils/structured-value';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { resolveNestedValue } from '../../utils/display-materialization';
@@ -75,7 +78,20 @@ export async function processPipeline(
     recursive: true,
     mergeArrayElements: true
   });
-  let pipelineDescriptor: SecurityDescriptor | undefined = descriptorFromValue;
+  const descriptorFromAst = extractDescriptorFromAst(node, env);
+  if (process.env.MLLD_DEBUG === 'true') {
+    const payload = {
+      nodeType: node?.type,
+      descriptorFromValue,
+      descriptorFromAst
+    };
+    console.error('[processPipeline] descriptor sources', payload);
+    try {
+      const fs = await import('node:fs');
+      fs.appendFileSync('/tmp/pipeline-debug.log', `${JSON.stringify(payload)}\n`);
+    } catch {}
+  }
+  let pipelineDescriptor: SecurityDescriptor | undefined = descriptorFromValue ?? descriptorFromAst;
   const directiveLabels = directive
     ? (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined
     : undefined;
@@ -161,7 +177,7 @@ export async function processPipeline(
   await validatePipeline(pipelineToValidate, env, identifier);
   
   // Prepare input value for pipeline
-  const input = await prepareInput(value, env);
+  const input = await prepareInput(value, env, pipelineDescriptor);
   
   // Create source function for retrying stage 0 if applicable
   let sourceFunction: (() => Promise<string | StructuredValue>) | undefined;
@@ -283,16 +299,31 @@ async function validatePipeline(
  */
 async function prepareInput(
   value: any,
-  env: Environment
+  env: Environment,
+  descriptor?: SecurityDescriptor
 ): Promise<string | StructuredValue> {
-  return prepareStructuredInput(value, env);
+  return prepareStructuredInput(value, env, undefined, descriptor);
 }
 
 async function prepareStructuredInput(
   value: any,
   env: Environment,
-  incomingMetadata?: StructuredValueMetadata
+  incomingMetadata?: StructuredValueMetadata,
+  providedDescriptor?: SecurityDescriptor
 ): Promise<StructuredValue> {
+  const sourceDescriptor = providedDescriptor ?? extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  const finalizeWrapper = (wrapper: StructuredValue): StructuredValue => {
+    if (sourceDescriptor) {
+      applySecurityDescriptorToStructuredValue(wrapper, sourceDescriptor);
+      setExpressionProvenance(wrapper, sourceDescriptor);
+    } else {
+      inheritExpressionProvenance(wrapper, value);
+    }
+    return wrapper;
+  };
   const mergedMetadata = (current?: StructuredValueMetadata): StructuredValueMetadata | undefined => {
     if (!incomingMetadata && !current) {
       return undefined;
@@ -305,7 +336,9 @@ async function prepareStructuredInput(
 
   if (isStructuredValue(value)) {
     const normalizedData = sanitizeStructuredData(value.data);
-    return wrapStructured(normalizedData, value.type, value.text, mergedMetadata(value.metadata));
+    return finalizeWrapper(
+      wrapStructured(normalizedData, value.type, value.text, mergedMetadata(value.metadata))
+    );
   }
 
   if (
@@ -318,51 +351,59 @@ async function prepareStructuredInput(
     typeof (value as any).type === 'string'
   ) {
     const normalizedData = sanitizeStructuredData((value as any).data);
-    return wrapStructured(normalizedData, (value as any).type, (value as any).text, mergedMetadata((value as any).metadata));
+    return finalizeWrapper(
+      wrapStructured(normalizedData, (value as any).type, (value as any).text, mergedMetadata((value as any).metadata))
+    );
   }
 
   if (value && typeof value === 'object' && 'value' in value && ('ctx' in value || 'internal' in value)) {
     const metadata = mergedMetadata(undefined);
-    return prepareStructuredInput(value.value, env, metadata);
+    const nested = await prepareStructuredInput(value.value, env, metadata, providedDescriptor);
+    return finalizeWrapper(nested);
   }
 
   if (value && typeof value === 'object') {
     const { resolveValue, ResolutionContext } = await import('../../utils/variable-resolution');
     if ('type' in value && 'value' in value && 'name' in value) {
       const resolved = await resolveValue(value, env, ResolutionContext.PipelineInput);
-      return prepareStructuredInput(resolved, env, incomingMetadata);
+      const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
+      return finalizeWrapper(nested);
     }
   }
 
   if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
     const wrapped = wrapLoadContentValue(value);
-    return wrapStructured(
-      wrapped,
-      wrapped.type,
-      wrapped.text,
-      mergedMetadata(wrapped.metadata)
+    return finalizeWrapper(
+      wrapStructured(
+        wrapped,
+        wrapped.type,
+        wrapped.text,
+        mergedMetadata(wrapped.metadata)
+      )
     );
   }
 
   if (typeof value === 'string') {
-    return ensureStructuredValue(value, 'text', value, incomingMetadata);
+    return finalizeWrapper(ensureStructuredValue(value, 'text', value, incomingMetadata));
   }
 
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return ensureStructuredValue(value, 'text', String(value), incomingMetadata);
+    return finalizeWrapper(ensureStructuredValue(value, 'text', String(value), incomingMetadata));
   }
 
   if (Array.isArray(value)) {
     const normalizedArray = value.map(item => sanitizeStructuredData(item));
-    return wrapStructured(normalizedArray, 'array', undefined, incomingMetadata);
+    return finalizeWrapper(wrapStructured(normalizedArray, 'array', undefined, incomingMetadata));
   }
 
   if (value && typeof value === 'object') {
     const normalizedObject = sanitizeStructuredData(value);
-    return wrapStructured(normalizedObject as Record<string, unknown>, 'object', undefined, incomingMetadata);
+    return finalizeWrapper(
+      wrapStructured(normalizedObject as Record<string, unknown>, 'object', undefined, incomingMetadata)
+    );
   }
 
-  return ensureStructuredValue('', 'text', '', incomingMetadata);
+  return finalizeWrapper(ensureStructuredValue('', 'text', '', incomingMetadata));
 }
 
 /**
@@ -383,6 +424,44 @@ function getAvailableFunctions(env: Environment): string[] {
 
 function sanitizeStructuredData(value: unknown): unknown {
   return resolveNestedValue(value, { preserveProvenance: true });
+}
+
+function extractDescriptorFromAst(node: any, env: Environment): SecurityDescriptor | undefined {
+  if (!node || typeof node !== 'object') {
+    return undefined;
+  }
+
+  if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
+    const variable = env.getVariable(node.identifier);
+    if (variable?.ctx) {
+      return ctxToSecurityDescriptor(variable.ctx);
+    }
+  }
+
+  if (node.objectReference) {
+    const descriptor = extractDescriptorFromAst(node.objectReference, env);
+    if (descriptor) {
+      return descriptor;
+    }
+  }
+
+  if (node.commandRef?.objectReference) {
+    const descriptor = extractDescriptorFromAst(node.commandRef.objectReference, env);
+    if (descriptor) {
+      return descriptor;
+    }
+  }
+
+  if (Array.isArray(node.value)) {
+    for (const child of node.value) {
+      const descriptor = extractDescriptorFromAst(child, env);
+      if (descriptor) {
+        return descriptor;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 /**
