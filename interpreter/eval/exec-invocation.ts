@@ -19,7 +19,6 @@ import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
-import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import {
@@ -68,50 +67,6 @@ async function resolveStdinInput(stdinSource: unknown, env: Environment): Promis
   return coerceValueForStdin(value);
 }
 
-/**
- * Simple metadata shelf for preserving LoadContentResult metadata
- * This is a module-level implementation that works for synchronous operations
- */
-class SimpleMetadataShelf {
-  private shelf: Map<string, LoadContentResult> = new Map();
-  
-  storeMetadata(value: any): void {
-    if (isLoadContentResultArray(value)) {
-      for (const item of value) {
-        if (isLoadContentResult(item)) {
-          this.shelf.set(item.content, item);
-        }
-      }
-    } else if (isLoadContentResult(value)) {
-      this.shelf.set(value.content, value);
-    }
-  }
-  
-  restoreMetadata(value: any): any {
-    if (!Array.isArray(value)) return value;
-    
-    const restored: any[] = [];
-    let hasRestorable = false;
-    
-    for (const item of value) {
-      if (typeof item === 'string' && this.shelf.has(item)) {
-        restored.push(this.shelf.get(item));
-        hasRestorable = true;
-      } else {
-        restored.push(item);
-      }
-    }
-    
-    return hasRestorable ? restored : value;
-  }
-  
-  clear(): void {
-    this.shelf.clear();
-  }
-}
-
-// Module-level shelf instance
-const metadataShelf = new SimpleMetadataShelf();
 const chainDebugEnabled = process.env.MLLD_DEBUG_CHAINING === '1';
 function chainDebug(message: string, payload?: Record<string, unknown>): void {
   if (!chainDebugEnabled) {
@@ -1247,6 +1202,7 @@ export async function evaluateExecInvocation(
   };
 
   return await env.withOpContext(operationContext, async () => {
+    return AutoUnwrapManager.executeWithPreservation(async () => {
   // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
@@ -1718,9 +1674,6 @@ export async function evaluateExecInvocation(
             };
             variableForShadow = resolvedVar;
           } else {
-            // Store metadata on shelf before unwrapping
-            metadataShelf.storeMetadata(paramVar.value);
-            
             // Auto-unwrap LoadContentResult objects for JS/Python
             const unwrappedValue = AutoUnwrapManager.unwrap(paramVar.value);
             if (unwrappedValue !== paramVar.value) {
@@ -1862,8 +1815,8 @@ export async function evaluateExecInvocation(
       processedResult = codeResult;
     }
 
-    // Attempt to restore metadata from shelf
-    result = metadataShelf.restoreMetadata(processedResult);
+    // Attempt to restore metadata from the auto-unwrap shelf
+    result = AutoUnwrapManager.restore(processedResult);
     if (process.env.MLLD_DEBUG_STRUCTURED === 'true' && result && typeof result === 'object') {
       try {
         const debugData = (result as any).data;
@@ -1899,9 +1852,6 @@ export async function evaluateExecInvocation(
       env.recordSecurityDescriptor(mergedInputDescriptor);
       mergeResultDescriptor(mergedInputDescriptor);
     }
-    
-    // Clear the shelf to prevent memory leaks
-    metadataShelf.clear();
     }
   }
   // Handle command reference executables
@@ -2278,6 +2228,7 @@ export async function evaluateExecInvocation(
   }
     const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
     return finalEvalResult;
+    });
   });
 }
 
