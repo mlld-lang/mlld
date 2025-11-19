@@ -20,7 +20,7 @@ const asyncLocalStorage = new AsyncLocalStorage<MetadataShelf>();
  * Metadata shelf for preserving LoadContentResult metadata
  */
 class MetadataShelf {
-  private shelf: Map<string, LoadContentResult> = new Map();
+  private shelf: Map<string, LoadContentResult[]> = new Map();
   private singleFileMetadata: LoadContentResult | null = null;
   private structuredShelf: Map<any, StructuredValue> = new Map();
   
@@ -32,12 +32,12 @@ class MetadataShelf {
       // Store each LoadContentResult keyed by its content
       for (const item of value) {
         if (isLoadContentResult(item)) {
-          this.shelf.set(item.content, item);
+          this.getBucket(item.content).push(item);
         }
       }
     } else if (isLoadContentResult(value)) {
       // Store both in shelf (for exact matching) and as single file metadata (for auto-restoration)
-      this.shelf.set(value.content, value);
+      this.getBucket(value.content).push(value);
       this.singleFileMetadata = value;
     } else if (isStructuredValue(value)) {
       this.structuredShelf.set(value.data, value);
@@ -60,14 +60,23 @@ class MetadataShelf {
       let hasRestorable = false;
       
       for (const item of value) {
-        if (typeof item === 'string' && this.shelf.has(item)) {
-          // Found matching content - restore the LoadContentResult
-          restored.push(this.shelf.get(item));
-          hasRestorable = true;
-        } else {
-          // Not restorable - keep as is
-          restored.push(item);
+        if (typeof item === 'string') {
+          const restoredItem = this.shiftFromBucket(item);
+          if (restoredItem) {
+            restored.push(restoredItem);
+            hasRestorable = true;
+            continue;
+          }
         }
+
+        if (typeof item === 'string' && this.singleFileMetadata && this.singleFileMetadata.content === item) {
+          restored.push(this.singleFileMetadata);
+          hasRestorable = true;
+          continue;
+        }
+
+        // Not restorable - keep as is
+        restored.push(item);
       }
       
       // Only return restored array if we actually restored something
@@ -76,9 +85,14 @@ class MetadataShelf {
 
     // Handle single values (new functionality)
     if (typeof value === 'string' && this.singleFileMetadata) {
+      const bucketMatch = this.shiftFromBucket(value);
+      if (bucketMatch) {
+        return bucketMatch;
+      }
+
       // Check for exact match first
-      if (this.shelf.has(value)) {
-        return this.shelf.get(value);
+      if (this.singleFileMetadata.content === value) {
+        return this.singleFileMetadata;
       }
       
       // Auto-restore for transformed single file content
@@ -153,6 +167,35 @@ class MetadataShelf {
     this.singleFileMetadata = null;
     this.structuredShelf.clear();
   }
+
+  debugSnapshot(): Record<string, unknown> {
+    return {
+      loadContentEntries: this.shelf.size,
+      hasSingleFileMetadata: Boolean(this.singleFileMetadata),
+      structuredEntries: this.structuredShelf.size
+    };
+  }
+
+  private getBucket(content: string): LoadContentResult[] {
+    let bucket = this.shelf.get(content);
+    if (!bucket) {
+      bucket = [];
+      this.shelf.set(content, bucket);
+    }
+    return bucket;
+  }
+
+  private shiftFromBucket(content: string): LoadContentResult | undefined {
+    const bucket = this.shelf.get(content);
+    if (!bucket || bucket.length === 0) {
+      return undefined;
+    }
+    const value = bucket.shift();
+    if (!bucket.length) {
+      this.shelf.delete(content);
+    }
+    return value;
+  }
 }
 
 /**
@@ -167,8 +210,11 @@ export class AutoUnwrapManager {
    * @returns The unwrapped content or the original value
    */
   static unwrap(value: any): any {
-    // Get or create shelf for current async context
-    const shelf = asyncLocalStorage.getStore() || new MetadataShelf();
+    // Get shelf for current async context
+    const shelf = asyncLocalStorage.getStore();
+    if (!shelf) {
+      throw new Error('AutoUnwrapManager.unwrap called outside executeWithPreservation context');
+    }
 
     if (isStructuredValue(value)) {
       shelf.storeMetadata(value);
@@ -215,7 +261,7 @@ export class AutoUnwrapManager {
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[AutoUnwrapManager] Result before restoration:', result);
-        console.error('[AutoUnwrapManager] Shelf contents:', shelf.shelf);
+        console.error('[AutoUnwrapManager] Shelf snapshot:', shelf.debugSnapshot());
       }
       
       // Restore metadata if applicable

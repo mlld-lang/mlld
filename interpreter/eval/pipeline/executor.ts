@@ -466,13 +466,15 @@ export class PipelineExecutor {
     // Get arguments and validate them
     let args = await this.processArguments(command.args || [], stageEnv);
 
-    // Smart parameter binding for pipeline functions
-    if (args.length === 0) {
-      args = await this.bindParametersAutomatically(commandVar, input);
-    }
-
     // Execute with metadata preservation
     const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
+
+    // Smart parameter binding for pipeline functions
+    if (args.length === 0) {
+      args = await AutoUnwrapManager.executeWithPreservation(async () => {
+        return await this.bindParametersAutomatically(commandVar, input);
+      });
+    }
     
     const result = await AutoUnwrapManager.executeWithPreservation(async () => {
       return await this.executeCommandVariable(commandVar, args, stageEnv, input, structuredInput, {

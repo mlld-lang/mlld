@@ -371,37 +371,39 @@ export async function evaluateRun(
     
     // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
     const args = directive.values?.args || [];
-    const argValues: Record<string, any> = {};
-    
-    if (args.length > 0) {
-      // Process each argument
-      for (let i = 0; i < args.length; i++) {
-        const arg = args[i];
-        
-        if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
-          // This is a variable reference like @myVar
-          const varName = arg.identifier;
-          const variable = env.getVariable(varName);
-          if (!variable) {
-            throw new Error(`Variable not found: ${varName}`);
-          }
-          
-          // Extract the variable value
-          const { extractVariableValue } = await import('../utils/variable-resolution');
-          const value = await extractVariableValue(variable, env);
-          
-          // Auto-unwrap LoadContentResult objects
-          const unwrappedValue = AutoUnwrapManager.unwrap(value);
-          
-          // The parameter name in the code will be the variable name without @
-          argValues[varName] = unwrappedValue;
-        } else if (typeof arg === 'string') {
-          // Simple string argument - shouldn't happen with current grammar
-          // but handle it just in case
-          argValues[`arg${i}`] = arg;
-        }
-      }
-    }
+    const argValues: Record<string, any> =
+      args.length === 0
+        ? {}
+        : await AutoUnwrapManager.executeWithPreservation(async () => {
+            const extracted: Record<string, any> = {};
+            for (let i = 0; i < args.length; i++) {
+              const arg = args[i];
+
+              if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
+                // This is a variable reference like @myVar
+                const varName = arg.identifier;
+                const variable = env.getVariable(varName);
+                if (!variable) {
+                  throw new Error(`Variable not found: ${varName}`);
+                }
+
+                // Extract the variable value
+                const { extractVariableValue } = await import('../utils/variable-resolution');
+                const value = await extractVariableValue(variable, env);
+
+                // Auto-unwrap LoadContentResult objects
+                const unwrappedValue = AutoUnwrapManager.unwrap(value);
+
+                // The parameter name in the code will be the variable name without @
+                extracted[varName] = unwrappedValue;
+              } else if (typeof arg === 'string') {
+                // Simple string argument - shouldn't happen with current grammar
+                // but handle it just in case
+                extracted[`arg${i}`] = arg;
+              }
+            }
+            return extracted;
+          });
     
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
