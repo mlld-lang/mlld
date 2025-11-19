@@ -346,7 +346,11 @@ export async function evaluateExecInvocation(
   };
 
   const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
-    return wrapExecResult(value, options);
+    const structured = wrapExecResult(value, options);
+    if (resultSecurityDescriptor) {
+      setStructuredSecurityDescriptor(structured, resultSecurityDescriptor);
+    }
+    return structured;
   };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
@@ -434,6 +438,7 @@ export async function evaluateExecInvocation(
       // Handle builtin methods on objects/arrays/strings
       let objectValue: any;
       let objectVar: Variable | undefined;
+      let sourceDescriptor: SecurityDescriptor | undefined;
 
       if (commandRefWithObject.objectReference) {
         const objectRef = commandRefWithObject.objectReference;
@@ -459,6 +464,7 @@ export async function evaluateExecInvocation(
         // Evaluate the source ExecInvocation to obtain a value, then apply builtin method
         const srcResult = await evaluateExecInvocation(commandRefWithObject.objectSource, env);
         if (srcResult && typeof srcResult === 'object') {
+          sourceDescriptor = extractSecurityDescriptor(srcResult.value);
           if (srcResult.value !== undefined) {
             const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
             objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Display);
@@ -480,7 +486,9 @@ export async function evaluateExecInvocation(
       });
 
       const targetDescriptor =
-        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) || extractSecurityDescriptor(objectValue);
+        sourceDescriptor ||
+        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) ||
+        extractSecurityDescriptor(objectValue);
       mergeResultDescriptor(targetDescriptor);
 
       // Structured exec returns wrappers – convert them to plain data before method lookup
@@ -605,7 +613,8 @@ export async function evaluateExecInvocation(
             value: pipelineInputValue,
             env,
             node,
-            identifier: node.identifier
+            identifier: node.identifier,
+            descriptorHint: resultSecurityDescriptor
           });
           // Still need to handle other withClause features (trust, needs)
           return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
@@ -862,7 +871,8 @@ export async function evaluateExecInvocation(
                   value: pipelineInputValue,
                   env,
                   node,
-                  identifier: node.identifier
+                  identifier: node.identifier,
+                  descriptorHint: resultSecurityDescriptor
                 });
                 // Still need to handle other withClause features (trust, needs)
                 return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
@@ -906,7 +916,8 @@ export async function evaluateExecInvocation(
           value: pipelineInputValue,
           env,
           node,
-          identifier: node.identifier
+          identifier: node.identifier,
+          descriptorHint: resultSecurityDescriptor
         });
         // Still need to handle other withClause features (trust, needs)
         return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
@@ -1333,7 +1344,8 @@ export async function evaluateExecInvocation(
       format: definition.format,
       identifier: commandName,
       location: node.location,
-      isRetryable: false
+      isRetryable: false,
+      descriptorHint: resultSecurityDescriptor
     });
     result = typeof pipelineResult === 'string' ? pipelineResult : String(pipelineResult ?? '');
   }
@@ -1550,7 +1562,8 @@ export async function evaluateExecInvocation(
           format: definition.withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandName,
-          location: variable.ctx?.definedAt || node.location
+          location: variable.ctx?.definedAt || node.location,
+          descriptorHint: resultSecurityDescriptor
         });
 
         if (typeof pipelineResult === 'string') {

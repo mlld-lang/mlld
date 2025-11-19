@@ -43,6 +43,7 @@ export interface UnifiedPipelineContext {
   // Required
   value: any;                    // Initial value (Variable, string, object, etc.)
   env: Environment;              // Execution environment
+  descriptorHint?: SecurityDescriptor; // Optional descriptor hint when value lost metadata
   
   // Optional detection sources
   node?: any;                    // AST node that might have pipeline
@@ -72,7 +73,7 @@ export interface UnifiedPipelineContext {
 export async function processPipeline(
   context: UnifiedPipelineContext
 ): Promise<any> {
-  const { value, env, node, directive, identifier } = context;
+  const { value, env, node, directive, identifier, descriptorHint } = context;
   const sourceNode = getSourceFunctionFromValue(value);
   const descriptorFromValue = extractSecurityDescriptor(value, {
     recursive: true,
@@ -83,7 +84,8 @@ export async function processPipeline(
     const payload = {
       nodeType: node?.type,
       descriptorFromValue,
-      descriptorFromAst
+      descriptorFromAst,
+      descriptorHint
     };
     console.error('[processPipeline] descriptor sources', payload);
     try {
@@ -91,7 +93,8 @@ export async function processPipeline(
       fs.appendFileSync('/tmp/pipeline-debug.log', `${JSON.stringify(payload)}\n`);
     } catch {}
   }
-  let pipelineDescriptor: SecurityDescriptor | undefined = descriptorFromValue ?? descriptorFromAst;
+  let pipelineDescriptor: SecurityDescriptor | undefined =
+    descriptorHint ?? descriptorFromValue ?? descriptorFromAst;
   const directiveLabels = directive
     ? (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined
     : undefined;
@@ -430,6 +433,27 @@ function extractDescriptorFromAst(node: any, env: Environment): SecurityDescript
   if (!node || typeof node !== 'object') {
     return undefined;
   }
+  if (node.type === 'ExecInvocation' && node.commandRef) {
+    const execDescriptor =
+      extractDescriptorFromAst(node.commandRef.objectReference, env) ??
+      extractDescriptorFromAst(node.commandRef.objectSource, env);
+    if (execDescriptor) {
+      return execDescriptor;
+    }
+    if (typeof node.commandRef.identifier === 'string') {
+      const variable = env.getVariable(node.commandRef.identifier);
+      if (variable?.ctx) {
+        return ctxToSecurityDescriptor(variable.ctx);
+      }
+    } else if (Array.isArray(node.commandRef.identifier)) {
+      for (const identifierNode of node.commandRef.identifier) {
+        const descriptor = extractDescriptorFromAst(identifierNode, env);
+        if (descriptor) {
+          return descriptor;
+        }
+      }
+    }
+  }
 
   if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
     const variable = env.getVariable(node.identifier);
@@ -447,6 +471,12 @@ function extractDescriptorFromAst(node: any, env: Environment): SecurityDescript
 
   if (node.commandRef?.objectReference) {
     const descriptor = extractDescriptorFromAst(node.commandRef.objectReference, env);
+    if (descriptor) {
+      return descriptor;
+    }
+  }
+  if (node.commandRef?.objectSource) {
+    const descriptor = extractDescriptorFromAst(node.commandRef.objectSource, env);
     if (descriptor) {
       return descriptor;
     }

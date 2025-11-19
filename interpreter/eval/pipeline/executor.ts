@@ -1,5 +1,6 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, PipelineStage } from '@core/types';
+import type { ExecInvocation, CommandReference } from '@core/types/primitives';
 import type { OperationContext, PipelineContextSnapshot } from '../../env/ContextManager';
 import type { StructuredValue } from '../../utils/structured-value';
 import type { SecurityDescriptor, DataLabel } from '@core/types/security';
@@ -29,6 +30,7 @@ import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
+import type { CommandExecutionHookOptions } from './command-execution';
 
 interface StageExecutionResult {
   result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
@@ -66,6 +68,7 @@ export class PipelineExecutor {
   private finalOutput?: StructuredValue;
   private lastStageIndex: number = -1;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
+  private stageHookNodeCounter = 0;
 
   constructor(
     pipeline: PipelineStage[],
@@ -276,11 +279,20 @@ export class PipelineExecutor {
       ctxManager = stageEnv.getContextManager();
       const stageOpContext = this.createPipelineOperationContext(command, stageIndex, context);
 
+      const stageHookNode = this.createStageHookNode(command);
+
       const executeStage = async (): Promise<StageResult> => {
         let stageExecution: StageExecutionResult | undefined;
         while (true) {
           try {
-            stageExecution = await this.executeCommand(command, input, structuredInput, stageEnv!);
+            stageExecution = await this.executeCommand(
+              command,
+              input,
+              structuredInput,
+              stageEnv!,
+              stageOpContext,
+              stageHookNode
+            );
             const output = stageExecution.result;
             this.rateLimiter.reset();
             break;
@@ -340,6 +352,16 @@ export class PipelineExecutor {
           stageDescriptor,
           stageExecution?.labelDescriptor
         );
+        if (this.debugStructured) {
+          try {
+            console.error('[PipelineExecutor][finalized-output]', {
+              stage: command.rawIdentifier,
+              stageIndex,
+              labels: normalized?.ctx?.labels ?? null,
+              metadataLabels: normalized?.metadata?.security?.labels ?? null
+            });
+          } catch {}
+        }
         this.structuredOutputs.set(stageIndex, normalized);
         this.finalOutput = normalized;
         this.lastStageIndex = stageIndex;
@@ -388,7 +410,9 @@ export class PipelineExecutor {
     command: PipelineCommand,
     input: string,
     structuredInput: StructuredValue,
-    stageEnv: Environment
+    stageEnv: Environment,
+    operationContext?: OperationContext,
+    hookNode?: ExecInvocation
   ): Promise<StageExecutionResult> {
     // Special handling for synthetic __source__ stage
     if (command.rawIdentifier === '__source__') {
@@ -451,7 +475,11 @@ export class PipelineExecutor {
     const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
     
     const result = await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await this.executeCommandVariable(commandVar, args, stageEnv, input, structuredInput);
+      return await this.executeCommandVariable(commandVar, args, stageEnv, input, structuredInput, {
+        hookNode,
+        operationContext,
+        stageInputs: [structuredInput]
+      });
     });
 
     const labelDescriptor = this.buildCommandLabelDescriptor(command, commandVar);
@@ -602,10 +630,11 @@ export class PipelineExecutor {
     args: any[],
     env: Environment,
     stdinInput?: string,
-    structuredInput?: StructuredValue
+    structuredInput?: StructuredValue,
+    hookOptions?: CommandExecutionHookOptions
   ): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
     const { executeCommandVariable } = await import('./command-execution');
-    return await executeCommandVariable(commandVar, args, env, stdinInput, structuredInput);
+    return await executeCommandVariable(commandVar, args, env, stdinInput, structuredInput, hookOptions);
   }
 
   /**
@@ -720,10 +749,18 @@ export class PipelineExecutor {
           const stageDescriptor = this.buildStageDescriptor(cmd, stageIndex, context, branchInput);
 
           const branchOpContext = this.createPipelineOperationContext(cmd, stageIndex, context);
+          const branchHookNode = this.createStageHookNode(cmd);
 
           const executeBranch = async (): Promise<{ normalized: StructuredValue; labels?: SecurityDescriptor } | { value: 'retry'; hint?: any; from?: number }> => {
             try {
-              const stageExecution = await this.executeCommand(cmd, input, branchInput, subEnv);
+              const stageExecution = await this.executeCommand(
+                cmd,
+                input,
+                branchInput,
+                subEnv,
+                branchOpContext,
+                branchHookNode
+              );
               if (this.isRetrySignal(stageExecution.result)) {
                 return stageExecution.result as RetrySignal;
               }
@@ -897,6 +934,19 @@ export class PipelineExecutor {
       }
     }
 
+    if (process.env.MLLD_DEBUG === 'true') {
+      try {
+        console.error('[PipelineExecutor][mergeStageDescriptors]', {
+          inputLabels: inputDescriptor?.labels ?? null,
+          rawLabels: rawDescriptor?.labels ?? null,
+          existingLabels: existingDescriptor?.labels ?? null,
+          hintLabels: descriptorHints.map(hint => hint?.labels ?? null),
+          normalizedLabels: normalizedValue?.ctx?.labels ?? null,
+          normalizedText: normalizedValue?.text
+        });
+      } catch {}
+    }
+
     if (descriptors.length === 0) {
       return undefined;
     }
@@ -988,6 +1038,24 @@ export class PipelineExecutor {
     return wrapStructured('', 'text', '');
   }
 
+  private createStageHookNode(command: PipelineCommand): ExecInvocation {
+    const nodeId = `pipeline-stage-${this.stageHookNodeCounter++}`;
+    const commandRef: CommandReference = {
+      type: 'CommandReference',
+      nodeId: `${nodeId}-command`,
+      identifier: command.rawIdentifier,
+      args: [],
+      fields: command.fields
+    };
+    return {
+      type: 'ExecInvocation',
+      nodeId,
+      commandRef,
+      withClause: undefined,
+      location: (command as any)?.location ?? (command as any)?.meta?.location
+    };
+  }
+
   private logStructuredStage(
     phase: 'input' | 'output',
     stageName: string,
@@ -1002,7 +1070,10 @@ export class PipelineExecutor {
       console.error(`[PipelineExecutor][${phase}]`, {
         stage: stageName,
         stageIndex,
-        parallel: isParallelBranch
+        parallel: isParallelBranch,
+        labels: value?.ctx?.labels ?? null,
+        taint: value?.ctx?.taint ?? null,
+        metadataLabels: value?.metadata?.security?.labels ?? null
       });
       console.error('[PipelineExecutor][detail-start]', {
         phase,

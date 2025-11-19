@@ -17,6 +17,12 @@ import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
+import type { HookableNode } from '@core/types/hooks';
+import type { OperationContext } from '../../env/ContextManager';
+import { materializeGuardInputs } from '../../utils/guard-inputs';
+import { handleGuardDecision } from '../../hooks/hook-decision-handler';
+import { handleExecGuardDenial } from '../guard-denial-handler';
+import type { WhenExpressionNode } from '@core/types/when';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -26,6 +32,12 @@ export type CommandExecutionResult =
   | Record<string, unknown>
   | unknown[]
   | RetrySignal;
+
+export interface CommandExecutionHookOptions {
+  operationContext?: OperationContext;
+  hookNode?: HookableNode;
+  stageInputs?: readonly unknown[];
+}
 
 const STRUCTURED_PIPELINE_LANGUAGES = new Set([
   'mlld-for',
@@ -569,7 +581,8 @@ export async function executeCommandVariable(
   args: any[],
   env: Environment,
   stdinInput?: string,
-  structuredInput?: StructuredValue
+  structuredInput?: StructuredValue,
+  hookOptions?: CommandExecutionHookOptions
 ): Promise<CommandExecutionResult> {
   const finalizeResult = (
     value: unknown,
@@ -685,6 +698,14 @@ export async function executeCommandVariable(
     throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(varInfo, null, 2)}`);
   }
   
+  let whenExprNode: WhenExpressionNode | null = null;
+  if (execDef?.language === 'mlld-when' && Array.isArray(execDef.codeTemplate) && execDef.codeTemplate.length > 0) {
+    const candidate = execDef.codeTemplate[0];
+    if (candidate && candidate.type === 'WhenExpression') {
+      whenExprNode = candidate as WhenExpressionNode;
+    }
+  }
+
   // Create environment with parameter bindings
   const execEnv = env.createChild();
   
@@ -804,6 +825,65 @@ export async function executeCommandVariable(
           markPipelineContext: isPipelineContextCandidate(normalizedValue)
         });
       }
+    }
+  }
+
+  const hookNode = hookOptions?.hookNode;
+  const operationContext = hookOptions?.operationContext;
+  const stageInputs = hookOptions?.stageInputs ?? [];
+  const guardInputCandidates: unknown[] = [];
+  const stageInputVar = env.getVariable?.('input');
+  if (stageInputVar) {
+    guardInputCandidates.push(stageInputVar);
+  }
+  if (stageInputs.length > 0) {
+    guardInputCandidates.push(...stageInputs);
+  }
+  if (Array.isArray(execDef?.paramNames)) {
+    for (const paramName of execDef.paramNames) {
+      const paramVar = execEnv.getVariable(paramName);
+      if (paramVar) {
+        guardInputCandidates.push(paramVar);
+      }
+    }
+  }
+  const guardInputs = materializeGuardInputs(guardInputCandidates, { nameHint: '__pipeline_stage_input__' });
+
+  if (hookNode && operationContext) {
+    const hookManager = env.getHookManager();
+    const preDecision = await hookManager.runPre(hookNode, guardInputs, env, operationContext);
+    const guardInputVariable =
+      preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
+    try {
+      await handleGuardDecision(preDecision, hookNode, env, operationContext);
+    } catch (error) {
+      if (guardInputVariable) {
+        const existingInput = execEnv.getVariable('input');
+        if (!existingInput) {
+          const clonedInput: Variable = {
+            ...(guardInputVariable as Variable),
+            name: 'input',
+            ctx: { ...(guardInputVariable as Variable).ctx },
+            internal: {
+              ...((guardInputVariable as Variable).internal ?? {}),
+              isSystem: true,
+              isParameter: true
+            }
+          };
+          execEnv.setParameterVariable('input', clonedInput);
+        }
+      }
+      if (whenExprNode) {
+        const handled = await handleExecGuardDenial(error, {
+          execEnv,
+          env,
+          whenExprNode
+        });
+        if (handled) {
+          return finalizeResult(handled.value ?? handled.stdout ?? '');
+        }
+      }
+      throw error;
     }
   }
   
@@ -1015,7 +1095,7 @@ export async function executeCommandVariable(
     if (fromParamScope) {
       // If this is an executable, recursively execute it in the same param scope
       if ((fromParamScope as any).type === 'executable') {
-        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput, structuredInput);
+        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput, structuredInput, hookOptions);
       }
       // Non-executable reference in exec scope: this is most likely a mistake now that
       // identity bodies compile to template executables.
@@ -1030,7 +1110,7 @@ export async function executeCommandVariable(
     }
 
     if ( (refVar as any).type === 'executable') {
-      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput, structuredInput);
+      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput, structuredInput, hookOptions);
     }
     // Non-executable reference in stage env: surface clear guidance
     const t = (refVar as any).type;
