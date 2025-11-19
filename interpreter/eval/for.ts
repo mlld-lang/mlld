@@ -18,6 +18,7 @@ import {
   looksLikeJsonString,
   normalizeWhenShowEffect
 } from '../utils/structured-value';
+import { materializeDisplayValue } from '../utils/display-materialization';
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown, env: Environment): Variable {
@@ -125,7 +126,18 @@ export async function evaluateForDirective(
             directive.values.action[0].type === 'ExecInvocation' &&
             actionResult.value !== undefined && actionResult.value !== null
           ) {
-            const outputContent = String(actionResult.value) + '\n';
+            const materialized = materializeDisplayValue(
+              actionResult.value,
+              undefined,
+              actionResult.value
+            );
+            let outputContent = materialized.text;
+            if (!outputContent.endsWith('\n')) {
+              outputContent += '\n';
+            }
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
             env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
           }
           retry.reset();

@@ -2,6 +2,8 @@ import type { Environment } from '../../env/Environment';
 import type { PipelineCommand } from '@core/types';
 import { appendContentToFile } from '../append';
 import type { SecurityDescriptor } from '@core/types/security';
+import { materializeDisplayValue } from '../../utils/display-materialization';
+import { asText, isStructuredValue } from '../../utils/structured-value';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -62,14 +64,17 @@ async function evaluateEffectArg(arg: any, env: Environment): Promise<string> {
 // Execute a builtin effect. Returns void; throws on error to abort the pipeline.
 export async function runBuiltinEffect(
   effect: PipelineCommand,
-  stageOutput: string,
+  stageOutput: unknown,
   env: Environment
 ): Promise<void> {
   const name = effect.rawIdentifier;
+  const stageOutputRaw = stageOutput;
+  const stageOutputText = typeof stageOutput === 'string' ? stageOutput : asText(stageOutput);
   switch (name) {
     case 'log':
     case 'LOG': {
       let content: string;
+      let descriptorSource: unknown = undefined;
       if (effect.args && effect.args.length > 0) {
         const parts: string[] = [];
         for (const a of effect.args) {
@@ -78,17 +83,29 @@ export async function runBuiltinEffect(
         content = parts.join(' ');
       } else {
         // Default to logging the stage output
-        content = stageOutput;
+        content = stageOutputText;
+        descriptorSource = stageOutputRaw;
       }
-      if (!content.endsWith('\n')) content += '\n';
+      const materialized = materializeDisplayValue(
+        descriptorSource ?? content,
+        undefined,
+        descriptorSource ?? content,
+        content
+      );
+      let output = materialized.text;
+      if (!output.endsWith('\n')) output += '\n';
+      if (materialized.descriptor) {
+        env.recordSecurityDescriptor(materialized.descriptor);
+      }
       // Prefer stderr for logs per policy
-      env.emitEffect('stderr', content);
+      env.emitEffect('stderr', output);
       return;
     }
 
     case 'show':
     case 'SHOW': {
       let content: string;
+      let descriptorSource: unknown = undefined;
       if (effect.args && effect.args.length > 0) {
         const parts: string[] = [];
         for (const a of effect.args) {
@@ -96,11 +113,22 @@ export async function runBuiltinEffect(
         }
         content = parts.join(' ');
       } else {
-        content = stageOutput;
+        content = stageOutputText;
+        descriptorSource = stageOutputRaw;
       }
-      if (!content.endsWith('\n')) content += '\n';
+      const materialized = materializeDisplayValue(
+        descriptorSource ?? content,
+        undefined,
+        descriptorSource ?? content,
+        content
+      );
+      let output = materialized.text;
+      if (!output.endsWith('\n')) output += '\n';
+      if (materialized.descriptor) {
+        env.recordSecurityDescriptor(materialized.descriptor);
+      }
       // Show writes to stdout (if streaming) and appends to document
-      env.emitEffect('both', content);
+      env.emitEffect('both', output);
       return;
     }
 
@@ -108,12 +136,15 @@ export async function runBuiltinEffect(
     case 'OUTPUT': {
       // args[0] = optional source; args[1] = required target object
       // Determine content: if two or more args, first is source; with one or zero args, use stage output
-      let content = stageOutput;
+      let content = stageOutputText;
+      let descriptorSource: unknown = stageOutputRaw;
       if (effect.args && effect.args.length >= 2) {
         try {
           content = await evaluateEffectArg(effect.args[0], env);
+          descriptorSource = undefined;
         } catch {
-          content = stageOutput;
+          content = stageOutputText;
+          descriptorSource = stageOutputRaw;
         }
       }
       let target: any = null;
@@ -125,6 +156,17 @@ export async function runBuiltinEffect(
       }
       if (!target || typeof target !== 'object' || !target.type) {
         throw new Error('output requires a valid target (file|stream|env|resolver)');
+      }
+
+      const materializedContent = materializeDisplayValue(
+        descriptorSource ?? content,
+        undefined,
+        descriptorSource ?? content,
+        content
+      );
+      content = materializedContent.text;
+      if (materializedContent.descriptor) {
+        env.recordSecurityDescriptor(materializedContent.descriptor);
       }
 
       switch (String(target.type)) {
@@ -235,12 +277,25 @@ export async function runBuiltinEffect(
         throw new Error('append requires a file target');
       }
 
-      let payload = stageOutput;
+      let payload = stageOutputText;
+      let descriptorSource: unknown = stageOutputRaw;
       if (hasExplicitSource && args.length > 0) {
         payload = await evaluateEffectArg(args[0], env);
+        descriptorSource = undefined;
       }
 
-      await appendContentToFile(target, payload, env, { directiveKind: 'append' });
+      const materializedPayload = materializeDisplayValue(
+        descriptorSource ?? payload,
+        undefined,
+        descriptorSource ?? payload,
+        payload
+      );
+      const finalPayload = materializedPayload.text;
+      if (materializedPayload.descriptor) {
+        env.recordSecurityDescriptor(materializedPayload.descriptor);
+      }
+
+      await appendContentToFile(target, finalPayload, env, { directiveKind: 'append' });
       return;
     }
 

@@ -827,7 +827,7 @@ export class PipelineExecutor {
     for (const effectCmd of command.effects) {
       try {
         if (!effectCmd?.rawIdentifier || !isBuiltinEffect(effectCmd.rawIdentifier)) continue;
-        await runBuiltinEffect(effectCmd, asText(stageOutput), stageEnv);
+        await runBuiltinEffect(effectCmd, stageOutput, stageEnv);
       } catch (err) {
         // Fail-fast on effect errors
         if (err instanceof Error) {
