@@ -6,8 +6,9 @@ import type {
   ExecInvocation
 } from '@core/types';
 import type { LoadContentResult } from '@core/types/load-content';
-import { normalizeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import type { SecurityDescriptor } from '@core/types/security';
 import { asText, assertStructuredValue, isStructuredValue } from '@interpreter/utils/structured-value';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import type { Environment } from '../env/Environment';
 import type { VarAssignmentResult } from '../eval/var';
 import type { OperationContext } from '../env/ContextManager';
@@ -170,7 +171,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           pushPart(`{{${varName}}}`); // Keep unresolved with {{}} syntax
           continue;
         }
-        collectDescriptor(variable.ctx as SecurityDescriptor | undefined);
+        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
         
         /**
          * Extract Variable value for string interpolation
@@ -236,7 +237,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           continue;
         }
         
-        collectDescriptor(variable.ctx as SecurityDescriptor | undefined);
+        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
         
         // Template variable content needs template escaping context
         if (variable.internal?.templateAst) {
@@ -273,7 +274,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           continue;
         }
 
-        collectDescriptor(variable.ctx as SecurityDescriptor | undefined);
+        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
 
         // Extract value based on variable type using new type guards
         let value: unknown = '';
@@ -662,11 +663,11 @@ export function extractInterpolationDescriptor(value: unknown): SecurityDescript
     return undefined;
   }
   if (isStructuredValue(value)) {
-    return normalizeSecurityDescriptor(value.ctx as SecurityDescriptor | undefined);
+    return ctxToSecurityDescriptor(value.ctx as any);
   }
   if (typeof value === 'object') {
-    const ctx = (value as { ctx?: SecurityDescriptor }).ctx;
-    return normalizeSecurityDescriptor(ctx as SecurityDescriptor | undefined);
+    const ctx = (value as { ctx?: Record<string, unknown> }).ctx;
+    return ctx ? ctxToSecurityDescriptor(ctx as any) : undefined;
   }
   return undefined;
 }

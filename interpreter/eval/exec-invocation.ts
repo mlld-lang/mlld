@@ -336,6 +336,19 @@ export async function evaluateExecInvocation(
       ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptor)
       : descriptor;
   };
+  const interpolateWithResultDescriptor = (
+    nodes: any,
+    targetEnv: Environment = env,
+    interpolationContext: InterpolationContext = InterpolationContext.Default
+  ): Promise<string> => {
+    return interpolate(nodes, targetEnv, interpolationContext, {
+      collectSecurityDescriptor: descriptor => {
+        if (descriptor) {
+          mergeResultDescriptor(descriptor);
+        }
+      }
+    });
+  };
 
   const createParameterMetadata = (value: unknown) => {
     const descriptor = extractSecurityDescriptor(value);
@@ -909,7 +922,7 @@ export async function evaluateExecInvocation(
       if (typeof arg === 'string') {
         inputValue = arg;
       } else if (arg && typeof arg === 'object') {
-        inputValue = await interpolate([arg], env);
+        inputValue = await interpolateWithResultDescriptor([arg], env);
       } else {
         inputValue = String(arg);
       }
@@ -1043,9 +1056,9 @@ export async function evaluateExecInvocation(
             const { isTemplate } = await import('@core/types/variable');
             if (isTemplate(variable)) {
               if (Array.isArray(value)) {
-                value = await interpolate(value, env);
-      } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
-        value = await interpolate(variable.internal.templateAst, env);
+                value = await interpolateWithResultDescriptor(value, env);
+              } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
+                value = await interpolateWithResultDescriptor(variable.internal.templateAst, env);
               }
             }
             
@@ -1081,7 +1094,7 @@ export async function evaluateExecInvocation(
             }
           } else {
             // Variable not found - use interpolation which will throw appropriate error
-            argValue = await interpolate([arg], env, InterpolationContext.Default);
+            argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
             argValueAny = argValue;
           }
           break;
@@ -1114,12 +1127,12 @@ export async function evaluateExecInvocation(
         case 'Text':
           // Plain text nodes should remain strings; avoid JSON coercion that can
           // truncate large numeric identifiers (e.g., Discord snowflakes)
-          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
           argValueAny = argValue;
           break;
         default:
           // Other nodes: interpolate normally
-          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
           // Try to preserve structured data if it's JSON
           try {
             argValueAny = JSON.parse(argValue);
@@ -1328,7 +1341,7 @@ export async function evaluateExecInvocation(
   // Handle template executables
   if (isTemplateExecutable(definition)) {
     // Interpolate the template with the bound parameters
-    const templateResult = await interpolate(definition.template, execEnv);
+    const templateResult = await interpolateWithResultDescriptor(definition.template, execEnv);
     if (isStructuredValue(templateResult)) {
       result = templateResult;
     } else if (typeof templateResult === 'string') {
@@ -1386,7 +1399,11 @@ export async function evaluateExecInvocation(
     } catch {}
     
     // Interpolate the command template with parameters using ShellCommand context
-    let command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    let command = await interpolateWithResultDescriptor(
+      definition.commandTemplate,
+      execEnv,
+      InterpolationContext.ShellCommand
+    );
     // Normalize common escaped sequences for usability in oneliners
     // Only handle simple \n, \t, \r, \0 to their literal counterparts
     // Leave quotes/backslashes intact for shell correctness
@@ -1470,7 +1487,11 @@ export async function evaluateExecInvocation(
               fallbackCommand += n;
             } else {
               // Fallback: interpolate conservatively for unexpected nodes
-              fallbackCommand += await interpolate([n as any], execEnv, InterpolationContext.ShellCommand);
+              fallbackCommand += await interpolateWithResultDescriptor(
+                [n as any],
+                execEnv,
+                InterpolationContext.ShellCommand
+              );
             }
           }
         } else {
@@ -1643,7 +1664,7 @@ export async function evaluateExecInvocation(
         }
       } else {
         // For other languages (JS, Python), interpolate as before
-        code = await interpolate(definition.codeTemplate, execEnv);
+        code = await interpolateWithResultDescriptor(definition.codeTemplate, execEnv);
       }
       
       // Import ASTEvaluator for normalizing array values
@@ -1924,15 +1945,14 @@ export async function evaluateExecInvocation(
       }
       // Evaluate each arg; handle interpolated string args that are arrays of parts
       let refArgs: any[] = [];
-      const { evaluate, interpolate } = await import('../core/interpreter');
-      const { InterpolationContext } = await import('../core/interpolation-context');
+      const { evaluate } = await import('../core/interpreter');
       
       for (const argNode of definition.commandArgs) {
         let value: any;
         // If this arg is an array of parts (from DataString with interpolation),
         // interpolate the whole array into a single string argument
         if (Array.isArray(argNode)) {
-          value = await interpolate(argNode as any[], execEnv, InterpolationContext.Default);
+          value = await interpolateWithResultDescriptor(argNode as any[], execEnv, InterpolationContext.Default);
         } else {
           // Evaluate the individual argument node
           const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
@@ -1997,10 +2017,10 @@ export async function evaluateExecInvocation(
   // Handle section executables
   else if (isSectionExecutable(definition)) {
     // Interpolate the path template to get the file path
-    const filePath = await interpolate(definition.pathTemplate, execEnv);
+    const filePath = await interpolateWithResultDescriptor(definition.pathTemplate, execEnv);
     
     // Interpolate the section template to get the section name
-    const sectionName = await interpolate(definition.sectionTemplate, execEnv);
+    const sectionName = await interpolateWithResultDescriptor(definition.sectionTemplate, execEnv);
     
     // Read the file content
     const fileContent = await execEnv.readFile(filePath);
@@ -2022,7 +2042,7 @@ export async function evaluateExecInvocation(
     
     // Handle rename if present
     if (definition.renameTemplate) {
-      const newTitle = await interpolate(definition.renameTemplate, execEnv);
+      const newTitle = await interpolateWithResultDescriptor(definition.renameTemplate, execEnv);
       const lines = sectionContent.split('\n');
       if (lines.length > 0 && lines[0].match(/^#+\s/)) {
         const newTitleTrimmed = newTitle.trim();
@@ -2069,7 +2089,7 @@ export async function evaluateExecInvocation(
     let payload: any = undefined;
     if (definition.payloadTemplate) {
       // Interpolate the payload template
-      const payloadStr = await interpolate(definition.payloadTemplate, execEnv);
+      const payloadStr = await interpolateWithResultDescriptor(definition.payloadTemplate, execEnv);
       try {
         // Try to parse as JSON
         payload = JSON.parse(payloadStr);
