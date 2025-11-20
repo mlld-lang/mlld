@@ -38,6 +38,9 @@ WithProperty
   / "needs" _ ":" _ needs:NeedsObject {
       return ["needs", needs];
     }
+  / "guards" _ ":" _ guards:GuardOverrides {
+      return ["guards", guards];
+    }
   / "stdin" _ ":" _ stdin:Expression {
       return ["stdin", stdin];
     }
@@ -87,6 +90,69 @@ GroupCommandList
   = first:PipelineCommand rest:(CommaSpace cmd:PipelineCommand { return cmd; })* {
       return [first, ...rest];
     }
+
+// -------------------------------------------------------------
+// GUARD OVERRIDES
+// -------------------------------------------------------------
+
+GuardOverrides
+  = "false" {
+      return false;
+    }
+  / GuardOverrideObject
+
+GuardOverrideObject
+  = "{" _ entries:GuardOverrideEntries? _ "}" {
+      const result = {};
+      if (entries) {
+        for (const [key, value] of entries) {
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+
+GuardOverrideEntries
+  = first:GuardOverrideEntry rest:(CommaSpace entry:GuardOverrideEntry { return entry; })* {
+      return [first, ...rest];
+    }
+
+GuardOverrideEntry
+  = "only" _ ":" _ names:GuardOverrideNameList {
+      return ["only", names];
+    }
+  / "except" _ ":" _ names:GuardOverrideNameList {
+      return ["except", names];
+    }
+
+GuardOverrideNameList
+  = "[" _ names:GuardOverrideNames? _ "]" {
+      return names || [];
+    }
+
+GuardOverrideNames
+  = first:GuardOverrideName rest:(CommaSpace name:GuardOverrideName { return name; })* {
+      return [first, ...rest];
+    }
+
+GuardOverrideName
+  = GuardOverrideSingleQuoted
+  / GuardOverrideDoubleQuoted
+
+GuardOverrideSingleQuoted
+  = "'" content:EscapedSingleStringContent "'" {
+      return content;
+    }
+
+GuardOverrideDoubleQuoted
+  = '"' parts:GuardOverrideDoubleChars* '"' {
+      return parts.join('');
+    }
+
+GuardOverrideDoubleChars
+  = '\\"' { return '"'; }
+  / '\\\\' { return '\\'; }
+  / char:[^"] { return char; }
 
 // Single pipeline command (command reference with @input support)
 // Uses UnifiedReferenceForPipeline to prevent nested pipelines

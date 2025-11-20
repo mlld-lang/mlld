@@ -20,7 +20,7 @@ import { evaluateCondition } from '../eval/when';
 import { isVariable } from '../utils/variable-resolution';
 import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
-import { isDirectiveHookTarget } from '@core/types/hooks';
+import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { makeSecurityDescriptor } from '@core/types/security';
@@ -52,6 +52,13 @@ interface GuardAttemptEntry {
 interface GuardAttemptState {
   nextAttempt: number;
   history: GuardAttemptEntry[];
+}
+
+type GuardOverrideValue = false | { only?: unknown; except?: unknown } | undefined;
+
+interface NormalizedGuardOverride {
+  kind: 'none' | 'disableAll' | 'only' | 'except';
+  names?: Set<string>;
 }
 
 const DEFAULT_GUARD_MAX = 3;
@@ -283,6 +290,111 @@ function clearGuardAttemptState(store: Map<string, GuardAttemptState>, key: stri
   store.delete(key);
 }
 
+function extractGuardOverride(node: HookableNode): GuardOverrideValue {
+  const withClause = resolveWithClause(node);
+  if (withClause && typeof withClause === 'object' && 'guards' in withClause) {
+    return (withClause as any).guards as GuardOverrideValue;
+  }
+  return undefined;
+}
+
+function resolveWithClause(node: HookableNode): unknown {
+  if (isExecHookTarget(node)) {
+    return (node as any).withClause;
+  }
+  const values = (node as any).values;
+  if (values?.withClause) {
+    return values.withClause;
+  }
+  if (values?.invocation?.withClause) {
+    return values.invocation.withClause;
+  }
+  if (values?.execInvocation?.withClause) {
+    return values.execInvocation.withClause;
+  }
+  if (values?.execRef?.withClause) {
+    return values.execRef.withClause;
+  }
+  const metaWithClause = (node as any).meta?.withClause;
+  if (metaWithClause) {
+    return metaWithClause;
+  }
+  return undefined;
+}
+
+function normalizeGuardNames(
+  names: unknown,
+  field: 'only' | 'except'
+): Set<string> {
+  if (!Array.isArray(names)) {
+    throw new Error(`Guard override ${field} value must be an array`);
+  }
+  const normalized = new Set<string>();
+  for (const entry of names) {
+    if (typeof entry !== 'string') {
+      throw new Error(`Guard override ${field} entries must be strings starting with @`);
+    }
+    const trimmed = entry.trim();
+    if (!trimmed.startsWith('@')) {
+      throw new Error(`Guard override ${field} entries must start with @`);
+    }
+    const name = trimmed.slice(1);
+    if (!name) {
+      throw new Error(`Guard override ${field} entries must include a name after @`);
+    }
+    normalized.add(name);
+  }
+  return normalized;
+}
+
+function normalizeGuardOverride(raw: GuardOverrideValue): NormalizedGuardOverride {
+  if (raw === undefined) {
+    return { kind: 'none' };
+  }
+  if (raw === false) {
+    return { kind: 'disableAll' };
+  }
+  if (raw && typeof raw === 'object') {
+    const rawOnly = (raw as any).only;
+    const rawExcept = (raw as any).except;
+    const hasOnly = Array.isArray(rawOnly);
+    const hasExcept = Array.isArray(rawExcept);
+    const hasOnlyValue = rawOnly !== undefined;
+    const hasExceptValue = rawExcept !== undefined;
+
+    if (hasOnly && hasExcept) {
+      throw new Error('Guard override cannot specify both only and except');
+    }
+    if (hasOnlyValue && !hasOnly) {
+      throw new Error('Guard override only value must be an array');
+    }
+    if (hasExceptValue && !hasExcept) {
+      throw new Error('Guard override except value must be an array');
+    }
+    if (hasOnly) {
+      return { kind: 'only', names: normalizeGuardNames(rawOnly, 'only') };
+    }
+    if (hasExcept) {
+      return { kind: 'except', names: normalizeGuardNames(rawExcept, 'except') };
+    }
+    return { kind: 'none' };
+  }
+  throw new Error('Guard override must be false or an object');
+}
+
+function applyGuardOverrideFilter(
+  guards: GuardDefinition[],
+  override: NormalizedGuardOverride
+): GuardDefinition[] {
+  if (override.kind === 'only') {
+    return guards.filter(def => def.name && override.names?.has(def.name));
+  }
+  if (override.kind === 'except') {
+    return guards.filter(def => !def.name || !override.names?.has(def.name));
+  }
+  return guards;
+}
+
 export const guardPreHook: PreHook = async (
   node,
   inputs,
@@ -294,11 +406,17 @@ export const guardPreHook: PreHook = async (
     return { action: 'continue' };
   }
 
+  const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
+  if (guardOverride.kind === 'disableAll') {
+    env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
+    return { action: 'continue' };
+  }
+
   const registry = env.getGuardRegistry();
   const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
 
-  const perInputCandidates = buildPerInputCandidates(registry, variableInputs);
-  const operationGuards = collectOperationGuards(registry, operation);
+  const perInputCandidates = buildPerInputCandidates(registry, variableInputs, guardOverride);
+  const operationGuards = collectOperationGuards(registry, operation, guardOverride);
 
   if (perInputCandidates.length === 0 && operationGuards.length === 0) {
     return { action: 'continue' };
@@ -462,7 +580,8 @@ export const guardPreHook: PreHook = async (
 
 function buildPerInputCandidates(
   registry: ReturnType<Environment['getGuardRegistry']>,
-  inputs: readonly Variable[]
+  inputs: readonly Variable[],
+  override: NormalizedGuardOverride
 ): PerInputCandidate[] {
   const results: PerInputCandidate[] = [];
 
@@ -484,8 +603,10 @@ function buildPerInputCandidates(
       }
     }
 
-    if (guards.length > 0) {
-      results.push({ index, variable, labels, sources, guards });
+    const filteredGuards = applyGuardOverrideFilter(guards, override);
+
+    if (filteredGuards.length > 0) {
+      results.push({ index, variable, labels, sources, guards: filteredGuards });
     }
   }
 
@@ -494,7 +615,8 @@ function buildPerInputCandidates(
 
 function collectOperationGuards(
   registry: ReturnType<Environment['getGuardRegistry']>,
-  operation: OperationContext
+  operation: OperationContext,
+  override: NormalizedGuardOverride
 ): GuardDefinition[] {
   const keys = buildOperationKeys(operation);
   const seen = new Set<string>();
@@ -510,7 +632,7 @@ function collectOperationGuards(
     }
   }
 
-  return results;
+  return applyGuardOverrideFilter(results, override);
 }
 
 function buildOperationSnapshot(inputs: readonly Variable[]): OperationSnapshot {

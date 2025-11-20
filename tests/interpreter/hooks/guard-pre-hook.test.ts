@@ -86,6 +86,96 @@ describe('guard pre-hook integration', () => {
     });
   });
 
+  it('warns and disables guards when with { guards: false } is set', async () => {
+    const env = createEnv();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    const guardDirective = parseSync(
+      '/guard @denySecret for secret = when [ * => deny "blocked secret" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'hidden',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @secretVar with { guards: false }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    expect(effects.getOutput().trim()).toBe('hidden');
+    expect(effects.getErrors()).toContain(
+      '[Guard Override] All guards disabled for this operation'
+    );
+  });
+
+  it('applies guard-only overrides to skip guards not listed', async () => {
+    const env = createEnv();
+    const guardAllow = parseSync('/guard @ga for secret = when [ * => allow ]')[0] as DirectiveNode;
+    const guardDeny = parseSync(
+      '/guard @gb for secret = when [ * => deny "blocked by gb" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardAllow, env);
+    await evaluateDirective(guardDeny, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'secret-value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const directive = parseSync(
+      '/show @secretVar with { guards: { only: ["@ga"] } }'
+    )[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+  });
+
+  it('throws when guard override sets both only and except', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'value',
+      createSimpleTextVariable(
+        'value',
+        'hello',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        { security: makeSecurityDescriptor() }
+      )
+    );
+
+    const directive = parseSync(
+      '/show @value with { guards: { only: ["@ga"], except: ["@gb"] } }'
+    )[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(
+      /cannot specify both only and except/
+    );
+  });
+
   it('applies per-operation guard helpers like @opIs', async () => {
     const env = createEnv();
     const guardDirective = parseSync(

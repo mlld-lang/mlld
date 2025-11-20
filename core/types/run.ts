@@ -11,6 +11,11 @@ import type { DataLabel } from './security';
  */
 export type PipelineStage = PipelineCommand | PipelineCommand[];
 
+export interface GuardOverrideOptions {
+  only?: string[];
+  except?: string[];
+}
+
 export interface WithClause {
   pipeline?: PipelineStage[];
   needs?: DependencyMap;
@@ -18,6 +23,7 @@ export interface WithClause {
   parallel?: number;
   delayMs?: number;
   stdin?: Expression;
+  guards?: GuardOverrideOptions | false;
   [key: string]: any; // For other with clause properties
 }
 
