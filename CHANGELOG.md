@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transformer variant resolution in pipelines - `@json.fromlist`, `@json.llm`, `@json.loose`, and `@json.strict` now work correctly in all pipeline contexts
 
 ### Added
+- Guard composition: all guards execute in registration order, decisions aggregate (deny > retry > allow @value > allow), transforms chain with provenance tracking, guard history via @ctx.guard.trace/hints/reasons and @p.guards in pipelines, overrides via with { guards: { only/except/false } }
 - `.ctx` property on StructuredValues (security, provenance, metrics)
 - `collectParameterDescriptors()` - centralized security collection
 - `extractSecurityDescriptor()` - extract from Values/Variables
