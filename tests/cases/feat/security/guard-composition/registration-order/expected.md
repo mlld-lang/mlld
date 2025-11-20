@@ -1,3 +1,4 @@
 # Guard Composition - Registration Order
 
-seed-a-b
+order: first,second
+x

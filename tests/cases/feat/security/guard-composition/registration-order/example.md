@@ -1,13 +1,20 @@
 # Guard Composition - Registration Order
 
-/guard for secret = when [
-  * => allow `@input-a`
+/guard @first for op:exe = when [
+  * => allow
 ]
 
-/guard for secret = when [
-  * => allow `@input-b`
+/guard @second for op:exe = when [
+  * => allow
 ]
 
-/var secret @value = "seed"
+/exe @foo() = {
+  "x"
+}
 
-/show @value
+/exe @report(val) = {
+  /show `order: @p.guards.filter(g => g.operation?.name == "foo").map(g => g.trace[0].guardName)`
+  @val
+}
+
+/show @foo() | @report
