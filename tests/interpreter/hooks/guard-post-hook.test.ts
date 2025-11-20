@@ -152,4 +152,35 @@ describe('guard post-hook integration', () => {
     expect(guardErr.decision).toBe('retry');
     expect(guardErr.reason ?? guardErr.details.reason).toMatch(/not implemented/i);
   });
+
+  it('suppresses nested guard evaluation invoked inside guard actions', async () => {
+    const env = createEnv();
+    const directives = parseSync(`
+/exe @helper(value) = js {
+  const val = value && typeof value === 'object' && 'value' in value ? value.value : value;
+  return "helper:" + val;
+}
+/guard after @wrap for op:exe = when [ * => allow @helper(@output) ]
+    `).filter(node => (node as DirectiveNode)?.kind === 'guard' || (node as DirectiveNode)?.kind === 'exe') as DirectiveNode[];
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const outputVar = createSecretVariable('secretVar', 'raw');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    const transformed = await guardPostHook(node, result, [outputVar], env, {
+      type: 'exe',
+      name: 'emit'
+    });
+    const rawValue =
+      (isStructuredValue(transformed.value) && transformed.value.text) ||
+      ((transformed.value as any)?.value ?? transformed.value);
+    expect(String(rawValue)).toContain('helper:');
+  });
 });

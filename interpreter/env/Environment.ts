@@ -206,6 +206,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
   // TODO: Introduce guard registration and evaluation using capability contexts.
+  // Guard evaluation depth prevents reentrant guard execution
+  private guardEvaluationDepth = 0;
 
   // Constructor overloads
   constructor(
@@ -1260,6 +1262,22 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     fn: () => Promise<T> | T
   ): Promise<T> {
     return this.contextManager.withGuardContext(context, fn);
+  }
+
+  async withGuardSuppression<T>(fn: () => Promise<T> | T): Promise<T> {
+    this.guardEvaluationDepth += 1;
+    try {
+      return await fn();
+    } finally {
+      this.guardEvaluationDepth = Math.max(0, this.guardEvaluationDepth - 1);
+    }
+  }
+
+  shouldSuppressGuards(): boolean {
+    if (this.guardEvaluationDepth > 0) {
+      return true;
+    }
+    return this.parent?.shouldSuppressGuards() ?? false;
   }
 
   async withDeniedContext<T>(

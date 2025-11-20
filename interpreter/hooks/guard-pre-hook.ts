@@ -10,7 +10,7 @@ import type {
   GuardResult
 } from '@core/types/guard';
 import type { Variable, VariableSource } from '@core/types/variable';
-import { createArrayVariable } from '@core/types/variable';
+import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable } from '@core/types/executable';
 import { attachArrayHelpers, buildArrayAggregate } from '@core/types/variable/ArrayHelpers';
@@ -407,178 +407,196 @@ export const guardPreHook: PreHook = async (
     return { action: 'continue' };
   }
 
-  const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
-  if (guardOverride.kind === 'disableAll') {
-    env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
+  if (env.shouldSuppressGuards()) {
     return { action: 'continue' };
   }
 
-  const registry = env.getGuardRegistry();
-  const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
+  return env.withGuardSuppression(async () => {
+    const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
+    if (guardOverride.kind === 'disableAll') {
+      env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
+      return { action: 'continue' };
+    }
 
-  const perInputCandidates = buildPerInputCandidates(registry, variableInputs, guardOverride);
-  const operationGuards = collectOperationGuards(registry, operation, guardOverride);
-
-  if (perInputCandidates.length === 0 && operationGuards.length === 0) {
-    return { action: 'continue' };
-  }
-
-  const attemptStore = getAttemptStore(env);
-  const guardTrace: GuardResult[] = [];
-  const reasons: string[] = [];
-  const hints: GuardHint[] = [];
-  const usedAttemptKeys = new Set<string>();
-  let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
-  let primaryMetadata: Record<string, unknown> | undefined;
-
-  const transformedInputs: Variable[] = [...variableInputs];
-
-  for (const candidate of perInputCandidates) {
-    const attemptKey = buildGuardAttemptKey(operation, 'perInput', candidate.variable);
-    usedAttemptKeys.add(attemptKey);
-    const attemptState = attemptStore.get(attemptKey);
-    const attemptNumber = attemptState?.nextAttempt ?? 1;
-    const attemptHistory = attemptState ? attemptState.history.slice() : [];
-    let currentInput = candidate.variable;
-
-    for (const guard of candidate.guards) {
-      const result = await evaluateGuard({
-        node,
-        env,
-        guard,
-        operation,
-        scope: 'perInput',
-        perInput: candidate,
-        attemptNumber,
-        attemptHistory,
-        attemptKey,
-        attemptStore,
-        inputHelper: helpers?.guard
-      });
-      guardTrace.push(result);
-      if (result.hint) {
-        hints.push(result.hint);
+    if (process.env.MLLD_DEBUG_GUARDS === '1' && operation?.name === 'emit') {
+      try {
+        const names = Array.from(env.getAllVariables().keys()).slice(0, 50);
+        interpreterLogger.debug('guard-pre debug emit context', {
+          parentHasPrefix: env.hasVariable('prefixWith'),
+          names
+        });
+      } catch {
+        // ignore debug failures
       }
-      if (result.decision === 'allow' && currentDecision === 'allow') {
-        if (result.replacement && isVariable(result.replacement as Variable)) {
-          currentInput = result.replacement as Variable;
+    }
+    const registry = env.getGuardRegistry();
+    const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
+
+    const perInputCandidates = buildPerInputCandidates(registry, variableInputs, guardOverride);
+    const operationGuards = collectOperationGuards(registry, operation, guardOverride);
+
+    if (perInputCandidates.length === 0 && operationGuards.length === 0) {
+      return { action: 'continue' };
+    }
+
+    const attemptStore = getAttemptStore(env);
+    const guardTrace: GuardResult[] = [];
+    const reasons: string[] = [];
+    const hints: GuardHint[] = [];
+    const usedAttemptKeys = new Set<string>();
+    let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
+    let primaryMetadata: Record<string, unknown> | undefined;
+
+    const transformedInputs: Variable[] = [...variableInputs];
+
+    for (const candidate of perInputCandidates) {
+      const attemptKey = buildGuardAttemptKey(operation, 'perInput', candidate.variable);
+      usedAttemptKeys.add(attemptKey);
+      const attemptState = attemptStore.get(attemptKey);
+      const attemptNumber = attemptState?.nextAttempt ?? 1;
+      const attemptHistory = attemptState ? attemptState.history.slice() : [];
+      let currentInput = candidate.variable;
+
+      for (const guard of candidate.guards) {
+        const result = await evaluateGuard({
+          node,
+          env,
+          guard,
+          operation,
+          scope: 'perInput',
+          perInput: candidate,
+          attemptNumber,
+          attemptHistory,
+          attemptKey,
+          attemptStore,
+          inputHelper: helpers?.guard
+        });
+        guardTrace.push(result);
+        if (result.hint) {
+          hints.push(result.hint);
         }
-      } else if (result.decision === 'deny') {
-        currentDecision = 'deny';
-        if (result.reason) {
-          reasons.push(result.reason);
+        if (result.decision === 'allow' && currentDecision === 'allow') {
+          if (result.replacement && isVariable(result.replacement as Variable)) {
+            currentInput = result.replacement as Variable;
+          }
+        } else if (result.decision === 'deny') {
+          currentDecision = 'deny';
+          if (result.reason) {
+            reasons.push(result.reason);
+          }
+          if (!primaryMetadata && result.metadata) {
+            primaryMetadata = result.metadata;
+          }
+        } else if (result.decision === 'retry' && currentDecision !== 'deny') {
+          currentDecision = 'retry';
+          if (result.reason) {
+            reasons.push(result.reason);
+          }
+          if (!primaryMetadata && result.metadata) {
+            primaryMetadata = result.metadata;
+          }
         }
-        if (!primaryMetadata && result.metadata) {
-          primaryMetadata = result.metadata;
+      }
+
+      transformedInputs[candidate.index] = currentInput;
+    }
+
+    if (operationGuards.length > 0) {
+      const attemptKey = buildGuardAttemptKey(operation, 'perOperation');
+      usedAttemptKeys.add(attemptKey);
+      const attemptState = attemptStore.get(attemptKey);
+      const attemptNumber = attemptState?.nextAttempt ?? 1;
+      const attemptHistory = attemptState ? attemptState.history.slice() : [];
+      let opSnapshot = buildOperationSnapshot(transformedInputs);
+
+      for (const guard of operationGuards) {
+        const result = await evaluateGuard({
+          node,
+          env,
+          guard,
+          operation,
+          scope: 'perOperation',
+          operationSnapshot: opSnapshot,
+          attemptNumber,
+          attemptHistory,
+          attemptKey,
+          attemptStore,
+          inputHelper: helpers?.guard
+        });
+        guardTrace.push(result);
+        if (result.hint) {
+          hints.push(result.hint);
         }
-      } else if (result.decision === 'retry' && currentDecision !== 'deny') {
-        currentDecision = 'retry';
-        if (result.reason) {
-          reasons.push(result.reason);
-        }
-        if (!primaryMetadata && result.metadata) {
-          primaryMetadata = result.metadata;
+        if (result.decision === 'allow' && currentDecision === 'allow') {
+          const replacements = normalizeGuardReplacements(result.replacement);
+          if (replacements.length > 0) {
+            transformedInputs.splice(0, transformedInputs.length, ...replacements);
+            opSnapshot = buildOperationSnapshot(transformedInputs);
+          }
+        } else if (result.decision === 'deny') {
+          currentDecision = 'deny';
+          if (result.reason) {
+            reasons.push(result.reason);
+          }
+          if (!primaryMetadata && result.metadata) {
+            primaryMetadata = result.metadata;
+          }
+        } else if (result.decision === 'retry') {
+          currentDecision = 'retry';
+          if (result.reason) {
+            reasons.push(result.reason);
+          }
+          if (!primaryMetadata && result.metadata) {
+            primaryMetadata = result.metadata;
+          }
         }
       }
     }
 
-    transformedInputs[candidate.index] = currentInput;
-  }
+    const aggregateContext = buildAggregateGuardContext({
+      decision: currentDecision,
+      guardResults: guardTrace,
+      hints,
+      reasons,
+      primaryMetadata
+    });
+    const aggregateMetadata = buildAggregateMetadata({
+      guardResults: guardTrace,
+      reasons,
+      hints,
+      transformedInputs,
+      primaryMetadata,
+      guardContext: aggregateContext
+    });
+    appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
 
-  if (operationGuards.length > 0) {
-    const attemptKey = buildGuardAttemptKey(operation, 'perOperation');
-    usedAttemptKeys.add(attemptKey);
-    const attemptState = attemptStore.get(attemptKey);
-    const attemptNumber = attemptState?.nextAttempt ?? 1;
-    const attemptHistory = attemptState ? attemptState.history.slice() : [];
-    const opSnapshot = buildOperationSnapshot(transformedInputs);
-
-    for (const guard of operationGuards) {
-      const result = await evaluateGuard({
-        node,
-        env,
-        guard,
-        operation,
-        scope: 'perOperation',
-        operationSnapshot: opSnapshot,
-        attemptNumber,
-        attemptHistory,
-        attemptKey,
-        attemptStore,
-        inputHelper: helpers?.guard
-      });
-      guardTrace.push(result);
-      if (result.hint) {
-        hints.push(result.hint);
-      }
-      if (result.decision === 'allow' && currentDecision === 'allow') {
-        if (result.replacement && Array.isArray(result.replacement)) {
-          // Allow aggregation to replace the entire input set
-          transformedInputs.splice(0, transformedInputs.length, ...(result.replacement as Variable[]));
-        }
-      } else if (result.decision === 'deny') {
-        currentDecision = 'deny';
-        if (result.reason) {
-          reasons.push(result.reason);
-        }
-        if (!primaryMetadata && result.metadata) {
-          primaryMetadata = result.metadata;
-        }
-      } else if (result.decision === 'retry') {
-        currentDecision = 'retry';
-        if (result.reason) {
-          reasons.push(result.reason);
-        }
-        if (!primaryMetadata && result.metadata) {
-          primaryMetadata = result.metadata;
-        }
-      }
-    }
-  }
-
-  const aggregateContext = buildAggregateGuardContext({
-    decision: currentDecision,
-    guardResults: guardTrace,
-    hints,
-    reasons,
-    primaryMetadata
-  });
-  const aggregateMetadata = buildAggregateMetadata({
-    guardResults: guardTrace,
-    reasons,
-    hints,
-    transformedInputs,
-    primaryMetadata,
-    guardContext: aggregateContext
-  });
-  appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
-
-  if (currentDecision === 'allow') {
-    for (const key of usedAttemptKeys) {
-      clearGuardAttemptState(attemptStore, key);
-    }
-    return {
-      action: 'continue',
-      metadata: aggregateMetadata
-    };
-  }
-
-  if (currentDecision === 'retry') {
-    return {
-      action: 'retry',
-      metadata: aggregateMetadata
-    };
-  }
-
-  return {
-    action: 'abort',
-    metadata: (() => {
+    if (currentDecision === 'allow') {
       for (const key of usedAttemptKeys) {
         clearGuardAttemptState(attemptStore, key);
       }
-      return aggregateMetadata;
-    })()
-  };
+      return {
+        action: 'continue',
+        metadata: aggregateMetadata
+      };
+    }
+
+    if (currentDecision === 'retry') {
+      return {
+        action: 'retry',
+        metadata: aggregateMetadata
+      };
+    }
+
+    return {
+      action: 'abort',
+      metadata: (() => {
+        for (const key of usedAttemptKeys) {
+          clearGuardAttemptState(attemptStore, key);
+        }
+        return aggregateMetadata;
+      })()
+    };
+  });
 };
 
 function buildPerInputCandidates(
@@ -664,16 +682,34 @@ async function evaluateGuard(options: {
 }): Promise<GuardResult> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
+  inheritParentVariables(env, guardEnv);
+  if (process.env.MLLD_DEBUG_GUARDS === '1' && (guard.name === 'prep' || guard.name === 'tagOutput')) {
+    try {
+      console.error('[guard-pre-hook] prefixWith availability', {
+        envHas: env.hasVariable('prefixWith'),
+        childHas: guardEnv.hasVariable('prefixWith'),
+        envHasEmit: env.hasVariable('emit'),
+        envHasTag: env.hasVariable('tagValue'),
+        childHasTag: guardEnv.hasVariable('tagValue')
+      });
+    } catch {
+      // ignore debug
+    }
+  }
+  ensurePrefixHelper(env, guardEnv);
+  ensureTagHelper(env, guardEnv);
 
   let inputVariable: Variable;
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
   const inputPreview = buildInputPreview(scope, options.perInput, options.operationSnapshot) ?? null;
+  let outputValue: unknown;
 
   if (scope === 'perInput' && options.perInput) {
     inputVariable = cloneVariableForGuard(options.perInput.variable);
     contextLabels = options.perInput.labels;
     contextSources = options.perInput.sources;
+    outputValue = resolveGuardValue(options.perInput.variable, inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
     inputVariable = createArrayVariable('input', arrayValue as any[], true, GUARD_INPUT_SOURCE, {
@@ -683,11 +719,27 @@ async function evaluateGuard(options: {
     attachArrayHelpers(inputVariable as any);
     contextLabels = options.operationSnapshot.aggregate.labels;
     contextSources = options.operationSnapshot.aggregate.sources;
+    const primaryOutput = options.operationSnapshot.variables[0];
+    outputValue = resolveGuardValue(primaryOutput, inputVariable);
   } else {
     return { guardName: guard.name ?? null, decision: 'allow' };
   }
 
+  const outputText =
+    typeof outputValue === 'string'
+      ? outputValue
+      : outputValue === undefined || outputValue === null
+        ? ''
+        : String(outputValue);
+  const guardOutputVariable = createSimpleTextVariable(
+    'output',
+    outputText as any,
+    GUARD_INPUT_SOURCE,
+    { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) }
+  );
+
   guardEnv.setVariable('input', inputVariable);
+  guardEnv.setVariable('output', guardOutputVariable);
   if (options.inputHelper) {
     attachGuardHelper(inputVariable, options.inputHelper);
   }
@@ -705,9 +757,11 @@ async function evaluateGuard(options: {
     tries: options.attemptHistory.map(entry => ({ ...entry })),
     max: DEFAULT_GUARD_MAX,
     input: inputVariable,
+    output: guardOutputVariable,
     labels: contextLabels,
     sources: contextSources,
     inputPreview,
+    outputPreview: buildVariablePreview(guardOutputVariable),
     hintHistory: options.attemptHistory.map(entry => entry.hint ?? null),
     timing: 'before'
   };
@@ -737,7 +791,9 @@ async function evaluateGuard(options: {
   };
 
   if (!action || action.decision === 'allow') {
-    const replacement = await evaluateGuardReplacement(action, guardEnv, guard, inputVariable);
+    const replacement = await env.withGuardContext(guardContext, async () =>
+      evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
+    );
     return {
       guardName: guard.name ?? null,
       decision: 'allow',
@@ -910,6 +966,29 @@ function buildDecisionMetadata(
   return metadata;
 }
 
+function inheritParentVariables(parent: Environment, child: Environment): void {
+  const aggregated = new Map<string, Variable>();
+  const addVars = (env: Environment) => {
+    for (const [name, variable] of env.getAllVariables()) {
+      if (!aggregated.has(name)) {
+        aggregated.set(name, variable);
+      }
+    }
+  };
+
+  let current: Environment | undefined = parent;
+  while (current) {
+    addVars(current);
+    current = current.getParent();
+  }
+
+  for (const [name, variable] of aggregated) {
+    if (!child.hasVariable(name)) {
+      child.setVariable(name, variable);
+    }
+  }
+}
+
 function cloneVariableForGuard(variable: Variable): Variable {
   const clone: Variable = {
     ...variable,
@@ -939,6 +1018,9 @@ function cloneGuardContextSnapshot(context: GuardContextSnapshot): GuardContextS
   };
   if (context.input !== undefined) {
     cloned.input = cloneGuardContextInput(context.input);
+  }
+  if (context.output !== undefined) {
+    cloned.output = cloneGuardContextInput(context.output as any);
   }
   return cloned;
 }
@@ -1019,6 +1101,86 @@ function createGuardHelperExecutable(
     guardHelperImplementation: implementation
   };
   return execVar;
+}
+
+function ensurePrefixHelper(sourceEnv: Environment, targetEnv: Environment): void {
+  const execVar = createGuardHelperExecutable('prefixWith', ([label, value]) => {
+    const normalize = (candidate: unknown, fallback: Variable | undefined) => {
+      if (isVariable(candidate as Variable)) {
+        return resolveGuardValue(candidate as Variable, (candidate as Variable) ?? fallback ?? (label as Variable));
+      }
+      if (Array.isArray(candidate)) {
+        const [head] = candidate;
+        if (head !== undefined) {
+          return normalize(head, head as Variable);
+        }
+        return '';
+      }
+      if (candidate && typeof candidate === 'object') {
+        const asObj = candidate as any;
+        if (typeof asObj.text === 'string') {
+          return asObj.text;
+        }
+        if (typeof asObj.data === 'string') {
+          return asObj.data;
+        }
+      }
+      return candidate;
+    };
+
+    if (process.env.MLLD_DEBUG_GUARDS === '1') {
+      try {
+        console.error('[guard-prefixWith]', {
+          labelType: typeof label,
+          valueType: typeof value,
+          labelKeys: label && typeof label === 'object' ? Object.keys(label as any) : null,
+          valueKeys: value && typeof value === 'object' ? Object.keys(value as any) : null
+        });
+      } catch {
+        // ignore debug logging errors
+      }
+    }
+
+    const normalized = normalize(value, value as Variable);
+    const normalizedLabel = normalize(label, label as Variable);
+    return `${normalizedLabel}:${normalized}`;
+  });
+  targetEnv.setVariable(execVar.name, execVar);
+}
+
+function ensureTagHelper(sourceEnv: Environment, targetEnv: Environment): void {
+  if (targetEnv.hasVariable('tagValue')) {
+    return;
+  }
+  const existing = sourceEnv.getVariable('tagValue');
+  if (existing) {
+    targetEnv.setVariable('tagValue', existing);
+    return;
+  }
+  const execVar = createGuardHelperExecutable('tagValue', ([timing, value, input]) => {
+    const normalize = (candidate: unknown): unknown => {
+      if (isVariable(candidate as Variable)) {
+        return resolveGuardValue(candidate as Variable, candidate as Variable);
+      }
+      if (Array.isArray(candidate)) {
+        const [head] = candidate;
+        return head !== undefined ? normalize(head) : '';
+      }
+      if (candidate && typeof candidate === 'object') {
+        const asObj = candidate as any;
+        if (typeof asObj.text === 'string') {
+          return asObj.text;
+        }
+        if (typeof asObj.data === 'string') {
+          return asObj.data;
+        }
+      }
+      return candidate;
+    };
+    const base = normalize(value) ?? normalize(input) ?? '';
+    return timing === 'before' ? `before:${base}` : `after:${base}`;
+  });
+  targetEnv.setVariable(execVar.name, execVar);
 }
 
 function buildOperationKeys(operation: OperationContext): string[] {
@@ -1123,6 +1285,32 @@ function buildAggregateGuardContext(options: {
     reason: baseContext.reason ?? options.reasons[0] ?? null,
     decision: options.decision
   };
+}
+
+function resolveGuardValue(variable: Variable | undefined, fallback: Variable): unknown {
+  const candidate = (variable as any)?.value ?? (fallback as any)?.value ?? variable ?? fallback;
+  if (candidate && typeof candidate === 'object') {
+    if (typeof (candidate as any).text === 'string') {
+      return (candidate as any).text;
+    }
+    if (typeof (candidate as any).data === 'string') {
+      return (candidate as any).data;
+    }
+  }
+  if (candidate === undefined || candidate === null) {
+    return buildVariablePreview(fallback) ?? '';
+  }
+  return candidate;
+}
+
+function normalizeGuardReplacements(value: unknown): Variable[] {
+  if (isVariable(value as Variable)) {
+    return [value as Variable];
+  }
+  if (Array.isArray(value)) {
+    return (value as unknown[]).filter(item => isVariable(item as Variable)) as Variable[];
+  }
+  return [];
 }
 
 function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {

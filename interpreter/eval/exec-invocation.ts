@@ -159,8 +159,11 @@ function applyGuardTransformsToExecArgs(options: {
     }
     const argIndex = entry.index;
     guardVariableCandidates[argIndex] = replacement;
-    evaluatedArgs[argIndex] = replacement.value;
-    evaluatedArgStrings[argIndex] = stringifyGuardArg(replacement.value);
+    const normalizedValue = isStructuredValue(replacement.value)
+      ? replacement.value.data
+      : replacement.value;
+    evaluatedArgs[argIndex] = normalizedValue;
+    evaluatedArgStrings[argIndex] = stringifyGuardArg(normalizedValue);
   }
 }
 
@@ -1246,9 +1249,14 @@ export async function evaluateExecInvocation(
     }
   }
 
-  const guardInputsWithMapping = materializeGuardInputsWithMapping(guardVariableCandidates, {
-    nameHint: '__guard_input__'
-  });
+  const guardInputsWithMapping = materializeGuardInputsWithMapping(
+    Array.from({ length: guardVariableCandidates.length }, (_unused, index) =>
+      guardVariableCandidates[index] ?? evaluatedArgs[index]
+    ),
+    {
+      nameHint: '__guard_input__'
+    }
+  );
   const guardInputs = guardInputsWithMapping.map(entry => entry.variable);
   let postHookInputs: readonly Variable[] = guardInputs;
   const hookManager = env.getHookManager();
@@ -1264,7 +1272,21 @@ export async function evaluateExecInvocation(
     }
   };
   const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
-    return hookManager.runPost(node, result, postHookInputs, env, operationContext);
+    try {
+      return await hookManager.runPost(node, result, postHookInputs, env, operationContext);
+    } catch (error) {
+      if (whenExprNode) {
+        const handled = await handleExecGuardDenial(error, {
+          execEnv,
+          env,
+          whenExprNode
+        });
+        if (handled) {
+          return handled;
+        }
+      }
+      throw error;
+    }
   };
 
   return await env.withOpContext(operationContext, async () => {
@@ -1749,39 +1771,46 @@ export async function evaluateExecInvocation(
             codeParams[paramName] = prepareValueForShadow(paramVar);
           }
         } else {
-          // Other languages (JS, Python, Node, etc.) get deferred conversion to proxies
-          // so that prepareParamsForShadow can record primitive metadata.
-          let variableForShadow: Variable = paramVar;
-
-          // But first, check if it's a complex Variable that needs resolution
-          if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
-            // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
-            const { extractVariableValue: extractVal } = await import('../utils/variable-resolution');
-            const resolvedValue = await extractVal(paramVar, execEnv);
-            const resolvedVar = {
-              ...paramVar,
-              value: resolvedValue,
-              isComplex: false
-            };
-            variableForShadow = resolvedVar;
+          if (env.shouldSuppressGuards() && paramVar.internal?.isSystem && paramVar.internal?.isParameter) {
+            const rawValue = isStructuredValue(paramVar.value)
+              ? paramVar.value.data
+              : paramVar.value;
+            codeParams[paramName] = rawValue;
           } else {
-            // Auto-unwrap LoadContentResult objects for JS/Python
-            const unwrappedValue = AutoUnwrapManager.unwrap(paramVar.value);
-            if (unwrappedValue !== paramVar.value) {
-              // Value was unwrapped, create a new variable with the unwrapped content
-              const unwrappedVar = {
-                ...paramVar,
-                value: unwrappedValue,
-                // Update type based on unwrapped value
-                type: Array.isArray(unwrappedValue) ? 'array' : 'text'
-              };
-              variableForShadow = unwrappedVar;
-            } else {
-              variableForShadow = paramVar;
-            }
-          }
+            // Other languages (JS, Python, Node, etc.) get deferred conversion to proxies
+            // so that prepareParamsForShadow can record primitive metadata.
+            let variableForShadow: Variable = paramVar;
 
-          codeParams[paramName] = variableForShadow;
+            // But first, check if it's a complex Variable that needs resolution
+            if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
+              // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
+              const { extractVariableValue: extractVal } = await import('../utils/variable-resolution');
+              const resolvedValue = await extractVal(paramVar, execEnv);
+              const resolvedVar = {
+                ...paramVar,
+                value: resolvedValue,
+                isComplex: false
+              };
+              variableForShadow = resolvedVar;
+            } else {
+              // Auto-unwrap LoadContentResult objects for JS/Python
+              const unwrappedValue = AutoUnwrapManager.unwrap(paramVar.value);
+              if (unwrappedValue !== paramVar.value) {
+                // Value was unwrapped, create a new variable with the unwrapped content
+                const unwrappedVar = {
+                  ...paramVar,
+                  value: unwrappedValue,
+                  // Update type based on unwrapped value
+                  type: Array.isArray(unwrappedValue) ? 'array' : 'text'
+                };
+                variableForShadow = unwrappedVar;
+              } else {
+                variableForShadow = paramVar;
+              }
+            }
+
+            codeParams[paramName] = variableForShadow;
+          }
         }
         
         // Store metadata for primitives that can't be proxied (only for non-bash languages)

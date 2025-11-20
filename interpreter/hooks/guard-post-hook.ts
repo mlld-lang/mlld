@@ -2,7 +2,7 @@ import type { HookableNode } from '@core/types/hooks';
 import type { GuardResult, GuardActionNode, GuardBlockNode, GuardHint } from '@core/types/guard';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { Variable, VariableSource } from '@core/types/variable';
-import { createArrayVariable } from '@core/types/variable';
+import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable } from '@core/types/executable';
 import {
@@ -23,7 +23,11 @@ import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
 import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { isVariable } from '../utils/variable-resolution';
-import { extractSecurityDescriptor } from '../utils/structured-value';
+import {
+  applySecurityDescriptorToStructuredValue,
+  ensureStructuredValue,
+  extractSecurityDescriptor
+} from '../utils/structured-value';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 
@@ -64,166 +68,225 @@ interface OperationSnapshot {
   variables: readonly Variable[];
 }
 
+function normalizeRawOutput(value: unknown): unknown {
+  if (value && typeof value === 'object') {
+    if ((value as any).text !== undefined) {
+      return (value as any).text;
+    }
+    if ((value as any).data !== undefined) {
+      return (value as any).data;
+    }
+  }
+  return value;
+}
+
 export const guardPostHook: PostHook = async (node, result, inputs, env, operation) => {
   if (!operation || (isDirectiveHookTarget(node) && node.kind === 'guard')) {
     return result;
   }
 
-  const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
-  if (guardOverride.kind === 'disableAll') {
-    env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
+  if (env.shouldSuppressGuards()) {
     return result;
   }
 
-  const registry = env.getGuardRegistry();
-  const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
-  let activeOutputs = outputVariables.slice();
-  let currentDescriptor = extractOutputDescriptor(result, activeOutputs[0]);
+  return env.withGuardSuppression(async () => {
+    if (process.env.MLLD_DEBUG_GUARDS === '1' && operation?.name === 'emit') {
+      try {
+        const names = Array.from(env.getAllVariables().keys()).slice(0, 50);
+        console.error('[guard-post-hook] debug emit context', {
+          parentHasPrefix: env.hasVariable('prefixWith'),
+          parentHasTag: env.hasVariable('tagValue'),
+          names
+        });
+      } catch {
+        // ignore debug failures
+      }
+    }
+    const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
+    if (guardOverride.kind === 'disableAll') {
+      env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
+      return result;
+    }
 
-  const perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride);
-  const operationGuards = collectOperationGuards(registry, operation, guardOverride, outputVariables);
+    const registry = env.getGuardRegistry();
+    const baseOutputValue = normalizeRawOutput(result.value);
+    const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
+    if (outputVariables.length === 0) {
+      const fallbackValue =
+        typeof baseOutputValue === 'string'
+          ? baseOutputValue
+          : baseOutputValue === undefined || baseOutputValue === null
+            ? ''
+            : String(baseOutputValue);
+      const fallbackOutput = createSimpleTextVariable(
+        '__guard_output__',
+        fallbackValue as any,
+        GUARD_INPUT_SOURCE,
+        { security: extractSecurityDescriptor(result.value) ?? makeSecurityDescriptor() }
+      );
+      outputVariables.push(fallbackOutput);
+    }
+    let activeOutputs = outputVariables.slice();
+    let currentDescriptor = extractOutputDescriptor(result, activeOutputs[0]);
 
-  if (perInputCandidates.length === 0 && operationGuards.length === 0) {
+    const perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride);
+    const operationGuards = collectOperationGuards(registry, operation, guardOverride, outputVariables);
+
+    if (perInputCandidates.length === 0 && operationGuards.length === 0) {
+      return result;
+    }
+
+    const guardTrace: GuardResult[] = [];
+    const reasons: string[] = [];
+    const hints: GuardHint[] = [];
+    let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
+    let transformsApplied = false;
+
+    for (const candidate of perInputCandidates) {
+      let currentInput = activeOutputs[0] ?? candidate.variable;
+
+      for (const guard of candidate.guards) {
+        const resultEntry = await evaluateGuard({
+          node,
+          env,
+          guard,
+          operation,
+          scope: 'perInput',
+          perInput: candidate,
+          inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
+          activeInput: currentInput,
+          labelsOverride: currentDescriptor.labels,
+          sourcesOverride: currentDescriptor.sources,
+          inputPreviewOverride: buildVariablePreview(currentInput),
+          outputRaw: resolveGuardValue(currentInput, currentInput)
+        });
+        guardTrace.push(resultEntry);
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
+        if (
+          resultEntry.decision === 'allow' &&
+          currentDecision === 'allow' &&
+          resultEntry.replacement
+        ) {
+          const replacements = normalizeReplacementVariables(resultEntry.replacement);
+          if (replacements.length > 0) {
+            const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
+            applyDescriptorToVariables(mergedDescriptor, replacements);
+            currentDescriptor = mergedDescriptor;
+            activeOutputs = replacements;
+            currentInput = replacements[0];
+            transformsApplied = true;
+          }
+        } else if (resultEntry.decision === 'deny') {
+          currentDecision = 'deny';
+          if (resultEntry.reason) {
+            reasons.push(resultEntry.reason);
+          }
+        } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
+          currentDecision = 'retry';
+          if (resultEntry.reason) {
+            reasons.push(resultEntry.reason);
+          }
+        }
+      }
+    }
+
+    if (operationGuards.length > 0) {
+      if (activeOutputs.length === 0 && outputVariables.length > 0) {
+        activeOutputs = outputVariables.slice();
+      }
+      let opSnapshot = buildOperationSnapshot(activeOutputs.length > 0 ? activeOutputs : outputVariables);
+
+      for (const guard of operationGuards) {
+        const currentOutputValue =
+          activeOutputs[0] ? resolveGuardValue(activeOutputs[0], activeOutputs[0]) : baseOutputValue;
+        const resultEntry = await evaluateGuard({
+          node,
+          env,
+          guard,
+          operation,
+          scope: 'perOperation',
+          operationSnapshot: opSnapshot,
+          inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
+          labelsOverride: opSnapshot.labels,
+          sourcesOverride: opSnapshot.sources,
+          inputPreviewOverride: `Array(len=${opSnapshot.variables.length})`,
+          outputRaw: currentOutputValue
+        });
+        guardTrace.push(resultEntry);
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
+        if (resultEntry.decision === 'allow' && resultEntry.replacement && currentDecision === 'allow') {
+          const replacements = normalizeReplacementVariables(resultEntry.replacement);
+          if (replacements.length > 0) {
+            const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
+            applyDescriptorToVariables(mergedDescriptor, replacements);
+            currentDescriptor = mergedDescriptor;
+            activeOutputs = replacements;
+            transformsApplied = true;
+            opSnapshot = buildOperationSnapshot(activeOutputs);
+          }
+        } else if (resultEntry.decision === 'deny') {
+          currentDecision = 'deny';
+          if (resultEntry.reason) {
+            reasons.push(resultEntry.reason);
+          }
+        } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
+          currentDecision = 'retry';
+          if (resultEntry.reason) {
+            reasons.push(resultEntry.reason);
+          }
+        }
+      }
+    }
+
+    appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+
+    if (currentDecision === 'deny') {
+      const error = buildGuardError({
+        guardResults: guardTrace,
+        reasons,
+        operation,
+        output: activeOutputs[0] ?? outputVariables[0],
+        timing: 'after'
+      });
+      throw error;
+    }
+
+    if (currentDecision === 'retry') {
+      const retryReasons = reasons.slice();
+      const defaultReason = 'Guard retry not implemented for after guards';
+      if (!retryReasons.includes(defaultReason)) {
+        retryReasons.unshift(defaultReason);
+      }
+      const error = buildGuardError({
+        guardResults: guardTrace,
+        reasons: retryReasons,
+        operation,
+        output: activeOutputs[0] ?? outputVariables[0],
+        timing: 'after',
+        retry: true
+      });
+      throw error;
+    }
+
+    if (transformsApplied && activeOutputs[0]) {
+      const finalVariable = activeOutputs[0];
+      const finalValue = resolveGuardValue(finalVariable, finalVariable);
+      if (typeof finalValue === 'string') {
+        const structured = ensureStructuredValue(finalValue, 'text', finalValue);
+        applySecurityDescriptorToStructuredValue(structured, currentDescriptor);
+        const nextResult = { ...result, value: structured };
+        (nextResult as any).stdout = finalValue;
+        return nextResult;
+      }
+      return { ...result, value: finalVariable };
+    }
+
     return result;
-  }
-
-  const guardTrace: GuardResult[] = [];
-  const reasons: string[] = [];
-  const hints: GuardHint[] = [];
-  let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
-  let transformsApplied = false;
-
-  for (const candidate of perInputCandidates) {
-    let currentInput = activeOutputs[0] ?? candidate.variable;
-
-    for (const guard of candidate.guards) {
-      const resultEntry = await evaluateGuard({
-        node,
-        env,
-        guard,
-        operation,
-        scope: 'perInput',
-        perInput: candidate,
-        inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
-        activeInput: currentInput,
-        labelsOverride: currentDescriptor.labels,
-        sourcesOverride: currentDescriptor.sources,
-        inputPreviewOverride: buildVariablePreview(currentInput)
-      });
-      guardTrace.push(resultEntry);
-      if (resultEntry.hint) {
-        hints.push(resultEntry.hint);
-      }
-      if (
-        resultEntry.decision === 'allow' &&
-        currentDecision === 'allow' &&
-        resultEntry.replacement
-      ) {
-        const replacements = normalizeReplacementVariables(resultEntry.replacement);
-        if (replacements.length > 0) {
-          const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
-          applyDescriptorToVariables(mergedDescriptor, replacements);
-          currentDescriptor = mergedDescriptor;
-          activeOutputs = replacements;
-          currentInput = replacements[0];
-          transformsApplied = true;
-        }
-      } else if (resultEntry.decision === 'deny') {
-        currentDecision = 'deny';
-        if (resultEntry.reason) {
-          reasons.push(resultEntry.reason);
-        }
-      } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
-        currentDecision = 'retry';
-        if (resultEntry.reason) {
-          reasons.push(resultEntry.reason);
-        }
-      }
-    }
-  }
-
-  if (operationGuards.length > 0) {
-    if (activeOutputs.length === 0 && outputVariables.length > 0) {
-      activeOutputs = outputVariables.slice();
-    }
-    let opSnapshot = buildOperationSnapshot(activeOutputs.length > 0 ? activeOutputs : outputVariables);
-
-    for (const guard of operationGuards) {
-      const resultEntry = await evaluateGuard({
-        node,
-        env,
-        guard,
-        operation,
-        scope: 'perOperation',
-        operationSnapshot: opSnapshot,
-        inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
-        labelsOverride: opSnapshot.labels,
-        sourcesOverride: opSnapshot.sources,
-        inputPreviewOverride: `Array(len=${opSnapshot.variables.length})`
-      });
-      guardTrace.push(resultEntry);
-      if (resultEntry.hint) {
-        hints.push(resultEntry.hint);
-      }
-      if (resultEntry.decision === 'allow' && resultEntry.replacement && currentDecision === 'allow') {
-        const replacements = normalizeReplacementVariables(resultEntry.replacement);
-        if (replacements.length > 0) {
-          const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
-          applyDescriptorToVariables(mergedDescriptor, replacements);
-          currentDescriptor = mergedDescriptor;
-          activeOutputs = replacements;
-          transformsApplied = true;
-          opSnapshot = buildOperationSnapshot(activeOutputs);
-        }
-      } else if (resultEntry.decision === 'deny') {
-        currentDecision = 'deny';
-        if (resultEntry.reason) {
-          reasons.push(resultEntry.reason);
-        }
-      } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
-        currentDecision = 'retry';
-        if (resultEntry.reason) {
-          reasons.push(resultEntry.reason);
-        }
-      }
-    }
-  }
-
-  appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
-
-  if (currentDecision === 'deny') {
-    const error = buildGuardError({
-      guardResults: guardTrace,
-      reasons,
-      operation,
-      output: activeOutputs[0] ?? outputVariables[0],
-      timing: 'after'
-    });
-    throw error;
-  }
-
-  if (currentDecision === 'retry') {
-    const retryReasons = reasons.slice();
-    const defaultReason = 'Guard retry not implemented for after guards';
-    if (!retryReasons.includes(defaultReason)) {
-      retryReasons.unshift(defaultReason);
-    }
-    const error = buildGuardError({
-      guardResults: guardTrace,
-      reasons: retryReasons,
-      operation,
-      output: activeOutputs[0] ?? outputVariables[0],
-      timing: 'after',
-      retry: true
-    });
-    throw error;
-  }
-
-  if (transformsApplied && activeOutputs[0]) {
-    return { ...result, value: activeOutputs[0] };
-  }
-
-  return result;
+  });
 };
 
 function buildPerInputCandidates(
@@ -312,17 +375,43 @@ async function evaluateGuard(options: {
   labelsOverride?: readonly DataLabel[];
   sourcesOverride?: readonly string[];
   inputPreviewOverride?: string | null;
+  outputRaw?: unknown;
 }): Promise<GuardResult> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
+  inheritParentVariables(env, guardEnv);
+  if (process.env.MLLD_DEBUG_GUARDS === '1' && guard.name === 'wrap') {
+    try {
+      console.error('[guard-post-hook] prefixWith availability', {
+        envHas: env.hasVariable('prefixWith'),
+        childHas: guardEnv.hasVariable('prefixWith')
+      });
+    } catch {
+      // ignore debug
+    }
+  }
+  ensurePrefixHelper(env, guardEnv);
+  ensureTagHelper(env, guardEnv);
+  if (!guardEnv.hasVariable('prefixWith') && env.hasVariable('prefixWith')) {
+    const existing = env.getVariable('prefixWith');
+    if (existing) {
+      guardEnv.setVariable('prefixWith', existing);
+    }
+  }
 
   let inputVariable: Variable;
+  let outputVariable: Variable | undefined;
+  let outputValue: unknown;
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
   let inputPreview: string | null = null;
 
   if (options.activeInput) {
     inputVariable = cloneVariable(options.activeInput);
+    outputVariable = inputVariable;
+    outputValue = options.outputRaw !== undefined
+      ? options.outputRaw
+      : resolveGuardValue(outputVariable, inputVariable);
     contextLabels =
       options.labelsOverride ??
       (Array.isArray(options.activeInput.ctx?.labels) ? options.activeInput.ctx.labels : []);
@@ -332,6 +421,8 @@ async function evaluateGuard(options: {
     inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
   } else if (scope === 'perInput' && options.perInput) {
     inputVariable = cloneVariable(options.perInput.variable);
+    outputVariable = inputVariable;
+    outputValue = options.outputRaw ?? resolveGuardValue(outputVariable, inputVariable);
     contextLabels = options.labelsOverride ?? options.perInput.labels;
     contextSources = options.sourcesOverride ?? options.perInput.sources;
     inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
@@ -344,6 +435,10 @@ async function evaluateGuard(options: {
     attachArrayHelpers(inputVariable as any);
     contextLabels = options.labelsOverride ?? options.operationSnapshot.labels;
     contextSources = options.sourcesOverride ?? options.operationSnapshot.sources;
+    outputVariable = options.operationSnapshot.variables[0]
+      ? cloneVariable(options.operationSnapshot.variables[0]!)
+      : undefined;
+    outputValue = options.outputRaw ?? resolveGuardValue(outputVariable, inputVariable);
     inputPreview =
       options.inputPreviewOverride ?? `Array(len=${options.operationSnapshot.variables.length})`;
   } else {
@@ -351,7 +446,15 @@ async function evaluateGuard(options: {
   }
 
   guardEnv.setVariable('input', inputVariable);
-  guardEnv.setVariable('output', inputVariable);
+  const outputText =
+    typeof outputValue === 'string' ? outputValue : outputValue === undefined || outputValue === null ? '' : String(outputValue);
+  const guardOutputVariable = createSimpleTextVariable(
+    'output',
+    outputText as any,
+    GUARD_INPUT_SOURCE,
+    { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) }
+  );
+  guardEnv.setVariable('output', guardOutputVariable);
   if (options.inputHelper) {
     attachGuardHelper(inputVariable, options.inputHelper);
   }
@@ -369,11 +472,11 @@ async function evaluateGuard(options: {
     tries: [],
     max: DEFAULT_GUARD_MAX,
     input: inputVariable,
-    output: inputVariable,
+    output: guardOutputVariable,
     labels: contextLabels,
     sources: contextSources,
     inputPreview,
-    outputPreview: buildVariablePreview(inputVariable),
+    outputPreview: buildVariablePreview(guardOutputVariable),
     timing: 'after'
   } as GuardContextSnapshot;
 
@@ -394,7 +497,9 @@ async function evaluateGuard(options: {
   };
 
   if (!action || action.decision === 'allow') {
-    const replacement = await evaluateGuardReplacement(action, guardEnv, guard, inputVariable);
+    const replacement = await env.withGuardContext(guardContext, async () =>
+      evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
+    );
     return {
       guardName: guard.name ?? null,
       decision: 'allow',
@@ -512,6 +617,45 @@ function buildDecisionMetadata(
   }
 
   return metadata;
+}
+
+function inheritParentVariables(parent: Environment, child: Environment): void {
+  const aggregated = new Map<string, Variable>();
+  const addVars = (env: Environment) => {
+    for (const [name, variable] of env.getAllVariables()) {
+      if (!aggregated.has(name)) {
+        aggregated.set(name, variable);
+      }
+    }
+  };
+
+  let current: Environment | undefined = parent;
+  while (current) {
+    addVars(current);
+    current = current.getParent();
+  }
+
+  for (const [name, variable] of aggregated) {
+    if (!child.hasVariable(name)) {
+      child.setVariable(name, variable);
+    }
+  }
+}
+
+function resolveGuardValue(variable: Variable | undefined, fallback: Variable): unknown {
+  const candidate = (variable as any)?.value ?? (fallback as any)?.value ?? variable ?? fallback;
+  if (candidate && typeof candidate === 'object') {
+    if (typeof (candidate as any).text === 'string') {
+      return (candidate as any).text;
+    }
+    if (typeof (candidate as any).data === 'string') {
+      return (candidate as any).data;
+    }
+  }
+  if (candidate === undefined || candidate === null) {
+    return buildVariablePreview(fallback) ?? '';
+  }
+  return candidate;
 }
 
 function extractGuardOverride(node: HookableNode): GuardOverrideValue {
@@ -746,6 +890,86 @@ function createGuardHelperExecutable(
     guardHelperImplementation: implementation
   };
   return execVar;
+}
+
+function ensurePrefixHelper(sourceEnv: Environment, targetEnv: Environment): void {
+  const execVar = createGuardHelperExecutable('prefixWith', ([label, value]) => {
+    const normalize = (candidate: unknown, fallback: Variable | undefined) => {
+      if (isVariable(candidate as Variable)) {
+        return resolveGuardValue(candidate as Variable, (candidate as Variable) ?? fallback ?? (label as Variable));
+      }
+      if (Array.isArray(candidate)) {
+        const [head] = candidate;
+        if (head !== undefined) {
+          return normalize(head, head as Variable);
+        }
+        return '';
+      }
+      if (candidate && typeof candidate === 'object') {
+        const asObj = candidate as any;
+        if (typeof asObj.text === 'string') {
+          return asObj.text;
+        }
+        if (typeof asObj.data === 'string') {
+          return asObj.data;
+        }
+      }
+      return candidate;
+    };
+
+    if (process.env.MLLD_DEBUG_GUARDS === '1') {
+      try {
+        console.error('[guard-prefixWith]', {
+          labelType: typeof label,
+          valueType: typeof value,
+          labelKeys: label && typeof label === 'object' ? Object.keys(label as any) : null,
+          valueKeys: value && typeof value === 'object' ? Object.keys(value as any) : null
+        });
+      } catch {
+        // ignore debug logging errors
+      }
+    }
+
+    const normalized = normalize(value, value as Variable);
+    const normalizedLabel = normalize(label, label as Variable);
+    return `${normalizedLabel}:${normalized}`;
+  });
+  targetEnv.setVariable(execVar.name, execVar);
+}
+
+function ensureTagHelper(sourceEnv: Environment, targetEnv: Environment): void {
+  if (targetEnv.hasVariable('tagValue')) {
+    return;
+  }
+  const existing = sourceEnv.getVariable('tagValue');
+  if (existing) {
+    targetEnv.setVariable('tagValue', existing);
+    return;
+  }
+  const execVar = createGuardHelperExecutable('tagValue', ([timing, value, input]) => {
+    const normalize = (candidate: unknown) => {
+      if (isVariable(candidate as Variable)) {
+        return resolveGuardValue(candidate as Variable, candidate as Variable);
+      }
+      if (Array.isArray(candidate)) {
+        const [head] = candidate;
+        return head !== undefined ? normalize(head) : '';
+      }
+      if (candidate && typeof candidate === 'object') {
+        const asObj = candidate as any;
+        if (typeof asObj.text === 'string') {
+          return asObj.text;
+        }
+        if (typeof asObj.data === 'string') {
+          return asObj.data;
+        }
+      }
+      return candidate;
+    };
+    const base = normalize(value) ?? normalize(input) ?? '';
+    return timing === 'before' ? `before:${base}` : `after:${base}`;
+  });
+  targetEnv.setVariable(execVar.name, execVar);
 }
 
 function cloneVariable(variable: Variable): Variable {
