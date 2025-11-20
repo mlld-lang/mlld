@@ -552,6 +552,36 @@ it('applies guard transformations to directive inputs before execution', async (
   expect(effects.getOutput().trim()).toBe('clean');
 });
 
+it('executes /run with guard-transformed command text', async () => {
+  const env = createEnv();
+  const effects = env.getEffectHandler() as TestEffectHandler;
+  const guardDirective = parseSync(
+    '/guard @sanitize for secret = when [ * => allow "echo sk-***" ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(guardDirective, env);
+
+  env.setVariable(
+    'key',
+    createSimpleTextVariable(
+      'key',
+      'sk-sensitive-123',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const directive = parseSync('/run {echo @key}')[0] as DirectiveNode;
+  await evaluateDirective(directive, env);
+  expect(effects.getOutput().trim()).toBe('sk-***');
+});
+
 it('feeds guard-transformed values into exec invocation parameters', async () => {
   const env = createEnv();
   const guardDirective = parseSync(
