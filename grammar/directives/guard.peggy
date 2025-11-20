@@ -2,8 +2,9 @@
 // Implements /guard parsing for security policy hooks.
 
 SlashGuard
-  = DirectiveContext "/guard" _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+  = DirectiveContext "/guard" _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched', { name, filter, guardBody });
+      const guardTiming = timing ?? 'before';
 
       const values = {
         filter: [filter.node],
@@ -21,6 +22,7 @@ SlashGuard
       if (name) {
         raw.name = `@${name.identifier}`;
       }
+      raw.timing = guardTiming;
 
       if (guardBody.modifier && guardBody.modifier !== 'default') {
         raw.modifier = guardBody.modifier;
@@ -33,6 +35,7 @@ SlashGuard
         modifier: guardBody.modifier,
         ruleCount: guardBody.node.rules.length,
         hasName: Boolean(name),
+        timing: guardTiming,
         ...(ending?.comment ? { comment: ending.comment } : {})
       };
 
@@ -54,6 +57,11 @@ GuardDirectiveName
   = "@" id:BaseIdentifier {
       return helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
     }
+
+GuardTiming
+  = "before" { return 'before'; }
+  / "after" { return 'after'; }
+  / "always" { return 'always'; }
 
 GuardFilterClause
   = filter:GuardOperationFilter { return filter; }

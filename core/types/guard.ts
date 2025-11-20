@@ -4,6 +4,7 @@ import type { BaseMlldNode, DirectiveNode, SourceLocation } from './primitives';
 export type GuardScope = 'perInput' | 'perOperation';
 export type GuardFilterKind = 'data' | 'operation';
 export type GuardDecisionType = 'allow' | 'deny' | 'retry' | 'prompt';
+export type GuardTiming = 'before' | 'after' | 'always';
 
 export interface GuardFilterNode extends BaseMlldNode {
   type: 'GuardFilter';
@@ -43,6 +44,7 @@ export interface GuardDirectiveValues {
 export interface GuardDirectiveRaw {
   name?: string;
   filter: string;
+  timing: GuardTiming;
   modifier?: string;
 }
 
@@ -53,6 +55,7 @@ export interface GuardDirectiveMeta {
   modifier: string;
   ruleCount: number;
   hasName: boolean;
+  timing: GuardTiming;
   location?: SourceLocation | null;
 }
 

@@ -24,6 +24,7 @@ describe('Guard directive', () => {
     expect(guard.values.filter[0].filterKind).toBe('data');
     expect(guard.values.filter[0].value).toBe('secret');
     expect(guard.meta.scope).toBe('perInput');
+    expect(guard.meta.timing).toBe('before');
 
     expect(guard.values.guard).toHaveLength(1);
     const block = guard.values.guard[0];
@@ -55,5 +56,24 @@ describe('Guard directive', () => {
     expect(guard.meta.scope).toBe('perOperation');
     expect(guard.meta.modifier).toBe('first');
     expect(guard.meta.ruleCount).toBe(2);
+    expect(guard.meta.timing).toBe('before');
+  });
+
+  test('parses explicit timing variants', async () => {
+    const beforeContent = `/guard before for secret = when [ * => allow ]`;
+    const afterContent = `/guard after for secret = when [ * => allow ]`;
+    const alwaysContent = `/guard always for secret = when [ * => allow ]`;
+
+    const beforeResult = await parse(beforeContent);
+    const beforeGuard = beforeResult.ast[0] as GuardDirectiveNode;
+    expect(beforeGuard.meta.timing).toBe('before');
+
+    const afterResult = await parse(afterContent);
+    const afterGuard = afterResult.ast[0] as GuardDirectiveNode;
+    expect(afterGuard.meta.timing).toBe('after');
+
+    const alwaysResult = await parse(alwaysContent);
+    const alwaysGuard = alwaysResult.ast[0] as GuardDirectiveNode;
+    expect(alwaysGuard.meta.timing).toBe('always');
   });
 });
