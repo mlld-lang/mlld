@@ -2,13 +2,19 @@ import type { GuardDefinition, GuardScope } from '../guards';
 import type { Environment } from '../env/Environment';
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { HookDecision, PreHook } from './HookManager';
-import type { GuardBlockNode, GuardActionNode, GuardDecisionType } from '@core/types/guard';
+import type {
+  GuardBlockNode,
+  GuardActionNode,
+  GuardDecisionType,
+  GuardHint,
+  GuardResult
+} from '@core/types/guard';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createArrayVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable } from '@core/types/executable';
-import { buildArrayAggregate } from '@core/types/variable/ArrayHelpers';
-import type { ArrayAggregateSnapshot } from '@core/types/variable/ArrayHelpers';
+import { attachArrayHelpers, buildArrayAggregate } from '@core/types/variable/ArrayHelpers';
+import type { ArrayAggregateSnapshot, GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isVariable } from '../utils/variable-resolution';
@@ -16,6 +22,9 @@ import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { materializeGuardTransform } from '../utils/guard-transform';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -220,12 +229,11 @@ function buildOperationIdentity(operation: OperationContext): string {
 }
 
 function buildGuardAttemptKey(
-  guard: GuardDefinition,
   operation: OperationContext,
   scope: GuardScope,
   variable?: Variable
 ): string {
-  return `${buildOperationIdentity(operation)}::${guard.id}::${scope}::${buildVariableIdentity(variable)}`;
+  return `${buildOperationIdentity(operation)}::${scope}::${buildVariableIdentity(variable)}`;
 }
 
 function truncatePreview(value: string, limit = 160): string {
@@ -295,40 +303,160 @@ export const guardPreHook: PreHook = async (
     return { action: 'continue' };
   }
 
+  const attemptStore = getAttemptStore(env);
+  const guardTrace: GuardResult[] = [];
+  const reasons: string[] = [];
+  const hints: GuardHint[] = [];
+  const usedAttemptKeys = new Set<string>();
+  let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
+  let primaryMetadata: Record<string, unknown> | undefined;
+
+  const transformedInputs: Variable[] = [...variableInputs];
+
   for (const candidate of perInputCandidates) {
+    const attemptKey = buildGuardAttemptKey(operation, 'perInput', candidate.variable);
+    usedAttemptKeys.add(attemptKey);
+    const attemptState = attemptStore.get(attemptKey);
+    const attemptNumber = attemptState?.nextAttempt ?? 1;
+    const attemptHistory = attemptState ? attemptState.history.slice() : [];
+    let currentInput = candidate.variable;
+
     for (const guard of candidate.guards) {
-      const decision = await evaluateGuard({
+      const result = await evaluateGuard({
         node,
         env,
         guard,
         operation,
         scope: 'perInput',
-        perInput: candidate
+        perInput: candidate,
+        attemptNumber,
+        attemptHistory,
+        attemptKey,
+        attemptStore,
+        inputHelper: helpers?.guard
       });
-      if (decision && decision.action !== 'continue') {
-        return decision;
+      guardTrace.push(result);
+      if (result.hint) {
+        hints.push(result.hint);
+      }
+      if (result.decision === 'allow' && currentDecision === 'allow') {
+        if (result.replacement && isVariable(result.replacement as Variable)) {
+          currentInput = result.replacement as Variable;
+        }
+      } else if (result.decision === 'deny') {
+        currentDecision = 'deny';
+        if (result.reason) {
+          reasons.push(result.reason);
+        }
+        if (!primaryMetadata && result.metadata) {
+          primaryMetadata = result.metadata;
+        }
+      } else if (result.decision === 'retry' && currentDecision !== 'deny') {
+        currentDecision = 'retry';
+        if (result.reason) {
+          reasons.push(result.reason);
+        }
+        if (!primaryMetadata && result.metadata) {
+          primaryMetadata = result.metadata;
+        }
       }
     }
+
+    transformedInputs.push(currentInput);
   }
 
   if (operationGuards.length > 0) {
-    const opSnapshot = buildOperationSnapshot(variableInputs);
+    const attemptKey = buildGuardAttemptKey(operation, 'perOperation');
+    usedAttemptKeys.add(attemptKey);
+    const attemptState = attemptStore.get(attemptKey);
+    const attemptNumber = attemptState?.nextAttempt ?? 1;
+    const attemptHistory = attemptState ? attemptState.history.slice() : [];
+    const opSnapshot = buildOperationSnapshot(transformedInputs);
+
     for (const guard of operationGuards) {
-      const decision = await evaluateGuard({
+      const result = await evaluateGuard({
         node,
         env,
         guard,
         operation,
         scope: 'perOperation',
-        operationSnapshot: opSnapshot
+        operationSnapshot: opSnapshot,
+        attemptNumber,
+        attemptHistory,
+        attemptKey,
+        attemptStore,
+        inputHelper: helpers?.guard
       });
-      if (decision && decision.action !== 'continue') {
-        return decision;
+      guardTrace.push(result);
+      if (result.hint) {
+        hints.push(result.hint);
+      }
+      if (result.decision === 'allow' && currentDecision === 'allow') {
+        if (result.replacement && Array.isArray(result.replacement)) {
+          // Allow aggregation to replace the entire input set
+          transformedInputs.splice(0, transformedInputs.length, ...(result.replacement as Variable[]));
+        }
+      } else if (result.decision === 'deny') {
+        currentDecision = 'deny';
+        if (result.reason) {
+          reasons.push(result.reason);
+        }
+        if (!primaryMetadata && result.metadata) {
+          primaryMetadata = result.metadata;
+        }
+      } else if (result.decision === 'retry') {
+        currentDecision = 'retry';
+        if (result.reason) {
+          reasons.push(result.reason);
+        }
+        if (!primaryMetadata && result.metadata) {
+          primaryMetadata = result.metadata;
+        }
       }
     }
   }
 
-  return { action: 'continue' };
+  if (currentDecision === 'allow') {
+    for (const key of usedAttemptKeys) {
+      clearGuardAttemptState(attemptStore, key);
+    }
+    return {
+      action: 'continue',
+      metadata: buildAggregateMetadata({
+        guardResults: guardTrace,
+        reasons,
+        hints,
+        transformedInputs
+      })
+    };
+  }
+
+  if (currentDecision === 'retry') {
+    return {
+      action: 'retry',
+      metadata: buildAggregateMetadata({
+        guardResults: guardTrace,
+        reasons,
+        hints,
+        primaryMetadata
+      })
+    };
+  }
+
+  return {
+    action: 'abort',
+    metadata: (() => {
+      for (const key of usedAttemptKeys) {
+        clearGuardAttemptState(attemptStore, key);
+      }
+      return buildAggregateMetadata({
+        guardResults: guardTrace,
+        reasons,
+        hints,
+        primaryMetadata
+      });
+    })()
+  };
 };
 
 function buildPerInputCandidates(
@@ -401,14 +529,14 @@ async function evaluateGuard(options: {
   scope: GuardScope;
   perInput?: PerInputCandidate;
   operationSnapshot?: OperationSnapshot;
-}): Promise<HookDecision | null> {
+  attemptNumber: number;
+  attemptHistory: GuardAttemptEntry[];
+  attemptKey: string;
+  attemptStore: Map<string, GuardAttemptState>;
+  inputHelper?: GuardInputHelper;
+}): Promise<GuardResult> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
-  const attemptStore = getAttemptStore(env);
-  const attemptKey = buildGuardAttemptKey(guard, operation, scope, options.perInput?.variable);
-  const attemptState = attemptStore.get(attemptKey);
-  const attemptNumber = attemptState?.nextAttempt ?? 1;
-  const attemptHistory = attemptState ? attemptState.history.slice() : [];
 
   let inputVariable: Variable;
   let contextLabels: readonly DataLabel[];
@@ -425,13 +553,17 @@ async function evaluateGuard(options: {
       isSystem: true,
       isReserved: true
     });
+    attachArrayHelpers(inputVariable as any);
     contextLabels = options.operationSnapshot.aggregate.labels;
     contextSources = options.operationSnapshot.aggregate.sources;
   } else {
-    return null;
+    return { guardName: guard.name ?? null, decision: 'allow' };
   }
 
   guardEnv.setVariable('input', inputVariable);
+  if (options.inputHelper) {
+    attachGuardHelper(inputVariable, options.inputHelper);
+  }
 
   injectGuardHelpers(guardEnv, {
     operation,
@@ -441,15 +573,15 @@ async function evaluateGuard(options: {
 
   const guardContext: GuardContextSnapshot = {
     name: guard.name,
-    attempt: attemptNumber,
-    try: attemptNumber,
-    tries: attemptHistory.map(entry => ({ ...entry })),
+    attempt: options.attemptNumber,
+    try: options.attemptNumber,
+    tries: options.attemptHistory.map(entry => ({ ...entry })),
     max: DEFAULT_GUARD_MAX,
     input: inputVariable,
     labels: contextLabels,
     sources: contextSources,
     inputPreview,
-    hintHistory: attemptHistory.map(entry => entry.hint ?? null)
+    hintHistory: options.attemptHistory.map(entry => entry.hint ?? null)
   };
 
   const contextSnapshotForMetadata = cloneGuardContextSnapshot(guardContext);
@@ -459,7 +591,7 @@ async function evaluateGuard(options: {
     node: options.node,
     operation,
     scope,
-    attempt: attemptNumber,
+    attempt: options.attemptNumber,
     inputPreview
   });
 
@@ -467,15 +599,29 @@ async function evaluateGuard(options: {
     return await evaluateGuardBlock(guard.block, guardEnv);
   });
 
+  const metadataBase: Record<string, unknown> = {
+    guardName: guard.name ?? null,
+    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+    scope,
+    inputPreview,
+    guardContext: contextSnapshotForMetadata,
+    guardInput: inputVariable
+  };
+
   if (!action || action.decision === 'allow') {
-    clearGuardAttemptState(attemptStore, attemptKey);
-    return null;
+    const replacement = await evaluateGuardReplacement(action, guardEnv, guard, inputVariable);
+    return {
+      guardName: guard.name ?? null,
+      decision: 'allow',
+      replacement,
+      metadata: metadataBase
+    };
   }
 
   const metadata = buildDecisionMetadata(action, guard, {
     inputPreview,
-    attempt: attemptNumber,
-    tries: attemptHistory,
+    attempt: options.attemptNumber,
+    tries: options.attemptHistory,
     inputVariable,
     contextSnapshot: contextSnapshotForMetadata
   });
@@ -485,7 +631,7 @@ async function evaluateGuard(options: {
     node: options.node,
     operation,
     scope,
-    attempt: attemptNumber,
+    attempt: options.attemptNumber,
     decision: action.decision,
     reason: action.decision === 'deny' ? action.message ?? null : null,
     hint: action.decision === 'retry' ? action.message ?? null : null,
@@ -493,32 +639,47 @@ async function evaluateGuard(options: {
   });
 
   if (action.decision === 'deny') {
-    clearGuardAttemptState(attemptStore, attemptKey);
-    return { action: 'deny', metadata };
+    return {
+      guardName: guard.name ?? null,
+      decision: 'deny',
+      reason: metadata.reason as string | undefined,
+      metadata
+    };
   }
   if (action.decision === 'retry') {
     const entry: GuardAttemptEntry = {
-      attempt: attemptNumber,
+      attempt: options.attemptNumber,
       decision: 'retry',
       hint: action.message ?? null
     };
-    const updatedHistory = [...attemptHistory, entry];
-    attemptStore.set(attemptKey, {
-      nextAttempt: attemptNumber + 1,
+    const updatedHistory = [...options.attemptHistory, entry];
+    options.attemptStore.set(options.attemptKey, {
+      nextAttempt: options.attemptNumber + 1,
       history: updatedHistory
     });
     const retryMetadata = buildDecisionMetadata(action, guard, {
       hint: action.message ?? null,
       inputPreview,
-      attempt: attemptNumber,
+      attempt: options.attemptNumber,
       tries: updatedHistory,
       inputVariable,
       contextSnapshot: contextSnapshotForMetadata
     });
-    return { action: 'retry', metadata: retryMetadata };
+    return {
+      guardName: guard.name ?? null,
+      decision: 'retry',
+      reason: retryMetadata.reason as string | undefined,
+      hint: action.message
+        ? { guardName: guard.name ?? null, hint: action.message }
+        : undefined,
+      metadata: retryMetadata
+    };
   }
-  clearGuardAttemptState(attemptStore, attemptKey);
-  return null;
+  return {
+    guardName: guard.name ?? null,
+    decision: 'allow',
+    metadata
+  };
 }
 
 async function evaluateGuardBlock(
@@ -538,6 +699,25 @@ async function evaluateGuardBlock(
     }
   }
   return undefined;
+}
+
+async function evaluateGuardReplacement(
+  action: GuardActionNode | undefined,
+  guardEnv: Environment,
+  guard: GuardDefinition,
+  inputVariable: Variable
+): Promise<Variable | undefined> {
+  if (!action || action.decision !== 'allow' || !action.value || action.value.length === 0) {
+    return undefined;
+  }
+  const { evaluate } = await import('../core/interpreter');
+  const result = await evaluate(action.value, guardEnv);
+  const descriptor =
+    inputVariable.ctx && inputVariable.ctx.labels
+      ? ctxToSecurityDescriptor(inputVariable.ctx)
+      : makeSecurityDescriptor();
+  const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
+  return materializeGuardTransform(result?.value ?? result, guardLabel, descriptor);
 }
 
 function buildDecisionMetadata(
@@ -750,4 +930,49 @@ function buildOperationKeySet(operation: OperationContext): Set<string> {
     normalized.add(key.toLowerCase());
   }
   return normalized;
+}
+
+function buildAggregateMetadata(options: {
+  guardResults: GuardResult[];
+  reasons?: string[];
+  hints?: GuardHint[];
+  transformedInputs?: readonly Variable[];
+  primaryMetadata?: Record<string, unknown> | undefined;
+}): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {
+    guardResults: options.guardResults,
+    reasons: options.reasons ?? [],
+    hints: options.hints ?? []
+  };
+
+  if (options.transformedInputs) {
+    metadata.transformedInputs = options.transformedInputs;
+  }
+
+  if (options.primaryMetadata) {
+    Object.assign(metadata, options.primaryMetadata);
+  }
+
+  if (!metadata.reason && options.reasons && options.reasons.length > 0) {
+    metadata.reason = options.reasons[0];
+  }
+
+  return metadata;
+}
+
+function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {
+  const apply = (key: string, value: unknown) => {
+    Object.defineProperty(target as any, key, {
+      value,
+      enumerable: false,
+      configurable: true,
+      writable: false
+    });
+  };
+
+  apply('any', helper.any);
+  apply('all', helper.all);
+  apply('none', helper.none);
+  apply('totalTokens', helper.totalTokens);
+  apply('maxTokens', helper.maxTokens);
 }

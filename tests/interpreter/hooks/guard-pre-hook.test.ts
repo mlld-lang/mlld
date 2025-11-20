@@ -49,10 +49,46 @@ describe('guard pre-hook integration', () => {
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked secret/);
   });
 
+  it('aggregates reasons from multiple matching guards', async () => {
+    const env = createEnv();
+    const guardDirectiveA = parseSync(
+      '/guard @ga for secret = when [ * => deny "first deny" ]'
+    )[0] as DirectiveNode;
+    const guardDirectiveB = parseSync(
+      '/guard @gb for secret = when [ * => deny "second deny" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirectiveA, env);
+    await evaluateDirective(guardDirectiveB, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'hi',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toMatchObject({
+      details: {
+        reasons: ['first deny', 'second deny']
+      }
+    });
+  });
+
   it('applies per-operation guard helpers like @opIs', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard for op:show = when [ @input.any.ctx.labels.includes("secret") => deny "secret output blocked" \n * => allow ]'
+      '/guard for op:show = when [ @opIs("show") && @inputHas("secret") => deny "secret output blocked" \n * => allow ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 

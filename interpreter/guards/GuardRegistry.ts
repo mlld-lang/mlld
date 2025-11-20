@@ -10,6 +10,7 @@ export interface GuardDefinition {
   modifier: string;
   block: GuardBlockNode;
   location?: SourceLocation | null;
+  registrationOrder: number;
 }
 
 export interface SerializedGuardDefinition {
@@ -20,17 +21,34 @@ export interface SerializedGuardDefinition {
   modifier: string;
   block: GuardBlockNode;
   location?: SourceLocation | null;
+  registrationOrder?: number;
 }
 
 export class GuardRegistry {
   private readonly parent?: GuardRegistry;
-  private readonly dataGuards = new Map<string, GuardDefinition[]>();
-  private readonly opGuards = new Map<string, GuardDefinition[]>();
+  private readonly root: GuardRegistry;
+  private nextRegistrationOrder: number;
+  private readonly guards: GuardDefinition[] = [];
+  private readonly dataIndex: Map<string, GuardDefinition[]>;
+  private readonly opIndex: Map<string, GuardDefinition[]>;
   private readonly definitions = new Map<string, GuardDefinition>();
   private readonly namedDefinitions = new Map<string, GuardDefinition>();
+  private readonly guardNames: Set<string>;
 
   constructor(parent?: GuardRegistry) {
     this.parent = parent;
+    this.root = parent?.root ?? this;
+    if (this.isRoot()) {
+      this.nextRegistrationOrder = 1;
+      this.dataIndex = new Map();
+      this.opIndex = new Map();
+      this.guardNames = new Set();
+    } else {
+      this.nextRegistrationOrder = 0;
+      this.dataIndex = this.root.dataIndex;
+      this.opIndex = this.root.opIndex;
+      this.guardNames = this.root.guardNames;
+    }
   }
 
   createChild(): GuardRegistry {
@@ -45,19 +63,20 @@ export class GuardRegistry {
 
     const guardName = node.values.name?.[0]?.identifier;
     if (guardName) {
-      if (this.namedDefinitions.has(guardName) || this.parent?.getByName(guardName)) {
+      if (this.guardNames.has(guardName)) {
         throw new Error(`Guard with name ${guardName} already exists`);
       }
-    }
-
-    const guardId = this.buildGuardId(guardName, filterNode);
-    if (this.definitions.has(guardId) || this.parent?.hasDefinition(guardId)) {
-      throw new Error(`Guard definition already exists for ${guardName ?? filterNode.value}`);
     }
 
     const block = node.values.guard?.[0];
     if (!block) {
       throw new Error('Guard directive missing body');
+    }
+
+    const registrationOrder = this.allocateRegistrationOrder();
+    const guardId = guardName ?? `<unnamed-guard-${registrationOrder}>`;
+    if (this.definitions.has(guardId) || this.parent?.hasDefinition(guardId)) {
+      throw new Error(`Guard definition already exists for ${guardName ?? filterNode.value}`);
     }
 
     const definition: GuardDefinition = {
@@ -68,21 +87,12 @@ export class GuardRegistry {
       scope: filterNode.scope,
       modifier: block.modifier ?? 'default',
       block,
-      location: location ?? node.location
+      location: location ?? node.location,
+      registrationOrder
     };
 
-    const targetMap = definition.filterKind === 'operation' ? this.opGuards : this.dataGuards;
-    const key = definition.filterValue;
-    const entry = targetMap.get(key);
-    if (entry) {
-      entry.push(definition);
-    } else {
-      targetMap.set(key, [definition]);
-    }
-    this.definitions.set(guardId, definition);
-    if (guardName) {
-      this.namedDefinitions.set(guardName, definition);
-    }
+    this.registerDefinition(definition);
+    this.guardNames.add(guardName ?? guardId);
     return definition;
   }
 
@@ -104,36 +114,42 @@ export class GuardRegistry {
 
   importSerialized(defs: SerializedGuardDefinition[]): void {
     for (const def of defs) {
-      const guardId = this.buildGuardId(def.name, { filterKind: def.filterKind, value: def.filterValue });
+      const guardName = def.name;
+      if (guardName && this.getByName(guardName)) {
+        continue;
+      }
+      const registrationOrder = this.allocateRegistrationOrder();
+      const guardId = guardName ?? `<unnamed-guard-${registrationOrder}>`;
       if (this.hasDefinition(guardId)) {
         continue;
       }
       const copy: GuardDefinition = {
         id: guardId,
-        name: def.name,
+        name: guardName,
         filterKind: def.filterKind,
         filterValue: def.filterValue,
         scope: def.scope,
         modifier: def.modifier,
         block: def.block,
-        location: def.location
+        location: def.location,
+        registrationOrder: def.registrationOrder ?? registrationOrder
       };
-      const targetMap = def.filterKind === 'operation' ? this.opGuards : this.dataGuards;
-      const list = targetMap.get(def.filterValue);
-      if (list) {
-        list.push(copy);
-      } else {
-        targetMap.set(def.filterValue, [copy]);
-      }
-      this.definitions.set(guardId, copy);
-      if (copy.name) {
-        this.namedDefinitions.set(copy.name, copy);
+      this.registerDefinition(copy);
+      if (guardName) {
+        this.guardNames.add(guardName);
       }
     }
   }
 
   listOwn(): GuardDefinition[] {
     return Array.from(this.definitions.values());
+  }
+
+  getAllGuards(): GuardDefinition[] {
+    if (!this.isRoot()) {
+      return this.root.getAllGuards();
+    }
+    return this.guards.slice();
   }
 
   getByName(name: string): GuardDefinition | undefined {
@@ -159,25 +175,49 @@ export class GuardRegistry {
       scope: def.scope,
       modifier: def.modifier,
       block: def.block,
-      location: def.location
+      location: def.location,
+      registrationOrder: def.registrationOrder
     };
   }
 
   private collectGuards(value: string, kind: GuardFilterKind): GuardDefinition[] {
-    const targetMap = kind === 'operation' ? this.opGuards : this.dataGuards;
-    const local = targetMap.get(value) ?? [];
-    const parentDefs = this.parent ? this.parent.collectGuards(value, kind) : [];
-    return [...parentDefs, ...local];
+    const index = kind === 'operation' ? this.opIndex : this.dataIndex;
+    const matches = index.get(value) ?? [];
+    return matches.slice().sort((a, b) => a.registrationOrder - b.registrationOrder);
   }
 
   private hasDefinition(id: string): boolean {
     return this.definitions.has(id) || (this.parent?.hasDefinition(id) ?? false);
   }
 
-  private buildGuardId(name: string | undefined, filter: { filterKind: GuardFilterKind; value: string }): string {
-    if (name) {
-      return `name:${name}`;
+  private registerDefinition(definition: GuardDefinition): void {
+    this.definitions.set(definition.id, definition);
+    this.guards.push(definition);
+    if (!this.isRoot()) {
+      this.root.guards.push(definition);
     }
-    return `${filter.filterKind}:${filter.value}:${Math.random().toString(36).slice(2)}`;
+    if (definition.name) {
+      this.namedDefinitions.set(definition.name, definition);
+    }
+    const index = definition.filterKind === 'operation' ? this.opIndex : this.dataIndex;
+    const list = index.get(definition.filterValue);
+    if (list) {
+      list.push(definition);
+    } else {
+      index.set(definition.filterValue, [definition]);
+    }
+  }
+
+  private allocateRegistrationOrder(): number {
+    if (!this.isRoot()) {
+      return this.root.allocateRegistrationOrder();
+    }
+    const order = this.nextRegistrationOrder;
+    this.nextRegistrationOrder += 1;
+    return order;
+  }
+
+  private isRoot(): boolean {
+    return this.root === this;
   }
 }

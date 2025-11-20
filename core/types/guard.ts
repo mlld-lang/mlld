@@ -65,3 +65,26 @@ export type GuardDirectiveNode = TypedDirectiveNode<'guard', 'guard'> & {
 export function isGuardDirective(node: DirectiveNode): node is GuardDirectiveNode {
   return node.kind === 'guard';
 }
+
+export interface GuardHint {
+  guardName: string | null;
+  hint: string;
+  severity?: 'info' | 'warn';
+}
+
+export interface GuardResult {
+  guardName: string | null;
+  decision: GuardDecisionType;
+  reason?: string;
+  hint?: GuardHint;
+  replacement?: unknown;
+  metadata?: Record<string, unknown>;
+}
+
+export interface GuardAggregateDecision {
+  decision: 'allow' | 'deny' | 'retry';
+  reasons?: string[];
+  hints?: GuardHint[];
+  transformedInputs?: unknown[];
+  guardResults: GuardResult[];
+}

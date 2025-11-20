@@ -2,6 +2,7 @@ import type { SourceLocation } from '@core/types';
 import type { OperationContext, GuardContextSnapshot } from '@interpreter/env/ContextManager';
 import type { GuardScope } from '@core/types/guard';
 import type { Environment } from '@interpreter/env/Environment';
+import type { GuardHint, GuardResult } from '@core/types/guard';
 import { MlldError, ErrorSeverity, type BaseErrorDetails } from './MlldError';
 
 export interface GuardErrorDetails extends BaseErrorDetails {
@@ -15,6 +16,9 @@ export interface GuardErrorDetails extends BaseErrorDetails {
   reason?: string | null;
   guardContext?: GuardContextSnapshot;
   guardInput?: unknown;
+  reasons?: string[];
+  guardResults?: GuardResult[];
+  hints?: GuardHint[];
 }
 
 export interface GuardErrorOptions {
@@ -31,6 +35,9 @@ export interface GuardErrorOptions {
   env?: Environment;
   guardContext?: GuardContextSnapshot;
   guardInput?: unknown;
+  reasons?: string[];
+  guardResults?: GuardResult[];
+  hints?: GuardHint[];
 }
 
 export class GuardError extends MlldError {
@@ -55,7 +62,10 @@ export class GuardError extends MlldError {
       retryHint: options.retryHint ?? null,
       reason: resolvedReason,
       guardContext: options.guardContext,
-      guardInput: options.guardInput
+      guardInput: options.guardInput,
+      reasons: options.reasons,
+      guardResults: options.guardResults,
+      hints: options.hints
     };
 
     super(resolvedMessage, {
