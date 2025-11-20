@@ -57,7 +57,8 @@ import {
   type PipelineContextSnapshot,
   type GuardContextSnapshot,
   type OperationContext,
-  type DeniedContextSnapshot
+  type DeniedContextSnapshot,
+  type GuardHistoryEntry
 } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { guardPreHook } from '../hooks/guard-pre-hook';
@@ -129,6 +130,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private contextManager: ContextManager;
   private hookManager: HookManager;
   private guardRegistry: GuardRegistry;
+  private pipelineGuardHistory?: GuardHistoryEntry[];
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
@@ -1208,6 +1210,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.guardRegistry;
   }
 
+  getPipelineGuardHistory(): GuardHistoryEntry[] {
+    const root = this.getRootEnvironment();
+    if (!root.pipelineGuardHistory) {
+      root.pipelineGuardHistory = [];
+    }
+    return root.pipelineGuardHistory;
+  }
+
+  recordPipelineGuardHistory(entry: GuardHistoryEntry): void {
+    const history = this.getPipelineGuardHistory();
+    history.push(entry);
+  }
+
+  resetPipelineGuardHistory(): void {
+    const history = this.getPipelineGuardHistory();
+    history.splice(0, history.length);
+  }
+
   serializeLocalGuards(): SerializedGuardDefinition[] {
     return this.guardRegistry.serializeOwn();
   }
@@ -1271,6 +1291,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private registerBuiltinHooks(): void {
     this.hookManager.registerPre(guardPreHook);
     this.hookManager.registerPost(taintPostHook);
+  }
+  
+  private getRootEnvironment(): Environment {
+    let current: Environment = this;
+    while (current.parent) {
+      current = current.parent;
+    }
+    return current;
   }
   
   /**

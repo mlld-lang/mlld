@@ -86,6 +86,105 @@ describe('guard pre-hook integration', () => {
     });
   });
 
+  it('exposes guard trace and hints in guard context on denial', async () => {
+    const env = createEnv();
+    const guardDirectiveA = parseSync(
+      '/guard @ga for secret = when [ * => deny "first reason" ]'
+    )[0] as DirectiveNode;
+    const guardDirectiveB = parseSync(
+      '/guard @gb for secret = when [ * => deny "second reason" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirectiveA, env);
+    await evaluateDirective(guardDirectiveB, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'hi',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+    let error: unknown;
+    try {
+      await evaluateDirective(directive, env);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(GuardError);
+    const guardCtx = (error as GuardError).details.guardContext as any;
+    expect(Array.isArray(guardCtx?.trace)).toBe(true);
+    expect(guardCtx.trace).toHaveLength(2);
+    expect(guardCtx.reasons).toEqual(['first reason', 'second reason']);
+    expect(Array.isArray(guardCtx.hints)).toBe(true);
+  });
+
+  it('records guard history when pipeline context is active', async () => {
+    const env = createEnv();
+    env.resetPipelineGuardHistory();
+    const guardDirective = parseSync(
+      '/guard @ga for secret = when [ * => deny "blocked in pipeline" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'hi',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    const pipelineContext: PipelineContextSnapshot = {
+      stage: 1,
+      totalStages: 1,
+      currentCommand: 'manual',
+      input: '',
+      previousOutputs: [],
+      format: undefined,
+      attemptCount: 1,
+      attemptHistory: [],
+      hint: null,
+      hintHistory: [],
+      sourceRetryable: false,
+      guards: env.getPipelineGuardHistory()
+    };
+
+    env.setPipelineContext(pipelineContext);
+    try {
+      await evaluateDirective(parseSync('/show @secretVar')[0] as DirectiveNode, env);
+    } catch (err) {
+      expect(err).toBeInstanceOf(GuardError);
+    } finally {
+      env.clearPipelineContext();
+    }
+
+    const history = env.getPipelineGuardHistory();
+    expect(Array.isArray(history)).toBe(true);
+    expect(history.length).toBe(1);
+    expect(history[0]?.decision).toBe('deny');
+    expect(history[0]?.trace.length).toBe(1);
+  });
+
   it('warns and disables guards when with { guards: false } is set', async () => {
     const env = createEnv();
     const effects = env.getEffectHandler() as TestEffectHandler;

@@ -1,5 +1,8 @@
 import type { SourceLocation } from '@core/types';
 import type { DataLabel } from '@core/types/security';
+import type { GuardHint, GuardResult } from '@core/types/guard';
+
+const DEFAULT_GUARD_MAX = 3;
 
 export interface OperationContext {
   /** Directive or operation type (e.g., "var", "run", "output") */
@@ -32,6 +35,7 @@ export interface PipelineContextSnapshot {
   hint?: string | null;
   hintHistory?: unknown[];
   sourceRetryable?: boolean;
+  guards?: GuardHistoryEntry[];
 }
 
 export interface GuardContextSnapshot {
@@ -47,6 +51,10 @@ export interface GuardContextSnapshot {
   hintHistory?: ReadonlyArray<string | null>;
   reason?: string | null;
   guardFilter?: string | null;
+  trace?: ReadonlyArray<GuardResult>;
+  hints?: ReadonlyArray<GuardHint>;
+  reasons?: ReadonlyArray<string>;
+  decision?: 'allow' | 'deny' | 'retry';
 }
 
 export interface DeniedContextSnapshot {
@@ -62,6 +70,15 @@ export interface SecuritySnapshotLike {
   taintLevel: string;
   policy?: Readonly<Record<string, unknown>>;
   operation?: Readonly<Record<string, unknown>>;
+}
+
+export interface GuardHistoryEntry {
+  stage: number;
+  operation: OperationContext | null;
+  decision: 'allow' | 'deny' | 'retry';
+  trace: ReadonlyArray<GuardResult>;
+  hints: ReadonlyArray<GuardHint>;
+  reasons: ReadonlyArray<string>;
 }
 
 interface BuildContextOptions {
@@ -230,19 +247,9 @@ export class ContextManager {
     }
 
     if (ctxValue.guard) {
-      const guardValue = { ...(guardContext ?? {}) } as Record<string, unknown>;
-      if (deniedContext) {
-        guardValue.reason = deniedContext.reason ?? guardValue.reason ?? null;
-        guardValue.name = guardValue.name ?? deniedContext.guardName ?? null;
-        guardValue.filter = deniedContext.guardFilter ?? (guardValue as any).filter ?? null;
-      }
-      ctxValue.guard = guardValue;
+      ctxValue.guard = this.normalizeGuardContext(guardContext, deniedContext);
     } else if (deniedContext) {
-      ctxValue.guard = {
-        reason: deniedContext.reason ?? null,
-        name: deniedContext.guardName ?? null,
-        filter: deniedContext.guardFilter ?? null
-      };
+      ctxValue.guard = this.normalizeGuardContext(undefined, deniedContext);
     }
 
     if (pipelineFields.pipe) {
@@ -289,6 +296,42 @@ export class ContextManager {
     }
   }
 
+  private normalizeGuardContext(
+    guardContext?: GuardContextSnapshot,
+    deniedContext?: DeniedContextSnapshot
+  ): Record<string, unknown> {
+    const trace = Array.isArray(guardContext?.trace) ? guardContext!.trace : [];
+    const hints = Array.isArray(guardContext?.hints) ? guardContext!.hints : [];
+    const reasons = Array.isArray(guardContext?.reasons)
+      ? guardContext!.reasons
+      : deniedContext?.reason
+        ? [deniedContext.reason]
+        : [];
+    const attempt =
+      typeof guardContext?.attempt === 'number'
+        ? guardContext.attempt
+        : typeof guardContext?.try === 'number'
+          ? guardContext.try ?? 0
+          : 0;
+    const resolvedReason = guardContext?.reason ?? reasons[0] ?? null;
+    const resolvedName = guardContext?.name ?? deniedContext?.guardName ?? null;
+    const resolvedFilter = guardContext?.guardFilter ?? deniedContext?.guardFilter ?? null;
+    const max = typeof guardContext?.max === 'number' ? guardContext.max : DEFAULT_GUARD_MAX;
+
+    return {
+      ...(guardContext ?? {}),
+      trace,
+      hints,
+      reasons,
+      reason: resolvedReason,
+      name: resolvedName,
+      filter: resolvedFilter,
+      attempt,
+      try: typeof guardContext?.try === 'number' ? guardContext.try : attempt,
+      max
+    };
+  }
+
   private buildPipelineFields(pipeline?: PipelineContextSnapshot): {
     root: Record<string, unknown>;
     pipe?: Record<string, unknown>;
@@ -320,7 +363,8 @@ export class ContextManager {
       stage: typeof pipeline.stage === 'number' ? pipeline.stage : 0,
       length: Array.isArray(pipeline.previousOutputs) ? pipeline.previousOutputs.length : 0,
       input: normalizedInput,
-      format: pipeline.format ?? null
+      format: pipeline.format ?? null,
+      guards: Array.isArray(pipeline.guards) ? pipeline.guards : []
     };
 
     return {

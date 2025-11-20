@@ -112,6 +112,7 @@ export class PipelineExecutor {
   async execute(initialInput: string | StructuredValue): Promise<string>;
   async execute(initialInput: string | StructuredValue, options: { returnStructured: true }): Promise<StructuredValue>;
   async execute(initialInput: string | StructuredValue, options?: ExecuteOptions): Promise<string | StructuredValue> {
+    this.env.resetPipelineGuardHistory();
     const initialWrapper = isStructuredValue(initialInput)
       ? cloneStructuredValue(initialInput)
       : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));

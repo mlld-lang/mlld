@@ -535,30 +535,37 @@ export const guardPreHook: PreHook = async (
     }
   }
 
+  const aggregateContext = buildAggregateGuardContext({
+    decision: currentDecision,
+    guardResults: guardTrace,
+    hints,
+    reasons,
+    primaryMetadata
+  });
+  const aggregateMetadata = buildAggregateMetadata({
+    guardResults: guardTrace,
+    reasons,
+    hints,
+    transformedInputs,
+    primaryMetadata,
+    guardContext: aggregateContext
+  });
+  appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+
   if (currentDecision === 'allow') {
     for (const key of usedAttemptKeys) {
       clearGuardAttemptState(attemptStore, key);
     }
     return {
       action: 'continue',
-      metadata: buildAggregateMetadata({
-        guardResults: guardTrace,
-        reasons,
-        hints,
-        transformedInputs
-      })
+      metadata: aggregateMetadata
     };
   }
 
   if (currentDecision === 'retry') {
     return {
       action: 'retry',
-      metadata: buildAggregateMetadata({
-        guardResults: guardTrace,
-        reasons,
-        hints,
-        primaryMetadata
-      })
+      metadata: aggregateMetadata
     };
   }
 
@@ -568,12 +575,7 @@ export const guardPreHook: PreHook = async (
       for (const key of usedAttemptKeys) {
         clearGuardAttemptState(attemptStore, key);
       }
-      return buildAggregateMetadata({
-        guardResults: guardTrace,
-        reasons,
-        hints,
-        primaryMetadata
-      });
+      return aggregateMetadata;
     })()
   };
 };
@@ -737,6 +739,7 @@ async function evaluateGuard(options: {
     return {
       guardName: guard.name ?? null,
       decision: 'allow',
+       timing: 'before',
       replacement,
       metadata: metadataBase
     };
@@ -766,6 +769,7 @@ async function evaluateGuard(options: {
     return {
       guardName: guard.name ?? null,
       decision: 'deny',
+       timing: 'before',
       reason: metadata.reason as string | undefined,
       metadata
     };
@@ -792,6 +796,7 @@ async function evaluateGuard(options: {
     return {
       guardName: guard.name ?? null,
       decision: 'retry',
+       timing: 'before',
       reason: retryMetadata.reason as string | undefined,
       hint: action.message
         ? { guardName: guard.name ?? null, hint: action.message }
@@ -802,6 +807,7 @@ async function evaluateGuard(options: {
   return {
     guardName: guard.name ?? null,
     decision: 'allow',
+    timing: 'before',
     metadata
   };
 }
@@ -1062,6 +1068,7 @@ function buildAggregateMetadata(options: {
   hints?: GuardHint[];
   transformedInputs?: readonly Variable[];
   primaryMetadata?: Record<string, unknown> | undefined;
+  guardContext?: GuardContextSnapshot;
 }): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     guardResults: options.guardResults,
@@ -1077,11 +1084,65 @@ function buildAggregateMetadata(options: {
     Object.assign(metadata, options.primaryMetadata);
   }
 
+  if (options.guardContext) {
+    metadata.guardContext = options.guardContext;
+  }
+
   if (!metadata.reason && options.reasons && options.reasons.length > 0) {
     metadata.reason = options.reasons[0];
   }
 
   return metadata;
+}
+
+function buildAggregateGuardContext(options: {
+  decision: 'allow' | 'deny' | 'retry';
+  guardResults: GuardResult[];
+  hints: GuardHint[];
+  reasons: string[];
+  primaryMetadata?: Record<string, unknown>;
+}): GuardContextSnapshot {
+  const baseContext =
+    (options.primaryMetadata?.guardContext as GuardContextSnapshot | undefined) ?? {};
+  const attempt =
+    typeof baseContext.attempt === 'number'
+      ? baseContext.attempt
+      : typeof baseContext.try === 'number'
+        ? baseContext.try ?? 0
+        : 0;
+  return {
+    ...baseContext,
+    attempt,
+    try: typeof baseContext.try === 'number' ? baseContext.try : attempt,
+    max: typeof baseContext.max === 'number' ? baseContext.max : DEFAULT_GUARD_MAX,
+    trace: options.guardResults.slice(),
+    hints: options.hints.slice(),
+    reasons: options.reasons.slice(),
+    reason: baseContext.reason ?? options.reasons[0] ?? null,
+    decision: options.decision
+  };
+}
+
+function appendGuardHistory(
+  env: Environment,
+  operation: OperationContext,
+  decision: 'allow' | 'deny' | 'retry',
+  guardResults: GuardResult[],
+  hints: GuardHint[],
+  reasons: string[]
+): void {
+  const pipelineContext = env.getPipelineContext?.();
+  if (!pipelineContext) {
+    return;
+  }
+  env.recordPipelineGuardHistory({
+    stage: typeof pipelineContext.stage === 'number' ? pipelineContext.stage : 0,
+    operation,
+    decision,
+    trace: guardResults.slice(),
+    hints: hints.slice(),
+    reasons: reasons.slice()
+  });
 }
 
 function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {

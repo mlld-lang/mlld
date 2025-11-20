@@ -13,6 +13,8 @@ import type { Variable } from '@core/types/variable';
 import { isVariable } from '../utils/variable-resolution';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 
+const DEFAULT_GUARD_MAX = 3;
+
 interface GuardDecisionInfo {
   guardName: string | null;
   guardFilter?: string;
@@ -48,6 +50,12 @@ export async function handleGuardDecision(
   const hints = Array.isArray((metadata as any).hints)
     ? ((metadata as any).hints as GuardHint[])
     : undefined;
+  const guardContextSnapshot = buildGuardContextFromMetadata(
+    metadata as Record<string, unknown>,
+    reasonsArray,
+    guardResults,
+    hints
+  );
   const primaryReason =
     (typeof (metadata as any).reason === 'string'
       ? (metadata as any).reason
@@ -66,7 +74,7 @@ export async function handleGuardDecision(
           ? 'Operation aborted by guard'
           : 'Guard requested retry'
     ,
-    guardContext: metadata.guardContext as GuardContextSnapshot | undefined,
+    guardContext: guardContextSnapshot,
     guardInput: metadata.guardInput as Variable | readonly Variable[] | null | undefined
   };
 
@@ -199,6 +207,45 @@ function canRetryWithinPipeline(context: PipelineContextSnapshot): boolean {
     return false;
   }
   return true;
+}
+
+function buildGuardContextFromMetadata(
+  metadata: Record<string, unknown>,
+  reasons?: string[],
+  guardResults?: GuardResult[],
+  hints?: GuardHint[]
+): GuardContextSnapshot {
+  const baseContext = (metadata.guardContext as GuardContextSnapshot | undefined) ?? {};
+  const trace =
+    guardResults ?? (Array.isArray((baseContext as any).trace) ? (baseContext as any).trace : []);
+  const hintList =
+    hints ?? (Array.isArray((baseContext as any).hints) ? (baseContext as any).hints : []);
+  const reasonList =
+    reasons ??
+    (Array.isArray((baseContext as any).reasons) ? ((baseContext as any).reasons as string[]) : []);
+  const attempt =
+    typeof baseContext.attempt === 'number'
+      ? baseContext.attempt
+      : typeof baseContext.try === 'number'
+        ? baseContext.try ?? 0
+        : 0;
+  const max = typeof baseContext.max === 'number' ? baseContext.max : DEFAULT_GUARD_MAX;
+  const resolvedReason =
+    baseContext.reason ??
+    (typeof metadata.reason === 'string' ? metadata.reason : undefined) ??
+    reasonList[0] ??
+    null;
+
+  return {
+    ...baseContext,
+    trace,
+    hints: hintList,
+    reasons: reasonList,
+    reason: resolvedReason,
+    attempt,
+    try: typeof baseContext.try === 'number' ? baseContext.try : attempt,
+    max
+  };
 }
 
 function extractNodeLocation(node: HookableNode) {

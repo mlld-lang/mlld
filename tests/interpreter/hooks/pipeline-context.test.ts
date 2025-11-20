@@ -5,6 +5,7 @@ import { PathService } from '@services/fs/PathService';
 import { PipelineExecutor } from '@interpreter/eval/pipeline/executor';
 import type { PipelineStage, PipelineCommand } from '@core/types';
 import type { StageContext } from '@interpreter/eval/pipeline/state-machine';
+import { wrapStructured } from '@interpreter/utils/structured-value';
 
 describe('pipeline stage context', () => {
   it('pushes operation metadata for each stage', async () => {
@@ -20,6 +21,7 @@ describe('pipeline stage context', () => {
     const executor = new PipelineExecutor(pipeline, env);
 
     const observedTypes: string[] = [];
+    const observedGuards: unknown[] = [];
     const originalExecuteCommand = (executor as any).executeCommand.bind(executor);
     (executor as any).executeCommand = async (
       cmd: PipelineCommand,
@@ -29,6 +31,8 @@ describe('pipeline stage context', () => {
     ) => {
       const ctxValue = stageEnv.getVariable('ctx')?.value as any;
       observedTypes.push(ctxValue?.op?.type);
+      const pVar = stageEnv.getVariable('p')?.value as any;
+      observedGuards.push(pVar?.guards);
       return await originalExecuteCommand(cmd, input, structuredInput, stageEnv);
     };
 
@@ -53,5 +57,7 @@ describe('pipeline stage context', () => {
     );
 
     expect(observedTypes).toEqual(['pipeline-stage']);
+    expect(Array.isArray(observedGuards[0])).toBe(true);
+    expect((observedGuards[0] as any[]).length).toBe(0);
   });
 });

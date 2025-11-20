@@ -79,6 +79,7 @@ export interface GuardResult {
   hint?: GuardHint;
   replacement?: unknown;
   metadata?: Record<string, unknown>;
+  timing?: 'before' | 'after';
 }
 
 export interface GuardAggregateDecision {

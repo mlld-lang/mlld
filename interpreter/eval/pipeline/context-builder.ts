@@ -8,7 +8,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
-import type { PipelineContextSnapshot } from '../../env/ContextManager';
+import type { GuardHistoryEntry, PipelineContextSnapshot } from '../../env/ContextManager';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { wrapStructured, isStructuredValue, type StructuredValue, type StructuredValueType } from '../../utils/structured-value';
@@ -35,6 +35,7 @@ export interface SimplifiedPipelineContext {
   retries?: {                     // Global retry accumulator
     all: Array<Array<string | StructuredValue>>;              // All attempts from all contexts
   };
+  guards?: ReadonlyArray<GuardHistoryEntry>;
 }
 
 /**
@@ -127,7 +128,8 @@ export async function createStageEnvironment(
     // Provide hint info for ambient @ctx.hint
     hint: normalizedHint,
     hintHistory: context.hintHistory || [],
-    sourceRetryable: options?.sourceRetryable ?? false
+    sourceRetryable: options?.sourceRetryable ?? false,
+    guards: env.getPipelineGuardHistory()
   };
 
   options?.capturePipelineContext?.(pipelineContextSnapshot);
@@ -235,7 +237,8 @@ function setSimplifiedPipelineVariable(
     events,
     hasSyntheticSource,
     allRetryHistory,
-    structuredAccess
+    structuredAccess,
+    () => env.getPipelineGuardHistory()
   );
   
   const inputSource: VariableSource = {
@@ -269,7 +272,8 @@ function createSimplifiedPipelineContext(
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>,
-  structuredAccess?: StageOutputAccessor
+  structuredAccess?: StageOutputAccessor,
+  guardHistoryProvider?: () => ReadonlyArray<GuardHistoryEntry>
 ): SimplifiedPipelineContext {
   const userVisibleStage = hasSyntheticSource && context.stage > 0 
     ? context.stage - 1 
@@ -360,6 +364,12 @@ function createSimplifiedPipelineContext(
       return { all: allAttempts };
     },
     enumerable: false,
+    configurable: true
+  });
+
+  Object.defineProperty(pipelineContext, 'guards', {
+    get: () => (guardHistoryProvider ? guardHistoryProvider() : []),
+    enumerable: true,
     configurable: true
   });
 
