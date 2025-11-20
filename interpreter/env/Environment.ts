@@ -62,6 +62,7 @@ import {
 } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { guardPreHook } from '../hooks/guard-pre-hook';
+import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 
@@ -1290,6 +1291,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   private registerBuiltinHooks(): void {
     this.hookManager.registerPre(guardPreHook);
+    this.hookManager.registerPost(guardPostHook);
     this.hookManager.registerPost(taintPostHook);
   }
   

@@ -11,6 +11,8 @@ export interface GuardErrorDetails extends BaseErrorDetails {
   scope?: GuardScope;
   operation?: OperationContext;
   inputPreview?: string | null;
+  outputPreview?: string | null;
+  timing?: 'before' | 'after';
   decision: 'deny' | 'retry';
   retryHint?: string | null;
   reason?: string | null;
@@ -38,6 +40,8 @@ export interface GuardErrorOptions {
   reasons?: string[];
   guardResults?: GuardResult[];
   hints?: GuardHint[];
+  outputPreview?: string | null;
+  timing?: 'before' | 'after';
 }
 
 export class GuardError extends MlldError {
@@ -58,6 +62,8 @@ export class GuardError extends MlldError {
       scope: options.scope,
       operation: options.operation,
       inputPreview: options.inputPreview ?? null,
+      outputPreview: options.outputPreview ?? null,
+      timing: options.timing,
       decision: options.decision,
       retryHint: options.retryHint ?? null,
       reason: resolvedReason,

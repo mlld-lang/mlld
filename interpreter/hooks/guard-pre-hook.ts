@@ -25,6 +25,7 @@ import { materializeGuardInputs } from '../utils/guard-inputs';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
+import { appendGuardHistory } from './guard-shared-history';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -596,7 +597,7 @@ function buildPerInputCandidates(
     const guards: GuardDefinition[] = [];
 
     for (const label of labels) {
-      const defs = registry.getDataGuards(label);
+      const defs = registry.getDataGuardsForTiming(label, 'before');
       for (const def of defs) {
         if (!seen.has(def.id)) {
           seen.add(def.id);
@@ -625,7 +626,7 @@ function collectOperationGuards(
   const results: GuardDefinition[] = [];
 
   for (const key of keys) {
-    const defs = registry.getOperationGuards(key);
+    const defs = registry.getOperationGuardsForTiming(key, 'before');
     for (const def of defs) {
       if (!seen.has(def.id)) {
         seen.add(def.id);
@@ -1121,28 +1122,6 @@ function buildAggregateGuardContext(options: {
     reason: baseContext.reason ?? options.reasons[0] ?? null,
     decision: options.decision
   };
-}
-
-function appendGuardHistory(
-  env: Environment,
-  operation: OperationContext,
-  decision: 'allow' | 'deny' | 'retry',
-  guardResults: GuardResult[],
-  hints: GuardHint[],
-  reasons: string[]
-): void {
-  const pipelineContext = env.getPipelineContext?.();
-  if (!pipelineContext) {
-    return;
-  }
-  env.recordPipelineGuardHistory({
-    stage: typeof pipelineContext.stage === 'number' ? pipelineContext.stage : 0,
-    operation,
-    decision,
-    trace: guardResults.slice(),
-    hints: hints.slice(),
-    reasons: reasons.slice()
-  });
 }
 
 function attachGuardHelper(target: Variable, helper: GuardInputHelper): void {

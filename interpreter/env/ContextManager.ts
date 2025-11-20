@@ -45,9 +45,12 @@ export interface GuardContextSnapshot {
   tries?: ReadonlyArray<Record<string, unknown>>;
   max?: number;
   input?: unknown;
+  output?: unknown;
   labels?: readonly DataLabel[];
   sources?: readonly string[];
   inputPreview?: string | null;
+  outputPreview?: string | null;
+  timing?: 'before' | 'after';
   hintHistory?: ReadonlyArray<string | null>;
   reason?: string | null;
   guardFilter?: string | null;

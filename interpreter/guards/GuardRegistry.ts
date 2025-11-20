@@ -1,4 +1,10 @@
-import type { GuardBlockNode, GuardDirectiveNode, GuardFilterKind, GuardScope } from '@core/types/guard';
+import type {
+  GuardBlockNode,
+  GuardDirectiveNode,
+  GuardFilterKind,
+  GuardScope,
+  GuardTiming
+} from '@core/types/guard';
 import type { SourceLocation } from '@core/types';
 
 export interface GuardDefinition {
@@ -11,6 +17,7 @@ export interface GuardDefinition {
   block: GuardBlockNode;
   location?: SourceLocation | null;
   registrationOrder: number;
+  timing: GuardTiming;
 }
 
 export interface SerializedGuardDefinition {
@@ -22,6 +29,7 @@ export interface SerializedGuardDefinition {
   block: GuardBlockNode;
   location?: SourceLocation | null;
   registrationOrder?: number;
+  timing?: GuardTiming;
 }
 
 export class GuardRegistry {
@@ -73,6 +81,7 @@ export class GuardRegistry {
       throw new Error('Guard directive missing body');
     }
 
+    const timing = node.meta.timing ?? 'before';
     const registrationOrder = this.allocateRegistrationOrder();
     const guardId = guardName ?? `<unnamed-guard-${registrationOrder}>`;
     if (this.definitions.has(guardId) || this.parent?.hasDefinition(guardId)) {
@@ -88,7 +97,8 @@ export class GuardRegistry {
       modifier: block.modifier ?? 'default',
       block,
       location: location ?? node.location,
-      registrationOrder
+      registrationOrder,
+      timing
     };
 
     this.registerDefinition(definition);
@@ -102,6 +112,14 @@ export class GuardRegistry {
 
   getOperationGuards(op: string): GuardDefinition[] {
     return this.collectGuards(op, 'operation');
+  }
+
+  getDataGuardsForTiming(label: string, timing: GuardTiming): GuardDefinition[] {
+    return this.collectGuards(label, 'data').filter(def => this.matchesTiming(def, timing));
+  }
+
+  getOperationGuardsForTiming(op: string, timing: GuardTiming): GuardDefinition[] {
+    return this.collectGuards(op, 'operation').filter(def => this.matchesTiming(def, timing));
   }
 
   serializeOwn(): SerializedGuardDefinition[] {
@@ -132,7 +150,8 @@ export class GuardRegistry {
         modifier: def.modifier,
         block: def.block,
         location: def.location,
-        registrationOrder: def.registrationOrder ?? registrationOrder
+        registrationOrder: def.registrationOrder ?? registrationOrder,
+        timing: def.timing ?? 'before'
       };
       this.registerDefinition(copy);
       if (guardName) {
@@ -176,7 +195,8 @@ export class GuardRegistry {
       modifier: def.modifier,
       block: def.block,
       location: def.location,
-      registrationOrder: def.registrationOrder
+      registrationOrder: def.registrationOrder,
+      timing: def.timing
     };
   }
 
@@ -184,6 +204,10 @@ export class GuardRegistry {
     const index = kind === 'operation' ? this.opIndex : this.dataIndex;
     const matches = index.get(value) ?? [];
     return matches.slice().sort((a, b) => a.registrationOrder - b.registrationOrder);
+  }
+
+  private matchesTiming(def: GuardDefinition, timing: GuardTiming): boolean {
+    return def.timing === timing || def.timing === 'always';
   }
 
   private hasDefinition(id: string): boolean {
