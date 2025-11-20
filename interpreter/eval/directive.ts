@@ -4,10 +4,9 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { getTextContent } from '../utils/type-guard-helpers';
 import type { OperationContext, PipelineContextSnapshot } from '../env/ContextManager';
 import { extractDirectiveInputs } from './directive-inputs';
-import type { HookDecision } from '../hooks/HookManager';
-import type { GuardScope } from '@core/types/guard';
-import { GuardError } from '@core/errors/GuardError';
-import { handleGuardDecision } from '../hooks/hook-decision-handler';
+import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
+import type { Variable } from '@core/types/variable';
+import { isVariable } from '../utils/variable-resolution';
 
 // Import specific evaluators
 import { evaluatePath } from './path';
@@ -134,17 +133,29 @@ export async function evaluateDirective(
         extractedInputs = await extractDirectiveInputs(directive, env);
       }
       const preDecision = await hookManager.runPre(directive, extractedInputs, env, operationContext);
+      const transformedInputs = getGuardTransformedInputs(preDecision, extractedInputs);
+      if (precomputedVarAssignment && transformedInputs && transformedInputs[0]) {
+        const firstTransformed = transformedInputs[0];
+        if (isVariable(firstTransformed)) {
+          precomputedVarAssignment = {
+            ...precomputedVarAssignment,
+            variable: firstTransformed as Variable
+          };
+        }
+      }
+
+      const resolvedInputs = transformedInputs ?? extractedInputs;
       await handleGuardDecision(preDecision, directive, env, operationContext);
 
       const mergedContext = mergeEvaluationContext(
         context,
-        extractedInputs,
+        resolvedInputs,
         operationContext,
         precomputedVarAssignment
       );
 
       let result = await dispatchDirective(directive, env, mergedContext);
-      result = await hookManager.runPost(directive, result, extractedInputs, env, operationContext);
+      result = await hookManager.runPost(directive, result, resolvedInputs, env, operationContext);
       return result;
     });
   } catch (error) {

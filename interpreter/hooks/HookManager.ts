@@ -58,14 +58,24 @@ export class HookManager {
     env: Environment,
     operation?: OperationContext
   ): Promise<HookDecision> {
+    let aggregatedMetadata: Record<string, unknown> | undefined;
     for (const hook of this.preHooks) {
       const helpers = this.buildInputHelpers(inputs);
       const decision = await hook(node, inputs, env, operation, helpers);
+      if (decision.metadata) {
+        aggregatedMetadata = aggregatedMetadata
+          ? { ...aggregatedMetadata, ...decision.metadata }
+          : decision.metadata;
+      }
       if (decision.action !== 'continue') {
-        return decision;
+        const metadata =
+          decision.metadata && aggregatedMetadata
+            ? { ...aggregatedMetadata, ...decision.metadata }
+            : decision.metadata ?? aggregatedMetadata;
+        return metadata ? { ...decision, metadata } : decision;
       }
     }
-    return { action: 'continue' };
+    return aggregatedMetadata ? { action: 'continue', metadata: aggregatedMetadata } : { action: 'continue' };
   }
 
   async runPost(

@@ -38,13 +38,14 @@ import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import type { SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
-import { GuardError } from '@core/errors/GuardError';
-import type { GuardErrorDetails } from '@core/errors/GuardError';
 import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
 import type { OperationContext } from '../env/ContextManager';
-import { handleGuardDecision } from '../hooks/hook-decision-handler';
-import { materializeGuardInputs } from '../utils/guard-inputs';
+import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
+import {
+  materializeGuardInputsWithMapping,
+  type GuardInputMappingEntry
+} from '../utils/guard-inputs';
 import { createParameterVariable } from '../utils/parameter-factory';
 
 /**
@@ -118,6 +119,49 @@ function cloneGuardCandidateForParameter(
     delete cloned.ctx.ctxCache;
   }
   return cloned;
+}
+
+function stringifyGuardArg(value: unknown): string {
+  if (isStructuredValue(value)) {
+    return asText(value);
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function applyGuardTransformsToExecArgs(options: {
+  guardInputEntries: readonly GuardInputMappingEntry[];
+  transformedInputs: readonly Variable[];
+  guardVariableCandidates: (Variable | undefined)[];
+  evaluatedArgs: any[];
+  evaluatedArgStrings: string[];
+}): void {
+  const { guardInputEntries, transformedInputs, guardVariableCandidates, evaluatedArgs, evaluatedArgStrings } =
+    options;
+  const limit = Math.min(transformedInputs.length, guardInputEntries.length);
+  for (let i = 0; i < limit; i++) {
+    const entry = guardInputEntries[i];
+    const replacement = transformedInputs[i];
+    if (!entry || !replacement) {
+      continue;
+    }
+    const argIndex = entry.index;
+    guardVariableCandidates[argIndex] = replacement;
+    evaluatedArgs[argIndex] = replacement.value;
+    evaluatedArgStrings[argIndex] = stringifyGuardArg(replacement.value);
+  }
 }
 
 type StringBuiltinMethod =
@@ -1202,7 +1246,11 @@ export async function evaluateExecInvocation(
     }
   }
 
-  const guardInputs = materializeGuardInputs(guardVariableCandidates, { nameHint: '__guard_input__' });
+  const guardInputsWithMapping = materializeGuardInputsWithMapping(guardVariableCandidates, {
+    nameHint: '__guard_input__'
+  });
+  const guardInputs = guardInputsWithMapping.map(entry => entry.variable);
+  let postHookInputs: readonly Variable[] = guardInputs;
   const hookManager = env.getHookManager();
   const execDescriptor = getVariableSecurityDescriptor(variable);
   const operationContext: OperationContext = {
@@ -1216,99 +1264,122 @@ export async function evaluateExecInvocation(
     }
   };
   const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
-    return hookManager.runPost(node, result, guardInputs, env, operationContext);
+    return hookManager.runPost(node, result, postHookInputs, env, operationContext);
   };
 
   return await env.withOpContext(operationContext, async () => {
     return AutoUnwrapManager.executeWithPreservation(async () => {
-  // Bind evaluated arguments to parameters
-  for (let i = 0; i < params.length; i++) {
-    const paramName = params[i];
-    const argValue = evaluatedArgs[i];
-    const argStringValue = evaluatedArgStrings[i];
-    const originalVar = originalVariables[i];
-    const guardCandidate = guardVariableCandidates[i];
-    const isShellCode =
-      definition.type === 'code' &&
-      typeof definition.language === 'string' &&
-      (definition.language === 'bash' || definition.language === 'sh');
-    const allowOriginalReuse = Boolean(originalVar) && !isShellCode && definition.type !== 'command';
-
-    if (guardCandidate && (!originalVar || !allowOriginalReuse)) {
-      const candidateClone = cloneGuardCandidateForParameter(paramName, guardCandidate, argValue, argStringValue);
-      execEnv.setParameterVariable(paramName, candidateClone);
-      continue;
-    }
-
-    if (argValue !== undefined) {
-      const paramVar = createParameterVariable({
-        name: paramName,
-        value: argValue,
-        stringValue: argStringValue,
-        originalVariable: originalVar,
-        allowOriginalReuse,
-        metadataFactory: createParameterMetadata,
-        origin: 'exec-param'
-      });
-
-      if (paramVar) {
-        execEnv.setParameterVariable(paramName, paramVar);
+      const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
+      const transformedGuardInputs = getGuardTransformedInputs(preDecision, guardInputs);
+      const transformedGuardSet =
+        transformedGuardInputs && transformedGuardInputs.length > 0
+          ? new Set(transformedGuardInputs as readonly Variable[])
+          : null;
+      if (transformedGuardInputs && transformedGuardInputs.length > 0) {
+        postHookInputs = transformedGuardInputs;
+        applyGuardTransformsToExecArgs({
+          guardInputEntries: guardInputsWithMapping,
+          transformedInputs: transformedGuardInputs,
+          guardVariableCandidates,
+          evaluatedArgs,
+          evaluatedArgStrings
+        });
       }
-    }
-  }
+      // Bind evaluated arguments to parameters
+      for (let i = 0; i < params.length; i++) {
+        const paramName = params[i];
+        const argValue = evaluatedArgs[i];
+        const argStringValue = evaluatedArgStrings[i];
+        const originalVar = originalVariables[i];
+        const guardCandidate = guardVariableCandidates[i];
+        const isShellCode =
+          definition.type === 'code' &&
+          typeof definition.language === 'string' &&
+          (definition.language === 'bash' || definition.language === 'sh');
+        const preferGuardReplacement =
+          transformedGuardSet?.has(guardCandidate as Variable) ?? false;
+        const allowOriginalReuse =
+          !preferGuardReplacement && Boolean(originalVar) && !isShellCode && definition.type !== 'command';
 
-  // Capture descriptors from executable definition and parameters
-  const descriptorPieces: SecurityDescriptor[] = [];
-  const variableDescriptor = getVariableSecurityDescriptor(variable);
-  if (variableDescriptor) {
-    descriptorPieces.push(variableDescriptor);
-  }
-  const mergedParamDescriptor = collectAndMergeParameterDescriptors(params, execEnv);
-  if (mergedParamDescriptor) {
-    descriptorPieces.push(mergedParamDescriptor);
-  }
-  if (descriptorPieces.length > 0) {
-    resultSecurityDescriptor =
-      descriptorPieces.length === 1
-        ? descriptorPieces[0]
-        : env.mergeSecurityDescriptors(...descriptorPieces);
-    env.recordSecurityDescriptor(resultSecurityDescriptor);
-  }
+        if (guardCandidate && (!originalVar || !allowOriginalReuse || preferGuardReplacement)) {
+          const candidateClone = cloneGuardCandidateForParameter(
+            paramName,
+            guardCandidate,
+            argValue,
+            argStringValue
+          );
+          execEnv.setParameterVariable(paramName, candidateClone);
+          continue;
+        }
 
-  const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
-  const guardInputVariable =
-    preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
-  try {
-    await handleGuardDecision(preDecision, node, env, operationContext);
-  } catch (error) {
-    if (guardInputVariable) {
-      const existingInput = execEnv.getVariable('input');
-      if (!existingInput) {
-        const clonedInput: Variable = {
-          ...(guardInputVariable as Variable),
-          name: 'input',
-          ctx: { ...(guardInputVariable as Variable).ctx },
-          internal: {
-            ...((guardInputVariable as Variable).internal ?? {}),
-            isSystem: true,
-            isParameter: true
+        if (argValue !== undefined) {
+          const paramVar = createParameterVariable({
+            name: paramName,
+            value: argValue,
+            stringValue: argStringValue,
+            originalVariable: originalVar,
+            allowOriginalReuse,
+            metadataFactory: createParameterMetadata,
+            origin: 'exec-param'
+          });
+
+          if (paramVar) {
+            execEnv.setParameterVariable(paramName, paramVar);
           }
-        };
-        execEnv.setParameterVariable('input', clonedInput);
+        }
       }
-    }
-    if (whenExprNode) {
-      const handled = await handleExecGuardDenial(error, {
-        execEnv,
-        env,
-        whenExprNode
-      });
-      if (handled) {
-        return finalizeResult(handled);
+
+      // Capture descriptors from executable definition and parameters
+      const descriptorPieces: SecurityDescriptor[] = [];
+      const variableDescriptor = getVariableSecurityDescriptor(variable);
+      if (variableDescriptor) {
+        descriptorPieces.push(variableDescriptor);
       }
-    }
-    throw error;
-  }
+      const mergedParamDescriptor = collectAndMergeParameterDescriptors(params, execEnv);
+      if (mergedParamDescriptor) {
+        descriptorPieces.push(mergedParamDescriptor);
+      }
+      if (descriptorPieces.length > 0) {
+        resultSecurityDescriptor =
+          descriptorPieces.length === 1
+            ? descriptorPieces[0]
+            : env.mergeSecurityDescriptors(...descriptorPieces);
+        env.recordSecurityDescriptor(resultSecurityDescriptor);
+      }
+
+      const guardInputVariable =
+        preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
+      try {
+        await handleGuardDecision(preDecision, node, env, operationContext);
+      } catch (error) {
+        if (guardInputVariable) {
+          const existingInput = execEnv.getVariable('input');
+          if (!existingInput) {
+            const clonedInput: Variable = {
+              ...(guardInputVariable as Variable),
+              name: 'input',
+              ctx: { ...(guardInputVariable as Variable).ctx },
+              internal: {
+                ...((guardInputVariable as Variable).internal ?? {}),
+                isSystem: true,
+                isParameter: true
+              }
+            };
+            execEnv.setParameterVariable('input', clonedInput);
+          }
+        }
+        if (whenExprNode) {
+          const handled = await handleExecGuardDenial(error, {
+            execEnv,
+            env,
+            whenExprNode
+          });
+          if (handled) {
+            return finalizeResult(handled);
+          }
+        }
+        throw error;
+      }
   
   let result: unknown;
   

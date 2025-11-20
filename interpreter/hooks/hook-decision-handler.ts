@@ -10,6 +10,8 @@ import type {
   GuardContextSnapshot
 } from '../env/ContextManager';
 import type { Variable } from '@core/types/variable';
+import { isVariable } from '../utils/variable-resolution';
+import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 
 interface GuardDecisionInfo {
   guardName: string | null;
@@ -97,6 +99,30 @@ export async function handleGuardDecision(
   }
 }
 
+export function getGuardTransformedInputs(
+  decision: HookDecision | undefined,
+  originalInputs?: readonly unknown[]
+): readonly Variable[] | undefined {
+  if (!decision?.metadata) {
+    return undefined;
+  }
+  const candidates = (decision.metadata as Record<string, unknown>).transformedInputs;
+  if (!Array.isArray(candidates)) {
+    return undefined;
+  }
+
+  const variables = candidates.filter(isVariable) as Variable[];
+  if (variables.length !== candidates.length) {
+    return undefined;
+  }
+
+  if (!originalInputs || originalInputs.length === 0) {
+    return variables;
+  }
+
+  return alignTransformedInputs(variables, originalInputs);
+}
+
 function enforcePipelineGuardRetry(
   info: GuardDecisionInfo,
   env: Environment,
@@ -149,7 +175,7 @@ function enforcePipelineGuardRetry(
     });
   }
 
-  throw new GuardError({
+  throw new GuardRetrySignal({
     decision: 'retry',
     guardName: info.guardName,
     guardFilter: info.guardFilter,
@@ -180,4 +206,36 @@ function extractNodeLocation(node: HookableNode) {
     return node.location ?? null;
   }
   return node.location ?? null;
+}
+
+function alignTransformedInputs(
+  transformed: readonly Variable[],
+  originals: readonly unknown[]
+): Variable[] {
+  const aligned: Variable[] = [];
+  const limit = Math.min(transformed.length, originals.length);
+  for (let i = 0; i < limit; i++) {
+    const replacement = transformed[i];
+    const original = originals[i];
+    if (isVariable(original) && original.name !== replacement.name) {
+      const cloned: Variable = {
+        ...replacement,
+        name: original.name,
+        ctx: replacement.ctx ? { ...replacement.ctx } : undefined,
+        internal: replacement.internal ? { ...replacement.internal } : undefined
+      };
+      if (cloned.ctx?.ctxCache) {
+        delete cloned.ctx.ctxCache;
+      }
+      aligned.push(cloned);
+    } else {
+      aligned.push(replacement);
+    }
+  }
+
+  for (let i = limit; i < transformed.length; i++) {
+    aligned.push(transformed[i]);
+  }
+
+  return aligned;
 }

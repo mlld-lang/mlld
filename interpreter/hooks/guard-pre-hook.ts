@@ -29,6 +29,7 @@ import { materializeGuardTransform } from '../utils/guard-transform';
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
 interface PerInputCandidate {
+  index: number;
   variable: Variable;
   labels: readonly DataLabel[];
   sources: readonly string[];
@@ -362,7 +363,7 @@ export const guardPreHook: PreHook = async (
       }
     }
 
-    transformedInputs.push(currentInput);
+    transformedInputs[candidate.index] = currentInput;
   }
 
   if (operationGuards.length > 0) {
@@ -465,7 +466,8 @@ function buildPerInputCandidates(
 ): PerInputCandidate[] {
   const results: PerInputCandidate[] = [];
 
-  for (const variable of inputs) {
+  for (let index = 0; index < inputs.length; index++) {
+    const variable = inputs[index]!;
     const labels = Array.isArray(variable.ctx?.labels) ? variable.ctx.labels : [];
     const sources = Array.isArray(variable.ctx?.sources) ? variable.ctx.sources : [];
 
@@ -483,7 +485,7 @@ function buildPerInputCandidates(
     }
 
     if (guards.length > 0) {
-      results.push({ variable, labels, sources, guards });
+      results.push({ index, variable, labels, sources, guards });
     }
   }
 

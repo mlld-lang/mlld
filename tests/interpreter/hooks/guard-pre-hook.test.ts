@@ -13,6 +13,7 @@ import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 
 function createEnv(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -517,6 +518,76 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     const execDirective = parseSync('/exe @leakSecret() = ::@secretValue::')[0] as DirectiveNode;
     await evaluateDirective(execDirective, env);
 
-    const directive = parseSync('/show @leakSecret()')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked inline secret/);
-  });
+  const directive = parseSync('/show @leakSecret()')[0] as DirectiveNode;
+  await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked inline secret/);
+});
+
+it('applies guard transformations to directive inputs before execution', async () => {
+  const env = createEnv();
+  const effects = env.getEffectHandler() as TestEffectHandler;
+  const guardDirective = parseSync(
+    '/guard @redact for secret = when [ * => allow "clean" ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(guardDirective, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'raw-secret',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const directive = parseSync('/show @secretVar')[0] as DirectiveNode;
+  await evaluateDirective(directive, env);
+  expect(effects.getOutput().trim()).toBe('clean');
+});
+
+it('feeds guard-transformed values into exec invocation parameters', async () => {
+  const env = createEnv();
+  const guardDirective = parseSync(
+    '/guard @scrub for secret = when [ * => allow "scrubbed" ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(guardDirective, env);
+
+  const exeDirective = parseSync('/exe @echo(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(exeDirective, env);
+
+  env.setVariable(
+    'secretVar',
+    createSimpleTextVariable(
+      'secretVar',
+      'raw-secret',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['secret'] })
+      }
+    )
+  );
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'echo' }],
+      args: [{ type: 'VariableReference', identifier: 'secretVar' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toContain('scrubbed');
+});
