@@ -248,6 +248,9 @@ export class ContextManager {
     if (guardContext?.input !== undefined) {
       ctxValue.input = guardContext.input;
     }
+    if (guardContext?.output !== undefined) {
+      ctxValue.output = guardContext.output;
+    }
 
     if (ctxValue.guard) {
       ctxValue.guard = this.normalizeGuardContext(guardContext, deniedContext);
@@ -320,6 +323,7 @@ export class ContextManager {
     const resolvedName = guardContext?.name ?? deniedContext?.guardName ?? null;
     const resolvedFilter = guardContext?.guardFilter ?? deniedContext?.guardFilter ?? null;
     const max = typeof guardContext?.max === 'number' ? guardContext.max : DEFAULT_GUARD_MAX;
+    const timing = guardContext?.timing ?? null;
 
     return {
       ...(guardContext ?? {}),
@@ -331,7 +335,8 @@ export class ContextManager {
       filter: resolvedFilter,
       attempt,
       try: typeof guardContext?.try === 'number' ? guardContext.try : attempt,
-      max
+      max,
+      timing
     };
   }
 

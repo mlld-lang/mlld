@@ -319,9 +319,11 @@ async function evaluateGuard(options: {
     tries: [],
     max: DEFAULT_GUARD_MAX,
     input: inputVariable,
+    output: inputVariable,
     labels: contextLabels,
     sources: contextSources,
     inputPreview,
+    outputPreview: buildVariablePreview(inputVariable),
     timing: 'after'
   } as GuardContextSnapshot;
 
@@ -753,6 +755,7 @@ function buildGuardError(options: {
 }): Error {
   const primaryReason = options.reasons[0] ?? 'Guard blocked operation';
   const { GuardError } = require('@core/errors/GuardError');
+  const guardContext = options.guardResults[0]?.metadata?.guardContext as GuardContextSnapshot | undefined;
   return new GuardError({
     decision: options.retry ? 'retry' : 'deny',
     guardName: options.guardResults[0]?.guardName ?? null,
@@ -765,6 +768,7 @@ function buildGuardError(options: {
     guardResults: options.guardResults,
     hints: options.guardResults.flatMap(entry => (entry.hint ? [entry.hint] : [])),
     timing: 'after',
-    reason: primaryReason
+    reason: primaryReason,
+    guardContext
   });
 }

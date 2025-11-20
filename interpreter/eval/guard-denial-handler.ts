@@ -41,6 +41,24 @@ export async function handleExecGuardDenial(
     options.env.recordSecurityDescriptor(materializedWarning.descriptor);
   }
   maybeInjectGuardInputVariable(options.execEnv, guardInput ?? guardContext?.input);
+  // Populate @output for after-guard denied handlers when available
+  if (guardContext?.output !== undefined) {
+    const existingOutput = options.execEnv.getVariable?.('output');
+    if (!existingOutput && isVariable(guardContext.output as Variable)) {
+      const outVar = guardContext.output as Variable;
+      const clonedOutput: Variable = {
+        ...outVar,
+        name: 'output',
+        ctx: { ...(outVar.ctx ?? {}) },
+        internal: {
+          ...(outVar.internal ?? {}),
+          isSystem: true,
+          isParameter: true
+        }
+      };
+      options.execEnv.setParameterVariable('output', clonedOutput);
+    }
+  }
   const runHandlers = async () =>
     options.execEnv.withDeniedContext(deniedContext, async () =>
       evaluateWhenExpression(options.whenExprNode, options.execEnv, undefined, { denyMode: true })

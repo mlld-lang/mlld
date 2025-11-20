@@ -708,7 +708,8 @@ async function evaluateGuard(options: {
     labels: contextLabels,
     sources: contextSources,
     inputPreview,
-    hintHistory: options.attemptHistory.map(entry => entry.hint ?? null)
+    hintHistory: options.attemptHistory.map(entry => entry.hint ?? null),
+    timing: 'before'
   };
 
   const contextSnapshotForMetadata = cloneGuardContextSnapshot(guardContext);
