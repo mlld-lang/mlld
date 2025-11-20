@@ -1,6 +1,6 @@
 import type { HookableNode } from '@core/types/hooks';
 import type { GuardResult, GuardActionNode, GuardBlockNode, GuardHint } from '@core/types/guard';
-import type { DataLabel } from '@core/types/security';
+import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createArrayVariable } from '@core/types/variable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
@@ -11,8 +11,8 @@ import {
   createGuardInputHelper
 } from '@core/types/variable/ArrayHelpers';
 import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
-import { makeSecurityDescriptor } from '@core/types/security';
+import { ctxToSecurityDescriptor, updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { materializeGuardTransform } from '../utils/guard-transform';
@@ -23,6 +23,7 @@ import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
 import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { isVariable } from '../utils/variable-resolution';
+import { extractSecurityDescriptor } from '../utils/structured-value';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 
@@ -76,6 +77,8 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
 
   const registry = env.getGuardRegistry();
   const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
+  let activeOutputs = outputVariables.slice();
+  let currentDescriptor = extractOutputDescriptor(result, activeOutputs[0]);
 
   const perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride);
   const operationGuards = collectOperationGuards(registry, operation, guardOverride, outputVariables);
@@ -88,11 +91,10 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
   const reasons: string[] = [];
   const hints: GuardHint[] = [];
   let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
-
-  let transformedOutput: Variable | undefined = outputVariables[0];
+  let transformsApplied = false;
 
   for (const candidate of perInputCandidates) {
-    let currentInput = candidate.variable;
+    let currentInput = activeOutputs[0] ?? candidate.variable;
 
     for (const guard of candidate.guards) {
       const resultEntry = await evaluateGuard({
@@ -102,15 +104,30 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         operation,
         scope: 'perInput',
         perInput: candidate,
-        inputHelper: buildGuardInputHelper(outputVariables)
+        inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
+        activeInput: currentInput,
+        labelsOverride: currentDescriptor.labels,
+        sourcesOverride: currentDescriptor.sources,
+        inputPreviewOverride: buildVariablePreview(currentInput)
       });
       guardTrace.push(resultEntry);
       if (resultEntry.hint) {
         hints.push(resultEntry.hint);
       }
-      if (resultEntry.decision === 'allow' && resultEntry.replacement && isVariable(resultEntry.replacement as Variable) && currentDecision === 'allow') {
-        currentInput = resultEntry.replacement as Variable;
-        transformedOutput = currentInput;
+      if (
+        resultEntry.decision === 'allow' &&
+        currentDecision === 'allow' &&
+        resultEntry.replacement
+      ) {
+        const replacements = normalizeReplacementVariables(resultEntry.replacement);
+        if (replacements.length > 0) {
+          const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
+          applyDescriptorToVariables(mergedDescriptor, replacements);
+          currentDescriptor = mergedDescriptor;
+          activeOutputs = replacements;
+          currentInput = replacements[0];
+          transformsApplied = true;
+        }
       } else if (resultEntry.decision === 'deny') {
         currentDecision = 'deny';
         if (resultEntry.reason) {
@@ -126,7 +143,10 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
   }
 
   if (operationGuards.length > 0) {
-    const opSnapshot = buildOperationSnapshot(transformedOutput ? [transformedOutput] : outputVariables);
+    if (activeOutputs.length === 0 && outputVariables.length > 0) {
+      activeOutputs = outputVariables.slice();
+    }
+    let opSnapshot = buildOperationSnapshot(activeOutputs.length > 0 ? activeOutputs : outputVariables);
 
     for (const guard of operationGuards) {
       const resultEntry = await evaluateGuard({
@@ -136,15 +156,25 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         operation,
         scope: 'perOperation',
         operationSnapshot: opSnapshot,
-        inputHelper: buildGuardInputHelper(outputVariables)
+        inputHelper: buildGuardInputHelper(activeOutputs.length > 0 ? activeOutputs : outputVariables),
+        labelsOverride: opSnapshot.labels,
+        sourcesOverride: opSnapshot.sources,
+        inputPreviewOverride: `Array(len=${opSnapshot.variables.length})`
       });
       guardTrace.push(resultEntry);
       if (resultEntry.hint) {
         hints.push(resultEntry.hint);
       }
-      if (resultEntry.decision === 'allow' && resultEntry.replacement && Array.isArray(resultEntry.replacement) && currentDecision === 'allow') {
-        const replacementArr = resultEntry.replacement as Variable[];
-        transformedOutput = replacementArr[0];
+      if (resultEntry.decision === 'allow' && resultEntry.replacement && currentDecision === 'allow') {
+        const replacements = normalizeReplacementVariables(resultEntry.replacement);
+        if (replacements.length > 0) {
+          const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
+          applyDescriptorToVariables(mergedDescriptor, replacements);
+          currentDescriptor = mergedDescriptor;
+          activeOutputs = replacements;
+          transformsApplied = true;
+          opSnapshot = buildOperationSnapshot(activeOutputs);
+        }
       } else if (resultEntry.decision === 'deny') {
         currentDecision = 'deny';
         if (resultEntry.reason) {
@@ -166,26 +196,31 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
       guardResults: guardTrace,
       reasons,
       operation,
-      output: transformedOutput ?? outputVariables[0],
+      output: activeOutputs[0] ?? outputVariables[0],
       timing: 'after'
     });
     throw error;
   }
 
   if (currentDecision === 'retry') {
+    const retryReasons = reasons.slice();
+    const defaultReason = 'Guard retry not implemented for after guards';
+    if (!retryReasons.includes(defaultReason)) {
+      retryReasons.unshift(defaultReason);
+    }
     const error = buildGuardError({
       guardResults: guardTrace,
-      reasons: reasons.length > 0 ? reasons : ['Guard retry not implemented for after guards'],
+      reasons: retryReasons,
       operation,
-      output: transformedOutput ?? outputVariables[0],
+      output: activeOutputs[0] ?? outputVariables[0],
       timing: 'after',
       retry: true
     });
     throw error;
   }
 
-  if (transformedOutput) {
-    return { ...result, value: transformedOutput };
+  if (transformsApplied && activeOutputs[0]) {
+    return { ...result, value: activeOutputs[0] };
   }
 
   return result;
@@ -273,6 +308,10 @@ async function evaluateGuard(options: {
   perInput?: PerInputCandidate;
   operationSnapshot?: OperationSnapshot;
   inputHelper?: GuardInputHelper;
+  activeInput?: Variable;
+  labelsOverride?: readonly DataLabel[];
+  sourcesOverride?: readonly string[];
+  inputPreviewOverride?: string | null;
 }): Promise<GuardResult> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
@@ -282,11 +321,20 @@ async function evaluateGuard(options: {
   let contextSources: readonly string[];
   let inputPreview: string | null = null;
 
-  if (scope === 'perInput' && options.perInput) {
+  if (options.activeInput) {
+    inputVariable = cloneVariable(options.activeInput);
+    contextLabels =
+      options.labelsOverride ??
+      (Array.isArray(options.activeInput.ctx?.labels) ? options.activeInput.ctx.labels : []);
+    contextSources =
+      options.sourcesOverride ??
+      (Array.isArray(options.activeInput.ctx?.sources) ? options.activeInput.ctx.sources : []);
+    inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
+  } else if (scope === 'perInput' && options.perInput) {
     inputVariable = cloneVariable(options.perInput.variable);
-    contextLabels = options.perInput.labels;
-    contextSources = options.perInput.sources;
-    inputPreview = buildVariablePreview(inputVariable);
+    contextLabels = options.labelsOverride ?? options.perInput.labels;
+    contextSources = options.sourcesOverride ?? options.perInput.sources;
+    inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
     inputVariable = createArrayVariable('input', arrayValue as any[], true, GUARD_INPUT_SOURCE, {
@@ -294,9 +342,10 @@ async function evaluateGuard(options: {
       isReserved: true
     });
     attachArrayHelpers(inputVariable as any);
-    contextLabels = options.operationSnapshot.labels;
-    contextSources = options.operationSnapshot.sources;
-    inputPreview = `Array(len=${options.operationSnapshot.variables.length})`;
+    contextLabels = options.labelsOverride ?? options.operationSnapshot.labels;
+    contextSources = options.sourcesOverride ?? options.operationSnapshot.sources;
+    inputPreview =
+      options.inputPreviewOverride ?? `Array(len=${options.operationSnapshot.variables.length})`;
   } else {
     return { guardName: guard.name ?? null, decision: 'allow', timing: 'after' };
   }
@@ -771,4 +820,60 @@ function buildGuardError(options: {
     reason: primaryReason,
     guardContext
   });
+}
+
+function normalizeReplacementVariables(value: unknown): Variable[] {
+  if (isVariable(value as Variable)) {
+    return [value as Variable];
+  }
+  if (Array.isArray(value)) {
+    return (value as unknown[]).filter(item => isVariable(item as Variable)) as Variable[];
+  }
+  return [];
+}
+
+function extractOutputDescriptor(result: EvalResult, output?: Variable): SecurityDescriptor {
+  const valueDescriptor = extractSecurityDescriptor(result.value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  const resultDescriptor =
+    result && typeof result === 'object' && 'ctx' in result
+      ? extractSecurityDescriptor((result as Record<string, unknown>).ctx, { recursive: true })
+      : undefined;
+  const outputDescriptor = output?.ctx ? ctxToSecurityDescriptor(output.ctx) : undefined;
+  return mergeDescriptors(valueDescriptor, resultDescriptor, outputDescriptor, makeSecurityDescriptor());
+}
+
+function mergeGuardDescriptor(
+  current: SecurityDescriptor,
+  replacements: readonly Variable[],
+  guard: GuardDefinition
+): SecurityDescriptor {
+  const guardSource = guard.name ?? guard.filterValue ?? 'guard';
+  const descriptors: SecurityDescriptor[] = [current];
+  for (const variable of replacements) {
+    const descriptor = extractSecurityDescriptor(variable, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (descriptor) {
+      descriptors.push(descriptor);
+    }
+  }
+  descriptors.push(makeSecurityDescriptor({ sources: [`guard:${guardSource}`] }));
+  return mergeDescriptors(...descriptors);
+}
+
+function applyDescriptorToVariables(
+  descriptor: SecurityDescriptor,
+  variables: readonly Variable[]
+): void {
+  for (const variable of variables) {
+    const ctx = (variable.ctx ?? (variable.ctx = {} as any)) as Record<string, unknown>;
+    updateCtxFromDescriptor(ctx, descriptor);
+    if ('ctxCache' in ctx) {
+      delete (ctx as any).ctxCache;
+    }
+  }
 }
