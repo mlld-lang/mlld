@@ -24,6 +24,7 @@ import type { GuardDefinition } from '../guards/GuardRegistry';
 import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { isVariable } from '../utils/variable-resolution';
 import { appendGuardHistory } from './guard-shared-history';
+import { GuardError } from '@core/errors/GuardError';
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -754,7 +755,6 @@ function buildGuardError(options: {
   retry?: boolean;
 }): Error {
   const primaryReason = options.reasons[0] ?? 'Guard blocked operation';
-  const { GuardError } = require('@core/errors/GuardError');
   const guardContext = options.guardResults[0]?.metadata?.guardContext as GuardContextSnapshot | undefined;
   return new GuardError({
     decision: options.retry ? 'retry' : 'deny',

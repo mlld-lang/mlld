@@ -118,6 +118,7 @@ describe('handleExecGuardDenial', () => {
     const whenExpr = parseWhenExpression(`
 /exe @process(value) = when [
   denied => show "Guard input: @ctx.guard.input"
+  denied => show "Guard output: @ctx.guard.output"
   denied => show "Param value: @value"
   * => show "Process"
 ]
@@ -147,6 +148,7 @@ describe('handleExecGuardDenial', () => {
       tries: [],
       max: 3,
       input: guardInput,
+      output: guardInput,
       labels: ['secret'],
       sources: [],
       hintHistory: []
@@ -167,6 +169,7 @@ describe('handleExecGuardDenial', () => {
       .filter(effect => effect.type === 'both')
       .map(effect => effect.content.trim());
     expect(outputs).toContain('Guard input: sk-live-ctx');
+    expect(outputs).toContain('Guard output: sk-live-ctx');
     expect(outputs).toContain('Param value: sk-live-ctx');
   });
 
