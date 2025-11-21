@@ -30,7 +30,7 @@ import { InterpolationContext, EscapingStrategyFactory } from './interpolation-c
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
-import { asText, assertStructuredValue, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, assertStructuredValue } from '@interpreter/utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
 import type { SecurityDescriptor } from '@core/types/security';
 import { classifyShellValue } from '@interpreter/utils/shell-value';
@@ -680,9 +680,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   if (node.type === 'FileReference') {
     const fileRefNode = node as FileReferenceNode;
     const { processContentLoader } = await import('../eval/content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
     const { accessField } = await import('../utils/field-access');
-    const { isStructuredValue, asData } = await import('../utils/structured-value');
+    const { wrapLoadContentValue } = await import('../utils/load-content-structured');
+    const { isStructuredValue } = await import('../utils/structured-value');
 
     // Convert FileReference to load-content structure
     const loadContentNode = {
@@ -691,12 +691,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     };
 
     // Load the content
-    let loadResult = await processContentLoader(loadContentNode, env);
-
-    // Extract data from StructuredValue if wrapped
-    if (isStructuredValue(loadResult)) {
-      loadResult = asData(loadResult);
-    }
+    const rawLoadResult = await processContentLoader(loadContentNode, env);
+    let loadResult = isStructuredValue(rawLoadResult)
+      ? rawLoadResult
+      : wrapLoadContentValue(rawLoadResult);
 
     // Process field access if present
     if (fileRefNode.fields && fileRefNode.fields.length > 0) {

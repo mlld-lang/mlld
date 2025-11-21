@@ -149,6 +149,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           }
           break;
         }
+        if (name === 'keepStructured') {
+          accessedValue = structuredWrapper;
+          break;
+        }
+        if (name === 'keep') {
+          accessedValue = structuredWrapper;
+          break;
+        }
         if (name === 'type') {
           accessedValue = structuredWrapper.type;
           break;

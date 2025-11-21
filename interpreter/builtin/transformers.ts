@@ -12,14 +12,14 @@ export interface TransformerDefinition {
   name: string;
   uppercase: string;
   description: string;
-  implementation: (input: string) => Promise<string> | string;
+  implementation: (input: any) => Promise<any> | any;
   variants?: TransformerVariant[];
 }
 
 export interface TransformerVariant {
   field: string;
   description: string;
-  implementation: (input: string) => Promise<string> | string;
+  implementation: (input: any) => Promise<any> | any;
 }
 
 function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
@@ -227,7 +227,7 @@ export const builtinTransformers: TransformerDefinition[] = [
  */
 export function createTransformerVariable(
   name: string,
-  implementation: (input: string) => Promise<string> | string,
+  implementation: (input: any) => Promise<any> | any,
   description: string,
   isUppercase: boolean
 ): MlldVariable {

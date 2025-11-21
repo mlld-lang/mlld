@@ -51,6 +51,7 @@ Currently supports JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Sol
 - `<file.json>` and `<file.jsonl>` auto-parse to StructuredValues: `.data` holds parsed object/array, `.text` preserves raw content, `.ctx` keeps path metadata.
 - JSONL parses non-empty lines individually. Parse errors include line number and offending line preview.
 - Opt-out (run-wide) by setting `MLLD_LOAD_JSON_RAW=1` to keep raw text.
+- Structured access: use `.keepStructured`/`.keep` or the `keepStructured()`/`keep()` helper to retain the StructuredValue/metadata when you need ctx/provenance instead of content-only sugar.
 
 ## The Content Extraction Magic
 

@@ -64,6 +64,7 @@ import { HookManager } from '../hooks/HookManager';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
+import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 
 interface ImportBindingInfo {
@@ -398,6 +399,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize built-in transformers
       this.initializeBuiltinTransformers();
+
+      // Register keep/keepStructured builtins
+      this.registerKeepBuiltins();
       
       // Reserve module prefixes from resolver configuration and create path variables
       this.reserveModulePrefixes();
@@ -426,6 +430,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getAllowAbsolutePaths: () => this.allowAbsolutePaths
     };
     this.importResolver = new ImportResolver(importResolverDependencies);
+
+    // Ensure keep/keepStructured helpers are available even from child environments
+    this.getRootEnvironment().registerKeepBuiltins();
     
     // Initialize command executor factory with dependencies
     const executorDependencies: ExecutorDependencies = {
@@ -1312,7 +1319,23 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.hookManager.registerPost(guardPostHook);
     this.hookManager.registerPost(taintPostHook);
   }
-  
+
+  private registerKeepBuiltins(): void {
+    try {
+      if (this.variableManager.hasVariable('keep') && this.variableManager.hasVariable('keepStructured')) {
+        return;
+      }
+      const keepExec = createKeepExecutable();
+      const keepStructuredExec = createKeepStructuredExecutable();
+      this.variableManager.setVariable('keep', keepExec as any);
+      this.variableManager.setVariable('keepStructured', keepStructuredExec as any);
+      this.reservedNames.add('keep');
+      this.reservedNames.add('keepStructured');
+    } catch (error) {
+      logger.warn('Failed to register keep builtins', error);
+    }
+  }
+
   private getRootEnvironment(): Environment {
     let current: Environment = this;
     while (current.parent) {

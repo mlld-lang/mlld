@@ -295,8 +295,26 @@ export async function prepareVarAssignment(
   let resolvedValue: any;
   const templateAst: any = null; // Store AST for templates that need lazy interpolation
   
+  if (valueNode && typeof valueNode === 'object' && valueNode.type === 'FileReference') {
+    const { processContentLoader } = await import('./content-loader');
+    const { accessField } = await import('../utils/field-access');
+    const loadContentNode = {
+      type: 'load-content' as const,
+      source: valueNode.source,
+      options: valueNode.options,
+      pipes: valueNode.pipes
+    };
+    const rawResult = await processContentLoader(loadContentNode as any, env);
+    let structuredResult = isStructuredValue(rawResult) ? rawResult : wrapLoadContentValue(rawResult);
+    if (valueNode.fields && valueNode.fields.length > 0) {
+      for (const field of valueNode.fields) {
+        structuredResult = await accessField(structuredResult, field, { env });
+      }
+    }
+    resolvedValue = structuredResult;
+    
   // Check for primitive values first (numbers, booleans, null)
-  if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
+  } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values from the grammar
     resolvedValue = valueNode;
     
@@ -981,14 +999,16 @@ export async function prepareVarAssignment(
 
   } else if (valueNode.type === 'ExecInvocation') {
     // Exec invocations can return any type
-    const actualValue = isStructuredValue(resolvedValue) ? asData(resolvedValue) : resolvedValue;
-    if (typeof actualValue === 'object' && actualValue !== null) {
-      if (Array.isArray(actualValue)) {
+    if (isStructuredValue(resolvedValue)) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
         const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createArrayVariable(identifier, actualValue, false, source, options);
+        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
       } else {
         const options = applySecurityOptions(undefined, resolvedValueDescriptor);
-        variable = createObjectVariable(identifier, actualValue, false, source, options);
+        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
       }
     } else {
       const options = applySecurityOptions(undefined, resolvedValueDescriptor);

@@ -20,6 +20,7 @@ mlld treats structured data (arrays, objects, JSON) as first-class values via `S
 - Runtime metadata (filenames, retries, loader info) flows via `.ctx`
 - String coercion is safe and predictable: `toString()` returns `.text`
 - JSON/JSONL auto-parse: `<path>.json` and `<path>.jsonl` load as StructuredValues with parsed `.data` (object/array), raw `.text`, and preserved `.ctx`. Set `MLLD_LOAD_JSON_RAW=1` to keep raw text.
+- Structured access helper: `keepStructured()` and `.keepStructured` let you retain wrappers/metadata when you need ctx/provenance instead of the content-only sugar.
 
 ## Details
 

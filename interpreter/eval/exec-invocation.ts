@@ -937,8 +937,15 @@ export async function evaluateExecInvocation(
     // Regular transformer handling
     let inputValue = '';
     if (args.length > 0) {
-      const arg = args[0];
-      if (typeof arg === 'string') {
+      let arg: any = args[0];
+      if (arg && typeof arg === 'object' && 'type' in arg) {
+        const { evaluateDataValue } = await import('./data-value-evaluator');
+        arg = await evaluateDataValue(arg as any, env);
+      }
+      const transformerName = (variable.name ?? commandName ?? '').toLowerCase();
+      if (transformerName === 'keep' || transformerName === 'keepstructured') {
+        inputValue = arg as any;
+      } else if (typeof arg === 'string') {
         inputValue = arg;
       } else if (arg && typeof arg === 'object') {
         inputValue = await interpolateWithResultDescriptor([arg], env);
@@ -1118,7 +1125,17 @@ export async function evaluateExecInvocation(
             argValueAny = argValue;
           }
           break;
-          
+
+        case 'load-content': {
+          const { processContentLoader } = await import('./content-loader');
+          const { wrapLoadContentValue } = await import('../utils/load-content-structured');
+          const loadResult = await processContentLoader(arg as any, env);
+          const structured = wrapLoadContentValue(loadResult);
+          argValueAny = structured;
+          argValue = asText(structured);
+          break;
+        }
+        
         case 'ExecInvocation': {
           const nestedResult = await evaluateExecInvocation(arg as ExecInvocation, env);
           if (nestedResult && nestedResult.value !== undefined) {
