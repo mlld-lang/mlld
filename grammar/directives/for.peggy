@@ -25,7 +25,7 @@ SlashFor "for directive"
           forOptions: opts || undefined
         },
         {
-          variable: pattern.variable.identifier,
+          variable: helpers.reconstructRawString(pattern.variable),
           source: helpers.reconstructRawString(pattern.source),
           action: helpers.reconstructRawString(action)
         },

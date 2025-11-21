@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@json.fromlist` transformer converts plain text lists (one item per line) to JSON arrays
 - Chained builtin methods on variables: string methods (slice, substring, substr, replace, replaceAll, padStart, padEnd, repeat, split, join) and array methods (slice, concat, reverse, sort) work in chains like `@secret.trim().slice(0, 6)` with security labels preserved
 - Structured-value helpers: added `keepStructured`/`keep` helper and `.keepStructured`/`.keep` field-access sugar to retain metadata/provenance without unwrapping content. Built-in `@keep`/`@keepStructured` executables allow helper-style usage in scripts.
+- For loops accept dotted iteration variables and bind both the base element and its field (e.g., `for @item.path in @files`) with proper field access errors.
+- For loop bodies can be `when [...]` across /for, /var, and /exe, using first-match semantics per iteration and feeding branch results into loop outputs.
 
 - Alligator JSON ergonomics: `<*.json>` and `<*.jsonl>` auto-parse to StructuredValues (parsed `.data`, raw `.text`, `.ctx` preserved); set `MLLD_LOAD_JSON_RAW=1` to opt out.
 

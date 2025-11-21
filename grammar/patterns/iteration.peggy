@@ -1,15 +1,11 @@
 // ITERATION PATTERNS
 // Shared patterns for iteration constructs (for loops, etc.)
 
-// For iteration pattern: @var in @collection
+// For iteration pattern: @var in @collection (supports dotted field access)
 ForIterationPattern "for iteration pattern"
-  = "@" variable:BaseIdentifier _ "in" _ source:VarRHSContent {
-      const varNode = helpers.createVariableReferenceNode('varIdentifier', { 
-        identifier: variable 
-      }, location());
-      
+  = variable:UnifiedVariableNoTail _ "in" _ source:VarRHSContent {
       return { 
-        variable: varNode, 
+        variable, 
         source: Array.isArray(source) ? source : [source]
       };
     }
@@ -170,6 +166,10 @@ ForSingleAction "for action"
   / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
       // Create the action node; pass ending.tail so pipelines are embedded immutably
       return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null);
+    }
+  / whenAction:WhenRHSAction {
+      // Allow when-style actions (including directives) directly in for loop bodies
+      return Array.isArray(whenAction) ? whenAction : [whenAction];
     }
   / invocation:UnifiedReferenceWithTail {
       // Follow the /when pattern - no @ consumption
