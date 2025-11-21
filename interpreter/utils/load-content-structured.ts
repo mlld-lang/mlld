@@ -5,6 +5,7 @@ import {
   type LoadContentResultHTML,
   type LoadContentResultURL
 } from '@core/types/load-content';
+import { MlldError } from '@core/errors';
 import {
   getVariableMetadata,
   hasVariableMetadata
@@ -42,6 +43,34 @@ function tryParseJson(text: string): { success: boolean; value?: unknown } {
   } catch {
     return { success: false };
   }
+}
+
+function parseJsonWithContext(text: string, sourceLabel: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error: any) {
+    const message = error?.message ? ` (${error.message})` : '';
+    throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`);
+  }
+}
+
+function parseJsonLines(text: string, sourceLabel: string): unknown[] {
+  const lines = text.split(/\r?\n/);
+  const results: unknown[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    try {
+      results.push(JSON.parse(line));
+    } catch (error: any) {
+      const message = error?.message ? ` (${error.message})` : '';
+      throw new MlldError(`Failed to parse JSONL from ${sourceLabel} at line ${i + 1}${message}`, {
+        line: i + 1,
+        offendingLine: line
+      });
+    }
+  }
+  return results;
 }
 
 function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMetadata): StructuredValueMetadata | undefined {
@@ -114,8 +143,23 @@ export function wrapLoadContentValue(value: any): StructuredValue {
   if (isLoadContentResult(value)) {
     const baseMetadata = extractLoadContentMetadata(value);
     const contentText = typeof value.content === 'string' ? value.content : String(value.content ?? '');
+    const filenameLower = (value.filename || '').toLowerCase();
+    const skipAutoParse = process.env.MLLD_LOAD_JSON_RAW === '1';
+
+    if (!skipAutoParse && filenameLower.endsWith('.jsonl') && typeof value.content === 'string') {
+      const data = parseJsonLines(contentText, value.filename || 'content');
+      const metadata = buildMetadata(baseMetadata, { type: 'jsonl' });
+      return wrapStructured(data, 'array', contentText, metadata);
+    }
+
+    if (!skipAutoParse && filenameLower.endsWith('.json') && typeof value.content === 'string') {
+      const data = parseJsonWithContext(contentText, value.filename || 'content');
+      const metadata = buildMetadata(baseMetadata, { type: 'json' });
+      return wrapStructured(data, detectStructuredType(data), contentText, metadata);
+    }
+
     const parsedFromContent = tryParseJson(contentText);
-    if (parsedFromContent.success) {
+    if (!skipAutoParse && parsedFromContent.success) {
       const data = parsedFromContent.value;
       return wrapStructured(data, detectStructuredType(data), contentText, baseMetadata);
     }

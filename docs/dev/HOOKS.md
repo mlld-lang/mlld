@@ -150,15 +150,15 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
 - Merges descriptors and records in environment
 - Traverses nested objects/arrays to find all descriptors
 
-**guardPreHook** (`interpreter/hooks/guard-pre-hook.ts`)
-- Enforces registered guards before directive execution
-- Resolves per-input and per-operation guard definitions, injects guard helpers, and can abort or request retries
-- Registered automatically via `Environment.registerBuiltinHooks()`
+**guard-before / guard-after** (`interpreter/hooks/guard-pre-hook.ts`, `interpreter/hooks/guard-post-hook.ts`)
+- Implements `/guard ... before ...` and `/guard ... after ...` syntax; hook files keep pre/post names for lifecycle clarity.
+- Enforces registered guards before and after directive execution; resolves per-input and per-operation guard definitions, injects guard helpers, and can abort or request retries.
+- Guard helpers are reserved in guard contexts: `@prefixWith` and `@tagValue` are injected into guard environments, and guard envs inherit all parent variables/executables so user helpers stay visible.
 - `PipelineExecutor.executeCommandVariable()` always passes `hookOptions.guard`, so every pipeline stage (including the synthetic `__source__`) runs through the guard hook path with an OperationContext seeded from the merged stage descriptor. Descriptor hints supplied to `processPipeline()` and the provenance assembled in `finalizeStageOutput()` flow into `@ctx.op.labels`, giving guard rules the same label set that downstream stages receive even when Stage 0 started with a plain string.
-- Because interpolation, iterators, pipelines, heredoc `/run`, and JS/Node returns all attach provenance handles through `ExpressionProvenance`, `materializeGuardInputs()` always materializes real Variables before guard evaluation. Guard fixtures that sanitize secrets, block heredocs, or retry pipeline stages rely on this hook to surface `.ctx.labels` even when the user-facing value is a primitive string produced by chained helpers.
+- Because interpolation, iterators, pipelines, heredoc `/run`, and JS/Node returns all attach provenance handles through `ExpressionProvenance`, `materializeGuardInputs()` always materializes real Variables (with descriptors) before guard evaluation. Guard fixtures that sanitize secrets, block heredocs, or retry pipeline stages rely on this hook to surface `.ctx.labels` even when the user-facing value is a primitive string produced by chained helpers.
 - Guard trace exposure: every guard execution contributes a `GuardResult` to `@ctx.guard.trace` alongside `@ctx.guard.reasons` and `@ctx.guard.hints`. These fields exist only while a guard is evaluating or while a denied handler runs; they are cleared before the main operation executes and reset to empty arrays by default to avoid null checks. A denied handler sees the aggregated trace, hints, and reasons for the whole operation.
 - Pipeline guard history: when a pipeline context is active, each guard evaluation appends `{ stage, operation, decision, trace, hints, reasons }` to `@p.guards` (and `@ctx.pipe.guards`), one entry per attempt. Retries append new entries instead of replacing earlier attempts, preserving a full audit trail across stages.
-- Guard non-reentrancy: while a guard evaluates, all guards are suppressed for nested directive/exe operations. Helper executables invoked from guard actions run unguarded to prevent recursion loops; write helpers accordingly and treat them as trusted.
+- Guard non-reentrancy: while a guard evaluates, all guards are suppressed for nested directive/exe operations. Helper executables invoked from guard actions run unguarded to prevent recursion loops; treat them as trusted.
 - Retry shared budget: guard retries reuse the pipeline retry machinery; `@ctx.guard.try` increments per attempt across the guard chain, and history is visible in `@p.guards` entries for each attempt. A retry on any guard in the chain causes the whole operation to be retried once; subsequent attempts see updated `@ctx.guard.try` values.
 
 ### OperationContext

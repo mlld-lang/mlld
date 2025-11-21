@@ -5,58 +5,78 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Phase 3.6 - Structured Data & Security Metadata (2025-11-12)
-
-### Fixed
-- Security metadata preserved through `/var` assignments
-- Issue #435: StructuredValue handling fully resolved
-- Display boundaries no longer leak wrapper objects
-- Foreach preserves and merges security descriptors
-- Template/executable taint tracking through pipelines
-- Module content suppression during imports - text, code fences, and markdown from imported modules no longer appear in stdout
-- Shell pipe detection now respects quoted strings - pipe characters inside quoted arguments no longer incorrectly trigger pipe handling
-- Transformer variant resolution in pipelines - `@json.fromlist`, `@json.llm`, `@json.loose`, and `@json.strict` now work correctly in all pipeline contexts
-
-### Added
-- Guard composition: all guards execute in registration order, decisions aggregate (deny > retry > allow @value > allow), transforms chain with provenance tracking, guard history via @ctx.guard.trace/hints/reasons and @p.guards in pipelines, overrides via with { guards: { only/except/false } }
-- `.ctx` property on StructuredValues (security, provenance, metrics)
-- `collectParameterDescriptors()` - centralized security collection
-- `extractSecurityDescriptor()` - extract from Values/Variables
-- `parseAndWrapJson()` - unified JSON detection and wrapping
-- `assertStructuredValue()` - dev-time boundary validation
-- Executables with shell commands auto-derive `commandOutput` taint
-- `@json.fromlist` transformer converts plain text lists (one item per line) to JSON arrays
-- Chained builtin methods on variables - string methods (slice, substring, substr, replace, replaceAll, padStart, padEnd, repeat, split, join) and array methods (slice, concat, reverse, sort) now work in chains like `@secret.trim().slice(0, 6)` with provenance preserved
-
-### Changed
-- Display boundaries consistently use `asText()` helper
-- Arrays of StructuredValues map elements for clean display
-- Template interpolation simplified (removed comma-separated arrays)
-- JS/Node executors unwrap StructuredValues to native data
-- Shell commands now run from project root when @base is inferred, otherwise from script directory
-
-### Removed
-- `createPipelineInput()` legacy pattern (migrated to `wrapStructured()`)
-- ~300 lines duplicate code (handlers, JSON cycles, formatters)
-- Unsafe `JSON.stringify()` at display boundaries
-
-### Security
-- Complete taint tracking through all boundaries
-- Foreach adds commandOutput taint to shell-based executables
-- Pipeline stages preserve security metadata end-to-end
-
 ## [2.0.0-rc70 (unreleased)]
+
+### Security - Production-Ready Guard System
+
+**Complete security layer for mlld**: Data labels, guards, and taint tracking that reliably prevents prompt injection and enables policy enforcement.
+
+**Guards**:
+- Policy enforcement for data access and operations
+- Syntax: `/guard <label> { allow/deny/retry }` with optional conditions
+- Guards trigger on data labels (`secret`, `pii`) or operations (`op:run`, `op:exe`)
+- Support `allow`, `deny`, and `retry` decisions
+- Can transform data with `allow @transform(@input)`
+- Fire before operations (input validation) or after operations (output validation)
+
+**Expression Tracking**:
+- Guards now see security labels through all transformations (closes `@secret.trim()` bypass hole)
+- Provenance preserved through: chained builtin methods, template interpolation, field access, iterators, pipelines, nested expressions
+- Example: `@secret.trim().slice(0, 5)` preserves `secret` label through entire chain
+- Guards fire at directive boundaries, exe invocations, and pipeline stages
+- ~155 evaluators instrumented across entire interpreter
+
+**Guard Composition**:
+- All guards execute in registration order (file top-to-bottom, imports flatten at position)
+- Multiple guards compose with decision precedence: deny > retry > allow @value > allow
+- Transform chaining: Guard N output → Guard N+1 input with full provenance tracking
+- Guard history exposed via `@ctx.guard.trace/hints/reasons` for denied handlers
+- Pipeline guard history via `@p.guards` tracks guard activity across all pipeline stages
+- Deterministic IDs for unnamed guards: `<unnamed-guard-N>`
+- Per-input guards (data labels) and per-operation guards (`op:run`, `op:exe`, etc.)
+
+**Before/After Guards**:
+- Guards fire before operations (input validation) or after operations (output validation)
+- Syntax: `/guard before`, `/guard after`, `/guard always` (fires both)
+- After guards enable LLM output validation: jailbreak detection, schema enforcement, PII scrubbing
+- Context: `@input` in before guards, `@output` in after guards, both available in denied handlers
+- After guards validate `@output` value with full security metadata
+- Composition: before guards → operation → after guards (execution order guaranteed)
+
+**Allow @value Transforms**:
+- Guards transform inputs/outputs: `allow @redact(@input)` or `allow @sanitize(@output)`
+- Transforms chain with metadata preservation (`guard:@name` appended to sources)
+- Works in both before guards (input sanitization) and after guards (output sanitization)
+- Cross-scope chaining: per-input guard transforms flow to per-operation guards
+- Provenance tracking: labels union, taint maximum, sources accumulate
+
+**Guard Overrides**:
+- Per-operation control: `with { guards: { only: [...], except: [...], false } }`
+- `guards: false` disables all guards (emits warning to stderr)
+- `only: ["@guard"]` runs specified guards only (unnamed guards excluded)
+- `except: ["@guard"]` skips named guards (unnamed guards still run)
+- Conflict detection: throws error if both `only` and `except` specified
+
+**Guard Architecture**:
+- Non-reentrant: guards don't fire during guard evaluation (prevents infinite recursion)
+- Guard helpers execute unguarded (assumed trusted)
+- Child environments inherit parent executables and variables
+- Reserved names in guard contexts: `@prefixWith`, `@tagValue` (system helpers)
+- GuardRegistry: single ordered array + label indexes (O(1) lookup, preserves registration order)
+
+**Taint Tracking**:
+- Security metadata preserved through `/var` assignments, template interpolation, pipelines
+- Complete taint tracking through all directive boundaries
 
 ### Added
 - **ctx/internal migration guide**: `docs/dev/MIGRATION_CTX_INTERNAL.md` explains how to replace `variable.metadata.*` access with `.ctx` / `.internal`, update StructuredValue checks, and modernize tests/proxies.
 - StructuredValue `.ctx`/`.internal` surfaces now power all provenance, security, and behavior metadata; helpers (`applySecurityDescriptorToStructuredValue`, `metadataToCtx`) keep ctx in sync automatically.
 - `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
 - `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
-- **Expression tracking** - Guards now work on expressions, not just variables
-  - `@secret.trim().slice(0, 5)` preserves labels through method chains
-  - Template interpolation, field access, and pipelines maintain security labels
-  - Guards fire at directive boundaries and inside pipelines
-  - Covers: chained methods, templates, iterators, pipelines, nested field access
+- `@json.fromlist` transformer converts plain text lists (one item per line) to JSON arrays
+- Chained builtin methods on variables: string methods (slice, substring, substr, replace, replaceAll, padStart, padEnd, repeat, split, join) and array methods (slice, concat, reverse, sort) work in chains like `@secret.trim().slice(0, 6)` with security labels preserved
+
+- Alligator JSON ergonomics: `<*.json>` and `<*.jsonl>` auto-parse to StructuredValues (parsed `.data`, raw `.text`, `.ctx` preserved); set `MLLD_LOAD_JSON_RAW=1` to opt out.
 
 ### Fixed
 - Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
@@ -80,12 +100,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Regression test added in `tests/cases/regression/parallel-interpolation-stack/`
 - Inline pipeline effect detection now differentiates builtin `append` from user-defined commands, restoring stage execution for execs named `append`
 - Alligator syntax in for expressions: `for @f in @files => <@f>` and property access like `for @f in @files => <@f>.fm.title` now work correctly
+- Module content suppression during imports - imported module content no longer appears in stdout
+- Shell pipe detection respects quoted strings - pipe characters inside quoted arguments no longer trigger pipe handling
+- Transformer variant resolution in pipelines - `@json.fromlist`, `@json.llm`, `@json.loose`, and `@json.strict` work correctly in all pipeline contexts
 
 ### Changed
 - **Enhanced error message for `run sh` in `/exe`**: `errors/parse/exe-run-sh/error.md` now clearly explains the distinction between bare shell commands and shell scripts
   - Shows that bare commands (`/exe @cmd(x) = {echo "@x"}`) support @variable interpolation but are single-line only
   - Shows that shell scripts (`/exe @cmd(x) = sh {echo "$1"}`) use $1, $2 parameters but support multiline with && and ;
   - Clarifies that the `run` keyword is only for standalone `/run` directives, not `/exe` definitions
+- Shell commands now run from project root when `@base` is inferred, otherwise from script directory
 
 ### Documentation
 - **llms.txt updates**:

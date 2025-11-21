@@ -47,6 +47,11 @@ Currently supports JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Sol
 - This allows XML-like tags such as `<thinking>` to remain literal text.
 - Angle brackets always mean “load contents”, not “filename string”. Use quotes for literal paths.
 
+### JSON/JSONL auto-parse
+- `<file.json>` and `<file.jsonl>` auto-parse to StructuredValues: `.data` holds parsed object/array, `.text` preserves raw content, `.ctx` keeps path metadata.
+- JSONL parses non-empty lines individually. Parse errors include line number and offending line preview.
+- Opt-out (run-wide) by setting `MLLD_LOAD_JSON_RAW=1` to keep raw text.
+
 ## The Content Extraction Magic
 
 The key principle: **`<file>` behaves like `<file>.content` automatically in most contexts**
