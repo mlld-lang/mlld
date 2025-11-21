@@ -47,6 +47,19 @@ function isGlobPattern(path: string): boolean {
   return /[\*\?\{\}\[\]]/.test(path);
 }
 
+function getRelativeBasePath(env: Environment): string {
+  // Prefer inferred project root; fall back to the current file directory when unavailable
+  const projectRoot = env.getProjectRoot?.() ?? env.getBasePath();
+  return projectRoot || env.getFileDirectory();
+}
+
+function formatRelativePath(env: Environment, targetPath: string): string {
+  const basePath = path.resolve(getRelativeBasePath(env));
+  const absoluteTarget = path.resolve(targetPath);
+  const relative = path.relative(basePath, absoluteTarget);
+  return relative ? `./${relative}` : './';
+}
+
 /**
  * Process content loading expressions (<file.md> syntax)
  * Loads content from files or URLs and optionally extracts sections
@@ -340,7 +353,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
       const fileContext = new LoadContentResultImpl({
         content: rawContent,
         filename: path.basename(resolvedPath),
-        relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+        relative: formatRelativePath(env, resolvedPath),
         absolute: resolvedPath
       });
       
@@ -359,7 +372,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
         content: sectionContent,
         rawHtml: rawContent,
         filename: path.basename(resolvedPath),
-        relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+        relative: formatRelativePath(env, resolvedPath),
         absolute: resolvedPath,
         title: title || undefined,
         description: description || undefined
@@ -380,7 +393,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
       content: markdownContent,
       rawHtml: rawContent,
       filename: path.basename(resolvedPath),
-      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      relative: formatRelativePath(env, resolvedPath),
       absolute: resolvedPath,
       title: title || undefined,
       description: description || undefined
@@ -396,7 +409,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
     const fileContext = new LoadContentResultImpl({
       content: rawContent,
       filename: path.basename(resolvedPath),
-      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      relative: formatRelativePath(env, resolvedPath),
       absolute: resolvedPath
     });
     
@@ -407,7 +420,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
     const result = new LoadContentResultImpl({
       content: sectionContent,
       filename: path.basename(resolvedPath),
-      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      relative: formatRelativePath(env, resolvedPath),
       absolute: resolvedPath,
       // Pass the full raw content so frontmatter can be parsed
       _rawContent: rawContent
@@ -419,7 +432,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
   const result = new LoadContentResultImpl({
     content: rawContent,
     filename: path.basename(resolvedPath),
-    relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+    relative: formatRelativePath(env, resolvedPath),
     absolute: resolvedPath
   });
   
@@ -430,15 +443,25 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
  * Load files matching a glob pattern
  */
 async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[] | string[]> {
-  // Resolve the pattern relative to current directory
-  const baseDir = env.getFileDirectory();
-  
-  
+  const relativeBase = getRelativeBasePath(env);
+  let globCwd = env.getFileDirectory();
+  let globPattern = pattern;
+
+  if (pattern.startsWith('@base/')) {
+    globCwd = relativeBase;
+    globPattern = pattern.slice('@base/'.length);
+  } else if (path.isAbsolute(pattern)) {
+    globCwd = path.parse(pattern).root || '/';
+    globPattern = path.relative(globCwd, pattern);
+  }
+
+  const computeRelative = (filePath: string): string => formatRelativePath(env, filePath);
+
   // Use tinyglobby to find matching files
   let matches: string[];
   try {
-    matches = await glob(pattern, {
-      cwd: baseDir,
+    matches = await glob(globPattern, {
+      cwd: globCwd,
       absolute: true,
       followSymlinks: true,
       // Ignore common non-text files
@@ -470,7 +493,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
             const fileContext = new LoadContentResultImpl({
               content: rawContent,
               filename: path.basename(filePath),
-              relative: `./${path.relative(baseDir, filePath)}`,
+              relative: computeRelative(filePath),
               absolute: filePath
             });
             
@@ -493,7 +516,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
                 content: sectionContent,
                 rawHtml: rawContent,
                 filename: path.basename(filePath),
-                relative: `./${path.relative(baseDir, filePath)}`,
+                relative: computeRelative(filePath),
                 absolute: filePath,
                 title: title || undefined,
                 description: description || undefined
@@ -516,7 +539,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
             content: markdownContent,
             rawHtml: rawContent,
             filename: path.basename(filePath),
-            relative: `./${path.relative(baseDir, filePath)}`,
+            relative: computeRelative(filePath),
             absolute: filePath,
             title: title || undefined,
             description: description || undefined
@@ -531,7 +554,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
             const fileContext = new LoadContentResultImpl({
               content: rawContent,
               filename: path.basename(filePath),
-              relative: `./${path.relative(baseDir, filePath)}`,
+              relative: computeRelative(filePath),
               absolute: filePath
             });
             
@@ -546,7 +569,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
               results.push(new LoadContentResultImpl({
                 content: sectionContent,
                 filename: path.basename(filePath),
-                relative: `./${path.relative(baseDir, filePath)}`,
+                relative: computeRelative(filePath),
                 absolute: filePath,
                 _rawContent: rawContent
               }));
@@ -560,7 +583,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
           results.push(new LoadContentResultImpl({
             content: rawContent,
             filename: path.basename(filePath),
-            relative: `./${path.relative(baseDir, filePath)}`,
+            relative: computeRelative(filePath),
             absolute: filePath
           }));
         }

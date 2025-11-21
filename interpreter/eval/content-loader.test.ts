@@ -4,8 +4,9 @@ import { Environment } from '../env/Environment';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { PathContextBuilder } from '@core/services/PathContextService';
 import * as path from 'path';
-import { minimatch } from 'minimatch';
+import minimatch from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
 import type { StructuredValueMetadata } from '../utils/structured-value';
@@ -161,6 +162,77 @@ describe('Content Loader with Glob Support', () => {
         expect(result.filename).toBe('README.md');
       }
       expectLoadContentMetadata(metadata);
+    });
+  });
+
+  describe('Relative path resolution', () => {
+    it('uses inferred project root for @base single file metadata', async () => {
+      const projectRoot = '/project';
+      const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
+      await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-security.md'), '# Spec');
+      await fileSystem.writeFile(scriptPath, '');
+
+      const pathContext = await PathContextBuilder.fromFile(scriptPath, fileSystem);
+      const envWithContext = new Environment(fileSystem, pathService, pathContext);
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: '@base/todo/spec-security.md' }],
+          raw: '@base/todo/spec-security.md'
+        }
+      };
+
+      const rawResult = await processContentLoader(node, envWithContext);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
+
+      expect(isLoadContentResult(result)).toBe(true);
+      if (isLoadContentResult(result)) {
+        expect(result.relative).toBe('./todo/spec-security.md');
+      }
+      expect(metadata?.relative).toBe('./todo/spec-security.md');
+    });
+
+    it('uses inferred project root for @base glob metadata', async () => {
+      const projectRoot = '/project';
+      const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
+      await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-a.md'), '# A');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-b.md'), '# B');
+      await fileSystem.writeFile(scriptPath, '');
+
+      const pathContext = await PathContextBuilder.fromFile(scriptPath, fileSystem);
+      const envWithContext = new Environment(fileSystem, pathService, pathContext);
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: '@base/todo/*.md' }],
+          raw: '@base/todo/*.md'
+        }
+      };
+
+      let rawResult;
+      try {
+        rawResult = await processContentLoader(node, envWithContext);
+      } catch (error) {
+        // Surface helpful details during test failures
+        // eslint-disable-next-line no-console
+        console.error('load-content error details', (error as any)?.details ?? error);
+        throw error;
+      }
+      const { data: result } = unwrapStructuredForTest(rawResult);
+
+      expect(isLoadContentResultArray(result)).toBe(true);
+      if (isLoadContentResultArray(result)) {
+        expect(result.map(item => item.relative).sort()).toEqual([
+          './todo/spec-a.md',
+          './todo/spec-b.md'
+        ]);
+      }
     });
   });
 
