@@ -448,8 +448,18 @@ WhenExprModifier = mod:("first") { return mod; }
 
 // Value-oriented condition list for when expressions
 WhenExpressionConditionList
-  = first:WhenExpressionConditionPair rest:(_ pair:WhenExpressionConditionPair { return pair; })* {
-      return [first, ...rest];
+  = first:WhenExpressionConditionPair rest:(_ (
+      "," {
+        helpers.mlldError(
+          "Unexpected ',' in when condition list. Separate conditions with whitespace or newlines (no commas).",
+          ",",
+          location()
+        );
+      }
+    / pair:WhenExpressionConditionPair { return pair; }
+    ))* {
+      const restPairs = rest.map(entry => entry && entry[1]).filter(Boolean);
+      return [first, ...restPairs];
     }
 
 // Single condition => value pair for expressions

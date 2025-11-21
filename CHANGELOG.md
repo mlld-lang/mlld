@@ -107,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shell pipe detection respects quoted strings - pipe characters inside quoted arguments no longer trigger pipe handling
 - Transformer variant resolution in pipelines - `@json.fromlist`, `@json.llm`, `@json.loose`, and `@json.strict` work correctly in all pipeline contexts
 - Alligator `.relative` resolves from inferred `@base` (or the script path when base is unavailable) so metadata matches project-root paths
+- Comma in `when` condition lists now emits a targeted parse error instead of a generic /exe syntax failure
 
 ### Changed
 - **Enhanced error message for `run sh` in `/exe`**: `errors/parse/exe-run-sh/error.md` now clearly explains the distinction between bare shell commands and shell scripts
