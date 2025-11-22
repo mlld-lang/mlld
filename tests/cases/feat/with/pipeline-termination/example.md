@@ -1,7 +1,7 @@
 # Pipeline Termination Test
 
-/exe @filter() = {grep "ERROR" | cat}
-/exe @uppercase() = {tr '[:lower:]' '[:upper:]'}
+/exe @filter() = cmd {grep "ERROR" | cat}
+/exe @uppercase() = cmd {tr '[:lower:]' '[:upper:]'}
 
 /run {echo "no errors here"} with {
 pipeline: [@filter, @uppercase]

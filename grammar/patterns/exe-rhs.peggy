@@ -36,7 +36,8 @@ ExeRHSContent "exe assignment value"
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
-  / ExeCommandPattern           // {command} - shell commands with interpolation
+  / ExeDataPattern              // { data } - structured data literal for exec
+  / ExeCommandPattern           // cmd {command} - shell commands with interpolation
   / ExeTemplateFromFilePattern  // template "path" - external template file
   / ExeTemplatePattern          // [[...]] and `...` - inline template executables
   / ExeSectionPattern           // [@file # section] - section extraction
@@ -130,7 +131,7 @@ ExeUnifiedReference "exe unified reference"
 
 // Run command with stdin pattern for exe context - handles "run {command} with { stdin: @var }"
 ExeRunCommandWithStdin "exe run command with stdin"
-  = "run" _ content:UnifiedCommandBrackets _ withClause:WithClause {
+  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) _ withClause:WithClause {
       // Only allow with clauses that have stdin
       if (!withClause || !('stdin' in withClause)) {
         return null; // Let other patterns handle this
@@ -158,7 +159,7 @@ ExeRunCommandWithStdin "exe run command with stdin"
 
 // Run command pipe stdin pattern for exe context - handles "run @var | {command}"
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? {
+  = "run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
       if (tail) {
         Object.assign(withClause, tail);
@@ -203,6 +204,7 @@ ExeRunCommandPattern "exe run command pattern"
         meta: content.meta
       };
     }
+  / "run" _ InvalidBareCommandBrackets
 
 // Code pattern for exe context - wraps RunLanguageCodeCore
 ExeCodePattern "exe code pattern"
@@ -226,7 +228,7 @@ ExeCodePattern "exe code pattern"
 
 // Command pattern for exe context - wraps UnifiedCommandBrackets
 ExeCommandPattern "exe command pattern"
-  = content:UnifiedCommandBrackets {
+  = content:CmdCommandBrackets {
       return {
         subtype: 'exeCommand',
         source: 'command',
@@ -239,6 +241,25 @@ ExeCommandPattern "exe command pattern"
           commandBases: content.raw.commandBases
         },
         meta: content.meta
+      };
+    }
+  / InvalidBareCommandBrackets
+
+// Data pattern for exe context - structured literal
+ExeDataPattern "exe data pattern"
+  = dataObj:DataObjectLiteral {
+      return {
+        subtype: 'exeData',
+        source: 'data',
+        values: {
+          data: dataObj
+        },
+        raw: {
+          data: text()
+        },
+        meta: {
+          inferredType: 'object'
+        }
       };
     }
 

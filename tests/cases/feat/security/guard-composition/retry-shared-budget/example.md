@@ -5,11 +5,11 @@
   * => allow
 ]
 
-/exe @gen() = {
+/exe @gen() = cmd {
   "value"
 }
 
-/exe @report(val) = {
+/exe @report(val) = cmd {
   /show `decisions: @p.guards.map(g => g.decision)`
   @val
 }

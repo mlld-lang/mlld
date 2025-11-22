@@ -1,4 +1,4 @@
-import type { PipelineCommand, PipelineStage } from '@core/types';
+import type { PipelineCommand, PipelineStage, PipelineStageEntry } from '@core/types';
 import { isBuiltinEffect } from './builtin-effects';
 
 /**
@@ -19,17 +19,19 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
     if (Array.isArray(stage)) {
       const { functionalPipeline: group, hadLeadingEffects: inner } = attachBuiltinEffects(stage);
       if (pendingLeadingEffects.length > 0 && group.length > 0) {
-        for (const cmd of group as PipelineCommand[]) {
-          const command = cmd as PipelineCommand;
-          command.effects = [
-            ...(command.effects || []),
-            ...pendingLeadingEffects
-          ];
+        for (const cmd of group as PipelineStageEntry[]) {
+          if ((cmd as PipelineCommand).rawIdentifier) {
+            const command = cmd as PipelineCommand;
+            command.effects = [
+              ...(command.effects || []),
+              ...pendingLeadingEffects
+            ];
+          }
         }
         pendingLeadingEffects.length = 0;
       }
       if (group.length > 0) {
-        functional.push(group as PipelineCommand[]);
+        functional.push(group as PipelineStage);
       }
       hadLeadingEffects = hadLeadingEffects || inner;
       continue;
@@ -45,19 +47,23 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
       if (functional.length > 0) {
         const prev = functional[functional.length - 1];
         if (Array.isArray(prev)) {
-          for (const pcmd of prev as PipelineCommand[]) {
-            const command = pcmd as PipelineCommand;
-            command.effects = [
-              ...(command.effects || []),
+          for (const pcmd of prev as PipelineStageEntry[]) {
+            if ((pcmd as PipelineCommand).rawIdentifier) {
+              const command = pcmd as PipelineCommand;
+              command.effects = [
+                ...(command.effects || []),
+                stage
+              ];
+            }
+          }
+        } else {
+          const prevCmd = prev as PipelineStageEntry;
+          if ((prevCmd as PipelineCommand).rawIdentifier) {
+            (prevCmd as PipelineCommand).effects = [
+              ...(((prevCmd as PipelineCommand).effects) || []),
               stage
             ];
           }
-        } else {
-          const prevCmd = prev as PipelineCommand;
-          prevCmd.effects = [
-            ...(prevCmd.effects || []),
-            stage
-          ];
         }
       } else {
         pendingLeadingEffects.push(stage);
@@ -66,12 +72,12 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
       continue;
     }
 
-    const cmd: PipelineCommand = { ...stage };
+    const cmd: PipelineStageEntry = { ...(stage as any) };
     if (pendingLeadingEffects.length > 0) {
-      cmd.effects = [...(cmd.effects || []), ...pendingLeadingEffects];
+      (cmd as any).effects = [...((cmd as any).effects || []), ...pendingLeadingEffects];
       pendingLeadingEffects.length = 0;
     }
-    functional.push(cmd);
+    functional.push(cmd as PipelineStage);
   }
 
   if (functional.length === 0 && pendingLeadingEffects.length > 0) {

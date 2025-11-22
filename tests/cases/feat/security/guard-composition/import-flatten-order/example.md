@@ -8,7 +8,7 @@
 
 /var secret @value = "seed"
 
-/exe @report(val) = {
+/exe @report(val) = cmd {
   /show `trace: @p.guards.filter(g => g.operation?.name == "report").map(g => g.trace[0].guardName)`
   /show `value: @val`
 }

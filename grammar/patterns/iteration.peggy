@@ -158,7 +158,7 @@ ForSingleAction "for action"
       })];
     }
   // Generic handling for other directives (with optional /)
-  / "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
+  / "show" _ content:WhenRHSShowContent ending:StandardDirectiveEnding {
       // Support both template/quote content and unified references for show actions
       // Pass along any tail pipeline from the standard directive ending
       return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);

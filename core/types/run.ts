@@ -9,7 +9,8 @@ import type { DataLabel } from './security';
 /**
  * With clause for pipeline and dependency management
  */
-export type PipelineStage = PipelineCommand | PipelineCommand[];
+export type PipelineStageEntry = PipelineCommand | InlineCommandStage | InlineValueStage;
+export type PipelineStage = PipelineStageEntry | PipelineStageEntry[];
 
 export interface GuardOverrideOptions {
   only?: string[];
@@ -41,6 +42,29 @@ export interface PipelineCommand {
   // These are pipeline builtin "effect" commands (e.g., @log) that should
   // execute after this stage succeeds, and do not count as stages themselves.
   effects?: PipelineCommand[];
+}
+
+/**
+ * Inline shell command stage (cmd { ... }) executed directly in the pipeline
+ */
+export interface InlineCommandStage {
+  type: 'inlineCommand';
+  command: ContentNodeArray;
+  commandBases?: VariableNodeArray;
+  rawCommand: string;
+  meta?: Record<string, unknown>;
+  location?: any;
+}
+
+/**
+ * Inline data stage ({ ... }) treated as a structured value source
+ */
+export interface InlineValueStage {
+  type: 'inlineValue';
+  value: any;
+  rawIdentifier: string;
+  meta?: Record<string, unknown>;
+  location?: any;
 }
 
 /**

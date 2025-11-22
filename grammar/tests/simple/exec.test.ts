@@ -6,7 +6,7 @@ import { parse } from '@grammar/parser';
 
 describe('Exec Directive Basic Test', () => {
   test('Basic exec value parses', async () => {
-    const content = '/exe @greeting() = {echo "Hello World"}';
+    const content = '/exe @greeting() = cmd {echo "Hello World"}';
     
     const result = await parse(content);
     
@@ -16,7 +16,7 @@ describe('Exec Directive Basic Test', () => {
   });
   
   test('Basic exec command parses', async () => {
-    const content = '/exe @list() = {ls -la}';
+    const content = '/exe @list() = cmd {ls -la}';
     
     const result = await parse(content);
     

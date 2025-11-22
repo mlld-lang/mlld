@@ -3,7 +3,7 @@ import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
-import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable } from '@core/types/executable';
+import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable, isDataExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import {
@@ -1438,11 +1438,31 @@ export async function evaluateExecInvocation(
       result = templateResult;
     }
 
-    if (!isStructuredValue(result) && result && typeof result === 'object') {
-      const templateType = Array.isArray(result) ? 'array' : 'object';
-      const metadata = resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined;
-      result = wrapStructured(result as Record<string, unknown>, templateType, undefined, metadata);
-    }
+  if (!isStructuredValue(result) && result && typeof result === 'object') {
+    const templateType = Array.isArray(result) ? 'array' : 'object';
+    const metadata = resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined;
+    result = wrapStructured(result as Record<string, unknown>, templateType, undefined, metadata);
+  }
+}
+// Handle data executables
+  else if (isDataExecutable(definition)) {
+    const { evaluateDataValue } = await import('./data-value-evaluator');
+    const dataValue = await evaluateDataValue(definition.dataTemplate as any, execEnv);
+    const text = typeof dataValue === 'string' ? dataValue : JSON.stringify(dataValue);
+    const dataDescriptor = extractSecurityDescriptor(dataValue, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const mergedDescriptor =
+      dataDescriptor && resultSecurityDescriptor
+        ? execEnv.mergeSecurityDescriptors(dataDescriptor, resultSecurityDescriptor)
+        : dataDescriptor || resultSecurityDescriptor || undefined;
+    result = wrapStructured(
+      dataValue as any,
+      Array.isArray(dataValue) ? 'array' : 'object',
+      text,
+      mergedDescriptor ? { security: mergedDescriptor } : undefined
+    );
   }
   // Handle pipeline executables
   else if (isPipelineExecutable(definition)) {

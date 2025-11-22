@@ -2,7 +2,7 @@
 
 /var @items = ["apple", "banana", "cherry"]
 
-/exe @describe(item) = {echo "This is a @item"}
+/exe @describe(item) = cmd {echo "This is a @item"}
 
 ## With template formatting
 

@@ -1,6 +1,6 @@
-/exe @getDate = {echo "2024-01-15"}
-/exe @getUser = {echo "admin"}
-/exe @getStatus = {echo "active"}
+/exe @getDate = cmd {echo "2024-01-15"}
+/exe @getUser = cmd {echo "admin"}
+/exe @getStatus = cmd {echo "active"}
 
 /var @systemInfo = {
 date: @getDate(),

@@ -9,7 +9,7 @@
 /show @formatted
 
 >> Pipe sugar should behave identically
-/run @rawPayload | { cat }
+/run { cat } with { stdin: @rawPayload }
 
 /var @pipeFormatted = run { cat } with { stdin: @rawPayload, pipeline: [@json] }
 /show @pipeFormatted

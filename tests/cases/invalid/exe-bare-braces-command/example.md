@@ -1,0 +1,1 @@
+/exe @c() = { echo "hi" }

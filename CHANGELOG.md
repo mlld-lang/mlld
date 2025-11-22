@@ -110,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comma in `when` condition lists now emits a targeted parse error instead of a generic /exe syntax failure
 
 ### Changed
+- Braced commands require explicit `cmd { ... }`; bare `{ ... }` parses as structured data, pipelines accept inline value stages with structured output, and bare brace commands raise a targeted parse error
 - **Enhanced error message for `run sh` in `/exe`**: `errors/parse/exe-run-sh/error.md` now clearly explains the distinction between bare shell commands and shell scripts
   - Shows that bare commands (`/exe @cmd(x) = {echo "@x"}`) support @variable interpolation but are single-line only
   - Shows that shell scripts (`/exe @cmd(x) = sh {echo "$1"}`) use $1, $2 parameters but support multiline with && and ;

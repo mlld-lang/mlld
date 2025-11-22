@@ -18,7 +18,7 @@
 /show @multiline
 
 # Pass to shell executable
-/exe @echo_it(prompt) = {echo "@prompt"}
+/exe @echo_it(prompt) = cmd {echo "@prompt"}
 
 /show "Echo simple template:"
 /show @echo_it(@simple)

@@ -8,11 +8,11 @@
   * => allow
 ]
 
-/exe @foo() = {
+/exe @foo() = cmd {
   "x"
 }
 
-/exe @report(val) = {
+/exe @report(val) = cmd {
   /show `order: @p.guards.filter(g => g.operation?.name == "foo").map(g => g.trace[0].guardName)`
   @val
 }

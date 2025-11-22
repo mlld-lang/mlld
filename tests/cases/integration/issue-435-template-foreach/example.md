@@ -3,7 +3,7 @@
   console.log('[issue-435][logValue]', { label, value });
   return value;
 }
-/exe @echo(data) = { echo "@data"}
+/exe @echo(data) = cmd { echo "@data"}
 /var @t = :::@entries_json:::
 /output @t to "test.att"
 /exe @template(entries_json) = template "test.att"

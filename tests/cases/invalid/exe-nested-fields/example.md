@@ -1,1 +1,1 @@
-/exe @api.users.list() = {echo "user1, user2, user3"}
+/exe @api.users.list() = cmd {echo "user1, user2, user3"}

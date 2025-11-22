@@ -304,6 +304,7 @@ RunCommandValue
         meta: content.meta
       };
     }
+  / "run" _ InvalidBareCommandBrackets
   / "run" _ "@" invocation:UnifiedReferenceWithTail {
       // Handle run @command() syntax with unified patterns
       return {
@@ -384,6 +385,7 @@ CodeExecution "code execution"
         meta: content.meta
       };
     }
+  / "run" _ InvalidBareCommandBrackets
   / lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
       // Shorthand: language + code without 'run' keyword
       return {

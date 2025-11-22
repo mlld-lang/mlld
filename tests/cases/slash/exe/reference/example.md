@@ -1,3 +1,3 @@
-/exe @echo(text) = {echo "@text"}
-/exe @greet(name) = {echo "Hello, @name!"}
+/exe @echo(text) = cmd {echo "@text"}
+/exe @greet(name) = cmd {echo "Hello, @name!"}
 /run @greet("World")

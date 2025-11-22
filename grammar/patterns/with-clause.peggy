@@ -78,7 +78,7 @@ PipelineStageList
 
 PipelineStage
   = ParallelGroupArray
-  / PipelineCommand
+  / PipelineStageEntry
 
 // Parallel group inside with { pipeline: [...] }, only commands allowed inside
 ParallelGroupArray
@@ -87,7 +87,7 @@ ParallelGroupArray
     }
 
 GroupCommandList
-  = first:PipelineCommand rest:(CommaSpace cmd:PipelineCommand { return cmd; })* {
+  = first:PipelineStageEntry rest:(CommaSpace cmd:PipelineStageEntry { return cmd; })* {
       return [first, ...rest];
     }
 
@@ -154,6 +154,12 @@ GuardOverrideDoubleChars
   / '\\\\' { return '\\'; }
   / char:[^"] { return char; }
 
+// Pipeline stage entry (inline value, inline command, or command reference)
+PipelineStageEntry
+  = PipelineInlineValueStage
+  / PipelineInlineCommandStage
+  / PipelineCommand
+
 // Single pipeline command (command reference with @input support)
 // Uses UnifiedReferenceForPipeline to prevent nested pipelines
 PipelineCommand
@@ -197,6 +203,39 @@ PipelineCommand
           rawArgs: []
         };
       }
+    }
+
+// Inline command stage using cmd { ... }
+PipelineInlineCommandStage
+  = "cmd" _ content:UnifiedCommandBrackets {
+      return {
+        type: 'inlineCommand',
+        command: content.values.command,
+        commandBases: content.values.commandBases,
+        rawCommand: content.raw.command,
+        rawIdentifier: content.raw.commandBases && content.raw.commandBases.length > 0 ? content.raw.commandBases[0] : 'cmd-stage',
+        meta: content.meta,
+        location: location()
+      };
+    }
+
+// Inline data stage using bare/data braces
+PipelineInlineValueStage
+  = "data" _ obj:DataObjectLiteral { 
+      return {
+        type: 'inlineValue',
+        value: obj,
+        rawIdentifier: 'data-literal',
+        location: location()
+      };
+    }
+  / obj:DataObjectLiteral {
+      return {
+        type: 'inlineValue',
+        value: obj,
+        rawIdentifier: 'data-literal',
+        location: location()
+      };
     }
 
 // -------------------------------------------------------------

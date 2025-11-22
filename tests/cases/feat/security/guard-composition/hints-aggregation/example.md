@@ -12,9 +12,9 @@
 
 /var secret @payload = "x"
 
-/exe @passthrough(val) = { @val }
+/exe @passthrough(val) = cmd { @val }
 
-/exe @report(val) = {
+/exe @report(val) = cmd {
   /show `hints: @p.guards.map(g => g.hints.map(h => h.hint).join("|")).join(",")`
   @val
 }

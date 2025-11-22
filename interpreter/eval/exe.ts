@@ -305,6 +305,19 @@ export async function evaluateExe(
       }
     }
     
+  } else if (directive.subtype === 'exeData') {
+    const dataNodes = directive.values?.data;
+    if (!dataNodes) {
+      throw new Error('Exec data directive missing data content');
+    }
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    executableDef = {
+      type: 'data',
+      dataTemplate: dataNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    };
   } else if (directive.subtype === 'exeCode') {
     /**
      * Handle code executable definitions
@@ -600,6 +613,8 @@ export async function evaluateExe(
     source.syntax = 'command';
   } else if (executableDef.type === 'template') {
     source.syntax = 'template';
+  } else if (executableDef.type === 'data') {
+    source.syntax = 'object';
   }
   
   // Extract language for code executables
@@ -634,7 +649,12 @@ export async function evaluateExe(
       metadata.capturedModuleEnv = env.captureModuleEnvironment();
     }
 
-    const executableTypeForVariable = executableDef.type === 'code' ? 'code' : 'command';
+    const executableTypeForVariable =
+      executableDef.type === 'code'
+        ? 'code'
+        : executableDef.type === 'data'
+          ? 'data'
+          : 'command';
 
   let executableDescriptor = descriptor;
   if (executableDef.type === 'command') {
@@ -671,6 +691,8 @@ export async function evaluateExe(
       variable.value.template = executableDef.codeTemplate;
     } else if (executableDef.type === 'template') {
       variable.value.template = executableDef.template;
+    } else if (executableDef.type === 'data') {
+      (variable.value as any).template = executableDef.dataTemplate;
     }
     
     env.setVariable(identifier, variable);
@@ -952,6 +974,14 @@ function createExecWrapper(
       
       // Interpolate the template with parameters
       result = await interpolateAndRecord(templateNodes, execEnv);
+    } else if (definition.type === 'data') {
+      const { evaluateDataValue } = await import('./data-value-evaluator');
+      const dataValue = await evaluateDataValue(definition.dataTemplate as any, execEnv);
+      try {
+        return JSON.parse(JSON.stringify(dataValue));
+      } catch {
+        return dataValue;
+      }
     } else if (definition.type === 'section') {
       // Extract section from file
       throw new Error(`Section executables cannot be invoked from shadow environments yet`);

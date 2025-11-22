@@ -4,9 +4,9 @@
   * => allow
 ]
 
-/exe @echo(val) = { @val }
+/exe @echo(val) = cmd { @val }
 
-/exe @report(val) = {
+/exe @report(val) = cmd {
   /show `decisions: @p.guards.map(g => g.decision)`
   /show `first-trace: @p.guards[0].trace.length`
   @val

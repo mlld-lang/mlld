@@ -274,6 +274,9 @@ async function validatePipeline(
       await validatePipeline(stage, env, identifier);
       continue;
     }
+    if ((stage as any).type === 'inlineCommand' || (stage as any).type === 'inlineValue') {
+      continue;
+    }
     const funcName = stage.rawIdentifier;
     
     // Check if it's a built-in transformer

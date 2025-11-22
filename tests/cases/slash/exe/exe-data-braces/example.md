@@ -1,0 +1,3 @@
+/exe @obj(x) = { value: @x, nested: { inner: 1 } }
+
+/show @obj("ok")

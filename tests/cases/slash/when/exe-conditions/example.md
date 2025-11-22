@@ -1,5 +1,5 @@
-/exe @is_true() = {echo "true"}
-/exe @is_false() = {echo ""}
+/exe @is_true() = cmd {echo "true"}
+/exe @is_false() = cmd {echo ""}
 
 ## Test 1: Simple conditional
 /when @is_true() => show "This should appear"
@@ -7,8 +7,8 @@
 
 ## Test 2: Block with first modifier
 /var @env = "development"
-/exe @is_dev() = {echo "true"}
-/exe @is_prod() = {echo ""}
+/exe @is_dev() = cmd {echo "true"}
+/exe @is_prod() = cmd {echo ""}
 
 /when @mode first: [
   @is_prod() => show "Production mode"
@@ -17,9 +17,9 @@
 ]
 
 ## Test 3: any modifier
-/exe @has_node() = {echo "true"}
-/exe @has_npm() = {echo "true"}
-/exe @has_yarn() = {echo ""}
+/exe @has_node() = cmd {echo "true"}
+/exe @has_npm() = cmd {echo "true"}
+/exe @has_yarn() = cmd {echo ""}
 
 /when @tools any: [
   @has_node()

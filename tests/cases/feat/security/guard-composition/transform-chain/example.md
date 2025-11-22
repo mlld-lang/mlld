@@ -10,7 +10,7 @@
 
 /var secret @raw = "  hello  "
 
-/exe @deliver(value) = {
+/exe @deliver(value) = cmd {
   /show `final: @value`
 }
 

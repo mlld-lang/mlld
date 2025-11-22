@@ -6,7 +6,7 @@
  */
 
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand, VariableSource } from '@core/types';
+import type { PipelineStageEntry, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
 import type { GuardHistoryEntry, PipelineContextSnapshot } from '../../env/ContextManager';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
@@ -53,7 +53,7 @@ interface StageEnvironmentOptions {
 }
 
 export async function createStageEnvironment(
-  command: PipelineCommand,
+  command: PipelineStageEntry,
   input: string,
   structuredInput: StructuredValue,
   context: StageContext,
@@ -66,7 +66,8 @@ export async function createStageEnvironment(
   options?: StageEnvironmentOptions
 ): Promise<Environment> {
   // Adjust stage number for synthetic source (hide from user)
-  const userVisibleStage = hasSyntheticSource && command.rawIdentifier !== '__source__'
+  const rawId = (command as any)?.rawIdentifier || 'inline-stage';
+  const userVisibleStage = hasSyntheticSource && rawId !== '__source__'
     ? context.stage - 1
     : context.stage;
     
@@ -117,7 +118,7 @@ export async function createStageEnvironment(
   const pipelineContextSnapshot: PipelineContextSnapshot = {
     stage: userVisibleStage,
     totalStages: userVisibleTotalStages,
-    currentCommand: command.rawIdentifier,
+    currentCommand: rawId,
     input: input,
     previousOutputs: context.previousOutputs,
     format: format,

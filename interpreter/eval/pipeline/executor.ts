@@ -1,5 +1,5 @@
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand, PipelineStage } from '@core/types';
+import type { PipelineCommand, PipelineStage, PipelineStageEntry, InlineCommandStage, InlineValueStage } from '@core/types';
 import type { ExecInvocation, CommandReference } from '@core/types/primitives';
 import type { OperationContext, PipelineContextSnapshot } from '../../env/ContextManager';
 import type { StructuredValue } from '../../utils/structured-value';
@@ -31,6 +31,7 @@ import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import type { CommandExecutionHookOptions } from './command-execution';
+import { InterpolationContext } from '../../core/interpolation-context';
 
 interface StageExecutionResult {
   result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
@@ -239,7 +240,7 @@ export class PipelineExecutor {
    */
   private async executeSingleStage(
     stageIndex: number,
-    command: PipelineCommand,
+    command: PipelineStageEntry,
     input: string,
     context: StageContext
   ): Promise<StageResult> {
@@ -286,14 +287,30 @@ export class PipelineExecutor {
         let stageExecution: StageExecutionResult | undefined;
         while (true) {
           try {
-            stageExecution = await this.executeCommand(
-              command,
-              input,
-              structuredInput,
-              stageEnv!,
-              stageOpContext,
-              stageHookNode
-            );
+            if ((command as InlineValueStage).type === 'inlineValue') {
+              stageExecution = await this.executeInlineValueStage(
+                command as InlineValueStage,
+                structuredInput,
+                stageEnv!
+              );
+            } else if ((command as InlineCommandStage).type === 'inlineCommand') {
+              stageExecution = await this.executeInlineCommandStage(
+                command as InlineCommandStage,
+                structuredInput,
+                stageEnv!,
+                stageOpContext,
+                stageHookNode
+              );
+            } else {
+              stageExecution = await this.executeCommand(
+                command as PipelineCommand,
+                input,
+                structuredInput,
+                stageEnv!,
+                stageOpContext,
+                stageHookNode
+              );
+            }
             const output = stageExecution.result;
             this.rateLimiter.reset();
             break;
@@ -488,6 +505,58 @@ export class PipelineExecutor {
     const labelDescriptor = this.buildCommandLabelDescriptor(command, commandVar);
 
     return { result, labelDescriptor };
+  }
+
+  private async executeInlineCommandStage(
+    stage: InlineCommandStage,
+    structuredInput: StructuredValue,
+    stageEnv: Environment,
+    operationContext?: OperationContext,
+    hookNode?: ExecInvocation
+  ): Promise<StageExecutionResult> {
+    const ctxManager = stageEnv.getContextManager();
+    const runInline = async (): Promise<StageExecutionResult> => {
+      const { interpolate } = await import('../../core/interpreter');
+      const descriptors: SecurityDescriptor[] = [];
+      const commandText = await interpolate(stage.command, stageEnv, InterpolationContext.ShellCommand, {
+        collectSecurityDescriptor: d => {
+          if (d) descriptors.push(d);
+        }
+      });
+      const stdinInput = structuredInput?.text ?? '';
+      const result = await stageEnv.executeCommand(commandText, { input: stdinInput });
+      const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
+      const normalizedResult = processCommandOutput(result);
+      const labelDescriptor =
+        descriptors.length > 1 ? stageEnv.mergeSecurityDescriptors(...descriptors) : descriptors[0];
+      return { result: normalizedResult, labelDescriptor };
+    };
+    if (ctxManager && operationContext) {
+      return await ctxManager.withOperation(operationContext, runInline);
+    }
+    return await runInline();
+  }
+
+  private async executeInlineValueStage(
+    stage: InlineValueStage,
+    stageInput: StructuredValue,
+    stageEnv: Environment
+  ): Promise<StageExecutionResult> {
+    const { evaluateDataValue } = await import('../data-value-evaluator');
+    const value = await evaluateDataValue(stage.value, stageEnv);
+    const text = safeJSONStringify(value);
+    const wrapped = wrapStructured(value, 'object', text);
+    const descriptor = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
+    if (descriptor) {
+      applySecurityDescriptorToStructuredValue(wrapped, descriptor);
+      setExpressionProvenance(wrapped, descriptor);
+    }
+    const mergedDescriptor =
+      descriptor && stageEnv ? stageEnv.mergeSecurityDescriptors(descriptor) : descriptor;
+    return {
+      result: this.finalizeStageOutput(wrapped, stageInput, value, mergedDescriptor),
+      labelDescriptor: mergedDescriptor
+    };
   }
 
   /**
@@ -690,7 +759,7 @@ export class PipelineExecutor {
   }
 
   private createPipelineOperationContext(
-    command: PipelineCommand,
+    command: PipelineStageEntry,
     stageIndex: number,
     stageContext: StageContext
   ): OperationContext {
@@ -709,7 +778,7 @@ export class PipelineExecutor {
 
   private async executeParallelStage(
     stageIndex: number,
-    commands: PipelineCommand[],
+    commands: PipelineStageEntry[],
     input: string,
     context: StageContext
   ): Promise<StageResult> {
@@ -756,14 +825,25 @@ export class PipelineExecutor {
 
           const executeBranch = async (): Promise<{ normalized: StructuredValue; labels?: SecurityDescriptor } | { value: 'retry'; hint?: any; from?: number }> => {
             try {
-              const stageExecution = await this.executeCommand(
-                cmd,
-                input,
-                branchInput,
-                subEnv,
-                branchOpContext,
-                branchHookNode
-              );
+              const stageExecution =
+                (cmd as InlineValueStage).type === 'inlineValue'
+                  ? await this.executeInlineValueStage(cmd as InlineValueStage, branchInput, subEnv)
+                  : (cmd as InlineCommandStage).type === 'inlineCommand'
+                    ? await this.executeInlineCommandStage(
+                        cmd as InlineCommandStage,
+                        branchInput,
+                        subEnv,
+                        branchOpContext,
+                        branchHookNode
+                      )
+                    : await this.executeCommand(
+                        cmd as PipelineCommand,
+                        input,
+                        branchInput,
+                        subEnv,
+                        branchOpContext,
+                        branchHookNode
+                      );
               if (this.isRetrySignal(stageExecution.result)) {
                 return stageExecution.result as RetrySignal;
               }
@@ -821,7 +901,7 @@ export class PipelineExecutor {
   }
 
   private buildStageDescriptor(
-    command: PipelineCommand,
+    command: PipelineStageEntry,
     stageIndex: number,
     context: StageContext,
     _structuredInput: StructuredValue
@@ -1041,14 +1121,14 @@ export class PipelineExecutor {
     return wrapStructured('', 'text', '');
   }
 
-  private createStageHookNode(command: PipelineCommand): ExecInvocation {
+  private createStageHookNode(command: PipelineStageEntry): ExecInvocation {
     const nodeId = `pipeline-stage-${this.stageHookNodeCounter++}`;
     const commandRef: CommandReference = {
       type: 'CommandReference',
       nodeId: `${nodeId}-command`,
       identifier: command.rawIdentifier,
       args: [],
-      fields: command.fields
+      fields: (command as any)?.fields
     };
     return {
       type: 'ExecInvocation',

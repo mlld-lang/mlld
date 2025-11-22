@@ -56,7 +56,7 @@ echo "$1"
 
   it('should execute shell commands in parallel for /for N parallel', async () => {
     const input = `
-/exe @slowShell(input) = { ${SLOW_SHELL_SCRIPT} "@input" }
+/exe @slowShell(input) = cmd { ${SLOW_SHELL_SCRIPT} "@input" }
 
 /for 4 parallel @x in ["A","B","C","D"] => show @slowShell(@x)
 `;
@@ -76,7 +76,7 @@ echo "$1"
 
   it('should execute shell commands in parallel for pipeline || stages', async () => {
     const input = `
-/exe @slowShell(input) = { ${SLOW_SHELL_SCRIPT} "@input" }
+/exe @slowShell(input) = cmd { ${SLOW_SHELL_SCRIPT} "@input" }
 /exe @seed() = "seed"
 /exe @combine(input) = js {
   const arr = JSON.parse(input);
@@ -107,7 +107,7 @@ echo "$1"
 `;
 
     const shellInput = `
-/exe @slowShell(input) = { ${SLOW_SHELL_SCRIPT} "@input" }
+/exe @slowShell(input) = cmd { ${SLOW_SHELL_SCRIPT} "@input" }
 
 /for 4 parallel @x in ["A","B","C","D"] => show @slowShell(@x)
 `;

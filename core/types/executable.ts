@@ -8,6 +8,7 @@
 import { MlldNode } from './nodes';
 import { VariableContext, VariableInternal } from './index';
 import type { PipelineStage } from './run';
+import type { DataValue } from './var';
 
 /**
  * Base executable definition that can be invoked with parameters
@@ -95,6 +96,15 @@ export interface PipelineExecutable extends BaseExecutable {
 }
 
 /**
+ * Data executable - /exe name(params) = { ... } returning structured data
+ */
+export interface DataExecutable extends BaseExecutable {
+  type: 'data';
+  dataTemplate: DataValue;
+  sourceDirective: 'exec';
+}
+
+/**
  * Unified executable type
  */
 export type ExecutableDefinition = 
@@ -104,7 +114,8 @@ export type ExecutableDefinition =
   | TemplateExecutable
   | SectionExecutable
   | ResolverExecutable
-  | PipelineExecutable;
+  | PipelineExecutable
+  | DataExecutable;
 
 /**
  * Variable that stores an executable definition
@@ -146,6 +157,10 @@ export function isResolverExecutable(def: ExecutableDefinition): def is Resolver
 
 export function isPipelineExecutable(def: ExecutableDefinition): def is PipelineExecutable {
   return def.type === 'pipeline';
+}
+
+export function isDataExecutable(def: ExecutableDefinition): def is DataExecutable {
+  return def.type === 'data';
 }
 
 /**

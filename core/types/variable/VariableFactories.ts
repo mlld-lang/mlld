@@ -383,7 +383,7 @@ export function createImportedVariable(
  */
 export function createExecutableVariable(
   name: string,
-  type: 'command' | 'code',
+  type: 'command' | 'code' | 'data',
   template: string,
   paramNames: string[],
   language: 'js' | 'node' | 'python' | 'sh' | 'bash' | undefined,
@@ -772,7 +772,7 @@ export class VariableFactory {
    */
   static createExecutable(
     name: string,
-    type: 'command' | 'code',
+    type: 'command' | 'code' | 'data',
     template: string,
     paramNames: string[],
     language: 'js' | 'node' | 'python' | 'sh' | 'bash' | undefined,

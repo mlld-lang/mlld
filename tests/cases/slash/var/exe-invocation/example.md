@@ -1,5 +1,5 @@
-/exe @getVersion = {echo "1.0.0"}
-/exe @getFiles(dir, pattern) = {echo '[{"name":"file1.txt"},{"name":"file2.txt"}]'}
+/exe @getVersion = cmd {echo "1.0.0"}
+/exe @getFiles(dir, pattern) = cmd {echo '[{"name":"file1.txt"},{"name":"file2.txt"}]'}
 /exe @calculate(a, b) = node {console.log(Number(a) + Number(b))}
 
 /var @version = @getVersion()

@@ -53,7 +53,7 @@ describe('Exec directive', () => {
   });
   describe('execCommand subtype', () => {
     test('Basic exec command', async () => {
-      const content = '/exe @listFiles = {ls -la}';
+    const content = '/exe @listFiles = cmd {ls -la}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -80,7 +80,7 @@ describe('Exec directive', () => {
     });
     
     test('Exec command with parameters (with space)', async () => {
-      const content = '/exe @formatFile (file, type) = {fmt @file --type=@type}';
+    const content = '/exe @formatFile (file, type) = cmd {fmt @file --type=@type}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -114,7 +114,7 @@ describe('Exec directive', () => {
     });
     
     test('Exec command with parameters (without space)', async () => {
-      const content = '/exe @formatFile(file, type) = {fmt @file --type=@type}';
+    const content = '/exe @formatFile(file, type) = cmd {fmt @file --type=@type}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -141,7 +141,7 @@ describe('Exec directive', () => {
     });
     
     test('Exec command with metadata', async () => {
-      const content = '/exe @dangerous.risk.high = {rm -rf @dir}';
+      const content = '/exe @dangerous.risk.high = cmd {rm -rf @dir}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

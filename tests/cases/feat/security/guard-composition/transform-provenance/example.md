@@ -6,7 +6,7 @@
 
 /var secret @raw = " padded "
 
-/exe @inspect(val) = {
+/exe @inspect(val) = cmd {
   /show `sources: @val.ctx.sources`
 }
 

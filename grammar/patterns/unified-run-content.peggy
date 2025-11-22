@@ -80,6 +80,22 @@ UnifiedCommandBrackets "Command brackets {...}"
       };
     }
 
+// CMD PREFIXED COMMAND BRACKETS - Explicit command wrapper
+CmdCommandBrackets "cmd command brackets"
+  = "cmd" _ content:UnifiedCommandBrackets {
+      return content;
+    }
+
+// Bare command brackets are no longer allowed without cmd prefix
+InvalidBareCommandBrackets
+  = "{" _ &{ return true; } {
+      helpers.mlldError(
+        "Use cmd { … } for commands or data { … } for objects.",
+        "cmd",
+        location()
+      );
+    }
+
 // UNIFIED RUN CONTENT - Detects and parses command vs code
 // Used by: Legacy compatibility (will be deprecated)
 // Purpose: Unified parsing of [(...))] syntax with type detection

@@ -2,7 +2,7 @@
 
 This example shows the correct way to create a parameterized command using `@exec`.
 
-/exe @greet(name) = {echo "Hello @name!"
+/exe @greet(name) = cmd {echo "Hello @name!"
 echo "Welcome @name!"
 echo "Greetings @name!"}
 

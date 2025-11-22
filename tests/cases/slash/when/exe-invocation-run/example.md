@@ -3,8 +3,8 @@
 Test that @when actions can use run with exec command invocations.
 
 /var @isTrue = "true"
-/exe @greet(name) = {echo "Hello, @name!"}
-/exe @capitalize(text) = {echo "@text" | tr '[:lower:]' '[:upper:]'}
+/exe @greet(name) = cmd {echo "Hello, @name!"}
+/exe @capitalize(text) = cmd {echo "@text" | tr '[:lower:]' '[:upper:]'}
 
 /var @condition = "true"
 
