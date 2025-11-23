@@ -218,13 +218,16 @@ function buildOperationContext(
   const baseMetadata: Record<string, unknown> = {
     trace: traceInfo.directive
   };
+  const streamingEnabled =
+    directive.values?.withClause?.stream === true ||
+    directive.meta?.withClause?.stream === true;
   const context: OperationContext = {
     type: directive.kind,
     subtype: directive.subtype,
     labels,
     name: traceInfo.varName,
     location: directive.location ?? null,
-    metadata: baseMetadata
+    metadata: streamingEnabled ? { ...baseMetadata, streaming: true } : baseMetadata
   };
 
   switch (directive.kind) {
@@ -242,6 +245,7 @@ function buildOperationContext(
       applyVarMetadata(context, directive);
       break;
     case 'show':
+    case 'stream':
       applyShowMetadata(context, directive);
       break;
   }
@@ -277,6 +281,8 @@ async function dispatchDirective(
       return await evaluateVar(directive, env, evaluationContext);
 
     case 'show':
+      return await evaluateShow(directive, env, evaluationContext);
+    case 'stream':
       return await evaluateShow(directive, env, evaluationContext);
 
     case 'exe':

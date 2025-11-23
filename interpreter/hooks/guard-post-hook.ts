@@ -132,6 +132,18 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     const perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride);
     const operationGuards = collectOperationGuards(registry, operation, guardOverride, outputVariables);
 
+    const streamingActive = Boolean(operation?.metadata && (operation.metadata as any).streaming);
+    if (streamingActive && (perInputCandidates.length > 0 || operationGuards.length > 0)) {
+      throw new GuardError(
+        [
+          'Cannot run after-guards when streaming is enabled.',
+          'Options:',
+          '- Remove after-timed guards or change them to before',
+          '- Disable streaming with `with { stream: false }`'
+        ].join('\n')
+      );
+    }
+
     if (perInputCandidates.length === 0 && operationGuards.length === 0) {
       return result;
     }

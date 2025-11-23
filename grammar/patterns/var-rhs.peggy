@@ -205,7 +205,7 @@ SpacedOrCondensedPipeChain "flexible pipe chain"
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Extract the last field as the method name
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;
@@ -227,12 +227,17 @@ FieldAccessExecPattern "field access exec invocation"
       };
       
       const exec = helpers.createExecInvocation(ref, tail || null, location());
+      if (streamPrefix) {
+        const mergedTail = tail ? { ...tail, stream: true } : { stream: true };
+        const execWithStream = helpers.createExecInvocation(ref, mergedTail, location());
+        return helpers.attachPostFields(execWithStream, post);
+      }
       return helpers.attachPostFields(exec, post);
     }
 
 // EXEC INVOCATION PATTERN - Matches @func() specifically
 ExecInvocationPattern "exec invocation pattern"
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Create command reference with arguments
       const ref = {
         name,
@@ -242,6 +247,11 @@ ExecInvocationPattern "exec invocation pattern"
       };
       
       const exec = helpers.createExecInvocation(ref, tail || null, location());
+      if (streamPrefix) {
+        const mergedTail = tail ? { ...tail, stream: true } : { stream: true };
+        const execWithStream = helpers.createExecInvocation(ref, mergedTail, location());
+        return helpers.attachPostFields(execWithStream, post);
+      }
       return helpers.attachPostFields(exec, post);
     }
 

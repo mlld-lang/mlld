@@ -100,6 +100,8 @@ export interface CLIOptions {
   serveConfigPath?: string;
   serveEnvOverrides?: string;
   serveTools?: string;
+  // Streaming options
+  noStream?: boolean;
   _?: string[]; // Remaining args after command
 }
 const globalErrorHandler = new ErrorHandler();
@@ -254,6 +256,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       // URLs disabled
       finalUrlConfig = undefined;
     }
+
+    const streamingOptions = cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined;
     
     // Use the new interpreter
     const interpretResult = await interpret(content, {
@@ -273,6 +277,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext,
         timeout: cliOptions.commandTimeout
       },
+      streaming: streamingOptions,
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,

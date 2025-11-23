@@ -53,6 +53,7 @@ export interface UnifiedPipelineContext {
   pipeline?: PipelineStage[];  // Explicit pipeline to execute
   format?: string;               // Data format hint
   isRetryable?: boolean;         // Override retryability
+  stream?: boolean;              // Enable streaming for this pipeline
   
   // Metadata
   identifier?: string;           // Variable name for debugging
@@ -74,6 +75,13 @@ export async function processPipeline(
   context: UnifiedPipelineContext
 ): Promise<any> {
   const { value, env, node, directive, identifier, descriptorHint } = context;
+  const streamRequested =
+    context.stream ??
+    Boolean(
+      (node as any)?.withClause?.stream ??
+      (directive as any)?.values?.withClause?.stream ??
+      (directive as any)?.meta?.withClause?.stream
+    );
   const sourceNode = getSourceFunctionFromValue(value);
   const descriptorFromValue = extractSecurityDescriptor(value, {
     recursive: true,
@@ -234,7 +242,10 @@ let executionResult: StructuredValue;
       detected.parallelCap,
       detected.delayMs
     );
-    executionResult = await executor.execute(input, { returnStructured: true }) as StructuredValue;
+    executionResult = await executor.execute(input, {
+      returnStructured: true,
+      stream: streamRequested
+    }) as StructuredValue;
 
   } catch (error) {
     // Enhance error with context

@@ -184,6 +184,10 @@ export class ArgumentParser {
         case '--ephemeral':
           options.ephemeral = true;
           break;
+        // Streaming options
+        case '--no-stream':
+          options.noStream = true;
+          break;
         // Environment file path
         case '--env':
           options.env = args[++i];
@@ -324,4 +328,5 @@ export class ArgumentParser {
   supportsSubcommands(command: string): boolean {
     return this.commandsWithSubcommands.includes(command);
   }
+
 }

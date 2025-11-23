@@ -183,4 +183,27 @@ describe('guard post-hook integration', () => {
       ((transformed.value as any)?.value ?? transformed.value);
     expect(String(rawValue)).toContain('helper:');
   });
+
+  it('rejects after-guards when streaming is enabled', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after for secret = when [ * => allow "ok" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createSecretVariable('secretVar', 'streaming-output');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [outputVar], env, {
+        type: 'exe',
+        name: 'emit',
+        metadata: { streaming: true }
+      })
+    ).rejects.toBeInstanceOf(GuardError);
+  });
 });

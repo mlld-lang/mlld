@@ -101,7 +101,7 @@ UnifiedAtomicExpression
 // Note: We intentionally keep this here (base) so WhenConditionAdapter (UnifiedExpression)
 // can parse it in simple /when forms.
 ExecResultMethodCall
-  = "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Build the base exec invocation: @func(args)
       const baseRef = {
         name: func,
@@ -122,9 +122,10 @@ ExecResultMethodCall
         objectSource: baseInvocation // Non-standard: handled by evaluator
       };
 
+      const finalTail = streamPrefix ? (tail ? { ...tail, stream: true } : { stream: true }) : tail;
       const exec = helpers.createExecInvocation(methodRef, null, location());
       const execWithPost = helpers.attachPostFields(exec, post);
-      return tail ? helpers.applyTail(execWithPost, tail) : execWithPost;
+      return finalTail ? helpers.applyTail(execWithPost, finalTail) : execWithPost;
     }
 
 // Array operations for advanced filtering and manipulation

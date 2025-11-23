@@ -57,6 +57,9 @@ WithProperty
       const delayMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
       return ["delayMs", delayMs];
     }
+  / "stream" _ ":" _ stream:BooleanLiteral {
+      return ["stream", stream === 'true' || stream === true];
+    }
 
 // -------------------------------------------------------------
 // PIPELINE SUPPORT

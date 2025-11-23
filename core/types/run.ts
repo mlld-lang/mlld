@@ -25,6 +25,7 @@ export interface WithClause {
   delayMs?: number;
   stdin?: Expression;
   guards?: GuardOverrideOptions | false;
+  stream?: boolean;
   [key: string]: any; // For other with clause properties
 }
 

@@ -210,7 +210,8 @@ export type DirectiveKind =
   | 'output'
   | 'append'
   | 'when'
-  | 'guard';
+  | 'guard'
+  | 'stream';
 
 export type DirectiveSubtype =
   // Import subtypes

@@ -51,6 +51,7 @@ import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
+import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
 import { ExportManifest } from '../eval/import/ExportManifest';
 import {
   ContextManager,
@@ -146,6 +147,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     timeout: 30000,
     collectErrors: false
   };
+  private streamingOptions: StreamingOptions = defaultStreamingOptions;
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -1724,6 +1726,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     child.allowAbsolutePaths = this.allowAbsolutePaths;
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
+    child.streamingOptions = { ...this.streamingOptions };
 
     // Create child import resolver
     child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);
@@ -1821,6 +1824,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   setOutputOptions(options: Partial<CommandExecutionOptions>): void {
     this.outputOptions = { ...this.outputOptions, ...options };
+  }
+
+  setStreamingOptions(options: Partial<StreamingOptions> | undefined): void {
+    if (!options) {
+      this.streamingOptions = { ...defaultStreamingOptions };
+      return;
+    }
+    this.streamingOptions = { ...this.streamingOptions, ...options };
+  }
+
+  getStreamingOptions(): StreamingOptions {
+    return { ...this.streamingOptions };
   }
   
   /**
@@ -2123,6 +2138,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.effectHandler  // Share the same effect handler
     );
     child.allowAbsolutePaths = this.allowAbsolutePaths;
+    child.streamingOptions = { ...this.streamingOptions };
     // Share import stack with parent via ImportResolver
     child.importResolver = this.importResolver.createChildResolver(undefined, () => child.allowAbsolutePaths);
     // Inherit trace settings

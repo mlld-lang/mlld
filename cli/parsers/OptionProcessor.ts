@@ -43,7 +43,9 @@ export class OptionProcessor {
       // Ephemeral mode
       ephemeral: cliOptions.ephemeral,
       // Absolute path override
-      allowAbsolutePaths: cliOptions.allowAbsolute
+      allowAbsolutePaths: cliOptions.allowAbsolute,
+      // Streaming options
+      streaming: cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined
     };
   }
 

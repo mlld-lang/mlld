@@ -32,6 +32,10 @@ import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import type { CommandExecutionHookOptions } from './command-execution';
 import { InterpolationContext } from '../../core/interpolation-context';
+import { getStreamBus, type StreamEvent } from './stream-bus';
+import { ProgressOnlySink } from './stream-sinks/progress';
+import { TerminalSink } from './stream-sinks/terminal';
+import type { StreamingOptions } from './streaming-options';
 
 interface StageExecutionResult {
   result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
@@ -40,6 +44,14 @@ interface StageExecutionResult {
 
 export interface ExecuteOptions {
   returnStructured?: boolean;
+  stream?: boolean;
+}
+
+let pipelineCounter = 0;
+
+function createPipelineId(): string {
+  pipelineCounter += 1;
+  return `pipeline-${pipelineCounter}`;
 }
 
 /**
@@ -70,6 +82,10 @@ export class PipelineExecutor {
   private lastStageIndex: number = -1;
   private readonly debugStructured = process.env.MLLD_DEBUG_STRUCTURED === 'true';
   private stageHookNodeCounter = 0;
+  private streamingOptions: StreamingOptions;
+  private pipelineId: string = createPipelineId();
+  private detachStreaming: Array<() => void> = [];
+  private streamingEnabled: boolean;
 
   constructor(
     pipeline: PipelineStage[],
@@ -101,6 +117,58 @@ export class PipelineExecutor {
     this.hasSyntheticSource = hasSyntheticSource;
     this.parallelCap = parallelCap;
     this.delayMs = delayMs;
+    this.streamingOptions = env.getStreamingOptions();
+    this.streamingEnabled = this.streamingOptions.enabled !== false;
+    if (this.streamingEnabled) {
+      this.attachStreamingSinks();
+    }
+  }
+
+  private attachStreamingSinks(): void {
+    const bus = getStreamBus();
+    const unsubscribes: Array<() => void> = [];
+
+    const sink = new ProgressOnlySink({
+      useTTY: process.stderr.isTTY,
+      writer: process.stderr
+    });
+    const progressUnsub = bus.subscribe(event => sink.handle(event));
+    unsubscribes.push(() => {
+      progressUnsub();
+      sink.stop?.();
+    });
+
+    // Terminal sink to emit chunks to stdout/stderr
+    const terminalSink = new TerminalSink();
+    const terminalUnsub = bus.subscribe(event => terminalSink.handle(event));
+    unsubscribes.push(terminalUnsub);
+
+    this.detachStreaming = unsubscribes;
+  }
+
+  private teardownStreaming(): void {
+    for (const unsub of this.detachStreaming) {
+      try {
+        unsub();
+      } catch (error) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Failed to detach streaming sink', error);
+        }
+      }
+    }
+    this.detachStreaming = [];
+  }
+
+  private emitStream(event: Omit<StreamEvent, 'timestamp' | 'pipelineId'> & { timestamp?: number; pipelineId?: string }): void {
+    if (!this.streamingEnabled) {
+      return;
+    }
+    const bus = getStreamBus();
+    bus.emit({
+      ...event,
+      pipelineId: event.pipelineId || this.pipelineId,
+      timestamp: event.timestamp ?? Date.now()
+    } as StreamEvent);
   }
 
   /**
@@ -114,120 +182,157 @@ export class PipelineExecutor {
   async execute(initialInput: string | StructuredValue, options: { returnStructured: true }): Promise<StructuredValue>;
   async execute(initialInput: string | StructuredValue, options?: ExecuteOptions): Promise<string | StructuredValue> {
     this.env.resetPipelineGuardHistory();
-    const initialWrapper = isStructuredValue(initialInput)
-      ? cloneStructuredValue(initialInput)
-      : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));
-    this.applySourceDescriptor(initialWrapper, initialInput);
+    try {
+      const initialWrapper = isStructuredValue(initialInput)
+        ? cloneStructuredValue(initialInput)
+        : wrapStructured(initialInput, 'text', typeof initialInput === 'string' ? initialInput : safeJSONStringify(initialInput));
+      this.applySourceDescriptor(initialWrapper, initialInput);
 
-    // Store initial input for synthetic source stage
-    this.initialInputText = initialWrapper.text;
-    this.structuredOutputs.clear();
-    this.initialOutput = initialWrapper;
-    this.finalOutput = this.initialOutput;
-    this.lastStageIndex = -1;
-    
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[PipelineExecutor] Pipeline start:', {
-        stages: this.pipeline.map(p => Array.isArray(p) ? '[parallel]' : p.rawIdentifier),
-        hasSyntheticSource: this.hasSyntheticSource,
-        isRetryable: this.isRetryable
-      });
-    }
-    
-    // Start the pipeline
-    let nextStep = this.stateMachine.transition({ type: 'START', input: this.initialInputText });
-    let iteration = 0;
+      // Store initial input for synthetic source stage
+      this.initialInputText = initialWrapper.text;
+      this.structuredOutputs.clear();
+      this.initialOutput = initialWrapper;
+      this.finalOutput = this.initialOutput;
+      this.lastStageIndex = -1;
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Pipeline start:', {
+          stages: this.pipeline.map(p => Array.isArray(p) ? '[parallel]' : p.rawIdentifier),
+          hasSyntheticSource: this.hasSyntheticSource,
+          isRetryable: this.isRetryable
+        });
+      }
+      this.emitStream({ type: 'PIPELINE_START', source: 'pipeline' });
+      
+      // Start the pipeline
+      let nextStep = this.stateMachine.transition({ type: 'START', input: this.initialInputText });
+      let iteration = 0;
 
-    // Process steps until complete
-    while (nextStep.type === 'EXECUTE_STAGE') {
-      iteration++;
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error(`[PipelineExecutor] Iteration ${iteration}:`, {
-          stage: nextStep.stage,
-          stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
-          contextAttempt: nextStep.context.contextAttempt
-        });
-      }
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Execute stage:', {
-          stage: nextStep.stage,
-          contextId: nextStep.context.contextId,
-          contextAttempt: nextStep.context.contextAttempt,
-          inputLength: nextStep.input?.length,
-          commandId: this.pipeline[nextStep.stage]?.rawIdentifier
-        });
-      }
-      
-      const stageEntry = this.pipeline[nextStep.stage];
-      const result = Array.isArray(stageEntry)
-        ? await this.executeParallelStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context)
-        : await this.executeSingleStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context);
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Stage result:', {
-          resultType: result.type,
-          isRetry: result.type === 'retry'
-        });
-      }
-      
-      // Let state machine decide next step
-      nextStep = this.stateMachine.transition({ 
-        type: 'STAGE_RESULT', 
-        result 
-      });
-      
-      // Update retry history
-      this.allRetryHistory = this.stateMachine.getAllRetryHistory();
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Next step:', {
-          type: nextStep.type,
-          nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined
-        });
-      }
-      
-      // Safety check for infinite loops
-      if (iteration > 100) {
-        throw new Error('Pipeline exceeded 100 iterations');
-      }
-    }
-    
-    // Handle final state
-    switch (nextStep.type) {
-      case 'COMPLETE':
-        if (options?.returnStructured) {
-          return this.getFinalOutput();
+      // Process steps until complete
+      while (nextStep.type === 'EXECUTE_STAGE') {
+        iteration++;
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error(`[PipelineExecutor] Iteration ${iteration}:`, {
+            stage: nextStep.stage,
+            stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
+            contextAttempt: nextStep.context.contextAttempt
+          });
         }
-        return nextStep.output;
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Execute stage:', {
+            stage: nextStep.stage,
+            contextId: nextStep.context.contextId,
+            contextAttempt: nextStep.context.contextAttempt,
+            inputLength: nextStep.input?.length,
+            commandId: this.pipeline[nextStep.stage]?.rawIdentifier
+          });
+        }
+        this.emitStream({
+          type: 'STAGE_START',
+          stageIndex: nextStep.stage,
+          command: this.pipeline[nextStep.stage],
+          contextId: nextStep.context.contextId,
+          attempt: nextStep.context.contextAttempt
+        });
+        const stageStartTime = Date.now();
+        
+        const stageEntry = this.pipeline[nextStep.stage];
+        const result = Array.isArray(stageEntry)
+          ? await this.executeParallelStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context)
+          : await this.executeSingleStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context);
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Stage result:', {
+            resultType: result.type,
+            isRetry: result.type === 'retry'
+          });
+        }
+        if (result.type === 'success') {
+          this.emitStream({
+            type: 'STAGE_SUCCESS',
+            stageIndex: nextStep.stage,
+            durationMs: Date.now() - stageStartTime
+          });
+          this.emitStream({
+            type: 'CHUNK',
+            stageIndex: nextStep.stage,
+            chunk: result.output || '',
+            source: 'stdout'
+          });
+        } else if (result.type === 'error') {
+          this.emitStream({
+            type: 'STAGE_FAILURE',
+            stageIndex: nextStep.stage,
+            error: result.error
+          });
+        }
+        
+        // Let state machine decide next step
+        nextStep = this.stateMachine.transition({ 
+          type: 'STAGE_RESULT', 
+          result 
+        });
+        
+        // Update retry history
+        this.allRetryHistory = this.stateMachine.getAllRetryHistory();
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Next step:', {
+            type: nextStep.type,
+            nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined
+          });
+        }
+        
+        // Safety check for infinite loops
+        if (iteration > 100) {
+          throw new Error('Pipeline exceeded 100 iterations');
+        }
+      }
       
-      case 'ERROR':
-        throw new MlldCommandExecutionError(
-          `Pipeline failed at stage ${nextStep.stage + 1}: ${nextStep.error.message}`,
-          undefined,
-          {
-            command: this.pipeline[nextStep.stage]?.rawIdentifier || 'unknown',
-            exitCode: 1,
-            duration: 0,
-            workingDirectory: process.cwd()
+      // Handle final state
+      switch (nextStep.type) {
+        case 'COMPLETE':
+          this.emitStream({ type: 'PIPELINE_COMPLETE' });
+          if (options?.returnStructured) {
+            return this.getFinalOutput();
           }
-        );
-      
-      case 'ABORT':
-        throw new MlldCommandExecutionError(
-          `Pipeline aborted: ${nextStep.reason}`,
-          undefined,
-          {
-            command: 'pipeline',
-            exitCode: 1,
-            duration: 0,
-            workingDirectory: process.cwd()
-          }
-        );
-      
-      default:
-        throw new Error('Pipeline ended in unexpected state');
+          return nextStep.output;
+        
+        case 'ERROR':
+          this.emitStream({ type: 'PIPELINE_ABORT', reason: nextStep.error.message });
+          throw new MlldCommandExecutionError(
+            `Pipeline failed at stage ${nextStep.stage + 1}: ${nextStep.error.message}`,
+            undefined,
+            {
+              command: this.pipeline[nextStep.stage]?.rawIdentifier || 'unknown',
+              exitCode: 1,
+              duration: 0,
+              workingDirectory: process.cwd()
+            }
+          );
+        
+        case 'ABORT':
+          this.emitStream({ type: 'PIPELINE_ABORT', reason: nextStep.reason || 'aborted' });
+          throw new MlldCommandExecutionError(
+            `Pipeline aborted: ${nextStep.reason}`,
+            undefined,
+            {
+              command: 'pipeline',
+              exitCode: 1,
+              duration: 0,
+              workingDirectory: process.cwd()
+            }
+          );
+        
+        default:
+          throw new Error('Pipeline ended in unexpected state');
+      }
+    } finally {
+      if (this.streamingEnabled) {
+        this.teardownStreaming();
+      }
     }
   }
 
@@ -771,7 +876,8 @@ export class PipelineExecutor {
       labels,
       metadata: {
         stageIndex: stageIndex + 1,
-        totalStages: stageContext.totalStages
+        totalStages: stageContext.totalStages,
+        streaming: this.streamingEnabled
       }
     };
   }

@@ -29,6 +29,7 @@ export const DirectiveKind = {
     run: 'run',
     var: 'var', // NEW: Replaces text/data
     show: 'show', // NEW: Replaces add
+    stream: 'stream',
     exe: 'exe', // NEW: Replaces exec
     for: 'for', // For loops
     path: 'path',
