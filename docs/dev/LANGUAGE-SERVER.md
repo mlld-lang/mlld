@@ -262,6 +262,32 @@ Any LSP-compatible editor can use the mlld language server:
 2. Set file types: `*.mlld`, `*.mld`
 3. Configure settings under `mlldLanguageServer` namespace
 
+## Building the VSCode extension locally
+
+When the grammar changes, you can install a matching local build of the VSCode extension without waiting for the next published version:
+
+1. Rebuild the parser so the extension picks up the latest grammar:
+   ```bash
+   npm run build:grammar
+   ```
+2. Package the extension from the repository root (this script installs dependencies, bumps the version in-place, and emits a `.vsix`):
+   ```bash
+   npm run package:vscode
+   # or manually:
+   # cd editors/vscode
+   # npm ci
+   # npx @vscode/vsce package --out ../../mlld-vscode-local.vsix
+   ```
+3. Install the generated package in VSCode/Cursor/Windsurf:
+   ```bash
+   code --install-extension mlld-vscode-*.vsix
+   # cursor --install-extension …   # for Cursor
+   # windsurf --install-extension …
+   ```
+4. Reload the editor window (`Developer: Reload Window`) so the new language server process starts.
+
+Keep the `.vsix` files out of source control (they are ignored by default). When you no longer need the local build, uninstall it from the Extensions panel and reinstall the marketplace version.
+
 ## Configuration
 
 The language server supports these settings:

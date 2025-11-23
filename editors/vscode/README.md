@@ -48,6 +48,33 @@ Use mlld to create a daily standup update based on your recent activity:
    - Search for "mlld" in Extensions
    - Or install via command palette: `ext install mlld.mlld-vscode`
 
+## Local development & testing
+
+When you need to exercise a local grammar change inside VSCode/Cursor before the marketplace build ships:
+
+1. From the repository root, rebuild the grammar:
+   ```bash
+   npm run build:grammar
+   ```
+2. Package the extension:
+   ```bash
+   npm run package:vscode
+   # or manually:
+   # cd editors/vscode
+   # npm ci
+   # npx @vscode/vsce package --out ../../mlld-vscode-dev.vsix
+   ```
+   This produces `mlld-vscode-<version>.vsix` in the repo root.
+3. Install the `.vsix` in your editor:
+   ```bash
+   code --install-extension mlld-vscode-<version>.vsix
+   # cursor --install-extension …   # for Cursor
+   # windsurf --install-extension …
+   ```
+4. Reload the window (`Developer: Reload Window`) so the language server restarts with the new grammar.
+
+When you’re done testing, uninstall the local extension from the Extensions panel and reinstall the marketplace build to get back on the release track.
+
 ## VSCode Features
 
 ### Syntax Highlighting
