@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed `UnifiedBacktickChar` and `UnifiedDoubleColonTextSegment` to use `LineStartPredicate` for `/for` and `/end` detection
   - Both backtick and `::` templates now consistently require line-start only for inline loops
   - Grammar changes in `grammar/base/unified-templates.peggy` and `grammar/base/unified-quotes.peggy`
+- **When-expression pipelines**: `/exe … = when [...]` actions now accept `| append`, `| log`, `| output`, and `| show` stages without misparsing ternary expressions (fixes `slash/when/exe-when-expressions-operators`).
 
 - **Heredoc and backtick template XML tag parity**: Both template types now handle XML-like tags identically
   - Previously, backtick templates allowed `<xml>` tags but heredoc `::` templates treated them as file references

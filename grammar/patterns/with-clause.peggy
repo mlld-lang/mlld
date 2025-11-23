@@ -243,7 +243,7 @@ PipelineInlineValueStage
 // -------------------------------------------------------------
 
 // Support: log [<source>]
-// Example: | log "After stage"   or   | log @var
+// Example: | log "After stage"   or   | log @var   or   | log
 PipelineBuiltinLog
   = "log" ![A-Za-z0-9_] _ src:OutputSource? {
       // Build a pseudo reference node for identifier compatibility

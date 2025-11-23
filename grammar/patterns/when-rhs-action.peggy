@@ -13,6 +13,7 @@ WhenRHSAction "when RHS action"
   / WhenRHSCommandAction
   / WhenRHSFunctionCall
   / WhenRHSSkipAction
+  / WhenRHSVariableReference  // Allow @var (optionally with pipelines) as value-returning action
   / WhenRHSRetryAction
   / VarRHSContent  // Pure values (fallback)
 
@@ -77,6 +78,17 @@ WhenRHSSkipAction
         valueType: 'skip',
         location: location()
       });
+    }
+
+// Variable reference (with optional tail modifiers / pipelines)
+WhenRHSVariableReference
+  = varRef:VariableReferenceWithTail {
+      if (!varRef || !varRef.withClause) {
+        const loc = location();
+        peg$currPos = loc.start.offset;
+        return peg$FAILED;
+      }
+      return varRef;
     }
 
 // Show action - creates regular show directive node
