@@ -1,12 +1,12 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
+import { StringDecoder } from 'string_decoder';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
-
-const execAsync = promisify(exec);
+import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
+import { randomUUID } from 'crypto';
 
 /**
  * Executes shell commands using async exec for true parallel execution
@@ -254,19 +254,40 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       );
     }
 
-    // Execute the validated command
+    const streamingEnabled = Boolean(context?.streamingEnabled);
+    if (streamingEnabled) {
+      return await this.executeStreamingCommand(safeCommand, options, context, startTime);
+    }
+
+    // Handle stdin input if provided (exec doesn't support input option like execSync)
+    const { stdout, stderr, duration } = await this.executeBufferedCommand(safeCommand, options, startTime);
+
+    return {
+      output: stdout,
+      duration,
+      exitCode: 0,
+      stderr
+    };
+  }
+
+  private async executeBufferedCommand(
+    safeCommand: string,
+    options: CommandExecutionOptions | undefined,
+    startTime: number
+  ): Promise<{ stdout: string; stderr: string; duration: number }> {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
     // In test environments with MLLD_NO_STREAMING, suppress stderr to keep output clean
     const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
 
-    // Handle stdin input if provided (exec doesn't support input option like execSync)
     let finalCommand = safeCommand;
     if (options?.input) {
       // Use printf piping for stdin input
       const escapedInput = options.input.replace(/'/g, "'\\''");
       finalCommand = `printf '%s' '${escapedInput}' | ${safeCommand}`;
     } else if (!CommandUtils.hasPipeOperator(safeCommand)) {
-      // Provide empty stdin to prevent commands from hanging waiting for input
-      // But only if command doesn't use actual pipes (respects quotes)
       finalCommand = `${safeCommand} < /dev/null`;
     }
 
@@ -277,17 +298,135 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       maxBuffer: 10 * 1024 * 1024 // 10MB limit
     });
 
-    // async exec always captures stderr; write it to process.stderr if not suppressed
     if (stderr && !suppressStderr) {
       process.stderr.write(stderr);
     }
 
     const duration = Date.now() - startTime;
+    return { stdout, stderr, duration };
+  }
 
-    return {
-      output: stdout,
-      duration,
-      exitCode: 0
+  private async executeStreamingCommand(
+    safeCommand: string,
+    options: CommandExecutionOptions | undefined,
+    context: CommandExecutionContext | undefined,
+    startTime: number
+  ): Promise<CommandExecutionResult> {
+    const bus = getStreamBus();
+    const pipelineId = context?.pipelineId || 'pipeline';
+    const stageIndex = context?.stageIndex ?? 0;
+    const parallelIndex = context?.parallelIndex;
+    const streamId = context?.streamId || randomUUID();
+    const env = { ...process.env, ...(options?.env || {}) };
+
+    const child = spawn(safeCommand, {
+      cwd: this.workingDirectory,
+      env,
+      shell: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    const stdoutDecoder = new StringDecoder('utf8');
+    const stderrDecoder = new StringDecoder('utf8');
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+
+    const emitChunk = (chunk: string, source: 'stdout' | 'stderr') => {
+      if (!chunk) return;
+      bus.emit({
+        type: 'CHUNK',
+        pipelineId,
+        stageIndex,
+        parallelIndex,
+        chunk,
+        source,
+        timestamp: Date.now()
+      });
     };
+
+    return await new Promise<CommandExecutionResult>((resolve, reject) => {
+      let settled = false;
+      if (options?.input) {
+        child.stdin.write(options.input);
+      }
+      // Always end stdin to avoid hangs
+      child.stdin.end();
+
+      child.stdout.on('data', (data: Buffer) => {
+        const text = stdoutDecoder.write(data);
+        stdoutBuffer += text;
+        emitChunk(text, 'stdout');
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        const text = stderrDecoder.write(data);
+        stderrBuffer += text;
+        emitChunk(text, 'stderr');
+      });
+
+      child.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        const duration = Date.now() - startTime;
+        reject(
+          new MlldCommandExecutionError(
+            `Command failed: ${err.message}`,
+            context?.sourceLocation,
+            {
+              command: safeCommand,
+              exitCode: 1,
+              stderr: err.message,
+              duration,
+              workingDirectory: this.workingDirectory,
+              directiveType: context?.directiveType || 'run'
+            }
+          )
+        );
+      });
+
+      child.on('close', (code) => {
+        if (settled) return;
+        const finalOut = stdoutDecoder.end();
+        if (finalOut) {
+          stdoutBuffer += finalOut;
+          emitChunk(finalOut, 'stdout');
+        }
+        const finalErr = stderrDecoder.end();
+        if (finalErr) {
+          stderrBuffer += finalErr;
+          emitChunk(finalErr, 'stderr');
+        }
+        const duration = Date.now() - startTime;
+
+        if (code && code !== 0) {
+          settled = true;
+          reject(
+            new MlldCommandExecutionError(
+              `Command failed with exit code ${code}`,
+              context?.sourceLocation,
+              {
+                command: safeCommand,
+                exitCode: code,
+                stderr: stderrBuffer,
+                stdout: stdoutBuffer,
+                duration,
+                workingDirectory: this.workingDirectory,
+                directiveType: context?.directiveType || 'run',
+                streamId
+              }
+            )
+          );
+          return;
+        }
+
+        settled = true;
+        resolve({
+          output: stdoutBuffer,
+          duration,
+          exitCode: code ?? 0,
+          stderr: stderrBuffer || undefined
+        });
+      });
+    });
   }
 }

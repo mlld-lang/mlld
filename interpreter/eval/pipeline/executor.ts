@@ -31,6 +31,7 @@ import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import type { CommandExecutionHookOptions } from './command-execution';
+import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import { InterpolationContext } from '../../core/interpolation-context';
 import { getStreamBus, type StreamEvent } from './stream-bus';
 import { ProgressOnlySink } from './stream-sinks/progress';
@@ -86,6 +87,22 @@ export class PipelineExecutor {
   private pipelineId: string = createPipelineId();
   private detachStreaming: Array<() => void> = [];
   private streamingEnabled: boolean;
+  private buildCommandExecutionContext(
+    stageIndex: number,
+    stageContext: StageContext,
+    parallelIndex?: number,
+    directiveType?: string
+  ): CommandExecutionContext {
+    const stageStreaming = this.isStageStreaming(this.pipeline[stageIndex]);
+    return {
+      directiveType: directiveType || 'run',
+      streamingEnabled: this.streamingEnabled && stageStreaming,
+      pipelineId: this.pipelineId,
+      stageIndex,
+      parallelIndex,
+      streamId: stageContext.contextId ?? createPipelineId()
+    };
+  }
 
   constructor(
     pipeline: PipelineStage[],
@@ -118,7 +135,7 @@ export class PipelineExecutor {
     this.parallelCap = parallelCap;
     this.delayMs = delayMs;
     this.streamingOptions = env.getStreamingOptions();
-    this.streamingEnabled = this.streamingOptions.enabled !== false;
+    this.streamingEnabled = this.streamingOptions.enabled !== false && this.pipelineHasStreamingStage(pipeline);
     if (this.streamingEnabled) {
       this.attachStreamingSinks();
     }
@@ -169,6 +186,22 @@ export class PipelineExecutor {
       pipelineId: event.pipelineId || this.pipelineId,
       timestamp: event.timestamp ?? Date.now()
     } as StreamEvent);
+  }
+
+  private isStageStreaming(stage: PipelineStageEntry | PipelineStageEntry[]): boolean {
+    if (Array.isArray(stage)) {
+      return stage.some(st => this.isStageStreaming(st));
+    }
+    const candidate = stage as any;
+    return Boolean(
+      candidate?.stream ||
+      candidate?.withClause?.stream ||
+      candidate?.meta?.withClause?.stream
+    );
+  }
+
+  private pipelineHasStreamingStage(pipeline: PipelineStageEntry[]): boolean {
+    return pipeline.some(stage => this.isStageStreaming(stage));
   }
 
   /**
@@ -250,16 +283,11 @@ export class PipelineExecutor {
           });
         }
         if (result.type === 'success') {
+          const stageEntry = this.pipeline[nextStep.stage];
           this.emitStream({
             type: 'STAGE_SUCCESS',
             stageIndex: nextStep.stage,
             durationMs: Date.now() - stageStartTime
-          });
-          this.emitStream({
-            type: 'CHUNK',
-            stageIndex: nextStep.stage,
-            chunk: result.output || '',
-            source: 'stdout'
           });
         } else if (result.type === 'error') {
           this.emitStream({
@@ -404,7 +432,9 @@ export class PipelineExecutor {
                 structuredInput,
                 stageEnv!,
                 stageOpContext,
-                stageHookNode
+                stageHookNode,
+                stageIndex,
+                context
               );
             } else {
               stageExecution = await this.executeCommand(
@@ -413,7 +443,9 @@ export class PipelineExecutor {
                 structuredInput,
                 stageEnv!,
                 stageOpContext,
-                stageHookNode
+                stageHookNode,
+                stageIndex,
+                context
               );
             }
             const output = stageExecution.result;
@@ -535,7 +567,10 @@ export class PipelineExecutor {
     structuredInput: StructuredValue,
     stageEnv: Environment,
     operationContext?: OperationContext,
-    hookNode?: ExecInvocation
+    hookNode?: ExecInvocation,
+    stageIndex?: number,
+    stageContext?: StageContext,
+    parallelIndex?: number
   ): Promise<StageExecutionResult> {
     // Special handling for synthetic __source__ stage
     if (command.rawIdentifier === '__source__') {
@@ -580,7 +615,7 @@ export class PipelineExecutor {
     }
     
     // Resolve the command reference
-    const commandVar = await this.resolveCommandReference(command, stageEnv);
+      const commandVar = await this.resolveCommandReference(command, stageEnv);
     
     if (!commandVar) {
       throw new Error(`Pipeline command ${command.rawIdentifier} not found`);
@@ -603,7 +638,10 @@ export class PipelineExecutor {
       return await this.executeCommandVariable(commandVar, args, stageEnv, input, structuredInput, {
         hookNode,
         operationContext,
-        stageInputs: [structuredInput]
+        stageInputs: [structuredInput],
+        executionContext: stageContext && typeof stageIndex === 'number'
+          ? this.buildCommandExecutionContext(stageIndex, stageContext, parallelIndex, command.rawIdentifier)
+          : undefined
       });
     });
 
@@ -616,8 +654,11 @@ export class PipelineExecutor {
     stage: InlineCommandStage,
     structuredInput: StructuredValue,
     stageEnv: Environment,
-    operationContext?: OperationContext,
-    hookNode?: ExecInvocation
+    operationContext: OperationContext | undefined,
+    hookNode: ExecInvocation | undefined,
+    stageIndex: number,
+    stageContext: StageContext,
+    parallelIndex?: number
   ): Promise<StageExecutionResult> {
     const ctxManager = stageEnv.getContextManager();
     const runInline = async (): Promise<StageExecutionResult> => {
@@ -629,7 +670,11 @@ export class PipelineExecutor {
         }
       });
       const stdinInput = structuredInput?.text ?? '';
-      const result = await stageEnv.executeCommand(commandText, { input: stdinInput });
+      const result = await stageEnv.executeCommand(
+        commandText,
+        { input: stdinInput },
+        this.buildCommandExecutionContext(stageIndex, stageContext, parallelIndex)
+      );
       const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
       const normalizedResult = processCommandOutput(result);
       const labelDescriptor =
@@ -893,7 +938,7 @@ export class PipelineExecutor {
       const results = await runWithConcurrency(
         commands,
         Math.min(this.parallelCap ?? getParallelLimit(), commands.length),
-        async (cmd) => {
+        async (cmd, parallelIndex) => {
           const branchInput = cloneStructuredValue(sharedStructuredInput);
           this.logStructuredStage('input', cmd.rawIdentifier, stageIndex, branchInput, true);
           let pipelineSnapshot: PipelineContextSnapshot | undefined;
@@ -940,7 +985,10 @@ export class PipelineExecutor {
                         branchInput,
                         subEnv,
                         branchOpContext,
-                        branchHookNode
+                        branchHookNode,
+                        stageIndex,
+                        context,
+                        parallelIndex
                       )
                     : await this.executeCommand(
                         cmd as PipelineCommand,
@@ -948,7 +996,10 @@ export class PipelineExecutor {
                         branchInput,
                         subEnv,
                         branchOpContext,
-                        branchHookNode
+                        branchHookNode,
+                        stageIndex,
+                        context,
+                        parallelIndex
                       );
               if (this.isRetrySignal(stageExecution.result)) {
                 return stageExecution.result as RetrySignal;

@@ -22,6 +22,7 @@ export type StreamEvent =
       type: 'STAGE_START';
       pipelineId: string;
       stageIndex: number;
+      parallelIndex?: number;
       command?: PipelineStageEntry;
       contextId?: string;
       attempt?: number;
@@ -31,6 +32,7 @@ export type StreamEvent =
       type: 'STAGE_SUCCESS';
       pipelineId: string;
       stageIndex: number;
+      parallelIndex?: number;
       durationMs: number;
       timestamp: number;
     }
@@ -38,6 +40,7 @@ export type StreamEvent =
       type: 'STAGE_FAILURE';
       pipelineId: string;
       stageIndex: number;
+      parallelIndex?: number;
       error: Error;
       timestamp: number;
     }
@@ -45,8 +48,14 @@ export type StreamEvent =
       type: 'CHUNK';
       pipelineId: string;
       stageIndex: number;
+      parallelIndex?: number;
       chunk: string;
-      source: 'stdout' | 'stderr';
+      source: 'stdout' | 'stderr' | 'api';
+      metadata?: {
+        tokens?: number;
+        eventType?: string;
+        raw?: unknown;
+      };
       timestamp: number;
     };
 

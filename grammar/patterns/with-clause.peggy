@@ -183,7 +183,8 @@ PipelineCommand
           rawArgs: ref.commandRef.args ? ref.commandRef.args.map(arg => 
             arg.type === NodeType.Text ? arg.content : 
             arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
-          ) : []
+          ) : [],
+          ...(ref.withClause?.stream ? { stream: true } : {})
         };
       } else if (ref.type === 'VariableReferenceWithTail') {
         // Variable with tail modifiers - should not happen in pipeline context
@@ -194,7 +195,8 @@ PipelineCommand
           args: [],
           fields: variable.fields || [],
           rawIdentifier: variable.identifier,
-          rawArgs: []
+          rawArgs: [],
+          ...(ref.withClause?.stream ? { stream: true } : {})
         };
       } else {
         // Plain variable reference

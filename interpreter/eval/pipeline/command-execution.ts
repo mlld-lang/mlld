@@ -1,4 +1,5 @@
 import type { Environment } from '../../env/Environment';
+import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
@@ -37,6 +38,7 @@ export interface CommandExecutionHookOptions {
   operationContext?: OperationContext;
   hookNode?: HookableNode;
   stageInputs?: readonly unknown[];
+  executionContext?: CommandExecutionContext;
 }
 
 const STRUCTURED_PIPELINE_LANGUAGES = new Set([
@@ -896,7 +898,11 @@ export async function executeCommandVariable(
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
 
     // Always pass pipeline input as stdin when available
-    let commandOutput: unknown = await env.executeCommand(command, { input: stdinInput } as any);
+    let commandOutput: unknown = await env.executeCommand(
+      command,
+      { input: stdinInput } as any,
+      hookOptions?.executionContext
+    );
 
     const withClause = execDef.withClause;
     if (withClause) {

@@ -9,8 +9,7 @@ export type DataLabel =
   | 'public'
   | 'trusted'
   | 'destructive'
-  | 'network'
-  | 'llm';
+  | 'network';
 
 export type CapabilityKind =
   | DirectiveKind
@@ -79,8 +78,7 @@ export const DATA_LABELS: readonly DataLabel[] = [
   'public',
   'trusted',
   'destructive',
-  'network',
-  'llm'
+  'network'
 ] as const;
 
 const TAINT_ORDER: Record<TaintLevel, number> = {
@@ -137,14 +135,10 @@ export function makeSecurityDescriptor(options?: {
 }): SecurityDescriptor {
   const labels = freezeArray(options?.labels);
   const taintLevel = options?.taintLevel ?? 'unknown';
-  const finalLabels =
-    taintLevel === 'llmOutput' && !labels.includes('llm')
-      ? freezeArray<DataLabel>([...labels, 'llm'])
-      : labels;
   const sources = freezeArray(options?.sources);
   const policyContext = freezeObject(options?.policyContext);
   return createDescriptor(
-    finalLabels,
+    labels,
     taintLevel,
     sources,
     options?.capability,
