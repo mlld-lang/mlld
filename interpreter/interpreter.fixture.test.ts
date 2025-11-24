@@ -1510,9 +1510,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           
           if (isValidFixture && !isSmokeTest) {
             // Normalize output (trim trailing whitespace/newlines)
-            const normalizedResult = result.trim();
-            const normalizedExpected = fixture.expected.trim();
-            expect(normalizedResult).toBe(normalizedExpected);
+          const normalizedResult = result.trim();
+          const normalizedExpected = fixture.expected.trim();
+          expect(normalizedResult).toBe(normalizedExpected);
           } else if (isSmokeTest) {
             // For smoke tests, just verify it doesn't crash and produces output
             expect(result).toBeDefined();

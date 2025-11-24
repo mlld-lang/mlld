@@ -7,6 +7,7 @@ import {
   mergeEvaluatorDescriptors,
   type EvaluatorResult
 } from '../utils/evaluator-result';
+import { executeParallelExecInvocations } from './helpers/parallel-exec';
 
 /**
  * Unified expression evaluator for all expression types from the unified grammar
@@ -86,7 +87,14 @@ async function evaluateBinaryExpression(
     operator = operator[0];
   }
   
-  
+  const isExecParallel =
+    operator === '||' &&
+    node.left?.type === 'ExecInvocation' &&
+    node.right?.type === 'ExecInvocation';
+  if (isExecParallel) {
+    const { value, descriptor } = await executeParallelExecInvocations(node.left, node.right, env);
+    return createEvaluatorResult(value, descriptor);
+  }
   
   const leftResult = await evaluateUnifiedExpression(node.left, env);
   const leftValue = leftResult.value;

@@ -11,6 +11,7 @@ import {
   isPipelineInput 
 } from '@core/types/variable';
 import { asText, assertStructuredValue } from '../utils/structured-value';
+import { executeParallelExecInvocations } from './helpers/parallel-exec';
 
 /**
  * Determines if a value is truthy according to mlld rules
@@ -122,6 +123,14 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     operator = operator[0];
   }
   
+  const isExecParallel =
+    operator === '||' &&
+    left?.type === 'ExecInvocation' &&
+    right?.type === 'ExecInvocation';
+  if (isExecParallel) {
+    const { value } = await executeParallelExecInvocations(left, right, env);
+    return { value, env };
+  }
   
   // Short-circuit evaluation for logical operators
   const expressionContext = { isExpression: true, ...context };
