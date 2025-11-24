@@ -318,6 +318,48 @@ Append one record per call, preserving existing file content:
 
 Syntactic sugar for `/output...to stderr`
 
+### `/stream` - Stream Output
+
+**Purpose**: Display output with live chunks as they arrive (instead of buffering until completion)
+
+**Syntax**: `/stream <expression>`
+
+**Example**:
+```mlld
+/stream @claude("Write a story")
+```
+
+### `stream` - Enable Streaming
+
+**Purpose**: Enable streaming for a function call or code block (syntactic sugar for `with { stream: true }`)
+
+**Syntax**:
+- `stream @function()`
+- `stream sh { ... }`
+- `stream node { ... }`
+
+**Example**:
+```mlld
+stream @claude("Write a haiku")
+
+# Equivalent to:
+@claude("Write a haiku") with { stream: true }
+```
+
+**Parallel execution**: Both branches stream concurrently, results buffer until complete
+
+```mlld
+/exe @left() = sh { echo "L" }
+/exe @right() = sh { echo "R" }
+/var @results = stream @left() || stream @right()
+/show @results   # => ["L","R"]
+```
+
+**Suppression**:
+- CLI: `--no-stream`
+- Env: `MLLD_NO_STREAM=true`
+- API: `interpret(..., { streaming: { enabled: false } })`
+
 ## Advanced Features
 
 ### Templates

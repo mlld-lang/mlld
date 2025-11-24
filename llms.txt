@@ -31,6 +31,7 @@
   <OUTPUT_DIRECTIVE> ............... Write to files/stdout/stderr with optional formats.
   <LOG_DIRECTIVE> .................. Syntactic sugar for /output to stdout; works in action contexts.
   <APPEND_DIRECTIVE> ............... Append JSONL/plain records via /append or `| append` builtin.
+  <STREAMING> ...................... Enable live chunks with stream keyword or /stream; suppress via flags.
 </COMMANDS>
 <CONTROL_FLOW>
   <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
@@ -61,8 +62,21 @@
   <MISTAKE_NO_EARLY_EXIT> .......... Model flows via /when rather than exits.
 </COMMON_MISTAKES>
 <REFERENCE> ........................ Execution context table, syntax summary, quick transforms list.
+<STREAMING> ........................ Live chunks with stream keyword or /stream; suppress via flags.
 <SEE_ALSO> ......................... Documentation, examples repository, source code.
 </TOC>
+
+<STREAMING>
+Show progress during execution instead of buffering:
+
+stream @claude("prompt")           # Keyword (sugar for with { stream: true })
+/stream @generateReport()          # Directive form
+stream @a() || stream @b()         # Parallel streams, returns ["A","B"]
+
+Suppress: --no-stream flag or MLLD_NO_STREAM=true
+
+Details: docs/dev/STREAMING.md
+</STREAMING>
 
 <OVERVIEW>
 mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps. It's designed to be written directly in Markdown: readable as docs, executable as workflows.

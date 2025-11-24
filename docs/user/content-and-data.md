@@ -23,6 +23,74 @@ Load file contents with angle brackets `<>`. This loads the actual file content,
 /show @filename                          >> Shows "README.md"
 ```
 
+## Streaming Output
+
+For long-running operations, streaming shows progress as chunks arrive instead of waiting for completion.
+
+```mlld
+/stream @claude("Write a story")
+```
+
+While streaming, chunks appear incrementally as the story generates. Progress displays to stderr:
+
+```
+⟳ stage 1: 142 tokens
+```
+
+### How to Enable Streaming
+
+Use the `stream` keyword before a function call or code block:
+
+```mlld
+stream @claude("Write a haiku")
+
+stream sh {
+  echo "Processing..."
+  sleep 2
+  echo "Done!"
+}
+```
+
+The `stream` keyword is syntactic sugar for `with { stream: true }`:
+
+```mlld
+@claude("prompt") with { stream: true }
+```
+
+Or use the `/stream` directive to output with streaming:
+
+```mlld
+/stream @generateReport()
+```
+
+### Parallel Streaming
+
+Multiple streams show progress concurrently, then output buffered results:
+
+```mlld
+/exe @left() = sh { echo "L" }
+/exe @right() = sh { echo "R" }
+
+/var @results = stream @left() || stream @right()
+/show @results
+```
+
+Output:
+```
+[
+  "L",
+  "R"
+]
+```
+
+### Disabling Streaming
+
+Suppress streaming when you only need final output:
+
+- CLI: `--no-stream`
+- Environment: `MLLD_NO_STREAM=true`
+- API: `interpret(..., { streaming: { enabled: false } })`
+
 ### Basic Loading
 
 ```mlld

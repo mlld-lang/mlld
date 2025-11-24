@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc70 (unreleased)]
 
+### Added
+- Streaming support: `stream` keyword, `/stream` directive, and `with { stream: true }` enable live chunk emission with progress sinks and executor streaming (shell, bash, node). Parallel groups stream concurrently and buffer results. Suppress with `--no-stream` or `MLLD_NO_STREAM`.
+
 ### Security - Production-Ready Guard System
 
 **Complete security layer for mlld**: Data labels, guards, and taint tracking that reliably prevents prompt injection and enables policy enforcement.
