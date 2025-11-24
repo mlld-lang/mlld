@@ -1,8 +1,9 @@
-/var @list = ::
-/for @item in @items
-- @item.name: @item.value
-/end
-::
+>> Load and transform files
+/var @config = <config.json> | @json
+/var @uppercase = <readme.txt> | @upper
 
->> Requirements: /for and /end at line start
->> NOT supported in :::...:::, .mtt, or "..."
+>> Chain transformations
+/exe @first(text, n) = js { 
+  return text.split('\n').slice(0, n).join('\n');
+}
+/var @summary = <docs.md> | @first(3) | @upper

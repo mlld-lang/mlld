@@ -1,9 +1,9 @@
->> Load and transform files
-/var @config = <config.json> | @json
-/var @uppercase = <readme.txt> | @upper
+/var @jsonStr = '{"name": "Alice", "active": true}'
 
->> Chain transformations
-/exe @first(text, n) = js { 
-  return text.split('\n').slice(0, n).join('\n');
+/exe @length(str) = js {
+  return str.length;
 }
-/var @summary = <docs.md> | @first(3) | @upper
+
+/run @length(@jsonStr)          >> Default: string
+/run @length(@jsonStr.text)     >> Explicit string
+/run @length(@jsonStr.content)  >> Alias for .text

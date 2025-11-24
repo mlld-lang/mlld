@@ -1,11 +1,8 @@
-/var @page = <https://example.com/data.json>
+>> Extract single section
+/var @install = <README.md # Installation>
 
->> URL-specific metadata
-/show @page.ctx.url                      >> Full URL
-/show @page.ctx.domain                   >> "example.com"
-/show @page.ctx.status                   >> HTTP status code
-/show @page.ctx.title                    >> Page title (if HTML)
+>> Extract from multiple files  
+/var @apis = <docs/*.md # API Reference>
 
->> HTML is converted to markdown
-/show @page.content                      >> Markdown version
-/show @page.ctx.html                     >> Original HTML
+>> Rename sections with 'as'
+/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"

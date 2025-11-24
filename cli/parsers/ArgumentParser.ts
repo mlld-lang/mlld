@@ -188,6 +188,19 @@ export class ArgumentParser {
         case '--no-stream':
           options.noStream = true;
           break;
+        case '--show-json':
+          options.showJson = true;
+          break;
+        case '--append-json': {
+          const candidate = args[i + 1];
+          if (candidate && !candidate.startsWith('-')) {
+            options.appendJson = candidate;
+            i++;
+          } else {
+            options.appendJson = ''; // signal default naming
+          }
+          break;
+        }
         // Environment file path
         case '--env':
           options.env = args[++i];

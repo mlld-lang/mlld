@@ -1,26 +1,17 @@
->> Double-colon (default)
-/var @msg = ::Hello @name!::
-/var @doc = ::Use `npm test` before @env::
-/var @report = ::
-Status: @status
-Config: <@base/config.json>
-Data: @data|@json
-::
+/var @fruits = ["apple", "banana", "cherry"]
+/var @numbers = [1, 2, 3, 4, 5]
 
->> Backticks (alternative)
-/var @msg = `Hello @name!`
-/var @multi = `
-Line 1: @var
-Line 2: @other
-`
+>> Check if array contains value
+/show @fruits.includes("banana")         >> true
+/show @fruits.includes("orange")         >> false
 
->> Double quotes (single-line only)
-/var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+>> Find index of value
+/show @fruits.indexOf("cherry")          >> 2
+/show @fruits.indexOf("missing")         >> -1
 
->> Triple-colon (Discord/social only)
-/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
+>> Get array length
+/show @fruits.length()                   >> 3
 
->> Single quotes (literal)
-/var @literal = '@name stays literal'
+>> Join array elements
+/show @fruits.join(", ")                 >> "apple, banana, cherry"
+/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"

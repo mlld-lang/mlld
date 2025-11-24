@@ -1,13 +1,14 @@
-/var @user = {"name": "Alice", "scores": [10, 20, 30]}
+/var @file = <package.json>
 
->> Object fields
-/show @user.name                         >> "Alice"
+>> Basic metadata
+/show @file.ctx.filename                 >> "package.json"
+/show @file.ctx.relative                 >> "./package.json" 
+/show @file.ctx.absolute                 >> Full path
 
->> Array elements by index
-/show @user.scores[0]                     >> 10
-/show @user.scores[1]                     >> 20
+>> Token counting
+/show @file.ctx.tokest                   >> Estimated tokens (fast)
+/show @file.ctx.tokens                   >> Exact tokens
 
->> Nested access
-/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
-/show @config.db.host                    >> "localhost"
-/show @config.db.users[1]                 >> "guest"
+>> Content access
+/show @file.content                      >> File contents (explicit)
+/show @file                              >> Same as above (implicit)

@@ -160,7 +160,7 @@ describe('Local Modules', () => {
             ]
           }
         }, null, 2),
-        'llm/modules/tools.mlld.md': `---
+        'llm/modules/tools.mld.md': `---
 name: tools
 author: tester
 ---

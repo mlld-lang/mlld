@@ -102,6 +102,8 @@ export interface CLIOptions {
   serveTools?: string;
   // Streaming options
   noStream?: boolean;
+  showJson?: boolean;
+  appendJson?: string;
   _?: string[]; // Remaining args after command
 }
 const globalErrorHandler = new ErrorHandler();

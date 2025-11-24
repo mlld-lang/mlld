@@ -70,6 +70,7 @@ export async function evaluateShow(
   let resultValue: unknown | undefined;
   let content = '';
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+  let isStreamingShow = false;
   let interpolatedDescriptor: SecurityDescriptor | undefined;
   const collectInterpolatedDescriptor = (descriptor?: SecurityDescriptor): void => {
     if (!descriptor) {
@@ -672,10 +673,20 @@ export async function evaluateShow(
     
   } else if (directive.subtype === 'addInvocation' || directive.subtype === 'showInvocation') {
     // Handle unified invocation - could be template or exec
-    const invocation = directive.values?.invocation;
-    if (!invocation) {
+    const baseInvocation = directive.values?.invocation;
+    if (!baseInvocation) {
       throw new Error('Show invocation directive missing invocation');
     }
+    isStreamingShow = Boolean(securityLabels?.includes('stream'));
+    const invocation = isStreamingShow
+      ? {
+          ...baseInvocation,
+          withClause: {
+            ...(baseInvocation.withClause || {}),
+            stream: true
+          }
+        }
+      : baseInvocation;
     
     // Check if this is a method call on an object or on an exec result
     const commandRef = invocation.commandRef as any;
@@ -1164,7 +1175,9 @@ export async function evaluateShow(
   // In expression contexts (like when expressions), we only return the value
   if (!context?.isExpression) {
     // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
-    env.emitEffect('both', content, { source: directive.location });
+    if (!isStreamingShow) {
+      env.emitEffect('both', content, { source: directive.location });
+    }
   }
 
   const baseValue = resultValue ?? textForWrapper;

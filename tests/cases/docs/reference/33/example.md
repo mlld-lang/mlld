@@ -1,5 +1,5 @@
-/exe @validator(input) = when [
-  @input.valid => @input
-  @ctx.try < 3 => retry "need more validation"
-  * => "fallback"
-]
+/var @fruits = ["apple", "banana", "cherry"]
+/show @fruits.includes("banana")        # true
+/show @fruits.indexOf("cherry")         # 2
+/show @fruits.length()                  # 3
+/show @fruits.join(", ")               # "apple, banana, cherry"

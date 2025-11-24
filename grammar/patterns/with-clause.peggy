@@ -247,10 +247,18 @@ PipelineInlineValueStage
 // PIPELINE BUILTIN EFFECTS (minimal)
 // -------------------------------------------------------------
 
+InlineEffectWhitespace "inline whitespace without newline"
+  = [ \t\u00A0\u200B\u200C\u200D]*
+
+PipelineEffectInlineSource "inline effect source (same line only)"
+  = InlineEffectWhitespace !(LineTerminator) source:OutputSource {
+      return source;
+    }
+
 // Support: log [<source>]
 // Example: | log "After stage"   or   | log @var   or   | log
 PipelineBuiltinLog
-  = "log" ![A-Za-z0-9_] _ src:OutputSource? {
+  = "log" ![A-Za-z0-9_] src:PipelineEffectInlineSource? {
       // Build a pseudo reference node for identifier compatibility
       const idNode = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: 'log'
@@ -288,7 +296,7 @@ PipelineBuiltinLog
 
 // show [<source>]
 PipelineBuiltinShow
-  = "show" ![A-Za-z0-9_] _ src:OutputSource? {
+  = "show" ![A-Za-z0-9_] src:PipelineEffectInlineSource? {
       const idNode = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: 'show'
       }, location());

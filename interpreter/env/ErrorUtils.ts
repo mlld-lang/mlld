@@ -26,6 +26,8 @@ export interface CommandExecutionContext {
   stageIndex?: number;
   parallelIndex?: number;
   streamId?: string;
+  emitEffect?: (chunk: string, source: 'stdout' | 'stderr') => void;
+  ndjsonParser?: any;
 }
 
 /**

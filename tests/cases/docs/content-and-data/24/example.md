@@ -1,18 +1,28 @@
->> .att files (default for 5+ lines)
->> file: templates/deploy.att
-# Deployment: @env
-Status: @status
-Config: <@base/config/@env.json>
+/var @text = "Hello World"
+/var @phrase = "  JavaScript rocks!  "
 
->> usage
-/exe @deploy(env, status) = template "./templates/deploy.att"
-/show @deploy("prod", "success")
+>> Check if string contains substring
+/show @text.includes("World")            >> true
+/show @text.includes("world")            >> false
 
->> .mtt files (Discord/social only)
->> file: templates/discord.mtt
-🚨 Alert <@{{adminId}}>!
-Reporter: <@{{reporterId}}>
-Severity: {{severity}}
+>> Find substring position
+/show @text.indexOf("W")                 >> 6
+/show @text.indexOf("xyz")               >> -1
 
->> usage
-/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
+>> Get string length
+/show @text.length()                     >> 11
+
+>> Change case
+/show @text.toLowerCase()                >> "hello world"
+/show @text.toUpperCase()                >> "HELLO WORLD"
+
+>> Trim whitespace
+/show @phrase.trim()                     >> "JavaScript rocks!"
+
+>> Check start/end
+/show @text.startsWith("Hello")          >> true
+/show @text.endsWith("World")            >> true
+
+>> Split into array
+/show @text.split(" ")                   >> ["Hello", "World"]
+/show @text.split("")                    >> ["H", "e", "l", "l", "o", " ", "W", "o", "r", "l", "d"]

@@ -33,6 +33,7 @@ ExeRHSContent "exe assignment value"
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
+  / ExeStreamCommandPattern     // stream cmd {command} - streaming shell command with optional tail
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
@@ -183,6 +184,35 @@ ExeRunCommandPipeStdin "exe run command pipe stdin"
           hasStdin: true,
           isPipeSugar: true,
           hasTailModifiers: !!tail
+        }
+      };
+  }
+
+// Streaming command pattern for exe context - handles "stream cmd {command}" syntax
+ExeStreamCommandPattern "exe stream command pattern"
+  = "stream" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+      const withClause = { stream: true };
+      if (tail) {
+        Object.assign(withClause, tail);
+      }
+      return {
+        subtype: 'exeCommand',
+        source: 'command',
+        values: {
+          command: content.values.command,
+          commandBases: content.values.commandBases,
+          withClause
+        },
+        raw: {
+          command: content.raw.command,
+          commandBases: content.raw.commandBases,
+          ...(tail ? { tailModifiers: tail } : {}),
+          stream: true
+        },
+        meta: {
+          ...content.meta,
+          hasTailModifiers: !!tail,
+          isStream: true
         }
       };
     }

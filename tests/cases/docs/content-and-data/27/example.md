@@ -1,14 +1,18 @@
->> In directives
-/show @name
+>> Extract from code fence
+/var @llmResponse = `Here's your data:
+\`\`\`json
+{"name": "Alice", "status": "active"}
+\`\`\``
 
->> In double quotes
-/var @greeting = "Hello @name"
+/var @data = @llmResponse | @json.llm
+/show @data.name                                >> Alice
 
->> In command braces
-/run {echo "Welcome @name"}
+>> Extract from inline prose
+/var @inline = `The result is {"count": 42} for this query.`
+/var @extracted = @inline | @json.llm
+/show @extracted.count                          >> 42
 
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
-
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Returns false when no JSON found
+/var @text = `Just plain text, no JSON here.`
+/var @result = @text | @json.llm
+/show @result                                   >> false

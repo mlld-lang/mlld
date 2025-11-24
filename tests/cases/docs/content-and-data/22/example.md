@@ -1,18 +1,21 @@
->> Extract from code fence
-/var @llmResponse = `Here's your data:
-\`\`\`json
-{"name": "Alice", "status": "active"}
-\`\`\``
+>> Files
+/var @config = <settings.json>
+@config.json              >> Parsed JSON object
+@config.data              >> Alias for .json
+@config.content           >> Raw string
+@config.text              >> Alias for .content
 
-/var @data = @llmResponse | @json.llm
-/show @data.name                                >> Alice
+>> Variables
+/var @str = '{"status": "ok"}'
+@str.data                 >> Parsed JSON object
+@str.json                 >> Alias for .data
+@str.text                 >> Original string
+@str.content              >> Alias for .text
+@str                      >> Original string (default)
 
->> Extract from inline prose
-/var @inline = `The result is {"count": 42} for this query.`
-/var @extracted = @inline | @json.llm
-/show @extracted.count                          >> 42
-
->> Returns false when no JSON found
-/var @text = `Just plain text, no JSON here.`
-/var @result = @text | @json.llm
-/show @result                                   >> false
+>> Command output
+/var @result = run {curl api.com/data}
+@result.data              >> Parse as JSON
+@result.json              >> Alias for .data
+@result.text              >> Keep as string
+@result.content           >> Alias for .text

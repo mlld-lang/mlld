@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Streaming support: `stream` keyword, `/stream` directive, and `with { stream: true }` enable live chunk emission with progress sinks and executor streaming (shell, bash, node). Parallel groups stream concurrently and buffer results. Suppress with `--no-stream` or `MLLD_NO_STREAM`.
+- Streaming UX MVP:
+  - Auto-parse NDJSON for `stream` execs (paths: message.content[].text/result/delta.text/completion/error.message).
+  - Live stdout for message text with spacing/dedupe; thinking/tool-use to stderr (`💭 text`, `🔧 name input=preview`); tool results suppressed for noise.
+  - Raw event visibility: `--show-json` (or `MLLD_SHOW_JSON=true`) mirrors NDJSON to stderr; `--append-json [file]` writes NDJSON to JSONL (default `YYYY-MM-DD-HH-MM-SS-stream.jsonl` when omitted).
+  - Streaming `/show ...` avoids double-print of streamed content.
 
 ### Security - Production-Ready Guard System
 

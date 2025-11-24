@@ -7,6 +7,8 @@ import { MlldCommandExecutionError } from '@core/errors';
 import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
 import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { randomUUID } from 'crypto';
+import { extractTextFromEvent, classifyEvent } from '@interpreter/streaming/ndjson-extract';
+import * as fs from 'fs';
 
 /**
  * Executes shell commands using async exec for true parallel execution
@@ -312,6 +314,22 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     context: CommandExecutionContext | undefined,
     startTime: number
   ): Promise<CommandExecutionResult> {
+    const showRawStream =
+      (Array.isArray(process.argv) && process.argv.includes('--show-json')) ||
+      process.env.MLLD_SHOW_JSON === 'true';
+    const appendTarget = (() => {
+      const argv = Array.isArray(process.argv) ? process.argv : [];
+      const idx = argv.indexOf('--append-json');
+      if (idx === -1) return undefined;
+      const candidate = argv[idx + 1];
+      if (candidate && !candidate.startsWith('--')) {
+        return candidate;
+      }
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}-stream.jsonl`;
+    })();
+    const appendStream = appendTarget ? fs.createWriteStream(appendTarget, { flags: 'a' }) : null;
     const bus = getStreamBus();
     const pipelineId = context?.pipelineId || 'pipeline';
     const stageIndex = context?.stageIndex ?? 0;
@@ -328,10 +346,14 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
 
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
+    let streamJsonCarry = '';
     let stdoutBuffer = '';
     let stderrBuffer = '';
+    const chunkEffect = context?.emitEffect;
+    const ndjsonParser = context?.ndjsonParser;
+    const useNdjson = Boolean(ndjsonParser);
 
-    const emitChunk = (chunk: string, source: 'stdout' | 'stderr') => {
+    const emitChunk = (chunk: string, source: 'stdout' | 'stderr', parsed?: boolean) => {
       if (!chunk) return;
       bus.emit({
         type: 'CHUNK',
@@ -340,8 +362,14 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         parallelIndex,
         chunk,
         source,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        parsed
       });
+      // When streaming, forward chunks to terminal if not suppressed by caller
+      if (context?.streamingEnabled && !context?.suppressTerminal) {
+        const dest = source === 'stderr' ? process.stderr : process.stdout;
+        dest.write(chunk);
+      }
     };
 
     return await new Promise<CommandExecutionResult>((resolve, reject) => {
@@ -354,8 +382,71 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
 
       child.stdout.on('data', (data: Buffer) => {
         const text = stdoutDecoder.write(data);
-        stdoutBuffer += text;
-        emitChunk(text, 'stdout');
+        if (useNdjson && ndjsonParser) {
+          const events = ndjsonParser.processChunk(text);
+          for (const evt of events) {
+            const rawLine = JSON.stringify(evt);
+            if (appendStream) {
+              appendStream.write(rawLine + '\n');
+            }
+            if (showRawStream) {
+              emitChunk(`${rawLine}\n`, 'stderr', true);
+            }
+            const classified = classifyEvent(evt);
+            switch (classified.kind) {
+              case 'message': {
+                const extracted = classified.text?.trim();
+                if (extracted) {
+                  stdoutBuffer += extracted;
+                  emitChunk(extracted, 'stdout', true);
+                  if (chunkEffect) {
+                    chunkEffect(extracted, 'stdout');
+                  }
+                }
+                break;
+              }
+              case 'thinking': {
+                if (classified.text) {
+                  emitChunk(`💭 ${classified.text}\n`, 'stderr', true);
+                }
+                break;
+              }
+              case 'tool-use': {
+                if (classified.text) {
+                  emitChunk(`${classified.text}\n`, 'stderr', true);
+                }
+                break;
+              }
+              case 'tool-result': {
+                // Skip noisy tool results for now
+                break;
+              }
+              case 'error': {
+                if (classified.text) {
+                  emitChunk(`❌ ${classified.text}\n`, 'stderr', true);
+                }
+                break;
+              }
+              default:
+                break;
+            }
+          }
+        } else {
+          const processed = processStreamJsonChunk(text, streamJsonCarry);
+          streamJsonCarry = processed.remainder;
+          if (processed.parsed) {
+            if (processed.text) {
+              stdoutBuffer += processed.text;
+              emitChunk(processed.text, 'stdout');
+            } else {
+              stdoutBuffer += text;
+              emitChunk(text, 'stdout');
+            }
+          } else {
+            stdoutBuffer += text;
+            emitChunk(text, 'stdout');
+          }
+        }
       });
 
       child.stderr.on('data', (data: Buffer) => {
@@ -388,8 +479,80 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         if (settled) return;
         const finalOut = stdoutDecoder.end();
         if (finalOut) {
-          stdoutBuffer += finalOut;
-          emitChunk(finalOut, 'stdout');
+          if (useNdjson && ndjsonParser) {
+            const events = ndjsonParser.processChunk(finalOut);
+            const flushed = ndjsonParser.flush();
+            for (const evt of [...events, ...flushed]) {
+              const rawLine = JSON.stringify(evt);
+              if (appendStream) {
+                appendStream.write(rawLine + '\n');
+              }
+              if (showRawStream) {
+                emitChunk(`${rawLine}\n`, 'stderr', true);
+              }
+              const classified = classifyEvent(evt);
+              switch (classified.kind) {
+                case 'message': {
+                  const extracted = classified.text?.trim();
+                  if (extracted) {
+                    stdoutBuffer += extracted;
+                    emitChunk(extracted, 'stdout', true);
+                    if (chunkEffect) {
+                      chunkEffect(extracted, 'stdout');
+                    }
+                  }
+                  break;
+                }
+                case 'thinking': {
+                  if (classified.text) {
+                    emitChunk(`💭 ${classified.text}\n`, 'stderr', true);
+                  }
+                  break;
+                }
+                case 'tool-use': {
+                  if (classified.text) {
+                    emitChunk(`${classified.text}\n`, 'stderr', true);
+                  }
+                  break;
+                }
+                case 'tool-result': {
+                  // Skip noisy tool results for now
+                  break;
+                }
+                case 'error': {
+                  if (classified.text) {
+                    emitChunk(`❌ ${classified.text}\n`, 'stderr', true);
+                  }
+                  break;
+                }
+                default:
+                  break;
+              }
+            }
+          } else {
+            const processed = processStreamJsonChunk(finalOut, streamJsonCarry);
+            streamJsonCarry = processed.remainder;
+            if (processed.parsed) {
+              if (processed.text) {
+                stdoutBuffer += processed.text;
+                emitChunk(processed.text, 'stdout');
+              } else {
+                stdoutBuffer += finalOut;
+                emitChunk(finalOut, 'stdout');
+              }
+            } else {
+              stdoutBuffer += finalOut;
+              emitChunk(finalOut, 'stdout');
+            }
+          }
+        }
+        if (!useNdjson && streamJsonCarry) {
+          stdoutBuffer += streamJsonCarry;
+          emitChunk(streamJsonCarry, 'stdout');
+          streamJsonCarry = '';
+        }
+        if (appendStream) {
+          appendStream.end();
         }
         const finalErr = stderrDecoder.end();
         if (finalErr) {
@@ -429,4 +592,59 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       });
     });
   }
+}
+
+function extractStreamJsonText(data: any): string | null {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+  if (typeof (data as any).completion === 'string') {
+    return (data as any).completion;
+  }
+  const delta = (data as any).delta;
+  if (delta && typeof delta === 'object') {
+    if (typeof delta.text === 'string') {
+      return delta.text;
+    }
+    if (typeof delta.partial_json === 'string') {
+      return delta.partial_json;
+    }
+  }
+  if (typeof (data as any).text === 'string') {
+    return (data as any).text;
+  }
+  return null;
+}
+
+function processStreamJsonChunk(
+  chunk: string,
+  carry: string
+): { text: string; remainder: string; parsed: boolean; hadText: boolean } {
+  const combined = (carry || '') + chunk;
+  const lines = combined.split(/\r?\n/);
+  const remainder = lines.pop() ?? '';
+  let parsedAny = false;
+  let textOut = '';
+  let hadText = false;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line);
+      parsedAny = true;
+      const text = extractStreamJsonText(parsed);
+      if (text) {
+        textOut += text;
+        hadText = true;
+      }
+    } catch {
+      // ignore parse errors; fall through
+    }
+  }
+
+  if (!parsedAny) {
+    return { text: combined, remainder: '', parsed: false, hadText: false };
+  }
+
+  return { text: hadText ? textOut : combined, remainder, parsed: true, hadText };
 }

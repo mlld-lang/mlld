@@ -1,14 +1,15 @@
->> Collect all module documentation
-/var @modules = <modules/**/*.md>
+>> ✗ Using {{}} in ::...::
+/var @msg = ::Hello {{name}}::        >> {{name}} is literal
+/var @msg = ::Hello @name::           >> ✓
 
->> Build README with metadata
-/var @readme = `# Project Modules
+>> ✗ Using @var in :::...:::
+/var @msg = :::Hello @name:::         >> @name is literal
+/var @msg = :::Hello {{name}}:::      >> ✓
 
-Total modules: @modules.length
-Last updated: @now
+>> ✗ Using ::: without Discord/social need
+/var @msg = :::Status: {{status}}:::  >> Loses all features
+/var @msg = ::Status: @status::       >> ✓ Full features
 
-@modules
-
-`
-
-/output @readme to "README.md"
+>> ✗ Importing template files
+/import { @tpl } from "./file.att"    >> Error
+/exe @tpl(x) = template "./file.att"  >> ✓

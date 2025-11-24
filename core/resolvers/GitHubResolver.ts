@@ -409,9 +409,9 @@ export class GitHubResolver implements Resolver {
     if (ref) {
       let modulePath = ref.replace(/^\/|\/$/g, '');
       
-      // Auto-append .mlld.md extension if no extension is provided
+      // Auto-append .mld.md extension if no extension is provided
       if (modulePath && !modulePath.includes('.')) {
-        modulePath += '.mlld.md';
+        modulePath += '.mld.md';
       }
       
       parts.push(modulePath);

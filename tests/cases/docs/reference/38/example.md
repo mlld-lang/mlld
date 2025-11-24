@@ -1,2 +1,3 @@
-/exe @formatDate(date) = run {date -d "@date" "+%Y-%m-%d"}
-/exe @validate(data) = js { return data.valid === true }
+>> Start-of-line comment
+/var @name = "Alice"    >> end-of-line comment
+/show @greeting         << also end-of-line

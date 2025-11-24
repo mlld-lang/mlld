@@ -47,6 +47,10 @@ import {
   type GuardInputMappingEntry
 } from '../utils/guard-inputs';
 import { createParameterVariable } from '../utils/parameter-factory';
+import { getStreamBus } from './pipeline/stream-bus';
+import { TerminalSink } from './pipeline/stream-sinks/terminal';
+import { NDJSONParser } from '../streaming/ndjson-parser';
+import { extractTextFromEvent } from '../streaming/ndjson-extract';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -329,15 +333,57 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
-  let resultSecurityDescriptor: SecurityDescriptor | undefined;
-  const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
-    if (!descriptor) {
+  const streamingOptions = env.getStreamingOptions();
+  let streamingRequested =
+    node.stream === true ||
+    node.withClause?.stream === true ||
+    node.meta?.withClause?.stream === true;
+  let streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
+  const detachStreaming: Array<() => void> = [];
+  const hasStreamFormat =
+    node.withClause?.streamFormat !== undefined ||
+    node.meta?.withClause?.streamFormat !== undefined;
+  const useNdjsonParsing = streamingEnabled && !hasStreamFormat;
+  const ndjsonParser = useNdjsonParsing ? new NDJSONParser() : null;
+  const pipelineId = `exec-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+  let lastEmittedChunk: string | undefined;
+  const chunkEffect = (chunk: string, source: 'stdout' | 'stderr') => {
+    if (!streamingEnabled) return;
+    const trimmed = chunk.trim();
+    if (trimmed && trimmed === lastEmittedChunk) {
       return;
     }
-    resultSecurityDescriptor = resultSecurityDescriptor
-      ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptor)
-      : descriptor;
+    lastEmittedChunk = trimmed || chunk;
+    const withSpacing = chunk.endsWith('\n') ? `${chunk}\n` : `${chunk}\n\n`;
+    // Route stdout chunks to doc to display progressively; stderr stays stderr.
+    if (source === 'stdout') {
+      env.emitEffect('doc', withSpacing);
+    } else {
+      env.emitEffect('stderr', chunk);
+    }
   };
+
+  const ensureStreamingSinks = (): void => {
+    // NDJSON parsing uses direct chunk writing from executor; still allow sinks
+    if (!streamingEnabled || detachStreaming.length > 0) {
+      return;
+    }
+    const bus = getStreamBus();
+    const terminalSink = new TerminalSink();
+    const terminalUnsub = bus.subscribe(event => terminalSink.handle(event));
+    detachStreaming.push(terminalUnsub);
+  };
+
+  try {
+  let resultSecurityDescriptor: SecurityDescriptor | undefined;
+    const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
+      if (!descriptor) {
+        return;
+      }
+      resultSecurityDescriptor = resultSecurityDescriptor
+        ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptor)
+        : descriptor;
+    };
   const interpolateWithResultDescriptor = (
     nodes: any,
     targetEnv: Environment = env,
@@ -988,6 +1034,17 @@ export async function evaluateExecInvocation(
   if (!definition) {
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
   }
+  const definitionHasStreamFormat =
+    definition.withClause?.streamFormat !== undefined ||
+    (definition.meta as any)?.withClause?.streamFormat !== undefined;
+  streamingRequested =
+    streamingRequested ||
+    definition.withClause?.stream === true ||
+    (definition.meta as any)?.withClause?.stream === true ||
+    (definition.meta as any)?.isStream === true;
+  const ndjsonActive = streamingRequested && !definitionHasStreamFormat && !hasStreamFormat;
+  streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
+  ensureStreamingSinks();
 
   let whenExprNode: WhenExpressionNode | null = null;
   if (definition.language === 'mlld-when') {
@@ -1655,7 +1712,19 @@ export async function evaluateExecInvocation(
 
       // Execute the command with environment variables and optional stdin
       const commandOptions = stdinInput !== undefined ? { env: envVars, input: stdinInput } : { env: envVars };
-      const commandOutput = await execEnv.executeCommand(command, commandOptions);
+      const commandOutput = await execEnv.executeCommand(
+        command,
+        commandOptions,
+        {
+          directiveType: 'exec',
+          streamingEnabled,
+          pipelineId,
+          stageIndex: 0,
+          sourceLocation: node.location,
+          emitEffect: chunkEffect,
+          ndjsonParser: ndjsonActive ? new NDJSONParser() : undefined
+        }
+      );
       
       // Normalize structured output when possible
       if (typeof commandOutput === 'string') {
@@ -2383,10 +2452,21 @@ export async function evaluateExecInvocation(
       });
     } catch {}
   }
-    const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
-    return finalEvalResult;
+  const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
+  return finalEvalResult;
     });
   });
+  } finally {
+    if (detachStreaming.length > 0) {
+      for (const unsub of detachStreaming) {
+        try {
+          unsub();
+        } catch {
+          // ignore teardown errors during streaming teardown
+        }
+      }
+    }
+  }
 }
 
 type SecurityCarrier = {

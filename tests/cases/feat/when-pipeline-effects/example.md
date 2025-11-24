@@ -16,7 +16,18 @@
   true => @value | show
 ]
 
+/var @usePrimary = false
+
+/exe @doubleLog(usePrimary) = when first [
+  @usePrimary => @value | log
+  @value => @value | log
+  * => null
+]
+
+/var @doubleLogResult = @doubleLog(@usePrimary)
+
 /show ::append:@appendResult::
 /show ::output:@outputResult::
 /show ::log:@logResult::
 /show ::showValue:@showResult::
+/show ::doubleLog:@doubleLogResult::
