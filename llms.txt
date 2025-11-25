@@ -1511,7 +1511,7 @@ After guards (output validation):
 ]
 
 Transform with allow @value:
-/guard @redact secret = when [
+/guard @redact before secret = when [
   @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]

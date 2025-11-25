@@ -42,11 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Before/After Guards**:
 - Guards fire before operations (input validation) or after operations (output validation)
-- Syntax: `/guard before`, `/guard after`, `/guard always` (fires both)
+- Syntax: `/guard @name before datalabel = when [...]` where TIMING is `before`, `after`, or `always`
+- Syntactic sugar: `/guard @name for LABEL` is equivalent to `before` timing (explicit `before` recommended)
 - Context: `@input` in before guards, `@output` in after guards, both available in denied handlers
 - Execution order: before guards → operation → after guards
-- `/guard before` retries supported in pipeline context
-- Note: `/guard after` does not support `retry` yet; coming in a future release
+- Retries supported in pipeline context for both before and after guards
 
 **Allow @value Transforms**:
 - Guards transform inputs/outputs: `allow @redact(@input)` or `allow @sanitize(@output)`
