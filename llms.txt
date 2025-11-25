@@ -62,21 +62,10 @@
   <MISTAKE_NO_EARLY_EXIT> .......... Model flows via /when rather than exits.
 </COMMON_MISTAKES>
 <REFERENCE> ........................ Execution context table, syntax summary, quick transforms list.
+<SECURITY> ......................... Guards, data labels, expression tracking, @ctx.guard context.
 <STREAMING> ........................ Live chunks with stream keyword or /stream; suppress via flags.
 <SEE_ALSO> ......................... Documentation, examples repository, source code.
 </TOC>
-
-<STREAMING>
-Show progress during execution instead of buffering:
-
-stream @claude("prompt")           # Keyword (sugar for with { stream: true })
-/stream @generateReport()          # Directive form
-stream @a() || stream @b()         # Parallel streams, returns ["A","B"]
-
-Suppress: --no-stream flag or MLLD_NO_STREAM=true
-
-Details: docs/dev/STREAMING.md
-</STREAMING>
 
 <OVERVIEW>
 mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps. It's designed to be written directly in Markdown: readable as docs, executable as workflows.
@@ -1490,8 +1479,66 @@ Execution Context – where interpolation applies:
 
 Transforms (built-in): `@json`, `@xml`, `@csv`, `@md`
 Aliases: `@p` ≡ `@pipeline` inside pipeline stages
-Globs: use `<path/*.ext>` and `as "template"` with `<>` placeholder for each matched file 
+Globs: use `<path/*.ext>` and `as "template"` with `<>` placeholder for each matched file
 </REFERENCE>
+
+<SECURITY>
+Guards protect data and operations. Label sensitive data, define policies:
+
+/var secret @apiKey = "sk-12345"         # Label as 'secret'
+/var pii @email = "user@example.com"     # Label as 'pii'
+
+/guard @noShellSecrets for secret = when [
+  @ctx.op.type == "run" => deny "Secrets blocked from shell"
+  * => allow
+]
+
+/run { echo @apiKey }                    # Blocked by guard
+
+Before guards (input validation):
+/guard before @sanitize for untrusted = when [
+  * => allow @input.trim().slice(0, 100)
+]
+
+After guards (output validation):
+/guard after @validateJson for op:exe = when [
+  @isValidJson(@output) => allow
+  * => deny "Invalid JSON"
+]
+
+Transform with allow @value:
+/guard @redact for secret = when [
+  @ctx.op.type == "show" => allow @redact(@input)
+  * => allow
+]
+
+Denied handlers:
+/exe @handler(value) = when [
+  denied => `Blocked: @ctx.guard.reason`
+  * => @value
+]
+
+Labels track through: methods (@secret.trim()), templates, field access, iterators, pipelines.
+
+Guards are: non-reentrant, ordered (file top-to-bottom), composable (all run, deny > retry > allow @value > allow).
+
+Details: docs/user/security.md
+</SECURITY>
+
+<STREAMING>
+Show progress during execution instead of buffering:
+
+stream @claude("prompt")           # Keyword (sugar for with { stream: true })
+/stream @generateReport()          # Directive form
+stream @a() || stream @b()         # Parallel streams (concurrent, buffered results)
+
+NDJSON auto-parsing for stream executors; live output with thinking (💭) and tool-use (🔧) formatting.
+
+Suppress: --no-stream flag or MLLD_NO_STREAM=true
+Debug: --show-json mirrors NDJSON to stderr; --append-json saves to JSONL
+
+Details: docs/user/streaming.md
+</STREAMING>
 
 <SEE_ALSO>
 Documentation: https://mlld.ai/docs

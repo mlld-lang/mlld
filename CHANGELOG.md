@@ -117,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transformer variant resolution in pipelines - `@json.fromlist`, `@json.llm`, `@json.loose`, and `@json.strict` work correctly in all pipeline contexts
 - Alligator `.relative` resolves from inferred `@base` (or the script path when base is unavailable) so metadata matches project-root paths
 - Comma in `when` condition lists now emits a targeted parse error instead of a generic /exe syntax failure
+- Wrong parallel syntax order (`/for parallel 18` instead of `/for 18 parallel`) now shows helpful error with correct syntax examples
 
 ### Changed
 - Braced commands require explicit `cmd { ... }`; bare `{ ... }` parses as structured data, pipelines accept inline value stages with structured output, and bare brace commands raise a targeted parse error

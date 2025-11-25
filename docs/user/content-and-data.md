@@ -11,16 +11,53 @@ Load files with `<file.txt>`, work with data structures using dot notation, tran
 /show @files[0].ctx.filename              >> Access file metadata via .ctx
 ```
 
-## File Loading
+## StructuredValue and .ctx
 
-Load file contents with angle brackets `<>`. This loads the actual file content, not the filename string.
+Loaded files and data are `StructuredValue` objects with three key parts:
 
 ```mlld
-/var @readme = <README.md>               >> Load file content
-/var @filename = "README.md"             >> Literal string
+/var @file = <package.json>
 
-/show @readme                            >> Shows file contents  
-/show @filename                          >> Shows "README.md"
+@file.text                               # String content
+@file.data                               # Parsed payload (JSON object)
+@file.ctx                                # Metadata (filename, tokens, labels, etc.)
+```
+
+The `.ctx` namespace is where all metadata lives:
+
+```mlld
+/var @file = <README.md>
+
+/show @file.ctx.filename                 # "README.md"
+/show @file.ctx.tokens                   # Token count
+/show @file.ctx.labels                   # Security labels
+/show @file.ctx.absolute                 # Full path
+```
+
+**Auto-unwrapping**: Display and templates automatically use `.text`:
+
+```mlld
+/show @file                              # Same as @file.text
+/var @msg = `Content: @file`             # Uses @file.text
+```
+
+**Explicit access** when you need metadata:
+
+```mlld
+/when @file.ctx.tokest > 2000 => show "File is large"
+/var @name = @file.ctx.filename
+```
+
+## File Loading
+
+Load file contents with angle brackets `<>`:
+
+```mlld
+/var @readme = <README.md>               # Load file content
+/var @filename = "README.md"             # Literal string
+
+/show @readme                            # Shows file contents
+/show @filename                          # Shows "README.md"
 ```
 
 ## Streaming Output
@@ -167,7 +204,12 @@ Every loaded file exposes metadata through its `.ctx` namespace:
 /show @file                              >> Same as above (implicit)
 ```
 
-**Note:** Loaded files are `StructuredValue` objects with `.text` (string view), `.data` (parsed payload, such as JSON objects), and `.ctx` (runtime metadata like filenames, provenance, token counts, frontmatter, and parsed JSON). Display automatically uses `.text`, while code can inspect `.data` or `.ctx` depending on whether it needs content or metadata. Short aliases such as `@file.filename` still resolve to `.ctx.filename`, but `.ctx` is the canonical namespace going forward.
+**StructuredValue properties:**
+- `.text` - String content (used by display/templates)
+- `.data` - Parsed payload (JSON objects, arrays, etc.)
+- `.ctx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
+
+Always use `.ctx` for metadata access - it's the canonical namespace.
 
 ### JSON File Metadata
 
@@ -808,12 +850,46 @@ Capture long-running results without rewriting the full file:
 
 Each append writes one compact JSON object followed by a newline. Use `.jsonl` when you want structured JSONL output. Any other extension (e.g., `.log`, `.txt`, `'.md`) is treated as plain text. `.json` files are blocked to prevent producing invalid JSON.
 
+## Gotchas
+
+### Metadata Access in Loops
+
+Auto-unwrapping in iterations drops direct `.ctx` access:
+
+```mlld
+/var @files = <docs/*.md>
+
+# ✗ This won't work - loop variable is unwrapped text
+/for @file in @files => show @file.ctx.filename   # Error: .ctx on string
+
+# ✓ Access via array index
+/for @i in [0, 1, 2] => show @files[@i].ctx.filename
+
+# ✓ Or use @keep helper to preserve structure
+/for @file in @files.keep => show @file.ctx.filename
+```
+
+### Metadata in Pipelines
+
+Pipeline stages receive string input by default:
+
+```mlld
+/var @file = <config.json>
+
+# ✗ This loses metadata
+/var @result = @file | @process          # @process gets string, no .ctx
+
+# ✓ Keep structured form
+/exe @process(file) = show `Name: @file.ctx.filename, Tokens: @file.ctx.tokens`
+/var @result = @file.keep | @process
+```
+
 ## Best Practices
 
 **File Loading:**
 - Use globs for multiple files: `<docs/*.md>`
 - Check existence: `/when @config => show "Found config"`
-- Access metadata for token counting: `@file.tokest`
+- Access metadata via `.ctx`: `@file.ctx.tokest`
 
 **Data Access:**
 - Prefer dot notation: `@user.name` over complex expressions
