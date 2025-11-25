@@ -23,7 +23,7 @@ import {
   type CapabilityContext,
   type SecurityDescriptor
 } from '@core/types/security';
-import { asText, isStructuredValue } from '../utils/structured-value';
+import { asData, asText, isStructuredValue } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
 
 async function interpolateAndRecord(
@@ -726,8 +726,14 @@ function createSyncJsWrapper(
       // Always add the parameter, even if undefined
       // This ensures JS code can reference all declared parameters
       if (argValue !== undefined) {
-        // Auto-unwrap LoadContentResult objects
-        argValue = AutoUnwrapManager.unwrap(argValue);
+        // Auto-unwrap without async shelf (sync context)
+        if (isStructuredValue(argValue)) {
+          argValue = asData(argValue);
+        } else if (isLoadContentResult(argValue)) {
+          argValue = argValue.content;
+        } else if (isLoadContentResultArray(argValue)) {
+          argValue = argValue.map(item => item.content);
+        }
         
         // Try to parse numeric values (same logic as async wrapper)
         if (typeof argValue === 'string') {

@@ -4,7 +4,7 @@ import { LoadContentResultImpl } from '../eval/load-content';
 import { buildPipelineStructuredValue } from '@interpreter/utils/pipeline-input';
 
 describe('prepareValueForShadow (structured)', () => {
-  it('returns native LoadContentResult objects to shadow environments', () => {
+  it('returns plain content strings to shadow environments by default', () => {
     const result = new LoadContentResultImpl({
       content: 'File body',
       filename: 'file.md',
@@ -13,9 +13,8 @@ describe('prepareValueForShadow (structured)', () => {
     });
 
     const prepared = prepareValueForShadow(result);
-    expect(prepared).toBeInstanceOf(LoadContentResultImpl);
-    expect(prepared.filename).toBe('file.md');
-    expect(prepared.content).toBe('File body');
+    expect(typeof prepared).toBe('string');
+    expect(prepared).toBe('File body');
   });
 
   it('unwraps pipeline inputs to plain data and records metadata', () => {

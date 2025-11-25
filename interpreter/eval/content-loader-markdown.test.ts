@@ -71,12 +71,8 @@ describe('Content Loader HTML to Markdown Conversion', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      // Check that it's a LoadContentResultURL
-      expect(result).toHaveProperty('url', 'https://example.com/article');
-      expect(result).toHaveProperty('domain', 'example.com');
-      
       // Check that content is markdown
-      const content = result.content;
+      const content = result as string;
       expect(content).toContain('# Main Article Title');
       expect(content).toContain('This is the main content of the article.');
       expect(content).toContain('**bold**');
@@ -89,6 +85,8 @@ describe('Content Loader HTML to Markdown Conversion', () => {
       expect(content).not.toContain('Navigation menu');
       expect(content).not.toContain('Footer content');
       expect(content).not.toContain('Ads here');
+      expect(metadata?.url).toBe('https://example.com/article');
+      expect(metadata?.domain).toBe('example.com');
       expectLoadContentMetadata(metadata);
     });
 
@@ -122,7 +120,7 @@ describe('Content Loader HTML to Markdown Conversion', () => {
       const { data: result } = unwrapStructuredForTest(rawResult);
       
       // Should still convert to markdown
-      const content = result.content;
+      const content = result as string;
       expect(content).toContain('## Simple Page');
       expect(content).toContain('No proper article structure here.');
     });

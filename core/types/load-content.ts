@@ -11,6 +11,27 @@ export interface LoadContentResult {
   filename: string;             // "README.md"
   relative: string;             // "./docs/README.md"
   absolute: string;             // "/Users/adam/project/docs/README.md"
+  // StructuredValue surface (content-first)
+  readonly type?: 'text' | 'object' | 'array' | 'html' | (string & {});
+  readonly text?: string;
+  readonly data?: unknown;
+  readonly ctx?: {
+    filename?: string;
+    relative?: string;
+    absolute?: string;
+    url?: string;
+    domain?: string;
+    title?: string;
+    description?: string;
+    status?: number;
+    headers?: Record<string, unknown>;
+    html?: string;
+    tokest?: number;
+    tokens?: number;
+    fm?: unknown;
+    json?: unknown;
+    type?: 'text' | 'object' | 'array' | 'html' | (string & {});
+  };
   
   // Lazy-evaluated properties (implemented as getters)
   tokest: number;               // Estimated tokens (KB-based)

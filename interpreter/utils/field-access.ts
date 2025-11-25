@@ -150,10 +150,20 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         if (name === 'keepStructured') {
+          if (structuredWrapper.internal) {
+            (structuredWrapper.internal as Record<string, unknown>).keepStructured = true;
+          } else {
+            (structuredWrapper as Record<string, unknown>).internal = { keepStructured: true };
+          }
           accessedValue = structuredWrapper;
           break;
         }
         if (name === 'keep') {
+          if (structuredWrapper.internal) {
+            (structuredWrapper.internal as Record<string, unknown>).keepStructured = true;
+          } else {
+            (structuredWrapper as Record<string, unknown>).internal = { keepStructured: true };
+          }
           accessedValue = structuredWrapper;
           break;
         }

@@ -15,6 +15,7 @@ export type StructuredValueType =
   | 'object'
   | 'csv'
   | 'xml'
+  | 'html'
   | (string & {});
 
 type StructuredValueLoadResult = Partial<LoadContentResult> & {

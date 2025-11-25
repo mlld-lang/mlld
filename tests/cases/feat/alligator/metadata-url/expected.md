@@ -9,11 +9,9 @@ This test verifies that URLs loaded with alligator syntax include rich metadata.
 URL: https://example.com
 Domain: example.com
 Status: 200
-Content Type: text/html
 ## Show title if available
 
 Title: Example Domain
-
 ## Default content behavior
 
 # Example Domain

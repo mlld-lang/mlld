@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { processContentLoader } from './content-loader';
 import { Environment } from '../env/Environment';
-import { isLoadContentResultURL } from '@core/types/load-content';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { unwrapStructuredForTest } from './test-helpers';
@@ -49,28 +48,14 @@ describe('Content Loader URL Metadata', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      expect(isLoadContentResultURL(result)).toBe(true);
-      if (isLoadContentResultURL(result)) {
-        // Basic properties
-        expect(result.url).toBe('https://example.com');
-        expect(result.domain).toBe('example.com');
-        expect(result.status).toBe(200);
-        expect(result.contentType).toBe('text/html; charset=utf-8');
-        
-        // Extracted metadata
-        expect(result.title).toBe('Example Page');
-        expect(result.description).toBe('Example description');
-        
-        // Content variations
-        expect(result.html).toBe(mockResponse.content);
-        expect(result.text).toContain('Example'); // HTML stripped
-        // Content should be converted to markdown for HTML URLs
-        expect(result.content).toContain('Example Page');
-        expect(result.content).toContain('# Example');
-        
-        // Headers
-        expect(result.headers).toEqual(mockResponse.headers);
-      }
+      expect(typeof result).toBe('string');
+      expect(result).toContain('Example Page');
+      expect(metadata?.url).toBe('https://example.com');
+      expect(metadata?.domain).toBe('example.com');
+      expect(metadata?.status).toBe(200);
+      expect(metadata?.title).toBe('Example Page');
+      expect(metadata?.description).toBe('Example description');
+      expect(metadata?.headers).toEqual(mockResponse.headers);
       expectLoadContentMetadata(metadata);
     });
 
@@ -95,14 +80,10 @@ describe('Content Loader URL Metadata', () => {
       };
 
       const rawResult = await processContentLoader(node, env);
-      const { data: result } = unwrapStructuredForTest(rawResult);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      if (isLoadContentResultURL(result)) {
-        expect(result.contentType).toBe('application/json');
-        expect(result.json).toEqual(mockJsonData);
-        expect(result.html).toBeUndefined(); // Not HTML
-        expect(result.md).toBeUndefined(); // Not HTML
-      }
+      expect(result).toEqual(mockJsonData);
+      expect(metadata?.url).toBe('https://api.example.com/data.json');
     });
 
     it('should extract og:description when meta description is missing', async () => {
@@ -125,12 +106,11 @@ describe('Content Loader URL Metadata', () => {
       };
 
       const rawResult = await processContentLoader(node, env);
-      const { data: result } = unwrapStructuredForTest(rawResult);
+      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      if (isLoadContentResultURL(result)) {
-        expect(result.title).toBe('OG Test');
-        expect(result.description).toBe('OG description');
-      }
+      expect(typeof result).toBe('string');
+      expect(metadata?.title).toBe('OG Test');
+      expect(metadata?.description).toBe('OG description');
     });
 
     it('should handle URLs with section extraction', async () => {
@@ -198,18 +178,12 @@ describe('Content Loader URL Metadata', () => {
 
       const rawResult = await processContentLoader(node, env);
       const { data: result } = unwrapStructuredForTest(rawResult);
-      
-      if (isLoadContentResultURL(result)) {
-        // Script and style should be removed
-        expect(result.text).not.toContain('console.log');
-        expect(result.text).not.toContain('color: red');
-        
-        // HTML entities should be decoded
-        expect(result.text).toContain('This is & test with <special> chars "quoted"');
-        
-        // Tags should be removed but content preserved
-        expect(result.text).toContain('Header');
-      }
+ 
+      expect(typeof result).toBe('string');
+      expect(result).not.toContain('console.log');
+      expect(result).not.toContain('color: red');
+      expect(result).toContain('This is & test with <special> chars "quoted"');
+      expect(result).toContain('Header');
     });
   });
 });

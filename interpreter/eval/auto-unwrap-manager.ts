@@ -22,7 +22,7 @@ const asyncLocalStorage = new AsyncLocalStorage<MetadataShelf>();
 class MetadataShelf {
   private shelf: Map<string, LoadContentResult[]> = new Map();
   private singleFileMetadata: LoadContentResult | null = null;
-  private structuredShelf: Map<any, StructuredValue> = new Map();
+  private structuredShelf: WeakMap<object, StructuredValue> = new WeakMap();
   
   /**
    * Store LoadContentResult objects on the shelf before unwrapping
@@ -40,7 +40,9 @@ class MetadataShelf {
       this.getBucket(value.content).push(value);
       this.singleFileMetadata = value;
     } else if (isStructuredValue(value)) {
-      this.structuredShelf.set(value.data, value);
+      if (value.data && typeof value.data === 'object') {
+        this.structuredShelf.set(value.data as object, value);
+      }
     }
   }
   
@@ -118,8 +120,7 @@ class MetadataShelf {
   }
 
   private restoreStructuredFromShelf(value: any): StructuredValue | null {
-    if (!this.structuredShelf.size) return null;
-    const original = this.structuredShelf.get(value);
+    const original = value && typeof value === 'object' ? this.structuredShelf.get(value) : undefined;
     if (!original) {
       return null;
     }
@@ -165,14 +166,14 @@ class MetadataShelf {
   clear(): void {
     this.shelf.clear();
     this.singleFileMetadata = null;
-    this.structuredShelf.clear();
+    this.structuredShelf = new WeakMap();
   }
 
   debugSnapshot(): Record<string, unknown> {
     return {
       loadContentEntries: this.shelf.size,
       hasSingleFileMetadata: Boolean(this.singleFileMetadata),
-      structuredEntries: this.structuredShelf.size
+      structuredEntries: 'weak'
     };
   }
 
@@ -217,6 +218,9 @@ export class AutoUnwrapManager {
     }
 
     if (isStructuredValue(value)) {
+      if (value.internal && (value.internal as any).keepStructured) {
+        return value;
+      }
       shelf.storeMetadata(value);
       return value.data;
     }

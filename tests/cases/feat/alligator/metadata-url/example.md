@@ -4,20 +4,18 @@ This test verifies that URLs loaded with alligator syntax include rich metadata.
 
 ## Load a URL
 
-/var @page = <https://example.com>
+/var @page = <https://example.com>.keep
 
 ## Access URL metadata
 
-/show `URL: @page.url`
-/show `Domain: @page.domain`
-/show `Status: @page.status`
-/show `Content Type: @page.contentType`
+/show `URL: @page.ctx.url`
+/show `Domain: @page.ctx.domain`
+/show `Status: @page.ctx.status`
 
 ## Show title if available
 
-/when @page.title => show `Title: @page.title`
+/show `Title: @page.ctx.title`
 
 ## Default content behavior
 
 /show @page
-

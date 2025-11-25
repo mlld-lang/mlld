@@ -120,6 +120,41 @@ export class LoadContentResultImpl implements LoadContentResult {
     return this.content;
   }
   
+  // StructuredValue-like surface
+  get type(): 'text' {
+    return 'text';
+  }
+  
+  get text(): string {
+    return this.content;
+  }
+  
+  get data(): string {
+    return this.content;
+  }
+  
+  get ctx() {
+    const self = this;
+    return {
+      filename: this.filename,
+      relative: this.relative,
+      absolute: this.absolute,
+      get tokest() { return self.tokest; },
+      get tokens() { return self.tokens; },
+      get fm() { return self.fm; },
+      get json() { return self.json; },
+      type: this.type
+    };
+  }
+  
+  valueOf(): string {
+    return this.content;
+  }
+  
+  [Symbol.toPrimitive](): string {
+    return this.content;
+  }
+  
   // JSON representation includes metadata
   toJSON(): any {
     return {
@@ -205,6 +240,33 @@ export class LoadContentResultURLImpl extends LoadContentResultImpl implements L
     // Return markdown content (the processed content for HTML)
     const contentType = this.contentType;
     return contentType?.includes('text/html') ? this.content : undefined;
+  }
+  
+  get type(): 'text' | 'object' | 'array' | 'html' {
+    const contentType = this.contentType;
+    if (contentType?.includes('application/json')) {
+      const parsed = this.json;
+      if (Array.isArray(parsed)) return 'array';
+      if (parsed && typeof parsed === 'object') return 'object';
+    }
+    if (contentType?.includes('text/html')) {
+      return 'html';
+    }
+    return 'text';
+  }
+  
+  get ctx() {
+    const base = super.ctx;
+    return {
+      ...base,
+      url: this.url,
+      domain: this.domain,
+      title: this.title,
+      description: this.description,
+      status: this.status,
+      headers: this.headers,
+      html: this.html
+    };
   }
   
   // JSON representation includes URL metadata
@@ -310,6 +372,18 @@ export class LoadContentResultHTMLImpl extends LoadContentResultImpl implements 
     } catch {
       return this._rawHtml;
     }
+  }
+  
+  get type(): 'html' {
+    return 'html';
+  }
+  
+  get ctx() {
+    const base = super.ctx;
+    return {
+      ...base,
+      html: this.html
+    };
   }
   
   // JSON representation includes HTML metadata

@@ -124,13 +124,10 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.filename).toBe('README.md');
-        expect(result.content).toBeDefined();
-        expect(result.tokest).toBeGreaterThan(0);
-        expect(result.absolute).toContain('README.md');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('Test README');
+      expect(metadata?.filename).toBe('README.md');
+      expect(metadata?.absolute).toContain('README.md');
       expectLoadContentMetadata(metadata);
     });
 
@@ -155,12 +152,9 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      // With section extraction, should return LoadContentResult to maintain metadata
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.content).toContain('Install instructions here');
-        expect(result.filename).toBe('README.md');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('Install instructions here');
+      expect(metadata?.filename).toBe('README.md');
       expectLoadContentMetadata(metadata);
     });
   });
@@ -186,12 +180,8 @@ describe('Content Loader with Glob Support', () => {
       };
 
       const rawResult = await processContentLoader(node, envWithContext);
-      const { data: result, metadata } = unwrapStructuredForTest(rawResult);
+      const { metadata } = unwrapStructuredForTest(rawResult);
 
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.relative).toBe('./todo/spec-security.md');
-      }
       expect(metadata?.relative).toBe('./todo/spec-security.md');
     });
 
@@ -499,12 +489,9 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      // Single file with section and rename should still return LoadContentResult
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.content).toContain('## test by Alice');
-        expect(result.content).toContain('This is a test summary');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('## test by Alice');
+      expect((result as string)).toContain('This is a test summary');
       expectLoadContentMetadata(metadata);
     });
 
@@ -543,11 +530,9 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        // Without fields, <> should reference the content itself
-        expect(result.content).toContain('### File: This is the overview section.');
-      }
+      expect(typeof result).toBe('string');
+      // Without fields, <> should reference the content itself
+      expect((result as string)).toContain('### File: This is the overview section.');
       expectLoadContentMetadata(metadata);
     });
 
@@ -592,11 +577,9 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.content).toContain('## mymodule v1.0.0');
-        expect(result.content).toContain('Module description here');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('## mymodule v1.0.0');
+      expect((result as string)).toContain('Module description here');
       expectLoadContentMetadata(metadata);
     });
   });

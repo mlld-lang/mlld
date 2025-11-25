@@ -144,22 +144,22 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     const baseMetadata = extractLoadContentMetadata(value);
     const contentText = typeof value.content === 'string' ? value.content : String(value.content ?? '');
     const filenameLower = (value.filename || '').toLowerCase();
-    const skipAutoParse = process.env.MLLD_LOAD_JSON_RAW === '1';
+    const skipAutoParse = false;
 
-    if (!skipAutoParse && filenameLower.endsWith('.jsonl') && typeof value.content === 'string') {
+    if (filenameLower.endsWith('.jsonl') && typeof value.content === 'string') {
       const data = parseJsonLines(contentText, value.filename || 'content');
       const metadata = buildMetadata(baseMetadata, { type: 'jsonl' });
       return wrapStructured(data, 'array', contentText, metadata);
     }
 
-    if (!skipAutoParse && filenameLower.endsWith('.json') && typeof value.content === 'string') {
+    if (filenameLower.endsWith('.json') && typeof value.content === 'string') {
       const data = parseJsonWithContext(contentText, value.filename || 'content');
       const metadata = buildMetadata(baseMetadata, { type: 'json' });
       return wrapStructured(data, detectStructuredType(data), contentText, metadata);
     }
 
     const parsedFromContent = tryParseJson(contentText);
-    if (!skipAutoParse && parsedFromContent.success) {
+    if (parsedFromContent.success) {
       const data = parsedFromContent.value;
       return wrapStructured(data, detectStructuredType(data), contentText, baseMetadata);
     }
@@ -167,7 +167,8 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     if (parsed !== undefined) {
       return wrapStructured(parsed, detectStructuredType(parsed), contentText, baseMetadata);
     }
-    return wrapStructured(value, 'object', contentText, baseMetadata);
+    // Default text handling: data is the content string, metadata carries file info
+    return wrapStructured(contentText, 'text', contentText, baseMetadata);
   }
 
   if (Array.isArray(value)) {
