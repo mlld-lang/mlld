@@ -1,18 +1,15 @@
->> Extract from code fence
-/var @llmResponse = `Here's your data:
-\`\`\`json
-{"name": "Alice", "status": "active"}
-\`\`\``
+>> Format JSON with indentation
+/var @data = <file.csv>
+/var @tojson = @data | @json
+/show @tojson
 
-/var @data = @llmResponse | @json.llm
-/show @data.name                                >> Alice
+>> Convert to XML (SCREAMING_SNAKE_CASE)
+/var @toxml = @data | @XML
+/show @toxml
 
->> Extract from inline prose
-/var @inline = `The result is {"count": 42} for this query.`
-/var @extracted = @inline | @json.llm
-/show @extracted.count                          >> 42
+>> Convert arrays to CSV
+/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+/var @tocsv = @users | @CSV
+/show @tocsv
 
->> Returns false when no JSON found
-/var @text = `Just plain text, no JSON here.`
-/var @result = @text | @json.llm
-/show @result                                   >> false
+`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:

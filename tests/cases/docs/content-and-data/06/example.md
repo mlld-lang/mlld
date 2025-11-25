@@ -1,5 +1,3 @@
-/var @readme = <README.md>               # Load file content
-/var @filename = "README.md"             # Literal string
-
-/show @readme                            # Shows file contents
-/show @filename                          # Shows "README.md"
+/exe @process(f) = js { return f.ctx.filename; }
+/show @process(@file.keep)  # Works - wrapper has .ctx
+/show @process(@file)        # Error - unwrapped to string/object

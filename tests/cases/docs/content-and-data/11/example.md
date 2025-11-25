@@ -1,5 +1,1 @@
-/exe @left() = sh { echo "L" }
-/exe @right() = sh { echo "R" }
-
-/var @results = stream @left() || stream @right()
-/show @results
+/stream @generateReport()

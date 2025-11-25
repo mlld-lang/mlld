@@ -816,6 +816,12 @@ export async function prepareVarAssignment(
     if (finalMetadata?.security) {
       updateCtxFromDescriptor(options.ctx ?? (options.ctx = {}), finalMetadata.security);
     }
+    if (finalMetadata) {
+      options.metadata = {
+        ...(options.metadata ?? {}),
+        ...finalMetadata
+      };
+    }
     return options;
   };
   

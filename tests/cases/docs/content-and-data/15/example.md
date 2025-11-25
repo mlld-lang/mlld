@@ -1,2 +1,8 @@
-/var @handlers = <src/service.ts { createUser, (logger.info) }>
-/var @templated = <src/**/*.py { create_user }> as ::## <>.name\n```\n<>.code\n```::
+>> Extract single section
+/var @install = <README.md # Installation>
+
+>> Extract from multiple files  
+/var @apis = <docs/*.md # API Reference>
+
+>> Rename sections with 'as'
+/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"

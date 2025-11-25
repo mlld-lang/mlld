@@ -72,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - For loops accept dotted iteration variables and bind both the base element and its field (e.g., `for @item.path in @files`) with proper field access errors.
 - For loop bodies can be `when [...]` across /for, /var, and /exe, using first-match semantics per iteration and feeding branch results into loop outputs.
 
-- Alligator JSON ergonomics: `<*.json>` and `<*.jsonl>` auto-parse to StructuredValues (parsed `.data`, raw `.text`, `.ctx` preserved); set `MLLD_LOAD_JSON_RAW=1` to opt out.
+- Alligator JSON ergonomics: `<*.json>` and `<*.jsonl>` auto-parse to StructuredValues (parsed `.data`, raw `.text`, `.ctx` preserved); use `.text` when raw strings are needed.
 
 ### Fixed
 - Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
@@ -97,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced error message for `run sh` in `/exe` explains distinction between bare commands and shell scripts
 - Shell commands now run from project root when `@base` is inferred, otherwise from script directory
 - `/for` parallel syntax uses `parallel(cap, pacing)` instead of `(cap, pacing) parallel`. Old syntax still parses with a warning.
+- Unified file loading uses StructuredValue metadata consistently: text files unwrap to strings by default, JSON/JSONL unwrap to parsed objects/arrays, `.ctx` carries file/URL metadata, `.keep` passes wrappers into JS/Node, and `MLLD_LOAD_JSON_RAW` is removed in favor of `.text` for raw access.
 
 ## [2.0.0-rc69]
 ### Fixed

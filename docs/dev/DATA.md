@@ -19,7 +19,8 @@ mlld treats structured data (arrays, objects, JSON) as first-class values via `S
 - Computation boundaries (foreach, JS stages, comparisons) access `.data`
 - Runtime metadata (filenames, retries, loader info) flows via `.ctx`
 - String coercion is safe and predictable: `toString()` returns `.text`
-- JSON/JSONL auto-parse: `<path>.json` and `<path>.jsonl` load as StructuredValues with parsed `.data` (object/array), raw `.text`, and preserved `.ctx`. Set `MLLD_LOAD_JSON_RAW=1` to keep raw text.
+- JSON/JSONL auto-parse: `<path>.json` and `<path>.jsonl` load as StructuredValues with parsed `.data` (object/array), raw `.text`, and preserved `.ctx`; `.text` is the raw string if callers need it.
+- JS/Node invocations receive `.data` by default (text → string, JSON/JSONL → object/array). Use `.keep`/`.keepStructured` when metadata needs to cross the boundary.
 - Structured access helper: `keepStructured()` and `.keepStructured` let you retain wrappers/metadata when you need ctx/provenance instead of the content-only sugar.
 
 ## Details
@@ -28,7 +29,7 @@ mlld treats structured data (arrays, objects, JSON) as first-class values via `S
 
 ```typescript
 interface StructuredValue<T = unknown> {
-  type: 'text' | 'json' | 'array' | 'object' | 'csv' | 'xml' | (string & {});
+  type: 'text' | 'array' | 'object' | 'csv' | 'xml' | 'html' | (string & {});
   text: string;           // canonical string representation
   data: T;                // structured view (parsed)
   ctx: {                  // user-facing runtime context (mirrors Variable.ctx)
@@ -135,6 +136,8 @@ assertStructuredValue(value, context?)         // Throw when boundary requires S
 ## Implementation Patterns
 
 ### When to Unwrap
+
+AutoUnwrapManager unwraps StructuredValues to `.data` for JS/Node execution unless the wrapper carries `internal.keepStructured` (set by `.keep`/`.keepStructured` or the helpers). `.keep` preserves the wrapper for metadata/ctx access while display still renders `.text`.
 
 **Use `asData()` at computation boundaries:**
 - JavaScript function arguments

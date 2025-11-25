@@ -48,6 +48,16 @@ The `.ctx` namespace is where all metadata lives:
 /var @name = @file.ctx.filename
 ```
 
+### JS/Node defaults and `.keep`
+
+JS/Node receive `.data` by default (text → string, JSON → object). Extract the metadata you want to pass at the time of instantiating a variable or use `.keep` to preserve metadata when passing the value:
+
+```mlld
+/exe @process(f) = js { return f.ctx.filename; }
+/show @process(@file.keep)    # Works - wrapper has .ctx
+/show @process(@file)         # Error - unwrapped to string/object
+```
+
 ## File Loading
 
 Load file contents with angle brackets `<>`:
@@ -148,7 +158,7 @@ Use standard glob patterns to load multiple files:
 /var @source = <src/**/*.ts>             >> All TypeScript in src
 
 >> Access individual files
-/show @docs[0].content                    >> First file's content
+/show @docs[0].text                       >> First file's content
 /show @docs[0].ctx.filename               >> First file's name
 ```
 

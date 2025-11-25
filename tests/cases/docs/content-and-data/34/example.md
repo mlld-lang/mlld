@@ -1,8 +1,18 @@
-/var @list = ::
-/for @item in @items
-- @item.name: @item.value
-/end
-::
+>> .att files (default for 5+ lines)
+>> file: templates/deploy.att
+# Deployment: @env
+Status: @status
+Config: <@base/config/@env.json>
 
->> Requirements: /for and /end at line start
->> NOT supported in :::...:::, .mtt, or "..."
+>> usage
+/exe @deploy(env, status) = template "./templates/deploy.att"
+/show @deploy("prod", "success")
+
+>> .mtt files (Discord/social only)
+>> file: templates/discord.mtt
+🚨 Alert <@{{adminId}}>!
+Reporter: <@{{reporterId}}>
+Severity: {{severity}}
+
+>> usage
+/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"

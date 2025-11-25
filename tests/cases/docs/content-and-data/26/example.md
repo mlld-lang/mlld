@@ -1,21 +1,13 @@
->> Files
-/var @config = <settings.json>
-@config.json              >> Parsed JSON object
-@config.data              >> Alias for .json
-@config.content           >> Raw string
-@config.text              >> Alias for .content
+>> Filter JSON array from command
+/var @json = run {./mkjson.sh}
+/exe @filterHigh(entries) = js {
+  return entries.filter(e => e.finding.startsWith("High"));
+}
+/var @result = @filterHigh(@json.data)
 
->> Variables
-/var @str = '{"status": "ok"}'
-@str.data                 >> Parsed JSON object
-@str.json                 >> Alias for .data
-@str.text                 >> Original string
-@str.content              >> Alias for .text
-@str                      >> Original string (default)
-
->> Command output
-/var @result = run {curl api.com/data}
-@result.data              >> Parse as JSON
-@result.json              >> Alias for .data
-@result.text              >> Keep as string
-@result.content           >> Alias for .text
+>> Process API response
+/var @response = run {curl -s api.example.com/data}
+/exe @getActive(data) = js {
+  return data.users.filter(u => u.active);
+}
+/var @active = @getActive(@response.data)

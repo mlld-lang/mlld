@@ -14,7 +14,7 @@ The alligator syntax (`<file>` or `<pattern>`) in mlld provides powerful content
 
 **Conceptually**: Think of `<file>` as returning content directly - that's its primary purpose. The metadata (filename, frontmatter, etc.) is available when you need it, but content is the default.
 
-**Implementation detail**: Under the hood, mlld stores the result in a `StructuredValue`. The wrapper's `.data` contains the parsed `LoadContentResult` (or plain string), `.text` mirrors `.content`, and `.ctx` flattens common metadata (filename, relative path, url, token counts) so `<file>.ctx.filename` is always available even after the wrapper flows through pipelines. Use `asData(@file)` whenever you need the original `LoadContentResult` object.
+**Implementation detail**: Under the hood, mlld stores the result in a `StructuredValue`. The wrapper's `.data` contains parsed content (string for text, object/array for JSON/JSONL), `.text` mirrors the display string, and `.ctx` flattens common metadata (filename, relative path, url, token counts) so `<file>.ctx.filename` stays available as values flow. Use `.keep`/`.keepStructured` when a JS/Node stage needs the wrapper and its `.ctx`; legacy surface fields like `.filename` and `.content` remain for compatibility.
 
 ## Basic Syntax
 
@@ -50,8 +50,7 @@ Currently supports JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Sol
 ### JSON/JSONL auto-parse
 - `<file.json>` and `<file.jsonl>` auto-parse to StructuredValues: `.data` holds parsed object/array, `.text` preserves raw content, `.ctx` keeps path metadata.
 - JSONL parses non-empty lines individually. Parse errors include line number and offending line preview.
-- Opt-out (run-wide) by setting `MLLD_LOAD_JSON_RAW=1` to keep raw text.
-- Structured access: use `.keepStructured`/`.keep` or the `keepStructured()`/`keep()` helper to retain the StructuredValue/metadata when you need ctx/provenance instead of content-only sugar.
+- Structured access: use `.keepStructured`/`.keep` or the `keepStructured()`/`keep()` helper to retain the StructuredValue/metadata when you need ctx/provenance instead of content-only sugar, and use `.text` when you need the raw string form inside JS/Node.
 
 ## The Content Extraction Magic
 
@@ -122,7 +121,7 @@ End of document.
 ## Metadata Surfaces
 
 - `.ctx` surfaces canonical metadata (`filename`, `relative`, `absolute`, `url`, `domain`, `title`, `description`, `tokens`, `tokest`, `fm`, provenance fields such as `source` and `retries`) as mutable runtime state.
-- `.data` contains the parsed `LoadContentResult` object (or array). Call `asData(value)` when you need loader-specific helpers such as `fm`, `json`, `headers`, or HTTP status.
+- `.data` contains the parsed content (string for text, object/array for JSON/JSONL, structured values for globs); `.keep`/`.keepStructured` preserves wrappers for JS/Node when metadata is required.
 - `.text` mirrors the user-visible content string, ensuring display paths never see `[object Object]`.
 
 Example:
@@ -131,44 +130,48 @@ Example:
 /var @readme = <README.md>
 /show `Path: @readme.ctx.relative`
 /show `Tokens: @readme.ctx.tokens (est: @readme.ctx.tokest)`
-/show `Frontmatter title: @(asData(@readme).fm.title)`
+/show `Frontmatter title: @readme.ctx.fm.title`
 ```
 
 ### JavaScript Function Parameters
 
-When LoadContentResult objects are passed to JavaScript functions, they automatically unwrap to their content:
+When load-content StructuredValues are passed to JavaScript functions, they automatically unwrap to their `.data`:
 
 ```mlld
 /var @config = <config.json>
 
 /exe @parseConfig(@config) = js {
-  // 'config' here is the string content, not the LoadContentResult object
-  return JSON.parse(config);
+  return JSON.stringify({
+    type: typeof config,
+    hasFilename: 'filename' in config,
+    name: config.name
+  });
 }
 
->> If you need the full object with metadata:
-/exe @processFile(@config.content, @config.filename, @config.fm) = js {
-  // Explicitly pass the properties you need
-  console.log(`Processing ${filename}`);
-  return content;
-}
+>> If you need metadata in JS, pass `.keep`:
+/exe @processFile(@config.keep) = js {
+  return JSON.stringify({
+    filename: config.ctx.filename,
+    tokens: config.ctx.tokens
+  });
+} 
 ```
 
 ### Structured Value Behavior
 
-- Load-content results are stored as `StructuredValue` wrappers with both `.text` (string view) and `.data` (structured object) properties.
+- Load-content results are stored as `StructuredValue` wrappers with `.text` (string view), `.data` (content), and `.ctx` (metadata).
 - Display paths (templates, `/show`, pipelines) automatically use `.text`, so visible output stays content-focused.
-- Access metadata with `.data` or the helper `asData(value)` when you need the rich object. Use `.text` / `asText(value)` for the string form when writing to logs or shell commands.
+- Access metadata via `.ctx`; pass `.keep`/`.keepStructured` into JS/Node when code needs both `.data` and metadata.
 - Field access resolves through the underlying data while `.text` continues to mirror the content-first behaviour documented above.
 
 ## Type System Integration
 
-### LoadContentResult
+### Single file loads
 
-Single file loads create a `StructuredValue` whose `.data` stores the `LoadContentResult` object:
-- `.text` equals the file content
+Single file loads create a `StructuredValue` whose `.data` stores the file content (string for text, object/array for JSON/JSONL):
+- `.text` equals the file content string
 - `.ctx.filename`, `.ctx.relative`, `.ctx.absolute`, and `.ctx.url` surface path info
-- `asData(@file).fm` exposes frontmatter
+- `.ctx.fm` exposes frontmatter when present; `.ctx.tokens`/`.ctx.tokest` surface token metrics
 
 ### LoadContentResultArray
 
