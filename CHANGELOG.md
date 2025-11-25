@@ -15,9 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Raw event visibility: `--show-json` (or `MLLD_SHOW_JSON=true`) mirrors NDJSON to stderr; `--append-json [file]` writes NDJSON to JSONL (default `YYYY-MM-DD-HH-MM-SS-stream.jsonl` when omitted).
   - Streaming `/show ...` avoids double-print of streamed content.
 
-### Security - Production-Ready Guard System
-
-**Complete security layer for mlld**: Data labels, guards, and taint tracking that reliably prevents prompt injection and enables policy enforcement.
+### Security
 
 **Guards**:
 - Policy enforcement for data access and operations
@@ -28,11 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fire before operations (input validation) or after operations (output validation)
 
 **Expression Tracking**:
-- Guards now see security labels through all transformations (closes `@secret.trim()` bypass hole)
+- Guards see security labels through all transformations (closes `@secret.trim()` bypass hole)
 - Provenance preserved through: chained builtin methods, template interpolation, field access, iterators, pipelines, nested expressions
 - Example: `@secret.trim().slice(0, 5)` preserves `secret` label through entire chain
 - Guards fire at directive boundaries, exe invocations, and pipeline stages
-- ~155 evaluators instrumented across entire interpreter
 
 **Guard Composition**:
 - All guards execute in registration order (file top-to-bottom, imports flatten at position)
@@ -46,10 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Before/After Guards**:
 - Guards fire before operations (input validation) or after operations (output validation)
 - Syntax: `/guard before`, `/guard after`, `/guard always` (fires both)
-- After guards enable LLM output validation: jailbreak detection, schema enforcement, PII scrubbing
 - Context: `@input` in before guards, `@output` in after guards, both available in denied handlers
-- After guards validate `@output` value with full security metadata
-- Composition: before guards → operation → after guards (execution order guaranteed)
+- Execution order: before guards → operation → after guards
+- `/guard before` retries supported in pipeline context
+- Note: `/guard after` does not support `retry` yet; coming in a future release
 
 **Allow @value Transforms**:
 - Guards transform inputs/outputs: `allow @redact(@input)` or `allow @sanitize(@output)`
@@ -65,20 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `except: ["@guard"]` skips named guards (unnamed guards still run)
 - Conflict detection: throws error if both `only` and `except` specified
 
-**Guard Architecture**:
-- Non-reentrant: guards don't fire during guard evaluation (prevents infinite recursion)
-- Guard helpers execute unguarded (assumed trusted)
-- Child environments inherit parent executables and variables
-- Reserved names in guard contexts: `@prefixWith`, `@tagValue` (system helpers)
-- GuardRegistry: single ordered array + label indexes (O(1) lookup, preserves registration order)
-
-**Taint Tracking**:
-- Security metadata preserved through `/var` assignments, template interpolation, pipelines
-- Complete taint tracking through all directive boundaries
-
 ### Added
-- **ctx/internal migration guide**: `docs/dev/MIGRATION_CTX_INTERNAL.md` explains how to replace `variable.metadata.*` access with `.ctx` / `.internal`, update StructuredValue checks, and modernize tests/proxies.
-- StructuredValue `.ctx`/`.internal` surfaces now power all provenance, security, and behavior metadata; helpers (`applySecurityDescriptorToStructuredValue`, `metadataToCtx`) keep ctx in sync automatically.
+- StructuredValue `.ctx`/`.internal` surfaces power provenance, security, and behavior metadata
 - `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
 - `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
 - `@json.fromlist` transformer converts plain text lists (one item per line) to JSON arrays
@@ -92,24 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
 
-- **Template `/for` loop greedy matching**: Inline `/for` loops in templates now only trigger at line start, not mid-line
-  - Previously, mentioning `/for` in template text (e.g., "Use /for iteration") would trigger parse errors
-  - Fixed `UnifiedBacktickChar` and `UnifiedDoubleColonTextSegment` to use `LineStartPredicate` for `/for` and `/end` detection
-  - Both backtick and `::` templates now consistently require line-start only for inline loops
-  - Grammar changes in `grammar/base/unified-templates.peggy` and `grammar/base/unified-quotes.peggy`
+- Inline `/for` loops in templates only trigger at line start (not mid-line)
 - **When-expression pipelines**: `/exe … = when [...]` actions now accept `| append`, `| log`, `| output`, and `| show` stages without misparsing ternary expressions (fixes `slash/when/exe-when-expressions-operators`).
 
-- **Heredoc and backtick template XML tag parity**: Both template types now handle XML-like tags identically
-  - Previously, backtick templates allowed `<xml>` tags but heredoc `::` templates treated them as file references
-  - Created abstracted `UnifiedAngleBracketContent` and `AngleBracketLiteral` patterns following DRY principles
-  - Both `` ` `` and `::` templates now parse `<tags>` the same way (literal text when no `./*/@` present)
-  - Grammar changes in `grammar/patterns/file-reference.peggy`, `grammar/base/unified-templates.peggy`, `grammar/base/unified-quotes.peggy`
+- Backtick and `::` templates handle XML-like tags identically
 
-- **Parallel for loop circular reference detection**: Fixed false positive circular reference warnings when multiple parallel tasks load the same file
-  - Each parallel execution context now maintains its own interpolation stack for independent file loading
-  - Prevents `Warning: Circular reference detected` when parallel tasks legitimately reference the same shared file
-  - Real circular references (A includes B includes A) are still correctly detected via parent chain checking
-  - Regression test added in `tests/cases/regression/parallel-interpolation-stack/`
+- Fixed false circular reference warnings when parallel tasks load the same file
 - Inline pipeline effect detection now differentiates builtin `append` from user-defined commands, restoring stage execution for execs named `append`
 - Alligator syntax in for expressions: `for @f in @files => <@f>` and property access like `for @f in @files => <@f>.fm.title` now work correctly
 - Module content suppression during imports - imported module content no longer appears in stdout
@@ -121,17 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Braced commands require explicit `cmd { ... }`; bare `{ ... }` parses as structured data, pipelines accept inline value stages with structured output, and bare brace commands raise a targeted parse error
-- **Enhanced error message for `run sh` in `/exe`**: `errors/parse/exe-run-sh/error.md` now clearly explains the distinction between bare shell commands and shell scripts
-  - Shows that bare commands (`/exe @cmd(x) = {echo "@x"}`) support @variable interpolation but are single-line only
-  - Shows that shell scripts (`/exe @cmd(x) = sh {echo "$1"}`) use $1, $2 parameters but support multiline with && and ;
-  - Clarifies that the `run` keyword is only for standalone `/run` directives, not `/exe` definitions
+- Enhanced error message for `run sh` in `/exe` explains distinction between bare commands and shell scripts
 - Shell commands now run from project root when `@base` is inferred, otherwise from script directory
-
-### Documentation
-- **llms.txt updates**:
-  - Added `<FILE_LOADING_GLOBS>` section with prominent glob pattern examples and array access patterns
-  - Enhanced interpolation table to emphasize single quotes are literal (no interpolation)
-  - Added "Variable scoping (security)" section explaining JS/Node blocks only access explicit parameters
 
 ## [2.0.0-rc69]
 ### Fixed
