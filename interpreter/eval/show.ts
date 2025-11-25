@@ -1,9 +1,14 @@
 import type { DirectiveNode } from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
-import type { EvalResult } from '../core/interpreter';
+import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { JSONFormatter } from '../core/json-formatter';
+import { formatForDisplay } from '../utils/display-formatter';
+import { materializeDisplayValue } from '../utils/display-materialization';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 // Remove old type imports - we'll use only the new ones
 import {
   isTextLike,
@@ -30,11 +35,18 @@ import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue, looksLikeJsonString } from '@interpreter/utils/structured-value';
+import {
+  asText,
+  assertStructuredValue,
+  isStructuredValue,
+  parseAndWrapJson,
+  applySecurityDescriptorToStructuredValue
+} from '@interpreter/utils/structured-value';
 
-const STRUCTURED_COLLECTION_TYPES = new Set(['object', 'array', 'json']);
 import { wrapExecResult } from '../utils/structured-exec';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 // Template normalization now handled in grammar - no longer needed here
+import { resolveDirectiveExecInvocation } from './directive-replay';
 
 /**
  * Evaluate /show directives.
@@ -45,7 +57,7 @@ import { wrapExecResult } from '../utils/structured-exec';
 export async function evaluateShow(
   directive: DirectiveNode,
   env: Environment,
-  context?: any
+  context?: EvaluationContext
 ): Promise<EvalResult> {
   // Check if we're importing - skip execution if so
   if (env.getIsImporting()) {
@@ -57,7 +69,38 @@ export async function evaluateShow(
 
   let resultValue: unknown | undefined;
   let content = '';
+  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+  let isStreamingShow = false;
+  let interpolatedDescriptor: SecurityDescriptor | undefined;
+  const collectInterpolatedDescriptor = (descriptor?: SecurityDescriptor): void => {
+    if (!descriptor) {
+      return;
+    }
+    interpolatedDescriptor = interpolatedDescriptor
+      ? env.mergeSecurityDescriptors(interpolatedDescriptor, descriptor)
+      : descriptor;
+  };
+  const mergePipelineDescriptor = (
+    ...values: (SecurityDescriptor | undefined)[]
+  ): SecurityDescriptor | undefined => {
+    const descriptors = values.filter(Boolean) as SecurityDescriptor[];
+    if (descriptors.length === 0) {
+      return undefined;
+    }
+    if (descriptors.length === 1) {
+      return descriptors[0];
+    }
+    return env.mergeSecurityDescriptors(...descriptors);
+  };
+  const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
+    if (!variable?.ctx) {
+      return undefined;
+    }
+    return ctxToSecurityDescriptor(variable.ctx);
+  };
   
+  const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
+
   if (directive.subtype === 'showVariable') {
     // Handle variable reference - supports both unified AST and legacy structure
     let variableNode: any;
@@ -167,12 +210,13 @@ export async function evaluateShow(
       // Skip the variable type checking below since we already have the value
     } else {
       // Normal variable reference
-      variable = env.getVariable(varName);
+      const extractedVar = getExtractedVariable(context, varName);
+      variable = extractedVar ?? env.getVariable(varName);
       if (!variable) {
         throw new Error(`Variable not found: ${varName}`);
       }
     }
-    
+
     // Handle all variable types using the new type guards (skip if we already have a value from template literal)
     if (value === undefined && variable) {
       if (isTextLike(variable)) {
@@ -189,13 +233,17 @@ export async function evaluateShow(
               astArray: value
             });
           }
-          value = await interpolate(value, env);
+          value = await interpolate(value, env, undefined, {
+            collectSecurityDescriptor: collectInterpolatedDescriptor
+          });
           if (process.env.MLLD_DEBUG === 'true') {
             logger.debug('Interpolation result:', { value });
           }
-        } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
-          // GOTCHA: Some legacy paths store template AST in metadata
-          value = await interpolate(variable.metadata.templateAst, env);
+        } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
+          // GOTCHA: Some legacy paths store template AST in internal metadata
+          value = await interpolate(variable.internal.templateAst, env, undefined, {
+            collectSecurityDescriptor: collectInterpolatedDescriptor
+          });
         }
       }
     } else if (isObject(variable)) {
@@ -244,7 +292,8 @@ export async function evaluateShow(
       value = variable.value;
     } else if (isPipelineInput(variable)) {
       // Pipeline input - use the text representation
-      value = variable.value.text;
+      assertStructuredValue(variable.value, 'show:pipeline-input');
+      value = asText(variable.value);
     } else if (isImported(variable)) {
       // Imported variable - use the value
       value = variable.value;
@@ -294,14 +343,15 @@ export async function evaluateShow(
     if (!(directive as any)?.values?.invocation) {
       if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
         const { processPipeline } = await import('./pipeline/unified-processor');
-        const initialInput = typeof value === 'string' ? value : String(value ?? '');
         const processed = await processPipeline({
-          value: initialInput,
+          value,
           env,
+          node: variableNode,
           directive,
           pipeline: variableNode.withClause.pipeline,
           identifier: varName,
-          location: directive.location
+          location: directive.location,
+          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
         });
         value = processed;
         if (isStructuredValue(processed)) {
@@ -327,7 +377,7 @@ export async function evaluateShow(
     }
     
     // Handle field access if present in the variable node
-    if (variableNode.fields && variableNode.fields.length > 0 && typeof value === 'object' && value !== null) {
+    if (variableNode.fields && variableNode.fields.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
       const { accessField } = await import('../utils/field-access');
       for (const field of variableNode.fields) {
         // Handle variableIndex type - need to resolve the variable first
@@ -337,7 +387,7 @@ export async function evaluateShow(
             const { FieldAccessError } = await import('@core/errors');
             throw new FieldAccessError(`Variable not found for index: ${field.value}`,
               { baseValue: value, fieldAccessChain: [], failedAtIndex: 0, failedKey: String(field.value) },
-              { sourceLocation: directive.location, env }
+              { sourceLocation: directiveLocation, env }
             );
           }
           // Get the actual value to use as index
@@ -350,14 +400,14 @@ export async function evaluateShow(
           const fieldResult = await accessField(value, resolvedField, { 
             preserveContext: true,
             env,
-            sourceLocation: directive.location
+            sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         } else {
           const fieldResult = await accessField(value, field, { 
             preserveContext: true,
             env,
-            sourceLocation: directive.location
+            sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         }
@@ -383,104 +433,32 @@ export async function evaluateShow(
      */
     const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
     value = await resolveValue(value, env, ResolutionContext.Display);
-    // Import LoadContentResult type check
-    const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
+    const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
+    const isNamespaceVariable = variable?.internal?.isNamespace && !hadFieldAccess;
 
-    // Convert final value to string
-    if (typeof value === 'string') {
-      content = value;
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
-      // For primitives, just convert to string
-      content = String(value);
-    } else if (isLoadContentResult(value)) {
-      // For LoadContentResult, show the content by default
-      content = value.content;
-    } else if (isLoadContentResultArray(value)) {
-      // For array of LoadContentResult, concatenate content with double newlines
-      content = value.map(item => item.content).join('\n\n');
-    } else if (isStructuredValue(value)) {
-      if (value.type === 'array' && Array.isArray(value.data)) {
-        const printableArray = value.data.map(item =>
-          isStructuredValue(item)
-            ? (item.type === 'object' || item.type === 'array') ? item.data : asText(item)
-            : item
-        );
-        content = JSONFormatter.stringify(printableArray, { pretty: true, indent: 2 });
-      } else if (value.type === 'object' && value.data && typeof value.data === 'object') {
-        if (
-          (value.metadata && 'loadResult' in value.metadata && value.metadata.loadResult) ||
-          value.metadata?.source === 'load-content'
-        ) {
-          content = value.text;
-        } else {
-          content = JSONFormatter.stringify(value.data, { pretty: true });
-        }
-      } else {
-        content = value.text;
+    if (isNamespaceVariable && value && typeof value === 'object') {
+      if (process.env.DEBUG_NAMESPACE) {
+        logger.debug('Cleaning namespace for display:', {
+          varName: variable.name,
+          hasMetadata: !!variable.internal,
+          isNamespace: variable.internal?.isNamespace,
+          valueKeys: Object.keys(value)
+        });
       }
-    } else if (Array.isArray(value)) {
-      const printableArray = value.map(item => {
-        if (isStructuredValue(item)) {
-          if (STRUCTURED_COLLECTION_TYPES.has(item.type)) {
-            return item.data;
-          }
-          return asText(item);
-        }
-        if (item && typeof item === 'object' && typeof (item as any).text === 'string' && typeof (item as any).type === 'string') {
-          return (item as any).text;
-        }
-        return item;
-      });
-      value = printableArray;
-
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
+      content = JSONFormatter.stringifyNamespace(value);
+    } else if (value && typeof value === 'object' && (value as any).__executable) {
+      const params = (value as any).paramNames || [];
+      content = `<function(${params.join(', ')})>`;
+    } else {
+      if (Array.isArray(value) && process.env.MLLD_DEBUG === 'true') {
         logger.debug('show.ts: Formatting array:', {
           varName: variable.name,
           valueLength: value.length,
-          value: value,
-          isForeachSection: isForeachSection
+          value,
+          isForeachSection
         });
       }
-      
-      // Check if this is from a foreach-section expression
-      if (isForeachSection && value.every(item => typeof item === 'string')) {
-        // Join string array with double newlines for foreach-section results
-        content = value.join('\n\n');
-      } else {
-        // For other arrays, use JSON format (this preserves the original behavior)
-        // Use proper indentation for arrays (2 spaces)
-        const indent = 2;
-        
-        content = JSONFormatter.stringify(value, { pretty: true, indent });
-      }
-    } else if (value !== null && value !== undefined) {
-      // Check if this is a namespace object that needs special formatting
-      // BUT NOT if we've accessed a field on it - in that case, value is no longer the namespace
-      const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
-      if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
-        if (process.env.DEBUG_NAMESPACE) {
-          logger.debug('Cleaning namespace for display:', {
-            varName: variable.name,
-            hasMetadata: !!variable.metadata,
-            isNamespace: variable.metadata?.isNamespace,
-            valueKeys: Object.keys(value)
-          });
-        }
-        content = JSONFormatter.stringifyNamespace(value);
-      } else {
-        // Check if the top-level value itself is an executable that needs cleaning
-        if (value && typeof value === 'object' && value.__executable) {
-          const params = value.paramNames || [];
-          content = `<function(${params.join(', ')})>`;
-        } else {
-          // For objects, use JSON with custom replacer for VariableReference nodes
-          content = JSONFormatter.stringify(value, { pretty: true });
-        }
-      }
-    } else {
-      // Handle null/undefined
-      content = '';
+      content = formatForDisplay(value, { isForeachSection });
     }
     
     // Legacy path: only run when invocation is not present (avoid double-processing)
@@ -490,12 +468,14 @@ export async function evaluateShow(
         const processed = await processPipeline({
           value: content,
           env,
+          node: variableNode,
           directive,
           pipeline: variableNode.withClause.pipeline,
           identifier: varName,
-          location: directive.location
+          location: directive.location,
+          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
         });
-        value = processed;
+      value = processed;
         if (isStructuredValue(processed)) {
           content = asText(processed);
         } else if (typeof processed === 'string') {
@@ -519,9 +499,10 @@ export async function evaluateShow(
           node: invocationNode,
           directive,
           identifier: varName || 'show',
-          location: directive.location
+          location: directive.location,
+          descriptorHint: mergePipelineDescriptor(descriptorFromVariable(variable), interpolatedDescriptor)
         });
-        value = processed;
+      value = processed;
         if (isStructuredValue(processed)) {
           content = asText(processed);
         } else if (typeof processed === 'string') {
@@ -550,7 +531,9 @@ export async function evaluateShow(
       resolvedPath = pathValue;
     } else if (Array.isArray(pathValue)) {
       // Array of path nodes
-      resolvedPath = await interpolate(pathValue, env);
+      resolvedPath = await interpolate(pathValue, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
     } else {
       throw new Error('Invalid path type in add directive');
     }
@@ -576,7 +559,9 @@ export async function evaluateShow(
     }
     
     // Get the section title
-    const sectionTitle = await interpolate(sectionTitleNodes, env);
+    const sectionTitle = await interpolate(sectionTitleNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Handle both string paths (URLs) and node arrays
     let resolvedPath: string;
@@ -585,7 +570,9 @@ export async function evaluateShow(
       resolvedPath = pathValue;
     } else if (Array.isArray(pathValue)) {
       // Array of path nodes
-      resolvedPath = await interpolate(pathValue, env);
+      resolvedPath = await interpolate(pathValue, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
     } else {
       throw new Error('Invalid path type in add section directive');
     }
@@ -615,7 +602,9 @@ export async function evaluateShow(
     // Handle rename if newTitle is specified
     const newTitleNodes = directive.values?.newTitle;
     if (newTitleNodes) {
-      const newTitle = await interpolate(newTitleNodes, env);
+      const newTitle = await interpolate(newTitleNodes, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
       // Replace the original section title with the new one
       const lines = content.split('\n');
       if (lines.length > 0 && lines[0].match(/^#+\s/)) {
@@ -659,7 +648,9 @@ export async function evaluateShow(
     
     
     // Interpolate the template
-    content = await interpolate(templateNodes, env);
+    content = await interpolate(templateNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Handle pipeline if present
     if (directive.values?.pipeline) {
@@ -672,7 +663,9 @@ export async function evaluateShow(
     // Handle section extraction if specified
     const sectionNodes = directive.values?.section;
     if (sectionNodes && Array.isArray(sectionNodes)) {
-      const section = await interpolate(sectionNodes, env);
+      const section = await interpolate(sectionNodes, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
       if (section) {
         content = extractSection(content, section);
       }
@@ -680,23 +673,37 @@ export async function evaluateShow(
     
   } else if (directive.subtype === 'addInvocation' || directive.subtype === 'showInvocation') {
     // Handle unified invocation - could be template or exec
-    const invocation = directive.values?.invocation;
-    if (!invocation) {
+    const baseInvocation = directive.values?.invocation;
+    if (!baseInvocation) {
       throw new Error('Show invocation directive missing invocation');
     }
+    isStreamingShow = Boolean(securityLabels?.includes('stream'));
+    const invocation = isStreamingShow
+      ? {
+          ...baseInvocation,
+          withClause: {
+            ...(baseInvocation.withClause || {}),
+            stream: true
+          }
+        }
+      : baseInvocation;
     
     // Check if this is a method call on an object or on an exec result
     const commandRef = invocation.commandRef as any;
     if (commandRef && (commandRef.objectReference || commandRef.objectSource)) {
       // This is a method call like @list.includes() - evaluate directly
-      const { evaluateExecInvocation } = await import('./exec-invocation');
-      const result = await evaluateExecInvocation(invocation, env);
+      const result = await resolveDirectiveExecInvocation(directive, env, invocation);
       
       resultValue = result.value;
 
       // Convert result to string appropriately
       if (isStructuredValue(result.value)) {
-        content = asText(result.value);
+        if (result.value.type === 'array' && Array.isArray(result.value.data)) {
+          const cleaned = result.value.data.map(item => (isStructuredValue(item) ? asText(item) : item));
+          content = JSONFormatter.stringify(cleaned, { pretty: true });
+        } else {
+          content = asText(result.value);
+        }
       } else if (typeof result.value === 'string') {
         content = result.value;
       } else if (result.value === null || result.value === undefined) {
@@ -715,7 +722,8 @@ export async function evaluateShow(
       }
       
       // Look up what this invocation refers to
-      const variable = env.getVariable(name);
+      const extracted = getExtractedVariable(context, name);
+      const variable = extracted ?? env.getVariable(name);
       if (!variable) {
         throw new Error(`Variable not found: ${name}`);
       }
@@ -723,14 +731,18 @@ export async function evaluateShow(
       // Handle based on variable type
       if (isExecutableVar(variable)) {
         // This is an executable invocation - use exec-invocation handler
-        const { evaluateExecInvocation } = await import('./exec-invocation');
-        const result = await evaluateExecInvocation(invocation, env);
+        const result = await resolveDirectiveExecInvocation(directive, env, invocation);
         
         resultValue = result.value;
 
         // Convert result to string appropriately
         if (isStructuredValue(result.value)) {
-          content = asText(result.value);
+          if (result.value.type === 'array' && Array.isArray(result.value.data)) {
+            const cleaned = result.value.data.map(item => (isStructuredValue(item) ? asText(item) : item));
+            content = JSONFormatter.stringify(cleaned, { pretty: true });
+          } else {
+            content = asText(result.value);
+          }
         } else if (typeof result.value === 'string') {
           content = result.value;
         } else if (result.value === null || result.value === undefined) {
@@ -754,7 +766,9 @@ export async function evaluateShow(
     }
     
     // Get the template name
-    const templateName = await interpolate(templateNameNodes, env);
+    const templateName = await interpolate(templateNameNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Look up the template
     const template = env.getVariable(templateName);
@@ -843,7 +857,9 @@ export async function evaluateShow(
     if (!templateNodes) {
       throw new Error(`Template ${templateName} has no template content`);
     }
-    content = await interpolate(templateNodes, childEnv);
+    content = await interpolate(templateNodes, childEnv, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Template normalization is now handled in the grammar at parse time
     
@@ -873,14 +889,12 @@ export async function evaluateShow(
     }
     
     // Evaluate the exec invocation
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execInvocation, env);
-    
+    const result = await resolveDirectiveExecInvocation(directive, env, execInvocation);
     resultValue = result.value;
 
     // Convert result to string appropriately
     if (isStructuredValue(result.value)) {
-      content = asText(result.value);
+      content = formatForDisplay(result.value);
     } else if (typeof result.value === 'string') {
       content = result.value;
     } else if (result.value === null || result.value === undefined) {
@@ -940,24 +954,21 @@ export async function evaluateShow(
     // Use the content loader to process the node
     const { processContentLoader } = await import('./content-loader');
     const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { wrapLoadContentValue } = await import('../utils/load-content-structured');
     const loadResult = await processContentLoader(loadContentNode, env);
-    
-    resultValue = loadResult;
-    
+
     // Handle different return types from processContentLoader
-    if (typeof loadResult === 'string') {
+    if (isLoadContentResult(loadResult) || isLoadContentResultArray(loadResult)) {
+      const structured = wrapLoadContentValue(loadResult);
+      resultValue = structured;
+      content = asText(structured);
+    } else if (isStructuredValue(loadResult)) {
+      resultValue = loadResult;
+      content = asText(loadResult);
+    } else if (typeof loadResult === 'string') {
       // Backward compatibility - plain string
       content = loadResult;
-    } else if (isLoadContentResult(loadResult)) {
-      // Single file with metadata - use content
-      content = loadResult.content;
-    } else if (isLoadContentResultArray(loadResult)) {
-      // Multiple files from glob - join their contents
-      content = loadResult.map(r => r.content).join('\n\n');
-    } else if (loadResult && typeof loadResult === 'object' && 'content' in (loadResult as any) && typeof (loadResult as any).content === 'string') {
-      content = (loadResult as any).content;
-    } else if (isStructuredValue(loadResult)) {
-      content = asText(loadResult);
+      resultValue = loadResult;
     } else {
       try {
         content = String(loadResult ?? '');
@@ -969,7 +980,9 @@ export async function evaluateShow(
     // Handle rename if newTitle is specified (for section extraction)
     const newTitleNodes = directive.values?.newTitle;
     if (newTitleNodes && loadContentNode.options?.section) {
-      const newTitle = await interpolate(newTitleNodes, env);
+      const newTitle = await interpolate(newTitleNodes, env, undefined, {
+        collectSecurityDescriptor: collectInterpolatedDescriptor
+      });
       content = applyHeaderTransform(content, newTitle);
     }
     
@@ -984,11 +997,13 @@ export async function evaluateShow(
     const { InterpolationContext } = await import('../core/interpolation-context');
     
     // Interpolate command (resolve variables) with shell command context
-    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     // Execute the command and capture output for display
     const executionContext = {
-      sourceLocation: directive.location,
+      sourceLocation: directiveLocation,
       directiveNode: directive,
       filePath: env.getCurrentFilePath(),
       directiveType: 'show'  // Mark as show for context
@@ -1043,7 +1058,7 @@ export async function evaluateShow(
     
     // Execute code and capture output for display
     const executionContext = {
-      sourceLocation: directive.location,
+      sourceLocation: directiveLocation,
       directiveNode: directive,
       filePath: env.getCurrentFilePath(),
       directiveType: 'show'  // Mark as show for context
@@ -1067,7 +1082,9 @@ export async function evaluateShow(
     
     
     // Process the content using the standard interpolation
-    content = await interpolate(templateNodes, env);
+    content = await interpolate(templateNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
     
     
   } else {
@@ -1088,7 +1105,8 @@ export async function evaluateShow(
       directive,
       pipeline,
       identifier: 'show-tail',
-      location: directive.location
+      location: directive.location,
+      descriptorHint: interpolatedDescriptor
     });
     resultValue = processed;
     if (isStructuredValue(processed)) {
@@ -1121,14 +1139,9 @@ export async function evaluateShow(
       content = String(content);
     }
   } else if (typeof content === 'string') {
-    // Check if content is a JSON string that should be pretty-printed
-    try {
-      if (looksLikeJsonString(content)) {
-        const parsed = JSON.parse(content.trim());
-        content = JSONFormatter.stringify(parsed, { pretty: true });
-      }
-    } catch {
-      // Not valid JSON, keep original string
+    const parsed = parseAndWrapJson(content, { preserveText: true });
+    if (parsed && typeof parsed !== 'string' && isStructuredValue(parsed)) {
+      content = JSONFormatter.stringify(parsed.data, { pretty: true });
     }
   }
 
@@ -1136,25 +1149,46 @@ export async function evaluateShow(
     resultValue = content;
   }
 
+  const displayMaterialized = materializeDisplayValue(content, undefined, resultValue);
+  content = displayMaterialized.text;
   const textForWrapper = content;
 
   if (!content.endsWith('\n')) {
     content = `${content}\n`;
   }
+
+  const snapshot = env.getSecuritySnapshot();
+  const resultDescriptor = mergeDescriptors(
+    interpolatedDescriptor,
+    displayMaterialized.descriptor,
+    snapshot
+      ? makeSecurityDescriptor({
+          labels: snapshot.labels,
+          taintLevel: snapshot.taintLevel,
+          sources: snapshot.sources,
+          policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+        })
+      : undefined
+  );
   
   // Only emit the effect if we're not in an expression context
   // In expression contexts (like when expressions), we only return the value
   if (!context?.isExpression) {
     // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
-    env.emitEffect('both', content, { source: directive.location });
+    if (!isStreamingShow) {
+      env.emitEffect('both', content, { source: directive.location });
+    }
   }
-  
+
   const baseValue = resultValue ?? textForWrapper;
   const wrapOptions =
     !isStructuredValue(baseValue) && typeof baseValue !== 'string'
       ? { text: textForWrapper }
       : undefined;
   const wrapped = wrapExecResult(baseValue, wrapOptions);
+  if (resultDescriptor) {
+    applySecurityDescriptorToStructuredValue(wrapped, resultDescriptor);
+  }
   return { value: wrapped, env };
 }
 
@@ -1232,4 +1266,23 @@ export function extractSection(content: string, sectionName: string): string {
   }
   
   return sectionLines.join('\\n').trim();
+}
+function getExtractedVariable(
+  context: EvaluationContext | undefined,
+  name: string
+): Variable | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const candidate of context.extractedInputs) {
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      'name' in candidate &&
+      (candidate as Variable).name === name
+    ) {
+      return candidate as Variable;
+    }
+  }
+  return undefined;
 }

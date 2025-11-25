@@ -37,12 +37,6 @@ export * from './variable/VariableFactories';
 export * from './variable/AdvancedTypeDetection';
 
 // =========================================================================
-// LEGACY COMPATIBILITY
-// =========================================================================
-
-export * from './variable/LegacyCompatibility';
-
-// =========================================================================
 // CONVENIENT RE-EXPORTS
 // =========================================================================
 
@@ -61,9 +55,6 @@ export { VariableTypeGuards } from './variable/TypeGuards';
 // Re-export advanced detection
 export { AdvancedTypeDetection } from './variable/AdvancedTypeDetection';
 
-// Re-export legacy converter
-export { LegacyVariableConverter } from './variable/LegacyCompatibility';
-
 // Re-export metadata utilities
 export { VariableMetadataUtils, VariableSourceHelpers } from './variable/VariableMetadata';
 
@@ -72,22 +63,7 @@ export { VariableMetadataUtils, VariableSourceHelpers } from './variable/Variabl
 // =========================================================================
 
 import { Variable } from './variable/VariableTypes';
-import { LegacyVariableConverter } from './variable/LegacyCompatibility';
 import { AdvancedTypeDetection } from './variable/AdvancedTypeDetection';
-
-/**
- * Convert a new variable to legacy format (backward compatibility)
- */
-export function toLegacyVariable(variable: Variable): any {
-  return LegacyVariableConverter.toLegacyVariable(variable);
-}
-
-/**
- * Check for legacy variable types in imported variables (backward compatibility)
- */
-export function hasLegacyType(variable: Variable): boolean {
-  return LegacyVariableConverter.hasLegacyType(variable);
-}
 
 /**
  * Check if variable is an executable, including imported executables (backward compatibility)

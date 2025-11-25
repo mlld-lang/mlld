@@ -14,7 +14,7 @@ describe('Directive Base Structure', () => {
     '/var @myvar = { "key": "value" }',
     '/path @myvar = "/path/to/file"',
     '/run {echo "hello world"}',
-    '/exe @mycommand (param) = {echo "hello"}'
+    '/exe @mycommand (param) = cmd {echo "hello"}'
   ];
 
   for (const input of directiveExamples) {

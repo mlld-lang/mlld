@@ -1,15 +1,9 @@
->> ✗ Using {{}} in ::...::
-/var @msg = ::Hello {{name}}::        >> {{name}} is literal
-/var @msg = ::Hello @name::           >> ✓
+/var @jsonStr = '{"name": "Alice", "active": true}'
 
->> ✗ Using @var in :::...:::
-/var @msg = :::Hello @name:::         >> @name is literal
-/var @msg = :::Hello {{name}}:::      >> ✓
+/exe @length(str) = js {
+  return str.length;
+}
 
->> ✗ Using ::: without Discord/social need
-/var @msg = :::Status: {{status}}:::  >> Loses all features
-/var @msg = ::Status: @status::       >> ✓ Full features
-
->> ✗ Importing template files
-/import { @tpl } from "./file.att"    >> Error
-/exe @tpl(x) = template "./file.att"  >> ✓
+/run @length(@jsonStr)          >> Default: string
+/run @length(@jsonStr.text)     >> Explicit string
+/run @length(@jsonStr.content)  >> Alias for .text

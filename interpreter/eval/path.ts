@@ -4,6 +4,7 @@ import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import { createPathVariable, type VariableSource } from '@core/types/variable';
+import type { SecurityDescriptor } from '@core/types/security';
 
 /**
  * Evaluate @path directives.
@@ -45,7 +46,23 @@ export async function evaluatePath(
   const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
   
   // Interpolate the path (resolve variables)
-  const interpolatedPath = await interpolate(pathNodes, env);
+  const descriptors: SecurityDescriptor[] = [];
+  const interpolatedPath = await interpolate(pathNodes, env, undefined, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  const merged =
+    descriptors.length === 1
+      ? descriptors[0]
+      : descriptors.length > 1
+        ? env.mergeSecurityDescriptors(...descriptors)
+        : undefined;
+  if (merged) {
+    env.recordSecurityDescriptor(merged);
+  }
   
   // Handle special path variables and absolute paths
   let resolvedPath = interpolatedPath;

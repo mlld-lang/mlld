@@ -1,0 +1,217 @@
+import { describe, it, expect } from 'vitest';
+import { parseSync } from '@grammar/parser';
+import type { DirectiveNode } from '@core/types';
+import { Environment } from '@interpreter/env/Environment';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { evaluateVar } from '@interpreter/eval/var';
+import { evaluateDirective } from '@interpreter/eval/directive';
+import { evaluateExe } from '@interpreter/eval/exe';
+import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
+import { ObjectReferenceResolver } from '@interpreter/eval/import/ObjectReferenceResolver';
+import { VariableMetadataUtils } from '@core/types/variable';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { processPipeline } from '@interpreter/eval/pipeline/unified-processor';
+import type { PipelineCommand } from '@core/types/run';
+import { TestEffectHandler } from '@interpreter/env/EffectHandler';
+import { evaluateOutput } from '@interpreter/eval/output';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { evaluateShow } from '@interpreter/eval/show';
+import { createSimpleTextVariable } from '@core/types/variable';
+
+describe('Security metadata propagation', () => {
+  it('attaches descriptors when evaluating /var directives', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const directive = parseSync('/var secret,untrusted @foo = "value"')[0] as DirectiveNode;
+
+    await evaluateVar(directive, env);
+
+    const variable = env.getVariable('foo');
+    expect(variable?.ctx).toBeDefined();
+    expect(variable?.ctx.labels).toEqual(['secret', 'untrusted']);
+  });
+
+  it('restores serialized metadata during import reconstruction', () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const serialized = VariableMetadataUtils.serializeSecurityMetadata({
+      security: makeSecurityDescriptor({ labels: ['pii'] })
+    });
+
+    const variable = importer.createVariableFromValue('foo', 'bar', '/module', undefined, {
+      serializedMetadata: serialized,
+      securityLabels: ['secret']
+    });
+
+    expect(variable.ctx.labels).toEqual(['secret']);
+  });
+
+  it('propagates descriptors through pipeline stages', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const source = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    } as const;
+    const descriptor = makeSecurityDescriptor({ labels: ['secret'] });
+    const variable = createSimpleTextVariable('input', '  hello  ', source, { security: descriptor });
+    const pipelineStage: PipelineCommand = {
+      rawIdentifier: '__identity__',
+      identifier: [
+        { type: 'VariableReference', valueType: 'varIdentifier', identifier: '__identity__' }
+      ] as any,
+      args: [],
+      fields: [],
+      rawArgs: []
+    };
+
+    const result = await processPipeline({
+      value: variable,
+      env,
+      pipeline: [pipelineStage],
+      identifier: 'input'
+    });
+
+    expect(result.ctx?.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('wraps /show output and effects with capability metadata', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const handler = new TestEffectHandler();
+    env.setEffectHandler(handler);
+
+    const descriptor = makeSecurityDescriptor({ labels: ['secret'] });
+    const templateSource = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    } as const;
+    env.setVariable(
+      'foo',
+      createSimpleTextVariable('foo', 'value', templateSource, { security: descriptor })
+    );
+
+    const directive = parseSync('/show @foo')[0] as DirectiveNode;
+    const result = await evaluateShow(directive, env);
+
+    expect(result.value).toBeDefined();
+    const showValue = result.value as any;
+    expect(showValue.ctx?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(handler.collected[0]?.capability?.security.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('serializes module export descriptors', () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const childEnv = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    childEnv.pushSecurityContext({
+      descriptor: makeSecurityDescriptor({ labels: ['network'] }),
+      kind: 'import'
+    });
+
+    const source = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    } as const;
+    const variable = createSimpleTextVariable('foo', 'bar', source, {
+      security: makeSecurityDescriptor({ labels: ['secret'] })
+    });
+    const childVars = new Map<string, ReturnType<typeof createSimpleTextVariable>>([
+      ['foo', variable]
+    ]);
+
+    const { moduleObject } = importer.processModuleExports(
+      childVars,
+      { frontmatter: null },
+      undefined,
+      null,
+      childEnv
+    );
+
+    childEnv.popSecurityContext();
+
+    const serialized = moduleObject.__metadata__?.foo?.security;
+    expect(serialized?.labels).toEqual(expect.arrayContaining(['secret', 'network']));
+  });
+
+  it('attaches capability metadata when emitting file effects', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const env = new Environment(fileSystem, new PathService(), '/');
+    const handler = new TestEffectHandler();
+    env.setEffectHandler(handler);
+
+    const descriptor = makeSecurityDescriptor({ labels: ['secret'] });
+    const templateSource = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    } as const;
+    env.setVariable(
+      'foo',
+      createSimpleTextVariable('foo', 'file contents', templateSource, { security: descriptor })
+    );
+
+    const directive = parseSync('/output @foo to "out.txt"')[0] as DirectiveNode;
+    await evaluateOutput(directive, env);
+
+    const fileEffect = handler.collected.find(effect => effect.type === 'file');
+    expect(fileEffect).toBeDefined();
+    expect(fileEffect?.path).toContain('out.txt');
+    expect(fileEffect?.capability?.security.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('propagates /exe labels to executable definitions and invocation results', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const exeDirective = parseSync('/exe secret @emit() = js { return "hello"; }')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const execVar = env.getVariable('emit');
+    expect(execVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+
+    const invocationDirective = parseSync('/var @result = @emit()')[0] as DirectiveNode;
+    await evaluateVar(invocationDirective, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('merges descriptors during template interpolation', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const secretDirective = parseSync('/var secret @token = "shh"')[0] as DirectiveNode;
+    await evaluateVar(secretDirective, env);
+
+    const templateDirective = parseSync('/var @message = `Token: @token`')[0] as DirectiveNode;
+    await evaluateVar(templateDirective, env);
+
+    const messageVar = env.getVariable('message');
+    expect(messageVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('propagates pipeline taint and labels into structured outputs and downstream results', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const tokenDirective = parseSync('/var secret @token = "abc123"')[0] as DirectiveNode;
+    await evaluateDirective(tokenDirective, env);
+
+    const emitDirective = parseSync('/exe @emitToken(value) = run { printf "Token: @value" }')[0] as DirectiveNode;
+    const echoDirective = parseSync('/exe @echoValue(value) = run { printf "@value" }')[0] as DirectiveNode;
+    const markDirective = parseSync('/exe @markDone(value) = js { return value + " :: done"; }')[0] as DirectiveNode;
+    await evaluateDirective(emitDirective, env);
+    await evaluateDirective(echoDirective, env);
+    await evaluateDirective(markDirective, env);
+
+    const pipelineDirective = parseSync('/var @pipelineOutput = @token | @emitToken | @echoValue | @markDone')[0] as DirectiveNode;
+    await evaluateDirective(pipelineDirective, env);
+    const pipelineVar = env.getVariable('pipelineOutput');
+    expect(pipelineVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(pipelineVar?.ctx.taint).toBe('unknown');
+
+    const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
+    const result = await evaluateDirective(resultDirective, env);
+    const structuredResult = result.value as any;
+    expect(structuredResult?.ctx?.labels).toEqual(expect.arrayContaining(['untrusted']));
+    expect(structuredResult?.ctx?.taint).toBe('commandOutput');
+  });
+});

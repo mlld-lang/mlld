@@ -10,16 +10,65 @@ import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { MlldWhenExpressionError } from '@core/errors';
-import { evaluate, interpolate } from '../core/interpreter';
-import { evaluateCondition } from './when';
+import { evaluate } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
+import { evaluateCondition, conditionTargetsDenied } from './when';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue } from '../utils/structured-value';
+import { asText, asData, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+
+export interface WhenExpressionOptions {
+  denyMode?: boolean;
+}
+
+type InterpolateFn = typeof import('../core/interpreter').interpolate;
+let cachedInterpolateFn: InterpolateFn | null = null;
+
+async function getInterpolateFn(): Promise<InterpolateFn> {
+  if (!cachedInterpolateFn) {
+    const module = await import('../core/interpreter');
+    cachedInterpolateFn = module.interpolate;
+  }
+  return cachedInterpolateFn;
+}
 
 /**
  * Check if a condition is the 'none' literal
  */
 function isNoneCondition(condition: any): boolean {
   return condition?.type === 'Literal' && condition?.valueType === 'none';
+}
+
+async function normalizeActionValue(value: unknown, actionEnv: Environment): Promise<unknown> {
+  let normalized = value;
+
+  if (isStructuredValue(normalized)) {
+    normalized = asData(normalized);
+  }
+
+  if (
+    normalized &&
+    typeof normalized === 'object' &&
+    'wrapperType' in (normalized as Record<string, unknown>) &&
+    Array.isArray((normalized as { content?: unknown[] }).content)
+  ) {
+    try {
+      const interpolateFn = await getInterpolateFn();
+      normalized = await interpolateFn((normalized as { content: any[] }).content, actionEnv);
+    } catch {
+      normalized = String(normalized as any);
+    }
+  }
+
+  if (normalized && typeof normalized === 'object' && 'type' in (normalized as Record<string, unknown>)) {
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    try {
+      normalized = await extractVariableValue(normalized as any, actionEnv);
+    } catch (error) {
+      logger.debug('Could not extract variable value in when expression:', error);
+    }
+  }
+
+  return normalized;
 }
 
 /**
@@ -68,7 +117,8 @@ function validateNonePlacement(conditions: WhenConditionPair[]): void {
 export async function evaluateWhenExpression(
   node: WhenExpressionNode,
   env: Environment,
-  context?: EvaluationContext
+  context?: EvaluationContext,
+  options?: WhenExpressionOptions
 ): Promise<EvalResult> {
   // console.error('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
   
@@ -76,6 +126,8 @@ export async function evaluateWhenExpression(
   validateNonePlacement(node.conditions);
   
   const errors: Error[] = [];
+  const denyMode = Boolean(options?.denyMode);
+  let deniedHandlerRan = false;
   
   // Check if we have a "first" modifier (stop after first match)
   const isFirstMode = node.meta?.modifier === 'first';
@@ -87,17 +139,22 @@ export async function evaluateWhenExpression(
   let hasValueProducingMatch = false;  // Track if any condition produced an actual return value (not just side effects)
   let lastNoneValue: any = null;
   let accumulatedEnv = env;
+  const buildResult = (value: unknown, environment: Environment): EvalResult => ({
+    value,
+    env: environment,
+    internal: deniedHandlerRan ? { deniedHandlerRan: true } : undefined
+  });
   
   // Empty conditions array - return null
   if (node.conditions.length === 0) {
-    return { value: null, env };
+    return buildResult(null, env);
   }
   
   // Check if any condition has an action
   const hasAnyAction = node.conditions.some(c => c.action && c.action.length > 0);
   if (!hasAnyAction) {
     logger.warn('WhenExpression has no actions defined');
-    return { value: null, env };
+    return buildResult(null, env);
   }
   
   // Check all actions for code blocks upfront
@@ -132,11 +189,15 @@ export async function evaluateWhenExpression(
       continue;
     }
 
+    if (denyMode && !conditionTargetsDenied(pair.condition)) {
+      continue;
+    }
+
     
     
-    try {
-      // Evaluate the condition
-      const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
+      try {
+        // Evaluate the condition
+        const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
@@ -150,12 +211,15 @@ export async function evaluateWhenExpression(
         // Condition matched - evaluate the action
         hasMatch = true;
         hasNonNoneMatch = true;
+        const matchedDeniedCondition = conditionTargetsDenied(pair.condition);
+        if (matchedDeniedCondition) {
+          deniedHandlerRan = true;
+        }
         
         if (!pair.action || pair.action.length === 0) {
           // No action for this condition - continue to next
           continue;
         }
-        
         try {
           // Special-case: detect retry with optional hint without evaluating side-effects
           // Pattern: action starts with a RetryLiteral, optionally followed by a Text node (hint)
@@ -177,12 +241,11 @@ export async function evaluateWhenExpression(
                   } else {
                     // String/function/exec/template hint → interpolate to plain string
                     // Check if the first node is a wrapper with content
+                    const interpolateFn = await getInterpolateFn();
                     if (firstNode && typeof firstNode === 'object' && 'content' in firstNode && Array.isArray(firstNode.content)) {
-                      // Unwrap and interpolate the content
-                      hintValue = await interpolate(firstNode.content, hintEnv);
+                      hintValue = await interpolateFn(firstNode.content, hintEnv);
                     } else {
-                      // Interpolate the nodes directly
-                      hintValue = await interpolate(hintNodes as any, hintEnv);
+                      hintValue = await interpolateFn(hintNodes as any, hintEnv);
                     }
                     if (typeof hintValue !== 'string') {
                       // Defensive: ensure non-object hints are plain strings
@@ -201,12 +264,11 @@ export async function evaluateWhenExpression(
               }
               // In "first" mode, return immediately after first match
               if (isFirstMode) {
-                return { value, env: accumulatedEnv };
+                return buildResult(value, accumulatedEnv);
               }
               lastMatchValue = value;
               hasMatch = true;
               hasValueProducingMatch = true;  // action produces a value
-              // Merge nodes from accumulatedEnv childless (no child changes here)
               continue;
             }
           }
@@ -231,70 +293,29 @@ export async function evaluateWhenExpression(
           // evaluate each action in a child env and merge resulting variable
           // bindings back into the accumulatedEnv after evaluation.
           const actionEnv = accumulatedEnv.createChild();
-          // FIXED: Suppress side effects in when expressions used in /exe functions
-          // Side effects should be handled by the calling context (e.g., /show @func())
-          // Evaluate the action in normal directive context so effects stream.
-          // We avoid forcing isExpression here to preserve effect emission.
-          const actionResult = await evaluate(pair.action, actionEnv, context);
-          
-          let value = actionResult.value;
+          let actionResult: EvalResult | null = null;
+          let value: unknown;
+          const wrapperCandidate =
+            pair.action.length === 1 &&
+            pair.action[0] &&
+            typeof pair.action[0] === 'object' &&
+            !('type' in (pair.action[0] as BaseMlldNode)) &&
+            Array.isArray((pair.action[0] as any).content)
+              ? (pair.action[0] as { content: any[] })
+              : null;
 
-          if (isStructuredValue(value)) {
-            value = value.type === 'array' || value.type === 'object' ? value.data : asText(value);
+          if (wrapperCandidate) {
+            const interpolateFn = await getInterpolateFn();
+            value = await interpolateFn(wrapperCandidate.content, actionEnv, InterpolationContext.Template);
+          } else {
+            // FIXED: Suppress side effects in when expressions used in /exe functions
+            // Side effects should be handled by the calling context (e.g., /show @func())
+            // Evaluate the action in normal directive context so effects stream.
+            // We avoid forcing isExpression here to preserve effect emission.
+            actionResult = await evaluate(pair.action, actionEnv, context);
+            value = actionResult.value;
           }
-          
-
-          // Normalize wrapped string nodes (quotes/backticks) into plain strings
-          if (value && typeof value === 'object' && 'wrapperType' in value && Array.isArray((value as any).content)) {
-            try {
-              value = await interpolate((value as any).content, actionEnv);
-            } catch {
-              // If interpolation fails, fallback to string coercion
-              value = String(value as any);
-            }
-          }
-          
-          // Extract Variable values if needed (but keep effects working)
-          if (value && typeof value === 'object' && 'type' in value) {
-            // This looks like a Variable object - extract its value
-            const { extractVariableValue } = await import('../utils/variable-resolution');
-            try {
-              value = await extractVariableValue(value, actionEnv);
-            } catch (e) {
-              // If extraction fails, keep the original value
-              logger.debug('Could not extract variable value in when expression:', e);
-            }
-          }
-          
-          // Coerce non-string values to strings for expression returns
-          if (typeof value !== 'string') {
-            try {
-              if (value && typeof value === 'object') {
-                // Unwrap template-like values
-                if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
-                  value = await interpolate((value as any).content, actionEnv);
-                } else if ('type' in (value as any)) {
-                  const { extractVariableValue } = await import('../utils/variable-resolution');
-                  const extracted = await extractVariableValue(value as any, actionEnv);
-                  value = typeof extracted === 'string' ? extracted : JSON.stringify(extracted);
-                } else {
-                  value = JSON.stringify(value);
-                }
-              } else {
-                value = String(value ?? '');
-              }
-            } catch {
-              value = String(value ?? '');
-            }
-          }
-
-          // Debug: What did we get back?
-          // console.error('🔍 WHEN-EXPRESSION action result:', {
-          //   valueType: typeof value,
-          //   valuePreview: String(value).substring(0, 50),
-          //   actionKind: Array.isArray(pair.action) && pair.action[0] ? pair.action[0].kind : 'unknown'
-          // });
-          
+          value = await normalizeActionValue(value, actionEnv);
           if (Array.isArray(pair.action) && pair.action.length === 1) {
             const singleAction = pair.action[0];
             if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
@@ -335,19 +356,21 @@ export async function evaluateWhenExpression(
           }
           
           // Apply tail modifiers if present
+          const executionEnv = actionResult?.env ?? actionEnv;
+
           if (node.withClause && node.withClause.pipes) {
-            value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
+            value = await applyTailModifiers(value, node.withClause.pipes, executionEnv);
           }
           
           // Merge variable assignments from this action back into the
           // accumulated environment so subsequent actions can see them.
           // We use mergeChild to merge variables; since actions are evaluated
           // with isExpression=true, no user-facing nodes are produced.
-          accumulatedEnv.mergeChild(actionEnv);
+          accumulatedEnv.mergeChild(executionEnv);
 
           // In "first" mode, return immediately after first match
           if (isFirstMode) {
-            return { value, env: accumulatedEnv };
+            return buildResult(value, accumulatedEnv);
           }
 
           // For bare when, save the value and continue evaluating
@@ -389,7 +412,7 @@ export async function evaluateWhenExpression(
   }
   
   // Second pass: Evaluate none conditions if no value-producing conditions matched
-  if (!hasValueProducingMatch) {
+  if (!hasValueProducingMatch && !denyMode) {
     for (let i = 0; i < node.conditions.length; i++) {
       const pair = node.conditions[i];
       
@@ -411,6 +434,7 @@ export async function evaluateWhenExpression(
         const actionResult = await evaluate(pair.action, actionEnv, context);
         
         let value = actionResult.value;
+        value = await normalizeActionValue(value, actionEnv);
         
         // Apply tail modifiers if present
         if (node.withClause && node.withClause.pipes) {
@@ -421,9 +445,9 @@ export async function evaluateWhenExpression(
         accumulatedEnv.mergeChild(actionEnv);
 
         // In "first" mode, return immediately after first none match
-        if (isFirstMode) {
-          return { value, env: accumulatedEnv };
-        }
+          if (isFirstMode) {
+            return buildResult(value, accumulatedEnv);
+          }
 
         // For bare when, save the none value and continue
         lastNoneValue = value;
@@ -445,7 +469,7 @@ export async function evaluateWhenExpression(
   
   // If we had any matches, return the last match value with accumulated environment
   if (hasMatch) {
-    return { value: lastMatchValue, env: accumulatedEnv };
+    return buildResult(lastMatchValue, accumulatedEnv);
   }
   
   // If we collected errors and no condition matched, report them
@@ -458,7 +482,7 @@ export async function evaluateWhenExpression(
   }
   
   // No conditions matched - return null
-  return { value: null, env: accumulatedEnv };
+  return buildResult(null, accumulatedEnv);
 }
 
 /**
@@ -476,20 +500,13 @@ async function applyTailModifiers(
     const pipeEnv = env.createChild();
     
     // Set up pipeline input variable
-    const { createPipelineInputVariable } = await import('@core/types/variable');
-    const pipelineInput = {
-      text: String(result),
-      data: result,
-      toString: () => String(result)
-    };
-    
-    const pipelineVar = createPipelineInputVariable(
+    const { createStructuredValueVariable } = await import('@core/types/variable');
+    const structuredInput = ensureStructuredValue(result, undefined, String(result));
+    const pipelineVar = createStructuredValueVariable(
       '_pipelineInput',
-      pipelineInput,
-      'text',
-      String(result),
+      structuredInput,
       { directive: 'var', syntax: 'reference', hasInterpolation: false, isMultiLine: false },
-      0
+      { internal: { isPipelineInput: true, pipelineStage: 0 } }
     );
     
     pipeEnv.setVariable('_pipelineInput', pipelineVar);

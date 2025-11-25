@@ -58,8 +58,11 @@ describe('Variable Proxy Integration', () => {
     it('should pass Variables as proxies to JavaScript shadow environments', async () => {
       // Create a variable with metadata
       const arrayVar = createArrayVariable('testData', ['a', 'b', 'c'], false, mockSource, {
-        arrayType: 'load-content',
-        customToString: () => 'a|b|c'
+        ctx: {},
+        internal: {
+          arrayType: 'load-content',
+          customToString: () => 'a|b|c'
+        }
       });
       env.setVariable('testData', arrayVar);
       
@@ -122,10 +125,12 @@ describe('Variable Proxy Integration', () => {
       expect(output.hasHelpers).toBe(true);
       expect(output.isVariable).toBe(true);
       expect(output.type).toBe('array');
-      expect(output.metadata).toEqual({
-        arrayType: 'load-content',
-        isSystem: true,
-        isParameter: true
+      expect(output.metadata).toMatchObject({
+        internal: {
+          arrayType: 'load-content',
+          isSystem: true,
+          isParameter: true
+        }
       });
       expect(output.directType).toBe('array');
       
@@ -142,7 +147,10 @@ describe('Variable Proxy Integration', () => {
         { name: 'Alice', age: 30, active: true },
         false,
         mockSource,
-        { source: 'api' }
+        {
+          ctx: { source: 'api' },
+          internal: {}
+        }
       );
       env.setVariable('user', objVar);
       
@@ -194,16 +202,19 @@ describe('Variable Proxy Integration', () => {
       const output = typeof unwrappedResult.data === 'string'
         ? JSON.parse(unwrappedResult.data)
         : unwrappedResult.data;
-      
       // Verify
       expect(output.name).toBe('Alice');
       expect(output.age).toBe(30);
       expect(output.active).toBe(true);
       expect(output.type).toBe('object');
-      expect(output.metadata).toEqual({ 
-        source: 'api',
-        isSystem: true,
-        isParameter: true
+      expect(output.metadata).toMatchObject({
+        ctx: {
+          source: 'api'
+        },
+        internal: {
+          isSystem: true,
+          isParameter: true
+        }
       });
       expect(output.keys).toEqual(['name', 'age', 'active']);
       expect(output.hasName).toBe(true);
@@ -267,7 +278,10 @@ describe('Variable Proxy Integration', () => {
     it('should preserve custom toString in proxies', async () => {
       // Create array with custom toString
       const arrayVar = createArrayVariable('paths', ['/home', '/usr', '/var'], false, mockSource, {
-        customToString: function() { return this.join(':'); }
+        ctx: {},
+        internal: {
+          customToString: function() { return this.join(':'); }
+        }
       });
       env.setVariable('paths', arrayVar);
       
@@ -322,7 +336,10 @@ describe('Variable Proxy Integration', () => {
       
       // Create a variable
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {
-        arrayType: 'special'
+        ctx: {},
+        internal: {
+          arrayType: 'special'
+        }
       });
       env.setVariable('data', arrayVar);
       

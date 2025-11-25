@@ -18,7 +18,8 @@
 <SYNTAX>
   <VARIABLES> ...................... Types, primitives, command results, code execution.
   <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
-  <FILE_LOADING> ................... Angle brackets, metadata fields, globs, "as" templates, detection rules.
+  <FILE_LOADING> ................... Angle brackets, metadata fields, detection rules.
+  <FILE_LOADING_GLOBS> ............. Glob patterns, array access, "as" templates, common patterns.
   <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
   <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects, parallel groups with ||.
   <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
@@ -29,6 +30,8 @@
   <EXE_EXECUTABLES> ................ Defining shell/js/node/template/section executables; shadow env intro.
   <OUTPUT_DIRECTIVE> ............... Write to files/stdout/stderr with optional formats.
   <LOG_DIRECTIVE> .................. Syntactic sugar for /output to stdout; works in action contexts.
+  <APPEND_DIRECTIVE> ............... Append JSONL/plain records via /append or `| append` builtin.
+  <STREAMING> ...................... Enable live chunks with stream keyword or /stream; suppress via flags.
 </COMMANDS>
 <CONTROL_FLOW>
   <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
@@ -59,6 +62,8 @@
   <MISTAKE_NO_EARLY_EXIT> .......... Model flows via /when rather than exits.
 </COMMON_MISTAKES>
 <REFERENCE> ........................ Execution context table, syntax summary, quick transforms list.
+<SECURITY> ......................... Guards, data labels, expression tracking, @ctx.guard context.
+<STREAMING> ........................ Live chunks with stream keyword or /stream; suppress via flags.
 <SEE_ALSO> ......................... Documentation, examples repository, source code.
 </TOC>
 
@@ -158,8 +163,10 @@ Default to `::...::` for inline templates, `.att` files for external templates (
 | `"..."` | `@var` `<file>` `@exe()` | ✓ | ✗ | Single-line only |
 | `:::...:::` | `{{var}}` only | ✗ | ✗ | Discord/social escape hatch |
 | `.mtt` | `{{var}}` only | ✗ | ✗ | Discord/social external |
-| `'...'` | None (literal) | ✗ | ✗ | Literal text |
+| `'...'` | **None (literal)** | ✗ | ✗ | **Literal text** |
 | `{...}` | `@var` `<file>` | ✗ | ✗ | Commands/code |
+
+Key: Backticks, `::...::`, and `"..."` all use `@var` interpolation. Only `'...'` (single quotes) keeps text literal without interpolation.
 
 **Inline templates:**
 
@@ -326,7 +333,7 @@ Angle brackets load file contents (not filenames). Works in variables, templates
 /var @authorEmail = <package.json>.author.email
 
 # Globs + "as" templates
-/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
 ```
 
 Data flows as native types:
@@ -404,8 +411,8 @@ Use `foreach` to transform collections; use `/for` to execute/collect. Batch pip
 
 # Optional parallel forms
 /for parallel @n in @names => show @n              # uses MLLD_PARALLEL_LIMIT (default 4)
-/var @caps = for 2 parallel @n in @names => @greet(@n)  # per-loop cap override
-/for (3, 1s) parallel @n in @names => show @n      # cap 3 with 1s pacing between starts
+/var @caps = for parallel(2) @n in @names => @greet(@n)  # per-loop cap override
+/for parallel(3, 1s) @n in @names => show @n      # cap 3 with 1s pacing between starts
 ```
 
 </RULE_11_ITERATION_OVERVIEW>
@@ -518,7 +525,7 @@ Angle brackets load, quotes store literal paths. Field access and globs are supp
 ```mlld
 /var @author = <package.json>.author
 /var @firstEmail = <data.json>.users[0].email
-/var @md = <docs/*.md> as "# <>.filename"
+/var @md = <docs/*.md> as "# <>.ctx.filename"
 ```
 
 AST selection: add `{ ... }` inside the angle brackets to pull specific definitions or usages.
@@ -535,10 +542,52 @@ AST selection: add `{ ... }` inside the angle brackets to pull specific definiti
 
 Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
 
-File metadata fields: `content` (default), `filename`, `relative`, `absolute`, `tokens`, `tokest`, `fm` (frontmatter), `json` (for .json files)
+Metadata lives under `.ctx` (e.g., `@file.ctx.filename`); shorthand like `@file.filename` still maps to the same fields for backward compatibility.
 
-URL metadata fields: All file fields plus: `url`, `domain`, `title`, `description`, `html`, `text`, `md`, `headers`, `status`, `contentType`
+File metadata fields: `.ctx.content` (default), `.ctx.filename`, `.ctx.relative`, `.ctx.absolute`, `.ctx.tokens`, `.ctx.tokest`, `.ctx.fm` (frontmatter), `.ctx.json` (for .json files)
+
+URL metadata fields: All file fields plus `.ctx.url`, `.ctx.domain`, `.ctx.title`, `.ctx.description`, `.ctx.html`, `.ctx.text`, `.ctx.md`, `.ctx.headers`, `.ctx.status`, `.ctx.contentType`
 </FILE_LOADING>
+
+<FILE_LOADING_GLOBS>
+Glob patterns load multiple files at once. Use `<path/**/*.ext>` to match recursively and access results as an array.
+
+```mlld
+# Load all markdown files
+/var @docs = <docs/**/*.md>
+/show @docs.length                    # number of files loaded
+/show @docs[0].ctx.filename           # first file's name
+/show @docs[0].content                # first file's content
+
+# Generate table of contents
+/var @toc = <docs/**/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
+
+# Find specific test directories
+/var @tests = <tests/**/example.md>   # all example.md files
+/var @dirs = @tests.map(t => t.ctx.relative.replace("/example.md", ""))
+
+# Field access on each file
+/for @doc in @docs => show @doc.ctx.fm.title
+```
+
+Glob metadata (each matched file has):
+- All standard file fields: `content`, `filename`, `relative`, `absolute`
+- `file` property traces source path
+- Frontmatter via `fm` property
+- Use `as "template"` to transform each match with `<>` placeholder
+
+Common patterns:
+```mlld
+# All TypeScript files
+/var @sources = <src/**/*.ts>
+
+# All JSON configs
+/var @configs = <**/*.json>
+
+# Specific pattern
+/var @handlers = <src/**/handler.ts>
+```
+</FILE_LOADING_GLOBS>
 
 <BUILTIN_METHODS>
 Variables support builtin methods for common operations. Methods are called with parentheses and can accept arguments.
@@ -585,7 +634,7 @@ Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and
 <PIPELINES>
 Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). All `/exe` functions work in pipelines (native mlld, JS, shell). Stages access context via `@ctx` and pipeline history via `@p`.
 
-JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments).
+JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments), `@json.llm` (extract JSON from LLM responses with code fences/prose, returns false if none found).
 
 ```mlld
 /var @users = run {cat users.json} | @json | @csv
@@ -596,6 +645,7 @@ JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict J
 /var @relaxed = @input | @json.loose   # JSON5: single quotes, trailing commas, comments
 /var @strict = @input | @json.strict   # strict JSON only
 /var @auto = @input | @json            # loose mode with helpful errors
+/var @extracted = @llmResponse | @json.llm  # extract from code fences/prose, false if none
 
 # Native mlld functions in pipelines
 /exe @filterHigh(items) = for @item in @items => when [
@@ -768,6 +818,32 @@ Expose JS helpers across `js {}` blocks in the same module:
 /var @out = js { cap("hello") + ": " + double(5) }  # "Hello: 10"
 ```
 
+Variable scoping (security):
+JS/Node blocks only access parameters passed explicitly—no auto-injection of outer scope variables:
+
+```mlld
+/var @data = [1, 2, 3]
+
+# ❌ Cannot access outer variables
+/var @result = node {
+  return data.map(x => x * 2);  # ReferenceError: data not defined
+}
+
+# ✅ Pass variables as parameters
+/exe @double(arr) = js {
+  return arr.map(x => x * 2);
+}
+/var @result = @double(@data)  # [2, 4, 6]
+
+# ✅ Multiple parameters
+/exe @process(data, multiplier) = js {
+  return data.map(x => x * multiplier);
+}
+/var @result = @process(@data, 2)  # [2, 4, 6]
+```
+
+This isolation prevents accidental variable leakage and makes dependencies explicit.
+
 </EXE_EXECUTABLES>
 
 <OUTPUT_DIRECTIVE>
@@ -800,7 +876,25 @@ Syntactic sugar for `/output to stdout`. Works in action contexts.
 ]
 ```
 
-</LOG_DIRECTIVE> </COMMANDS>
+</LOG_DIRECTIVE>
+
+<APPEND_DIRECTIVE>
+Append newline-delimited records via `/append` or the pipeline builtin `| append`.
+
+```mlld
+/append @record to "events.jsonl"        # JSON object per line (validated)
+/append "raw line" to "events.log"
+
+/var @runs = ["alpha","beta"]
+/var @_ = for @name in @runs => append @name to "pipeline.log"
+
+/var @_ = "done" | append "completion.log"
+/var @_ = "ignored" | append @runs to "runs.jsonl"
+```
+
+`.jsonl` enforces JSON serialization. Any other extension writes text. `.json` extensions are blocked.
+
+</APPEND_DIRECTIVE> </COMMANDS>
 
 <CONTROL_FLOW>
 <WHEN_DECISIONS>
@@ -940,16 +1034,16 @@ Parallel /for (optional):
 /for parallel @x in @items => show @x
 
 # Cap override and pacing between starts (units: s, m, h, d, w)
-/for (2, 1s) parallel @x in @items => show @x
+/for parallel(2, 1s) @x in @items => show @x
 
 # Collection form preserves input order
-/var @out = for 3 parallel @x in ["a","b","c"] => @upper(@x)
+/var @out = for parallel(3) @x in ["a","b","c"] => @upper(@x)
 ```
 
 Notes:
 - Directive form streams results as iterations finish (order not guaranteed); expression form returns results in input order.
 - Concurrency capped by `MLLD_PARALLEL_LIMIT` unless overridden per loop.
-- Pacing: optional minimum delay between iteration starts via `/for (n, interval) parallel ...` (units: ms, s, m, h).
+- Pacing: optional minimum delay between iteration starts via `/for parallel(n, interval) ...` (units: ms, s, m, h).
 - Rate limits: per‑iteration 429/"rate limit" errors use exponential backoff.
 
 <NO_EARLY_EXIT>
@@ -1089,6 +1183,8 @@ Step-by-step & guarded execution:
   !@processed.ok => show "❌ Validation failed"
 ]
 ```
+
+Guards work on expressions and transformations—labels are preserved through helper chains, templates, iterators, and pipelines.
 
 </PATTERNS>
 
@@ -1383,8 +1479,70 @@ Execution Context – where interpolation applies:
 
 Transforms (built-in): `@json`, `@xml`, `@csv`, `@md`
 Aliases: `@p` ≡ `@pipeline` inside pipeline stages
-Globs: use `<path/*.ext>` and `as "template"` with `<>` placeholder for each matched file 
+Globs: use `<path/*.ext>` and `as "template"` with `<>` placeholder for each matched file
 </REFERENCE>
+
+<SECURITY>
+Guards protect data and operations. Label sensitive data, define policies:
+
+/var secret @apiKey = "sk-12345"         # Label as 'secret'
+/var pii @email = "user@example.com"     # Label as 'pii'
+
+/guard @noShellSecrets before secret = when [
+  @ctx.op.type == "run" => deny "Secrets blocked from shell"
+  * => allow
+]
+
+/run { echo @apiKey }                    # Blocked by guard
+
+Syntax: /guard [@name] TIMING LABEL = when [...]
+- TIMING: before, after, or always (required)
+- Syntactic sugar: 'for' is equivalent to 'before' (e.g., /guard for secret = /guard before secret)
+
+Before guards (input validation):
+/guard @sanitize before untrusted = when [
+  * => allow @input.trim().slice(0, 100)
+]
+
+After guards (output validation):
+/guard @validateJson after op:exe = when [
+  @isValidJson(@output) => allow
+  * => deny "Invalid JSON"
+]
+
+Transform with allow @value:
+/guard @redact before secret = when [
+  @ctx.op.type == "show" => allow @redact(@input)
+  * => allow
+]
+
+Denied handlers:
+/exe @handler(value) = when [
+  denied => `Blocked: @ctx.guard.reason`
+  * => @value
+]
+
+Labels track through: methods (@secret.trim()), templates, field access, iterators, pipelines.
+
+Guards are: non-reentrant, ordered (file top-to-bottom), composable (all run, deny > retry > allow @value > allow).
+
+Details: docs/user/security.md
+</SECURITY>
+
+<STREAMING>
+Show progress during execution instead of buffering:
+
+stream @claude("prompt")           # Keyword (sugar for with { stream: true })
+/stream @generateReport()          # Directive form
+stream @a() || stream @b()         # Parallel streams (concurrent, buffered results)
+
+NDJSON auto-parsing for stream executors; live output with thinking (💭) and tool-use (🔧) formatting.
+
+Suppress: --no-stream flag or MLLD_NO_STREAM=true
+Debug: --show-json mirrors NDJSON to stderr; --append-json saves to JSONL
+
+Details: docs/user/streaming.md
+</STREAMING>
 
 <SEE_ALSO>
 Documentation: https://mlld.ai/docs

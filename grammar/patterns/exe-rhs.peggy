@@ -33,10 +33,12 @@ ExeRHSContent "exe assignment value"
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
+  / ExeStreamCommandPattern     // stream cmd {command} - streaming shell command with optional tail
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
-  / ExeCommandPattern           // {command} - shell commands with interpolation
+  / ExeDataPattern              // { data } - structured data literal for exec
+  / ExeCommandPattern           // cmd {command} - shell commands with interpolation
   / ExeTemplateFromFilePattern  // template "path" - external template file
   / ExeTemplatePattern          // [[...]] and `...` - inline template executables
   / ExeSectionPattern           // [@file # section] - section extraction
@@ -130,7 +132,7 @@ ExeUnifiedReference "exe unified reference"
 
 // Run command with stdin pattern for exe context - handles "run {command} with { stdin: @var }"
 ExeRunCommandWithStdin "exe run command with stdin"
-  = "run" _ content:UnifiedCommandBrackets _ withClause:WithClause {
+  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) _ withClause:WithClause {
       // Only allow with clauses that have stdin
       if (!withClause || !('stdin' in withClause)) {
         return null; // Let other patterns handle this
@@ -158,7 +160,7 @@ ExeRunCommandWithStdin "exe run command with stdin"
 
 // Run command pipe stdin pattern for exe context - handles "run @var | {command}"
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? {
+  = "run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
       if (tail) {
         Object.assign(withClause, tail);
@@ -184,6 +186,35 @@ ExeRunCommandPipeStdin "exe run command pipe stdin"
           hasTailModifiers: !!tail
         }
       };
+  }
+
+// Streaming command pattern for exe context - handles "stream cmd {command}" syntax
+ExeStreamCommandPattern "exe stream command pattern"
+  = "stream" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+      const withClause = { stream: true };
+      if (tail) {
+        Object.assign(withClause, tail);
+      }
+      return {
+        subtype: 'exeCommand',
+        source: 'command',
+        values: {
+          command: content.values.command,
+          commandBases: content.values.commandBases,
+          withClause
+        },
+        raw: {
+          command: content.raw.command,
+          commandBases: content.raw.commandBases,
+          ...(tail ? { tailModifiers: tail } : {}),
+          stream: true
+        },
+        meta: {
+          ...content.meta,
+          hasTailModifiers: !!tail,
+          isStream: true
+        }
+      };
     }
 
 // Run command pattern for exe context - handles "run {command}" syntax
@@ -203,6 +234,7 @@ ExeRunCommandPattern "exe run command pattern"
         meta: content.meta
       };
     }
+  / "run" _ InvalidBareCommandBrackets
 
 // Code pattern for exe context - wraps RunLanguageCodeCore
 ExeCodePattern "exe code pattern"
@@ -226,7 +258,7 @@ ExeCodePattern "exe code pattern"
 
 // Command pattern for exe context - wraps UnifiedCommandBrackets
 ExeCommandPattern "exe command pattern"
-  = content:UnifiedCommandBrackets {
+  = content:CmdCommandBrackets {
       return {
         subtype: 'exeCommand',
         source: 'command',
@@ -239,6 +271,25 @@ ExeCommandPattern "exe command pattern"
           commandBases: content.raw.commandBases
         },
         meta: content.meta
+      };
+    }
+  / InvalidBareCommandBrackets
+
+// Data pattern for exe context - structured literal
+ExeDataPattern "exe data pattern"
+  = dataObj:DataObjectLiteral {
+      return {
+        subtype: 'exeData',
+        source: 'data',
+        values: {
+          data: dataObj
+        },
+        raw: {
+          data: text()
+        },
+        meta: {
+          inferredType: 'object'
+        }
       };
     }
 
@@ -448,8 +499,18 @@ WhenExprModifier = mod:("first") { return mod; }
 
 // Value-oriented condition list for when expressions
 WhenExpressionConditionList
-  = first:WhenExpressionConditionPair rest:(_ pair:WhenExpressionConditionPair { return pair; })* {
-      return [first, ...rest];
+  = first:WhenExpressionConditionPair rest:(_ (
+      "," {
+        helpers.mlldError(
+          "Unexpected ',' in when condition list. Separate conditions with whitespace or newlines (no commas).",
+          ",",
+          location()
+        );
+      }
+    / pair:WhenExpressionConditionPair { return pair; }
+    ))* {
+      const restPairs = rest.map(entry => entry && entry[1]).filter(Boolean);
+      return [first, ...restPairs];
     }
 
 // Single condition => value pair for expressions

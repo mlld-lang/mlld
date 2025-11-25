@@ -1,17 +1,15 @@
->> Load files and check context limits
-/var @files = <src/**/*.ts>
+>> Format JSON with indentation
+/var @data = <file.csv>
+/var @tojson = @data | @json
+/show @tojson
 
->> Define filter for large files (over 2000 tokens)
-/exe @filterLarge(files) = js {
-  return files.filter(f => f.tokest > 2000)
-}
-/var @large = @filterLarge(@files)
+>> Convert to XML (SCREAMING_SNAKE_CASE)
+/var @toxml = @data | @XML
+/show @toxml
 
->> Calculate total tokens
-/exe @sumTokens(files) = js {
-  return files.reduce((sum, f) => sum + (f.tokest || 0), 0)
-}
-/var @totalTokens = @sumTokens(@files)
+>> Convert arrays to CSV
+/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+/var @tocsv = @users | @CSV
+/show @tocsv
 
-/show `Found @large.length files over 2000 tokens`
-/show `Total estimated tokens: @totalTokens`
+`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:

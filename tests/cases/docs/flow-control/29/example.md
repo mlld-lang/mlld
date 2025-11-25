@@ -1,5 +1,3 @@
-/var @validation = @validate(@input)
-/when [
-  @validation.valid => show "Processing successful"
-  !@validation.valid => show `Error: @validation.message`
-]
+>> These produce identical results:
+/var @shorthand = || @a() || @b() | @combine
+/var @longhand = "" with { pipeline: [[@a, @b], @combine] }

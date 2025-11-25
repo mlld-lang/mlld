@@ -4,6 +4,7 @@
 
 import type { MlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
+import type { SecurityDescriptor } from '@core/types/security';
 
 /**
  * Creates a JSON replacer function that properly handles AST nodes
@@ -141,7 +142,24 @@ export async function evaluateNodeToValue(node: unknown, env?: Environment): Pro
       // If we have an env and interpolate function, use it for complex content
       if (env && wrappedNode.content.length > 0) {
         const { interpolate } = await import('../core/interpreter');
-        return await interpolate(wrappedNode.content as MlldNode[], env);
+        const descriptors: SecurityDescriptor[] = [];
+        const text = await interpolate(wrappedNode.content as MlldNode[], env, undefined, {
+          collectSecurityDescriptor: descriptor => {
+            if (descriptor) {
+              descriptors.push(descriptor);
+            }
+          }
+        });
+        const merged =
+          descriptors.length === 1
+            ? descriptors[0]
+            : descriptors.length > 1
+              ? env.mergeSecurityDescriptors(...descriptors)
+              : undefined;
+        if (merged) {
+          env.recordSecurityDescriptor(merged);
+        }
+        return text;
       }
     }
   }

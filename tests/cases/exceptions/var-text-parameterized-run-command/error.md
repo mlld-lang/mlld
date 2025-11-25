@@ -8,7 +8,7 @@ The syntax `@exec codecat(dir) = run {...}` is invalid. For parameterized comman
 
 **Correct syntax:**
 ```mlld
-/exe @codecat(dir) = {find @dir -type f -name "*.js" -exec cat {} \;}
+/exe @codecat(dir) = cmd {find @dir -type f -name "*.js" -exec cat {} \;}
 ```
 
 **Alternative for text templates:**

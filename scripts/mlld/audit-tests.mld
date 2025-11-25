@@ -1,0 +1,393 @@
+>> Load relevant tests
+>> Load pre-screened relevant tests from screening script
+/var @relevantTestsData = <@base/relevant-tests.json>
+/var @allRelevantDirs = @relevantTestsData.relevantTests
+
+>> Filter for tests that have expected.md (exclude docs smoke tests)
+/exe @filterWithExpected(dirs) = node {
+  const fs = require('fs');
+  const path = require('path');
+  return dirs.filter(dir => {
+    const expectedPath = path.join(dir, 'expected.md');
+    return fs.existsSync(expectedPath);
+  });
+}
+
+/var @dirsWithExpected = @filterWithExpected(@allRelevantDirs)
+>> /show "Filtered to @dirsWithExpected.length tests with expected.md files"
+>> /show @dirsWithExpected
+
+>> Apply limit if set
+/exe @applyLimit(dirs, limit) = js {
+  const lim = Number(limit) || 0;
+  return lim > 0 ? dirs.slice(0, lim) : dirs;
+}
+
+/var @testDirs = @applyLimit(@dirsWithExpected, @limit)
+/show "Analyzing @testDirs.length test directories"
+/var @dataContract = <@base/docs/dev/DATA.md>
+/exe @claude(prompt) = run @prompt | {claude -p --model claude-haiku-4-5}
+
+/var @testIn  = for @dir in @testDirs => <@base/@dir/example.md> | show
+/var @testOut = for @dir in @testDirs => <@base/@dir/expected.md> | show
+
+/show "Test In: @testIn"
+/show "Test Out: @testOut"
+
+>> Load Test Files (like screening script does)
+/exe @loadTest(dir) = node {
+  const fs = require('fs');
+  const path = require('path');
+  const examplePath = path.join(dir, 'example.md');
+  const expectedPath = path.join(dir, 'expected.md');
+
+  return {
+    dir: dir,
+    example: fs.existsSync(examplePath) ? fs.readFileSync(examplePath, 'utf8') : '[File not found]',
+    expected: fs.existsSync(expectedPath) ? fs.readFileSync(expectedPath, 'utf8') : '[File not found]'
+  };
+}
+
+>> Build Analysis Prompt
+/exe @buildAnalysisPrompt(test, contract) = `
+You are analyzing a test case to categorize its expectations regarding StructuredValue behavior.
+
+<data_contract>
+@contract
+</data_contract>
+
+<test_directory>
+@test.dir
+</test_directory>
+
+<test_input>
+@test.example
+</test_input>
+
+<expected_output>
+@test.expected
+</expected_output>
+
+<task>
+Analyze this test case and return a JSON object with the following structure:
+
+{
+  "testPath": "@test.dir",
+  "category": "slash" | "feat" | "integration" | "exceptions" | "warnings" | "invalid",
+  "expectsStructuredValues": boolean,
+  "expectsUnwrappedData": boolean,
+  "expectsCtxAccess": boolean,
+  "expectsMetadata": boolean,
+  "boundaryType": "display" | "computation" | "storage" | "mixed" | "unclear",
+  "dataPatterns": {
+    "hasArrays": boolean,
+    "hasObjects": boolean,
+    "hasPrimitives": boolean,
+    "hasPipelines": boolean,
+    "hasForeach": boolean,
+    "hasTemplates": boolean
+  },
+  "alignment": "aligned" | "misaligned" | "unknown",
+  "confidence": 0-100,
+  "alignmentNotes": "Brief explanation of alignment with DATA.md",
+  "issues": ["List of specific issues if misaligned"]
+}
+
+Focus on:
+1. Whether expected output shows wrapper leakage (StructuredValue objects in output)
+2. Whether test expects .ctx property access (metadata flow)
+3. What boundary type this test exercises (display/computation/storage)
+4. Alignment with DATA.md rules for that boundary type
+
+**Confidence scoring**:
+- 90-100: Very confident in analysis
+- 70-89: Reasonably confident
+- 50-69: Moderate confidence, some ambiguity
+- 0-49: Low confidence, should be manually reviewed
+
+**Unknown alignment**: Use when you cannot determine if test expectations align with DATA.md (e.g., insufficient context, edge case, unclear test intent).
+
+Return ONLY valid JSON, no explanatory text.
+</task>
+`
+
+>> Run Analysis in Parallel
+/show "Starting parallel analysis..."
+
+/var @testData = foreach @loadTest(@testDirs)
+/show "Loaded @testData.length test files"
+/show "First test dir: @testData[0].dir"
+
+/show "Starting Claude calls..."
+/var @results = for 4 parallel @test in @testData => @claude(@buildAnalysisPrompt(@test, @dataContract)) | append "progress.jsonl" | log
+
+>> Process Results
+/output @results to "audit-raw-responses.json"
+
+>> Robust JSON parsing with 3-tier fallback
+/exe @parseResponses(results) = js {
+  return results.map((result, idx) => {
+    const original = String(result).trim();
+
+    // Tier 1: Try parse as-is
+    try {
+      return JSON.parse(original);
+    } catch (e1) {
+      // Tier 2: Try strip markdown fences
+      try {
+        let jsonText = original;
+        if (jsonText.startsWith('```')) {
+          jsonText = jsonText.replace(/^```json?\n?/, '');
+          jsonText = jsonText.replace(/\n?```$/, '');
+        }
+        return JSON.parse(jsonText);
+      } catch (e2) {
+        // Tier 3: Try find first { or [ and parse from there
+        try {
+          const openBrace = original.indexOf('{');
+          const openBracket = original.indexOf('[');
+          let start = -1;
+
+          if (openBrace !== -1 && openBracket !== -1) {
+            start = Math.min(openBrace, openBracket);
+          } else if (openBrace !== -1) {
+            start = openBrace;
+          } else if (openBracket !== -1) {
+            start = openBracket;
+          }
+
+          if (start !== -1) {
+            const jsonText = original.substring(start);
+            return JSON.parse(jsonText);
+          }
+          throw new Error('No JSON found');
+        } catch (e3) {
+          // All parsing failed - return placeholder
+          return {
+            testPath: `parse-error-${idx}`,
+            category: "unknown",
+            alignment: "unknown",
+            confidence: 0,
+            expectsStructuredValues: false,
+            expectsUnwrappedData: false,
+            expectsCtxAccess: false,
+            expectsMetadata: false,
+            boundaryType: "unclear",
+            dataPatterns: {
+              hasArrays: false,
+              hasObjects: false,
+              hasPrimitives: false,
+              hasPipelines: false,
+              hasForeach: false,
+              hasTemplates: false
+            },
+            alignmentNotes: "Parse error - manual review required",
+            issues: [],
+            _parseError: true,
+            _originalResponse: original.substring(0, 500)
+          };
+        }
+      }
+    }
+  });
+}
+
+/var @parsedResults = @parseResponses(@results)
+/output @parsedResults to "audit-structured-tests-raw.json"
+
+## Generate Summary Statistics
+
+/exe @generateSummary(data) = js {
+  const summary = {
+    total: data.length,
+    byCategory: {},
+    byAlignment: { aligned: 0, misaligned: 0, unknown: 0 },
+    byConfidence: { high: 0, medium: 0, low: 0, veryLow: 0 },
+    expectsStructuredValues: 0,
+    expectsUnwrappedData: 0,
+    expectsCtxAccess: 0,
+    expectsMetadata: 0,
+    boundaryTypes: {},
+    parseErrors: 0,
+    issues: [],
+    needsManualReview: []
+  };
+
+  data.forEach(test => {
+    summary.byCategory[test.category] = (summary.byCategory[test.category] || 0) + 1;
+    summary.byAlignment[test.alignment]++;
+
+    // Track confidence levels
+    const conf = test.confidence || 0;
+    if (conf >= 90) summary.byConfidence.high++;
+    else if (conf >= 70) summary.byConfidence.medium++;
+    else if (conf >= 50) summary.byConfidence.low++;
+    else summary.byConfidence.veryLow++;
+
+    if (test.expectsStructuredValues) summary.expectsStructuredValues++;
+    if (test.expectsUnwrappedData) summary.expectsUnwrappedData++;
+    if (test.expectsCtxAccess) summary.expectsCtxAccess++;
+    if (test.expectsMetadata) summary.expectsMetadata++;
+
+    summary.boundaryTypes[test.boundaryType] = (summary.boundaryTypes[test.boundaryType] || 0) + 1;
+
+    // Track parse errors
+    if (test._parseError) {
+      summary.parseErrors++;
+    }
+
+    // Collect misaligned tests with issues
+    if (test.alignment === 'misaligned' && test.issues && test.issues.length > 0) {
+      summary.issues.push({
+        testPath: test.testPath,
+        issues: test.issues,
+        confidence: test.confidence || 0
+      });
+    }
+
+    // Flag tests needing manual review
+    if (test.alignment === 'unknown' || test.confidence < 70 || test._parseError) {
+      summary.needsManualReview.push({
+        testPath: test.testPath,
+        reason: test._parseError ? 'Parse error' :
+                test.alignment === 'unknown' ? 'Unknown alignment' :
+                'Low confidence',
+        confidence: test.confidence || 0,
+        alignment: test.alignment
+      });
+    }
+  });
+
+  return summary;
+}
+
+/var @summary = @generateSummary(@parsedResults)
+/output @summary to "audit-structured-tests-summary.json"
+
+## Generate Markdown Report
+
+>> Helper functions
+/exe @pct(part, total) = js {
+  return Math.round((part / total) * 100) || 0;
+}
+
+/exe @sortedEntries(obj) = js {
+  return Object.entries(obj).sort((a, b) => a[0].localeCompare(b[0])).map(([name, count]) => ({name, count}));
+}
+
+>> Calculate percentages
+/var @alignedPct = @pct(@summary.byAlignment.aligned, @summary.total)
+/var @misalignedPct = @pct(@summary.byAlignment.misaligned, @summary.total)
+/var @unknownPct = @pct(@summary.byAlignment.unknown, @summary.total)
+
+>> Convert objects to sorted arrays for iteration
+/var @categoryEntries = @sortedEntries(@summary.byCategory)
+/var @boundaryEntries = @sortedEntries(@summary.boundaryTypes)
+
+>> Generate misaligned section conditionally
+/var @misalignedSection = when [
+  @summary.issues.length > 0 => @renderMisalignedTests(@summary.issues)
+  * => `
+
+## Misaligned Tests
+
+None found - all tests aligned with DATA.md!
+`
+]
+
+/exe @renderMisalignedTests(issues) = `
+
+## Misaligned Tests Requiring Updates (@issues.length)
+
+/for @item in @issues
+### @item.testPath
+
+/for @issue in @item.issues
+- @issue
+/end
+
+/end
+`
+
+>> Generate manual review section if needed
+/exe @renderManualReview(items) = `
+
+## Tests Requiring Manual Review (@items.length)
+
+/for @item in @items
+- **@item.testPath**
+  - Reason: @item.reason
+  - Confidence: @item.confidence%
+  - Alignment: @item.alignment
+/end
+`
+
+/var @manualReviewSection = when [
+  @summary.needsManualReview.length > 0 => @renderManualReview(@summary.needsManualReview)
+  * => ""
+]
+
+>> Generate report using native mlld template
+/var @report = `
+# Test Expectations Audit Results
+
+Generated: @now
+
+## Summary Statistics
+
+- **Total Tests Analyzed**: @summary.total
+- **Tests Expecting StructuredValue Wrappers**: @summary.expectsStructuredValues
+- **Tests Expecting Unwrapped Data**: @summary.expectsUnwrappedData
+- **Tests Expecting .ctx Access**: @summary.expectsCtxAccess
+- **Tests Expecting Metadata Preservation**: @summary.expectsMetadata
+- **Parse Errors**: @summary.parseErrors
+
+## Alignment with DATA.md
+
+- **Aligned**: @summary.byAlignment.aligned (@alignedPct%)
+- **Misaligned**: @summary.byAlignment.misaligned (@misalignedPct%)
+- **Unknown**: @summary.byAlignment.unknown (@unknownPct%)
+
+## Confidence Breakdown
+
+- **High (90-100%)**: @summary.byConfidence.high tests
+- **Medium (70-89%)**: @summary.byConfidence.medium tests
+- **Low (50-69%)**: @summary.byConfidence.low tests
+- **Very Low (0-49%)**: @summary.byConfidence.veryLow tests
+
+## Tests by Category
+
+/for @entry in @categoryEntries
+- **@entry.name**: @entry.count
+/end
+
+## Tests by Boundary Type
+
+/for @entry in @boundaryEntries
+- **@entry.name**: @entry.count
+/end
+@misalignedSection
+@manualReviewSection
+
+## Next Steps
+
+1. Review tests flagged for manual review (unknown alignment or confidence <70%)
+2. Review misaligned tests and determine if expectations or implementation need updates
+3. Update test expectations to align with DATA.md contract
+4. Fix interpreter boundaries causing legitimate failures
+
+## Full Results
+
+See \`audit-structured-tests-raw.json\` for complete analysis of all tests.
+Use \`jq '.[] | select(.confidence < 70 or .alignment == "unknown")'\` to filter low-confidence tests.
+`
+/output @report to "audit-structured-tests.md"
+/show @report
+/show `
+✅ Audit complete!
+   Analyzed @summary.total pre-screened relevant tests
+
+   Output files:
+   - audit-structured-tests.md (human-readable report)
+   - audit-structured-tests-summary.json (statistics)
+   - audit-structured-tests-raw.json (full Claude analysis)`

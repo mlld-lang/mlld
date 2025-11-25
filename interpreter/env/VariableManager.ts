@@ -1,4 +1,4 @@
-import type { Variable, VariableSource, VariableMetadata } from '@core/types/variable';
+import type { Variable, VariableSource } from '@core/types/variable';
 import { 
   createSimpleTextVariable, 
   createObjectVariable, 
@@ -12,7 +12,9 @@ import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
-import { looksLikeJsonString } from '@interpreter/utils/structured-value';
+import type { DataLabel, TaintLevel, SecurityDescriptor } from '@core/types/security';
+import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
 export interface IVariableManager {
   // Core variable operations
@@ -46,16 +48,16 @@ export interface VariableManagerDependencies {
   getSecurityManager(): any; // Will be typed more specifically when needed
   getBasePath(): string;
   // Provide access to current pipeline context for ambient @ctx
-  getPipelineContext?(): {
-    stage: number;
-    totalStages: number;
-    currentCommand: string;
-    input: any;
-    previousOutputs: string[];
-    format?: string;
-    attemptCount?: number;
-    attemptHistory?: any[];
+  getPipelineContext?(): PipelineContextSnapshot | undefined;
+  getSecuritySnapshot?(): {
+    labels: readonly DataLabel[];
+    sources: readonly string[];
+    taintLevel: TaintLevel;
+    policy?: Readonly<Record<string, unknown>>;
+    operation?: Readonly<Record<string, unknown>>;
   } | undefined;
+  recordSecurityDescriptor?(descriptor: SecurityDescriptor | undefined): void;
+  getContextManager?(): ContextManager | undefined;
 }
 
 export interface VariableManagerContext {
@@ -72,6 +74,87 @@ export class VariableManager implements IVariableManager {
   getVariables(): Map<string, Variable> {
     return this.variables;
   }
+
+  private buildLegacyContext(
+    pipelineContext?: PipelineContextSnapshot,
+    securitySnapshot?: {
+      labels: readonly DataLabel[];
+      sources: readonly string[];
+      taintLevel: TaintLevel;
+      policy?: Readonly<Record<string, unknown>>;
+      operation?: Readonly<Record<string, unknown>>;
+    }
+  ): Record<string, unknown> {
+    if (!pipelineContext) {
+      return {
+        try: 1,
+        tries: [],
+        stage: 0,
+        isPipeline: false,
+        hint: null,
+        lastOutput: null,
+        input: null,
+        labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
+        sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
+        taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
+        policy: securitySnapshot?.policy ?? null,
+        operation: securitySnapshot?.operation ?? null,
+        op: securitySnapshot?.operation ?? null
+      };
+    }
+
+    const outputs: any[] = pipelineContext.attemptHistory || [];
+    const hints: any[] = pipelineContext.hintHistory || [];
+    const tries: any[] = [];
+    const total = Math.max(outputs.length, hints.length);
+    for (let i = 0; i < total; i++) {
+      tries.push({
+        attempt: i + 1,
+        result: 'retry',
+        hint: hints[i],
+        output: outputs[i]
+      });
+    }
+
+    const normalizeInput = (raw: any): any => {
+      if (typeof raw !== 'string') {
+        return raw;
+      }
+      const trimmed = raw.trim();
+      const looksJson =
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'));
+      if (!looksJson) {
+        return raw;
+      }
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return raw;
+      }
+    };
+
+    const ctxValue = {
+      try: pipelineContext.attemptCount || 1,
+      tries,
+      stage: typeof pipelineContext.stage === 'number' ? pipelineContext.stage : 0,
+      isPipeline: true,
+      hint: pipelineContext.hint ?? null,
+      lastOutput:
+        Array.isArray(pipelineContext.previousOutputs) && pipelineContext.previousOutputs.length > 0
+          ? pipelineContext.previousOutputs[pipelineContext.previousOutputs.length - 1]
+          : null,
+      input: normalizeInput(pipelineContext.input),
+      labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
+      sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
+      taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
+      policy: securitySnapshot?.policy ?? null,
+      operation: securitySnapshot?.operation ?? null,
+      op: securitySnapshot?.operation ?? null
+    };
+
+    return ctxValue;
+  }
   
   setVariable(name: string, variable: Variable): void {
     // Prevent @ctx from being redefined by user code
@@ -80,7 +163,7 @@ export class VariableManager implements IVariableManager {
     }
     // Check if the name is reserved (but allow system variables to be set)
     const reservedNames = this.deps.getReservedNames();
-    if (reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
+    if (reservedNames.has(name) && !variable.internal?.isReserved && !variable.internal?.isSystem) {
       throw new Error(`Cannot create variable '@${name}': this name is already reserved by the system or a resolver prefix`);
     }
     
@@ -97,19 +180,19 @@ export class VariableManager implements IVariableManager {
       // Only throw collision errors if both variables are legitimate mlld types
       if (isLegitimateVariable && existingIsLegitimate) {
         // Check if this is an import conflict (one imported, one local)
-        const existingIsImported = Boolean(existing.metadata?.isImported);
-        const newIsImported = Boolean(variable.metadata?.isImported);
+        const existingIsImported = Boolean(existing.ctx?.isImported);
+        const newIsImported = Boolean(variable.ctx?.isImported);
         
         if (existingIsImported !== newIsImported) {
           if (process.env.MLLD_DEBUG === 'true') {
             console.error(`[setVariable] import conflict name=${name}, existingIsImported=${existingIsImported}, newIsImported=${newIsImported}`);
           }
           // Import vs local conflict
-          const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
+          const importPath = existingIsImported ? existing.ctx?.importPath : variable.ctx?.importPath;
           throw VariableRedefinitionError.forImportConflict(
             name,
-            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
             importPath,
             existingIsImported
           );
@@ -117,8 +200,8 @@ export class VariableManager implements IVariableManager {
           // Same-file redefinition
           throw VariableRedefinitionError.forSameFile(
             name,
-            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+            existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
           );
         }
       }
@@ -132,13 +215,13 @@ export class VariableManager implements IVariableManager {
       
       // Only throw collision errors if both variables are legitimate mlld types
       if (isLegitimateVariable && existingIsLegitimate) {
-        const isExistingImported = existing.metadata?.isImported || false;
-        const importPath = existing.metadata?.importPath;
-        
+        const isExistingImported = existing.ctx?.isImported || false;
+        const importPath = existing.ctx?.importPath;
+
         throw VariableRedefinitionError.forImportConflict(
           name,
-          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
           importPath,
           isExistingImported
         );
@@ -158,8 +241,8 @@ export class VariableManager implements IVariableManager {
       const existing = this.variables.get(name)!;
       throw VariableRedefinitionError.forSameFile(
         name,
-        existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-        variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+        existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+        variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
       );
     }
     
@@ -174,59 +257,31 @@ export class VariableManager implements IVariableManager {
       const testCtxVar = this.variables.get('test_ctx') || this.deps.getParent()?.getVariable('test_ctx');
       if (testCtxVar) {
         return createObjectVariable('ctx', testCtxVar.value, false, undefined, {
-          isReserved: true,
-          isReadOnly: true,
-          definedAt: { line: 0, column: 0, filePath: '<context>' }
+          ctx: {
+            definedAt: { line: 0, column: 0, filePath: '<context>' }
+          },
+          internal: {
+            isReserved: true,
+            isReadOnly: true
+          }
         });
       }
 
-      const pctx = this.deps.getPipelineContext?.();
-      // Build minimal ctx per spec; defaults when no pipeline context
-      const ctxValue = pctx ? {
-        try: (pctx as any).attemptCount || 1,
-        tries: (() => {
-          const outputs: any[] = (pctx as any).attemptHistory || [];
-          const hints: any[] = (pctx as any).hintHistory || [];
-          const arr: any[] = [];
-          const n = Math.max(outputs.length, hints.length);
-          for (let i = 0; i < n; i++) {
-            arr.push({ attempt: i + 1, result: 'retry', hint: hints[i], output: outputs[i] });
-          }
-          return arr;
-        })(),
-        stage: typeof pctx.stage === 'number' ? pctx.stage : 0,
-        isPipeline: true,
-        hint: (pctx as any).hint ?? null,
-        // Provide last output from previous stage attempts when available
-        lastOutput: Array.isArray((pctx as any).previousOutputs) && (pctx as any).previousOutputs.length > 0
-          ? (pctx as any).previousOutputs[(pctx as any).previousOutputs.length - 1]
-          : null,
-        // Auto-parse JSON-looking inputs so @ctx.input.<field> works in when-expressions
-        input: (() => {
-          const raw = (pctx as any).input;
-          if (typeof raw === 'string' && looksLikeJsonString(raw)) {
-            try {
-              return JSON.parse(raw.trim());
-            } catch {
-              // fall through to return raw if parsing fails
-            }
-          }
-          return raw;
-        })()
-      } : {
-        try: 1,
-        tries: [],
-        stage: 0,
-        isPipeline: false,
-        hint: null,
-        lastOutput: null,
-        input: null
-      };
+      const contextManager = this.deps.getContextManager?.();
+      const pipelineContext = this.deps.getPipelineContext?.();
+      const securitySnapshot = this.deps.getSecuritySnapshot?.();
+      const ctxValue = contextManager
+        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot })
+        : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
       return createObjectVariable('ctx', ctxValue, false, undefined, {
-        isReserved: true,
-        isReadOnly: true,
-        definedAt: { line: 0, column: 0, filePath: '<context>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<context>' }
+        },
+        internal: {
+          isReserved: true,
+          isReadOnly: true
+        }
       });
     }
 
@@ -237,8 +292,11 @@ export class VariableManager implements IVariableManager {
     const parent = this.deps.getParent();
     
     if (variable) {
+      this.deps.recordSecurityDescriptor?.(
+        variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+      );
       // Special handling for lazy variables like @debug
-      if (variable.metadata && 'isLazy' in variable.metadata && variable.metadata.isLazy && variable.value === null) {
+      if (variable.internal && 'isLazy' in variable.internal && variable.internal.isLazy && variable.value === null) {
         // For lazy variables, we need to compute the value
         if (name === 'debug') {
           const debugValue = this.deps.createDebugObject(3); // Use markdown format
@@ -256,12 +314,21 @@ export class VariableManager implements IVariableManager {
       const capturedEnv = this.deps.getCapturedModuleEnv();
       if (capturedEnv && capturedEnv.has(name)) {
         variable = capturedEnv.get(name);
+        if (variable) {
+          this.deps.recordSecurityDescriptor?.(
+            variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+          );
+          return variable;
+        }
       }
     }
     
     // Check parent scope for regular variables
     const parentVar = parent?.getVariable(name);
     if (parentVar) {
+      this.deps.recordSecurityDescriptor?.(
+        parentVar.ctx ? ctxToSecurityDescriptor(parentVar.ctx) : undefined
+      );
       return parentVar;
     }
     
@@ -334,11 +401,15 @@ export class VariableManager implements IVariableManager {
       `@${resolverName}`, // Placeholder value
       placeholderSource,
       {
-        isReserved: true,
-        isResolver: true,
-        resolverName: resolverName,
-        needsResolution: true, // Flag indicating this needs async resolution
-        definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+        },
+        internal: {
+          isReserved: true,
+          isResolver: true,
+          resolverName: resolverName,
+          needsResolution: true
+        }
       }
     );
   }
@@ -429,8 +500,12 @@ export class VariableManager implements IVariableManager {
       getTimeValue(),
       nowSource,
       {
-        isReserved: true,
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        },
+        internal: {
+          isReserved: true
+        }
       }
     );
     // Direct assignment for reserved variables during initialization
@@ -450,9 +525,13 @@ export class VariableManager implements IVariableManager {
       false, // Not complex
       debugSource,
       {
-        isReserved: true,
-        isLazy: true, // Indicates value should be computed on access
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        },
+        internal: {
+          isReserved: true,
+          isLazy: true
+        }
       }
     );
     // Direct assignment for reserved variables during initialization
@@ -474,8 +553,12 @@ export class VariableManager implements IVariableManager {
       true, // Is absolute
       baseSource,
       {
-        isReserved: true,
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        ctx: {
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        },
+        internal: {
+          isReserved: true
+        }
       }
     );
     // Direct assignment for reserved variables during initialization
@@ -517,37 +600,39 @@ export class VariableManager implements IVariableManager {
       isMultiLine: false
     };
     
-    const metadata: VariableMetadata = {
-      isReserved: true,
+    const ctxData = {
       definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+    };
+    const internalData = {
+      isReserved: true
     };
     
     // If we have both stdin and env vars, merge them
     if (stdinData !== null && Object.keys(envVars).length > 0) {
       if (typeof stdinData === 'object' && stdinData !== null && !Array.isArray(stdinData)) {
         // Merge objects (env vars take precedence)
-        return createObjectVariable('input', { ...stdinData, ...envVars }, true, inputSource, metadata);
+        return createObjectVariable('input', { ...stdinData, ...envVars }, true, inputSource, { ctx: ctxData, internal: internalData });
       } else {
         // Stdin is not an object, create object with separate fields
         return createObjectVariable('input', {
           stdin: stdinData,
           ...envVars
-        }, true, inputSource, metadata);
+        }, true, inputSource, { ctx: ctxData, internal: internalData });
       }
     }
-    
+
     // If we only have env vars
     if (Object.keys(envVars).length > 0) {
-      return createObjectVariable('input', envVars, true, inputSource, metadata);
+      return createObjectVariable('input', envVars, true, inputSource, { ctx: ctxData, internal: internalData });
     }
-    
+
     // If we only have stdin
     if (stdinData !== null) {
       if (typeof stdinData === 'object' && stdinData !== null) {
-        return createObjectVariable('input', stdinData, true, inputSource, metadata);
+        return createObjectVariable('input', stdinData, true, inputSource, { ctx: ctxData, internal: internalData });
       } else {
         // Simple text
-        return createSimpleTextVariable('input', stdinData, textSource, metadata);
+        return createSimpleTextVariable('input', stdinData, textSource, { ctx: ctxData, internal: internalData });
       }
     }
     
@@ -562,7 +647,7 @@ export class VariableManager implements IVariableManager {
    */
   private isLegitimateVariableType(variable: Variable): boolean {
     // System variables (like frontmatter) should not participate in collision detection
-    if (variable.metadata?.isSystem || variable.metadata?.isReserved) {
+    if (variable.internal?.isSystem || variable.internal?.isReserved) {
       return false;
     }
     

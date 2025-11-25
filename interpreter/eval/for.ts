@@ -1,7 +1,6 @@
-import type { ForDirective, ForExpression, Environment, ArrayVariable, Variable } from '@core/types';
-import { evaluate, interpolate, type EvalResult } from '../core/interpreter';
-import { InterpolationContext } from '../core/interpolation-context';
-import { MlldDirectiveError } from '@core/errors';
+import type { ForDirective, ForExpression, Environment, ArrayVariable, Variable, FieldAccessNode, SourceLocation } from '@core/types';
+import { evaluate, type EvalResult } from '../core/interpreter';
+import { FieldAccessError, MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import { RateLimitRetry, isRateLimitError } from '../eval/pipeline/rate-limit-retry';
@@ -11,10 +10,20 @@ import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
-import { asData, asText, isStructuredValue, looksLikeJsonString } from '../utils/structured-value';
+import {
+  asData,
+  asText,
+  isStructuredValue,
+  looksLikeJsonString,
+  normalizeWhenShowEffect
+} from '../utils/structured-value';
+import { materializeDisplayValue } from '../utils/display-materialization';
+import { accessFields } from '../utils/field-access';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { evaluateWhenExpression } from './when-expression';
 
 // Helper to ensure a value is wrapped as a Variable
-function ensureVariable(name: string, value: unknown): Variable {
+function ensureVariable(name: string, value: unknown, env: Environment): Variable {
   // If already a Variable, return as-is
   if (isVariable(value)) {
     return value;
@@ -43,7 +52,69 @@ function ensureVariable(name: string, value: unknown): Variable {
   
   // Otherwise, create a Variable from the value
   const importer = new VariableImporter();
-  return importer.createVariableFromValue(name, value, 'for-loop');
+  return importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
+}
+
+function formatFieldPath(fields?: FieldAccessNode[]): string | null {
+  if (!fields || fields.length === 0) {
+    return null;
+  }
+  const parts: string[] = [];
+  for (const field of fields) {
+    const value = field.value;
+    switch (field.type) {
+      case 'field':
+      case 'stringIndex':
+      case 'bracketAccess':
+      case 'numericField':
+        parts.push(typeof value === 'number' ? String(value) : String(value ?? ''));
+        break;
+      case 'arrayIndex':
+      case 'variableIndex':
+        parts.push(`[${typeof value === 'number' ? value : String(value ?? '')}]`);
+        break;
+      case 'arraySlice':
+        parts.push(`[${field.start ?? ''}:${field.end ?? ''}]`);
+        break;
+      case 'arrayFilter':
+        parts.push('[?]');
+        break;
+      default:
+        parts.push(String(value ?? ''));
+        break;
+    }
+  }
+
+  return parts
+    .map((part, index) => (part.startsWith('[') || index === 0 ? part : `.${part}`))
+    .join('');
+}
+
+function enhanceFieldAccessError(
+  error: unknown,
+  options: { fieldPath?: string | null; varName: string; index: number; key: string | null; sourceLocation?: SourceLocation }
+): unknown {
+  if (!(error instanceof FieldAccessError)) {
+    return error;
+  }
+  const pathSuffix = options.fieldPath ? `.${options.fieldPath}` : '';
+  const contextParts: string[] = [];
+  if (options.key !== null && options.key !== undefined) {
+    contextParts.push(`key ${String(options.key)}`);
+  } else if (options.index >= 0) {
+    contextParts.push(`index ${options.index}`);
+  }
+  const context = contextParts.length > 0 ? ` (${contextParts.join(', ')})` : '';
+  const message = `${error.message} in for binding @${options.varName}${pathSuffix}${context}`;
+  const enhancedDetails = {
+    ...(error.details || {}),
+    iterationIndex: options.index,
+    iterationKey: options.key
+  };
+  return new FieldAccessError(message, enhancedDetails, {
+    cause: error,
+    sourceLocation: (error as any).sourceLocation ?? options.sourceLocation
+  });
 }
 
 export async function evaluateForDirective(
@@ -52,6 +123,8 @@ export async function evaluateForDirective(
 ): Promise<EvalResult> {
   const varNode = directive.values.variable[0];
   const varName = varNode.identifier;
+  const varFields = varNode.fields;
+  const fieldPathString = formatFieldPath(varFields);
   
   // Debug support
   const debugEnabled = process.env.DEBUG_FOR === '1' || process.env.DEBUG_FOR === 'true' || process.env.MLLD_DEBUG === 'true';
@@ -97,10 +170,34 @@ export async function evaluateForDirective(
       let childEnv = env.createChildEnvironment();
       // Inherit forOptions for nested loops if set
       if (effective) (childEnv as any).__forOptions = effective;
-      const iterationVar = ensureVariable(varName, value);
+      let derivedValue: unknown;
+      if (varFields && varFields.length > 0) {
+        try {
+          const accessed = await accessFields(value, varFields, {
+            env: childEnv,
+            preserveContext: true,
+            sourceLocation: varNode.location
+          });
+          derivedValue = (accessed as any)?.value ?? accessed;
+          inheritExpressionProvenance(derivedValue, value);
+        } catch (error) {
+          throw enhanceFieldAccessError(error, {
+            fieldPath: fieldPathString,
+            varName,
+            index: idx,
+            key: key ?? null,
+            sourceLocation: varNode.location
+          }) as Error;
+        }
+      }
+      const iterationVar = ensureVariable(varName, value, env);
       childEnv.setVariable(varName, iterationVar);
+      if (typeof derivedValue !== 'undefined' && fieldPathString) {
+        const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
+        childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
+      }
       if (key !== null && typeof key === 'string') {
-        const keyVar = ensureVariable(`${varName}_key`, key);
+        const keyVar = ensureVariable(`${varName}_key`, key, env);
         childEnv.setVariable(`${varName}_key`, keyVar);
       }
 
@@ -110,7 +207,15 @@ export async function evaluateForDirective(
         try {
           let actionResult: any = { value: undefined, env: childEnv };
           for (const actionNode of actionNodes) {
-            actionResult = await evaluate(actionNode, childEnv);
+            if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
+              const nodeWithFirst = {
+                ...actionNode,
+                meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
+              };
+              actionResult = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
+            } else {
+              actionResult = await evaluate(actionNode, childEnv);
+            }
             if (actionResult.env) childEnv = actionResult.env;
           }
           // Emit bare exec output as effect (legacy behavior)
@@ -119,7 +224,18 @@ export async function evaluateForDirective(
             directive.values.action[0].type === 'ExecInvocation' &&
             actionResult.value !== undefined && actionResult.value !== null
           ) {
-            const outputContent = String(actionResult.value) + '\n';
+            const materialized = materializeDisplayValue(
+              actionResult.value,
+              undefined,
+              actionResult.value
+            );
+            let outputContent = materialized.text;
+            if (!outputContent.endsWith('\n')) {
+              outputContent += '\n';
+            }
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
             env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
           }
           retry.reset();
@@ -157,6 +273,8 @@ export async function evaluateForExpression(
   env: Environment
 ): Promise<ArrayVariable> {
   const varName = expr.variable.identifier;
+  const varFields = expr.variable.fields;
+  const fieldPathString = formatFieldPath(varFields);
 
   // Evaluate source collection
   const sourceResult = await evaluate(expr.source, env, { isExpression: true });
@@ -192,10 +310,34 @@ export async function evaluateForExpression(
     const [key, value] = entry;
     let childEnv = env.createChildEnvironment();
     if (effective) (childEnv as any).__forOptions = effective;
-    const iterationVar = ensureVariable(varName, value);
+    let derivedValue: unknown;
+    if (varFields && varFields.length > 0) {
+      try {
+        const accessed = await accessFields(value, varFields, {
+          env: childEnv,
+          preserveContext: true,
+          sourceLocation: expr.variable.location
+        });
+        derivedValue = (accessed as any)?.value ?? accessed;
+        inheritExpressionProvenance(derivedValue, value);
+      } catch (error) {
+        throw enhanceFieldAccessError(error, {
+          fieldPath: fieldPathString,
+          varName,
+          index: idx,
+          key: key ?? null,
+          sourceLocation: expr.variable.location
+        }) as Error;
+      }
+    }
+    const iterationVar = ensureVariable(varName, value, env);
     childEnv.setVariable(varName, iterationVar);
+    if (typeof derivedValue !== 'undefined' && fieldPathString) {
+      const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
+      childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
+    }
     if (key !== null && typeof key === 'string') {
-      const keyVar = ensureVariable(`${varName}_key`, key);
+      const keyVar = ensureVariable(`${varName}_key`, key, env);
       childEnv.setVariable(`${varName}_key`, keyVar);
     }
     try {
@@ -210,7 +352,22 @@ export async function evaluateForExpression(
         ) {
           nodesToEvaluate = (expr.expression[0] as any).content;
         }
-        const result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
+
+        let result: EvalResult;
+        if (
+          nodesToEvaluate.length === 1 &&
+          (nodesToEvaluate[0] as any).type === 'WhenExpression' &&
+          (nodesToEvaluate[0] as any).meta?.modifier !== 'first'
+        ) {
+          const nodeWithFirst = {
+            ...(nodesToEvaluate[0] as any),
+            meta: { ...((nodesToEvaluate[0] as any).meta || {}), modifier: 'first' as const }
+          };
+          result = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
+        } else {
+          result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
+        }
+
         if (result.env) childEnv = result.env;
         let branchValue = result?.value;
         if (isStructuredValue(branchValue)) {
@@ -228,6 +385,10 @@ export async function evaluateForExpression(
         } else {
           exprResult = branchValue;
         }
+
+        // Preserve directive-produced text (e.g., show/run) when they tag side effects
+        exprResult = normalizeWhenShowEffect(exprResult).normalized;
+
         if (typeof exprResult === 'string' && looksLikeJsonString(exprResult)) {
           try {
             exprResult = JSON.parse(exprResult.trim());
@@ -312,7 +473,7 @@ export async function evaluateForExpression(
     isMultiLine: false
   };
 
-  const metadata: any = {
+  const metadata: Record<string, unknown> = {
     sourceExpression: expr.expression,
     iterationVariable: expr.variable.identifier
   };
@@ -326,13 +487,17 @@ export async function evaluateForExpression(
   }
 
   if (Array.isArray(finalResults)) {
-    metadata.arrayType = 'for-expression-result';
     return createArrayVariable(
       'for-result',
       finalResults,
       false,
       variableSource,
-      metadata
+      {
+        metadata,
+        internal: {
+          arrayType: 'for-expression-result'
+        }
+      }
     );
   }
 
@@ -341,7 +506,7 @@ export async function evaluateForExpression(
       'for-result',
       null,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -354,7 +519,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults as number | boolean | null,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -363,7 +528,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -373,7 +538,7 @@ export async function evaluateForExpression(
       finalResults,
       false,
       variableSource,
-      metadata
+      { ctx: metadata }
     );
   }
 
@@ -381,6 +546,6 @@ export async function evaluateForExpression(
     'for-result',
     String(finalResults),
     variableSource,
-    metadata
+    { ctx: metadata }
   );
 }

@@ -2,6 +2,29 @@ import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
+import type { SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../../core/interpolation-context';
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Handles evaluation of collection data values (objects and arrays).
@@ -89,7 +112,7 @@ export class CollectionEvaluator {
       
       if (isTemplateContent) {
         // This is template content that needs interpolation
-        return await interpolate(value, env);
+        return await interpolateAndRecord(value, env);
       }
       
       // Otherwise it's a regular array that's already been processed

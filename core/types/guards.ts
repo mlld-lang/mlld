@@ -45,6 +45,7 @@ import {
 } from './var';
 import { ImportWildcardNode } from './values';
 import { WithClause } from './run';
+import type { GuardDirectiveNode } from './guard';
 import type { CapabilityContext, CapabilityKind } from './security';
 
 // Define InterpolatableValue for the guard function
@@ -121,6 +122,10 @@ export function isWildcardImport(node: VariableReferenceNode): node is ImportWil
   return node.valueType === 'import' && node.identifier === '*';
 }
 
+export function isGuardDirective(node: DirectiveNode): node is GuardDirectiveNode {
+  return node.kind === 'guard';
+}
+
 /**
  * ExecInvocation type guards
  */
@@ -187,4 +192,3 @@ export type GuardThunk<E = unknown> = (
   event: GuardEvent,
   env: E
 ) => GuardDecision | Promise<GuardDecision>;
-

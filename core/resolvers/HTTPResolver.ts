@@ -6,7 +6,7 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 
 /**
  * Configuration for HTTPResolver
@@ -114,15 +114,17 @@ export class HTTPResolver implements Resolver {
     const cached = this.getCached(cacheKey, config.cacheTimeout);
     if (cached) {
       const contentType = await this.detectContentType(url.pathname, cached.content);
+      const metadata = {
+        source: url.toString(),
+        timestamp: new Date(),
+        taintLevel: 'networkCached' as TaintLevel,
+        mimeType: cached.headers?.['content-type'] || 'text/plain'
+      };
       return {
         content: cached.content,
         contentType,
-        metadata: {
-          source: url.toString(),
-          timestamp: new Date(),
-          taintLevel: (TaintLevel as any).EXTERNAL,
-          mimeType: cached.headers?.['content-type'] || 'text/plain'
-        }
+        ctx: metadata,
+        metadata
       };
     }
 
@@ -139,16 +141,18 @@ export class HTTPResolver implements Resolver {
       });
 
       const contentType = await this.detectContentType(url.pathname, content);
+      const metadata = {
+        source: url.toString(),
+        timestamp: new Date(),
+        taintLevel: 'networkLive' as TaintLevel,
+        mimeType: headers['content-type'] || 'text/plain',
+        size: parseInt(headers['content-length'] || '0', 10) || undefined
+      };
       return {
         content,
         contentType,
-        metadata: {
-          source: url.toString(),
-          timestamp: new Date(),
-          taintLevel: (TaintLevel as any).EXTERNAL,
-          mimeType: headers['content-type'] || 'text/plain',
-          size: parseInt(headers['content-length'] || '0', 10) || undefined
-        }
+        ctx: metadata,
+        metadata
       };
     } catch (error) {
       if (error.status === 404) {

@@ -18,10 +18,10 @@ describe('Variable Migration Utils', () => {
       
       expect(variable.type).toBe('array');
       expect(variable.value).toEqual(items);
-      expect(variable.metadata?.arrayType).toBe('renamed-content');
-      expect(variable.metadata?.joinSeparator).toBe('\n\n');
-      expect(variable.metadata?.customToString).toBeDefined();
-      expect(variable.metadata?.customToString?.()).toBe('Section 1\n\nSection 2\n\nSection 3');
+      expect(variable.internal?.arrayType).toBe('renamed-content');
+      expect(variable.internal?.joinSeparator).toBe('\n\n');
+      expect(variable.internal?.customToString).toBeDefined();
+      expect(variable.internal?.customToString?.()).toBe('Section 1\n\nSection 2\n\nSection 3');
     });
 
     it('should accept additional metadata', () => {
@@ -32,9 +32,9 @@ describe('Variable Migration Utils', () => {
         fileCount: 1
       });
       
-      expect(variable.metadata?.fromGlobPattern).toBe(true);
-      expect(variable.metadata?.globPattern).toBe('*.md');
-      expect(variable.metadata?.fileCount).toBe(1);
+      expect(variable.internal?.fromGlobPattern).toBe(true);
+      expect(variable.internal?.globPattern).toBe('*.md');
+      expect(variable.internal?.fileCount).toBe(1);
     });
   });
 
@@ -59,9 +59,9 @@ describe('Variable Migration Utils', () => {
       
       expect(variable.type).toBe('array');
       expect(variable.value).toEqual(items);
-      expect(variable.metadata?.arrayType).toBe('load-content-result');
-      expect(variable.metadata?.customToString?.()).toBe('File 1 content\n\nFile 2 content');
-      expect(variable.metadata?.contentGetter?.()).toBe('File 1 content\n\nFile 2 content');
+      expect(variable.internal?.arrayType).toBe('load-content-result');
+      expect(variable.internal?.customToString?.()).toBe('File 1 content\n\nFile 2 content');
+      expect(variable.internal?.contentGetter?.()).toBe('File 1 content\n\nFile 2 content');
     });
   });
 
@@ -123,7 +123,7 @@ describe('Variable Migration Utils', () => {
       
       const metadata = getVariableMetadata(extracted);
       expect(metadata).toEqual(variable);
-      expect(metadata?.metadata?.arrayType).toBe('renamed-content');
+      expect(metadata?.internal?.arrayType).toBe('renamed-content');
     });
   });
 });

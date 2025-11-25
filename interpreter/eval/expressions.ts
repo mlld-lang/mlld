@@ -2,12 +2,21 @@ import type { Environment } from '../env/Environment';
 import { evaluate } from '../core/interpreter';
 import { MlldDirectiveError } from '../../core/errors/MlldDirectiveError';
 import { isEqual, toNumber, isTruthy } from './expression';
+import {
+  createEvaluatorResult,
+  mergeEvaluatorDescriptors,
+  type EvaluatorResult
+} from '../utils/evaluator-result';
+import { executeParallelExecInvocations } from './helpers/parallel-exec';
 
 /**
  * Unified expression evaluator for all expression types from the unified grammar
  * Handles: BinaryExpression, UnaryExpression, TernaryExpression, ArrayFilterExpression, ArraySliceExpression, Literal nodes
  */
-export async function evaluateUnifiedExpression(node: any, env: Environment): Promise<any> {
+export async function evaluateUnifiedExpression(
+  node: any,
+  env: Environment
+): Promise<EvaluatorResult> {
   try {
     switch (node.type) {
       case 'BinaryExpression':
@@ -25,30 +34,30 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
         if (node.valueType === 'none') {
           throw new Error('The "none" keyword can only be used as a condition in /when directives');
         }
-        return node.value;
+        return createEvaluatorResult(node.value);
       case 'VariableReference':
         // Delegate variable references to the standard evaluator
         try {
           const varResult = await evaluate(node, env);
-          return varResult.value;
+          return createEvaluatorResult(varResult.value);
         } catch (error) {
           // Handle undefined variables gracefully for backward compatibility
-          if (error.message && error.message.includes('Variable not found')) {
-            return undefined;
+          if (error instanceof Error && error.message.includes('Variable not found')) {
+            return createEvaluatorResult(undefined);
           }
           throw error;
         }
       case 'ExecReference':
         // Delegate exec references to the standard evaluator
         const execResult = await evaluate(node, env);
-        return execResult.value;
+        return createEvaluatorResult(execResult.value);
       case 'Text':
         // Handle text nodes that might appear in expressions
-        return node.content;
+        return createEvaluatorResult(node.content);
       default:
         // For all other node types, delegate to the standard evaluator
         const result = await evaluate(node, env);
-        return result.value;
+        return createEvaluatorResult(result.value);
     }
   } catch (error) {
     throw new MlldDirectiveError(
@@ -67,7 +76,10 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
 /**
  * Evaluate binary expressions (&&, ||, ==, !=, <, >, <=, >=, ~=)
  */
-async function evaluateBinaryExpression(node: any, env: Environment): Promise<any> {
+async function evaluateBinaryExpression(
+  node: any,
+  env: Environment
+): Promise<EvaluatorResult> {
   let { operator } = node;
   
   // Handle operator being an array (from PEG.js negative lookahead)
@@ -75,13 +87,21 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
     operator = operator[0];
   }
   
-  
+  const isExecParallel =
+    operator === '||' &&
+    node.left?.type === 'ExecInvocation' &&
+    node.right?.type === 'ExecInvocation';
+  if (isExecParallel) {
+    const { value, descriptor } = await executeParallelExecInvocations(node.left, node.right, env);
+    return createEvaluatorResult(value, descriptor);
+  }
   
   const leftResult = await evaluateUnifiedExpression(node.left, env);
+  const leftValue = leftResult.value;
   
   // Short-circuit evaluation for logical operators  
   if (operator === '&&') {
-    const leftTruthy = isTruthy(leftResult);
+    const leftTruthy = isTruthy(leftValue);
     if (!leftTruthy) {
       // Short-circuit: if left is falsy, return left value
       return leftResult;
@@ -92,7 +112,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   }
   
   if (operator === '||') {
-    const leftTruthy = isTruthy(leftResult);
+    const leftTruthy = isTruthy(leftValue);
     if (leftTruthy) {
       // Short-circuit: if left is truthy, return left value
       return leftResult;
@@ -103,39 +123,41 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   }
   
   const rightResult = await evaluateUnifiedExpression(node.right, env);
+  const rightValue = rightResult.value;
+  const mergedDescriptor = mergeEvaluatorDescriptors(leftResult, rightResult);
   
   
   switch (operator) {
     case '==':
-      const equal = isEqual(leftResult, rightResult);
-      return equal;
+      const equal = isEqual(leftValue, rightValue);
+      return createEvaluatorResult(equal, mergedDescriptor);
     case '!=':
-      return !isEqual(leftResult, rightResult);
+      return createEvaluatorResult(!isEqual(leftValue, rightValue), mergedDescriptor);
     case '~=':
       // Regex match operator
-      const regex = new RegExp(String(rightResult));
-      return regex.test(String(leftResult));
+      const regex = new RegExp(String(rightValue));
+      return createEvaluatorResult(regex.test(String(leftValue)), mergedDescriptor);
     case '<':
-      const leftNum = toNumber(leftResult);
-      const rightNum = toNumber(rightResult);
+      const leftNum = toNumber(leftValue);
+      const rightNum = toNumber(rightValue);
       const ltResult = leftNum < rightNum;
-      return ltResult;
+      return createEvaluatorResult(ltResult, mergedDescriptor);
     case '>':
-      return toNumber(leftResult) > toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) > toNumber(rightValue), mergedDescriptor);
     case '<=':
-      return toNumber(leftResult) <= toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) <= toNumber(rightValue), mergedDescriptor);
     case '>=':
-      return toNumber(leftResult) >= toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) >= toNumber(rightValue), mergedDescriptor);
     case '+':
-      return toNumber(leftResult) + toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) + toNumber(rightValue), mergedDescriptor);
     case '-':
-      return toNumber(leftResult) - toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) - toNumber(rightValue), mergedDescriptor);
     case '*':
-      return toNumber(leftResult) * toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) * toNumber(rightValue), mergedDescriptor);
     case '/':
-      return toNumber(leftResult) / toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) / toNumber(rightValue), mergedDescriptor);
     case '%':
-      return toNumber(leftResult) % toNumber(rightResult);
+      return createEvaluatorResult(toNumber(leftValue) % toNumber(rightValue), mergedDescriptor);
     default:
       throw new Error(`Unknown binary operator: ${operator}`);
   }
@@ -144,16 +166,20 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
 /**
  * Evaluate unary expressions (!, -, +)
  */
-async function evaluateUnaryExpression(node: any, env: Environment): Promise<any> {
+async function evaluateUnaryExpression(
+  node: any,
+  env: Environment
+): Promise<EvaluatorResult> {
   const operandResult = await evaluateUnifiedExpression(node.operand, env);
+  const operandValue = operandResult.value;
   
   switch (node.operator) {
     case '!':
-      return !isTruthy(operandResult);
+      return createEvaluatorResult(!isTruthy(operandValue), operandResult.descriptor);
     case '-':
-      return -toNumber(operandResult);
+      return createEvaluatorResult(-toNumber(operandValue), operandResult.descriptor);
     case '+':
-      return +toNumber(operandResult);
+      return createEvaluatorResult(+toNumber(operandValue), operandResult.descriptor);
     default:
       throw new Error(`Unknown unary operator: ${node.operator}`);
   }
@@ -162,10 +188,14 @@ async function evaluateUnaryExpression(node: any, env: Environment): Promise<any
 /**
  * Evaluate ternary expressions (condition ? trueBranch : falseBranch)
  */
-async function evaluateTernaryExpression(node: any, env: Environment): Promise<any> {
+async function evaluateTernaryExpression(
+  node: any,
+  env: Environment
+): Promise<EvaluatorResult> {
   const conditionResult = await evaluateUnifiedExpression(node.condition, env);
+  const conditionValue = conditionResult.value;
   
-  return isTruthy(conditionResult)
+  return isTruthy(conditionValue)
     ? await evaluateUnifiedExpression(node.trueBranch, env)
     : await evaluateUnifiedExpression(node.falseBranch, env);
 }
@@ -173,8 +203,12 @@ async function evaluateTernaryExpression(node: any, env: Environment): Promise<a
 /**
  * Evaluate array filter expressions: @array[?condition]
  */
-async function evaluateArrayFilterExpression(node: any, env: Environment): Promise<any[]> {
-  const array = await evaluateUnifiedExpression(node.array, env);
+async function evaluateArrayFilterExpression(
+  node: any,
+  env: Environment
+): Promise<EvaluatorResult<any[]>> {
+  const arrayResult = await evaluateUnifiedExpression(node.array, env);
+  const array = arrayResult.value;
   
   if (!Array.isArray(array)) {
     throw new Error(`Cannot filter non-array value: ${typeof array}`);
@@ -185,19 +219,23 @@ async function evaluateArrayFilterExpression(node: any, env: Environment): Promi
     // Create new environment with current item accessible as '$'
     const itemEnv = env.withVariable('$', item);
     const passes = await evaluateUnifiedExpression(node.filter, itemEnv);
-    if (passes) {
+    if (passes.value) {
       results.push(item);
     }
   }
   
-  return results;
+  return createEvaluatorResult(results, arrayResult.descriptor);
 }
 
 /**
  * Evaluate array slice expressions: @array[start:end]
  */
-async function evaluateArraySliceExpression(node: any, env: Environment): Promise<any[]> {
-  const array = await evaluateUnifiedExpression(node.array, env);
+async function evaluateArraySliceExpression(
+  node: any,
+  env: Environment
+): Promise<EvaluatorResult<any[]>> {
+  const arrayResult = await evaluateUnifiedExpression(node.array, env);
+  const array = arrayResult.value;
   
   if (!Array.isArray(array)) {
     throw new Error(`Cannot slice non-array value: ${typeof array}`);
@@ -206,7 +244,7 @@ async function evaluateArraySliceExpression(node: any, env: Environment): Promis
   const start = node.start || 0;
   const end = node.end !== undefined ? node.end : array.length;
   
-  return array.slice(start, end);
+  return createEvaluatorResult(array.slice(start, end), arrayResult.descriptor);
 }
 
 /**
@@ -233,7 +271,7 @@ export async function evaluateArrayFilter(array: any[], filter: any, env: Enviro
     // Create a new environment with the current item as '$'
     const itemEnv = env.withVariable('$', item);
     const passes = await evaluateUnifiedExpression(filter, itemEnv);
-    if (passes) results.push(item);
+    if (passes.value) results.push(item);
   }
   return results;
 }

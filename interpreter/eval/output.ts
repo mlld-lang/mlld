@@ -10,15 +10,55 @@ import type {
   isEnvTarget,
   isResolverTarget
 } from '@core/types/output';
+import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
+import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../core/interpolation-context';
+import { resolveDirectiveExecInvocation } from './directive-replay';
+
+function mergeInterpolatedDescriptors(
+  env: Environment,
+  descriptors: SecurityDescriptor[]
+): SecurityDescriptor | undefined {
+  if (descriptors.length === 0) {
+    return undefined;
+  }
+  return descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+}
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  const merged = mergeInterpolatedDescriptors(env, descriptors);
+  if (merged) {
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
+
+interface OutputSourceResult {
+  rawValue: unknown;
+  text: string;
+}
 
 /**
  * Evaluates @output directive with enhanced syntax.
@@ -41,7 +81,8 @@ import * as path from 'path';
  */
 export async function evaluateOutput(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: EvaluationContext
 ): Promise<EvalResult> {
   // Check if we're importing - skip execution if so
   if (env.getIsImporting()) {
@@ -54,11 +95,12 @@ export async function evaluateOutput(
   const format = directive.meta?.format;
   // Removed: isLegacy flag - bracket syntax no longer supported
 
-
+  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
 
   try {
     // Get the content to output
     let content: string;
+    let descriptorSource: unknown;
     
     if (!hasSource) {
       // @output [file.md] or @output to target - output full document
@@ -66,6 +108,7 @@ export async function evaluateOutput(
       const effectHandler = env.getEffectHandler();
       if (effectHandler && typeof effectHandler.getDocument === 'function') {
         content = effectHandler.getDocument();
+        descriptorSource = content;
       } else {
         // Fallback to node formatting if no effect handler
         try {
@@ -75,6 +118,7 @@ export async function evaluateOutput(
             format: format || 'markdown',
             variables: env.getAllVariables()
           });
+          descriptorSource = content;
         } catch (formatError) {
           // If there's an error, log it in debug mode
           if (env.hasVariable('DEBUG')) {
@@ -88,12 +132,25 @@ export async function evaluateOutput(
       }
     } else {
       // Evaluate source content
-      content = await evaluateOutputSource(directive, env, sourceType);
+      const sourceResult = await evaluateOutputSource(directive, env, sourceType, context);
+      content = sourceResult.text;
+      descriptorSource = sourceResult.rawValue;
     }
     
     // Apply format transformation if specified
     if (format) {
       content = await applyOutputFormat(content, format, env);
+    }
+
+    const materializedContent = materializeDisplayValue(
+      descriptorSource ?? content,
+      undefined,
+      descriptorSource ?? content,
+      content
+    );
+    content = materializedContent.text;
+    if (materializedContent.descriptor) {
+      env.recordSecurityDescriptor(materializedContent.descriptor);
     }
     
     // Handle the target
@@ -169,11 +226,12 @@ export async function evaluateOutput(
 /**
  * Evaluates the source content for output
  */
-async function evaluateOutputSource(
+export async function evaluateOutputSource(
   directive: DirectiveNode,
   env: Environment,
-  sourceType: string
-): Promise<string> {
+  sourceType: string,
+  context?: EvaluationContext
+): Promise<OutputSourceResult> {
   switch (sourceType) {
     case 'literal':
       // @output "text content" to target
@@ -183,15 +241,17 @@ async function evaluateOutputSource(
       // All literal sources should now be arrays of nodes from UnifiedQuoteOrTemplate
       if (Array.isArray(source)) {
         const { interpolate } = await import('../core/interpreter');
-        return await interpolate(source, env);
+        const text = await interpolateAndRecord(source, env);
+        return { rawValue: text, text };
       }
       
       // Fallback for any unexpected format
       console.warn('Unexpected literal source format:', source);
-      return String(source);
+      const fallback = String(source);
+      return { rawValue: fallback, text: fallback };
       
     case 'variable':
-      return await evaluateVariableSource(directive, env);
+      return await evaluateVariableSource(directive, env, context);
       
     case 'command':
       return await evaluateCommandSource(directive, env);
@@ -214,18 +274,19 @@ async function evaluateOutputSource(
  */
 async function evaluateVariableSource(
   directive: DirectiveNode,
-  env: Environment
-): Promise<string> {
+  env: Environment,
+  context?: EvaluationContext
+): Promise<OutputSourceResult> {
   // Check if the source has args, which indicates it's an invocation
   const source = directive.values.source;
   const hasArgs = source.args && Array.isArray(source.args) && source.args.length > 0;
   
   if (hasArgs || directive.subtype === 'outputInvocation' || directive.subtype === 'outputExecInvocation') {
     // @output @template(args) to target or @output @command(args) to target
-    return await evaluateInvocationSource(directive, env);
+    return await evaluateInvocationSource(directive, env, context);
   } else {
     // @output @variable to target - simple variable reference
-    return await evaluateSimpleVariableSource(directive, env);
+    return await evaluateSimpleVariableSource(directive, env, context);
   }
 }
 
@@ -234,8 +295,9 @@ async function evaluateVariableSource(
  */
 async function evaluateInvocationSource(
   directive: DirectiveNode,
-  env: Environment
-): Promise<string> {
+  env: Environment,
+  context?: EvaluationContext
+): Promise<OutputSourceResult> {
   const identifierNodes = directive.values.source.identifier;
   const varName = (identifierNodes && Array.isArray(identifierNodes) && identifierNodes[0]?.identifier) 
     ? identifierNodes[0].identifier 
@@ -247,7 +309,7 @@ async function evaluateInvocationSource(
   const args = directive.values.source.args || [];
   
   // Get the variable
-  const variable = env.getVariable(varName);
+  const variable = findExtractedVariable(context, varName) ?? env.getVariable(varName);
   
   if (!variable) {
     throw new MlldOutputError(
@@ -274,9 +336,9 @@ async function evaluateInvocationSource(
     };
     
     // Use the standard exec invocation evaluator
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execNode as any, env);
-    return String(result.value);
+    const result = await resolveDirectiveExecInvocation(directive, env, execNode as any);
+    const text = String(result.value ?? '');
+    return { rawValue: result.value, text };
     
   } else if (isTextLike(variable)) {
     // It's a regular text variable (not a template)
@@ -286,7 +348,8 @@ async function evaluateInvocationSource(
     const childEnv = env.createChild();
     
     // For regular text variables, interpolate the string
-    return await childEnv.interpolate(templateContent);
+    const text = await interpolateAndRecord(templateContent, childEnv);
+    return { rawValue: text, text };
     
   } else if (isExecutable(variable)) {
     // It's an executable - need to invoke it properly
@@ -311,8 +374,10 @@ async function evaluateInvocationSource(
             isMultiLine: false
           },
           {
-            isSystem: true,
-            isParameter: true
+            internal: {
+              isSystem: true,
+              isParameter: true
+            }
           }
         );
         childEnv.set(paramName, paramVar);
@@ -322,12 +387,13 @@ async function evaluateInvocationSource(
     // Execute based on the type
     let result: string;
     if (definition.type === 'template') {
-      result = await interpolate(definition.template, childEnv);
+      const templateResult = await interpolateAndRecord(definition.template, childEnv);
+      result = templateResult;
     } else if (definition.type === 'command') {
-      const command = await interpolate(definition.commandTemplate, childEnv);
+      const command = await interpolateAndRecord(definition.commandTemplate, childEnv);
       result = await childEnv.executeCommand(command);
     } else if (definition.type === 'code') {
-      const code = await interpolate(definition.codeTemplate, childEnv);
+      const code = await interpolateAndRecord(definition.codeTemplate, childEnv);
       result = await childEnv.executeCode(code, definition.language || 'javascript');
     } else {
       throw new MlldOutputError(
@@ -337,7 +403,8 @@ async function evaluateInvocationSource(
       );
     }
     
-    return String(result || '');
+    const text = String(result ?? '');
+    return { rawValue: result, text };
     
   } else {
     throw new MlldOutputError(
@@ -353,8 +420,9 @@ async function evaluateInvocationSource(
  */
 async function evaluateSimpleVariableSource(
   directive: DirectiveNode,
-  env: Environment
-): Promise<string> {
+  env: Environment,
+  context?: EvaluationContext
+): Promise<OutputSourceResult> {
   // The source can be either an object with identifier array or a direct node
   let varName: string;
   
@@ -372,7 +440,7 @@ async function evaluateSimpleVariableSource(
     // Gracefully handle template-as-array passed directly
     const parts = directive.values.source as any[];
     const { interpolate } = await import('../core/interpreter');
-    return await interpolate(parts as any, env);
+    return await interpolateAndRecord(parts as any, env);
   } else {
     throw new MlldOutputError(
       'Invalid source structure for variable output',
@@ -381,7 +449,7 @@ async function evaluateSimpleVariableSource(
     );
   }
   
-  const variable = env.getVariable(varName);
+  const variable = findExtractedVariable(context, varName) ?? env.getVariable(varName);
   
   if (!variable) {
     throw new MlldOutputError(
@@ -454,24 +522,52 @@ async function evaluateSimpleVariableSource(
   const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
   
   // Convert value to string
-  if (structuredWrapper && value === structuredWrapper.data) {
-    return structuredWrapper.text;
+  if (structuredWrapper && (!sourceFields || sourceFields.length === 0)) {
+    return { rawValue: structuredWrapper, text: structuredWrapper.text };
   }
 
+  const rawValue = value;
+
   if (typeof value === 'string') {
-    return value;
+    return { rawValue, text: value };
+  } else if (isStructuredValue(value)) {
+    const text = asText(value);
+    return { rawValue: value, text };
   } else if (isLoadContentResult(value)) {
     // For LoadContentResult, output the content by default (matching /show behavior)
-    return value.content;
+    return { rawValue: value, text: value.content ?? '' };
   } else if (isLoadContentResultArray(value)) {
     // For array of LoadContentResult, concatenate content with double newlines
-    return value.map(item => item.content).join('\n\n');
+    const text = value.map(item => item.content ?? '').join('\n\n');
+    return { rawValue: value, text };
   } else if (typeof value === 'object') {
     // For objects/arrays, convert to JSON
-    return JSON.stringify(value, null, 2);
+    const text = JSON.stringify(value, null, 2);
+    return { rawValue, text };
   } else {
-    return String(value || '');
+    const text = String(value || '');
+    return { rawValue, text };
   }
+}
+
+function findExtractedVariable(
+  context: EvaluationContext | undefined,
+  name: string | undefined
+): Variable | undefined {
+  if (!context?.extractedInputs || !name) {
+    return undefined;
+  }
+  for (const candidate of context.extractedInputs) {
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      'name' in candidate &&
+      (candidate as Variable).name === name
+    ) {
+      return candidate as Variable;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -480,7 +576,7 @@ async function evaluateSimpleVariableSource(
 async function evaluateCommandSource(
   directive: DirectiveNode,
   env: Environment
-): Promise<string> {
+): Promise<OutputSourceResult> {
   // @output @run @command to target
   // Execute the command reference
   const cmdName = directive.values.source.identifier[0].identifier;
@@ -514,8 +610,10 @@ async function evaluateCommandSource(
           isMultiLine: false
         },
         {
-          isSystem: true,
-          isParameter: true
+          internal: {
+            isSystem: true,
+            isParameter: true
+          }
         }
       );
       cmdChildEnv.setParameterVariable(paramName, paramVar);
@@ -524,7 +622,8 @@ async function evaluateCommandSource(
   
   // Execute the command
   const cmdResult = await evaluate(cmdVariable.value, cmdChildEnv);
-  return String(cmdResult.value || '');
+  const text = String(cmdResult.value ?? '');
+  return { rawValue: cmdResult.value, text };
 }
 
 /**
@@ -533,14 +632,14 @@ async function evaluateCommandSource(
 async function evaluateExecSource(
   directive: DirectiveNode,
   env: Environment
-): Promise<string> {
+): Promise<OutputSourceResult> {
   // @output @command() to target with tail modifiers
   // Handle ExecInvocation nodes
   const execInvocationNode = directive.values.source || directive.values.execInvocation;
   if (execInvocationNode && execInvocationNode.type === 'ExecInvocation') {
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execInvocationNode, env);
-    return String(result.value);
+    const result = await resolveDirectiveExecInvocation(directive, env, execInvocationNode);
+    const text = String(result.value ?? '');
+    return { rawValue: result.value, text };
   } else {
     throw new MlldOutputError(
       `Invalid exec invocation source`,
@@ -562,7 +661,7 @@ async function outputToFile(
   
   
   // Evaluate the file path
-  const pathResult = await interpolate(target.path, env);
+  const pathResult = await interpolateAndRecord(target.path, env);
   let targetPath = String(pathResult);
   
   

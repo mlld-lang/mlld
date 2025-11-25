@@ -1,10 +1,8 @@
-/exe @left(input) = `L:@input`
-/exe @right(input) = `R:@input`
-/exe @combine(input) = js {
-  // Parallel stage returns a JSON array string
-  const [l, r] = JSON.parse(input);
-  return `${l} | ${r}`;
-}
+/exe @validator(input) = when first [
+  @input.valid => @input.value
+  @ctx.try < 3 => retry "validation failed"
+  none => "fallback value"
+]
 
-/var @out = "seed" with { pipeline: [ @left || @right, @combine ] }
-/show @out
+/var @result = "invalid" | @validator
+/show @result

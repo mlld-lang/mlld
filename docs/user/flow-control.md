@@ -171,10 +171,10 @@ Run iterations in parallel with an optional per-loop cap and pacing between star
 /for parallel @x in ["a","b","c","d"] => show @x
 
 # Cap override and pacing between task starts
-/for (2, 1s) parallel @n in [1,2,3,4] => show `Item: @n`
+/for parallel(2, 1s) @n in [1,2,3,4] => show `Item: @n`
 
 # Collection form (preserves input order)
-/var @res = for 2 parallel @x in ["x","y","z"] => @upper(@x)
+/var @res = for parallel(2) @x in ["x","y","z"] => @upper(@x)
 /show @res
 ```
 
@@ -292,6 +292,33 @@ Use `/show foreach` with options:
 /exe @greet(n) = `Hello @n`
 /show foreach @greet(@names) with { separator: " | ", template: "{{index}}={{result}}" }
 # Output: 0=Hello Ann | 1=Hello Ben
+```
+
+### Inline Pipeline Effects
+
+Attach lightweight side effects after any stage without a full directive:
+
+```text
+| log "message"          # stderr
+| show "message"         # stdout + document
+| output @var to "file"  # reuse /output routing
+| append "file.jsonl"    # append stage output
+```
+
+Example append usage:
+
+```mlld
+/var @runs = ["alpha", "beta", "gamma"]
+/var @_ = for @name in @runs =>
+  `processed @name` | append "runs.log"
+
+/show <runs.log>
+```
+
+You can pass an explicit source to `append` when you need different content:
+
+```mlld
+/var @_ = "summary" | append @runs to "runs.jsonl"
 ```
 
 ### When-Expressions in `for` RHS

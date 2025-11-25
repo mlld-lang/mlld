@@ -1,6 +1,8 @@
 import type { Environment } from '../env/Environment';
 import { evaluateForeachCommand, evaluateForeachSection } from '../eval/foreach';
 import { interpolate } from '../core/interpreter';
+import type { SecurityDescriptor } from '@core/types/security';
+import { isStructuredValue } from './structured-value';
 
 /**
  * Configuration options for foreach output formatting
@@ -45,7 +47,11 @@ export async function evaluateForeachAsText(
   }
   
   // If no results, return empty string
-  const normalizedResults = Array.isArray(results) ? results : [results];
+  const normalizedResults = Array.isArray(results)
+    ? results
+    : isStructuredValue(results) && Array.isArray(results.data)
+      ? results.data
+      : [results];
 
   if (normalizedResults.length === 0) {
     return '';
@@ -56,13 +62,14 @@ export async function evaluateForeachAsText(
   
   // Convert results to strings
   const stringResults = normalizedResults.map(result => {
-    if (typeof result === 'string') {
-      return result;
-    } else if (typeof result === 'object') {
-      return JSON.stringify(result, null, 2);
-    } else {
-      return String(result);
+    const normalized = normalizeForeachResultValue(result);
+    if (typeof normalized === 'string') {
+      return normalized;
     }
+    if (typeof normalized === 'object') {
+      return JSON.stringify(normalized, null, 2);
+    }
+    return String(normalized);
   });
   
   // Apply template if provided
@@ -85,13 +92,28 @@ export async function evaluateForeachAsText(
         };
         
         // Add template variables using new Variable types
-        childEnv.setVariable('result', createSimpleTextVariable('result', result, templateSource));
-        childEnv.setVariable('index', createObjectVariable('index', index, false, templateSource));
-        childEnv.setVariable('item', createSimpleTextVariable('item', result, templateSource));
+        childEnv.setVariable('result', createSimpleTextVariable('result', result, templateSource, { ctx: templateSource }));
+        childEnv.setVariable('index', createObjectVariable('index', index, false, templateSource, { ctx: templateSource }));
+        childEnv.setVariable('item', createSimpleTextVariable('item', result, templateSource, { ctx: templateSource }));
         
         // Parse and interpolate the template
         const templateNodes = parseTemplateString(finalOptions.template!);
-        return await interpolate(templateNodes, childEnv);
+        const descriptors: SecurityDescriptor[] = [];
+        const interpolated = await interpolate(templateNodes, childEnv, undefined, {
+          collectSecurityDescriptor: descriptor => {
+            if (descriptor) {
+              descriptors.push(descriptor);
+            }
+          }
+        });
+        if (descriptors.length > 0) {
+          const merged =
+            descriptors.length === 1
+              ? descriptors[0]
+              : childEnv.mergeSecurityDescriptors(...descriptors);
+          childEnv.recordSecurityDescriptor(merged);
+        }
+        return interpolated;
       })
     );
     
@@ -194,6 +216,41 @@ export function parseForeachOptions(withClause: any): ForeachOptions {
   }
   
   return options;
+}
+
+function normalizeForeachResultValue(value: unknown): unknown {
+  if (isStructuredValue(value)) {
+    return normalizeForeachResultValue(value.data);
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => normalizeForeachResultValue(item));
+  }
+  if (value && typeof value === 'object') {
+    if (isStructuredValueLike(value)) {
+      return normalizeForeachResultValue((value as any).data);
+    }
+    const entries = Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => [
+      key,
+      normalizeForeachResultValue(entryValue)
+    ]);
+    return Object.fromEntries(entries);
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function isStructuredValueLike(value: unknown): value is { data?: unknown } {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  return 'data' in (value as Record<string, unknown>) && 'text' in (value as Record<string, unknown>);
 }
 
 /**

@@ -7,11 +7,6 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import path from 'path';
 import { unwrapStructuredForTest } from './test-helpers';
-import type { StructuredValueMetadata } from '../utils/structured-value';
-
-function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
-  expect(metadata?.source).toBe('load-content');
-}
 
 describe('Content Loader Variable Tagging', () => {
   it('should tag RenamedContentArray with __variable metadata', async () => {
@@ -47,7 +42,7 @@ describe('Content Loader Variable Tagging', () => {
     
     // Process the content loader
     const rawResult = await processContentLoader(loadContentNode, env);
-    const { data: result, metadata } = unwrapStructuredForTest<any>(rawResult);
+    const { data: result, wrapper } = unwrapStructuredForTest<any>(rawResult);
     
     // Check that result is an array
     expect(Array.isArray(result)).toBe(true);
@@ -59,18 +54,18 @@ describe('Content Loader Variable Tagging', () => {
     const variable = (result as any).__variable as ArrayVariable;
     expect(variable).toBeDefined();
     expect(variable.type).toBe('array');
-    expect(variable.metadata?.arrayType).toBe('renamed-content');
-    expect(variable.metadata?.joinSeparator).toBe('\n\n');
-    expect(variable.metadata?.fromGlobPattern).toBe(true);
-    expect(variable.metadata?.globPattern).toBe('tests/cases/files/*.txt');
-    expect(variable.metadata?.fileCount).toBe((result as any[]).length);
+    expect(variable.internal?.arrayType).toBe('renamed-content');
+    expect(variable.internal?.joinSeparator).toBe('\n\n');
+    expect(variable.internal?.fromGlobPattern).toBe(true);
+    expect(variable.internal?.globPattern).toBe('tests/cases/files/*.txt');
+    expect(variable.internal?.fileCount).toBe((result as any[]).length);
     
     // Check that customToString is a function
-    expect(typeof variable.metadata?.customToString).toBe('function');
+    expect(typeof variable.internal?.customToString).toBe('function');
     
     // Verify the toString behavior matches
-    expect(result.toString()).toBe(variable.metadata?.customToString?.());
-    expectLoadContentMetadata(metadata);
+    expect(result.toString()).toBe(variable.internal?.customToString?.());
+    expect(wrapper?.ctx.source).toBe('load-content');
   });
   
   it('should tag LoadContentResultArray with __variable metadata', async () => {
@@ -98,7 +93,7 @@ describe('Content Loader Variable Tagging', () => {
     
     // Process the content loader
     const rawResult = await processContentLoader(loadContentNode, env);
-    const { data: result, metadata } = unwrapStructuredForTest<any>(rawResult);
+    const { data: result, wrapper } = unwrapStructuredForTest<any>(rawResult);
     
     // Check that result is an array
     expect(Array.isArray(result)).toBe(true);
@@ -110,15 +105,15 @@ describe('Content Loader Variable Tagging', () => {
     const variable = (result as any).__variable as ArrayVariable;
     expect(variable).toBeDefined();
     expect(variable.type).toBe('array');
-    expect(variable.metadata?.arrayType).toBe('load-content-result');
-    expect(variable.metadata?.joinSeparator).toBe('\n\n');
-    expect(variable.metadata?.fromGlobPattern).toBe(true);
-    expect(variable.metadata?.globPattern).toBe('tests/cases/files/*.txt');
-    expect(variable.metadata?.fileCount).toBe((result as any[]).length);
+    expect(variable.internal?.arrayType).toBe('load-content-result');
+    expect(variable.internal?.joinSeparator).toBe('\n\n');
+    expect(variable.internal?.fromGlobPattern).toBe(true);
+    expect(variable.internal?.globPattern).toBe('tests/cases/files/*.txt');
+    expect(variable.internal?.fileCount).toBe((result as any[]).length);
     
     // Check that customToString is a function
-    expect(typeof variable.metadata?.customToString).toBe('function');
-    expectLoadContentMetadata(metadata);
+    expect(typeof variable.internal?.customToString).toBe('function');
+    expect(wrapper?.ctx.source).toBe('load-content');
   });
   
   it('should preserve __variable metadata through var.ts', async () => {
@@ -145,6 +140,14 @@ describe('Content Loader Variable Tagging', () => {
         fromGlobPattern: true,
         globPattern: 'test/*.txt',
         fileCount: 2
+      },
+      internal: {
+        arrayType: 'renamed-content',
+        joinSeparator: '\n\n',
+        customToString: () => mockArray.join('\n\n'),
+        fromGlobPattern: true,
+        globPattern: 'test/*.txt',
+        fileCount: 2
       }
     };
     
@@ -156,6 +159,6 @@ describe('Content Loader Variable Tagging', () => {
     
     // Verify tagging worked
     expect((mockArray as any).__variable).toBe(mockVariable);
-    expect((mockArray as any).__variable.metadata?.arrayType).toBe('renamed-content');
+    expect((mockArray as any).__variable.internal?.arrayType).toBe('renamed-content');
   });
 });

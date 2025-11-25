@@ -2,7 +2,8 @@
  * Type definitions for directive values arrays
  */
 import {
-  ImportType
+  ImportType,
+  DataLabel
 } from './security';
 
 import {
@@ -43,6 +44,7 @@ export interface ImportValues {
   importType?: ImportType;
   cachedDuration?: TimeDurationNode;
   withClause?: WithClause;
+  securityLabels?: DataLabel[];
 }
 
 export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;
@@ -109,6 +111,7 @@ export interface RunValues {
   command: ContentNodeArray;
   parameters?: ContentNodeArray;
   options?: BaseMlldNode[];
+  securityLabels?: DataLabel[];
 }
 
 /**

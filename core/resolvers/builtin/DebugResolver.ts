@@ -38,13 +38,15 @@ export class DebugResolver implements Resolver {
     // Variable context - return debug object as data
     if (!config?.context || config.context === 'variable') {
       const info = await this.collectDebugInfo();
+      const metadata = {
+        source: 'debug',
+        timestamp: new Date()
+      };
       return {
         content: JSON.stringify(info),
         contentType: 'data',
-        metadata: {
-          source: 'debug',
-          timestamp: new Date()
-        }
+        ctx: metadata,
+        metadata
       };
     }
     
@@ -95,13 +97,15 @@ export class DebugResolver implements Resolver {
         }
       }
       
+      const metadata = {
+        source: 'debug',
+        timestamp: new Date()
+      };
       return {
         content: JSON.stringify(exports),
         contentType: 'data',
-        metadata: {
-          source: 'debug',
-          timestamp: new Date()
-        }
+        ctx: metadata,
+        metadata
       };
     }
     

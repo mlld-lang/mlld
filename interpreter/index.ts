@@ -12,6 +12,7 @@ import * as path from 'path';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 
 import type { ResolvedURLConfig } from '@core/config/types';
+import type { StreamingOptions } from './eval/pipeline/streaming-options';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -49,6 +50,7 @@ export interface InterpretOptions {
   ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
   effectHandler?: EffectHandler; // Optional custom effect handler (tests/CI)
   allowAbsolutePaths?: boolean; // Allow absolute paths outside project root
+  streaming?: StreamingOptions; // Streaming configuration
 }
 
 /**
@@ -255,6 +257,11 @@ export async function interpret(
   if (options.outputOptions) {
     env.setOutputOptions(options.outputOptions);
   }
+
+  // Configure streaming options (flags override environment defaults)
+  const streamingDisabled = process.env.MLLD_NO_STREAM === 'true' || (options.streaming && options.streaming.enabled === false);
+  const streamingOptions = options.streaming ?? { enabled: !streamingDisabled };
+  env.setStreamingOptions(streamingOptions);
   
   // Set stdin content if provided
   if (options.stdinContent !== undefined) {

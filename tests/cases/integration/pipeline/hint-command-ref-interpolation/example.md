@@ -2,7 +2,7 @@
 
 /var @docs = "docs"
 
-/exe @echo(p) = {echo "@p"}
+/exe @echo(p) = cmd {echo "@p"}
 
 /exe @injcheck(answer) = @echo("Previous response: @answer Can you see it?")
 

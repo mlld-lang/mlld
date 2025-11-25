@@ -1,17 +1,31 @@
-/exe @zipAs(entries,values,fieldName) = js {
-  return entries.map((entry, i) => {
-    const obj = {...entry}
-    obj[fieldName] = values[i];
+/exe @zipAs(entries, values, fieldName) = js {
+  const base = entries;
+  const incoming = values;
+  console.log('[issue-435][zipAs] entries:', entries);
+  console.log('[issue-435][zipAs] values:', values);
+  return base.map((entry, i) => {
+    const obj = { ...entry };
+    obj[fieldName] = incoming[i];
+    console.log('[issue-435][zipAs] iteration', i, {
+      entry,
+      incomingValue: incoming[i],
+      fieldName
+    });
     return obj;
   });
 }
 
 /exe @square(arr) = js {
-  return arr.map(x => x * x);
+  console.log('[issue-435][square] arr:', arr);
+  return arr.map(value => {
+    console.log('[issue-435][square] value:', value);
+    return value * value;
+  });
 }
 
 /exe @flat(arr) = js {
-  return arr.flat()
+  console.log('[issue-435][flat] arr:', arr);
+  return arr.flat();
 }
 
 /var @data = '[{"f":1}, {"f":2}, {"f":3}, {"f":4}]' | @json

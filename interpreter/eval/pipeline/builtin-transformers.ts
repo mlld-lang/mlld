@@ -13,16 +13,20 @@ const BUILTIN_TRANSFORMERS = new Set([
   'json',
   'json.loose',
   'json.strict',
+  'json.llm',
+  'json.fromlist',
   'JSON',
   'JSON_LOOSE',
   'JSON_STRICT',
-  'xml', 
+  'JSON_LLM',
+  'JSON_FROMLIST',
+  'xml',
   'XML',
   'csv',
   'CSV',
   'md',
   'MD',
-  
+
   // String transformations
   'upper',
   'UPPER',
@@ -30,7 +34,7 @@ const BUILTIN_TRANSFORMERS = new Set([
   'LOWER',
   'trim',
   'TRIM',
-  
+
   // These might be built-in (need to verify)
   'pretty',
   'PRETTY',

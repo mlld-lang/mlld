@@ -1,2 +1,2 @@
-/exe @formatDate(date) = run {date -d "@date" "+%Y-%m-%d"}
-/exe @validate(data) = js { return data.valid === true }
+/var @access = @score > 80 && @verified ? "granted" : "denied"
+/var @status = @isAdmin || (@isMod && @active) ? "privileged" : "standard"

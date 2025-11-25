@@ -69,7 +69,7 @@ export class InitModuleCommand {
                 // For GitHub resolver, we'll create locally and remind user to commit/push
                 const { repository, basePath } = resolver.config;
                 console.log(chalk.blue(`\nThis will create a module for GitHub repository: ${repository}`));
-                console.log(chalk.gray(`Remote path: ${basePath || 'modules'}/${suggestedModuleName}.mlld.md`));
+                console.log(chalk.gray(`Remote path: ${basePath || 'modules'}/${suggestedModuleName}.mld.md`));
                 console.log('');
                 
                 // Check if we're in a git repo that matches
@@ -172,7 +172,7 @@ export class InitModuleCommand {
       
       // If we have a resolver path, we know exactly where to create it
       if (resolverPath && resolverPrefix) {
-        const moduleFileName = suggestedModuleName + '.mlld.md';
+        const moduleFileName = suggestedModuleName + '.mld.md';
         outputPath = path.join(resolverPath, moduleFileName);
         displayPath = path.relative(process.cwd(), outputPath);
         
@@ -502,8 +502,7 @@ More detailed usage examples and documentation.
 /var @greeting = "Hello from ${metadata.name}!"
 
 >> Add your mlld code here
->> All variables are automatically exported
->> You can optionally create a structured export by adding a /var @module = { ... }
+>> Then \`/export { @greeting, @variable }\`
 \`\`\`
 `;
     
@@ -574,7 +573,7 @@ Options:
 More Examples:
   mlld init --name utils --about "Utility functions"
   mlld init test --author myorg
-  mlld init ./src/helpers.mlld.md
+  mlld init ./src/helpers.mld.md
         `);
         return;
       }

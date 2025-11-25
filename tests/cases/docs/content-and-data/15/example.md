@@ -1,9 +1,8 @@
-/var @jsonStr = '{"name": "Alice", "active": true}'
+>> Extract single section
+/var @install = <README.md # Installation>
 
-/exe @length(str) = js {
-  return str.length;
-}
+>> Extract from multiple files  
+/var @apis = <docs/*.md # API Reference>
 
-/run @length(@jsonStr)          >> Default: string
-/run @length(@jsonStr.text)     >> Explicit string
-/run @length(@jsonStr.content)  >> Alias for .text
+>> Rename sections with 'as'
+/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"

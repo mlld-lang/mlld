@@ -209,7 +209,10 @@ Directive
     / SlashImport   // Import directives (from other files)
     / SlashExport   // Export directives (explicit exports)
     / SlashOutput   // Output directives (output routing)
+    / SlashAppend   // Append directives (incremental file writing)
     / SlashWhen     // When directives (conditional execution)
+    / SlashGuard    // Guard directives (security policies)
+    / SlashStream   // Stream directives
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
 

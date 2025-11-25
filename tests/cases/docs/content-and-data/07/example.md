@@ -1,14 +1,5 @@
-/var @file = <package.json>
+/var @readme = <README.md>               # Load file content
+/var @filename = "README.md"             # Literal string
 
->> Basic metadata
-/show @file.filename                     >> "package.json"
-/show @file.relative                     >> "./package.json" 
-/show @file.absolute                     >> Full path
-
->> Token counting
-/show @file.tokest                       >> Estimated tokens (fast)
-/show @file.tokens                       >> Exact tokens
-
->> Content access
-/show @file.content                      >> File contents (explicit)
-/show @file                              >> Same as above (implicit)
+/show @readme                            # Shows file contents
+/show @filename                          # Shows "README.md"

@@ -1,0 +1,3 @@
+/var @out = { a: 1 } | @json
+
+/show @out

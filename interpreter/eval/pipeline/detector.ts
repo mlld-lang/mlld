@@ -60,7 +60,7 @@ export function detectPipeline(
       delayMs: node.withClause.delayMs
     };
   }
-  
+
   // 3. Check directive.values.withClause (directive-level pipeline)
   if (directive?.values?.withClause && directive.values.withClause.pipeline) {
     return {
@@ -72,7 +72,7 @@ export function detectPipeline(
       delayMs: directive.values.withClause.delayMs
     };
   }
-  
+
   // 4. Check directive.meta.withClause (fallback for some literal cases)
   if (directive?.meta?.withClause && directive.meta.withClause.pipeline) {
     return {
@@ -122,7 +122,7 @@ function convertCondensedPipe(pipe: any): PipelineStage {
       rawArgs: pipe.args || []
     };
   }
-  
+
   // Already in correct format or unknown format - pass through
   return pipe;
 }

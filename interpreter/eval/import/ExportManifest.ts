@@ -6,6 +6,7 @@ import type { SourceLocation } from '@core/types';
  */
 export interface ExportManifestEntry {
   name: string;
+  kind?: 'variable' | 'guard';
   location?: SourceLocation;
 }
 
@@ -20,7 +21,7 @@ export class ExportManifest implements Iterable<ExportManifestEntry> {
       if (!trimmed) continue;
 
       if (!this.entries.has(trimmed)) {
-        this.entries.set(trimmed, { name: trimmed, location: entry.location });
+        this.entries.set(trimmed, { name: trimmed, kind: entry.kind, location: entry.location });
       } else if (entry.location && !this.entries.get(trimmed)?.location) {
         const existing = this.entries.get(trimmed)!;
         this.entries.set(trimmed, { ...existing, location: entry.location });

@@ -4,9 +4,9 @@
   return items.filter(item => item.active === true);
 }
 
-/exe @processWithStdin(data) = run { cat } with { stdin: @data, pipeline: [@filterActive] }
+/exe @processWithStdin(data) = run cmd { cat } with { stdin: @data, pipeline: [@filterActive] }
 
-/exe @processWithPipe(data) = run @data | { cat } | @filterActive
+/exe @processWithPipe(data) = run cmd { cat } with { stdin: @data, pipeline: [@filterActive] }
 
 /var @jsonData = '[{"name": "Alice", "active": true}, {"name": "Bob", "active": false}]'
 

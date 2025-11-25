@@ -31,7 +31,8 @@ export class MetadataPreserver {
           transformed,
           (wrapper && wrapper.type) || 'array',
           JSON.stringify(transformed),
-          wrapper?.metadata
+          wrapper?.ctx,
+          wrapper?.internal
         );
       }
 
@@ -73,8 +74,8 @@ export class MetadataPreserver {
       original.isComplex || false,
       original.source,
       {
-        ...original.metadata,
-        transformedBy: 'array-operation'
+        ctx: { ...original.ctx },
+        internal: { ...original.internal, transformedBy: 'array-operation' }
       }
     );
   }

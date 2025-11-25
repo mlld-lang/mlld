@@ -24,9 +24,142 @@ import {
   StructuredValueVariable,
   PrimitiveVariable,
   PipelineInput,
-  Variable
+  Variable,
+  VariableContext,
+  VariableInternalMetadata
 } from './VariableTypes';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
+import { ensureStructuredValue, applySecurityDescriptorToStructuredValue } from '@interpreter/utils/structured-value';
+import { legacyMetadataToCtx, legacyMetadataToInternal } from './CtxHelpers';
+import { VariableMetadataUtils } from './VariableMetadata';
+import { attachArrayHelpers } from './ArrayHelpers';
+import type { TokenEstimationOptions } from '@core/utils/token-metrics';
+
+export interface VariableFactoryInitOptions {
+  ctx?: Partial<VariableContext>;
+  internal?: Partial<VariableInternalMetadata>;
+  metadata?: VariableMetadata;
+}
+
+interface NormalizedFactoryState {
+  metadata?: VariableMetadata;
+  ctx: VariableContext;
+  internal: VariableInternalMetadata;
+}
+
+function finalizeVariable<T extends Variable>(variable: T & { metadata?: VariableMetadata }): T {
+  const legacyMetadata = variable.metadata;
+  if (!variable.ctx) {
+    variable.ctx = legacyMetadata
+      ? legacyMetadataToCtx(legacyMetadata)
+      : {
+          labels: [],
+          taint: 'unknown',
+          sources: [],
+          policy: null
+        };
+  }
+  if (variable.ctx) {
+    variable.ctx.name = variable.name;
+    variable.ctx.type = variable.type;
+    if (variable.definedAt) {
+      variable.ctx.definedAt = variable.definedAt;
+    }
+  }
+  if (!variable.internal) {
+    variable.internal = {};
+  }
+  if ('metadata' in variable) {
+    delete (variable as Record<string, unknown>).metadata;
+  }
+  return VariableMetadataUtils.attachContext(variable);
+}
+
+function applyTextMetrics(
+  metadata: VariableMetadata | undefined,
+  text: string | undefined,
+  options?: TokenEstimationOptions
+): VariableMetadata | undefined {
+  return VariableMetadataUtils.applyTextMetrics(metadata, text, options);
+}
+
+function normalizeFactoryOptions(
+  metadataOrOptions: VariableMetadata | VariableFactoryInitOptions | undefined,
+  text?: string,
+  tokenOptions?: TokenEstimationOptions
+): NormalizedFactoryState {
+  const { legacyMetadata, ctxOverrides, internalOverrides } = extractFactoryInput(metadataOrOptions);
+  const metadata = applyTextMetrics(legacyMetadata, text, tokenOptions);
+  const ctx = Object.assign(
+    metadata ? legacyMetadataToCtx(metadata) : {
+      labels: [],
+      taint: 'unknown',
+      sources: [],
+      policy: null
+    },
+    ctxOverrides
+  );
+  const internal = Object.assign(metadata ? legacyMetadataToInternal(metadata) : {}, internalOverrides);
+  return { metadata, ctx, internal };
+}
+
+function enrichStructuredMetadata(
+  metadataOrOptions: VariableMetadata | VariableFactoryInitOptions | undefined,
+  structuredValue: StructuredValue
+): VariableMetadata | VariableFactoryInitOptions | undefined {
+  const structuredFields = {
+    isStructuredValue: true,
+    structuredValueType: structuredValue.type
+  };
+
+  if (!metadataOrOptions) {
+    return { metadata: structuredFields };
+  }
+
+  if (isFactoryInitOptions(metadataOrOptions)) {
+    return {
+      ...metadataOrOptions,
+      metadata: {
+        ...(metadataOrOptions.metadata ?? {}),
+        ...structuredFields
+      }
+    };
+  }
+
+  return {
+    ...metadataOrOptions,
+    ...structuredFields
+  };
+}
+
+function extractFactoryInput(
+  metadataOrOptions: VariableMetadata | VariableFactoryInitOptions | undefined
+): {
+  legacyMetadata?: VariableMetadata;
+  ctxOverrides?: Partial<VariableContext>;
+  internalOverrides?: Partial<VariableInternalMetadata>;
+} {
+  if (!metadataOrOptions) {
+    return {};
+  }
+
+  if (isFactoryInitOptions(metadataOrOptions)) {
+    return {
+      legacyMetadata: metadataOrOptions.metadata,
+      ctxOverrides: metadataOrOptions.ctx,
+      internalOverrides: metadataOrOptions.internal
+    };
+  }
+
+  return { legacyMetadata: metadataOrOptions };
+}
+
+function isFactoryInitOptions(value: unknown): value is VariableFactoryInitOptions {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  return 'ctx' in value || 'internal' in value || 'metadata' in value;
+}
 
 // =========================================================================
 // INDIVIDUAL FACTORY FUNCTION EXPORTS (for backward compatibility)
@@ -39,9 +172,9 @@ export function createSimpleTextVariable(
   name: string,
   value: string,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): SimpleTextVariable {
-  return VariableFactory.createSimpleText(name, value, source, metadata);
+  return VariableFactory.createSimpleText(name, value, source, metadataOrOptions);
 }
 
 /**
@@ -52,9 +185,15 @@ export function createInterpolatedTextVariable(
   value: string,
   interpolationPoints: Array<{ start: number; end: number; expression: string }>,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): InterpolatedTextVariable {
-  return VariableFactory.createInterpolatedText(name, value, interpolationPoints, source, metadata);
+  return VariableFactory.createInterpolatedText(
+    name,
+    value,
+    interpolationPoints,
+    source,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -66,9 +205,16 @@ export function createTemplateVariable(
   parameters: string[] | undefined,
   templateSyntax: 'double-bracket' | 'backtick' | 'doubleColon' | 'tripleColon',
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): TemplateVariable {
-  return VariableFactory.createTemplate(name, value, parameters, templateSyntax, source, metadata);
+  return VariableFactory.createTemplate(
+    name,
+    value,
+    parameters,
+    templateSyntax,
+    source,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -79,9 +225,16 @@ export function createFileContentVariable(
   value: string,
   filePath: string,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): FileContentVariable {
-  return VariableFactory.createFileContent(name, value, filePath, source, undefined, metadata);
+  return VariableFactory.createFileContent(
+    name,
+    value,
+    filePath,
+    source,
+    undefined,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -94,9 +247,17 @@ export function createSectionContentVariable(
   sectionName: string,
   sectionSyntax: 'hash' | 'bracket',
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): SectionContentVariable {
-  return VariableFactory.createSectionContent(name, value, filePath, sectionName, sectionSyntax, source, metadata);
+  return VariableFactory.createSectionContent(
+    name,
+    value,
+    filePath,
+    sectionName,
+    sectionSyntax,
+    source,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -107,9 +268,9 @@ export function createObjectVariable(
   value: Record<string, any>,
   isComplex: boolean,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): ObjectVariable {
-  return VariableFactory.createObject(name, value, isComplex, source, metadata);
+  return VariableFactory.createObject(name, value, isComplex, source, metadataOrOptions);
 }
 
 /**
@@ -120,9 +281,9 @@ export function createArrayVariable(
   value: any[],
   isComplex: boolean,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): ArrayVariable {
-  return VariableFactory.createArray(name, value, isComplex, source, metadata);
+  return VariableFactory.createArray(name, value, isComplex, source, metadataOrOptions);
 }
 
 /**
@@ -134,9 +295,16 @@ export function createComputedVariable(
   language: 'js' | 'node' | 'python' | 'sh',
   sourceCode: string,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): ComputedVariable {
-  return VariableFactory.createComputed(name, value, language, sourceCode, source, metadata);
+  return VariableFactory.createComputed(
+    name,
+    value,
+    language,
+    sourceCode,
+    source,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -149,9 +317,17 @@ export function createCommandResultVariable(
   source: VariableSource,
   exitCode?: number,
   stderr?: string,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): CommandResultVariable {
-  return VariableFactory.createCommandResult(name, value, command, source, exitCode, stderr, metadata);
+  return VariableFactory.createCommandResult(
+    name,
+    value,
+    command,
+    source,
+    exitCode,
+    stderr,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -164,9 +340,17 @@ export function createPathVariable(
   isURL: boolean,
   isAbsolute: boolean,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): PathVariable {
-  return VariableFactory.createPath(name, resolvedPath, originalPath, isURL, isAbsolute, source, metadata);
+  return VariableFactory.createPath(
+    name,
+    resolvedPath,
+    originalPath,
+    isURL,
+    isAbsolute,
+    source,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -180,9 +364,18 @@ export function createImportedVariable(
   isModule: boolean,
   variableName: string,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): ImportedVariable {
-  return VariableFactory.createImported(name, value, originalType, importPath, isModule, variableName, source, metadata);
+  return VariableFactory.createImported(
+    name,
+    value,
+    originalType,
+    importPath,
+    isModule,
+    variableName,
+    source,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -190,14 +383,22 @@ export function createImportedVariable(
  */
 export function createExecutableVariable(
   name: string,
-  type: 'command' | 'code',
+  type: 'command' | 'code' | 'data',
   template: string,
   paramNames: string[],
   language: 'js' | 'node' | 'python' | 'sh' | 'bash' | undefined,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): ExecutableVariable {
-  return VariableFactory.createExecutable(name, type, template, paramNames, language, source, metadata);
+  return VariableFactory.createExecutable(
+    name,
+    type,
+    template,
+    paramNames,
+    language,
+    source,
+    metadataOrOptions
+  );
 }
 
 /**
@@ -221,9 +422,9 @@ export function createStructuredValueVariable(
   name: string,
   value: StructuredValue,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): StructuredValueVariable {
-  return VariableFactory.createStructuredValue(name, value, source, metadata);
+  return VariableFactory.createStructuredValue(name, value, source, metadataOrOptions);
 }
 
 /**
@@ -233,9 +434,9 @@ export function createPrimitiveVariable(
   name: string,
   value: number | boolean | null,
   source: VariableSource,
-  metadata?: VariableMetadata
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
 ): PrimitiveVariable {
-  return VariableFactory.createPrimitive(name, value, source, metadata);
+  return VariableFactory.createPrimitive(name, value, source, metadataOrOptions);
 }
 
 
@@ -259,17 +460,19 @@ export class VariableFactory {
     name: string,
     value: string,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): SimpleTextVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions, value);
+    return finalizeVariable({
       type: 'simple-text',
       name,
       value,
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   /**
@@ -280,9 +483,10 @@ export class VariableFactory {
     value: string,
     interpolationPoints: Array<{ start: number; end: number; expression: string }>,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): InterpolatedTextVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions, value);
+    return finalizeVariable({
       type: 'interpolated-text',
       name,
       value,
@@ -290,8 +494,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   /**
@@ -303,9 +508,11 @@ export class VariableFactory {
     parameters: string[] | undefined,
     templateSyntax: 'double-bracket' | 'backtick' | 'doubleColon' | 'tripleColon',
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): TemplateVariable {
-    return {
+    const textValue = typeof value === 'string' ? value : undefined;
+    const init = normalizeFactoryOptions(metadataOrOptions, textValue);
+    return finalizeVariable({
       type: 'template',
       name,
       value,
@@ -314,8 +521,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   // =========================================================================
@@ -331,9 +539,12 @@ export class VariableFactory {
     filePath: string,
     source: VariableSource,
     encoding?: string,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): FileContentVariable {
-    return {
+    const extensionMatch = filePath.match(/\.([a-zA-Z0-9]+)$/);
+    const extension = extensionMatch ? extensionMatch[1].toLowerCase() : undefined;
+    const init = normalizeFactoryOptions(metadataOrOptions, value, { extension });
+    return finalizeVariable({
       type: 'file-content',
       name,
       value,
@@ -342,8 +553,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   /**
@@ -356,9 +568,12 @@ export class VariableFactory {
     sectionName: string,
     sectionSyntax: 'hash' | 'bracket',
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): SectionContentVariable {
-    return {
+    const extensionMatch = filePath.match(/\.([a-zA-Z0-9]+)$/);
+    const extension = extensionMatch ? extensionMatch[1].toLowerCase() : undefined;
+    const init = normalizeFactoryOptions(metadataOrOptions, value, { extension });
+    return finalizeVariable({
       type: 'section-content',
       name,
       value,
@@ -368,8 +583,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   // =========================================================================
@@ -384,9 +600,10 @@ export class VariableFactory {
     value: Record<string, any>,
     isComplex: boolean,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ObjectVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions);
+    return finalizeVariable({
       type: 'object',
       name,
       value,
@@ -394,8 +611,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   /**
@@ -406,9 +624,10 @@ export class VariableFactory {
     value: any[],
     isComplex: boolean,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ArrayVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions);
+    const arrayVariable = finalizeVariable({
       type: 'array',
       name,
       value,
@@ -416,8 +635,11 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    }) as ArrayVariable;
+    attachArrayHelpers(arrayVariable);
+    return arrayVariable;
   }
 
   // =========================================================================
@@ -433,9 +655,11 @@ export class VariableFactory {
     language: 'js' | 'node' | 'python' | 'sh',
     sourceCode: string,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ComputedVariable {
-    return {
+    const textValue = typeof value === 'string' ? value : undefined;
+    const init = normalizeFactoryOptions(metadataOrOptions, textValue);
+    return finalizeVariable({
       type: 'computed',
       name,
       value,
@@ -444,8 +668,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   /**
@@ -458,9 +683,10 @@ export class VariableFactory {
     source: VariableSource,
     exitCode?: number,
     stderr?: string,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): CommandResultVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions, value);
+    return finalizeVariable({
       type: 'command-result',
       name,
       value,
@@ -470,8 +696,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   // =========================================================================
@@ -488,9 +715,10 @@ export class VariableFactory {
     isURL: boolean,
     isAbsolute: boolean,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): PathVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions);
+    return finalizeVariable({
       type: 'path',
       name,
       value: {
@@ -502,8 +730,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   /**
@@ -517,9 +746,10 @@ export class VariableFactory {
     isModule: boolean,
     variableName: string,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ImportedVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions);
+    return finalizeVariable({
       type: 'imported',
       name,
       value,
@@ -532,8 +762,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
   /**
@@ -541,27 +772,37 @@ export class VariableFactory {
    */
   static createExecutable(
     name: string,
-    type: 'command' | 'code',
+    type: 'command' | 'code' | 'data',
     template: string,
     paramNames: string[],
     language: 'js' | 'node' | 'python' | 'sh' | 'bash' | undefined,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ExecutableVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions);
+    const executableDefinition = {
+      type,
+      template,
+      language
+    };
+    const variable = finalizeVariable({
       type: 'executable',
       name,
-      value: {
-        type,
-        template,
-        language
-      },
+      value: executableDefinition,
       paramNames,
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
+    if (init.internal?.executableDef === undefined) {
+      variable.internal = {
+        ...(variable.internal ?? {}),
+        executableDef: executableDefinition
+      };
+    }
+    return variable;
   }
 
   /**
@@ -575,7 +816,12 @@ export class VariableFactory {
     source: VariableSource,
     pipelineStage?: number
   ): PipelineInputVariable {
-    return {
+    const baseMetadata: VariableMetadata = {
+      isPipelineInput: true,
+      pipelineStage
+    };
+    const init = normalizeFactoryOptions({ metadata: baseMetadata }, rawText, { format });
+    return finalizeVariable({
       type: 'pipeline-input',
       name,
       value,
@@ -584,11 +830,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata: {
-        isPipelineInput: true,
-        pipelineStage
-      }
-    };
+      ctx: init.ctx,
+      internal: init.internal ?? baseMetadata
+    });
   }
 
   /**
@@ -598,23 +842,42 @@ export class VariableFactory {
     name: string,
     value: StructuredValue,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): StructuredValueVariable {
-    const structuredMetadata: VariableMetadata = {
-      ...metadata,
-      isStructuredValue: true,
-      structuredValueType: value.type
-    };
+    const structuredValue = ensureStructuredValue(value);
+    const enrichedInput = enrichStructuredMetadata(metadataOrOptions, structuredValue);
+    const baseMetadata = isFactoryInitOptions(enrichedInput)
+      ? enrichedInput.metadata
+      : enrichedInput;
+    const mergedMetadata = VariableMetadataUtils.mergeMetadata(
+      structuredValue.metadata as any,
+      baseMetadata as any
+    );
+    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(mergedMetadata, {
+      existingDescriptor: structuredValue.metadata?.security
+    });
+    // Attach metadata/security in place to preserve identity
+    structuredValue.metadata = securityAwareMetadata as any;
+    if (securityAwareMetadata?.security) {
+      applySecurityDescriptorToStructuredValue(structuredValue, securityAwareMetadata.security);
+    }
+    const init = normalizeFactoryOptions(
+      isFactoryInitOptions(enrichedInput)
+        ? { ...enrichedInput, metadata: securityAwareMetadata }
+        : securityAwareMetadata,
+      structuredValue.text
+    );
 
-    return {
+    return finalizeVariable({
       type: 'structured',
       name,
-      value,
+      value: structuredValue,
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata: structuredMetadata
-    };
+      ctx: init.ctx,
+      internal: init.internal ?? securityAwareMetadata
+    });
   }
 
   /**
@@ -624,9 +887,10 @@ export class VariableFactory {
     name: string,
     value: number | boolean | null,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): PrimitiveVariable {
-    return {
+    const init = normalizeFactoryOptions(metadataOrOptions, typeof value === 'string' ? value : undefined);
+    return finalizeVariable({
       type: 'primitive',
       name,
       value,
@@ -634,8 +898,9 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      metadata
-    };
+      ctx: init.ctx,
+      internal: init.internal
+    });
   }
 
 
@@ -650,20 +915,20 @@ export class VariableFactory {
     name: string,
     value: any,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): SimpleTextVariable | ObjectVariable | ArrayVariable | PrimitiveVariable {
     // Auto-detect type based on value
     if (typeof value === 'string') {
-      return this.createSimpleText(name, value, source, metadata);
+      return this.createSimpleText(name, value, source, metadataOrOptions);
     } else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
-      return this.createPrimitive(name, value, source, metadata);
+      return this.createPrimitive(name, value, source, metadataOrOptions);
     } else if (Array.isArray(value)) {
-      return this.createArray(name, value, false, source, metadata);
+      return this.createArray(name, value, false, source, metadataOrOptions);
     } else if (typeof value === 'object' && value !== null) {
-      return this.createObject(name, value, false, source, metadata);
+      return this.createObject(name, value, false, source, metadataOrOptions);
     } else {
       // Fallback to simple text with string conversion
-      return this.createSimpleText(name, String(value), source, metadata);
+      return this.createSimpleText(name, String(value), source, metadataOrOptions);
     }
   }
 
@@ -675,7 +940,7 @@ export class VariableFactory {
     value: string,
     parameters?: string[],
     source?: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): TemplateVariable {
     // Detect template syntax from content
     const templateSyntax = value.includes('{{') && value.includes('}}') 
@@ -690,7 +955,7 @@ export class VariableFactory {
       isMultiLine: value.includes('\n')
     };
 
-    return this.createTemplate(name, value, parameters, templateSyntax, finalSource, metadata);
+    return this.createTemplate(name, value, parameters, templateSyntax, finalSource, metadataOrOptions);
   }
 
   /**
@@ -700,11 +965,11 @@ export class VariableFactory {
     name: string,
     value: Record<string, any>,
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ObjectVariable {
     // Simple heuristic for complexity detection
     const isComplex = this.detectComplexity(value);
-    return this.createObject(name, value, isComplex, source, metadata);
+    return this.createObject(name, value, isComplex, source, metadataOrOptions);
   }
 
   /**
@@ -714,13 +979,13 @@ export class VariableFactory {
     name: string,
     value: any[],
     source: VariableSource,
-    metadata?: VariableMetadata
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ArrayVariable {
     // Simple heuristic for complexity detection
     const isComplex = value.some(item => 
       typeof item === 'object' && item !== null && this.detectComplexity(item)
     );
-    return this.createArray(name, value, isComplex, source, metadata);
+    return this.createArray(name, value, isComplex, source, metadataOrOptions);
   }
 
   // =========================================================================
@@ -780,20 +1045,6 @@ export class VariableFactory {
       valid: errors.length === 0,
       errors
     };
-  }
-
-  /**
-   * Clone a variable with updated metadata
-   */
-  static cloneWithMetadata<T extends import('./VariableTypes').Variable = import('./VariableTypes').Variable>(
-    variable: T,
-    newMetadata: VariableMetadata
-  ): T {
-    return {
-      ...variable,
-      metadata: { ...variable.metadata, ...newMetadata },
-      modifiedAt: Date.now()
-    } as T;
   }
 
   /**

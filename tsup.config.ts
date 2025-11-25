@@ -71,12 +71,12 @@ const getEsbuildOptions = (format: string) => (options: EsbuildOptions) => {
   
   // Optimize for DI-based code
   options.keepNames = true; // Required for reflection-based DI
-  
+
   // Ensure proper module resolution
   options.resolveExtensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
   options.format = format;
   options.target = 'es2020';
-  
+
   return options;
 };
 

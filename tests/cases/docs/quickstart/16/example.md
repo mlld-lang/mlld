@@ -1,6 +1,8 @@
-/var @docs = <docs/*.md>
-/show `Found @docs.length() documentation files`
+/var @records = [
+  {"id": 1, "status": "ok"},
+  {"id": 2, "status": "retry"}
+]
 
-# Transform each file with templates
-/var @toc = <docs/*.md> as "- [@filename](@relative)"
-/show @toc
+/for @record in @records => append @record to "jobs.jsonl"
+
+/show <jobs.jsonl>

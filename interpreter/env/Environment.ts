@@ -1,5 +1,5 @@
 import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, PipelineInput, VariableMetadata } from '@core/types/variable';
+import type { Variable, VariableSource, PipelineInput } from '@core/types/variable';
 import { 
   createSimpleTextVariable, 
   createObjectVariable, 
@@ -19,6 +19,18 @@ import * as path from 'path';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
+import {
+  makeSecurityDescriptor,
+  mergeDescriptors,
+  createCapabilityContext,
+  type SecurityDescriptor,
+  type CapabilityContext,
+  type CapabilityKind,
+  type ImportType,
+  type DataLabel,
+  type TaintLevel
+} from '@core/types/security';
+import { TaintTracker } from '@core/security';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -38,13 +50,51 @@ import { ImportResolver, type IImportResolver, type ImportResolverDependencies, 
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
-import { looksLikeJsonString } from '@interpreter/utils/structured-value';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
+import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
 import { ExportManifest } from '../eval/import/ExportManifest';
+import {
+  ContextManager,
+  type PipelineContextSnapshot,
+  type GuardContextSnapshot,
+  type OperationContext,
+  type DeniedContextSnapshot,
+  type GuardHistoryEntry
+} from './ContextManager';
+import { HookManager } from '../hooks/HookManager';
+import { guardPreHook } from '../hooks/guard-pre-hook';
+import { guardPostHook } from '../hooks/guard-post-hook';
+import { taintPostHook } from '../hooks/taint-post-hook';
+import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
+import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 
 interface ImportBindingInfo {
   source: string;
   location?: SourceLocation;
+}
+
+interface SecurityScopeFrame {
+  kind: CapabilityKind;
+  importType?: ImportType;
+  metadata?: Readonly<Record<string, unknown>>;
+  operation?: Readonly<Record<string, unknown>>;
+  previousDescriptor: SecurityDescriptor;
+  previousPolicy?: Readonly<Record<string, unknown>>;
+}
+
+interface SecurityRuntimeState {
+  tracker: TaintTracker;
+  descriptor: SecurityDescriptor;
+  stack: SecurityScopeFrame[];
+  policy?: Readonly<Record<string, unknown>>;
+}
+
+interface SecuritySnapshot {
+  labels: readonly DataLabel[];
+  sources: readonly string[];
+  taintLevel: TaintLevel;
+  policy?: Readonly<Record<string, unknown>>;
+  operation?: Readonly<Record<string, unknown>>;
 }
 
 
@@ -60,6 +110,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Note: importApproval and immutableCache are now handled by ImportResolver
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
+  private securityRuntime?: SecurityRuntimeState;
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
@@ -79,20 +130,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private commandExecutorFactory: CommandExecutorFactory;
   private variableManager: IVariableManager;
   private importResolver: IImportResolver;
+  private contextManager: ContextManager;
+  private hookManager: HookManager;
+  private guardRegistry: GuardRegistry;
+  private pipelineGuardHistory?: GuardHistoryEntry[];
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
   private nodeShadowEnv?: NodeShadowEnvironment; // VM-based Node.js shadow environment
-  
-  // Pipeline execution context
-  private pipelineContext?: {
-    stage: number;
-    totalStages: number;
-    currentCommand: string;
-    input: any;
-    previousOutputs: string[];
-    format?: string;
-  };
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -102,6 +147,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     timeout: 30000,
     collectErrors: false
   };
+  private streamingOptions: StreamingOptions = defaultStreamingOptions;
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -163,6 +209,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
   // TODO: Introduce guard registration and evaluation using capability contexts.
+  // Guard evaluation depth prevents reentrant guard execution
+  private guardEvaluationDepth = 0;
 
   // Constructor overloads
   constructor(
@@ -198,6 +246,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Initialize effect handler: use provided, inherit from parent, or create default
     this.effectHandler = effectHandler || parent?.effectHandler || new DefaultEffectHandler();
+
+    if (parent) {
+      this.contextManager = parent.contextManager;
+      this.hookManager = parent.hookManager;
+      this.guardRegistry = parent.guardRegistry.createChild();
+    } else {
+      this.contextManager = new ContextManager();
+      this.hookManager = new HookManager();
+      this.guardRegistry = new GuardRegistry();
+      this.registerBuiltinHooks();
+    }
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -329,7 +388,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getBasePath: () => this.getProjectRoot(),
       getFileDirectory: () => this.getFileDirectory(),
       getExecutionDirectory: () => this.getExecutionDirectory(),
-      getPipelineContext: () => this.getPipelineContext()
+      getPipelineContext: () => this.getPipelineContext(),
+      getSecuritySnapshot: () => this.getSecuritySnapshot(),
+      recordSecurityDescriptor: descriptor => this.recordSecurityDescriptor(descriptor),
+      getContextManager: () => this.contextManager
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -339,6 +401,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize built-in transformers
       this.initializeBuiltinTransformers();
+
+      // Register keep/keepStructured builtins
+      this.registerKeepBuiltins();
       
       // Reserve module prefixes from resolver configuration and create path variables
       this.reserveModulePrefixes();
@@ -367,6 +432,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getAllowAbsolutePaths: () => this.allowAbsolutePaths
     };
     this.importResolver = new ImportResolver(importResolverDependencies);
+
+    // Ensure keep/keepStructured helpers are available even from child environments
+    this.getRootEnvironment().registerKeepBuiltins();
     
     // Initialize command executor factory with dependencies
     const executorDependencies: ExecutorDependencies = {
@@ -453,10 +521,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
               isMultiLine: false
             },
             {
-              isReserved: true,
-              isPrefixPath: true,
-              prefixConfig: prefixConfig,
-              definedAt: { line: 0, column: 0, filePath: '<prefix-config>' }
+              ctx: {
+                definedAt: { line: 0, column: 0, filePath: '<prefix-config>' }
+              },
+              internal: {
+                isReserved: true,
+                isPrefixPath: true,
+                prefixConfig: prefixConfig
+              }
             }
           );
           this.variableManager.setVariable(prefixName, pathVar);
@@ -497,10 +569,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.reservedNames.add(transformer.name);
 
       if (transformer.variants && transformer.variants.length > 0) {
-        const lowerMetadata = (lowerVar.metadata ??= {} as any);
-        const upperMetadata = (upperVar.metadata ??= {} as any);
-        const lowerVariantMap = lowerMetadata.transformerVariants ?? (lowerMetadata.transformerVariants = {} as Record<string, any>);
-        const upperVariantMap = upperMetadata.transformerVariants ?? (upperMetadata.transformerVariants = {} as Record<string, any>);
+        const lowerInternal = (lowerVar.internal ??= {});
+        const upperInternal = (upperVar.internal ??= {});
+        const lowerVariantMap =
+          (lowerInternal.transformerVariants as Record<string, any> | undefined) ??
+          (lowerInternal.transformerVariants = {});
+        const upperVariantMap =
+          (upperInternal.transformerVariants as Record<string, any> | undefined) ??
+          (upperInternal.transformerVariants = {});
         for (const variant of transformer.variants) {
           const lowerVariant = createTransformerVariable(
             `${transformer.name}.${variant.field}`,
@@ -581,13 +657,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get the execution directory (where commands run)
+   * If we have an inferred project root and the file is within the project,
+   * use the project root. Otherwise use the script's directory.
    */
   getExecutionDirectory(): string {
     const context = this.getPathContext();
     if (context) {
-      return context.executionDirectory;
+      // Check if file directory is within the project root
+      const isFileInProject = context.fileDirectory.startsWith(context.projectRoot);
+
+      // If we have an inferred project root (different from file directory)
+      // AND the file is within the project, use project root for commands
+      if (isFileInProject &&
+          context.projectRoot &&
+          context.projectRoot !== context.fileDirectory) {
+        return context.projectRoot;
+      }
+      // Otherwise use the file's directory (script location)
+      return context.fileDirectory;
     }
-    // In legacy mode, use basePath
+    // Fallback in legacy mode
     return this.basePath;
   }
   
@@ -649,6 +738,93 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (this.securityManager) return this.securityManager;
     return this.parent?.getSecurityManager();
   }
+
+  getSecuritySnapshot(): SecuritySnapshot | undefined {
+    if (this.securityRuntime) {
+      const top = this.securityRuntime.stack[this.securityRuntime.stack.length - 1];
+      return {
+        labels: this.securityRuntime.descriptor.labels,
+        sources: this.securityRuntime.descriptor.sources,
+        taintLevel: this.securityRuntime.descriptor.taintLevel,
+        policy: this.securityRuntime.policy,
+        operation: top?.operation
+      };
+    }
+    return this.parent?.getSecuritySnapshot();
+  }
+
+  protected ensureSecurityRuntime(): SecurityRuntimeState {
+    if (!this.securityRuntime) {
+      this.securityRuntime = {
+        tracker: new TaintTracker(),
+        descriptor: makeSecurityDescriptor(),
+        stack: [],
+        policy: undefined
+      };
+    }
+    return this.securityRuntime;
+  }
+
+  pushSecurityContext(input: {
+    descriptor: SecurityDescriptor;
+    kind: CapabilityKind;
+    importType?: ImportType;
+    metadata?: Record<string, unknown>;
+    operation?: Record<string, unknown>;
+    policy?: Record<string, unknown>;
+  }): void {
+    const runtime = this.ensureSecurityRuntime();
+    const previousDescriptor = runtime.descriptor;
+    const merged = mergeDescriptors(previousDescriptor, input.descriptor);
+    const policy = input.policy ?? runtime.policy;
+    runtime.stack.push({
+      kind: input.kind,
+      importType: input.importType,
+      metadata: input.metadata ? Object.freeze({ ...input.metadata }) : undefined,
+      operation: input.operation ? Object.freeze({ ...input.operation }) : undefined,
+      previousDescriptor,
+      previousPolicy: runtime.policy
+    });
+    runtime.descriptor = merged;
+    runtime.policy = policy;
+  }
+
+  popSecurityContext(): CapabilityContext | undefined {
+    const runtime = this.securityRuntime;
+    if (!runtime) {
+      return undefined;
+    }
+    const frame = runtime.stack.pop();
+    if (!frame) {
+      return undefined;
+    }
+    const descriptor = runtime.descriptor;
+    const context = createCapabilityContext({
+      kind: frame.kind,
+      importType: frame.importType,
+      descriptor,
+      metadata: frame.metadata,
+      policy: runtime.policy,
+      operation: frame.operation
+    });
+    runtime.descriptor = frame.previousDescriptor;
+    runtime.policy = frame.previousPolicy;
+    return context;
+  }
+
+  mergeSecurityDescriptors(
+    ...descriptors: Array<SecurityDescriptor | undefined>
+  ): SecurityDescriptor {
+    return mergeDescriptors(...descriptors);
+  }
+
+  recordSecurityDescriptor(descriptor: SecurityDescriptor | undefined): void {
+    if (!descriptor) {
+      return;
+    }
+    const runtime = this.ensureSecurityRuntime();
+    runtime.descriptor = mergeDescriptors(runtime.descriptor, descriptor);
+  }
   
   getRegistryManager(): RegistryManager | undefined {
     // Get from this environment or parent
@@ -693,24 +869,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Add a file path to the interpolation stack
+   * Each environment maintains its own stack to support parallel execution
    */
   pushInterpolationStack(path: string): void {
-    if (this.parent) {
-      this.parent.pushInterpolationStack(path);
-    } else {
-      this.interpolationStack.add(path);
-    }
+    this.interpolationStack.add(path);
   }
-  
+
   /**
    * Remove a file path from the interpolation stack
+   * Each environment maintains its own stack to support parallel execution
    */
   popInterpolationStack(path: string): void {
-    if (this.parent) {
-      this.parent.popInterpolationStack(path);
-    } else {
-      this.interpolationStack.delete(path);
-    }
+    this.interpolationStack.delete(path);
   }
   
   /**
@@ -742,18 +912,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   getVariable(name: string): Variable | undefined {
-    // First check local variables
-    const localVar = this.variableManager.getVariable(name);
-    if (localVar) {
-      return localVar;
-    }
-
-    // Fall back to captured module environment if available
-    if (this.capturedModuleEnv) {
-      return this.capturedModuleEnv.get(name);
-    }
-
-    return undefined;
+    // Delegate entirely to VariableManager which handles local, captured, and parent lookups
+    return this.variableManager.getVariable(name);
   }
 
   /**
@@ -767,48 +927,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   /**
    * Set pipeline execution context
    */
-  setPipelineContext(context: {
-    stage: number;
-    totalStages: number;
-    currentCommand: string;
-    input: any;
-    previousOutputs: string[];
-    format?: string;
-    // Optional retry context data for ambient @ctx
-    attemptCount?: number;
-    attemptHistory?: any[];
-    hint?: string | null;
-    hintHistory?: string[];
-  }): void {
-    this.pipelineContext = context;
+  setPipelineContext(context: PipelineContextSnapshot): void {
+    this.contextManager.pushPipelineContext(context);
   }
   
   /**
    * Clear pipeline execution context
    */
   clearPipelineContext(): void {
-    this.pipelineContext = undefined;
+    this.contextManager.popPipelineContext();
+  }
+
+  updatePipelineContext(context: PipelineContextSnapshot): void {
+    this.contextManager.replacePipelineContext(context);
   }
   
   /**
    * Get current pipeline context
    */
-  getPipelineContext(): typeof this.pipelineContext {
-    // Check this environment first
-    if (this.pipelineContext) {
-      return this.pipelineContext;
-    }
-    
-    // Check parent environments
-    let current = this.parent;
-    while (current) {
-      if (current.pipelineContext) {
-        return current.pipelineContext;
-      }
-      current = current.parent;
-    }
-    
-    return undefined;
+  getPipelineContext(): PipelineContextSnapshot | undefined {
+    return this.contextManager.peekPipelineContext();
   }
   
   /**
@@ -838,8 +976,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         false, // Not complex, it's just a string
         debugSource,
         {
-          isReserved: true,
-          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          ctx: {
+            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          },
+          internal: {
+            isReserved: true
+          }
         }
       );
       return debugVar;
@@ -847,8 +989,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Check cache first
     const cached = this.cacheManager.getResolverVariable(name);
-    if (cached && cached.metadata && 'needsResolution' in cached.metadata && !cached.metadata.needsResolution) {
-      return cached;
+    if (cached) {
+      const needsResolution = cached.internal?.needsResolution;
+      if (needsResolution === false) {
+        return cached;
+      }
     }
     
     // Get the resolver manager
@@ -885,19 +1030,29 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         hasInterpolation: false,
         isMultiLine: false
       };
-      const resolvedVar = varType === 'data' ?
-        createObjectVariable(name, varValue, true, resolverSource, {
-          isReserved: true,
-          isResolver: true,
-          resolverName: name,
-          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-        }) :
-        createSimpleTextVariable(name, varValue, resolverSource, {
-          isReserved: true,
-          isResolver: true,
-          resolverName: name,
-          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-        });
+      const resolvedVar = varType === 'data'
+        ? createObjectVariable(name, varValue, true, resolverSource, {
+            ctx: {
+              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+            },
+            internal: {
+              isReserved: true,
+              isResolver: true,
+              resolverName: name,
+              needsResolution: false
+            }
+          })
+        : createSimpleTextVariable(name, varValue, resolverSource, {
+            ctx: {
+              definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+            },
+            internal: {
+              isReserved: true,
+              isResolver: true,
+              resolverName: name,
+              needsResolution: false
+            }
+          });
       
       // Cache the resolved variable
       this.cacheManager.setResolverVariable(name, resolvedVar);
@@ -952,11 +1107,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       data,
       true, // Frontmatter can be complex
       frontmatterSource,
-      { 
-        isSystem: true, 
-        immutable: true,
-        source: 'frontmatter',
-        definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
+      {
+        ctx: {
+          source: 'frontmatter',
+          definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
+        },
+        internal: {
+          isSystem: true,
+          immutable: true
+        }
       }
     );
     
@@ -987,6 +1146,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     options?: {
       path?: string;
       source?: SourceLocation;
+      mode?: 'append' | 'write';
       metadata?: any;
     }
   ): void {
@@ -994,14 +1154,44 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       console.error('[WARNING] No effect handler available!');
       return;
     }
-    
+
+    // Suppress doc effects when importing to prevent module content from appearing in stdout
+    if (type === 'doc' && this.isImportingContent) {
+      return;
+    }
+    const snapshot = this.getSecuritySnapshot();
+    let capability: CapabilityContext | undefined;
+    if (snapshot) {
+      const descriptor = makeSecurityDescriptor({
+        labels: snapshot.labels,
+        taintLevel: snapshot.taintLevel,
+        sources: snapshot.sources,
+        policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+      });
+      capability = createCapabilityContext({
+        kind: 'effect',
+        descriptor,
+        metadata: {
+          effectType: type,
+          path: options?.path
+        },
+        operation: snapshot.operation ?? {
+          kind: 'effect',
+          effectType: type
+        }
+      });
+      this.recordSecurityDescriptor(descriptor);
+    }
+
     // Always emit effects (handler decides whether to actually output)
     this.effectHandler.handleEffect({
       type,
       content,
       path: options?.path,
       source: options?.source,
-      metadata: options?.metadata
+      mode: options?.mode,
+      metadata: options?.metadata,
+      capability
     });
   }
   
@@ -1017,6 +1207,142 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   setEffectHandler(handler: EffectHandler): void {
     this.effectHandler = handler;
+  }
+  
+  getContextManager(): ContextManager {
+    return this.contextManager;
+  }
+
+  getHookManager(): HookManager {
+    return this.hookManager;
+  }
+
+  getGuardRegistry(): GuardRegistry {
+    return this.guardRegistry;
+  }
+
+  getPipelineGuardHistory(): GuardHistoryEntry[] {
+    const root = this.getRootEnvironment();
+    if (!root.pipelineGuardHistory) {
+      root.pipelineGuardHistory = [];
+    }
+    return root.pipelineGuardHistory;
+  }
+
+  recordPipelineGuardHistory(entry: GuardHistoryEntry): void {
+    const history = this.getPipelineGuardHistory();
+    history.push(entry);
+  }
+
+  resetPipelineGuardHistory(): void {
+    const history = this.getPipelineGuardHistory();
+    history.splice(0, history.length);
+  }
+
+  serializeLocalGuards(): SerializedGuardDefinition[] {
+    return this.guardRegistry.serializeOwn();
+  }
+
+  serializeGuardsByNames(names: readonly string[]): SerializedGuardDefinition[] {
+    return this.guardRegistry.serializeByNames(names);
+  }
+
+  registerSerializedGuards(definitions: SerializedGuardDefinition[] | undefined | null): void {
+    if (!definitions || definitions.length === 0) {
+      return;
+    }
+    this.guardRegistry.importSerialized(definitions);
+  }
+
+  async withOpContext<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
+    return this.contextManager.withOperation(context, fn);
+  }
+
+  async withPipeContext<T>(
+    context: PipelineContextSnapshot,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withPipelineContext(context, fn);
+  }
+
+  async withGuardContext<T>(
+    context: GuardContextSnapshot,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withGuardContext(context, fn);
+  }
+
+  async withGuardSuppression<T>(fn: () => Promise<T> | T): Promise<T> {
+    this.guardEvaluationDepth += 1;
+    try {
+      return await fn();
+    } finally {
+      this.guardEvaluationDepth = Math.max(0, this.guardEvaluationDepth - 1);
+    }
+  }
+
+  shouldSuppressGuards(): boolean {
+    if (this.guardEvaluationDepth > 0) {
+      return true;
+    }
+    return this.parent?.shouldSuppressGuards() ?? false;
+  }
+
+  async withDeniedContext<T>(
+    context: DeniedContextSnapshot,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withDeniedContext(context, fn);
+  }
+
+  pushExecutionContext(type: string, context: unknown): void {
+    this.contextManager.pushGenericContext(type, context);
+  }
+
+  popExecutionContext<T = unknown>(type: string): T | undefined {
+    return this.contextManager.popGenericContext<T>(type);
+  }
+
+  getExecutionContext<T = unknown>(type: string): T | undefined {
+    return this.contextManager.peekGenericContext<T>(type);
+  }
+
+  async withExecutionContext<T>(
+    type: string,
+    context: unknown,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return this.contextManager.withGenericContext(type, context, fn);
+  }
+
+  private registerBuiltinHooks(): void {
+    this.hookManager.registerPre(guardPreHook);
+    this.hookManager.registerPost(guardPostHook);
+    this.hookManager.registerPost(taintPostHook);
+  }
+
+  private registerKeepBuiltins(): void {
+    try {
+      if (this.variableManager.hasVariable('keep') && this.variableManager.hasVariable('keepStructured')) {
+        return;
+      }
+      const keepExec = createKeepExecutable();
+      const keepStructuredExec = createKeepStructuredExecutable();
+      this.variableManager.setVariable('keep', keepExec as any);
+      this.variableManager.setVariable('keepStructured', keepStructuredExec as any);
+      this.reservedNames.add('keep');
+      this.reservedNames.add('keepStructured');
+    } catch (error) {
+      logger.warn('Failed to register keep builtins', error);
+    }
+  }
+
+  private getRootEnvironment(): Environment {
+    let current: Environment = this;
+    while (current.parent) {
+      current = current.parent;
+    }
+    return current;
   }
   
   /**
@@ -1334,47 +1660,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       try {
         // Prefer explicit @test_ctx override for deterministic tests
         const testCtxVar = this.getVariable('test_ctx');
-        const pctx = this.getPipelineContext();
-        const ctxValue = testCtxVar ? (testCtxVar.value as any) : (pctx ? {
-          try: (pctx as any).attemptCount || 1,
-          tries: (() => {
-            const outputs: any[] = (pctx as any).attemptHistory || [];
-            const hints: any[] = (pctx as any).hintHistory || [];
-            const arr: any[] = [];
-            const n = Math.max(outputs.length, hints.length);
-            for (let i = 0; i < n; i++) {
-              arr.push({ attempt: i + 1, result: 'retry', hint: hints[i], output: outputs[i] });
-            }
-            return arr;
-          })(),
-          stage: typeof pctx.stage === 'number' ? pctx.stage : 0,
-          isPipeline: true,
-          hint: (pctx as any).hint ?? null,
-          // Provide last output from previous stage attempts when available
-          lastOutput: Array.isArray((pctx as any).previousOutputs) && (pctx as any).previousOutputs.length > 0
-            ? (pctx as any).previousOutputs[(pctx as any).previousOutputs.length - 1]
-            : null,
-          // Auto-parse JSON-looking inputs so ctx.input.<field> works
-          input: (() => {
-            const raw = (pctx as any).input;
-            if (typeof raw === 'string' && looksLikeJsonString(raw)) {
-              try {
-                return JSON.parse(raw.trim());
-              } catch {
-                // ignore parse errors; keep raw
-              }
-            }
-            return raw;
-          })()
-        } : {
-          try: 1,
-          tries: [],
-          stage: 0,
-          isPipeline: false,
-          hint: null,
-          lastOutput: null,
-          input: null
-        });
+        const ctxValue = testCtxVar
+          ? (testCtxVar.value as any)
+          : this.contextManager.buildAmbientContext({
+              pipelineContext: this.getPipelineContext(),
+              securitySnapshot: this.getSecuritySnapshot()
+            });
         if (!('ctx' in finalParams)) {
           finalParams = { ...finalParams, ctx: Object.freeze(ctxValue) };
         }
@@ -1434,6 +1725,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     child.allowAbsolutePaths = this.allowAbsolutePaths;
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
+    child.streamingOptions = { ...this.streamingOptions };
 
     // Create child import resolver
     child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);
@@ -1531,6 +1823,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   setOutputOptions(options: Partial<CommandExecutionOptions>): void {
     this.outputOptions = { ...this.outputOptions, ...options };
+  }
+
+  setStreamingOptions(options: Partial<StreamingOptions> | undefined): void {
+    if (!options) {
+      this.streamingOptions = { ...defaultStreamingOptions };
+      return;
+    }
+    this.streamingOptions = { ...this.streamingOptions, ...options };
+  }
+
+  getStreamingOptions(): StreamingOptions {
+    return { ...this.streamingOptions };
   }
   
   /**
@@ -1833,6 +2137,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.effectHandler  // Share the same effect handler
     );
     child.allowAbsolutePaths = this.allowAbsolutePaths;
+    child.streamingOptions = { ...this.streamingOptions };
     // Share import stack with parent via ImportResolver
     child.importResolver = this.importResolver.createChildResolver(undefined, () => child.allowAbsolutePaths);
     // Inherit trace settings

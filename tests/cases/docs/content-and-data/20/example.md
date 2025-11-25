@@ -1,9 +1,11 @@
->> Load and transform files
-/var @config = <config.json> | @json
-/var @uppercase = <readme.txt> | @upper
+/var @page = <https://example.com/data.json>
 
->> Chain transformations
-/exe @first(text, n) = js { 
-  return text.split('\n').slice(0, n).join('\n');
-}
-/var @summary = <docs.md> | @first(3) | @upper
+>> URL-specific metadata
+/show @page.ctx.url                      >> Full URL
+/show @page.ctx.domain                   >> "example.com"
+/show @page.ctx.status                   >> HTTP status code
+/show @page.ctx.title                    >> Page title (if HTML)
+
+>> HTML is converted to markdown
+/show @page.content                      >> Markdown version
+/show @page.ctx.html                     >> Original HTML

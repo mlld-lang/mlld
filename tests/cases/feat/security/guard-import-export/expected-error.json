@@ -1,0 +1,7 @@
+{
+  "name": "GuardError",
+  "guardName": "@moduleSecretShield",
+  "filter": "data:secret",
+  "reason": "Module guard blocks display",
+  "operation": "show"
+}

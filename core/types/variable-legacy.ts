@@ -16,7 +16,7 @@ import {
   ForeachCommandExpression,
   ForeachSectionExpression 
 } from './data';
-import { VariableType, VariableMetadata } from './index';
+import { VariableType, VariableCtx, VariableInternal } from './index';
 
 /**
  * Var directive raw values
@@ -117,9 +117,10 @@ export interface VarVariable {
   type: ExtendedVariableType.VAR;
   name: string;
   value: any; // Can be any type of value
-  metadata?: VariableMetadata & {
+  ctx: VariableCtx & {
     inferredType?: 'text' | 'data' | 'path' | 'exec';
   };
+  internal: VariableInternal;
 }
 
 /**
@@ -150,16 +151,20 @@ import type {
 export function createVarVariable(
   name: string,
   value: any,
-  metadata?: Partial<VariableMetadata & { inferredType?: string }>
+  options?: {
+    ctx?: Partial<VariableCtx & { inferredType?: string }>;
+    internal?: Partial<VariableInternal>;
+  }
 ): VarVariable {
   return {
     type: ExtendedVariableType.VAR,
     name,
     value,
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
+    ctx: {
+      ...options?.ctx
+    },
+    internal: {
+      ...options?.internal
     }
   };
 }
@@ -188,7 +193,7 @@ export function isVarExecDefinition(value: VarValue): value is VarExecDefinition
 export function convertVarToTypedVariable(
   varVariable: VarVariable
 ): TextVariable | DataVariable | PathVariable | CommandVariable {
-  const inferredType = varVariable.metadata?.inferredType;
+  const inferredType = varVariable.ctx?.inferredType;
   
   switch (inferredType) {
     case 'text':
@@ -196,7 +201,8 @@ export function convertVarToTypedVariable(
         type: VariableType.TEXT,
         name: varVariable.name,
         value: String(varVariable.value),
-        metadata: varVariable.metadata
+        ctx: varVariable.ctx,
+        internal: varVariable.internal
       };
     
     case 'path':
@@ -207,7 +213,8 @@ export function convertVarToTypedVariable(
           resolvedPath: String(varVariable.value),
           isURL: false
         },
-        metadata: varVariable.metadata
+        ctx: varVariable.ctx,
+        internal: varVariable.internal
       };
     
     case 'exec':
@@ -219,11 +226,12 @@ export function convertVarToTypedVariable(
           value: {
             type: varVariable.value.body.type === 'command' ? 'command' : 'code',
             paramNames: varVariable.value.params,
-            ...(varVariable.value.body.type === 'command' 
+            ...(varVariable.value.body.type === 'command'
               ? { commandTemplate: varVariable.value.body.template }
               : { codeTemplate: varVariable.value.body.template, language: varVariable.value.body.language })
           },
-          metadata: varVariable.metadata
+          ctx: varVariable.ctx,
+          internal: varVariable.internal
         };
       }
       // Fall through to data if not a proper exec definition
@@ -234,7 +242,8 @@ export function convertVarToTypedVariable(
         type: VariableType.DATA,
         name: varVariable.name,
         value: varVariable.value,
-        metadata: varVariable.metadata
+        ctx: varVariable.ctx,
+        internal: varVariable.internal
       };
   }
 }

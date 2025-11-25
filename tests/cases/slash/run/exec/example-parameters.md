@@ -1,2 +1,2 @@
-/exe @greetCommand(param) = {echo "Hello, @param!"}
+/exe @greetCommand(param) = cmd {echo "Hello, @param!"}
 /run @greetCommand("World")

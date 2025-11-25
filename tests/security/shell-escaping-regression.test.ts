@@ -22,7 +22,7 @@ describe('Shell Escaping Security Tests', () => {
       it(`should safely handle ${name} when interpolating variables`, async () => {
         const mlld = `
 /var @dangerous = "${value}"
-/exe @echo(msg) = {echo "@msg"}
+/exe @echo(msg) = cmd {echo "@msg"}
 /var @result = @echo(@dangerous)
 /show @result
 `;
@@ -57,7 +57,7 @@ describe('Shell Escaping Security Tests', () => {
     it('should safely handle command output containing metacharacters when passed to other functions', async () => {
       const mlld = `
 /exe @generateDangerous() = js { return "Output with \`backticks\` and $(whoami)"; }
-/exe @process(input) = {echo "Processing: @input"}
+/exe @process(input) = cmd {echo "Processing: @input"}
 /var @result = @process(@generateDangerous())
 /show @result
 `;
@@ -70,7 +70,7 @@ describe('Shell Escaping Security Tests', () => {
       const mlld = `
 /var @dangerous = "Has \`backticks\` and $(pwd)"
 /exe @passthrough(x) = js { return x; }
-/exe @process(input) = {echo "Processing: @input"}
+/exe @process(input) = cmd {echo "Processing: @input"}
 /var @passed = @passthrough(@dangerous)
 /var @result = @process(@passed)
 /show @result
@@ -85,7 +85,7 @@ describe('Shell Escaping Security Tests', () => {
     it('should safely handle variables with metacharacters in for loops', async () => {
       const mlld = `
 /var @dangerous = "text with \`backticks\` and $(command)"
-/exe @echo(msg) = {echo "@msg"}
+/exe @echo(msg) = cmd {echo "@msg"}
 /var @items = ["one", "two"]
 /for @item in @items => @echo(@dangerous)
 `;
@@ -98,7 +98,7 @@ describe('Shell Escaping Security Tests', () => {
     it('should safely handle functions returning dangerous strings in for loops', async () => {
       const mlld = `
 /exe @generateOutput() = js { return "Item with \`dangerous\` chars and $(cmd)"; }
-/exe @display(msg) = {echo "@msg"}
+/exe @display(msg) = cmd {echo "@msg"}
 /var @items = ["a", "b", "c"]
 /for @item in @items => @display(@generateOutput())
 `;
@@ -166,7 +166,7 @@ describe('Shell Escaping Security Tests', () => {
       const mlld = `
 /var @empty = ""
 /var @nullish = null
-/exe @echo(msg) = {echo "@msg"}
+/exe @echo(msg) = cmd {echo "@msg"}
 /run @echo(@empty)
 /run @echo(@nullish)
 `;
@@ -178,7 +178,7 @@ describe('Shell Escaping Security Tests', () => {
       const longString = 'a'.repeat(1000) + '`backtick`' + 'b'.repeat(1000);
       const mlld = `
 /var @long = "${longString}"
-/exe @process(msg) = {echo "@msg" | wc -c}
+/exe @process(msg) = cmd {echo "@msg" | wc -c}
 /var @result = @process(@long)
 /show "Character count: @result"
 `;
@@ -190,7 +190,7 @@ describe('Shell Escaping Security Tests', () => {
     it('should handle Unicode and special characters with metacharacters', async () => {
       const mlld = `
 /var @unicode = "Hello 世界 with \`backticks\` and émojis 🎉"
-/exe @echo(msg) = {echo "@msg"}
+/exe @echo(msg) = cmd {echo "@msg"}
 /run @echo(@unicode)
 `;
       const result = await processMlld(mlld);
@@ -204,7 +204,7 @@ describe('Shell Escaping Security Tests', () => {
   describe('Real-World Scenarios', () => {
     it('should safely handle code snippets from AI responses', async () => {
       const mlld = `
-/exe @simulateAI() = {echo 'To solve this, use: const result = \`Hello \${name}\`; // Template literal'}
+/exe @simulateAI() = cmd {echo 'To solve this, use: const result = \`Hello \${name}\`; // Template literal'}
 /var @aiResponse = @simulateAI()
 /show "AI suggested: @aiResponse"
 `;
@@ -217,8 +217,8 @@ describe('Shell Escaping Security Tests', () => {
       const mlld = `
 /var @userInput = "dangerous \`input\` here"
 /exe @sanitize(input) = js { return input.replace(/[\\\`\\\$]/g, '_'); }
-/exe @process(data) = {echo "Processing: @data"}
-/exe @finalize(result) = {echo "[FINAL] @result"}
+/exe @process(data) = cmd {echo "Processing: @data"}
+/exe @finalize(result) = cmd {echo "[FINAL] @result"}
 
 /var @sanitized = @sanitize(@userInput)
 /var @processed = @process(@sanitized)

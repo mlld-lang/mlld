@@ -5,6 +5,7 @@ import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 import { WithClause } from './run';
 import { ParameterNode } from './primitives';
+import type { DataLabel } from './security';
 
 /**
  * Exe directive raw values
@@ -17,6 +18,7 @@ export interface ExeRaw {
   lang?: string;
   code?: string;
   withClause?: WithClause;
+  securityLabels?: string;
 }
 
 /**
@@ -33,6 +35,7 @@ export interface ExeMeta {
     [key: string]: unknown;
   };
   withClause?: WithClause;
+  securityLabels?: DataLabel[];
 }
 
 /**
@@ -60,6 +63,7 @@ export interface ExeValues {
   lang?: TextNodeArray;
   code?: ContentNodeArray;
   withClause?: WithClause;
+  securityLabels?: DataLabel[];
 }
 
 /**
@@ -72,12 +76,14 @@ export interface ExeCommandDirectiveNode extends ExeDirectiveNode {
     params: ParameterNode[];
     metadata?: TextNodeArray;
     command: ContentNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     identifier: string;
     params: string[];
     metadata?: string;
     command: string;
+    securityLabels?: string;
   };
   meta: ExeMeta;
 }
@@ -93,6 +99,7 @@ export interface ExeCodeDirectiveNode extends ExeDirectiveNode {
     metadata?: TextNodeArray;
     lang: TextNodeArray;
     code: ContentNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     identifier: string;
@@ -100,6 +107,7 @@ export interface ExeCodeDirectiveNode extends ExeDirectiveNode {
     metadata?: string;
     lang: string;
     code: string;
+    securityLabels?: string;
   };
   meta: ExeMeta;
 }

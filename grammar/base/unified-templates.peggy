@@ -143,7 +143,7 @@ UnifiedAtInterpolation "At-sign interpolation"
   = ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
-  / FileReferenceInterpolation   // <file.md>
+  / UnifiedAngleBracketContent   // <file.md> or literal <xml> - USE UNIFIED PATTERN
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
   / "@" !BaseIdentifier char:. { // @ followed by non-identifier
@@ -154,6 +154,16 @@ UnifiedAtInterpolation "At-sign interpolation"
 // -------------------------------------------------------------
 // TEXT SEGMENTS
 // -------------------------------------------------------------
+
+// Line-start predicate for inline loop detection
+// Used to ensure /for and /end only trigger at line start
+LineStartPredicate "line-start check"
+  = &{
+      const pos = offset();
+      if (pos === 0) return true;
+      const prev = input[pos - 1];
+      return prev === '\n' || prev === '\r';
+    }
 
 // Text for triple colon templates (excludes :::, {{, }})
 UnifiedTemplateTextSegment "Template text segment"
@@ -166,9 +176,10 @@ UnifiedTemplateChar
   / EscapeSequence
   / !((":::" / "{{" / "}}")) char:. { return char; }
 
-// Text for double colon templates (excludes ::, @, and <)
+// Text for double colon templates (excludes ::, @, and < only when it's a valid file ref or literal tag)
+// Only excludes /for and /end when they appear at line start
 UnifiedDoubleColonTextSegment "Double colon text segment"
-  = chars:(!("::" / "/for" / "/end" / "@" / "<") char:. { return char; })+ {
+  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 

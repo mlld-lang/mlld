@@ -9,6 +9,7 @@ import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
 import { DirectiveNode, ExecInvocation } from './nodes';
 import type { PipelineStage } from './run';
+import type { DataLabel } from './security';
 
 /**
  * Data object value structure for var directive
@@ -93,6 +94,7 @@ export type DataValue =
 export interface VarRaw {
   identifier: string;
   value?: string;
+  securityLabels?: string;
   [key: string]: string | undefined; // Allow additional properties for compatibility
 }
 
@@ -101,6 +103,7 @@ export interface VarRaw {
  */
 export interface VarMeta {
   inferredType?: 'text' | 'data' | 'path' | 'exec';
+  securityLabels?: DataLabel[];
   [key: string]: unknown;
 }
 
@@ -110,6 +113,7 @@ export interface VarMeta {
 export interface VarValues {
   identifier: VariableNodeArray;
   value?: VarValue; // Optional for declarations without initial value
+  securityLabels?: DataLabel[];
   [key: string]: any; // Allow additional properties for compatibility
 }
 
@@ -159,10 +163,12 @@ export interface VarAssignmentDirectiveNode extends VarDirectiveNode {
   values: {
     identifier: VariableNodeArray;
     value?: VarValue;
+    securityLabels?: DataLabel[];
   };
   raw: {
     identifier: string;
     value?: string;
+    securityLabels?: string;
   };
 }
 

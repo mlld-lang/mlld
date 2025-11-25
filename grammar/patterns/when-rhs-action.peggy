@@ -10,10 +10,34 @@ WhenRHSAction "when RHS action"
   / WhenRHSShowAction
   / WhenRHSOutputAction  
   / WhenRHSVarAssignment
+  / WhenRHSCommandAction
   / WhenRHSFunctionCall
   / WhenRHSSkipAction
+  / WhenRHSVariableReference  // Allow @var (optionally with pipelines) as value-returning action
   / WhenRHSRetryAction
   / VarRHSContent  // Pure values (fallback)
+
+// Command action - explicit cmd { ... } in when actions
+WhenRHSCommandAction
+  = cmdAction:CmdCommandBrackets tail:TailModifiers? {
+      const values = { ...cmdAction.values };
+      const raw = { ...cmdAction.raw };
+      const meta = { ...cmdAction.meta };
+      if (tail) {
+        values.withClause = tail;
+        raw.withClause = tail;
+        meta.withClause = tail;
+      }
+      return [helpers.createStructuredDirective(
+        'run',
+        'runCommand',
+        values,
+        raw,
+        meta,
+        location(),
+        'command'
+      )];
+    }
 
 // Retry action with optional hint value (string/object/function/variable)
 // Returns an array of nodes: [RetryLiteral, <hintNode>?]
@@ -54,6 +78,17 @@ WhenRHSSkipAction
         valueType: 'skip',
         location: location()
       });
+    }
+
+// Variable reference (with optional tail modifiers / pipelines)
+WhenRHSVariableReference
+  = varRef:VariableReferenceWithTail {
+      if (!varRef || !varRef.withClause) {
+        const loc = location();
+        peg$currPos = loc.start.offset;
+        return peg$FAILED;
+      }
+      return varRef;
     }
 
 // Show action - creates regular show directive node
@@ -253,6 +288,7 @@ WhenRHSFunctionCall
 WhenRHSShowContent
   = UnifiedQuoteOrTemplate  // Use unified pattern instead of TemplateStyleInterpolation
   / UnifiedReference             // Variable or exec reference
+  / DataObjectLiteral
   / PrimitiveValue              // Includes string literals and other primitives
 
 // Output source for RHS context - use same patterns as VarRHSContent  

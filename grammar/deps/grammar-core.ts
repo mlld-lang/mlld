@@ -32,19 +32,80 @@ export const DirectiveKind = {
   run: 'run',
   var: 'var',     // NEW: Replaces text/data
   show: 'show',   // NEW: Replaces add
+  stream: 'stream',
   exe: 'exe',     // NEW: Replaces exec
   for: 'for',     // For loops
   path: 'path',
   import: 'import',
   output: 'output',
+  append: 'append',
   when: 'when',
+  guard: 'guard',
   // NO deprecated entries - clean break!
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 
+export interface GrammarWarning {
+  code?: string;
+  message: string;
+  suggestion?: string;
+  location?: any;
+}
+
+type WarningCollector = ((warning: GrammarWarning) => void) | GrammarWarning[];
+
+let warningCollector: ((warning: GrammarWarning) => void) | null = null;
+
 export const helpers = {
   debug(msg: string, ...args: unknown[]) {
     if (process.env.DEBUG_MLLD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
+  },
+
+  warn(message: string, suggestion?: string, loc?: any, code?: string): GrammarWarning {
+    const warning: GrammarWarning = {
+      message,
+      ...(suggestion ? { suggestion } : {}),
+      ...(loc ? { location: loc } : {}),
+      ...(code ? { code } : {})
+    };
+
+    if (warningCollector) {
+      try {
+        warningCollector(warning);
+        return warning;
+      } catch {
+        // ignore collector errors and fall back to console
+      }
+    }
+
+    try {
+      // eslint-disable-next-line no-console
+      console.warn(`[mlld grammar warning] ${warning.message}`);
+    } catch {
+      // ignore console failures
+    }
+
+    return warning;
+  },
+
+  setWarningCollector(collector?: WarningCollector | null) {
+    if (!collector) {
+      warningCollector = null;
+      return;
+    }
+
+    if (Array.isArray(collector)) {
+      warningCollector = (warning: GrammarWarning) => {
+        collector.push(warning);
+      };
+      return;
+    }
+
+    warningCollector = collector;
+  },
+
+  clearWarningCollector() {
+    warningCollector = null;
   },
 
   isExecutableReference(ref: any): boolean {
@@ -637,6 +698,63 @@ export const helpers = {
       withClause: withClause || null,
       location
     });
+  },
+
+  attachPostFields(exec: any, post: any[] | null | undefined) {
+    if (!post || post.length === 0) {
+      return exec;
+    }
+
+    let current = exec;
+    const tail = current.withClause || null;
+    if (tail) {
+      current = { ...current, withClause: null };
+    }
+
+    const additionalFields: any[] = [];
+    for (const entry of post) {
+      if (entry?.type === 'methodCall') {
+        const methodRef = {
+          name: entry.name,
+          identifier: [
+            this.createNode(NodeType.Text, {
+              content: entry.name,
+              location: entry.location
+            })
+          ],
+          args: entry.args || [],
+          isCommandReference: true,
+          objectSource: current
+        };
+        current = this.createExecInvocation(methodRef, null, entry.location);
+      } else {
+        additionalFields.push(entry);
+      }
+    }
+
+    if (additionalFields.length > 0) {
+      const existingFields = current.fields || [];
+      current = {
+        ...current,
+        fields: [...existingFields, ...additionalFields]
+      };
+    }
+
+    if (tail) {
+      current = { ...current, withClause: tail };
+    }
+
+    return current;
+  },
+
+  applyTail(exec: any, tail: any) {
+    if (!tail) {
+      return exec;
+    }
+    return {
+      ...exec,
+      withClause: tail
+    };
   },
 
   /**

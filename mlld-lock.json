@@ -1,0 +1,33 @@
+{
+  "lockfileVersion": 1,
+  "modules": {
+    "@mlld/env": {
+      "version": "latest",
+      "resolved": "registry://@mlld/env",
+      "source": "registry://@mlld/env",
+      "integrity": "sha256:2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
+      "fetchedAt": "2025-07-20T03:33:03.718Z",
+      "sourceUrl": "registry://@mlld/env"
+    },
+    "@mlld/github": {
+      "version": "latest",
+      "resolved": "f4faa6b25effdb9a9b75022c973a3a0bfa13842bb19a09c2c6480c0797ee2902",
+      "source": "registry://@mlld/github",
+      "integrity": "sha256:f4faa6b25effdb9a9b75022c973a3a0bfa13842bb19a09c2c6480c0797ee2902",
+      "fetchedAt": "2025-09-27T19:54:02.384Z",
+      "sourceUrl": "registry://@mlld/github"
+    },
+    "@mlld/ai-cli": {
+      "version": "latest",
+      "resolved": "registry://@mlld/ai-cli",
+      "source": "registry://@mlld/ai-cli",
+      "integrity": "sha256:1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
+      "fetchedAt": "2025-07-20T03:33:04.018Z",
+      "sourceUrl": "registry://@mlld/ai-cli"
+    }
+  },
+  "metadata": {
+    "createdAt": "2025-09-27T19:54:02.369Z",
+    "updatedAt": "2025-09-27T19:54:02.384Z"
+  }
+}

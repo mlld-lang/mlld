@@ -1,4 +1,4 @@
-/exe @getCSV() = {echo "name,age
+/exe @getCSV() = cmd {echo "name,age
 Alice,30
 Bob,25"}
 /exe @debug(data) = js { console.log("Debug - type:", typeof data, "length:", data.length, "content:", JSON.stringify(data)); return data; }

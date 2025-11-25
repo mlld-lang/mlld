@@ -80,13 +80,15 @@ export class ProjectPathResolver implements Resolver {
     if (!config || !config.context || config.context === 'variable') {
       // If it's just @base, return the base path
       if (ref === '@base' || ref === 'base') {
+        const metadata = {
+          source: 'base',
+          timestamp: new Date()
+        };
         return {
           content: basePath,
           contentType: 'text',
-          metadata: {
-            source: 'base',
-            timestamp: new Date()
-          }
+          ctx: metadata,
+          metadata
         };
       }
     }
@@ -111,13 +113,15 @@ export class ProjectPathResolver implements Resolver {
 
       // If no path specified, just return the project path
       if (!relativePath) {
+        const metadata = {
+          source: 'base',
+          timestamp: new Date()
+        };
         return {
           content: basePath,
           contentType: 'text',
-          metadata: {
-            source: 'base',
-            timestamp: new Date()
-          }
+          ctx: metadata,
+          metadata
         };
       }
 
@@ -143,14 +147,16 @@ export class ProjectPathResolver implements Resolver {
             const content = await this.fileSystem.readFile(withMld);
             const contentType = await this.detectContentType(withMld, content);
             
+            const metadata = {
+              source: withMld,
+              timestamp: new Date(),
+              originalRef: ref
+            };
             return {
               content,
               contentType,
-              metadata: {
-                source: withMld,
-                timestamp: new Date(),
-                originalRef: ref
-              }
+              ctx: metadata,
+              metadata
             };
           }
         }
@@ -166,14 +172,16 @@ export class ProjectPathResolver implements Resolver {
         const content = await this.fileSystem.readFile(fullPath);
         const contentType = await this.detectContentType(fullPath, content);
 
+        const metadata = {
+          source: fullPath,
+          timestamp: new Date(),
+          originalRef: ref
+        };
         return {
           content,
           contentType,
-          metadata: {
-            source: fullPath,
-            timestamp: new Date(),
-            originalRef: ref
-          }
+          ctx: metadata,
+          metadata
         };
       } catch (error) {
         throw new MlldFileNotFoundError(

@@ -1,0 +1,9 @@
+{
+  "name": "GuardError",
+  "guardName": "@blockOutput",
+  "filter": "operation:exe",
+  "reason": "Output contains secret",
+  "operation": "exe",
+  "timing": "after",
+  "outputPreview": "secret-value"
+}

@@ -1,15 +1,15 @@
->> Format JSON with indentation
-/var @data = <file.csv>
-/var @tojson = @data | @json
-/show @tojson
+>> Primitives
+/var @name = "Alice"
+/var @age = 30
+/var @active = true
 
->> Convert to XML (SCREAMING_SNAKE_CASE)
-/var @toxml = @data | @XML
-/show @toxml
+>> Arrays
+/var @fruits = ["apple", "banana", "cherry"]
+/var @numbers = [1, 2, 3, 4, 5]
 
->> Convert arrays to CSV
-/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
-/var @tocsv = @users | @CSV
-/show @tocsv
-
-`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:
+>> Objects
+/var @user = {"name": "Alice", "role": "admin"}
+/var @config = {
+  "database": {"host": "localhost", "port": 5432},
+  "features": ["auth", "api"]
+}

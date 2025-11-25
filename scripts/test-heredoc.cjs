@@ -235,7 +235,7 @@ tests.push({
   },
   script: `
 /var @huge = \`${'n'.repeat(200000)}\`
-/exe @echo_it2(big) = { echo @big bar }
+/exe @echo_it2(big) = sh { echo "$big" bar }
 /show @echo_it2(@huge)
 `,
   expected: (output) => {
@@ -254,7 +254,7 @@ tests.push({
   },
   script: `
 /var @huge = \`${'n'.repeat(200000)}\`
-/exe @echo_it2(big) = { echo @big bar }
+/exe @echo_it2(big) = sh { echo "$big" bar }
 /show @echo_it2(@huge)
 /run @echo_it2(@huge)
 `,

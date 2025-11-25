@@ -6,8 +6,9 @@
  */
 
 import { MlldNode } from './nodes';
-import { VariableMetadata } from './index';
+import { VariableContext, VariableInternal } from './index';
 import type { PipelineStage } from './run';
+import type { DataValue } from './var';
 
 /**
  * Base executable definition that can be invoked with parameters
@@ -95,6 +96,15 @@ export interface PipelineExecutable extends BaseExecutable {
 }
 
 /**
+ * Data executable - /exe name(params) = { ... } returning structured data
+ */
+export interface DataExecutable extends BaseExecutable {
+  type: 'data';
+  dataTemplate: DataValue;
+  sourceDirective: 'exec';
+}
+
+/**
  * Unified executable type
  */
 export type ExecutableDefinition = 
@@ -104,7 +114,8 @@ export type ExecutableDefinition =
   | TemplateExecutable
   | SectionExecutable
   | ResolverExecutable
-  | PipelineExecutable;
+  | PipelineExecutable
+  | DataExecutable;
 
 /**
  * Variable that stores an executable definition
@@ -113,7 +124,8 @@ export interface ExecutableVariable {
   type: 'executable';
   name: string;
   value: ExecutableDefinition;
-  metadata?: VariableMetadata;
+  ctx: VariableContext;
+  internal?: VariableInternal;
 }
 
 /**
@@ -147,6 +159,10 @@ export function isPipelineExecutable(def: ExecutableDefinition): def is Pipeline
   return def.type === 'pipeline';
 }
 
+export function isDataExecutable(def: ExecutableDefinition): def is DataExecutable {
+  return def.type === 'data';
+}
+
 /**
  * Check if an executable came from an exec directive
  */
@@ -167,16 +183,17 @@ export function isTextSourced(def: ExecutableDefinition): boolean {
 export function createExecutableVariable(
   name: string,
   definition: ExecutableDefinition,
-  metadata?: Partial<VariableMetadata>
+  options?: { ctx?: Partial<VariableContext>; internal?: Partial<VariableInternal> }
 ): ExecutableVariable {
   return {
     type: 'executable',
     name,
     value: definition,
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
+    ctx: {
+      ...options?.ctx
+    },
+    internal: {
+      ...options?.internal
     }
   };
 }

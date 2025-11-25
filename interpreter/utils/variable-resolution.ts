@@ -141,14 +141,16 @@ export async function resolveVariable(
         const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
         const evaluatedValue = await evaluateDataValue(variable.value, env);
         
+        const evaluatedAt = Date.now();
         // Create a new Variable with the evaluated value
         return {
           ...variable,
           value: evaluatedValue,
-          metadata: {
-            ...variable.metadata,
+          ctx: { ...variable.ctx },
+          internal: {
+            ...(variable.internal ?? {}),
             wasEvaluated: true,
-            evaluatedAt: Date.now()
+            evaluatedAt
           }
         } as Variable;
       }
@@ -215,9 +217,12 @@ export async function extractVariableValue(
     // Check if this is an array with custom behaviors (LoadContentResultArray, RenamedContentArray)
     // WHY: Special array types have behaviors (toString, content getter) that must be preserved
     //      during value extraction to maintain proper output formatting
-    if (variable.type === 'array' && variable.metadata?.arrayType && 
-        (variable.metadata.arrayType === 'renamed-content' || 
-         variable.metadata.arrayType === 'load-content-result')) {
+    const arrayType = variable.internal?.arrayType;
+    if (
+      variable.type === 'array' &&
+      arrayType &&
+      (arrayType === 'renamed-content' || arrayType === 'load-content-result')
+    ) {
       // Use the variable-migration extractVariableValue to preserve behaviors
       const { extractVariableValue: extractWithBehaviors } = await import('./variable-migration');
       return extractWithBehaviors(variable);

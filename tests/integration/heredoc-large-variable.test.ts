@@ -27,7 +27,7 @@ describe('Bash heredoc integration', () => {
 /var @file = <big.txt>
 /var @content = @file.content
 /exe @shell_echo(arg) = sh { echo "shell executed" }
-/exe @native_echo(arg) = {echo "node executed"}
+/exe @native_echo(arg) = sh { echo "node executed" }
 /show @shell_echo(@content)
 /show @native_echo(@content)
 /run @native_echo(@content)

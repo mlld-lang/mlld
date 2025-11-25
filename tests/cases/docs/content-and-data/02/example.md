@@ -1,5 +1,5 @@
-/var @readme = <README.md>               >> Load file content
-/var @filename = "README.md"             >> Literal string
+/var @file = <package.json>
 
-/show @readme                            >> Shows file contents  
-/show @filename                          >> Shows "README.md"
+@file.text                               # String content
+@file.data                               # Parsed payload (JSON object)
+@file.ctx                                # Metadata (filename, tokens, labels, etc.)

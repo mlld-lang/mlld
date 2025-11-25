@@ -1,8 +1,2 @@
->> Extract single section
-/var @install = <README.md # Installation>
-
->> Extract from multiple files  
-/var @apis = <docs/*.md # API Reference>
-
->> Rename sections with 'as'
-/var @modules = <*.md # Overview> as "## <>.filename Overview"
+/when @file.ctx.tokest > 2000 => show "File is large"
+/var @name = @file.ctx.filename

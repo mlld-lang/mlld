@@ -9,11 +9,14 @@ import { interpolate, evaluate } from '../../core/interpreter';
 import { MlldError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import type { SerializedGuardDefinition } from '../../guards';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
   frontmatter: Record<string, any> | null;
   childEnvironment: Environment;
+  guardDefinitions: SerializedGuardDefinition[];
 }
 
 /**
@@ -38,7 +41,20 @@ export class ModuleContentProcessor {
 
     // Begin import tracking for security
     this.securityValidator.beginImport(resolvedPath);
-
+    const snapshot = this.env.getSecuritySnapshot();
+    const importDescriptor = mergeDescriptors(
+      snapshot
+        ? makeSecurityDescriptor({
+            labels: snapshot.labels,
+            taintLevel: snapshot.taintLevel,
+            sources: snapshot.sources,
+            policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+          })
+        : makeSecurityDescriptor(),
+      makeSecurityDescriptor({
+        labels: directive.meta?.securityLabels || directive.values?.securityLabels
+      })
+    );
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerPath = resolvedPath.toLowerCase();
@@ -116,7 +132,20 @@ export class ModuleContentProcessor {
   ): Promise<ModuleProcessingResult> {
     // Begin import tracking for security
     this.securityValidator.beginImport(ref);
-
+    const snapshot = this.env.getSecuritySnapshot();
+    const importDescriptor = mergeDescriptors(
+      snapshot
+        ? makeSecurityDescriptor({
+            labels: snapshot.labels,
+            taintLevel: snapshot.taintLevel,
+            sources: snapshot.sources,
+            policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+          })
+        : makeSecurityDescriptor(),
+      makeSecurityDescriptor({
+        labels: directive.meta?.securityLabels || directive.values?.securityLabels
+      })
+    );
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerRef = ref.toLowerCase();
@@ -249,7 +278,23 @@ export class ModuleContentProcessor {
     let processedContent = content;
     const sectionNodes = directive.values?.section;
     if (sectionNodes && Array.isArray(sectionNodes)) {
-      const section = await interpolate(sectionNodes, this.env);
+      const descriptors: SecurityDescriptor[] = [];
+      const section = await interpolate(sectionNodes, this.env, undefined, {
+        collectSecurityDescriptor: descriptor => {
+          if (descriptor) {
+            descriptors.push(descriptor);
+          }
+        }
+      });
+      const merged =
+        descriptors.length === 1
+          ? descriptors[0]
+          : descriptors.length > 1
+            ? this.env.mergeSecurityDescriptors(...descriptors)
+            : undefined;
+      if (merged) {
+        this.env.recordSecurityDescriptor(merged);
+      }
       if (section) {
         processedContent = this.extractSectionContent(content, section);
       }
@@ -285,7 +330,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter: null,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: []
     };
   }
 
@@ -320,7 +366,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter: null,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: []
     };
   }
 
@@ -349,7 +396,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter: null,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: []
     };
   }
 
@@ -400,11 +448,12 @@ export class ModuleContentProcessor {
       });
     }
     const exportManifest = childEnv.getExportManifest();
-    const { moduleObject, frontmatter } = this.variableImporter.processModuleExports(
+    const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,
       { frontmatter: frontmatterData },
       undefined,
-      exportManifest
+      exportManifest,
+      childEnv
     );
 
     // Add __meta__ property with frontmatter if available
@@ -420,7 +469,8 @@ export class ModuleContentProcessor {
         return {
           moduleObject,
           frontmatter,
-          childEnvironment: childEnv
+          childEnvironment: childEnv,
+          guardDefinitions: guards
         };
       }
       let templateSyntax: 'doubleColon' | 'tripleColon' = 'doubleColon';
@@ -445,7 +495,8 @@ export class ModuleContentProcessor {
     return {
       moduleObject,
       frontmatter,
-      childEnvironment: childEnv
+      childEnvironment: childEnv,
+      guardDefinitions: guards
     };
   }
 

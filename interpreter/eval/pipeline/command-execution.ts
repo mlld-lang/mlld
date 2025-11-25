@@ -1,13 +1,29 @@
 import type { Environment } from '../../env/Environment';
+import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
-import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
-import { createPipelineInput } from '../../utils/pipeline-input';
-import { asText, isStructuredValue, wrapStructured, type StructuredValue } from '../../utils/structured-value';
+import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
+import { createPipelineParameterVariable } from '../../utils/parameter-factory';
+import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
+import {
+  asText,
+  isStructuredValue,
+  wrapStructured,
+  looksLikeJsonString,
+  normalizeWhenShowEffect,
+  type StructuredValue,
+  type StructuredValueType
+} from '../../utils/structured-value';
 import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
+import type { HookableNode } from '@core/types/hooks';
+import type { OperationContext } from '../../env/ContextManager';
+import { materializeGuardInputs } from '../../utils/guard-inputs';
+import { handleGuardDecision } from '../../hooks/hook-decision-handler';
+import { handleExecGuardDenial } from '../guard-denial-handler';
+import type { WhenExpressionNode } from '@core/types/when';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -17,6 +33,13 @@ export type CommandExecutionResult =
   | Record<string, unknown>
   | unknown[]
   | RetrySignal;
+
+export interface CommandExecutionHookOptions {
+  operationContext?: OperationContext;
+  hookNode?: HookableNode;
+  stageInputs?: readonly unknown[];
+  executionContext?: CommandExecutionContext;
+}
 
 const STRUCTURED_PIPELINE_LANGUAGES = new Set([
   'mlld-for',
@@ -123,26 +146,6 @@ function sanitizeJsonStringControlChars(input: string): string {
   }
 
   return changed ? result : input;
-}
-
-function unwrapStructuredDeep(value: any): any {
-  if (isStructuredValue(value)) {
-    return unwrapStructuredDeep(value.data);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => unwrapStructuredDeep(item));
-  }
-
-  if (value && typeof value === 'object') {
-    const result: Record<string, any> = {};
-    for (const [key, val] of Object.entries(value)) {
-      result[key] = unwrapStructuredDeep(val);
-    }
-    return result;
-  }
-
-  return value;
 }
 
 /**
@@ -364,7 +367,7 @@ function createTypedPipelineVariable(
     hasInterpolation: false,
     isMultiLine: false
   };
-  const metadata: Record<string, any> = {
+  const internal: Record<string, any> = {
     isPipelineParameter: true,
     pipelineOriginal: originalText,
     pipelineFormat: 'json'
@@ -372,16 +375,16 @@ function createTypedPipelineVariable(
 
   if (Array.isArray(parsedValue)) {
     const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
-    metadata.pipelineType = 'array';
-    metadata.customToString = () => originalText;
-    return createArrayVariable(paramName, bridged, false, pipelineSource, metadata);
+    internal.pipelineType = 'array';
+    internal.customToString = () => originalText;
+    return createArrayVariable(paramName, bridged, false, pipelineSource, { internal });
   }
 
   if (parsedValue && typeof parsedValue === 'object') {
     const bridged = wrapPipelineStructuredValue(parsedValue, originalText);
-    metadata.pipelineType = 'object';
-    metadata.customToString = () => originalText;
-    return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, metadata);
+    internal.pipelineType = 'object';
+    internal.customToString = () => originalText;
+    return createObjectVariable(paramName, bridged as Record<string, any>, false, pipelineSource, { internal });
   }
 
   const textSource: VariableSource = {
@@ -390,13 +393,81 @@ function createTypedPipelineVariable(
     hasInterpolation: false,
     isMultiLine: false
   };
-  return createSimpleTextVariable(paramName, originalText, textSource, { isPipelineParameter: true });
+  return createSimpleTextVariable(paramName, originalText, textSource, { internal: { isPipelineParameter: true } });
+}
+
+interface AssignPipelineParameterOptions {
+  name: string;
+  value: unknown;
+  originalVariable?: Variable;
+  pipelineStage?: number;
+  isPipelineInput?: boolean;
+  markPipelineContext?: boolean;
+}
+
+function assignPipelineParameter(
+  targetEnv: Environment,
+  options: AssignPipelineParameterOptions
+): void {
+  const variable = createPipelineParameterVariable({
+    name: options.name,
+    value: options.value,
+    origin: 'pipeline',
+    originalVariable: options.originalVariable,
+    allowOriginalReuse: Boolean(options.originalVariable),
+    pipelineStage: options.pipelineStage,
+    isPipelineInput: options.isPipelineInput
+  });
+
+  if (!variable) {
+    return;
+  }
+
+  if (options.markPipelineContext) {
+    variable.internal = {
+      ...(variable.internal ?? {}),
+      isPipelineContext: true
+    };
+  }
+
+  targetEnv.setParameterVariable(options.name, variable);
+}
+
+function normalizePipelineParameterValue(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (isStructuredValue(value)) {
+    return value;
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === 'object') {
+    const candidate = value as { type?: string; content?: unknown };
+    if (candidate && candidate.type === 'Text' && candidate.content !== undefined) {
+      return candidate.content;
+    }
+    if (candidate && candidate.content !== undefined) {
+      return candidate.content;
+    }
+    return value;
+  }
+  return String(value);
+}
+
+function isPipelineContextCandidate(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && 'stage' in (value as Record<string, unknown>));
 }
 
 function resolveExecutableLanguage(commandVar: any, execDef: any): string | undefined {
   if (execDef?.language) return String(execDef.language);
-  if (commandVar?.metadata?.executableDef?.language) {
-    return String(commandVar.metadata.executableDef.language);
+  const metadataDef = commandVar?.internal?.executableDef;
+  if (metadataDef?.language) {
+    return String(metadataDef.language);
   }
   if (commandVar?.value?.language) {
     return String(commandVar.value.language);
@@ -423,22 +494,39 @@ export async function resolveCommandReference(
   if (!command.identifier || command.identifier.length === 0) {
     return null;
   }
-  
+
   // Use the first node (should be a VariableReference node)
   const varRefNode = command.identifier[0];
-  
+
   // Check if this is a variable reference with field access
   if (varRefNode.type === 'VariableReference') {
     const varRef = varRefNode as any;
-    const baseVar = env.getVariable(varRef.identifier);
-    
+
+    let baseVar = env.getVariable(varRef.identifier);
+    let parsedFields: any[] = [];
+
+    // If not found and identifier contains a dot, try splitting for transformer variants
+    // This handles cases where the grammar outputs dotted names like "json.fromlist"
+    if (!baseVar && varRef.identifier.includes('.')) {
+      const parts = varRef.identifier.split('.');
+      const baseName = parts[0];
+      const fieldPath = parts.slice(1);
+
+      baseVar = env.getVariable(baseName);
+      if (baseVar && fieldPath.length > 0) {
+        // Store the parsed fields for processing below
+        parsedFields = fieldPath.map(value => ({ type: 'field', value }));
+      }
+    }
+
     if (!baseVar) {
       return null;
     }
-    
-    const variantMap = baseVar.metadata?.transformerVariants as Record<string, any> | undefined;
+
+    const variantMap =
+      (baseVar.internal?.transformerVariants as Record<string, unknown> | undefined);
     let value: any;
-    let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
+    let remainingFields = parsedFields.length > 0 ? parsedFields : (Array.isArray(varRef.fields) ? [...varRef.fields] : []);
 
     if (variantMap && remainingFields.length > 0) {
       const firstField = remainingFields[0];
@@ -495,19 +583,33 @@ export async function executeCommandVariable(
   args: any[],
   env: Environment,
   stdinInput?: string,
-  structuredInput?: StructuredValue
+  structuredInput?: StructuredValue,
+  hookOptions?: CommandExecutionHookOptions
 ): Promise<CommandExecutionResult> {
   const finalizeResult = (
     value: unknown,
     options?: { type?: string; text?: string }
   ): CommandExecutionResult => {
+    if (
+      typeof value === 'string' &&
+      (!options || !options.type || options.type === 'text') &&
+      looksLikeJsonString(value)
+    ) {
+      try {
+        const parsed = JSON.parse(value.trim());
+        const typeHint = Array.isArray(parsed) ? 'array' : 'object';
+        return wrapExecResult(parsed, { type: typeHint, text: options?.text ?? value });
+      } catch {
+        // Fall through to default wrapping when JSON.parse fails
+      }
+    }
     return wrapExecResult(value, options);
   };
 
   // Built-in transformer handling
-  if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
+  if (commandVar && commandVar.internal?.isBuiltinTransformer && commandVar.internal?.transformerImplementation) {
     try {
-      const result = await commandVar.metadata.transformerImplementation(stdinInput || '');
+      const result = await commandVar.internal.transformerImplementation(stdinInput || '');
       const normalized = normalizeTransformerResult(commandVar?.name, result);
       return finalizeResult(normalized.value, normalized.options);
     } catch (error) {
@@ -528,9 +630,10 @@ export async function executeCommandVariable(
   let execDef: any;
   
   if (commandVar && commandVar.type === 'executable' && commandVar.value) {
-    // Check if we have the full ExecutableDefinition in metadata
-    if (commandVar.metadata?.executableDef) {
-      execDef = commandVar.metadata.executableDef;
+    // Check if we have the full ExecutableDefinition in internal
+    const storedDef = commandVar.internal?.executableDef;
+    if (storedDef) {
+      execDef = storedDef;
       
       // Also copy paramNames from the variable if not in execDef
       if (!execDef.paramNames && commandVar.paramNames) {
@@ -567,7 +670,7 @@ export async function executeCommandVariable(
         hasTemplateContent: !!execDef?.templateContent,
         hasTemplate: !!execDef?.template,
         language: execDef?.language,
-        fromMetadata: !!commandVar.metadata?.executableDef
+        fromMetadata: !!commandVar.internal?.executableDef
       });
     }
   } else if (commandVar && (commandVar.type === 'command' || commandVar.type === 'code' || commandVar.type === 'template') && (commandVar.commandTemplate || commandVar.codeTemplate || commandVar.templateContent)) {
@@ -597,6 +700,14 @@ export async function executeCommandVariable(
     throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(varInfo, null, 2)}`);
   }
   
+  let whenExprNode: WhenExpressionNode | null = null;
+  if (execDef?.language === 'mlld-when' && Array.isArray(execDef.codeTemplate) && execDef.codeTemplate.length > 0) {
+    const candidate = execDef.codeTemplate[0];
+    if (candidate && candidate.type === 'WhenExpression') {
+      whenExprNode = candidate as WhenExpressionNode;
+    }
+  }
+
   // Create environment with parameter bindings
   const execEnv = env.createChild();
   
@@ -628,7 +739,13 @@ export async function executeCommandVariable(
 
         if (hasNativeStructuredInput) {
           const typedVar = createTypedPipelineVariable(paramName, structuredInput.data, textValue);
-          execEnv.setParameterVariable(paramName, typedVar);
+          assignPipelineParameter(execEnv, {
+            name: paramName,
+            value: typedVar.value,
+            originalVariable: typedVar,
+            pipelineStage: pipelineCtx?.stage,
+            isPipelineInput: true
+          });
           continue;
         }
 
@@ -639,7 +756,13 @@ export async function executeCommandVariable(
             const parsed = parseStructuredJson(candidate);
             if (parsed !== null) {
               const typedVar = createTypedPipelineVariable(paramName, parsed, candidate);
-              execEnv.setParameterVariable(paramName, typedVar);
+              assignPipelineParameter(execEnv, {
+                name: paramName,
+                value: typedVar.value,
+                originalVariable: typedVar,
+                pipelineStage: pipelineCtx?.stage,
+                isPipelineInput: true
+              });
               continue;
             }
           }
@@ -655,14 +778,20 @@ export async function executeCommandVariable(
             paramName,
             resolvedText,
             textSource,
-            { isPipelineParameter: true }
+            { internal: { isPipelineParameter: true } }
           );
 
-          execEnv.setParameterVariable(paramName, textVar);
+          assignPipelineParameter(execEnv, {
+            name: paramName,
+            value: textVar.value,
+            originalVariable: textVar,
+            pipelineStage: pipelineCtx?.stage,
+            isPipelineInput: true
+          });
           continue;
         } else {
           const resolvedText = typeof unwrappedStdin === 'string' ? unwrappedStdin : textValue;
-          const wrappedInput = createPipelineInput(resolvedText, format);
+          const wrappedInput = buildPipelineStructuredValue(resolvedText, format as StructuredValueType);
 
           const pipelineSource: VariableSource = {
             directive: 'var',
@@ -677,113 +806,86 @@ export async function executeCommandVariable(
             format as 'json' | 'csv' | 'xml' | 'text',
             resolvedText,
             pipelineSource,
-            pipelineCtx?.stage
+            { internal: { pipelineStage: pipelineCtx?.stage } }
           );
 
-          execEnv.setParameterVariable(paramName, pipelineVar);
+          assignPipelineParameter(execEnv, {
+            name: paramName,
+            value: pipelineVar.value,
+            originalVariable: pipelineVar,
+            pipelineStage: pipelineCtx?.stage,
+            isPipelineInput: true
+          });
           continue;
         }
       } else {
-        // Regular parameter handling
-        if (isStructuredValue(argValue)) {
-          const structuredVar = createStructuredValueVariable(
-            paramName,
-            argValue,
-            {
-              directive: 'var',
-              syntax: 'reference',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            {
+        const normalizedValue = normalizePipelineParameterValue(argValue);
+        assignPipelineParameter(execEnv, {
+          name: paramName,
+          value: normalizedValue,
+          pipelineStage: pipelineCtx?.stage,
+          markPipelineContext: isPipelineContextCandidate(normalizedValue)
+        });
+      }
+    }
+  }
+
+  const hookNode = hookOptions?.hookNode;
+  const operationContext = hookOptions?.operationContext;
+  const stageInputs = hookOptions?.stageInputs ?? [];
+  const guardInputCandidates: unknown[] = [];
+  const stageInputVar = env.getVariable?.('input');
+  if (stageInputVar) {
+    guardInputCandidates.push(stageInputVar);
+  }
+  if (stageInputs.length > 0) {
+    guardInputCandidates.push(...stageInputs);
+  }
+  if (Array.isArray(execDef?.paramNames)) {
+    for (const paramName of execDef.paramNames) {
+      const paramVar = execEnv.getVariable(paramName);
+      if (paramVar) {
+        guardInputCandidates.push(paramVar);
+      }
+    }
+  }
+  const guardInputs = materializeGuardInputs(guardInputCandidates, { nameHint: '__pipeline_stage_input__' });
+
+  if (hookNode && operationContext) {
+    const hookManager = env.getHookManager();
+    const preDecision = await hookManager.runPre(hookNode, guardInputs, env, operationContext);
+    const guardInputVariable =
+      preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
+    try {
+      await handleGuardDecision(preDecision, hookNode, env, operationContext);
+    } catch (error) {
+      if (guardInputVariable) {
+        const existingInput = execEnv.getVariable('input');
+        if (!existingInput) {
+          const clonedInput: Variable = {
+            ...(guardInputVariable as Variable),
+            name: 'input',
+            ctx: { ...(guardInputVariable as Variable).ctx },
+            internal: {
+              ...((guardInputVariable as Variable).internal ?? {}),
+              isSystem: true,
               isParameter: true
             }
-          );
-          execEnv.setParameterVariable(paramName, structuredVar);
-          continue;
-        }
-
-        let paramValue: any;
-        
-        if (argValue === null) {
-          paramValue = '';
-        } else if (typeof argValue === 'string' || typeof argValue === 'number' || typeof argValue === 'boolean') {
-          paramValue = argValue;
-        } else if (argValue && typeof argValue === 'object') {
-          if (!Array.isArray(argValue) && argValue.type === 'Text' && argValue.content !== undefined) {
-            paramValue = argValue.content;
-          } else if (!Array.isArray(argValue) && argValue.content !== undefined) {
-            paramValue = argValue.content;
-          } else {
-            paramValue = argValue;
-          }
-        } else {
-          paramValue = String(argValue);
-        }
-        
-        if (isStructuredValue(paramValue)) {
-          const structuredVar = createStructuredValueVariable(
-            paramName,
-            paramValue,
-            {
-              directive: 'var',
-              syntax: 'reference',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            { isParameter: true }
-          );
-          execEnv.setParameterVariable(paramName, structuredVar);
-        } else if (Array.isArray(paramValue)) {
-          const paramVar = createArrayVariable(
-            paramName,
-            paramValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'array',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            { isParameter: true }
-          );
-          execEnv.setParameterVariable(paramName, paramVar);
-        } else if (paramValue !== null && typeof paramValue === 'object') {
-          const paramVar = createObjectVariable(
-            paramName,
-            paramValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'object',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            { 
-              isParameter: true,
-              isPipelineContext: paramValue.stage !== undefined
-            }
-          );
-          
-          execEnv.setParameterVariable(paramName, paramVar);
-        } else {
-          const paramSource: VariableSource = {
-            directive: 'var',
-            syntax: 'quoted',
-            hasInterpolation: false,
-            isMultiLine: false
           };
-          
-          const paramVar = createSimpleTextVariable(
-            paramName,
-            String(paramValue),
-            paramSource,
-            { isParameter: true }
-          );
-          
-          execEnv.setParameterVariable(paramName, paramVar);
+          execEnv.setParameterVariable('input', clonedInput);
         }
       }
+      if (whenExprNode) {
+        const handled = await handleExecGuardDenial(error, {
+          execEnv,
+          env,
+          whenExprNode
+        });
+        if (handled) {
+          return finalizeResult(handled.value ?? handled.stdout ?? '');
+        }
+      }
+      throw error;
     }
   }
   
@@ -796,14 +898,18 @@ export async function executeCommandVariable(
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
 
     // Always pass pipeline input as stdin when available
-    let commandOutput: unknown = await env.executeCommand(command, { input: stdinInput } as any);
+    let commandOutput: unknown = await env.executeCommand(
+      command,
+      { input: stdinInput } as any,
+      hookOptions?.executionContext
+    );
 
     const withClause = execDef.withClause;
     if (withClause) {
       if (withClause.needs) {
         const { checkDependencies, DefaultDependencyChecker } = await import('../dependencies');
         const checker = new DefaultDependencyChecker();
-        await checkDependencies(withClause.needs, checker, commandVar.metadata?.definedAt);
+        await checkDependencies(withClause.needs, checker, commandVar.ctx?.definedAt);
       }
 
       if (withClause.pipeline && withClause.pipeline.length > 0) {
@@ -815,7 +921,7 @@ export async function executeCommandVariable(
           format: withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandVar?.name,
-          location: commandVar.metadata?.definedAt
+          location: commandVar.ctx?.definedAt
         });
         if (processed === 'retry') {
           return 'retry';
@@ -851,21 +957,11 @@ export async function executeCommandVariable(
         return 'retry';
       }
       
-      // If when-expression produced a side-effect show inside a pipeline,
-      // propagate the input forward (so the stage doesn't terminate) while
-      // still letting the effect line be emitted by the action itself.
-      const inPipeline = !!env.getPipelineContext();
-      const showEffect =
-        resultValue &&
-        typeof resultValue === 'object' &&
-        (resultValue as any).__whenEffect === 'show';
-      const structuredShowEffect =
-        isStructuredValue(resultValue) &&
-        resultValue.data &&
-        typeof resultValue.data === 'object' &&
-        (resultValue.data as any).__whenEffect === 'show';
+      const normalized = normalizeWhenShowEffect(resultValue);
+      resultValue = normalized.normalized;
 
-      if (inPipeline && (showEffect || structuredShowEffect)) {
+      const inPipeline = !!env.getPipelineContext();
+      if (inPipeline && normalized.hadShowEffect) {
         // If this is the last stage, suppress echo to avoid showing seed text.
         // If there are more stages, propagate input forward to keep pipeline alive.
         const pctx = env.getPipelineContext?.();
@@ -885,14 +981,6 @@ export async function executeCommandVariable(
           resultValue = String(resultValue);
         }
       }
-      // Unwrap tagged show effects for non-pipeline contexts
-      if (showEffect) {
-        resultValue = (resultValue as any).text ?? '';
-      } else if (structuredShowEffect) {
-        const data = (resultValue as any).data;
-        resultValue = (data as any)?.text ?? asText(resultValue);
-      }
-      
       // Return the result in the configured format
       return finalizeResult(resultValue ?? '');
     } else if (execDef.language === 'mlld-foreach') {
@@ -949,23 +1037,23 @@ export async function executeCommandVariable(
       for (const paramName of execDef.paramNames) {
         const paramVar = execEnv.getVariable(paramName);
         if (paramVar) {
-          // Check if this is a pipeline input variable
           if (paramVar.type === 'pipeline-input') {
-            // PipelineInputVariable stores the PipelineInput object in value
             params[paramName] = paramVar.value;
-          } else if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
-            // Legacy: Use the wrapped pipeline input from metadata
-            params[paramName] = paramVar.metadata.pipelineInput;
+          } else if (
+            (paramVar.internal?.isPipelineInput && paramVar.internal?.pipelineInput)
+          ) {
+            params[paramName] =
+              paramVar.internal?.pipelineInput;
           } else {
-            // Regular variable - use the value directly
             params[paramName] = paramVar.value;
           }
         }
       }
     }
-    
+
     const result = await env.executeCode(code, execDef.language || 'javascript', params);
 
+    // If the function returns a StructuredValue-like object, preserve it directly
     if (result && typeof result === 'object' && 'text' in result && 'type' in result) {
       const text =
         typeof (result as any).text === 'string'
@@ -976,6 +1064,7 @@ export async function executeCommandVariable(
       return finalizeResult(result, { type, text });
     }
 
+    // Auto-parse JSON-like strings in pipeline context
     if (
       typeof result === 'string' &&
       pipelineCtx !== undefined &&
@@ -1012,7 +1101,7 @@ export async function executeCommandVariable(
     if (fromParamScope) {
       // If this is an executable, recursively execute it in the same param scope
       if ((fromParamScope as any).type === 'executable') {
-        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput, structuredInput);
+        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput, structuredInput, hookOptions);
       }
       // Non-executable reference in exec scope: this is most likely a mistake now that
       // identity bodies compile to template executables.
@@ -1027,7 +1116,7 @@ export async function executeCommandVariable(
     }
 
     if ( (refVar as any).type === 'executable') {
-      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput, structuredInput);
+      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput, structuredInput, hookOptions);
     }
     // Non-executable reference in stage env: surface clear guidance
     const t = (refVar as any).type;

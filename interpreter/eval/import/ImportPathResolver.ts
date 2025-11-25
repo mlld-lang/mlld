@@ -1,5 +1,5 @@
 import type { DirectiveNode, ContentNode } from '@core/types';
-import type { ImportType } from '@core/types/security';
+import type { ImportType, SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import { interpolate } from '../../core/interpreter';
 
@@ -147,7 +147,24 @@ export class ImportPathResolver {
    */
   private async interpolatePathNodes(pathNodes: ContentNodeArray): Promise<string> {
     // Regular path interpolation - handles liberal import syntax through normal interpolation
-    return (await interpolate(pathNodes, this.env)).trim();
+    const descriptors: SecurityDescriptor[] = [];
+    const interpolated = await interpolate(pathNodes, this.env, undefined, {
+      collectSecurityDescriptor: descriptor => {
+        if (descriptor) {
+          descriptors.push(descriptor);
+        }
+      }
+    });
+    const merged =
+      descriptors.length === 1
+        ? descriptors[0]
+        : descriptors.length > 1
+          ? this.env.mergeSecurityDescriptors(...descriptors)
+          : undefined;
+    if (merged) {
+      this.env.recordSecurityDescriptor(merged);
+    }
+    return interpolated.trim();
   }
 
   /**
@@ -162,7 +179,23 @@ export class ImportPathResolver {
     const sectionNodes = directive.values?.section;
     let sectionName: string | undefined;
     if (sectionNodes && Array.isArray(sectionNodes)) {
-      sectionName = await interpolate(sectionNodes, this.env);
+      const sectionDescriptors: SecurityDescriptor[] = [];
+      sectionName = await interpolate(sectionNodes, this.env, undefined, {
+        collectSecurityDescriptor: descriptor => {
+          if (descriptor) {
+            sectionDescriptors.push(descriptor);
+          }
+        }
+      });
+      const mergedSection =
+        sectionDescriptors.length === 1
+          ? sectionDescriptors[0]
+          : sectionDescriptors.length > 1
+            ? this.env.mergeSecurityDescriptors(...sectionDescriptors)
+            : undefined;
+      if (mergedSection) {
+        this.env.recordSecurityDescriptor(mergedSection);
+      }
     }
 
     // Check if this is a module reference (@prefix/ pattern)

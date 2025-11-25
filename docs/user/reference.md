@@ -247,16 +247,18 @@ Load file contents with angle brackets:
 File metadata access:
 
 ```mlld
-/var @filename = <package.json>.filename
-/var @tokens = <large-file.md>.tokens
-/var @frontmatter = <doc.md>.fm.title
+/var @filename = <package.json>.ctx.filename
+/var @tokens = <large-file.md>.ctx.tokens
+/var @frontmatter = <doc.md>.ctx.fm.title
 ```
+
+Aliases like `<doc.md>.filename` still resolve to `.ctx.filename`, but `.ctx` is the preferred namespace.
 
 Glob patterns:
 
 ```mlld
 /var @allDocs = <docs/*.md>
-/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
 ```
 
 ### Imports (`/import`)
@@ -301,9 +303,62 @@ Write to files and streams:
 /output @config to "settings.yaml" as yaml
 ```
 
+### Append (`/append`)
+
+Append one record per call, preserving existing file content:
+
+```mlld
+/append @payload to "events.jsonl"
+/append "raw text entry" to "events.log"
+```
+
+`.jsonl` targets must receive valid JSON objects; anything else will use plain text. The pipeline form `| append "file.jsonl"` appends the prior stage output.
+
 ### Log (`/log`)
 
 Syntactic sugar for `/output...to stderr`
+
+### `/stream` - Stream Output
+
+**Purpose**: Display output with live chunks as they arrive (instead of buffering until completion)
+
+**Syntax**: `/stream <expression>`
+
+**Example**:
+```mlld
+/stream @claude("Write a story")
+```
+
+### `stream` - Enable Streaming
+
+**Purpose**: Enable streaming for a function call or code block (syntactic sugar for `with { stream: true }`)
+
+**Syntax**:
+- `stream @function()`
+- `stream sh { ... }`
+- `stream node { ... }`
+
+**Example**:
+```mlld
+stream @claude("Write a haiku")
+
+# Equivalent to:
+@claude("Write a haiku") with { stream: true }
+```
+
+**Parallel execution**: Both branches stream concurrently, results buffer until complete
+
+```mlld
+/exe @left() = sh { echo "L" }
+/exe @right() = sh { echo "R" }
+/var @results = stream @left() || stream @right()
+/show @results   # => ["L","R"]
+```
+
+**Suppression**:
+- CLI: `--no-stream`
+- Env: `MLLD_NO_STREAM=true`
+- API: `interpret(..., { streaming: { enabled: false } })`
 
 ## Advanced Features
 
@@ -364,8 +419,8 @@ Chain operations with `|`:
 ```
 
 Built-in transformers:
-- `@json`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@json.strict` to require standard JSON or `@json.loose` to be explicit about relaxed parsing.
-- `@xml`: parse/format XML  
+- `@json`: parse/format JSON, accepting relaxed JSON syntax (single quotes, trailing commas, comments). Use `@json.strict` to require standard JSON, `@json.loose` to be explicit about relaxed parsing, or `@json.llm` to extract JSON from LLM responses (code fences, prose). Returns `false` if no JSON found.
+- `@xml`: parse/format XML
 - `@csv`: parse/format CSV
 - `@md`: format as Markdown
 

@@ -30,6 +30,7 @@ export * from './output';
 export * from './when';
 export * from './var'; // New unified var directive
 export * from './for'; // For loop directive and expression
+export * from './guard'; // Guard directives
 export * from './load-content'; // Load content types and utilities including URL metadata
 
 // Import node types for the MlldNode union
@@ -115,6 +116,8 @@ export interface VariableMetadata {
   isImported?: boolean;
   importPath?: string;
   isComplex?: boolean;
+  security?: import('./security').SecurityDescriptor;
+  capability?: import('./security').CapabilityContext;
 }
 
 // Import ExecutableVariable for the union

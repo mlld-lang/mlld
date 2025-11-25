@@ -1,4 +1,4 @@
-/exe @getConfig = {echo '{"env":"prod","version":"2.0"}'}
+/exe @getConfig = cmd {echo '{"env":"prod","version":"2.0"}'}
 /exe @transform(data) = sh {echo "$data" | sed "s/prod/production/g"}
 
 /var @config = @getConfig()

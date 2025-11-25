@@ -31,6 +31,17 @@ export class MemoryFileSystem implements IFileSystemService {
     }
     this.files.set(normalizedPath, content);
   }
+
+  async appendFile(filePath: string, content: string): Promise<void> {
+    const normalizedPath = this.normalizePath(filePath);
+    const existing = this.files.get(normalizedPath) || '';
+    // Create parent directories if needed
+    const dir = this.dirname(normalizedPath);
+    if (dir && dir !== '/' && !await this.isDirectory(dir)) {
+      await this.mkdir(dir, { recursive: true });
+    }
+    this.files.set(normalizedPath, existing + content);
+  }
   
   async exists(filePath: string): Promise<boolean> {
     const normalizedPath = this.normalizePath(filePath);

@@ -1,0 +1,9 @@
+# Module exporting interconnected labeled executables
+
+/exe secret @greeter(name) = js {
+  return `HELLO ${name.toUpperCase()}`;
+}
+
+/var @exports = {
+  greeter: @greeter
+}

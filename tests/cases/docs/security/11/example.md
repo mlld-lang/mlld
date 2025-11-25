@@ -1,4 +1,7 @@
-/exe @safeRun(cmd, args) = when [
-  @cmd == "ls" || @cmd == "cat" || @cmd == "grep" || @cmd == "echo" => run {@cmd @args}
-  * => "Error: command not allowed"
+/guard @sanitize before untrusted = when [
+  * => allow @input.trim().slice(0, 100)
 ]
+
+/var untrusted @userInput = "  very long input...  "
+/exe @process(data) = `Processed: @data`
+/show @process(@userInput)                 # Input trimmed and truncated

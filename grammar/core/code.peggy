@@ -95,7 +95,7 @@ LanguageCodeCore
 // This is the base abstraction for language + code patterns
 // Used by exec.peggy where parameters are already parsed
 RunLanguageCodeCore
-  = language:RunCodeLanguage _ code:UnifiedCodeBrackets {
+  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage _ code:UnifiedCodeBrackets {
       helpers.debug('RunLanguageCodeCore matched', { language, code });
       
       // Create language node
@@ -125,19 +125,21 @@ RunLanguageCodeCore
         hasVariables: false  // Code blocks don't support variable interpolation
       };
       
+      const withClause = streamPrefix ? { stream: true } : undefined;
+
       // Return a structured result that can be used by both directives
       return {
         type: 'runCode',
-        values,
-        raw,
-        meta,
+        values: withClause ? { ...values, withClause } : values,
+        raw: withClause ? { ...raw, withClause } : raw,
+        meta: withClause ? { ...meta, withClause } : meta,
         location: location()
       };
     }
 
 // This pattern is used by run.peggy where arguments can appear after the language
 RunLanguageCodeWithArgs
-  = language:RunCodeLanguage _ argList:UnifiedArgumentList _ code:UnifiedCodeBrackets {
+  = streamPrefix:StreamKeyword? _ language:RunCodeLanguage _ argList:UnifiedArgumentList _ code:UnifiedCodeBrackets {
       helpers.debug('RunLanguageCodeWithArgs matched', { language, argList, code });
       
       // Extract arguments from unified argument list
@@ -180,12 +182,14 @@ RunLanguageCodeWithArgs
         hasVariables: false  // Code blocks don't support variable interpolation
       };
       
+      const withClause = streamPrefix ? { stream: true } : undefined;
+
       // Return a structured result that can be used by both directives
       return {
         type: 'runCode',
-        values,
-        raw,
-        meta,
+        values: withClause ? { ...values, withClause } : values,
+        raw: withClause ? { ...raw, withClause } : raw,
+        meta: withClause ? { ...meta, withClause } : meta,
         location: location()
       };
     }

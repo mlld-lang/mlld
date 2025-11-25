@@ -4,8 +4,9 @@ import { Environment } from '../env/Environment';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { PathContextBuilder } from '@core/services/PathContextService';
 import * as path from 'path';
-import { minimatch } from 'minimatch';
+import minimatch from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
 import type { StructuredValueMetadata } from '../utils/structured-value';
@@ -123,13 +124,10 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.filename).toBe('README.md');
-        expect(result.content).toBeDefined();
-        expect(result.tokest).toBeGreaterThan(0);
-        expect(result.absolute).toContain('README.md');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('Test README');
+      expect(metadata?.filename).toBe('README.md');
+      expect(metadata?.absolute).toContain('README.md');
       expectLoadContentMetadata(metadata);
     });
 
@@ -154,13 +152,77 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      // With section extraction, should return LoadContentResult to maintain metadata
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.content).toContain('Install instructions here');
-        expect(result.filename).toBe('README.md');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('Install instructions here');
+      expect(metadata?.filename).toBe('README.md');
       expectLoadContentMetadata(metadata);
+    });
+  });
+
+  describe('Relative path resolution', () => {
+    it('uses inferred project root for @base single file metadata', async () => {
+      const projectRoot = '/project';
+      const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
+      await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-security.md'), '# Spec');
+      await fileSystem.writeFile(scriptPath, '');
+
+      const pathContext = await PathContextBuilder.fromFile(scriptPath, fileSystem);
+      const envWithContext = new Environment(fileSystem, pathService, pathContext);
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: '@base/todo/spec-security.md' }],
+          raw: '@base/todo/spec-security.md'
+        }
+      };
+
+      const rawResult = await processContentLoader(node, envWithContext);
+      const { metadata } = unwrapStructuredForTest(rawResult);
+
+      expect(metadata?.relative).toBe('./todo/spec-security.md');
+    });
+
+    it('uses inferred project root for @base glob metadata', async () => {
+      const projectRoot = '/project';
+      const scriptPath = path.join(projectRoot, 'scripts', 'main.mld');
+      await fileSystem.writeFile(path.join(projectRoot, 'mlld-config.json'), '{}');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-a.md'), '# A');
+      await fileSystem.writeFile(path.join(projectRoot, 'todo', 'spec-b.md'), '# B');
+      await fileSystem.writeFile(scriptPath, '');
+
+      const pathContext = await PathContextBuilder.fromFile(scriptPath, fileSystem);
+      const envWithContext = new Environment(fileSystem, pathService, pathContext);
+
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: '@base/todo/*.md' }],
+          raw: '@base/todo/*.md'
+        }
+      };
+
+      let rawResult;
+      try {
+        rawResult = await processContentLoader(node, envWithContext);
+      } catch (error) {
+        // Surface helpful details during test failures
+        // eslint-disable-next-line no-console
+        console.error('load-content error details', (error as any)?.details ?? error);
+        throw error;
+      }
+      const { data: result } = unwrapStructuredForTest(rawResult);
+
+      expect(isLoadContentResultArray(result)).toBe(true);
+      if (isLoadContentResultArray(result)) {
+        expect(result.map(item => item.relative).sort()).toEqual([
+          './todo/spec-a.md',
+          './todo/spec-b.md'
+        ]);
+      }
     });
   });
 
@@ -427,12 +489,9 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      // Single file with section and rename should still return LoadContentResult
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.content).toContain('## test by Alice');
-        expect(result.content).toContain('This is a test summary');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('## test by Alice');
+      expect((result as string)).toContain('This is a test summary');
       expectLoadContentMetadata(metadata);
     });
 
@@ -471,11 +530,9 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        // Without fields, <> should reference the content itself
-        expect(result.content).toContain('### File: This is the overview section.');
-      }
+      expect(typeof result).toBe('string');
+      // Without fields, <> should reference the content itself
+      expect((result as string)).toContain('### File: This is the overview section.');
       expectLoadContentMetadata(metadata);
     });
 
@@ -520,11 +577,9 @@ describe('Content Loader with Glob Support', () => {
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
       
-      expect(isLoadContentResult(result)).toBe(true);
-      if (isLoadContentResult(result)) {
-        expect(result.content).toContain('## mymodule v1.0.0');
-        expect(result.content).toContain('Module description here');
-      }
+      expect(typeof result).toBe('string');
+      expect((result as string)).toContain('## mymodule v1.0.0');
+      expect((result as string)).toContain('Module description here');
       expectLoadContentMetadata(metadata);
     });
   });

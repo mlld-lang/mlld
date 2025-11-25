@@ -1,4 +1,4 @@
-// Note: use dynamic require for spawnSync so tests can spy via require('child_process')
+// Note: use dynamic require so tests can spy on child_process methods
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const child_process = require('child_process');
 import * as fs from 'fs';
@@ -8,6 +8,9 @@ import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { isTextLike, type Variable } from '@core/types/variable';
 import { adaptVariablesForBash } from '../bash-variable-adapter';
+import { StringDecoder } from 'string_decoder';
+import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
+import { randomUUID } from 'crypto';
 
 export interface VariableProvider {
   /**
@@ -20,12 +23,21 @@ export interface VariableProvider {
  * Executes bash/shell code with environment variable injection
  */
 export class BashExecutor extends BaseCommandExecutor {
+  private bashPath: string;
   constructor(
     errorUtils: ErrorUtils,
     workingDirectory: string,
     private variableProvider: VariableProvider
   ) {
     super(errorUtils, workingDirectory);
+    this.bashPath = this.resolveBashPath();
+    if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
+      try {
+        process.stdout.write(`[BashExecutor] resolved bashPath=${this.bashPath}\n`);
+      } catch {
+        // ignore logging errors
+      }
+    }
   }
 
   async execute(
@@ -43,6 +55,84 @@ export class BashExecutor extends BaseCommandExecutor {
     );
   }
 
+  /**
+   * Resolve a usable bash/shell binary across environments.
+   * Prefer PATH lookup to avoid hard-coding platform paths that may not exist.
+   */
+  private resolveBashPath(): string {
+    return process.env.MLLD_BASH_BINARY || 'bash';
+  }
+
+  /**
+   * Build an ordered list of candidate shells to try.
+   * Ensures we have fallbacks when a specific path is unavailable.
+   */
+  private getCandidateBashPaths(): string[] {
+    const candidates = [
+      this.bashPath,
+      process.env.MLLD_BASH_BINARY,
+      'bash',
+      '/bin/bash',
+      '/usr/bin/bash',
+      'sh',
+      '/bin/sh',
+      '/usr/bin/sh'
+    ];
+
+    // Deduplicate while preserving order
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const candidate of candidates) {
+      if (!candidate || seen.has(candidate)) continue;
+      seen.add(candidate);
+      unique.push(candidate);
+    }
+    return unique;
+  }
+
+  /**
+   * Execute bash code synchronously with graceful fallbacks if a binary is missing.
+   */
+  private runBashSync(
+    enhancedCode: string,
+    envVars: Record<string, string>
+  ): { execResult: any; usedPath: string } {
+    const candidates = this.getCandidateBashPaths();
+    let lastError: unknown;
+
+    for (const candidate of candidates) {
+      try {
+        const execResult = child_process.spawnSync(candidate, [], {
+          input: enhancedCode,
+          encoding: 'utf8',
+          env: { ...process.env, ...envVars },
+          cwd: this.workingDirectory,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        if (execResult.error && (execResult.error as any).code === 'ENOENT') {
+          lastError = execResult.error;
+          continue;
+        }
+
+        // Update the preferred path to the one that succeeded
+        this.bashPath = candidate;
+        return { execResult, usedPath: candidate };
+      } catch (err: any) {
+        if (err?.code === 'ENOENT') {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+    throw new Error('No bash-compatible shell available');
+  }
+
   private async executeBashCode(
     code: string,
     params?: Record<string, any>,
@@ -50,12 +140,11 @@ export class BashExecutor extends BaseCommandExecutor {
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
+    let envVars: Record<string, string> = {};
+    let tempFiles: string[] = [];
 
     try {
       // Build environment variables from parameters
-      let envVars: Record<string, string> = {};
-      let tempFiles: string[] = [];
-
       if (params && typeof params === 'object') {
         // Always use the adapter to convert Variables/proxies to strings
         // This handles both enhanced Variables and regular values
@@ -167,62 +256,169 @@ export class BashExecutor extends BaseCommandExecutor {
       // Optional debug: dump the constructed bash script (prelude + user code)
       if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
         try {
-          console.error('--- MLLD Bash Script (BEGIN) ---');
-          console.error(enhancedCode);
+          process.stdout.write('--- MLLD Bash Script (BEGIN) ---\n');
+          process.stdout.write(enhancedCode + '\n');
           const keys = Object.keys(envVars);
-          console.error(`[MLLD Bash Env] keys: ${keys.length > 50 ? keys.slice(0, 50).join(',') + '…' : keys.join(',')}`);
-          console.error('--- MLLD Bash Script (END) ---');
+          process.stdout.write(`[MLLD Bash Env] keys: ${keys.length > 50 ? keys.slice(0, 50).join(',') + '…' : keys.join(',')}\n`);
+          process.stdout.write('--- MLLD Bash Script (END) ---\n');
         } catch {}
       }
 
-      // For multiline bash scripts, use stdin to avoid shell escaping issues
-      // Use spawnSync to capture both stdout and stderr
-      const execResult = child_process.spawnSync('bash', [], {
-        input: enhancedCode,
-        encoding: 'utf8',
+      // Non-streaming path: preserve legacy sync behavior for fixtures/tests
+      if (!context?.streamingEnabled) {
+        const { execResult, usedPath } = this.runBashSync(enhancedCode, envVars);
+
+        if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
+          try {
+            process.stdout.write(
+              JSON.stringify({
+                tag: 'BashExecutor[non-stream]',
+                status: execResult.status,
+                error: execResult.error ? String(execResult.error) : null,
+                stdout: execResult.stdout,
+                stderr: execResult.stderr,
+                envKeys: Object.keys(envVars).slice(0, 20),
+                enhancedCode,
+                usedPath
+              }) + '\n'
+            );
+          } catch {
+            // ignore logging errors
+          }
+        }
+
+        if (execResult.error) {
+          throw execResult.error;
+        }
+
+        if (execResult.status !== 0) {
+          const error: any = new Error(`Command failed with exit code ${execResult.status}`);
+          error.status = execResult.status;
+          error.stderr = execResult.stderr;
+          error.stdout = execResult.stdout;
+          throw error;
+        }
+
+        const stdout = execResult.stdout || '';
+        const stderr = execResult.stderr || '';
+        const hasTTYCheck = enhancedCode.includes('[ -t ') || enhancedCode.includes('>&2');
+        const resultText = hasTTYCheck && stderr && !stdout ? stderr : stdout;
+        const duration = Date.now() - startTime;
+
+        return {
+          output: resultText.toString().replace(/\n+$/, ''),
+          duration,
+          exitCode: 0
+        };
+      }
+
+      const bus = getStreamBus();
+      const pipelineId = context?.pipelineId || 'pipeline';
+      const stageIndex = context?.stageIndex ?? 0;
+      const parallelIndex = context?.parallelIndex;
+      const streamId = context?.streamId || randomUUID();
+      const stdoutDecoder = new StringDecoder('utf8');
+      const stderrDecoder = new StringDecoder('utf8');
+
+      const child = child_process.spawn(this.bashPath, [], {
         env: { ...process.env, ...envVars },
         cwd: this.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe']
       });
-      
-      if (execResult.error) {
-        throw execResult.error;
-      }
-      
-      if (execResult.status !== 0) {
-        // Handle non-zero exit status like execSync would
-        const error: any = new Error(`Command failed with exit code ${execResult.status}`);
-        error.status = execResult.status;
-        error.stderr = execResult.stderr;
-        error.stdout = execResult.stdout;
-        throw error;
-      }
-      
-      // Combine stdout and stderr for commands that write to stderr when no TTY
-      const stdout = execResult.stdout || '';
-      const stderr = execResult.stderr || '';
-      
-      // For commands that likely wrote to stderr due to TTY detection, include stderr in output
-      const hasTTYCheck = enhancedCode.includes('[ -t ') || enhancedCode.includes('>&2');
-      const result = hasTTYCheck && stderr && !stdout ? stderr : stdout;
-      
-      const duration = Date.now() - startTime;
 
-      // Clean up any temporary files created for oversized variables
-      for (const file of tempFiles) {
-        try {
-          fs.unlinkSync(file);
-        } catch {
-          // ignore cleanup errors
-        }
-      }
+      let stdoutBuffer = '';
+      let stderrBuffer = '';
 
-      return {
-        output: result.toString().replace(/\n+$/, ''),
-        duration,
-        exitCode: 0
+      const emitChunk = (chunk: string, source: 'stdout' | 'stderr') => {
+        if (!bus || !chunk) return;
+        bus.emit({
+          type: 'CHUNK',
+          pipelineId,
+          stageIndex,
+          parallelIndex,
+          chunk,
+          source,
+          timestamp: Date.now()
+        });
       };
+
+      child.stdin.write(enhancedCode);
+      child.stdin.end();
+
+      child.stdout.on('data', (data: Buffer) => {
+        const text = stdoutDecoder.write(data);
+        stdoutBuffer += text;
+        emitChunk(text, 'stdout');
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        const text = stderrDecoder.write(data);
+        stderrBuffer += text;
+        emitChunk(text, 'stderr');
+      });
+
+      const result: CommandExecutionResult = await new Promise((resolve, reject) => {
+        let settled = false;
+        child.on('error', (err) => {
+          if (settled) return;
+          settled = true;
+          reject(err);
+        });
+
+        child.on('close', (code) => {
+          if (settled) return;
+          const finalOut = stdoutDecoder.end();
+          if (finalOut) {
+            stdoutBuffer += finalOut;
+            emitChunk(finalOut, 'stdout');
+          }
+          const finalErr = stderrDecoder.end();
+          if (finalErr) {
+            stderrBuffer += finalErr;
+            emitChunk(finalErr, 'stderr');
+          }
+
+          const duration = Date.now() - startTime;
+          const stdoutText = stdoutBuffer.toString();
+          const stderrText = stderrBuffer.toString();
+
+          if (code && code !== 0) {
+            settled = true;
+            const err = new MlldCommandExecutionError(
+              `Code execution failed: bash`,
+              context?.sourceLocation,
+              {
+                command: `bash code execution`,
+                exitCode: code,
+                duration,
+                stderr: stderrText,
+                stdout: stdoutText,
+                workingDirectory: this.workingDirectory,
+                directiveType: context?.directiveType || 'run',
+                streamId
+              }
+            );
+            reject(err);
+            return;
+          }
+
+          const hasTTYCheck = enhancedCode.includes('[ -t ') || enhancedCode.includes('>&2');
+          const merged = hasTTYCheck && stderrText && !stdoutText ? stderrText : stdoutText;
+          settled = true;
+          resolve({
+            output: merged.replace(/\n+$/, ''),
+            duration,
+            exitCode: code ?? 0,
+            stderr: stderrText || undefined
+          });
+        });
+      });
+      
+      return result;
     } catch (execError: unknown) {
+      if (execError instanceof MlldCommandExecutionError) {
+        throw execError;
+      }
       // Handle execution error with proper error details
       if (context?.sourceLocation) {
         const stderr = (execError && typeof execError === 'object' && 'stderr' in execError) ? String(execError.stderr) : (execError instanceof Error ? execError.message : 'Unknown error');
@@ -245,6 +441,15 @@ export class BashExecutor extends BaseCommandExecutor {
         throw bashError;
       }
       throw new Error(`Bash execution failed: ${execError instanceof Error ? execError.message : 'Unknown error'}`);
+    } finally {
+      // Clean up any temporary files created for oversized variables
+      for (const file of tempFiles) {
+        try {
+          fs.unlinkSync(file);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
     }
   }
 

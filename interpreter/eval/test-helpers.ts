@@ -1,17 +1,20 @@
 import { asData, isStructuredValue } from '../utils/structured-value';
-import type { StructuredValue, StructuredValueMetadata } from '../utils/structured-value';
+import type { StructuredValue, StructuredValueContext } from '../utils/structured-value';
 
 export interface UnwrappedStructured<T> {
   data: T;
-  metadata?: StructuredValueMetadata;
+  ctx?: StructuredValueContext;
+  metadata?: StructuredValueContext;
   wrapper?: StructuredValue<T>;
 }
 
 export function unwrapStructuredForTest<T>(value: T | StructuredValue<T>): UnwrappedStructured<T> {
   if (isStructuredValue<T>(value)) {
+    const ctx = value.ctx;
     return {
       data: asData<T>(value),
-      metadata: value.metadata,
+      ctx,
+      metadata: ctx,
       wrapper: value
     };
   }

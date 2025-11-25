@@ -323,7 +323,7 @@ describe('ResolverManager', () => {
       const manager = new ResolverManager();
       manager.registerResolver(new LocalResolver(new NodeFileSystem()));
 
-      const modulePath = path.join(tempDir, 'tools.mlld.md');
+      const modulePath = path.join(tempDir, 'tools.mld.md');
       await fs.writeFile(modulePath, `---
 name: tools
 author: testuser
@@ -342,7 +342,7 @@ author: testuser
       const manager = new ResolverManager();
       manager.registerResolver(new LocalResolver(new NodeFileSystem()));
 
-      const modulePath = path.join(tempDir, 'tools.mlld.md');
+      const modulePath = path.join(tempDir, 'tools.mld.md');
       await fs.writeFile(modulePath, `---
 name: tools
 author: testuser

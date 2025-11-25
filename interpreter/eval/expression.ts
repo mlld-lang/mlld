@@ -10,6 +10,8 @@ import {
   isCommandResult, 
   isPipelineInput 
 } from '@core/types/variable';
+import { asText, assertStructuredValue } from '../utils/structured-value';
+import { executeParallelExecInvocations } from './helpers/parallel-exec';
 
 /**
  * Determines if a value is truthy according to mlld rules
@@ -36,7 +38,8 @@ export function isTruthy(value: any): boolean {
       // Command results are truthy if they have output
       return variable.value.trim().length > 0;
     } else if (isPipelineInput(variable)) {
-      return variable.value.text.length > 0;
+      assertStructuredValue(variable.value, 'expression:isTruthy:pipeline-input');
+      return asText(variable.value).length > 0;
     }
     
     // For other variable types, use their value
@@ -120,6 +123,14 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     operator = operator[0];
   }
   
+  const isExecParallel =
+    operator === '||' &&
+    left?.type === 'ExecInvocation' &&
+    right?.type === 'ExecInvocation';
+  if (isExecParallel) {
+    const { value } = await executeParallelExecInvocations(left, right, env);
+    return { value, env };
+  }
   
   // Short-circuit evaluation for logical operators
   const expressionContext = { isExpression: true, ...context };

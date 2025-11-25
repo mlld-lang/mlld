@@ -70,21 +70,14 @@ Key characteristics:
 
 ### Variable Type Preservation
 
-Both iterators preserve Variable wrappers to maintain type information:
+- Loop-scoped bindings stay Variables when the source value already carries a wrapper. `/for` assigns the normalized value into the iteration variable, so guard helpers and field access keep the original metadata. Executable references (e.g., function arrays) are preserved as Variables on purpose; `normalizeIterableValue` skips executable Variables so higher-order patterns (function composition fixtures) continue to work.
+- Foreach parameter binding uses the same rule set: strings become text Variables, objects/arrays become object/array Variables, and executables stay executable Variables so parameterized helpers can run them.
 
-```typescript
-// /for - preserves Variable wrappers
-childEnv.set(varName, value);  // value may be a Variable
+### Plain Value Contract
 
-// foreach - creates appropriate Variable types
-if (typeof paramValue === 'string') {
-  childEnv.setVariable(paramName, {
-    type: 'text',
-    name: paramName,
-    value: paramValue,
-    definedAt: null
-  });
-}
+- `/for` and `foreach` call `normalizeIterableValue` (`interpreter/eval/for-utils.ts`) on every collection before iteration. The helper unwraps StructuredValues and Variables into plain JavaScript arrays/objects while attaching provenance via `ExpressionProvenance`. User-visible data (loop bodies, `/for` expression results, foreach tuples, batch inputs) therefore contains raw values without `.data` detours.
+- Provenance-aware consumers materialize labels on demand. Guard hooks run `materializeGuardInputs()` to build Variables from the provenance registry, and ArrayHelpers/when-conditions continue to see `.ctx.labels` even though the loop returned primitives.
+- Normalization stops at executable Variables so higher-order helpers receive callable objects. Keep function arrays in executable form when assembling operation lists; the helper preserves them automatically.
 
 ### Evaluation Patterns
 
@@ -185,18 +178,18 @@ Syntax options:
 /for parallel @x in @items => show @x
 
 # Per-loop cap override
-/for 3 parallel @x in @items => show @x
+/for parallel(3) @x in @items => show @x
 
 # Cap with pacing between task starts (time units: s, m, h, d, w)
-/for (3, 1s) parallel @x in @items => show @x
+/for parallel(3, 1s) @x in @items => show @x
 
 # Collection form with parallel
-/var @out = for 2 parallel @x in ["a","b","c"] => @upper(@x)
+/var @out = for parallel(2) @x in ["a","b","c"] => @upper(@x)
 ```
 
 Semantics:
 - Concurrency cap: defaults to `MLLD_PARALLEL_LIMIT` (env), overridable per loop; cap never exceeds collection length.
-- Pacing: optional minimum delay between iteration starts; `(n, 1s)` adds ~1 second between starts across the loop.
+- Pacing: optional minimum delay between iteration starts; `parallel(n, 1s)` adds ~1 second between starts across the loop.
 - Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff.
 - Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is `null`.
 - Nested loops: inner loops inherit outer `forOptions` unless overridden.

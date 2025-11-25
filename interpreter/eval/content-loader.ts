@@ -16,12 +16,48 @@ import { createRenamedContentVariable, createLoadContentResultVariable, extractV
 import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
+import { InterpolationContext } from '../core/interpolation-context';
+import type { SecurityDescriptor } from '@core/types/security';
 
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const { interpolate } = await import('../core/interpreter');
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 /**
  * Check if a path contains glob patterns
  */
 function isGlobPattern(path: string): boolean {
   return /[\*\?\{\}\[\]]/.test(path);
+}
+
+function getRelativeBasePath(env: Environment): string {
+  // Prefer inferred project root; fall back to the current file directory when unavailable
+  const projectRoot = env.getProjectRoot?.() ?? env.getBasePath();
+  return projectRoot || env.getFileDirectory();
+}
+
+function formatRelativePath(env: Environment, targetPath: string): string {
+  const basePath = path.resolve(getRelativeBasePath(env));
+  const absoluteTarget = path.resolve(targetPath);
+  const relative = path.relative(basePath, absoluteTarget);
+  return relative ? `./${relative}` : './';
 }
 
 /**
@@ -317,7 +353,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
       const fileContext = new LoadContentResultImpl({
         content: rawContent,
         filename: path.basename(resolvedPath),
-        relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+        relative: formatRelativePath(env, resolvedPath),
         absolute: resolvedPath
       });
       
@@ -336,7 +372,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
         content: sectionContent,
         rawHtml: rawContent,
         filename: path.basename(resolvedPath),
-        relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+        relative: formatRelativePath(env, resolvedPath),
         absolute: resolvedPath,
         title: title || undefined,
         description: description || undefined
@@ -357,7 +393,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
       content: markdownContent,
       rawHtml: rawContent,
       filename: path.basename(resolvedPath),
-      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      relative: formatRelativePath(env, resolvedPath),
       absolute: resolvedPath,
       title: title || undefined,
       description: description || undefined
@@ -373,7 +409,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
     const fileContext = new LoadContentResultImpl({
       content: rawContent,
       filename: path.basename(resolvedPath),
-      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      relative: formatRelativePath(env, resolvedPath),
       absolute: resolvedPath
     });
     
@@ -384,7 +420,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
     const result = new LoadContentResultImpl({
       content: sectionContent,
       filename: path.basename(resolvedPath),
-      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      relative: formatRelativePath(env, resolvedPath),
       absolute: resolvedPath,
       // Pass the full raw content so frontmatter can be parsed
       _rawContent: rawContent
@@ -396,7 +432,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
   const result = new LoadContentResultImpl({
     content: rawContent,
     filename: path.basename(resolvedPath),
-    relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+    relative: formatRelativePath(env, resolvedPath),
     absolute: resolvedPath
   });
   
@@ -407,15 +443,25 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
  * Load files matching a glob pattern
  */
 async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[] | string[]> {
-  // Resolve the pattern relative to current directory
-  const baseDir = env.getFileDirectory();
-  
-  
+  const relativeBase = getRelativeBasePath(env);
+  let globCwd = env.getFileDirectory();
+  let globPattern = pattern;
+
+  if (pattern.startsWith('@base/')) {
+    globCwd = relativeBase;
+    globPattern = pattern.slice('@base/'.length);
+  } else if (path.isAbsolute(pattern)) {
+    globCwd = path.parse(pattern).root || '/';
+    globPattern = path.relative(globCwd, pattern);
+  }
+
+  const computeRelative = (filePath: string): string => formatRelativePath(env, filePath);
+
   // Use tinyglobby to find matching files
   let matches: string[];
   try {
-    matches = await glob(pattern, {
-      cwd: baseDir,
+    matches = await glob(globPattern, {
+      cwd: globCwd,
       absolute: true,
       followSymlinks: true,
       // Ignore common non-text files
@@ -447,7 +493,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
             const fileContext = new LoadContentResultImpl({
               content: rawContent,
               filename: path.basename(filePath),
-              relative: `./${path.relative(baseDir, filePath)}`,
+              relative: computeRelative(filePath),
               absolute: filePath
             });
             
@@ -470,7 +516,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
                 content: sectionContent,
                 rawHtml: rawContent,
                 filename: path.basename(filePath),
-                relative: `./${path.relative(baseDir, filePath)}`,
+                relative: computeRelative(filePath),
                 absolute: filePath,
                 title: title || undefined,
                 description: description || undefined
@@ -493,7 +539,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
             content: markdownContent,
             rawHtml: rawContent,
             filename: path.basename(filePath),
-            relative: `./${path.relative(baseDir, filePath)}`,
+            relative: computeRelative(filePath),
             absolute: filePath,
             title: title || undefined,
             description: description || undefined
@@ -508,7 +554,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
             const fileContext = new LoadContentResultImpl({
               content: rawContent,
               filename: path.basename(filePath),
-              relative: `./${path.relative(baseDir, filePath)}`,
+              relative: computeRelative(filePath),
               absolute: filePath
             });
             
@@ -523,7 +569,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
               results.push(new LoadContentResultImpl({
                 content: sectionContent,
                 filename: path.basename(filePath),
-                relative: `./${path.relative(baseDir, filePath)}`,
+                relative: computeRelative(filePath),
                 absolute: filePath,
                 _rawContent: rawContent
               }));
@@ -537,7 +583,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
           results.push(new LoadContentResultImpl({
             content: rawContent,
             filename: path.basename(filePath),
-            relative: `./${path.relative(baseDir, filePath)}`,
+            relative: computeRelative(filePath),
             absolute: filePath
           }));
         }
@@ -598,9 +644,7 @@ async function reconstructPath(pathNode: any, env: Environment): Promise<string>
   const hasVariables = pathNode.segments.some((seg: any) => seg.type === 'VariableReference');
   
   if (hasVariables) {
-    // Import interpolate function to handle variable references
-    const { interpolate } = await import('../core/interpreter');
-    const interpolated = await interpolate(pathNode.segments, env);
+    const interpolated = await interpolateAndRecord(pathNode.segments, env);
     return interpolated.trim();
   }
 
@@ -649,13 +693,9 @@ async function extractSectionName(sectionNode: any, env: Environment): Promise<s
     return identifier.content;
   } else if (identifier.type === 'VariableReference') {
     // Import interpolate function
-    const { interpolate } = await import('../core/interpreter');
-    // Handle variable reference as section name
-    return await interpolate([identifier], env);
+    return await interpolateAndRecord([identifier], env);
   } else if (Array.isArray(identifier)) {
-    // Handle array of nodes (with potential variable interpolation)
-    const { interpolate } = await import('../core/interpreter');
-    return await interpolate(identifier, env);
+    return await interpolateAndRecord(identifier, env);
   }
 
   throw new MlldError('Unable to extract section name', {
@@ -700,8 +740,6 @@ async function extractSection(content: string, sectionName: string, renamedTitle
         
         
         // Create an environment for interpolation with the file context bound to <>
-        const { interpolate } = await import('../core/interpreter');
-        
         // Process the template parts, replacing placeholders with actual values
         const processedParts: any[] = [];
         for (const part of renamedTitle.parts || []) {
@@ -748,7 +786,7 @@ async function extractSection(content: string, sectionName: string, renamedTitle
             sectionName: sectionName
           });
         }
-        finalTitle = await interpolate(processedParts, env);
+        finalTitle = await interpolateAndRecord(processedParts, env);
       } else {
         // It's a plain string (legacy behavior)
         finalTitle = renamedTitle;
@@ -856,7 +894,7 @@ async function applyTransformToResults(
   transform: any,
   env: Environment
 ): Promise<string[]> {
-  const { interpolate } = await import('../core/interpreter');
+  // Interpolate the processed template for each result
   const transformed: string[] = [];
   
   
@@ -914,7 +952,7 @@ async function applyTransformToResults(
     }
     
     // Interpolate the processed template
-    const transformedContent = await interpolate(processedParts, childEnv);
+    const transformedContent = await interpolateAndRecord(processedParts, childEnv);
     transformed.push(transformedContent);
   }
   
@@ -926,7 +964,6 @@ async function applyTemplateToAstResults(
   transform: any,
   env: Environment
 ): Promise<string[]> {
-  const { interpolate } = await import('../core/interpreter');
   const transformed: string[] = [];
 
   for (const result of results) {
@@ -966,7 +1003,7 @@ async function applyTemplateToAstResults(
     }
 
     const childEnv = env.createChild();
-    const transformedContent = await interpolate(processedParts, childEnv);
+    const transformedContent = await interpolateAndRecord(processedParts, childEnv);
     transformed.push(transformedContent);
   }
 

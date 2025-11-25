@@ -21,6 +21,13 @@ export interface CommandExecutionContext {
   directiveNode?: any; // MlldNode
   filePath?: string;
   directiveType?: string;
+  streamingEnabled?: boolean;
+  pipelineId?: string;
+  stageIndex?: number;
+  parallelIndex?: number;
+  streamId?: string;
+  emitEffect?: (chunk: string, source: 'stdout' | 'stderr') => void;
+  ndjsonParser?: any;
 }
 
 /**

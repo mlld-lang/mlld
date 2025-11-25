@@ -1,8 +1,11 @@
 import {
   isLoadContentResult,
   isLoadContentResultArray,
-  type LoadContentResult
+  type LoadContentResult,
+  type LoadContentResultHTML,
+  type LoadContentResultURL
 } from '@core/types/load-content';
+import { MlldError } from '@core/errors';
 import {
   getVariableMetadata,
   hasVariableMetadata
@@ -42,6 +45,34 @@ function tryParseJson(text: string): { success: boolean; value?: unknown } {
   }
 }
 
+function parseJsonWithContext(text: string, sourceLabel: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error: any) {
+    const message = error?.message ? ` (${error.message})` : '';
+    throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`);
+  }
+}
+
+function parseJsonLines(text: string, sourceLabel: string): unknown[] {
+  const lines = text.split(/\r?\n/);
+  const results: unknown[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    try {
+      results.push(JSON.parse(line));
+    } catch (error: any) {
+      const message = error?.message ? ` (${error.message})` : '';
+      throw new MlldError(`Failed to parse JSONL from ${sourceLabel} at line ${i + 1}${message}`, {
+        line: i + 1,
+        offendingLine: line
+      });
+    }
+  }
+  return results;
+}
+
 function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMetadata): StructuredValueMetadata | undefined {
   if (!base && !extra) {
     return undefined;
@@ -54,15 +85,37 @@ function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMe
 
 function extractLoadContentMetadata(result: LoadContentResult): StructuredValueMetadata {
   const metadata: StructuredValueMetadata = {
-    source: 'load-content'
+    source: 'load-content',
+    filename: result.filename,
+    relative: result.relative,
+    absolute: result.absolute,
+    tokest: result.tokest,
+    tokens: result.tokens,
+    fm: result.fm,
+    json: result.json,
+    length: typeof result.content === 'string' ? result.content.length : undefined,
+    metrics: {
+      tokens: result.tokens,
+      length: typeof result.content === 'string' ? result.content.length : undefined
+    }
   };
 
-  if ('filename' in result && result.filename) metadata.filename = result.filename;
-  if ('relative' in result && result.relative) metadata.relative = result.relative;
-  if ('absolute' in result && result.absolute) metadata.absolute = result.absolute;
-  if ('url' in result && result.url) metadata.url = result.url;
-  if ('status' in (result as any) && (result as any).status !== undefined) metadata.status = (result as any).status;
-  if ('headers' in (result as any) && (result as any).headers) metadata.headers = (result as any).headers;
+  if ('url' in result && result.url) {
+    const urlResult = result as LoadContentResultURL;
+    metadata.url = urlResult.url;
+    metadata.domain = urlResult.domain;
+    if (urlResult.title) metadata.title = urlResult.title;
+    if (urlResult.description) metadata.description = urlResult.description;
+    if (urlResult.status !== undefined) metadata.status = urlResult.status;
+    if (urlResult.headers) metadata.headers = urlResult.headers;
+  }
+
+  if ('html' in result && !(result as LoadContentResultURL).url) {
+    const htmlResult = result as LoadContentResultHTML;
+    metadata.html = htmlResult.html;
+    if (htmlResult.title) metadata.title = htmlResult.title;
+    if (htmlResult.description) metadata.description = htmlResult.description;
+  }
 
   return metadata;
 }
@@ -89,21 +142,33 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
   if (isLoadContentResult(value)) {
     const baseMetadata = extractLoadContentMetadata(value);
-    const metadata: StructuredValueMetadata = {
-      ...baseMetadata,
-      loadResult: value
-    };
     const contentText = typeof value.content === 'string' ? value.content : String(value.content ?? '');
+    const filenameLower = (value.filename || '').toLowerCase();
+    const skipAutoParse = false;
+
+    if (filenameLower.endsWith('.jsonl') && typeof value.content === 'string') {
+      const data = parseJsonLines(contentText, value.filename || 'content');
+      const metadata = buildMetadata(baseMetadata, { type: 'jsonl' });
+      return wrapStructured(data, 'array', contentText, metadata);
+    }
+
+    if (filenameLower.endsWith('.json') && typeof value.content === 'string') {
+      const data = parseJsonWithContext(contentText, value.filename || 'content');
+      const metadata = buildMetadata(baseMetadata, { type: 'json' });
+      return wrapStructured(data, detectStructuredType(data), contentText, metadata);
+    }
+
     const parsedFromContent = tryParseJson(contentText);
     if (parsedFromContent.success) {
       const data = parsedFromContent.value;
-      return wrapStructured(data, detectStructuredType(data), contentText, metadata);
+      return wrapStructured(data, detectStructuredType(data), contentText, baseMetadata);
     }
     const parsed = value.json;
     if (parsed !== undefined) {
-      return wrapStructured(parsed, detectStructuredType(parsed), contentText, metadata);
+      return wrapStructured(parsed, detectStructuredType(parsed), contentText, baseMetadata);
     }
-    return wrapStructured(value, 'object', contentText, metadata);
+    // Default text handling: data is the content string, metadata carries file info
+    return wrapStructured(contentText, 'text', contentText, baseMetadata);
   }
 
   if (Array.isArray(value)) {
@@ -116,8 +181,8 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     const variableMetadata = hasVariableMetadata(value) ? getVariableMetadata(value) : undefined;
     const metadata = buildMetadata(
       baseMetadata,
-      variableMetadata?.metadata
-        ? { variableMetadata: variableMetadata.metadata }
+      variableMetadata?.ctx
+        ? { variableMetadata: variableMetadata.ctx }
         : undefined
     );
 
@@ -129,7 +194,9 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     const metadata: StructuredValueMetadata = {
       source: 'load-content',
       length: value.length,
-      loadResult: value
+      metrics: {
+        length: value.length
+      }
     };
     return wrapStructured(value, 'array', text, metadata);
   }

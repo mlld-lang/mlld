@@ -34,6 +34,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   // Test EffectHandler that redirects file outputs into the in-memory FS under a tmp root
   class TestRedirectEffectHandler implements EffectHandler {
     private documentBuffer: string[] = [];
+    private stdoutBuffer: string[] = [];
+    private stderrBuffer: string[] = [];
     constructor(private outRoot: string, private fs: MemoryFileSystem) {}
     
     handleEffect(effect: Effect): void {
@@ -44,10 +46,13 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         case 'both':
           // stdout ignored in tests; still append to document
           this.documentBuffer.push(effect.content);
+          this.stdoutBuffer.push(effect.content);
           break;
         case 'stdout':
+          this.stdoutBuffer.push(effect.content);
+          break;
         case 'stderr':
-          // Suppress console noise in CI
+          this.stderrBuffer.push(effect.content);
           break;
         case 'file':
           if (effect.path) {
@@ -60,6 +65,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     
     getDocument(): string {
       return this.documentBuffer.join('').replace(/\n{3,}/g, '\n\n');
+    }
+
+    getStdout(): string {
+      return this.stdoutBuffer.join('');
+    }
+
+    getStderr(): string {
+      return this.stderrBuffer.join('');
     }
     
     private mapPath(p: string): string {
@@ -516,6 +529,92 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // If not found, return null
     return null;
   }
+
+  interface FixtureIOExpectations {
+    expectedStderr?: string;
+    expectedErrorShape?: Record<string, unknown>;
+  }
+
+  function loadFixtureExpectations(fixturePath: string): FixtureIOExpectations {
+    const expectations: FixtureIOExpectations = {};
+    const testCasePath = getTestCasePathFromFixture(fixturePath);
+    if (!testCasePath) {
+      return expectations;
+    }
+
+    const stderrPath = path.join(testCasePath, 'expected-stderr.md');
+    if (fs.existsSync(stderrPath)) {
+      expectations.expectedStderr = fs.readFileSync(stderrPath, 'utf8');
+    }
+
+    const errorShapePath = path.join(testCasePath, 'expected-error.json');
+    if (fs.existsSync(errorShapePath)) {
+      try {
+        const raw = fs.readFileSync(errorShapePath, 'utf8');
+        expectations.expectedErrorShape = JSON.parse(raw);
+      } catch (error) {
+        throw new Error(
+          `Failed to parse expected-error.json for ${fixturePath}: ${(error as Error).message}`
+        );
+      }
+    }
+    return expectations;
+  }
+
+  function normalizeOutputText(value?: string | null): string {
+    if (!value) {
+      return '';
+    }
+    return value.replace(/\r\n/g, '\n').trim();
+  }
+
+  function validateStderrOutput(
+    actual: string | undefined,
+    expected: string | undefined,
+    fixtureName: string
+  ): void {
+    if (expected === undefined) {
+      return;
+    }
+    const normalizedActual = normalizeOutputText(actual ?? '');
+    const normalizedExpected = normalizeOutputText(expected);
+    expect(normalizedActual).toBe(normalizedExpected);
+  }
+
+  function validateExpectedErrorShape(
+    error: unknown,
+    expectedShape: Record<string, unknown>,
+    fixtureName: string
+  ): void {
+    if (!error || typeof error !== 'object') {
+      throw new Error(`Expected an error object for ${fixtureName} but received ${typeof error}`);
+    }
+    const details = (error as any).details ?? {};
+    const actualShape: Record<string, unknown> = {
+      name: (error as any).name ?? null,
+      guardName: details.guardName ?? null,
+      filter: details.guardFilter ?? null,
+      guardFilter: details.guardFilter ?? null,
+      reason: details.reason ?? (error as any).reason ?? null,
+      operation: details.operation?.type ?? null,
+      operationSubtype: details.operation?.subtype ?? null,
+      decision: (error as any).decision ?? details.decision ?? null,
+      retryHint: (error as any).retryHint ?? details.retryHint ?? null
+    };
+
+    for (const [key, expectedValue] of Object.entries(expectedShape)) {
+      const actualValue = actualShape[key];
+      if (key === 'filter' && typeof expectedValue === 'string' && typeof actualValue === 'string') {
+        if (actualValue !== expectedValue && !actualValue.endsWith(`:${expectedValue}`)) {
+          throw new Error(
+            `Expected guard filter "${expectedValue}" for ${fixtureName} but received "${actualValue}"`
+          );
+        }
+        continue;
+      }
+      expect(actualValue).toBe(expectedValue);
+    }
+  }
   
   // Recursive function to copy test files to virtual filesystem
   async function copyTestFilesToVFS(sourcePath: string, targetPath: string) {
@@ -533,6 +632,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         if (entry.name.startsWith('example') && entry.name.endsWith('.md')) continue;
         if (entry.name.startsWith('expected') && entry.name.endsWith('.md')) continue;
         if (entry.name === 'error.md') continue;
+        if (entry.name === 'expected-error.json') continue;
         if (entry.name === 'warning.md') continue;
         
         // Copy all other files to the virtual filesystem
@@ -738,10 +838,24 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     
     // For fixtures without expected output, run as smoke tests
     const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
-    
-    const testFn = (skipTests[fixture.name] || shouldSkipDoc) ? it.skip : it;
-    const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` : 
-                       shouldSkipDoc ? ` (Skipped: Intentional partial/educational example)` : '';
+
+    const ioExpectations = loadFixtureExpectations(fixtureFile);
+
+    // List of known slow fixture tests (> 2s)
+    const slowFixtures = [
+      'feat/with/combined',
+      'feat/with/needs-node',
+      'slash/run/command-bases-npm-run'
+    ];
+
+    // Check if SKIP_SLOW is enabled and this is a slow test
+    const shouldSkipSlow = process.env.SKIP_SLOW === '1' &&
+                           slowFixtures.some(slow => fixture.name.includes(slow));
+
+    const testFn = (skipTests[fixture.name] || shouldSkipDoc || shouldSkipSlow) ? it.skip : it;
+    const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` :
+                       shouldSkipDoc ? ` (Skipped: Intentional partial/educational example)` :
+                       shouldSkipSlow ? ` (Skipped: Slow test in fast mode)` : '';
 
     testFn(`should handle ${fixture.name}${isDocumentationTest ? ' (syntax only)' : isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, async () => {
       // Check if this is a valid fixture that has a parse error
@@ -1185,6 +1299,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
           
           // For error fixtures, expect interpretation to fail and validate error format
+          const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem);
           let caughtError: any = null;
           try {
             await interpret(fixture.input, {
@@ -1196,7 +1311,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               stdinContent,
               // Avoid real filesystem writes and locks
               ephemeral: true,
-              effectHandler: new TestRedirectEffectHandler('/tmp-tests', fileSystem),
+              effectHandler,
               useMarkdownFormatter: false, // Disable prettier for tests
               // Allow absolute paths for absolute path test
               allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
@@ -1252,6 +1367,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
                 }
               }
             }
+          }
+
+          validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
+          if (ioExpectations.expectedErrorShape && caughtError) {
+            validateExpectedErrorShape(caughtError, ioExpectations.expectedErrorShape, fixture.name);
           }
           
           // Test error formatting if we have expected error content
@@ -1363,6 +1483,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               .mockImplementation(async () => '/var @value = "cached angle from fixture"');
           }
 
+          const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem);
           let result: string;
           try {
             // For valid fixtures, expect successful interpretation
@@ -1379,7 +1500,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               },
               // Avoid real filesystem writes and locks
               ephemeral: true,
-              effectHandler: new TestRedirectEffectHandler('/tmp-tests', fileSystem),
+              effectHandler,
               // Allow absolute paths for absolute path test
               allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
             }) as string;
@@ -1389,13 +1510,20 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           
           if (isValidFixture && !isSmokeTest) {
             // Normalize output (trim trailing whitespace/newlines)
-            const normalizedResult = result.trim();
-            const normalizedExpected = fixture.expected.trim();
-            expect(normalizedResult).toBe(normalizedExpected);
+          const normalizedResult = result.trim();
+          const normalizedExpected = fixture.expected.trim();
+          expect(normalizedResult).toBe(normalizedExpected);
           } else if (isSmokeTest) {
             // For smoke tests, just verify it doesn't crash and produces output
             expect(result).toBeDefined();
             expect(typeof result).toBe('string');
+          }
+
+          validateStderrOutput(effectHandler.getStderr(), ioExpectations.expectedStderr, fixture.name);
+          if (ioExpectations.expectedErrorShape) {
+            throw new Error(
+              `expected-error.json present for ${fixture.name} but the fixture executed without throwing`
+            );
           }
           
           // Validate semantic token coverage for valid fixtures with AST (only if flag is set)

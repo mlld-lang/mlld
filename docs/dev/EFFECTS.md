@@ -67,6 +67,8 @@ handleEffect(effect: Effect): void {
 }
 ```
 
+`'file'` effects now include a `mode` flag. When `mode === 'append'`, the handler only records metadata because the evaluator already appended the payload. Overwrite operations (`mode === 'write'` or undefined) continue to sync the document buffer to disk for compatibility with legacy workflows.
+
 ### Document Retrieval (`interpreter/index.ts:286-288`)
 
 The final document is assembled from the effect handler:
@@ -127,7 +129,14 @@ The system should support both:
 | `'both'`    | ✅ Yes        | ✅ Yes          | `/show` output |
 | `'stdout'`  | ✅ Yes        | ❌ No           | CLI-only messages |
 | `'stderr'`  | ✅ Yes        | ❌ No           | Error output |
-| `'file'`    | ❌ No         | ❌ No           | File output only |
+| `'file'`    | ❌ No         | ❌ No           | File writes happen inside directives; effect metadata exposes `mode` (`write` or `append`) |
+
+### Append Directive
+
+- `/append` mirrors `/output`'s source resolution but always targets files and enforces newline-delimited writes.
+- `.jsonl` targets must receive valid JSON; `.json` targets are blocked to avoid corrupt objects.
+- Both the directive and the pipeline `| append` operator append through `IFileSystemService.appendFile()` and emit a `'file'` effect with `mode: 'append'` so handlers can observe writes without duplicating them.
+- `IFileSystemService` implementations must provide `appendFile()` in addition to `writeFile()` so evaluators and builtin pipeline effects can perform the actual writes; the effect handler is notification-only for append operations.
 
 ## Implementation Plan
 

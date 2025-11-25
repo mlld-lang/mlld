@@ -23,9 +23,11 @@ It can be used in these forms:
 // Primary /show directive with all variants
 SlashShow
   // Command execution syntax: /show {echo "test"}
-  = DirectiveContext "/show" _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+  = DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
       // Command syntax for display: /show {command}
       helpers.debug('SlashShow matched command for display', { content, tail });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
 
       const meta = {
         ...content.meta,
@@ -33,17 +35,25 @@ SlashShow
         executionType: 'command',
         isExecutionContent: true,
       };
-      
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
+
       // Apply unified pipeline processing
       helpers.processPipelineEnding(content.values, content.raw, meta, ending);
-      
+
       // Add withClause from tail if present
       if (tail) {
         content.values.withClause = tail;
         content.raw.withClause = tail;
         meta.withClause = tail;
       }
-      
+
+      if (labelInfo) {
+        content.values.securityLabels = labelInfo.labels;
+        content.raw.securityLabels = labelInfo.raw;
+      }
+
       return helpers.createStructuredDirective(
         DirectiveKind.show,
         'showCommand',
@@ -55,9 +65,11 @@ SlashShow
       );
     }
   // Code execution syntax: /show js {console.log("test")}
-  / DirectiveContext "/show" _ lang:RunCodeLanguage _ content:UnifiedCodeBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ lang:RunCodeLanguage _ content:UnifiedCodeBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
       // Code syntax for display: /show language {code}
       helpers.debug('SlashShow matched code for display', { lang, content });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
       const codeNode = helpers.createNode(NodeType.Text, { content: content.content, location: location() });
@@ -67,12 +79,18 @@ SlashShow
         args: [],
         code: [codeNode]
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       const raw = {
         lang: lang,
         args: [],
         code: content.content
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       const meta = {
         isMultiLine: content.isMultiLine,
@@ -82,6 +100,9 @@ SlashShow
         executionType: 'code',
         isExecutionContent: true
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Apply unified pipeline processing
       helpers.processPipelineEnding(values, raw, meta, ending);
@@ -106,8 +127,10 @@ SlashShow
   // REMOVED: Foreach section expression - superseded by file reference interpolation
   // Migration: Use /show <*.md # section> as "template" instead
   // Foreach command expression: /show foreach @command(@arrays)
-  / DirectiveContext "/show" _ expr:ForeachCommandExpression ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ expr:ForeachCommandExpression ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched foreach expression', { expr, ending });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Extract the inner value from the ForeachCommandExpression
       const foreachValue = expr.value;
@@ -116,6 +139,9 @@ SlashShow
       const values = {
         foreach: foreachValue
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add with clause if present
       if (foreachValue.with) {
@@ -133,6 +159,9 @@ SlashShow
       const raw = {
         foreach: rawString
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       if (foreachValue.with) {
         raw.withClause = 'with { ... }';
@@ -143,6 +172,9 @@ SlashShow
         isForeach: true,
         hasExecInvocation: true
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -160,8 +192,10 @@ SlashShow
       );
     }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
-  / DirectiveContext "/show" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched double-bracketed path section', { content, rename, ending });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       const rawPath = content.raw.split(' # ')[0];
       const sectionText = content.section;
@@ -171,6 +205,9 @@ SlashShow
         sectionTitle: content.sectionNodes || [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
         path: content.parts
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add new title if provided
       if (rename) {
@@ -182,6 +219,9 @@ SlashShow
         sectionTitle: sectionText,
         path: rawPath
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Add new title to raw if present
       if (rename) {
@@ -192,6 +232,9 @@ SlashShow
       const meta = {
         path: helpers.createPathMetadata(rawPath, content.parts)
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -209,13 +252,18 @@ SlashShow
       );
     }
   // Load content expression: <path/to/file.md> or <path # Section>
-  / DirectiveContext "/show" _ content:AlligatorExpression rename:AsNewTitle? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:AlligatorExpression rename:AsNewTitle? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched load content expression', { content, rename, ending });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Handle content loading
       const values = {
         loadContent: content
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add rename if provided
       if (rename) {
@@ -226,6 +274,9 @@ SlashShow
       const raw = {
         loadContent: text()
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       if (rename) {
         raw.newTitle = rename[0].content;
@@ -236,6 +287,9 @@ SlashShow
         hasSection: content.options && content.options.section,
         sourceType: content.source.type
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -252,8 +306,10 @@ SlashShow
         'load-content'
       );
     }
-  / DirectiveContext "/show" _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched template content', { template, headerLevel, underHeader, ending });
+      
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -263,6 +319,9 @@ SlashShow
       const values = {
         content: template.values.content
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
@@ -285,6 +344,9 @@ SlashShow
       const raw = {
         content: template.raw.content
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Add headerLevel and underHeader to raw if present
       if (headerLevelValue) {
@@ -300,6 +362,9 @@ SlashShow
         isTemplateContent: true,
         ...template.meta
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Apply unified pipeline processing (consolidates with when.peggy)
       helpers.processPipelineEnding(values, raw, meta, ending);
@@ -315,8 +380,10 @@ SlashShow
       );
     }
   // Variable reference MUST come before exec invocation to match simple @varname first
-  / DirectiveContext "/show" _ "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched variable reference', { varRef, headerLevel, underHeader, ending });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Extract variable reference information
       const id = varRef.identifier;
@@ -329,6 +396,9 @@ SlashShow
       const values = {
         variable: [varRef]
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
@@ -351,6 +421,9 @@ SlashShow
       const raw = {
         variable: `@${id}`
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Add headerLevel and underHeader to raw if present
       if (headerLevelValue) {
@@ -363,6 +436,9 @@ SlashShow
       
       // Create meta object placeholder
       const meta = {};
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -380,8 +456,10 @@ SlashShow
       );
     }
   // Unified reference (exec invocation or variable) with tail modifiers - /show @obj.method() | @modifiers
-  / DirectiveContext "/show" _ invocation:UnifiedReferenceWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ invocation:UnifiedReferenceWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched unified reference with tail modifiers', { invocation, headerLevel, underHeader, ending });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Handle both ExecInvocation and VariableReferenceWithTail types
       const isExecInvocation = invocation.type === 'ExecInvocation';
@@ -396,6 +474,9 @@ SlashShow
       const values = {
         invocation: invocation
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
@@ -428,6 +509,9 @@ SlashShow
         const variable = invocation.variable || invocation;
         raw.variable = `@${variable.identifier}${variable.fields ? variable.fields.map(f => `.${f.value || f.name || f.index}`).join('') : ''}`;
       }
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Add headerLevel and underHeader to raw if present
       if (headerLevelValue) {
@@ -443,6 +527,9 @@ SlashShow
         hasParentheses: hasParentheses,
         argumentCount: isExecInvocation && commandRef.args ? commandRef.args.length : 0
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -465,8 +552,10 @@ SlashShow
         'invocation'
       );
     }
-  / DirectiveContext "/show" _ "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched quoted string', { content, headerLevel, underHeader, ending });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Create path structure
       const path = {
@@ -489,6 +578,9 @@ SlashShow
       const values = {
         path: path.values.path
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
@@ -511,6 +603,9 @@ SlashShow
       const raw = {
         path: content
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Add headerLevel and underHeader to raw if present
       if (headerLevelValue) {
@@ -525,6 +620,9 @@ SlashShow
       const meta = {
         path: path.meta
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -541,8 +639,10 @@ SlashShow
         'path'
       );
     }
-  / DirectiveContext "/show" _ path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, ending });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -552,6 +652,9 @@ SlashShow
       const values = {
         path: path.values.path || path.values.url
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
@@ -574,6 +677,9 @@ SlashShow
       const raw = {
         path: path.raw.path || path.raw.url
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Add headerLevel and underHeader to raw if present
       if (headerLevelValue) {
@@ -591,6 +697,9 @@ SlashShow
           pathSubtype: path.subtype // Preserve the specific path type
         }
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -612,7 +721,7 @@ SlashShow
   // -----------------------------------------
   
   // Error: Unclosed double brackets [[ (for path section expressions)
-  / DirectiveContext "/show" _ "[[" &{
+  / DirectiveContext "/show" (_ DataLabelList)? _ "[[" &{
       // Check if we have unclosed double brackets
       let i = peg$currPos;
       let depth = 1;
@@ -633,7 +742,7 @@ SlashShow
     }
     
   // Error: Unclosed alligator bracket <
-  / DirectiveContext "/show" _ "<" &{
+  / DirectiveContext "/show" (_ DataLabelList)? _ "<" &{
       // Check if we have an unclosed alligator bracket
       let i = peg$currPos;
       while (i < input.length) {
@@ -648,7 +757,7 @@ SlashShow
     
     
   // Error: Invalid @ usage (not followed by valid identifier)
-  / DirectiveContext "/show" _ "@" &{
+  / DirectiveContext "/show" (_ DataLabelList)? _ "@" &{
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
@@ -656,7 +765,7 @@ SlashShow
     }
     
   // Error: Unclosed backtick template
-  / DirectiveContext "/show" _ "`" &{
+  / DirectiveContext "/show" (_ DataLabelList)? _ "`" &{
       let i = peg$currPos;
       while (i < input.length) {
         if (input[i] === '`' && input[i-1] !== '\\') return false;
@@ -669,19 +778,19 @@ SlashShow
     }
     
   // Error: Unclosed double-colon template
-  / DirectiveContext "/show" _ "::" &{
+  / DirectiveContext "/show" (_ DataLabelList)? _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed double-colon template in /show directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing content after /show
-  / DirectiveContext "/show" _ &(LineTerminator / EOF) {
+  / DirectiveContext "/show" (_ DataLabelList)? _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing content in /show directive. Expected template, variable, or path to show.", "@", location());
     }
     
   // Error: Invalid foreach syntax
-  / DirectiveContext "/show" _ "foreach" _ &{
+  / DirectiveContext "/show" (_ DataLabelList)? _ "foreach" _ &{
       // Check if we have incomplete foreach syntax
       const rest = input.substring(peg$currPos).trim();
       return !rest.startsWith('@') && !rest.startsWith('<');

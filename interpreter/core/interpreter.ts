@@ -19,17 +19,29 @@ import type {
   FieldAccessNode,
   CondensedPipe
 } from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
-import type { LoadContentResult } from '@core/types/load-content';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
+import type { VarAssignmentResult } from '../eval/var';
 import { isExecInvocation, isLiteralNode } from '@core/types';
 import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
+import type { OperationContext } from '../env/ContextManager';
 import { interpreterLogger as logger } from '@core/utils/logger';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, assertStructuredValue } from '@interpreter/utils/structured-value';
+import { materializeDisplayValue } from '../utils/display-materialization';
+import type { SecurityDescriptor } from '@core/types/security';
 import { classifyShellValue } from '@interpreter/utils/shell-value';
+import {
+  createInterpolator,
+  extractInterpolationDescriptor,
+  interpolateFileReference,
+  processFileFields,
+  type InterpolateOptions,
+  type InterpolationNode
+} from '../utils/interpolation';
 import * as shellQuote from 'shell-quote';
 
 /**
@@ -37,6 +49,8 @@ import * as shellQuote from 'shell-quote';
  */
 export type VariableValue = string | number | boolean | null | 
                            VariableValue[] | { [key: string]: VariableValue };
+
+export { interpolateFileReference, processFileFields };
 
 /**
  * Field access types from the AST
@@ -182,6 +196,7 @@ export interface EvalResult {
   stdout?: string;
   stderr?: string;
   exitCode?: number;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -192,6 +207,12 @@ export interface EvaluationContext {
   isCondition?: boolean;
   /** Whether we're evaluating an expression (affects variable resolution) */
   isExpression?: boolean;
+  /** Pre-evaluated directive inputs supplied by hook extraction */
+  extractedInputs?: readonly unknown[];
+  /** Operation context captured for the active directive */
+  operationContext?: OperationContext;
+  /** Precomputed /var assignment (Phase C guard runner) */
+  precomputedVarAssignment?: VarAssignmentResult;
 }
 
 /**
@@ -231,11 +252,19 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
           if (isText(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isNewline(n)) {
             env.emitEffect('doc', '\n');
           } else if (isCodeFence(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isMlldRunBlock(n) && !n.error) {
             // MlldRunBlock content is evaluated, not emitted directly
             // The evaluation will emit its own effects
@@ -284,11 +313,19 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
           if (isText(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isNewline(n)) {
             env.emitEffect('doc', '\n');
           } else if (isCodeFence(n)) {
-            env.emitEffect('doc', n.content);
+            const materialized = materializeDisplayValue(n.content, undefined, n.content);
+            env.emitEffect('doc', materialized.text);
+            if (materialized.descriptor) {
+              env.recordSecurityDescriptor(materialized.descriptor);
+            }
           } else if (isMlldRunBlock(n) && !n.error) {
             // MlldRunBlock content is evaluated, not emitted directly
             // The evaluation will emit its own effects
@@ -336,7 +373,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     }
     
     if (contentToInterpolate) {
-      const interpolated = await interpolate(contentToInterpolate, env);
+      const interpolated = await interpolateWithSecurityRecording(contentToInterpolate, env);
       return { value: interpolated, env };
     }
   }
@@ -468,7 +505,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           
           // Interpolate the command template
-          const command = await interpolate(commandTemplate as InterpolationNode[], env);
+          const command = await interpolateWithSecurityRecording(commandTemplate as InterpolationNode[], env);
           
           if (args.length > 0) {
             // TODO: Implement proper argument interpolation
@@ -491,7 +528,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           
           // Interpolate the code template
-          const code = await interpolate(codeTemplate as InterpolationNode[], env);
+          const code = await interpolateWithSecurityRecording(codeTemplate as InterpolationNode[], env);
           
           const result = await env.executeCode(
             code,
@@ -524,6 +561,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     // Handle field access if present
     if (node.fields && node.fields.length > 0) {
       const { accessField } = await import('../utils/field-access');
+      const fieldAccessLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
       
       // accessField handles Variable extraction internally when needed
       // No need to manually extract here
@@ -545,7 +583,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
             env,
-            sourceLocation: node.location
+            sourceLocation: fieldAccessLocation
           });
           resolvedValue = (fieldResult as any).value;
         } else {
@@ -553,7 +591,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
             env,
-            sourceLocation: node.location
+            sourceLocation: fieldAccessLocation
           });
           resolvedValue = (fieldResult as any).value;
         }
@@ -632,6 +670,44 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: result, env };
   }
 
+  // Handle load-content nodes (alligator syntax: <file>)
+  if (node.type === 'load-content') {
+    const result = await evaluateDataValue(node, env);
+    return { value: result, env };
+  }
+
+  // Handle FileReference nodes (<file> with field access or pipes)
+  if (node.type === 'FileReference') {
+    const fileRefNode = node as FileReferenceNode;
+    const { processContentLoader } = await import('../eval/content-loader');
+    const { accessField } = await import('../utils/field-access');
+    const { wrapLoadContentValue } = await import('../utils/load-content-structured');
+    const { isStructuredValue } = await import('../utils/structured-value');
+
+    // Convert FileReference to load-content structure
+    const loadContentNode = {
+      type: 'load-content' as const,
+      source: fileRefNode.source
+    };
+
+    // Load the content
+    const rawLoadResult = await processContentLoader(loadContentNode, env);
+    let loadResult = isStructuredValue(rawLoadResult)
+      ? rawLoadResult
+      : wrapLoadContentValue(rawLoadResult);
+
+    // Process field access if present
+    if (fileRefNode.fields && fileRefNode.fields.length > 0) {
+      let result: any = loadResult;
+      for (const field of fileRefNode.fields) {
+        result = await accessField(result, field, { env });
+      }
+      return { value: result, env };
+    }
+
+    return { value: loadResult, env };
+  }
+
   // Handle command nodes (from run {command} in expressions)
   if (node.type === 'command') {
     // Reuse the same logic as in lazy-eval.ts
@@ -640,7 +716,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       commandStr = node.command || '';
     } else if (Array.isArray(node.command)) {
       // Interpolate the command array
-      commandStr = await interpolate(node.command, env) || '';
+      const interpolatedCommand = await interpolateWithSecurityRecording(node.command, env);
+      commandStr = interpolatedCommand || '';
     } else {
       commandStr = '';
     }
@@ -657,6 +734,32 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);
+}
+
+const interpolate = createInterpolator(() => ({ evaluate }));
+export { interpolate };
+
+async function interpolateWithSecurityRecording(
+  nodes: any,
+  env: Environment,
+  context?: InterpolationContext
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1
+        ? descriptors[0]
+        : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
 }
 
 /**
@@ -749,7 +852,8 @@ async function resolveVariableValue(variable: Variable, env: Environment): Promi
     return variable.value.resolvedPath;
   } else if (isPipelineInput(variable)) {
     // Pipeline inputs return the text representation by default
-    return variable.value.text;
+    assertStructuredValue(variable.value, 'interpolate:pipeline-input');
+    return asText(variable.value);
   } else if (isExecutableVariable(variable)) {
     // Auto-execute executables when interpolated
     if (process.env.DEBUG_EXEC) {
@@ -836,848 +940,4 @@ export function cleanNamespaceForDisplay(namespaceObject: any): string {
   
   // Pretty print the JSON with 2-space indentation
   return JSON.stringify(cleaned, null, 2);
-}
-
-/**
- * Type for interpolation nodes
- */
-interface InterpolationNode {
-  type: string;
-  content?: string;
-  name?: string;
-  identifier?: string;
-  fields?: FieldAccess[];
-  value?: string;
-  commandRef?: any;
-  withClause?: any;
-  pipes?: any[];
-}
-
-/**
- * String interpolation helper - resolves {{variables}} in content
- */
-export async function interpolate(
-  nodes: InterpolationNode[],
-  env: Environment,
-  context: InterpolationContext = InterpolationContext.Default
-): Promise<string> {
-  logger.info('[INTERPOLATE] interpolate() called');
-  
-  // Handle non-array inputs
-  if (!Array.isArray(nodes)) {
-    if (typeof nodes === 'string') {
-      return nodes;
-    }
-    if (nodes && typeof nodes === 'object' && 'content' in nodes) {
-      return nodes.content || '';
-    }
-    return String(nodes || '');
-  }
-  
-  const parts: string[] = [];
-  let withinDoubleQuotes = false;
-  let withinSingleQuotes = false;
-
-  const updateQuoteState = (fragment: string): void => {
-    if (!fragment) return;
-    let backslashCount = 0;
-    for (let i = 0; i < fragment.length; i++) {
-      const char = fragment[i];
-      if (char === '\\') {
-        backslashCount++;
-        continue;
-      }
-      if (char === '"' || char === '\'') {
-        const isEscaped = backslashCount % 2 === 1;
-        if (char === '"' && !withinSingleQuotes && !isEscaped) {
-          withinDoubleQuotes = !withinDoubleQuotes;
-        } else if (char === '\'' && !withinDoubleQuotes && !isEscaped) {
-          withinSingleQuotes = !withinSingleQuotes;
-        }
-      }
-      backslashCount = 0;
-    }
-  };
-
-  const pushPart = (fragment: string): void => {
-    const value = fragment ?? '';
-    parts.push(value);
-    if (context === InterpolationContext.ShellCommand) {
-      updateQuoteState(value);
-    }
-  };
-  
-  for (const node of nodes) {
-    
-    if (node.type === 'Text') {
-      // Handle Text nodes - directly use string content
-      pushPart(node.content || '');
-    } else if (node.type === 'PathSeparator') {
-      pushPart(node.value || '/');
-    } else if (node.type === 'ExecInvocation') {
-      // Handle function calls in templates
-      const { evaluateExecInvocation } = await import('../eval/exec-invocation');
-      const result = await evaluateExecInvocation(node as any, env);
-      if (isStructuredValue(result.value) && result.value.type === 'array' && Array.isArray(result.value.data)) {
-        const arrayData = result.value.data as unknown[];
-        const allSimple = arrayData.every(item => item === null || item === undefined || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean');
-        if (allSimple) {
-          const joined = arrayData
-            .map(item => {
-              if (item === null || item === undefined) {
-                return '';
-              }
-              return String(item);
-            })
-            .join(',');
-          pushPart(joined);
-        } else {
-          pushPart(asText(result.value));
-        }
-      } else {
-        pushPart(asText(result.value));
-      }
-    } else if (node.type === 'InterpolationVar') {
-      // Handle {{var}} style interpolation (from triple colon templates)
-      const varName = node.identifier || node.name;
-      if (!varName) continue;
-      
-      let variable = env.getVariable(varName);
-      
-      // Check if this is a resolver variable that needs async resolution
-      if (!variable && env.hasVariable(varName)) {
-        // Try to get it as a resolver variable
-        const resolverVar = await env.getResolverVariable(varName);
-        if (resolverVar) {
-          variable = resolverVar;
-        }
-      }
-      
-      if (!variable) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          logger.debug('Variable not found during {{var}} interpolation:', { varName });
-        }
-        pushPart(`{{${varName}}}`); // Keep unresolved with {{}} syntax
-        continue;
-      }
-      
-      /**
-       * Extract Variable value for string interpolation
-       * WHY: String interpolation needs raw values because template engines
-       *      work with primitive types, not Variable wrapper objects
-       */
-      const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
-      const value = await resolveVariable(variable, env, ResolutionContext.StringInterpolation);
-      
-      // Convert final value to string
-      let stringValue: string;
-      if (value === null) {
-        stringValue = 'null';
-      } else if (value === undefined) {
-        stringValue = '';
-      } else if (isStructuredValue(value)) {
-        stringValue = asText(value);
-      } else if (typeof value === 'object') {
-        stringValue = JSON.stringify(value);
-        if (process.env.MLLD_DEBUG === 'true') {
-        }
-      } else {
-        stringValue = String(value);
-      }
-      
-      pushPart(stringValue);
-      logger.debug('[INTERPOLATE] Pushed to parts:', { stringValue, partsLength: parts.length });
-    } else if (node.type === 'VariableReference') {
-      const varName = node.identifier || node.name;
-      
-      if (!varName) {
-        continue;
-      }
-      
-      let variable = env.getVariable(varName);
-      
-      if (variable) {
-      }
-      
-      // Check if this is a resolver variable that needs async resolution
-      if (!variable && env.hasVariable(varName)) {
-        // Try to get it as a resolver variable
-        const resolverVar = await env.getResolverVariable(varName);
-        if (resolverVar) {
-          variable = resolverVar;
-        }
-      }
-      
-      
-      if (!variable) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          logger.debug('Variable not found during interpolation:', { varName, valueType: node.valueType });
-        }
-        // WHY: Preserve original syntax when variable is undefined for better error messages
-        if (node.valueType === 'varInterpolation') {
-          pushPart(`{{${varName}}}`);  // {{var}} syntax
-        } else {
-          pushPart(`@${varName}`);      // @var syntax
-        }
-        continue;
-      }
-      
-      // Extract value based on variable type using new type guards
-      let value: unknown = '';
-      
-      // Import isExecutableVariable dynamically
-      const { isExecutableVariable } = await import('@core/types/variable');
-      
-      // Special handling for executable variables with field access
-      if (isExecutableVariable(variable) && node.fields && node.fields.length > 0) {
-        // For executable variables with field access, we need to handle it specially
-        // The test expects executables to have a 'type' property that returns 'executable'
-        const field = node.fields[0];
-        if (field.type === 'field' && field.value === 'type') {
-          value = 'executable';
-          // Skip the rest of field processing since we handled it
-          node.fields = node.fields.slice(1);
-        } else {
-          // For other fields on executables, throw a more helpful error
-          throw new Error(`Cannot access field '${field.value}' on executable ${variable.name}. Executables can only be invoked.`);
-        }
-      } else {
-        // Use the already imported resolveVariableValue function
-        try {
-          if (process.env.MLLD_DEBUG === 'true') {
-          }
-          /**
-           * Extract Variable value for string interpolation
-           * WHY: String interpolation needs raw values because template engines
-           *      work with primitive types, not Variable wrapper objects
-           */
-          const { resolveVariable, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
-          value = await resolveVariable(variable, env, ResCtx.StringInterpolation);
-          
-        } catch (error) {
-          // Handle executable variables specially in interpolation
-          if (error instanceof Error && error.message.includes('Cannot interpolate executable')) {
-            if (context === InterpolationContext.Default) {
-              logger.warn(`Referenced executable '@${variable.name}' without calling it. Did you mean to use @${variable.name}() instead?`);
-            }
-            value = `[executable: ${variable.name}]`;
-          } else {
-            throw error;
-          }
-        }
-      }
-      
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
-      }
-      
-      // Special handling for lazy reserved variables like DEBUG
-      if (value === null && variable.metadata?.isReserved && variable.metadata?.isLazy) {
-        // Need to resolve this as a resolver variable
-        const resolverVar = await env.getResolverVariable(varName);
-        if (resolverVar && resolverVar.value !== null) {
-          value = resolverVar.value;
-        }
-      }
-      
-      // Handle field access if present
-      if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
-        const { accessField } = await import('../utils/field-access');
-        for (const field of node.fields) {
-          // Handle variableIndex type - need to resolve the variable first
-          if (field.type === 'variableIndex') {
-            const indexVar = env.getVariable(field.value);
-            if (!indexVar) {
-              throw new Error(`Variable not found for index: ${field.value}`);
-            }
-            // Extract Variable value for index access - WHY: Index values must be raw strings/numbers
-            const { resolveValue: resolveVal, ResolutionContext: ResCtx2 } = await import('../utils/variable-resolution');
-            const indexValue = await resolveVal(indexVar, env, ResCtx2.StringInterpolation);
-            // Create a new field with the resolved value
-            const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-            const fieldResult = await accessField(value, resolvedField, { 
-              preserveContext: true,
-              env 
-            });
-            value = (fieldResult as any).value;
-          } else {
-            const fieldResult = await accessField(value, field, { 
-              preserveContext: true,
-              env 
-            });
-            value = (fieldResult as any).value;
-          }
-          
-          // Handle null nodes from the grammar
-          if (value && typeof value === 'object' && 'type' in value) {
-            const nodeValue = value as Record<string, unknown>;
-            if (nodeValue.type === 'Null') {
-              value = null;
-            } else if (nodeValue.type === 'runExec' || nodeValue.type === 'ExecInvocation' || 
-                       nodeValue.type === 'command' || nodeValue.type === 'code' ||
-                       nodeValue.type === 'VariableReference' || nodeValue.type === 'path') {
-              // This is an unevaluated AST node from a complex object
-              // We need to evaluate it
-              value = await evaluateDataValue(value, env);
-            }
-          }
-          
-          if (value === undefined) break;
-        }
-      }
-
-      // Special-case: Normalize @ctx.hint to a string for interpolation when it carries wrapper/variable forms
-      try {
-        if (node.identifier === 'ctx' && Array.isArray(node.fields) && node.fields.length > 0) {
-          const lastField = node.fields[node.fields.length - 1];
-          const fieldName = (lastField && 'value' in lastField) ? String((lastField as any).value) : undefined;
-          if (fieldName === 'hint') {
-            if (typeof value === 'object' && value !== null) {
-              if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
-                value = await interpolate((value as any).content as any[], env, context);
-              } else if ('type' in (value as any)) {
-                const { extractVariableValue } = await import('../utils/variable-resolution');
-                value = await extractVariableValue(value as any, env);
-              }
-            }
-          }
-        }
-      } catch {
-        // Non-fatal normalization failure; proceed with generic conversion
-      }
-      
-      // Apply condensed pipes if present
-      if (node.pipes && node.pipes.length > 0) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[INTERPOLATE] Before applyCondensedPipes:', { 
-            valueType: typeof value,
-          isObject: typeof value === 'object',
-          valueKeys: typeof value === 'object' && value !== null ? Object.keys(value) : 'N/A',
-          valueStr: typeof value === 'object' ? JSON.stringify(value).substring(0, 100) : String(value).substring(0, 100),
-          pipes: node.pipes.map((p: any) => p.name || p.transform)
-          });
-        }
-        try {
-          // Use the unified pipeline processor instead of applyCondensedPipes
-          const { processPipeline } = await import('../eval/pipeline/unified-processor');
-          value = await processPipeline({
-            value,
-            env,
-            node,
-            identifier: node.identifier
-          });
-          if (process.env.MLLD_DEBUG === 'true') {
-            console.error('[INTERPOLATE] After pipes:', { 
-              valueType: typeof value,
-              valueStr: typeof value === 'object' ? JSON.stringify(value) : value
-            });
-          }
-        } catch (error) {
-          if (process.env.MLLD_DEBUG === 'true') {
-            console.error('[INTERPOLATE] Error in pipes:', error);
-          }
-          throw error;
-        }
-        // If pipes have already converted to string, use it directly
-        if (typeof value === 'string') {
-          const strategy = EscapingStrategyFactory.getStrategy(context);
-          pushPart(strategy.escape(value));
-          continue;
-        }
-      }
-      
-      // Convert final value to string
-      let stringValue: string;
-      
-      /**
-       * Extract Variable value for string interpolation
-       * WHY: String interpolation needs raw values because template engines
-       *      work with primitive types, not Variable wrapper objects
-       */
-      const { isVariable, resolveValue, ResolutionContext: ResContext } = await import('../utils/variable-resolution');
-      value = await resolveValue(value, env, ResContext.StringInterpolation);
-      
-      if (context === InterpolationContext.ShellCommand) {
-        const classification = classifyShellValue(value);
-        const strategy = EscapingStrategyFactory.getStrategy(context);
-
-        const escapeForSingleQuotes = (text: string): string => {
-          if (text === "'") {
-            return "'";
-          }
-          if (!text.includes("'")) {
-            return text;
-          }
-          const segments = text.split("'");
-          return segments
-            .map((segment, index) => {
-              if (index === segments.length - 1) {
-                return segment;
-              }
-              return `${segment}'\\''`;
-            })
-            .join('');
-        };
-        const escapeForDoubleQuotes = (text: string): string => strategy.escape(text);
-
-        if (classification.kind === 'simple') {
-          if (withinSingleQuotes) {
-            pushPart(escapeForSingleQuotes(classification.text));
-          } else {
-            pushPart(escapeForDoubleQuotes(classification.text));
-          }
-        } else if (classification.kind === 'array-simple') {
-          if (withinSingleQuotes) {
-            const escapedElements = classification.elements.map(elem => escapeForSingleQuotes(elem));
-            pushPart(escapedElements.join(' '));
-          } else {
-            const escapedElements = classification.elements.map(elem => escapeForDoubleQuotes(elem));
-            pushPart(escapedElements.join(' '));
-          }
-        } else {
-          if (withinDoubleQuotes) {
-            pushPart(escapeForDoubleQuotes(classification.text));
-          } else if (withinSingleQuotes) {
-            pushPart(escapeForSingleQuotes(classification.text));
-          } else {
-            pushPart(shellQuote.quote([classification.text]));
-          }
-        }
-        continue;
-      }
-
-      if (value === null) {
-        stringValue = 'null';
-      } else if (value === undefined) {
-        stringValue = '';
-      } else if (isStructuredValue(value)) {
-        stringValue = asText(value);
-      } else if (typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
-        // Handle wrapped strings (quotes, backticks, brackets)
-        stringValue = await interpolate(value.content as InterpolationNode[], env, context);
-      } else if (typeof value === 'object' && 'type' in value) {
-        const nodeValue = value as Record<string, unknown>;
-        if (process.env.MLLD_DEBUG === 'true') {
-        }
-        
-        // Check if this is a complex array that needs evaluation
-        if (nodeValue.type === 'array' && 'items' in nodeValue) {
-          // This is an unevaluated complex array!
-          if (process.env.MLLD_DEBUG === 'true') {
-          }
-          const evaluatedArray = await evaluateDataValue(value, env);
-          if (process.env.MLLD_DEBUG === 'true') {
-          }
-          // Now handle it as a regular array
-          if (Array.isArray(evaluatedArray)) {
-            const { JSONFormatter } = await import('./json-formatter');
-            stringValue = JSONFormatter.stringify(evaluatedArray);
-          } else {
-            stringValue = String(evaluatedArray);
-          }
-        } else if (nodeValue.type === 'Null') {
-          // Handle null nodes from the grammar
-          stringValue = 'null';
-        } else {
-          // Check if this is a PipelineInput object - WHY: PipelineInput has toString()
-          // method that should be used for string interpolation instead of JSON.stringify
-          const { isPipelineInput } = await import('../utils/pipeline-input');
-          if (isPipelineInput(value)) {
-            stringValue = asText(value);
-          } else {
-            stringValue = JSON.stringify(value);
-            if (process.env.MLLD_DEBUG === 'true') {
-            }
-          }
-        }
-      } else if (Array.isArray(value)) {
-        // Check if this is a LoadContentResultArray first
-        const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
-        
-        // Debug logging
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[INTERPOLATE] Array value check:', {
-            isArray: Array.isArray(value),
-            length: value.length,
-            hasVariable: '__variable' in value,
-            variableMetadata: (value as any).__variable?.metadata,
-            isRenamedContentArray: isRenamedContentArray(value),
-            isLoadContentResultArray: isLoadContentResultArray(value),
-            hasContent: 'content' in value,
-            contentType: typeof (value as any).content
-          });
-        }
-        
-        
-        if (isLoadContentResultArray(value)) {
-          // For LoadContentResultArray, use its .content getter (which concatenates all content)
-          stringValue = value.content;
-        } else if (isRenamedContentArray(value)) {
-          /**
-           * Handle RenamedContentArray string interpolation
-           * WHY: RenamedContentArray has a custom content getter that formats the array
-           *      elements according to the rename pattern from alligator syntax
-           * GOTCHA: The content getter might be defined but not enumerable, so we check
-           *         multiple methods to find the proper string representation
-           * CONTEXT: Used when arrays created with <*.md> as "pattern" are interpolated
-           */
-          if ('content' in value) {
-            stringValue = value.content;
-          } else if (value.toString !== Array.prototype.toString) {
-            // Use custom toString if available
-            stringValue = value.toString();
-          } else {
-            // Fallback to manual join
-            stringValue = value.join('\n\n');
-          }
-        } else {
-          // For other contexts, use JSON representation with custom replacer
-          // Note: No indentation for template interpolation - keep it compact
-          const { JSONFormatter } = await import('./json-formatter');
-          const printableArray = value.map(item => {
-            if (isStructuredValue(item)) {
-              if (item.type === 'object' || item.type === 'array' || item.type === 'json') {
-                return item.data;
-              }
-              return asText(item);
-            }
-            return item;
-          });
-          stringValue = JSONFormatter.stringify(printableArray);
-        }
-      } else if (typeof value === 'object') {
-        // Check if this is a LoadContentResult - use its content
-        const { isLoadContentResult, isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
-        if (isLoadContentResult(value)) {
-          stringValue = value.content;
-        } else if (isLoadContentResultArray(value)) {
-          // For array of LoadContentResult, concatenate content with double newlines
-          stringValue = value.map(item => item.content).join('\n\n');
-        } else if (variable && variable.metadata?.isNamespace && node.fields?.length === 0) {
-          // Check if this is a namespace object (only if no field access)
-          const { JSONFormatter } = await import('./json-formatter');
-          stringValue = JSONFormatter.stringifyNamespace(value);
-        } else if (value.__executable) {
-          // This is a raw executable object (from field access on namespace)
-          const params = value.paramNames || [];
-          stringValue = `<function(${params.join(', ')})>`;
-        } else {
-          // For path objects, try to extract the resolved path first
-          if (isPathValue(value)) {
-            stringValue = value.resolvedPath;
-          } else {
-            // For objects, use compact JSON in templates (no indentation)
-            const { JSONFormatter } = await import('./json-formatter');
-            stringValue = JSONFormatter.stringify(value);
-          }
-        }
-      } else {
-        // Generic fallback
-        if (typeof value === 'object' && value !== null) {
-          const { JSONFormatter } = await import('./json-formatter');
-          stringValue = JSONFormatter.stringify(value);
-        } else {
-          stringValue = String(value);
-        }
-      }
-      
-      
-      // Apply context-appropriate escaping
-      const strategy = EscapingStrategyFactory.getStrategy(context);
-      const escapedValue = strategy.escape(stringValue);
-      
-      if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
-      }
-      
-      pushPart(escapedValue);
-      
-      // Handle boundary marker after variable if present
-      // @var\ produces just the variable, @var\\ produces variable + literal backslash
-      if (node.boundary) {
-        if (node.boundary.type === 'literal') {
-          // Double backslash: add literal backslash after variable
-          pushPart(node.boundary.value);
-        }
-        // Single backslash (type: 'consumed'): don't add anything, it's just a boundary
-      }
-    } else if (node.type === 'ExecInvocation') {
-      // Handle exec invocation nodes in interpolation
-      const { evaluateExecInvocation } = await import('../eval/exec-invocation');
-      const result = await evaluateExecInvocation(node as ExecInvocation, env);
-      const stringValue = asText(result.value);
-      
-      // Apply context-appropriate escaping
-      const strategy = EscapingStrategyFactory.getStrategy(context);
-      pushPart(strategy.escape(stringValue));
-    } else if (node.type === 'FileReference') {
-      // Handle file reference interpolation
-      const result = await interpolateFileReference(node as any, env, context);
-      pushPart(result);
-    } else if (node.type === 'TemplateForBlock') {
-      // Inline template for-loop expansion
-      // Evaluate the source collection in expression context
-      const sourceEval = await evaluate(node.source, env, { isExpression: true });
-      const { toIterable } = await import('../eval/for-utils');
-      const iterable = toIterable(sourceEval.value);
-      if (!iterable) {
-        // Non-iterable: skip silently in template context
-        continue;
-      }
-      // Variable importer for proper Variable wrapping
-      const { VariableImporter } = await import('../eval/import/VariableImporter');
-      const importer = new VariableImporter();
-      for (const [key, value] of iterable as Iterable<[string | null, unknown]>) {
-        const childEnv = env.createChildEnvironment();
-        const varName = (node as any).variable?.identifier || (node as any).variable?.name || 'item';
-        const iterationVar = importer.createVariableFromValue(varName, value, 'template-for');
-        childEnv.setVariable(varName, iterationVar);
-        if (key !== null && key !== undefined) {
-          const keyVar = importer.createVariableFromValue(`${varName}_key`, key, 'template-for');
-          childEnv.setVariable(`${varName}_key`, keyVar);
-        }
-        const bodyStr = await interpolate((node as any).body as any[], childEnv, InterpolationContext.Template);
-        pushPart(bodyStr);
-      }
-    } else if (node.type === 'TemplateInlineShow') {
-      // Build a synthetic show directive and evaluate in capture mode
-      const directive: any = {
-        type: 'Directive',
-        kind: 'show',
-        subtype: undefined,
-        values: {},
-        raw: {},
-        meta: { applyTailPipeline: !!(node as any).tail },
-        location: (node as any).location
-      };
-      const n: any = node as any;
-      switch (n.showKind) {
-        case 'command':
-          directive.subtype = 'showCommand';
-          directive.values.command = n.content?.values?.command || n.content?.values || n.content;
-          directive.meta = { ...(directive.meta || {}), ...(n.content?.meta || {}) };
-          if (n.tail) directive.values.withClause = n.tail;
-          break;
-        case 'code':
-          directive.subtype = 'showCode';
-          directive.values.lang = n.lang || [];
-          directive.values.code = n.code || [];
-          directive.meta = { ...(directive.meta || {}), ...(n.meta || {}) };
-          if (n.tail) directive.values.withClause = n.tail;
-          break;
-        case 'template':
-          directive.subtype = 'showTemplate';
-          directive.values.content = n.template?.values?.content ? [{ content: n.template.values.content }] : (n.template?.values ? [n.template.values] : []);
-          directive.meta = { ...(directive.meta || {}), ...(n.template?.meta || {}), isTemplateContent: true };
-          if (n.tail) directive.values.withClause = n.tail;
-          break;
-        case 'load':
-          directive.subtype = 'showLoadContent';
-          directive.values.loadContent = n.loadContent;
-          if (n.tail) directive.values.withClause = n.tail;
-          break;
-        case 'reference':
-          // Distinguish variable vs exec invocation by node type
-          if (n.reference?.type === 'VariableReference' || n.reference?.type === 'VariableReferenceWithTail' || n.reference?.type === 'TemplateVariable') {
-            directive.subtype = 'showVariable';
-            directive.values.variable = n.reference;
-          } else {
-            directive.subtype = 'showExecInvocation';
-            directive.values.execInvocation = n.reference;
-          }
-          break;
-        default:
-          break;
-      }
-      const { evaluateShow } = await import('../eval/show');
-      const res = await evaluateShow(directive, env, { isExpression: true });
-      pushPart(asText(res.value ?? ''));
-    } else if (node.type === 'Literal') {
-      // Handle literal nodes from expressions
-      const { LiteralNode } = await import('@core/types');
-      const literalNode = node as LiteralNode;
-      const value = literalNode.value;
-      let stringValue: string;
-      if (value === null) {
-        stringValue = 'null';
-      } else if (value === undefined) {
-        stringValue = '';
-      } else {
-        stringValue = String(value);
-      }
-      const strategy = EscapingStrategyFactory.getStrategy(context);
-      pushPart(strategy.escape(stringValue));
-    }
-  }
-  
-  const result = parts.join('');
-  
-  return result;
-}
-
-/**
- * Interpolate file reference nodes (<file.md>) with optional field access and pipes
- */
-async function interpolateFileReference(
-  node: FileReferenceNode,
-  env: Environment,
-  context: InterpolationContext
-): Promise<string> {
-  const { FileReferenceNode } = await import('@core/types');
-  
-  // Special handling for <> placeholder in 'as' contexts
-  if (node.meta?.isPlaceholder) {
-    // Get current file from iteration context
-    const currentFile = env.getCurrentIterationFile?.();
-    if (!currentFile) {
-      throw new Error('<> can only be used in "as" template contexts');
-    }
-    return processFileFields(currentFile, node.fields, node.pipes, env);
-  }
-  
-  // Process the path (may contain variables)
-  let resolvedPath: string;
-  if (typeof node.source === 'string') {
-    resolvedPath = node.source;
-  } else if (node.source.raw) {
-    resolvedPath = node.source.raw;
-  } else if (node.source.segments) {
-    resolvedPath = await interpolate(node.source.segments, env);
-  } else {
-    resolvedPath = await interpolate([node.source], env);
-  }
-  
-  // Check if file interpolation is enabled
-  if (!env.isFileInterpolationEnabled()) {
-    throw new Error('File interpolation disabled by security policy');
-  }
-  
-  // Check circular reference
-  if (env.isInInterpolationStack(resolvedPath)) {
-    console.error(`Warning: Circular reference detected - '${resolvedPath}' references itself, skipping`);
-    return '';  // Return empty string and continue
-  }
-  
-  // Add to stack
-  env.pushInterpolationStack(resolvedPath);
-  
-  try {
-    // Use existing content loader
-    const { processContentLoader } = await import('../eval/content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-    
-    let loadResult: any;
-    try {
-      // If we already have a resolved path (from variable interpolation), create a simple path source
-      const sourceToUse = resolvedPath !== node.source?.raw ? 
-        { type: 'path', raw: resolvedPath, segments: [{ type: 'Text', content: resolvedPath }] } : 
-        node.source;
-      
-      loadResult = await processContentLoader({
-        type: 'load-content',
-        source: sourceToUse
-      }, env);
-    } catch (error: any) {
-      // Handle file not found or access errors gracefully by returning empty string
-      if (error.code === 'ENOENT') {
-        console.error(`Warning: File not found - '${resolvedPath}'`);
-        // Check if the path looks like it might be relative
-        if (!resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
-          console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`);
-        }
-        return '';
-      } else if (error.code === 'EACCES') {
-        console.error(`Warning: Permission denied - '${resolvedPath}'`);
-        return '';
-      } else {
-        console.error(`Warning: Failed to load file '${resolvedPath}': ${error.message}`);
-        // Check if the path looks like it might be relative
-        if (!resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
-          console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`);
-        }
-        return '';
-      }
-    }
-    
-    // Handle glob results (array of files)
-    if (isLoadContentResultArray(loadResult)) {
-      // For glob patterns, join all file contents
-      const contents = await Promise.all(
-        loadResult.map(file => processFileFields(file, node.fields, node.pipes, env))
-      );
-      return contents.join('\n\n');
-    }
-    
-    // Process field access and pipes
-    return processFileFields(loadResult, node.fields, node.pipes, env);
-  } finally {
-    // Remove from stack
-    env.popInterpolationStack(resolvedPath);
-  }
-}
-
-/**
- * Process field access and pipes on file content
- */
-async function processFileFields(
-  content: LoadContentResult | LoadContentResult[],
-  fields?: FieldAccessNode[],
-  pipes?: CondensedPipe[],
-  env: Environment
-): Promise<string> {
-  const { isLoadContentResult } = await import('@core/types/load-content');
-  let result: any = content;
-  
-  // Keep LoadContentResult intact for field access, only extract content if no fields to access
-  if (isLoadContentResult(result)) {
-    if (!fields || fields.length === 0) {
-      // No field access needed, extract content
-      result = result.content;
-    }
-    // If we have fields to access, keep the full LoadContentResult object so we can access .fm, .json, etc.
-  }
-  
-  // Process field access
-  if (fields && fields.length > 0) {
-    // Use enhanced field access for better error messages
-    const { accessField } = await import('../utils/field-access');
-    for (const field of fields) {
-      try {
-        const fieldResult = await accessField(result, field, { 
-          preserveContext: true,
-          env 
-        });
-        result = (fieldResult as any).value;
-        if (result === undefined) {
-          // Warning to stderr
-          console.error(`Warning: field '${field.value}' not found`);
-          return '';
-        }
-      } catch (error) {
-        // Field not found - log warning and return empty string for backward compatibility
-        console.error(`Warning: field '${field.value}' not found`);
-        return '';
-      }
-    }
-  }
-  
-  // Apply pipes
-  if (pipes && pipes.length > 0) {
-    // Use unified pipeline processor instead of applyCondensedPipes
-    const { processPipeline } = await import('../eval/pipeline/unified-processor');
-    // Create a node object with the pipes for the processor
-    const nodeWithPipes = { pipes };
-    result = await processPipeline({
-      value: result,
-      env,
-      node: nodeWithPipes
-    });
-    // Pipes already handle conversion to string format, so return as-is
-    return asText(result);
-  }
-  
-  // Convert to string only if no pipes were applied
-  if (isStructuredValue(result)) {
-    return asText(result);
-  }
-  return typeof result === 'string' ? result : JSON.stringify(result);
 }

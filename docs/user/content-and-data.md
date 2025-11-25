@@ -8,20 +8,135 @@ Load files with `<file.txt>`, work with data structures using dot notation, tran
 /var @config = <config.json>             >> Load and parse JSON
 /show @config.database.host              >> Access nested fields
 /var @files = <docs/*.md>                >> Load multiple files
-/show @files[0].filename                  >> Access file metadata
+/show @files[0].ctx.filename              >> Access file metadata via .ctx
+```
+
+## StructuredValue and .ctx
+
+Loaded files and data are `StructuredValue` objects with three key parts:
+
+```mlld
+/var @file = <package.json>
+
+@file.text                               # String content
+@file.data                               # Parsed payload (JSON object)
+@file.ctx                                # Metadata (filename, tokens, labels, etc.)
+```
+
+The `.ctx` namespace is where all metadata lives:
+
+```mlld
+/var @file = <README.md>
+
+/show @file.ctx.filename                 # "README.md"
+/show @file.ctx.tokens                   # Token count
+/show @file.ctx.labels                   # Security labels
+/show @file.ctx.absolute                 # Full path
+```
+
+**Auto-unwrapping**: Display and templates automatically use `.text`:
+
+```mlld
+/show @file                              # Same as @file.text
+/var @msg = `Content: @file`             # Uses @file.text
+```
+
+**Explicit access** when you need metadata:
+
+```mlld
+/when @file.ctx.tokest > 2000 => show "File is large"
+/var @name = @file.ctx.filename
+```
+
+### JS/Node defaults and `.keep`
+
+JS/Node receive `.data` by default (text → string, JSON → object). Extract the metadata you want to pass at the time of instantiating a variable or use `.keep` to preserve metadata when passing the value:
+
+```mlld
+/exe @process(f) = js { return f.ctx.filename; }
+/show @process(@file.keep)    # Works - wrapper has .ctx
+/show @process(@file)         # Error - unwrapped to string/object
 ```
 
 ## File Loading
 
-Load file contents with angle brackets `<>`. This loads the actual file content, not the filename string.
+Load file contents with angle brackets `<>`:
 
 ```mlld
-/var @readme = <README.md>               >> Load file content
-/var @filename = "README.md"             >> Literal string
+/var @readme = <README.md>               # Load file content
+/var @filename = "README.md"             # Literal string
 
-/show @readme                            >> Shows file contents  
-/show @filename                          >> Shows "README.md"
+/show @readme                            # Shows file contents
+/show @filename                          # Shows "README.md"
 ```
+
+## Streaming Output
+
+For long-running operations, streaming shows progress as chunks arrive instead of waiting for completion.
+
+```mlld
+/stream @claude("Write a story")
+```
+
+While streaming, chunks appear incrementally as the story generates. Progress displays to stderr:
+
+```
+⟳ stage 1: 142 tokens
+```
+
+### How to Enable Streaming
+
+Use the `stream` keyword before a function call or code block:
+
+```mlld
+stream @claude("Write a haiku")
+
+stream sh {
+  echo "Processing..."
+  sleep 2
+  echo "Done!"
+}
+```
+
+The `stream` keyword is syntactic sugar for `with { stream: true }`:
+
+```mlld
+@claude("prompt") with { stream: true }
+```
+
+Or use the `/stream` directive to output with streaming:
+
+```mlld
+/stream @generateReport()
+```
+
+### Parallel Streaming
+
+Multiple streams show progress concurrently, then output buffered results:
+
+```mlld
+/exe @left() = sh { echo "L" }
+/exe @right() = sh { echo "R" }
+
+/var @results = stream @left() || stream @right()
+/show @results
+```
+
+Output:
+```
+[
+  "L",
+  "R"
+]
+```
+
+### Disabling Streaming
+
+Suppress streaming when you only need final output:
+
+- CLI: `--no-stream`
+- Environment: `MLLD_NO_STREAM=true`
+- API: `interpret(..., { streaming: { enabled: false } })`
 
 ### Basic Loading
 
@@ -43,8 +158,8 @@ Use standard glob patterns to load multiple files:
 /var @source = <src/**/*.ts>             >> All TypeScript in src
 
 >> Access individual files
-/show @docs[0].content                    >> First file's content
-/show @docs[0].filename                   >> First file's name
+/show @docs[0].text                       >> First file's content
+/show @docs[0].ctx.filename               >> First file's name
 ```
 
 ### Section Extraction
@@ -59,10 +174,10 @@ Extract specific sections from markdown files:
 /var @apis = <docs/*.md # API Reference>
 
 >> Rename sections with 'as'
-/var @modules = <*.md # Overview> as "## <>.filename Overview"
+/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"
 ```
 
-The `<>` placeholder in `as` templates represents each file's metadata.
+The `<>` placeholder in `as` templates represents each file's StructuredValue; use `.ctx` to read metadata.
 
 ### AST-Based Code Selection
 
@@ -80,26 +195,31 @@ Use curly braces after a file path to pull specific definitions or usages from s
 
 ## File Metadata
 
-Every loaded file provides metadata through properties:
+Every loaded file exposes metadata through its `.ctx` namespace:
 
 ```mlld
 /var @file = <package.json>
 
 >> Basic metadata
-/show @file.filename                     >> "package.json"
-/show @file.relative                     >> "./package.json" 
-/show @file.absolute                     >> Full path
+/show @file.ctx.filename                 >> "package.json"
+/show @file.ctx.relative                 >> "./package.json" 
+/show @file.ctx.absolute                 >> Full path
 
 >> Token counting
-/show @file.tokest                       >> Estimated tokens (fast)
-/show @file.tokens                       >> Exact tokens
+/show @file.ctx.tokest                   >> Estimated tokens (fast)
+/show @file.ctx.tokens                   >> Exact tokens
 
 >> Content access
 /show @file.content                      >> File contents (explicit)
 /show @file                              >> Same as above (implicit)
 ```
 
-**Note:** Loaded files are `StructuredValue` objects with both `.text` (content string) and `.data` (rich metadata object) properties. Display automatically uses `.text`, while code can access `.data` for structured information.
+**StructuredValue properties:**
+- `.text` - String content (used by display/templates)
+- `.data` - Parsed payload (JSON objects, arrays, etc.)
+- `.ctx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
+
+Always use `.ctx` for metadata access - it's the canonical namespace.
 
 ### JSON File Metadata
 
@@ -123,12 +243,12 @@ Access YAML frontmatter from markdown files:
 ```mlld
 /var @post = <blog/post.md>
 
-/show @post.fm.title                     >> Post title
-/show @post.fm.author                    >> Author name
-/show @post.fm.tags                      >> Array of tags
+/show @post.ctx.fm.title                 >> Post title
+/show @post.ctx.fm.author                >> Author name
+/show @post.ctx.fm.tags                  >> Array of tags
 
 >> Conditional processing
-/when @post.fm.published => show @post.content
+/when @post.ctx.fm.published => show @post.content
 ```
 
 ## URL Loading
@@ -139,14 +259,14 @@ Load content directly from URLs:
 /var @page = <https://example.com/data.json>
 
 >> URL-specific metadata
-/show @page.url                          >> Full URL
-/show @page.domain                       >> "example.com"
-/show @page.status                       >> HTTP status code
-/show @page.title                        >> Page title (if HTML)
+/show @page.ctx.url                      >> Full URL
+/show @page.ctx.domain                   >> "example.com"
+/show @page.ctx.status                   >> HTTP status code
+/show @page.ctx.title                    >> Page title (if HTML)
 
 >> HTML is converted to markdown
 /show @page.content                      >> Markdown version
-/show @page.html                         >> Original HTML
+/show @page.ctx.html                     >> Original HTML
 ```
 
 ## Variables and Data Structures
@@ -395,6 +515,29 @@ mlld provides built-in transformers (both uppercase and lowercase work):
 /var @loose = "{'name': 'Ada', /* comment */ age: 32,}"
 /var @parsedLoose = @loose | @json              >> Uses relaxed parsing
 /var @parsedStrict = @loose | @json.strict      >> Fails with hint to use @json.loose
+```
+
+For extracting JSON from LLM responses that may contain markdown code fences or surrounding prose, use `@json.llm`:
+
+```mlld
+>> Extract from code fence
+/var @llmResponse = `Here's your data:
+\`\`\`json
+{"name": "Alice", "status": "active"}
+\`\`\``
+
+/var @data = @llmResponse | @json.llm
+/show @data.name                                >> Alice
+
+>> Extract from inline prose
+/var @inline = `The result is {"count": 42} for this query.`
+/var @extracted = @inline | @json.llm
+/show @extracted.count                          >> 42
+
+>> Returns false when no JSON found
+/var @text = `Just plain text, no JSON here.`
+/var @result = @text | @json.llm
+/show @result                                   >> false
 ```
 ```
 
@@ -702,12 +845,61 @@ Generated: @now
 /output @config to "runtime-config.json" as json
 ```
 
+### Incremental JSONL Logging
+
+Capture long-running results without rewriting the full file:
+
+```mlld
+/var @checks = for @service in ["auth", "payments", "search"] =>
+  {"service": @service, "status": "ok", "timestamp": @now}
+
+/for @entry in @checks => append @entry to "health.jsonl"
+
+/show <health.jsonl>
+```
+
+Each append writes one compact JSON object followed by a newline. Use `.jsonl` when you want structured JSONL output. Any other extension (e.g., `.log`, `.txt`, `'.md`) is treated as plain text. `.json` files are blocked to prevent producing invalid JSON.
+
+## Gotchas
+
+### Metadata Access in Loops
+
+Auto-unwrapping in iterations drops direct `.ctx` access:
+
+```mlld
+/var @files = <docs/*.md>
+
+# ✗ This won't work - loop variable is unwrapped text
+/for @file in @files => show @file.ctx.filename   # Error: .ctx on string
+
+# ✓ Access via array index
+/for @i in [0, 1, 2] => show @files[@i].ctx.filename
+
+# ✓ Or use @keep helper to preserve structure
+/for @file in @files.keep => show @file.ctx.filename
+```
+
+### Metadata in Pipelines
+
+Pipeline stages receive string input by default:
+
+```mlld
+/var @file = <config.json>
+
+# ✗ This loses metadata
+/var @result = @file | @process          # @process gets string, no .ctx
+
+# ✓ Keep structured form
+/exe @process(file) = `Name: @file.ctx.filename, Tokens: @file.ctx.tokens`
+/var @result = @file.keep | @process
+```
+
 ## Best Practices
 
 **File Loading:**
 - Use globs for multiple files: `<docs/*.md>`
 - Check existence: `/when @config => show "Found config"`
-- Access metadata for token counting: `@file.tokest`
+- Access metadata via `.ctx`: `@file.ctx.tokest`
 
 **Data Access:**
 - Prefer dot notation: `@user.name` over complex expressions

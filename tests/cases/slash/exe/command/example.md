@@ -1,1 +1,1 @@
-/exe @greet(name) = {echo "Hello, @name!"}
+/exe @greet(name) = cmd {echo "Hello, @name!"}

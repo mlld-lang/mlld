@@ -4,13 +4,48 @@ import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
-import { createExecutableVariable, createSimpleTextVariable, type VariableSource } from '@core/types/variable';
+import {
+  createExecutableVariable,
+  createSimpleTextVariable,
+  VariableMetadataUtils,
+  type VariableSource
+} from '@core/types/variable';
 // import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import * as path from 'path';
+import {
+  createCapabilityContext,
+  makeSecurityDescriptor,
+  type DataLabel,
+  type CapabilityContext,
+  type SecurityDescriptor
+} from '@core/types/security';
+import { asData, asText, isStructuredValue } from '../utils/structured-value';
+import { InterpolationContext } from '../core/interpolation-context';
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 function buildTemplateAstFromContent(content: string): any[] {
   const ast: any[] = [];
@@ -108,11 +143,12 @@ export async function evaluateExe(
         // Only create sync wrapper for JavaScript code (not commands or other types)
         if (funcVar.value.type === 'code' && 
             (funcVar.value.language === 'javascript' || funcVar.value.language === 'js')) {
-          // Get the executable definition from metadata
-          const execDef = (funcVar.metadata as any)?.executableDef;
+          // Get the executable definition from internal
+          const execDef = (funcVar.internal as any)?.executableDef;
           if (execDef && execDef.type === 'code') {
             // NEW: Pass captured shadow envs through the definition
-            (execDef as any).capturedShadowEnvs = (funcVar.metadata as any)?.capturedShadowEnvs;
+            (execDef as any).capturedShadowEnvs =
+              (funcVar.internal as any)?.capturedShadowEnvs;
             effectiveWrapper = createSyncJsWrapper(funcName, execDef, env);
           }
         }
@@ -136,12 +172,14 @@ export async function evaluateExe(
         const funcName = ref.identifier;
         const funcVar = env.getVariable(funcName);
         
-        if (funcVar && funcVar.type === 'executable' && funcVar.metadata) {
-          // Update the metadata to include captured shadow environments
-          (funcVar.metadata as any).capturedShadowEnvs = capturedEnvs;
-          
+        if (funcVar && funcVar.type === 'executable') {
+          // Update internal metadata to include captured shadow environments
+          funcVar.internal = {
+            ...(funcVar.internal ?? {}),
+            capturedShadowEnvs: capturedEnvs
+          };
           // Also update the executableDef if it exists
-          const execDef = (funcVar.metadata as any).executableDef;
+          const execDef = (funcVar.internal as any)?.executableDef;
           if (execDef) {
             (execDef as any).capturedShadowEnvs = capturedEnvs;
           }
@@ -172,11 +210,27 @@ export async function evaluateExe(
     throw new Error('Exec directive identifier must be a simple command name');
   }
   
+  const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+  const descriptor = makeSecurityDescriptor({ labels: securityLabels });
+  const capabilityContext: CapabilityContext = createCapabilityContext({
+    kind: 'exe',
+    descriptor,
+    metadata: {
+      identifier,
+      filePath: env.getCurrentFilePath()
+    },
+    operation: {
+      kind: 'exe',
+      identifier,
+      location: directive.location
+    }
+  });
+
   let executableDef: ExecutableDefinition;
-  
-  
-  if (directive.subtype === 'exeCommand') {
-    const params = directive.values?.params || [];
+
+
+    if (directive.subtype === 'exeCommand') {
+      const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     const withClause = directive.values?.withClause;
 
@@ -210,7 +264,7 @@ export async function evaluateExe(
         } catch {}
 
         if (!refName) {
-          refName = await interpolate(commandRef as any, env);
+          refName = await interpolateAndRecord(commandRef as any, env);
         }
 
         const args = directive.values?.args || [];
@@ -251,6 +305,19 @@ export async function evaluateExe(
       }
     }
     
+  } else if (directive.subtype === 'exeData') {
+    const dataNodes = directive.values?.data;
+    if (!dataNodes) {
+      throw new Error('Exec data directive missing data content');
+    }
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    executableDef = {
+      type: 'data',
+      dataTemplate: dataNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    };
   } else if (directive.subtype === 'exeCode') {
     /**
      * Handle code executable definitions
@@ -291,7 +358,7 @@ export async function evaluateExe(
     }
     
     // Get the resolver path (it's a literal string, not interpolated)
-    const resolverPath = await interpolate(resolverNodes, env);
+    const resolverPath = await interpolateAndRecord(resolverNodes, env);
     
     // Get parameter names if any
     const params = directive.values?.params || [];
@@ -546,6 +613,8 @@ export async function evaluateExe(
     source.syntax = 'command';
   } else if (executableDef.type === 'template') {
     source.syntax = 'template';
+  } else if (executableDef.type === 'data') {
+    source.syntax = 'object';
   }
   
   // Extract language for code executables
@@ -575,36 +644,61 @@ export async function evaluateExe(
     metadata.capturedShadowEnvs = env.captureAllShadowEnvs();
   }
 
-  // Only capture module environment when we're evaluating a module for import
-  if (env.getIsImporting()) {
-    metadata.capturedModuleEnv = env.captureModuleEnvironment();
+    // Only capture module environment when we're evaluating a module for import
+    if (env.getIsImporting()) {
+      metadata.capturedModuleEnv = env.captureModuleEnvironment();
+    }
+
+    const executableTypeForVariable =
+      executableDef.type === 'code'
+        ? 'code'
+        : executableDef.type === 'data'
+          ? 'data'
+          : 'command';
+
+  let executableDescriptor = descriptor;
+  if (executableDef.type === 'command') {
+    const commandTaintDescriptor = makeSecurityDescriptor({ taintLevel: 'commandOutput' });
+    executableDescriptor = executableDescriptor
+      ? env.mergeSecurityDescriptors(executableDescriptor, commandTaintDescriptor)
+      : commandTaintDescriptor;
   }
 
-  const executableTypeForVariable = executableDef.type === 'code' ? 'code' : 'command';
+  const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(metadata, {
+      existingDescriptor: executableDescriptor,
+      capability: capabilityContext
+    });
 
-  const variable = createExecutableVariable(
-    identifier,
-    executableTypeForVariable,
-    '', // Template will be filled from executableDef
-    executableDef.paramNames || [],
-    language,
-    source,
-        metadata
+    const variable = createExecutableVariable(
+      identifier,
+      executableTypeForVariable,
+      '', // Template will be filled from executableDef
+      executableDef.paramNames || [],
+      language,
+      source,
+      {
+        metadata: metadataWithSecurity,
+        internal: {
+          executableDef
+        }
+      }
     );
 
-  // Set the actual template/command content
-  if (executableDef.type === 'command') {
-    variable.value.template = executableDef.commandTemplate;
-  } else if (executableDef.type === 'code') {
-    variable.value.template = executableDef.codeTemplate;
-  } else if (executableDef.type === 'template') {
-    variable.value.template = executableDef.template;
-  }
-  
-  env.setVariable(identifier, variable);
-  
-  // Return the executable definition (no output for variable definitions)
-  return { value: executableDef, env };
+    // Set the actual template/command content
+    if (executableDef.type === 'command') {
+      variable.value.template = executableDef.commandTemplate;
+    } else if (executableDef.type === 'code') {
+      variable.value.template = executableDef.codeTemplate;
+    } else if (executableDef.type === 'template') {
+      variable.value.template = executableDef.template;
+    } else if (executableDef.type === 'data') {
+      (variable.value as any).template = executableDef.dataTemplate;
+    }
+    
+    env.setVariable(identifier, variable);
+    
+    // Return the executable definition (no output for variable definitions)
+    return { value: executableDef, env };
 }
 
 /**
@@ -632,8 +726,14 @@ function createSyncJsWrapper(
       // Always add the parameter, even if undefined
       // This ensures JS code can reference all declared parameters
       if (argValue !== undefined) {
-        // Auto-unwrap LoadContentResult objects
-        argValue = AutoUnwrapManager.unwrap(argValue);
+        // Auto-unwrap without async shelf (sync context)
+        if (isStructuredValue(argValue)) {
+          argValue = asData(argValue);
+        } else if (isLoadContentResult(argValue)) {
+          argValue = argValue.content;
+        } else if (isLoadContentResultArray(argValue)) {
+          argValue = argValue.map(item => item.content);
+        }
         
         // Try to parse numeric values (same logic as async wrapper)
         if (typeof argValue === 'string') {
@@ -733,8 +833,8 @@ function createExecWrapper(
   env: Environment
 ): Function {
   return async function(...args: any[]) {
-    // Get the executable definition from metadata
-    const definition = (execVar.metadata as any)?.executableDef;
+    // Get the executable definition from internal
+    const definition = (execVar.internal as any)?.executableDef;
     if (!definition) {
       throw new Error(`Executable ${execName} has no definition in metadata`);
     }
@@ -751,10 +851,14 @@ function createExecWrapper(
       const argValue = args[i];
       if (argValue !== undefined) {
         // For template interpolation, we need string representation
-        const stringValue = typeof argValue === 'string' ? argValue :
-                           argValue === null || argValue === undefined ? String(argValue) :
-                           typeof argValue === 'object' ? JSON.stringify(argValue) :
-                           String(argValue);
+        const stringValue =
+          typeof argValue === 'string'
+            ? argValue
+            : argValue === null || argValue === undefined
+              ? String(argValue)
+              : typeof argValue === 'object'
+                ? (isStructuredValue(argValue) ? asText(argValue) : JSON.stringify(argValue))
+                : String(argValue);
         
         const paramVar = createSimpleTextVariable(
           paramName,
@@ -766,8 +870,10 @@ function createExecWrapper(
             isMultiLine: false
           },
           {
-            isSystem: true,
-            isParameter: true
+            internal: {
+              isSystem: true,
+              isParameter: true
+            }
           }
         );
         execEnv.setParameterVariable(paramName, paramVar);
@@ -784,7 +890,11 @@ function createExecWrapper(
       }
       
       // Interpolate the command template with parameters
-      const command = await interpolate(commandTemplate, execEnv);
+      const command = await interpolateAndRecord(
+        commandTemplate,
+        execEnv,
+        InterpolationContext.ShellCommand
+      );
       
       // Build environment variables from parameters for shell execution
       const envVars: Record<string, string> = {};
@@ -806,7 +916,7 @@ function createExecWrapper(
       }
       
       // Interpolate the code template with parameters
-      const code = await interpolate(codeTemplate, execEnv);
+      const code = await interpolateAndRecord(codeTemplate, execEnv);
       
       // Build params object for code execution
       const codeParams: Record<string, any> = {};
@@ -838,8 +948,8 @@ function createExecWrapper(
       }
       
       // NEW CODE: Pass captured shadow environments to executors
-      // Get captured shadow environments from executable metadata
-      const capturedEnvs = (execVar.metadata as any)?.capturedShadowEnvs;
+      // Get captured shadow environments from executable internal
+      const capturedEnvs = (execVar.internal as any)?.capturedShadowEnvs;
       
       
       // For JS/Node execution, pass captured envs through params
@@ -869,7 +979,15 @@ function createExecWrapper(
       }
       
       // Interpolate the template with parameters
-      result = await interpolate(templateNodes, execEnv);
+      result = await interpolateAndRecord(templateNodes, execEnv);
+    } else if (definition.type === 'data') {
+      const { evaluateDataValue } = await import('./data-value-evaluator');
+      const dataValue = await evaluateDataValue(definition.dataTemplate as any, execEnv);
+      try {
+        return JSON.parse(JSON.stringify(dataValue));
+      } catch {
+        return dataValue;
+      }
     } else if (definition.type === 'section') {
       // Extract section from file
       throw new Error(`Section executables cannot be invoked from shadow environments yet`);

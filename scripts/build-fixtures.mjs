@@ -612,6 +612,17 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         warningContent = await fs.readFile(path.join(dirPath, 'warning.md'), 'utf-8');
       }
     }
+
+    // Allow any fixture to specify error expectations via local error.md (and variants)
+    if (!errorContent) {
+      const errorFile =
+        file === 'example.md'
+          ? 'error.md'
+          : file.replace('example-', 'error-');
+      if (files.includes(errorFile)) {
+        errorContent = await fs.readFile(path.join(dirPath, errorFile), 'utf-8');
+      }
+    }
     
     // Generate fixture filename (just for the file, not the full name)
     let fixtureFileName;

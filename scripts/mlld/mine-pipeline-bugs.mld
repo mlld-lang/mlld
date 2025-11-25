@@ -1,0 +1,163 @@
+---
+description: Mine CHANGELOG for pipeline bugs and generate adversarial test stages
+author: mlld-team
+version: 1.0.0
+---
+
+# Pipeline Bug Mining Script
+
+This script uses Claude Code to systematically extract pipeline-related bugs from the CHANGELOG
+and generate adversarial stage snippets that reproduce those failure modes.
+
+## Claude Code Wrapper
+
+/exe @claude(prompt, tools) = run sh {
+  claude -p "@prompt" --allowedTools @tools
+}
+
+## Phase 1: Extract Pipeline-Related Changelog Entries
+
+/var @changelog = <CHANGELOG.md>
+
+>> Extract entries from rc60-rc67 (the dense pipeline fix period)
+/var @pipeline_section = run sh {
+  sed -n '/## \[2.0.0-rc67\]/,/## \[2.0.0-rc57\]/p' CHANGELOG.md
+}
+
+/output @pipeline_section to "tests/pipeline/harness/stages/CHANGELOG-extract.md"
+
+## Phase 2: Identify Bug Patterns
+
+For each major bug category, we'll have Claude Code analyze and generate stage snippets.
+
+/var @bug_categories = [
+  {
+    "name": "shell-interpolation-object-mangling",
+    "description": "Shell commands converting objects to [object Object]",
+    "changelog_refs": ["rc60", "rc64"],
+    "output_file": "tests/pipeline/harness/stages/shell-interpolation.ts"
+  },
+  {
+    "name": "structured-value-unwrapping",
+    "description": "StructuredValue wrappers not being unwrapped properly",
+    "changelog_refs": ["rc61", "rc58"],
+    "output_file": "tests/pipeline/harness/stages/structured-unwrap.ts"
+  },
+  {
+    "name": "foreach-structured-data",
+    "description": "Foreach failing with structured values from pipelines",
+    "changelog_refs": ["rc58"],
+    "output_file": "tests/pipeline/harness/stages/foreach-structured.ts"
+  },
+  {
+    "name": "nested-array-handling",
+    "description": "Arrays of objects/arrays being stringified incorrectly",
+    "changelog_refs": ["rc60"],
+    "output_file": "tests/pipeline/harness/stages/nested-arrays.ts"
+  },
+  {
+    "name": "heredoc-large-variables",
+    "description": "Variables >128KB causing E2BIG errors",
+    "changelog_refs": ["rc48"],
+    "output_file": "tests/pipeline/harness/stages/heredoc.ts"
+  },
+  {
+    "name": "metadata-preservation",
+    "description": "LoadContentResult metadata being lost through pipeline stages",
+    "changelog_refs": ["rc35", "rc40"],
+    "output_file": "tests/pipeline/harness/stages/metadata.ts"
+  },
+  {
+    "name": "json-parsing-edge-cases",
+    "description": "Control characters and escaping in JSON shell output",
+    "changelog_refs": ["rc67"],
+    "output_file": "tests/pipeline/harness/stages/json-escaping.ts"
+  }
+]
+
+/exe @create_output_dir() = run sh {
+  mkdir -p tests/pipeline/harness/stages
+  mkdir -p llm/prompts/pipeline-mining
+}
+
+/run @create_output_dir()
+
+## Phase 3: Generate Stage Snippets via Claude Code
+
+/exe @stage_prompt(category) = template "llm/prompts/pipeline-mining/stage-generation.att"
+/exe @input_prompt() = template "llm/prompts/pipeline-mining/input-generation.att"
+/exe @index_prompt() = template "llm/prompts/pipeline-mining/index-generation.att"
+
+>> Now iterate over all categories
+/for @category in @bug_categories => run sh {
+  @claude(@stage_prompt(@category), "Read,Write,Glob,Grep")
+}
+
+## Phase 4: Generate Complex Input Specimens
+
+/run sh {
+  @claude(@input_prompt(), "Read,Write,Glob,Grep")
+}
+
+## Phase 5: Generate Index File
+
+/run sh {
+  @claude(@index_prompt(), "Read,Write,Glob,Grep")
+}
+
+## Phase 6: Integration Instructions
+
+/var @integration_guide = ::
+# Integration Steps
+
+After running this script, you should have:
+
+1. **Stage Modules**: tests/pipeline/harness/stages/*.ts with TypeScript stage definitions
+2. **Input Specimens**: tests/pipeline/harness/inputs-adversarial.ts with complex inputs
+3. **Index File**: tests/pipeline/harness/stages/index.ts for easy imports
+4. **CHANGELOG Extract**: tests/pipeline/harness/stages/CHANGELOG-extract.md for reference
+
+## Next Steps:
+
+1. Review generated files in tests/pipeline/harness/stages/
+2. Import stages in structured-harness.test.ts:
+   ```typescript
+   import * as adversarialStages from './stages/index';
+   ```
+3. Import adversarial inputs:
+   ```typescript
+   import * as adversarialInputs from './inputs-adversarial';
+   ```
+4. Add adversarial stages to the stage set in the test
+5. Add adversarial inputs to the input set in the test
+6. Run: npm run test:pipeline-harness
+7. Expect failures! These stages SHOULD trigger the downgrade/metadata assertions
+8. Verify failures match the historical bug patterns
+
+## Manual Review Checklist:
+
+- [ ] Do stages accurately reproduce historical bugs?
+- [ ] Are CHANGELOG references correct?
+- [ ] Do inputs cover the pathological cases mentioned?
+- [ ] Are stage tags (preservesData, etc.) set correctly?
+- [ ] Does the harness catch the downgrades/metadata loss?
+- [ ] Are imports/exports correct?
+
+## Files Generated:
+
+```bash
+ls -la tests/pipeline/harness/stages/
+```
+
+## Re-running:
+
+To regenerate with improved prompts:
+```bash
+mlld run mine-pipeline-bugs
+```
+::
+
+/show @integration_guide
+/output @integration_guide to "tests/pipeline/harness/stages/README.md"
+
+/show "✅ Pipeline bug mining complete! Check tests/pipeline/harness/stages/ for results."

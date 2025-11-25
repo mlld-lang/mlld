@@ -1,18 +1,16 @@
 import type { ExecInvocation, WithClause } from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
-import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable } from '@core/types/executable';
+import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable, isDataExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import {
   isExecutableVariable,
-  createSimpleTextVariable,
-  createObjectVariable,
-  createArrayVariable,
-  createPrimitiveVariable,
-  createStructuredValueVariable
+  VariableMetadataUtils
 } from '@core/types/variable';
+import type { Variable, VariableContext } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
@@ -21,13 +19,38 @@ import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
-import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
-import { asText, isStructuredValue, wrapStructured, looksLikeJsonString } from '../utils/structured-value';
+import {
+  asText,
+  isStructuredValue,
+  wrapStructured,
+  parseAndWrapJson,
+  collectAndMergeParameterDescriptors,
+  extractSecurityDescriptor,
+  normalizeWhenShowEffect,
+  applySecurityDescriptorToStructuredValue
+} from '../utils/structured-value';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
+import type { SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import type { WhenExpressionNode } from '@core/types/when';
+import { handleExecGuardDenial } from './guard-denial-handler';
+import type { OperationContext } from '../env/ContextManager';
+import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
+import {
+  materializeGuardInputsWithMapping,
+  type GuardInputMappingEntry
+} from '../utils/guard-inputs';
+import { createParameterVariable } from '../utils/parameter-factory';
+import { getStreamBus } from './pipeline/stream-bus';
+import { TerminalSink } from './pipeline/stream-sinks/terminal';
+import { NDJSONParser } from '../streaming/ndjson-parser';
+import { extractTextFromEvent } from '../streaming/ndjson-extract';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -49,50 +72,258 @@ async function resolveStdinInput(stdinSource: unknown, env: Environment): Promis
   return coerceValueForStdin(value);
 }
 
-/**
- * Simple metadata shelf for preserving LoadContentResult metadata
- * This is a module-level implementation that works for synchronous operations
- */
-class SimpleMetadataShelf {
-  private shelf: Map<string, LoadContentResult> = new Map();
-  
-  storeMetadata(value: any): void {
-    if (isLoadContentResultArray(value)) {
-      for (const item of value) {
-        if (isLoadContentResult(item)) {
-          this.shelf.set(item.content, item);
-        }
-      }
-    } else if (isLoadContentResult(value)) {
-      this.shelf.set(value.content, value);
-    }
+const chainDebugEnabled = process.env.MLLD_DEBUG_CHAINING === '1';
+function chainDebug(message: string, payload?: Record<string, unknown>): void {
+  if (!chainDebugEnabled) {
+    return;
   }
-  
-  restoreMetadata(value: any): any {
-    if (!Array.isArray(value)) return value;
-    
-    const restored: any[] = [];
-    let hasRestorable = false;
-    
-    for (const item of value) {
-      if (typeof item === 'string' && this.shelf.has(item)) {
-        restored.push(this.shelf.get(item));
-        hasRestorable = true;
-      } else {
-        restored.push(item);
-      }
-    }
-    
-    return hasRestorable ? restored : value;
-  }
-  
-  clear(): void {
-    this.shelf.clear();
+  try {
+    const serialized = payload ? ` ${JSON.stringify(payload)}` : '';
+    process.stdout.write(`[CHAIN] ${message}${serialized}\n`);
+  } catch {
+    process.stdout.write(`[CHAIN] ${message}\n`);
   }
 }
 
-// Module-level shelf instance
-const metadataShelf = new SimpleMetadataShelf();
+function cloneVariableWithNewValue(
+  source: Variable,
+  value: unknown,
+  fallback: string
+): Variable {
+  const cloned: Variable = {
+    ...source,
+    value: value ?? fallback,
+    ctx: source.ctx ? { ...source.ctx } : undefined,
+    internal: { ...(source.internal ?? {}) }
+  };
+  if (cloned.ctx?.ctxCache) {
+    delete cloned.ctx.ctxCache;
+  }
+  return cloned;
+}
+
+function cloneGuardCandidateForParameter(
+  name: string,
+  candidate: Variable,
+  argValue: unknown,
+  fallback: string | undefined
+): Variable {
+  const cloned: Variable = {
+    ...candidate,
+    name,
+    value: argValue ?? fallback ?? candidate.value,
+    ctx: candidate.ctx ? { ...candidate.ctx } : undefined,
+    internal: {
+      ...(candidate.internal ?? {}),
+      isSystem: true,
+      isParameter: true
+    }
+  };
+  if (cloned.ctx?.ctxCache) {
+    delete cloned.ctx.ctxCache;
+  }
+  return cloned;
+}
+
+function stringifyGuardArg(value: unknown): string {
+  if (isStructuredValue(value)) {
+    return asText(value);
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function applyGuardTransformsToExecArgs(options: {
+  guardInputEntries: readonly GuardInputMappingEntry[];
+  transformedInputs: readonly Variable[];
+  guardVariableCandidates: (Variable | undefined)[];
+  evaluatedArgs: any[];
+  evaluatedArgStrings: string[];
+}): void {
+  const { guardInputEntries, transformedInputs, guardVariableCandidates, evaluatedArgs, evaluatedArgStrings } =
+    options;
+  const limit = Math.min(transformedInputs.length, guardInputEntries.length);
+  for (let i = 0; i < limit; i++) {
+    const entry = guardInputEntries[i];
+    const replacement = transformedInputs[i];
+    if (!entry || !replacement) {
+      continue;
+    }
+    const argIndex = entry.index;
+    guardVariableCandidates[argIndex] = replacement;
+    const normalizedValue = isStructuredValue(replacement.value)
+      ? replacement.value.data
+      : replacement.value;
+    evaluatedArgs[argIndex] = normalizedValue;
+    evaluatedArgStrings[argIndex] = stringifyGuardArg(normalizedValue);
+  }
+}
+
+type StringBuiltinMethod =
+  | 'toLowerCase'
+  | 'toUpperCase'
+  | 'trim'
+  | 'slice'
+  | 'substring'
+  | 'substr'
+  | 'replace'
+  | 'replaceAll'
+  | 'padStart'
+  | 'padEnd'
+  | 'repeat';
+type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort';
+type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
+
+function ensureStringTarget(method: string, target: unknown): string {
+  if (typeof target === 'string') {
+    return target;
+  }
+  throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
+}
+
+function ensureArrayTarget(method: string, target: unknown): unknown[] {
+  if (Array.isArray(target)) {
+    return target;
+  }
+  throw new MlldInterpreterError(`Cannot call .${method}() on ${typeof target}`);
+}
+
+function handleStringBuiltin(method: StringBuiltinMethod, target: unknown, args: unknown[] = []): string {
+  const value = ensureStringTarget(method, target);
+  switch (method) {
+    case 'toLowerCase':
+      return value.toLowerCase();
+    case 'toUpperCase':
+      return value.toUpperCase();
+    case 'trim':
+      return value.trim();
+    case 'slice': {
+      const start = args.length > 0 ? Number(args[0]) : undefined;
+      const end = args.length > 1 ? Number(args[1]) : undefined;
+      return value.slice(start ?? undefined, end ?? undefined);
+    }
+    case 'substring': {
+      const start = args.length > 0 ? Number(args[0]) : 0;
+      const end = args.length > 1 ? Number(args[1]) : undefined;
+      return value.substring(start, end ?? undefined);
+    }
+    case 'substr': {
+      const start = args.length > 0 ? Number(args[0]) : 0;
+      const length = args.length > 1 && args[1] !== undefined ? Number(args[1]) : undefined;
+      return length !== undefined ? value.substr(start, length) : value.substr(start);
+    }
+    case 'replace': {
+      const searchValue = args[0] instanceof RegExp ? args[0] : String(args[0] ?? '');
+      const replaceValue = String(args[1] ?? '');
+      return value.replace(searchValue as any, replaceValue);
+    }
+    case 'replaceAll': {
+      const searchValue = args[0] instanceof RegExp ? args[0] : String(args[0] ?? '');
+      const replaceValue = String(args[1] ?? '');
+      if (searchValue instanceof RegExp && !searchValue.global) {
+        return value.replace(new RegExp(searchValue.source, `${searchValue.flags}g`), replaceValue);
+      }
+      return value.replaceAll(searchValue as any, replaceValue);
+    }
+    case 'padStart': {
+      const targetLength = args.length > 0 ? Number(args[0]) : value.length;
+      const padStringArg = args.length > 1 ? String(args[1]) : ' ';
+      return value.padStart(targetLength, padStringArg);
+    }
+    case 'padEnd': {
+      const targetLength = args.length > 0 ? Number(args[0]) : value.length;
+      const padStringArg = args.length > 1 ? String(args[1]) : ' ';
+      return value.padEnd(targetLength, padStringArg);
+    }
+    case 'repeat': {
+      const count = args.length > 0 ? Number(args[0]) : 0;
+      return value.repeat(count);
+    }
+  }
+  throw new MlldInterpreterError(`Unsupported string builtin: ${method}`);
+}
+
+function handleArrayBuiltin(method: ArrayBuiltinMethod, target: unknown, args: unknown[] = []): unknown[] {
+  const array = ensureArrayTarget(method, target);
+  switch (method) {
+    case 'slice': {
+      const start = args.length > 0 ? Number(args[0]) : undefined;
+      const end = args.length > 1 ? Number(args[1]) : undefined;
+      return array.slice(start ?? undefined, end ?? undefined);
+    }
+    case 'concat':
+      return array.concat(...args);
+    case 'reverse':
+      return [...array].reverse();
+    case 'sort': {
+      const cloned = [...array];
+      const comparator = args[0];
+      if (typeof comparator === 'function') {
+        return cloned.sort(comparator as (a: unknown, b: unknown) => number);
+      }
+      return cloned.sort();
+    }
+  }
+  throw new MlldInterpreterError(`Unsupported array builtin: ${method}`);
+}
+
+function handleLengthBuiltin(target: unknown): number {
+  if (typeof target === 'string' || Array.isArray(target)) {
+    return target.length;
+  }
+  throw new MlldInterpreterError(`Cannot call .length() on ${typeof target}`);
+}
+
+function handleJoinBuiltin(target: unknown, separator: unknown): string {
+  const value = ensureArrayTarget('join', target);
+  const joiner = separator !== undefined ? String(separator) : ',';
+  return value.join(joiner);
+}
+
+function handleSplitBuiltin(target: unknown, separator: unknown): string[] {
+  const value = ensureStringTarget('split', target);
+  const splitOn = separator !== undefined ? String(separator) : '';
+  return value.split(splitOn);
+}
+
+function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: unknown): boolean | number {
+  if (Array.isArray(target)) {
+    if (method === 'includes') {
+      return target.includes(arg);
+    }
+    if (method === 'indexOf') {
+      return target.indexOf(arg);
+    }
+    throw new MlldInterpreterError(`Cannot call .${method}() on array targets`);
+  }
+
+  const value = ensureStringTarget(method, target);
+  const searchValue = String(arg ?? '');
+
+  switch (method) {
+    case 'includes':
+      return value.includes(searchValue);
+    case 'indexOf':
+      return value.indexOf(searchValue);
+    case 'startsWith':
+      return value.startsWith(searchValue);
+    case 'endsWith':
+      return value.endsWith(searchValue);
+  }
+  throw new MlldInterpreterError(`Unsupported search builtin: ${method}`);
+}
 
 /**
  * Evaluate an ExecInvocation node
@@ -102,12 +333,102 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  const streamingOptions = env.getStreamingOptions();
+  let streamingRequested =
+    node.stream === true ||
+    node.withClause?.stream === true ||
+    node.meta?.withClause?.stream === true;
+  let streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
+  const detachStreaming: Array<() => void> = [];
+  const hasStreamFormat =
+    node.withClause?.streamFormat !== undefined ||
+    node.meta?.withClause?.streamFormat !== undefined;
+  const useNdjsonParsing = streamingEnabled && !hasStreamFormat;
+  const ndjsonParser = useNdjsonParsing ? new NDJSONParser() : null;
+  const pipelineId = `exec-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+  let lastEmittedChunk: string | undefined;
+  const chunkEffect = (chunk: string, source: 'stdout' | 'stderr') => {
+    if (!streamingEnabled) return;
+    const trimmed = chunk.trim();
+    if (trimmed && trimmed === lastEmittedChunk) {
+      return;
+    }
+    lastEmittedChunk = trimmed || chunk;
+    const withSpacing = chunk.endsWith('\n') ? `${chunk}\n` : `${chunk}\n\n`;
+    // Route stdout chunks to doc to display progressively; stderr stays stderr.
+    if (source === 'stdout') {
+      env.emitEffect('doc', withSpacing);
+    } else {
+      env.emitEffect('stderr', chunk);
+    }
+  };
+
+  const ensureStreamingSinks = (): void => {
+    // NDJSON parsing uses direct chunk writing from executor; still allow sinks
+    if (!streamingEnabled || detachStreaming.length > 0) {
+      return;
+    }
+    const bus = getStreamBus();
+    const terminalSink = new TerminalSink();
+    const terminalUnsub = bus.subscribe(event => terminalSink.handle(event));
+    detachStreaming.push(terminalUnsub);
+  };
+
+  try {
+  let resultSecurityDescriptor: SecurityDescriptor | undefined;
+    const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
+      if (!descriptor) {
+        return;
+      }
+      resultSecurityDescriptor = resultSecurityDescriptor
+        ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptor)
+        : descriptor;
+    };
+  const interpolateWithResultDescriptor = (
+    nodes: any,
+    targetEnv: Environment = env,
+    interpolationContext: InterpolationContext = InterpolationContext.Default
+  ): Promise<string> => {
+    return interpolate(nodes, targetEnv, interpolationContext, {
+      collectSecurityDescriptor: descriptor => {
+        if (descriptor) {
+          mergeResultDescriptor(descriptor);
+        }
+      }
+    });
+  };
+
+  const createParameterMetadata = (value: unknown) => {
+    const descriptor = extractSecurityDescriptor(value);
+    const metadata = descriptor
+      ? VariableMetadataUtils.applySecurityMetadata(
+          undefined,
+          { existingDescriptor: descriptor }
+        )
+      : undefined;
+
+    return {
+      metadata,
+      internal: {
+        isSystem: true,
+        isParameter: true
+      }
+    };
+  };
+
   const createEvalResult = (
     value: unknown,
     targetEnv: Environment,
     options?: { type?: string; text?: string }
   ): EvalResult => {
     const wrapped = wrapExecResult(value, options);
+    if (resultSecurityDescriptor) {
+      const existing = getStructuredSecurityDescriptor(wrapped);
+      const merged = existing
+        ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
+        : resultSecurityDescriptor;
+      setStructuredSecurityDescriptor(wrapped, merged);
+    }
     return {
       value: wrapped,
       env: targetEnv,
@@ -118,7 +439,11 @@ export async function evaluateExecInvocation(
   };
 
   const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
-    return wrapExecResult(value, options);
+    const structured = wrapExecResult(value, options);
+    if (resultSecurityDescriptor) {
+      setStructuredSecurityDescriptor(structured, resultSecurityDescriptor);
+    }
+    return structured;
   };
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[evaluateExecInvocation] Entry:', {
@@ -132,6 +457,7 @@ export async function evaluateExecInvocation(
   if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
     logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
   }
+  const nodeSourceLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
   
   // Get the command name from the command reference or legacy format
   let commandName: string;
@@ -178,14 +504,38 @@ export async function evaluateExecInvocation(
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     // Check if this is a builtin method call (e.g., @list.includes())
-    const builtinMethods = ['includes', 'length', 'indexOf', 'join', 'split', 'toLowerCase', 'toUpperCase', 'trim', 'startsWith', 'endsWith'];
+    const builtinMethods = [
+      'includes',
+      'length',
+      'indexOf',
+      'join',
+      'split',
+      'toLowerCase',
+      'toUpperCase',
+      'trim',
+      'slice',
+      'substring',
+      'substr',
+      'replace',
+      'replaceAll',
+      'padStart',
+      'padEnd',
+      'repeat',
+      'startsWith',
+      'endsWith',
+      'concat',
+      'reverse',
+      'sort'
+    ];
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
       let objectValue: any;
+      let objectVar: Variable | undefined;
+      let sourceDescriptor: SecurityDescriptor | undefined;
 
       if (commandRefWithObject.objectReference) {
         const objectRef = commandRefWithObject.objectReference;
-        const objectVar = env.getVariable(objectRef.identifier);
+        objectVar = env.getVariable(objectRef.identifier);
         if (!objectVar) {
           throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
         }
@@ -207,6 +557,7 @@ export async function evaluateExecInvocation(
         // Evaluate the source ExecInvocation to obtain a value, then apply builtin method
         const srcResult = await evaluateExecInvocation(commandRefWithObject.objectSource, env);
         if (srcResult && typeof srcResult === 'object') {
+          sourceDescriptor = extractSecurityDescriptor(srcResult.value);
           if (srcResult.value !== undefined) {
             const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
             objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Display);
@@ -221,12 +572,37 @@ export async function evaluateExecInvocation(
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
 
+      chainDebug('builtin invocation start', {
+        commandName,
+        hasObjectSource: Boolean(commandRefWithObject.objectSource),
+        hasObjectReference: Boolean(commandRefWithObject.objectReference)
+      });
+
+      const targetDescriptor =
+        sourceDescriptor ||
+        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) ||
+        extractSecurityDescriptor(objectValue);
+      mergeResultDescriptor(targetDescriptor);
+
       // Structured exec returns wrappers – convert them to plain data before method lookup
       if (isStructuredValue(objectValue)) {
         objectValue = objectValue.type === 'array' ? objectValue.data : asText(objectValue);
       } else if (LegacyStructuredValue.isStructuredValue?.(objectValue)) {
         objectValue = objectValue.text;
       }
+
+      chainDebug('resolved object value', {
+        commandName,
+        objectType: Array.isArray(objectValue) ? 'array' : typeof objectValue,
+        preview:
+          typeof objectValue === 'string'
+            ? objectValue.slice(0, 80)
+            : Array.isArray(objectValue)
+            ? `[array length=${objectValue.length}]`
+            : objectValue && typeof objectValue === 'object'
+            ? '[object]'
+            : objectValue
+      });
       
       // Evaluate arguments
       const evaluatedArgs: any[] = [];
@@ -235,79 +611,69 @@ export async function evaluateExecInvocation(
         const evaluatedArg = await evaluateDataValue(arg, env);
         evaluatedArgs.push(evaluatedArg);
       }
-      
-      // Apply the builtin method
-      let result: any;
-      switch (commandName) {
-        case 'includes':
-          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
-            result = objectValue.includes(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .includes() on ${typeof objectValue}`);
-          }
-          break;
-        case 'length':
-          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
-            result = objectValue.length;
-          } else {
-            throw new MlldInterpreterError(`Cannot call .length() on ${typeof objectValue}`);
-          }
-          break;
-        case 'indexOf':
-          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
-            result = objectValue.indexOf(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .indexOf() on ${typeof objectValue}`);
-          }
-          break;
-        case 'join':
-          if (Array.isArray(objectValue)) {
-            result = objectValue.join(evaluatedArgs[0] || ',');
-          } else {
-            throw new MlldInterpreterError(`Cannot call .join() on ${typeof objectValue}`);
-          }
-          break;
-        case 'split':
-          if (typeof objectValue === 'string') {
-            result = objectValue.split(evaluatedArgs[0] || '');
-          } else {
-            throw new MlldInterpreterError(`Cannot call .split() on ${typeof objectValue}`);
-          }
-          break;
-        case 'toLowerCase':
-          if (typeof objectValue === 'string') {
-            result = objectValue.toLowerCase();
-          } else {
-            throw new MlldInterpreterError(`Cannot call .toLowerCase() on ${typeof objectValue}`);
-          }
-          break;
-        case 'toUpperCase':
-          if (typeof objectValue === 'string') {
-            result = objectValue.toUpperCase();
-          } else {
-            throw new MlldInterpreterError(`Cannot call .toUpperCase() on ${typeof objectValue}`);
-          }
-          break;
-        case 'trim':
-          if (typeof objectValue === 'string') {
-            result = objectValue.trim();
-          } else {
-            throw new MlldInterpreterError(`Cannot call .trim() on ${typeof objectValue}`);
-          }
-          break;
-      case 'startsWith':
-        if (typeof objectValue === 'string') {
-          result = objectValue.startsWith(evaluatedArgs[0]);
-        } else {
-          throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
-        }
+
+      const quantifierEvaluator = (objectValue as any)?.__mlldQuantifierEvaluator;
+      if (quantifierEvaluator && typeof quantifierEvaluator === 'function') {
+      const quantifierResult = quantifierEvaluator(commandName, evaluatedArgs);
+      return createEvalResult(quantifierResult, env);
+    }
+    
+    // Apply the builtin method
+    let result: any;
+    const propagateResult = (output: unknown): void => {
+      inheritExpressionProvenance(output, objectVar ?? objectValue);
+      const sourceDescriptor =
+        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) || extractSecurityDescriptor(objectValue);
+      if (sourceDescriptor) {
+        resultSecurityDescriptor = resultSecurityDescriptor
+          ? env.mergeSecurityDescriptors(resultSecurityDescriptor, sourceDescriptor)
+          : sourceDescriptor;
+      }
+    };
+    switch (commandName) {
+      case 'toLowerCase':
+      case 'toUpperCase':
+      case 'trim':
+      case 'substring':
+      case 'substr':
+      case 'replace':
+      case 'replaceAll':
+      case 'padStart':
+      case 'padEnd':
+      case 'repeat':
+        result = handleStringBuiltin(commandName as StringBuiltinMethod, objectValue, evaluatedArgs);
+        propagateResult(result);
         break;
-        case 'endsWith':
-          if (typeof objectValue === 'string') {
-            result = objectValue.endsWith(evaluatedArgs[0]);
-          } else {
-            throw new MlldInterpreterError(`Cannot call .endsWith() on ${typeof objectValue}`);
-          }
+      case 'slice':
+        if (Array.isArray(objectValue)) {
+          result = handleArrayBuiltin('slice', objectValue, evaluatedArgs);
+        } else {
+          result = handleStringBuiltin('slice', objectValue, evaluatedArgs);
+        }
+        propagateResult(result);
+        break;
+      case 'concat':
+      case 'reverse':
+      case 'sort':
+        result = handleArrayBuiltin(commandName as ArrayBuiltinMethod, objectValue, evaluatedArgs);
+        propagateResult(result);
+        break;
+      case 'length':
+        result = handleLengthBuiltin(objectValue);
+        break;
+      case 'join':
+        result = handleJoinBuiltin(objectValue, evaluatedArgs[0]);
+        propagateResult(result);
+        break;
+      case 'split':
+        result = handleSplitBuiltin(objectValue, evaluatedArgs[0]);
+        propagateResult(result);
+        break;
+      case 'includes':
+      case 'indexOf':
+      case 'startsWith':
+      case 'endsWith':
+          result = handleSearchBuiltin(commandName as SearchBuiltinMethod, objectValue, evaluatedArgs[0]);
           break;
         default:
           throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
@@ -318,24 +684,30 @@ export async function evaluateExecInvocation(
       if (postFieldsBuiltin && postFieldsBuiltin.length > 0) {
         const { accessField } = await import('../utils/field-access');
         for (const f of postFieldsBuiltin) {
-          result = await accessField(result, f, { env, sourceLocation: node.location });
+          result = await accessField(result, f, { env, sourceLocation: nodeSourceLocation });
         }
       }
       
       const normalized = normalizeTransformerResult(commandName, result);
       const resolvedValue = normalized.value;
       const wrapOptions = normalized.options;
+      inheritExpressionProvenance(resolvedValue, objectVar ?? objectValue);
 
       // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
       if (node.withClause) {
         if (node.withClause.pipeline) {
           const { processPipeline } = await import('./pipeline/unified-processor');
           const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
+          chainDebug('applying builtin pipeline', {
+            commandName,
+            pipelineLength: node.withClause.pipeline.length
+          });
           const pipelineResult = await processPipeline({
             value: pipelineInputValue,
             env,
             node,
-            identifier: node.identifier
+            identifier: node.identifier,
+            descriptorHint: resultSecurityDescriptor
           });
           // Still need to handle other withClause features (trust, needs)
           return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
@@ -417,37 +789,42 @@ export async function evaluateExecInvocation(
     // Handle __executable objects from resolved imports
     if (typeof variable === 'object' && variable !== null && '__executable' in variable && variable.__executable) {
       // Deserialize shadow environments if needed
-      let metadata = variable.metadata || {};
-      if (metadata.capturedShadowEnvs && typeof metadata.capturedShadowEnvs === 'object') {
+      let serializedInternal =
+        (variable.internal as Record<string, unknown> | undefined) ??
+        {};
+      if (serializedInternal.capturedShadowEnvs && typeof serializedInternal.capturedShadowEnvs === 'object') {
         // Check if it needs deserialization (is plain object, not Map)
-        const needsDeserialization = Object.entries(metadata.capturedShadowEnvs).some(
+        const needsDeserialization = Object.entries(serializedInternal.capturedShadowEnvs).some(
           ([lang, env]) => env && !(env instanceof Map)
         );
 
         if (needsDeserialization) {
-          metadata = {
-            ...metadata,
-            capturedShadowEnvs: deserializeShadowEnvs(metadata.capturedShadowEnvs)
+          serializedInternal = {
+            ...serializedInternal,
+            capturedShadowEnvs: deserializeShadowEnvs(serializedInternal.capturedShadowEnvs)
           };
         }
       }
 
       // Deserialize module environment if needed
-      if (metadata.capturedModuleEnv && !(metadata.capturedModuleEnv instanceof Map)) {
+      if (serializedInternal.capturedModuleEnv && !(serializedInternal.capturedModuleEnv instanceof Map)) {
         // Import the VariableImporter to reuse the proper deserialization logic
         const { VariableImporter } = await import('./import/VariableImporter');
         const importer = new VariableImporter(null); // ObjectResolver not needed for this
-        const moduleEnvMap = importer.deserializeModuleEnv(metadata.capturedModuleEnv);
+        const moduleEnvMap = importer.deserializeModuleEnv(serializedInternal.capturedModuleEnv);
 
         // Each executable in the module env needs access to the full env
         for (const [_, variable] of moduleEnvMap) {
-          if (variable.type === 'executable' && variable.metadata) {
-            variable.metadata.capturedModuleEnv = moduleEnvMap;
+          if (variable.type === 'executable') {
+            variable.internal = {
+              ...(variable.internal ?? {}),
+              capturedModuleEnv: moduleEnvMap
+            };
           }
         }
 
-        metadata = {
-          ...metadata,
+        serializedInternal = {
+          ...serializedInternal,
           capturedModuleEnv: moduleEnvMap
         };
       }
@@ -467,8 +844,10 @@ export async function evaluateExecInvocation(
           isMultiLine: false
         },
         {
-          executableDef: variable.executableDef,
-          ...metadata
+          internal: {
+            executableDef: variable.executableDef,
+            ...serializedInternal
+          }
         }
       );
     }
@@ -476,17 +855,49 @@ export async function evaluateExecInvocation(
     // Regular command lookup
     variable = env.getVariable(commandName);
     if (!variable) {
-      throw new MlldInterpreterError(`Command not found: ${commandName}`);
+      // Try splitting on dot to handle variant access (e.g., "json.fromlist" -> "json" + variant "fromlist")
+      if (commandName.includes('.')) {
+        const parts = commandName.split('.');
+        const baseName = parts[0];
+        const variantName = parts.slice(1).join('.');
+
+        const baseVar = env.getVariable(baseName);
+        if (baseVar) {
+          const variants = baseVar.internal?.transformerVariants as Record<string, MlldVariable> | undefined;
+          if (variants && variantName in variants) {
+            variable = variants[variantName];
+          }
+        }
+      }
+
+      if (!variable) {
+        throw new MlldInterpreterError(`Command not found: ${commandName}`);
+      }
+    }
+
+    // Check if this is a transformer variant access (e.g., @json.fromlist)
+    if (isExecutableVariable(variable) && node.commandRef) {
+      const varRef = (node.commandRef as any).identifier?.[0] || node.commandRef;
+      if (varRef && varRef.type === 'VariableReference' && varRef.fields && varRef.fields.length > 0) {
+        const field = varRef.fields[0];
+        if (field.type === 'field') {
+          const variants = variable.internal?.transformerVariants as Record<string, MlldVariable> | undefined;
+          if (variants && field.value in variants) {
+            // Replace the variable with the variant
+            variable = variants[field.value];
+          }
+        }
+      }
     }
   }
-  
+
   // Ensure it's an executable variable
   if (!isExecutableVariable(variable)) {
     throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);
   }
   
   // Special handling for built-in transformers
-  if (variable.metadata?.isBuiltinTransformer && variable.metadata?.transformerImplementation) {
+  if (variable.internal?.isBuiltinTransformer && variable.internal?.transformerImplementation) {
     // Args were already extracted above
     
     // Special handling for @typeof - we need the Variable object, not just the value
@@ -526,7 +937,7 @@ export async function evaluateExecInvocation(
               }
             } else if (varObj.type === 'executable') {
               // Get executable type from metadata
-              const execDef = varObj.metadata?.executableDef;
+      const execDef = varObj.internal?.executableDef;
               if (execDef && 'type' in execDef) {
                 typeInfo = `executable (${execDef.type})`;
               }
@@ -538,7 +949,7 @@ export async function evaluateExecInvocation(
             }
             
             // Pass the type info with a special marker
-            const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+            const result = await variable.internal.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
             const normalized = normalizeTransformerResult(commandName, result);
             const resolvedValue = normalized.value;
             const wrapOptions = normalized.options;
@@ -553,7 +964,8 @@ export async function evaluateExecInvocation(
                   value: pipelineInputValue,
                   env,
                   node,
-                  identifier: node.identifier
+                  identifier: node.identifier,
+                  descriptorHint: resultSecurityDescriptor
                 });
                 // Still need to handle other withClause features (trust, needs)
                 return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
@@ -571,18 +983,25 @@ export async function evaluateExecInvocation(
     // Regular transformer handling
     let inputValue = '';
     if (args.length > 0) {
-      const arg = args[0];
-      if (typeof arg === 'string') {
+      let arg: any = args[0];
+      if (arg && typeof arg === 'object' && 'type' in arg) {
+        const { evaluateDataValue } = await import('./data-value-evaluator');
+        arg = await evaluateDataValue(arg as any, env);
+      }
+      const transformerName = (variable.name ?? commandName ?? '').toLowerCase();
+      if (transformerName === 'keep' || transformerName === 'keepstructured') {
+        inputValue = arg as any;
+      } else if (typeof arg === 'string') {
         inputValue = arg;
       } else if (arg && typeof arg === 'object') {
-        inputValue = await interpolate([arg], env);
+        inputValue = await interpolateWithResultDescriptor([arg], env);
       } else {
         inputValue = String(arg);
       }
     }
     
     // Call the transformer implementation directly
-    const result = await variable.metadata.transformerImplementation(inputValue);
+    const result = await variable.internal.transformerImplementation(inputValue);
     const normalized = normalizeTransformerResult(commandName, result);
     const resolvedValue = normalized.value;
     const wrapOptions = normalized.options;
@@ -597,7 +1016,8 @@ export async function evaluateExecInvocation(
           value: pipelineInputValue,
           env,
           node,
-          identifier: node.identifier
+          identifier: node.identifier,
+          descriptorHint: resultSecurityDescriptor
         });
         // Still need to handle other withClause features (trust, needs)
         return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
@@ -610,17 +1030,40 @@ export async function evaluateExecInvocation(
   }
   
   // Get the full executable definition from metadata
-  const definition = variable.metadata?.executableDef as ExecutableDefinition;
+  const definition = variable.internal?.executableDef as ExecutableDefinition;
   if (!definition) {
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
+  }
+  const definitionHasStreamFormat =
+    definition.withClause?.streamFormat !== undefined ||
+    (definition.meta as any)?.withClause?.streamFormat !== undefined;
+  streamingRequested =
+    streamingRequested ||
+    definition.withClause?.stream === true ||
+    (definition.meta as any)?.withClause?.stream === true ||
+    (definition.meta as any)?.isStream === true;
+  const ndjsonActive = streamingRequested && !definitionHasStreamFormat && !hasStreamFormat;
+  streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
+  ensureStreamingSinks();
+
+  let whenExprNode: WhenExpressionNode | null = null;
+  if (definition.language === 'mlld-when') {
+    const candidate =
+      Array.isArray(definition.codeTemplate) && definition.codeTemplate.length > 0
+        ? (definition.codeTemplate[0] as WhenExpressionNode | undefined)
+        : undefined;
+    if (!candidate || candidate.type !== 'WhenExpression') {
+      throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
+    }
+    whenExprNode = candidate;
   }
   
   // Create a child environment for parameter substitution
   let execEnv = env.createChild();
 
   // Set captured module environment for variable lookup fallback
-  if (variable?.metadata?.capturedModuleEnv instanceof Map) {
-    execEnv.setCapturedModuleEnv(variable.metadata.capturedModuleEnv);
+  if (variable?.internal?.capturedModuleEnv instanceof Map) {
+    execEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
   }
 
   // Handle command arguments - args were already extracted above
@@ -697,9 +1140,9 @@ export async function evaluateExecInvocation(
             const { isTemplate } = await import('@core/types/variable');
             if (isTemplate(variable)) {
               if (Array.isArray(value)) {
-                value = await interpolate(value, env);
-              } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
-                value = await interpolate(variable.metadata.templateAst, env);
+                value = await interpolateWithResultDescriptor(value, env);
+              } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
+                value = await interpolateWithResultDescriptor(variable.internal.templateAst, env);
               }
             }
             
@@ -735,11 +1178,21 @@ export async function evaluateExecInvocation(
             }
           } else {
             // Variable not found - use interpolation which will throw appropriate error
-            argValue = await interpolate([arg], env, InterpolationContext.Default);
+            argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
             argValueAny = argValue;
           }
           break;
-          
+
+        case 'load-content': {
+          const { processContentLoader } = await import('./content-loader');
+          const { wrapLoadContentValue } = await import('../utils/load-content-structured');
+          const loadResult = await processContentLoader(arg as any, env);
+          const structured = wrapLoadContentValue(loadResult);
+          argValueAny = structured;
+          argValue = asText(structured);
+          break;
+        }
+        
         case 'ExecInvocation': {
           const nestedResult = await evaluateExecInvocation(arg as ExecInvocation, env);
           if (nestedResult && nestedResult.value !== undefined) {
@@ -768,12 +1221,12 @@ export async function evaluateExecInvocation(
         case 'Text':
           // Plain text nodes should remain strings; avoid JSON coercion that can
           // truncate large numeric identifiers (e.g., Discord snowflakes)
-          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
           argValueAny = argValue;
           break;
         default:
           // Other nodes: interpolate normally
-          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValue = await interpolateWithResultDescriptor([arg], env, InterpolationContext.Default);
           // Try to preserve structured data if it's JSON
           try {
             argValueAny = JSON.parse(argValue);
@@ -793,7 +1246,9 @@ export async function evaluateExecInvocation(
   }
   
   // Track original Variables for arguments
-  const originalVariables: (any | undefined)[] = [];
+  const originalVariables: (Variable | undefined)[] = new Array(args.length);
+  const guardVariableCandidates: (Variable | undefined)[] = new Array(args.length);
+  const expressionSourceVariables: (Variable | undefined)[] = new Array(args.length);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
@@ -808,6 +1263,7 @@ export async function evaluateExecInvocation(
           originalVariables[i] = undefined;
         } else {
           originalVariables[i] = variable;
+          guardVariableCandidates[i] = variable;
         }
         
         if (process.env.MLLD_DEBUG === 'true') {
@@ -823,166 +1279,247 @@ export async function evaluateExecInvocation(
           });
         }
       }
+    } else if (
+      arg &&
+      typeof arg === 'object' &&
+      'type' in arg &&
+      arg.type === 'ExecInvocation'
+    ) {
+      const objectRef = (arg.commandRef as any)?.objectReference;
+      if (
+        objectRef &&
+        typeof objectRef === 'object' &&
+        objectRef.type === 'VariableReference' &&
+        objectRef.identifier
+      ) {
+        const baseVariable = env.getVariable(objectRef.identifier);
+        if (baseVariable) {
+          expressionSourceVariables[i] = baseVariable;
+        }
+      }
     }
   }
   
-  // Bind evaluated arguments to parameters
-  for (let i = 0; i < params.length; i++) {
-    const paramName = params[i];
-    const argValue = evaluatedArgs[i]; // Use the preserved type value
-    const argStringValue = evaluatedArgStrings[i];
-    
-    if (argValue !== undefined) {
-      let paramVar;
-      
-      // Check if we have the original Variable
-      const originalVar = originalVariables[i];
-      const isShellCode =
-        definition.type === 'code' &&
-        typeof definition.language === 'string' &&
-        (definition.language === 'bash' || definition.language === 'sh');
+  const guardHelperImpl =
+    (variable.internal as any)?.guardHelperImplementation;
+  if (
+    (variable.internal as any)?.isGuardHelper &&
+    typeof guardHelperImpl === 'function'
+  ) {
+    const impl = guardHelperImpl as (args: readonly unknown[]) => unknown | Promise<unknown>;
+    const helperResult = await impl(evaluatedArgs);
+    return createEvalResult(helperResult, env);
+  }
 
-      const shouldReuseOriginal = originalVar && !isShellCode && definition.type !== 'command';
+  for (let i = 0; i < args.length; i++) {
+    if (!guardVariableCandidates[i] && expressionSourceVariables[i]) {
+      const source = expressionSourceVariables[i]!;
+      const cloned = cloneVariableWithNewValue(
+        source,
+        evaluatedArgs[i],
+        evaluatedArgStrings[i]
+      );
+      guardVariableCandidates[i] = cloned;
+    }
+  }
 
-      if (shouldReuseOriginal) {
-        // Use the original Variable directly, just update the name
-        paramVar = {
-          ...originalVar,
-          name: paramName,
-          metadata: {
-            ...originalVar.metadata,
-            isSystem: true,
-            isParameter: true
-          }
-        };
-        
-        if (process.env.MLLD_DEBUG === 'true') {
-          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
-            ? (paramVar as any).primitiveType 
-            : paramVar.subtype;
-            
-          logger.debug(`Using original Variable for param ${paramName}:`, {
-            type: paramVar.type,
-            subtype: subtype,
-            hasMetadata: !!paramVar.metadata
+  const guardInputsWithMapping = materializeGuardInputsWithMapping(
+    Array.from({ length: guardVariableCandidates.length }, (_unused, index) =>
+      guardVariableCandidates[index] ?? evaluatedArgs[index]
+    ),
+    {
+      nameHint: '__guard_input__'
+    }
+  );
+  const guardInputs = guardInputsWithMapping.map(entry => entry.variable);
+  let postHookInputs: readonly Variable[] = guardInputs;
+  const hookManager = env.getHookManager();
+  const execDescriptor = getVariableSecurityDescriptor(variable);
+  const operationContext: OperationContext = {
+    type: 'exe',
+    name: variable.name ?? commandName,
+    labels: execDescriptor?.labels,
+    location: node.location ?? null,
+    metadata: {
+      executableType: definition.type,
+      command: commandName
+    }
+  };
+  const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
+    try {
+      return await hookManager.runPost(node, result, postHookInputs, env, operationContext);
+    } catch (error) {
+      if (whenExprNode) {
+        const handled = await handleExecGuardDenial(error, {
+          execEnv,
+          env,
+          whenExprNode
+        });
+        if (handled) {
+          return handled;
+        }
+      }
+      throw error;
+    }
+  };
+
+  return await env.withOpContext(operationContext, async () => {
+    return AutoUnwrapManager.executeWithPreservation(async () => {
+      const preDecision = await hookManager.runPre(node, guardInputs, env, operationContext);
+      const transformedGuardInputs = getGuardTransformedInputs(preDecision, guardInputs);
+      const transformedGuardSet =
+        transformedGuardInputs && transformedGuardInputs.length > 0
+          ? new Set(transformedGuardInputs as readonly Variable[])
+          : null;
+      if (transformedGuardInputs && transformedGuardInputs.length > 0) {
+        postHookInputs = transformedGuardInputs;
+        applyGuardTransformsToExecArgs({
+          guardInputEntries: guardInputsWithMapping,
+          transformedInputs: transformedGuardInputs,
+          guardVariableCandidates,
+          evaluatedArgs,
+          evaluatedArgStrings
+        });
+      }
+      // Bind evaluated arguments to parameters
+      for (let i = 0; i < params.length; i++) {
+        const paramName = params[i];
+        const argValue = evaluatedArgs[i];
+        const argStringValue = evaluatedArgStrings[i];
+        const originalVar = originalVariables[i];
+        const guardCandidate = guardVariableCandidates[i];
+        const isShellCode =
+          definition.type === 'code' &&
+          typeof definition.language === 'string' &&
+          (definition.language === 'bash' || definition.language === 'sh');
+        const preferGuardReplacement =
+          transformedGuardSet?.has(guardCandidate as Variable) ?? false;
+        const allowOriginalReuse =
+          !preferGuardReplacement && Boolean(originalVar) && !isShellCode && definition.type !== 'command';
+
+        if (guardCandidate && (!originalVar || !allowOriginalReuse || preferGuardReplacement)) {
+          const candidateClone = cloneGuardCandidateForParameter(
+            paramName,
+            guardCandidate,
+            argValue,
+            argStringValue
+          );
+          execEnv.setParameterVariable(paramName, candidateClone);
+          continue;
+        }
+
+        if (argValue !== undefined) {
+          const paramVar = createParameterVariable({
+            name: paramName,
+            value: argValue,
+            stringValue: argStringValue,
+            originalVariable: originalVar,
+            allowOriginalReuse,
+            metadataFactory: createParameterMetadata,
+            origin: 'exec-param'
           });
-        }
-      }
-      // Create appropriate variable type based on actual data
-      else {
-        const preservedValue = argValue !== undefined ? argValue : argStringValue;
 
-        if (isStructuredValue(preservedValue)) {
-          paramVar = createStructuredValueVariable(
-            paramName,
-            preservedValue,
-            {
-              directive: 'var',
-              syntax: 'reference',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            {
-              isSystem: true,
-              isParameter: true
-            }
-          );
-        } else if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
-          // Object type - preserve structure
-          paramVar = createObjectVariable(
-            paramName,
-            preservedValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'object',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            {
-              isSystem: true,
-              isParameter: true
-            }
-          );
-        } else if (Array.isArray(preservedValue)) {
-          // Array type - preserve structure
-          paramVar = createArrayVariable(
-            paramName,
-            preservedValue,
-            true,
-            {
-              directive: 'var',
-              syntax: 'array',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            {
-              isSystem: true,
-              isParameter: true
-            }
-          );
-        } else if (typeof preservedValue === 'number' || typeof preservedValue === 'boolean' || preservedValue === null) {
-          // Primitive types - create appropriate Variable type
-          paramVar = createPrimitiveVariable(
-            paramName,
-            preservedValue,
-            {
-              directive: 'var',
-              syntax: 'literal',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            {
-              isSystem: true,
-              isParameter: true
-            }
-          );
-        } else {
-          // String or undefined - use SimpleTextVariable
-          paramVar = createSimpleTextVariable(
-            paramName,
-            argStringValue,
-            {
-              directive: 'var',
-              syntax: 'quoted',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            {
-              isSystem: true,
-              isParameter: true
-            }
-          );
+          if (paramVar) {
+            execEnv.setParameterVariable(paramName, paramVar);
+          }
         }
       }
-      
-      execEnv.setParameterVariable(paramName, paramVar);
-    }
-  }
+
+      // Capture descriptors from executable definition and parameters
+      const descriptorPieces: SecurityDescriptor[] = [];
+      const variableDescriptor = getVariableSecurityDescriptor(variable);
+      if (variableDescriptor) {
+        descriptorPieces.push(variableDescriptor);
+      }
+      const mergedParamDescriptor = collectAndMergeParameterDescriptors(params, execEnv);
+      if (mergedParamDescriptor) {
+        descriptorPieces.push(mergedParamDescriptor);
+      }
+      if (descriptorPieces.length > 0) {
+        resultSecurityDescriptor =
+          descriptorPieces.length === 1
+            ? descriptorPieces[0]
+            : env.mergeSecurityDescriptors(...descriptorPieces);
+        env.recordSecurityDescriptor(resultSecurityDescriptor);
+      }
+
+      const guardInputVariable =
+        preDecision && preDecision.metadata && (preDecision.metadata as Record<string, unknown>).guardInput;
+      try {
+        await handleGuardDecision(preDecision, node, env, operationContext);
+      } catch (error) {
+        if (guardInputVariable) {
+          const existingInput = execEnv.getVariable('input');
+          if (!existingInput) {
+            const clonedInput: Variable = {
+              ...(guardInputVariable as Variable),
+              name: 'input',
+              ctx: { ...(guardInputVariable as Variable).ctx },
+              internal: {
+                ...((guardInputVariable as Variable).internal ?? {}),
+                isSystem: true,
+                isParameter: true
+              }
+            };
+            execEnv.setParameterVariable('input', clonedInput);
+          }
+        }
+        if (whenExprNode) {
+          const handled = await handleExecGuardDenial(error, {
+            execEnv,
+            env,
+            whenExprNode
+          });
+          if (handled) {
+            return finalizeResult(handled);
+          }
+        }
+        throw error;
+      }
   
-  let result: string;
+  let result: unknown;
   
   // Handle template executables
   if (isTemplateExecutable(definition)) {
     // Interpolate the template with the bound parameters
-    const templateResult = await interpolate(definition.template, execEnv);
+    const templateResult = await interpolateWithResultDescriptor(definition.template, execEnv);
     if (isStructuredValue(templateResult)) {
       result = templateResult;
     } else if (typeof templateResult === 'string') {
-      if (looksLikeJsonString(templateResult)) {
-        try {
-          const parsed = JSON.parse(templateResult.trim());
-          const typeHint = Array.isArray(parsed) ? 'array' : 'object';
-          result = wrapStructured(parsed, typeHint, templateResult);
-        } catch {
-          result = templateResult;
-        }
-      } else {
-        result = templateResult;
-      }
+      const parsed = parseAndWrapJson(templateResult, {
+        metadata: resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined,
+        preserveText: true
+      });
+      result = parsed ?? templateResult;
     } else {
       result = templateResult;
     }
+
+  if (!isStructuredValue(result) && result && typeof result === 'object') {
+    const templateType = Array.isArray(result) ? 'array' : 'object';
+    const metadata = resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined;
+    result = wrapStructured(result as Record<string, unknown>, templateType, undefined, metadata);
+  }
+}
+// Handle data executables
+  else if (isDataExecutable(definition)) {
+    const { evaluateDataValue } = await import('./data-value-evaluator');
+    const dataValue = await evaluateDataValue(definition.dataTemplate as any, execEnv);
+    const text = typeof dataValue === 'string' ? dataValue : JSON.stringify(dataValue);
+    const dataDescriptor = extractSecurityDescriptor(dataValue, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const mergedDescriptor =
+      dataDescriptor && resultSecurityDescriptor
+        ? execEnv.mergeSecurityDescriptors(dataDescriptor, resultSecurityDescriptor)
+        : dataDescriptor || resultSecurityDescriptor || undefined;
+    result = wrapStructured(
+      dataValue as any,
+      Array.isArray(dataValue) ? 'array' : 'object',
+      text,
+      mergedDescriptor ? { security: mergedDescriptor } : undefined
+    );
   }
   // Handle pipeline executables
   else if (isPipelineExecutable(definition)) {
@@ -994,7 +1531,8 @@ export async function evaluateExecInvocation(
       format: definition.format,
       identifier: commandName,
       location: node.location,
-      isRetryable: false
+      isRetryable: false,
+      descriptorHint: resultSecurityDescriptor
     });
     result = typeof pipelineResult === 'string' ? pipelineResult : String(pipelineResult ?? '');
   }
@@ -1023,7 +1561,11 @@ export async function evaluateExecInvocation(
     } catch {}
     
     // Interpolate the command template with parameters using ShellCommand context
-    let command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    let command = await interpolateWithResultDescriptor(
+      definition.commandTemplate,
+      execEnv,
+      InterpolationContext.ShellCommand
+    );
     // Normalize common escaped sequences for usability in oneliners
     // Only handle simple \n, \t, \r, \0 to their literal counterparts
     // Leave quotes/backslashes intact for shell correctness
@@ -1107,7 +1649,11 @@ export async function evaluateExecInvocation(
               fallbackCommand += n;
             } else {
               // Fallback: interpolate conservatively for unexpected nodes
-              fallbackCommand += await interpolate([n as any], execEnv, InterpolationContext.ShellCommand);
+              fallbackCommand += await interpolateWithResultDescriptor(
+                [n as any],
+                execEnv,
+                InterpolationContext.ShellCommand
+              );
             }
           }
         } else {
@@ -1149,17 +1695,10 @@ export async function evaluateExecInvocation(
         });
       }
       const commandOutput = await execEnv.executeCode(fallbackCommand, 'sh', codeParams);
-      // Try to parse as JSON if it looks like JSON
+      // Normalize structured output when possible
       if (typeof commandOutput === 'string') {
-        if (looksLikeJsonString(commandOutput)) {
-          try {
-            result = JSON.parse(commandOutput.trim());
-          } catch {
-            result = commandOutput;
-          }
-        } else {
-          result = commandOutput;
-        }
+        const parsed = parseAndWrapJson(commandOutput);
+        result = parsed ?? commandOutput;
       } else {
         result = commandOutput;
       }
@@ -1173,20 +1712,24 @@ export async function evaluateExecInvocation(
 
       // Execute the command with environment variables and optional stdin
       const commandOptions = stdinInput !== undefined ? { env: envVars, input: stdinInput } : { env: envVars };
-      const commandOutput = await execEnv.executeCommand(command, commandOptions);
-      
-      // Try to parse as JSON if it looks like JSON
-      if (typeof commandOutput === 'string') {
-        if (looksLikeJsonString(commandOutput)) {
-          try {
-            result = JSON.parse(commandOutput.trim());
-          } catch {
-            // Not valid JSON, use as-is
-            result = commandOutput;
-          }
-        } else {
-          result = commandOutput;
+      const commandOutput = await execEnv.executeCommand(
+        command,
+        commandOptions,
+        {
+          directiveType: 'exec',
+          streamingEnabled,
+          pipelineId,
+          stageIndex: 0,
+          sourceLocation: node.location,
+          emitEffect: chunkEffect,
+          ndjsonParser: ndjsonActive ? new NDJSONParser() : undefined
         }
+      );
+      
+      // Normalize structured output when possible
+      if (typeof commandOutput === 'string') {
+        const parsed = parseAndWrapJson(commandOutput);
+        result = parsed ?? commandOutput;
       } else {
         result = commandOutput;
       }
@@ -1195,7 +1738,11 @@ export async function evaluateExecInvocation(
     if (definition.withClause) {
       if (definition.withClause.needs) {
         const checker = new DefaultDependencyChecker();
-        await checkDependencies(definition.withClause.needs, checker, variable.metadata?.definedAt || node.location);
+        await checkDependencies(
+          definition.withClause.needs,
+          checker,
+          variable.ctx?.definedAt || node.location
+        );
       }
 
       if (definition.withClause.pipeline && definition.withClause.pipeline.length > 0) {
@@ -1204,7 +1751,9 @@ export async function evaluateExecInvocation(
           ? result
           : result === undefined || result === null
             ? ''
-            : JSON.stringify(result);
+            : isStructuredValue(result)
+              ? asText(result)
+              : JSON.stringify(result);
         const pipelineResult = await processPipeline({
           value: pipelineInput,
           env: execEnv,
@@ -1212,20 +1761,13 @@ export async function evaluateExecInvocation(
           format: definition.withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandName,
-          location: variable.metadata?.definedAt || node.location
+          location: variable.ctx?.definedAt || node.location,
+          descriptorHint: resultSecurityDescriptor
         });
 
         if (typeof pipelineResult === 'string') {
-          const trimmed = pipelineResult.trim();
-          if (trimmed) {
-            try {
-              result = JSON.parse(trimmed);
-            } catch {
-              result = pipelineResult;
-            }
-          } else {
-            result = pipelineResult;
-          }
+          const parsed = parseAndWrapJson(pipelineResult);
+          result = parsed ?? pipelineResult;
         } else {
           result = pipelineResult;
         }
@@ -1236,25 +1778,30 @@ export async function evaluateExecInvocation(
   else if (isCodeExecutable(definition)) {
     // Special handling for mlld-when expressions
     if (definition.language === 'mlld-when') {
-      // console.log('🎯 EXEC-INVOCATION MLLD-WHEN HANDLER CALLED');
-      
-      // The codeTemplate contains the WhenExpression node
-      const whenExprNode = definition.codeTemplate[0];
-      if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
+      const activeWhenExpr = whenExprNode;
+      if (!activeWhenExpr) {
         throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
       }
-      
+
       // Evaluate the when expression with the parameter environment
       const { evaluateWhenExpression } = await import('./when-expression');
-      const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-      let value: any = whenResult.value;
-      // Unwrap tagged show effects for non-pipeline exec-invocation (so /run echoes value)
-      if (value && typeof value === 'object' && (value as any).__whenEffect === 'show') {
-        value = (value as any).text ?? '';
-      } else if (isStructuredValue(value) && value.data && typeof value.data === 'object' && (value.data as any).__whenEffect === 'show') {
-        value = (value.data as any).text ?? asText(value);
+      let whenResult: EvalResult;
+      try {
+        whenResult = await evaluateWhenExpression(activeWhenExpr, execEnv);
+      } catch (error) {
+        const handled = await handleExecGuardDenial(error, {
+          execEnv,
+          env,
+          whenExprNode: activeWhenExpr
+        });
+        if (handled) {
+          const finalHandled = await finalizeResult(handled);
+          return finalHandled;
+        }
+        throw error;
       }
-      result = value;
+      const normalization = normalizeWhenShowEffect(whenResult.value);
+      result = normalization.normalized;
       // Update execEnv to the result which contains merged nodes
       execEnv = whenResult.env;
     } else if (definition.language === 'mlld-foreach') {
@@ -1292,7 +1839,7 @@ export async function evaluateExecInvocation(
         }
       } else {
         // For other languages (JS, Python), interpolate as before
-        code = await interpolate(definition.codeTemplate, execEnv);
+        code = await interpolateWithResultDescriptor(definition.codeTemplate, execEnv);
       }
       
       // Import ASTEvaluator for normalizing array values
@@ -1330,37 +1877,45 @@ export async function evaluateExecInvocation(
             codeParams[paramName] = prepareValueForShadow(paramVar);
           }
         } else {
-          // Other languages (JS, Python) get proxies for rich type info
-          // But first, check if it's a complex Variable that needs resolution
-          if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
-            // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
-            const { extractVariableValue: extractVal } = await import('../utils/variable-resolution');
-            const resolvedValue = await extractVal(paramVar, execEnv);
-            const resolvedVar = {
-              ...paramVar,
-              value: resolvedValue,
-              isComplex: false
-            };
-            codeParams[paramName] = prepareValueForShadow(resolvedVar);
+          if (env.shouldSuppressGuards() && paramVar.internal?.isSystem && paramVar.internal?.isParameter) {
+            const rawValue = isStructuredValue(paramVar.value)
+              ? paramVar.value.data
+              : paramVar.value;
+            codeParams[paramName] = rawValue;
           } else {
-            // Store metadata on shelf before unwrapping
-            metadataShelf.storeMetadata(paramVar.value);
-            
-            // Auto-unwrap LoadContentResult objects for JS/Python
-            const unwrappedValue = AutoUnwrapManager.unwrap(paramVar.value);
-            if (unwrappedValue !== paramVar.value) {
-              // Value was unwrapped, create a new variable with the unwrapped content
-              const unwrappedVar = {
+            // Other languages (JS, Python, Node, etc.) get deferred conversion to proxies
+            // so that prepareParamsForShadow can record primitive metadata.
+            let variableForShadow: Variable = paramVar;
+
+            // But first, check if it's a complex Variable that needs resolution
+            if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
+              // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
+              const { extractVariableValue: extractVal } = await import('../utils/variable-resolution');
+              const resolvedValue = await extractVal(paramVar, execEnv);
+              const resolvedVar = {
                 ...paramVar,
-                value: unwrappedValue,
-                // Update type based on unwrapped value
-                type: Array.isArray(unwrappedValue) ? 'array' : 'text'
+                value: resolvedValue,
+                isComplex: false
               };
-              codeParams[paramName] = prepareValueForShadow(unwrappedVar);
+              variableForShadow = resolvedVar;
             } else {
-              // No unwrapping needed, use original
-              codeParams[paramName] = prepareValueForShadow(paramVar);
+              // Auto-unwrap LoadContentResult objects for JS/Python
+              const unwrappedValue = AutoUnwrapManager.unwrap(paramVar.value);
+              if (unwrappedValue !== paramVar.value) {
+                // Value was unwrapped, create a new variable with the unwrapped content
+                const unwrappedVar = {
+                  ...paramVar,
+                  value: unwrappedValue,
+                  // Update type based on unwrapped value
+                  type: Array.isArray(unwrappedValue) ? 'array' : 'text'
+                };
+                variableForShadow = unwrappedVar;
+              } else {
+                variableForShadow = paramVar;
+              }
             }
+
+            codeParams[paramName] = variableForShadow;
           }
         }
         
@@ -1375,7 +1930,8 @@ export async function evaluateExecInvocation(
           variableMetadata[paramName] = {
             type: paramVar.type,
             subtype: subtype,
-            metadata: paramVar.metadata,
+            ctx: paramVar.ctx,
+            internal: paramVar.internal,
             isVariable: true
           };
         }
@@ -1388,7 +1944,7 @@ export async function evaluateExecInvocation(
           logger.debug(`Variable passing for ${paramName}:`, {
             variableType: paramVar.type,
             variableSubtype: subtype,
-            hasMetadata: !!paramVar.metadata,
+            hasInternal: !!paramVar.internal,
             isPrimitive: paramVar.value === null || typeof paramVar.value !== 'object',
             language: definition.language
           });
@@ -1413,12 +1969,14 @@ export async function evaluateExecInvocation(
     }
 
     // NEW: Pass captured shadow environments for JS/Node execution
+    const capturedModuleEnv =
+      (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
     if (
-      variable.metadata?.capturedModuleEnv instanceof Map &&
+      capturedModuleEnv instanceof Map &&
       (definition.language === 'js' || definition.language === 'javascript' ||
         definition.language === 'node' || definition.language === 'nodejs')
     ) {
-      for (const [capturedName, capturedVar] of variable.metadata.capturedModuleEnv) {
+      for (const [capturedName, capturedVar] of capturedModuleEnv) {
         if (codeParams[capturedName] !== undefined) {
           continue;
         }
@@ -1431,7 +1989,7 @@ export async function evaluateExecInvocation(
           continue;
         }
 
-        codeParams[capturedName] = prepareValueForShadow(capturedVar);
+        codeParams[capturedName] = capturedVar;
 
         if ((capturedVar.value === null || typeof capturedVar.value !== 'object') && capturedVar.type !== 'executable') {
           const subtype = capturedVar.type === 'primitive' && 'primitiveType' in capturedVar
@@ -1440,7 +1998,7 @@ export async function evaluateExecInvocation(
           variableMetadata[capturedName] = {
             type: capturedVar.type,
             subtype,
-            metadata: capturedVar.metadata,
+            ctx: capturedVar.ctx,
             isVariable: true
           };
         }
@@ -1448,7 +2006,8 @@ export async function evaluateExecInvocation(
     }
 
     // NEW: Pass captured shadow environments for JS/Node execution
-    const capturedEnvs = variable.metadata?.capturedShadowEnvs;
+    const capturedEnvs =
+      variable.internal?.capturedShadowEnvs;
     if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
                          definition.language === 'node' || definition.language === 'nodejs')) {
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
@@ -1482,8 +2041,8 @@ export async function evaluateExecInvocation(
       processedResult = codeResult;
     }
 
-    // Attempt to restore metadata from shelf
-    result = metadataShelf.restoreMetadata(processedResult);
+    // Attempt to restore metadata from the auto-unwrap shelf
+    result = AutoUnwrapManager.restore(processedResult);
     if (process.env.MLLD_DEBUG_STRUCTURED === 'true' && result && typeof result === 'object') {
       try {
         const debugData = (result as any).data;
@@ -1506,9 +2065,19 @@ export async function evaluateExecInvocation(
       const payload = (result as any).data;
       result = wrapStructured(payload, (result as any).type, (result as any).text, (result as any).metadata);
     }
-    
-    // Clear the shelf to prevent memory leaks
-    metadataShelf.clear();
+
+    const inputDescriptors = Object.values(variableMetadata)
+      .map(meta => getSecurityDescriptorFromCarrier(meta))
+      .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+
+    if (inputDescriptors.length > 0) {
+      const mergedInputDescriptor =
+        inputDescriptors.length === 1
+          ? inputDescriptors[0]
+          : env.mergeSecurityDescriptors(...inputDescriptors);
+      env.recordSecurityDescriptor(mergedInputDescriptor);
+      mergeResultDescriptor(mergedInputDescriptor);
+    }
     }
   }
   // Handle command reference executables
@@ -1521,8 +2090,9 @@ export async function evaluateExecInvocation(
     // Look up the referenced command
     // First check in the captured module environment (for imported executables)
     let refCommand = null;
-    if (variable?.metadata?.capturedModuleEnv) {
-      const capturedEnv = variable.metadata.capturedModuleEnv;
+    if (variable?.internal?.capturedModuleEnv) {
+      const capturedEnv =
+        (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
       if (capturedEnv instanceof Map) {
         // If it's a Map, we have proper Variables
         refCommand = capturedEnv.get(refName);
@@ -1551,15 +2121,14 @@ export async function evaluateExecInvocation(
       }
       // Evaluate each arg; handle interpolated string args that are arrays of parts
       let refArgs: any[] = [];
-      const { evaluate, interpolate } = await import('../core/interpreter');
-      const { InterpolationContext } = await import('../core/interpolation-context');
+      const { evaluate } = await import('../core/interpreter');
       
       for (const argNode of definition.commandArgs) {
         let value: any;
         // If this arg is an array of parts (from DataString with interpolation),
         // interpolate the whole array into a single string argument
         if (Array.isArray(argNode)) {
-          value = await interpolate(argNode as any[], execEnv, InterpolationContext.Default);
+          value = await interpolateWithResultDescriptor(argNode as any[], execEnv, InterpolationContext.Default);
         } else {
           // Evaluate the individual argument node
           const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
@@ -1573,8 +2142,14 @@ export async function evaluateExecInvocation(
       // Create a child environment that can access the referenced command
       const refEnv = env.createChild();
       // Set the captured module env so getVariable can find the command
-      if (variable?.metadata?.capturedModuleEnv instanceof Map) {
-        refEnv.setCapturedModuleEnv(variable.metadata.capturedModuleEnv);
+      if (
+        variable?.internal?.capturedModuleEnv instanceof Map
+      ) {
+        const captured =
+          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
+        if (captured instanceof Map) {
+          refEnv.setCapturedModuleEnv(captured);
+        }
       }
 
       // Create a new invocation node for the referenced command with the evaluated args
@@ -1595,8 +2170,8 @@ export async function evaluateExecInvocation(
       // Create a child environment that can access the referenced command
       const refEnv = env.createChild();
       // Set the captured module env so getVariable can find the command
-      if (variable?.metadata?.capturedModuleEnv instanceof Map) {
-        refEnv.setCapturedModuleEnv(variable.metadata.capturedModuleEnv);
+      if (variable?.internal?.capturedModuleEnv instanceof Map) {
+        refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
       }
 
       // No commandArgs means just pass through the current invocation's args
@@ -1618,10 +2193,10 @@ export async function evaluateExecInvocation(
   // Handle section executables
   else if (isSectionExecutable(definition)) {
     // Interpolate the path template to get the file path
-    const filePath = await interpolate(definition.pathTemplate, execEnv);
+    const filePath = await interpolateWithResultDescriptor(definition.pathTemplate, execEnv);
     
     // Interpolate the section template to get the section name
-    const sectionName = await interpolate(definition.sectionTemplate, execEnv);
+    const sectionName = await interpolateWithResultDescriptor(definition.sectionTemplate, execEnv);
     
     // Read the file content
     const fileContent = await execEnv.readFile(filePath);
@@ -1643,7 +2218,7 @@ export async function evaluateExecInvocation(
     
     // Handle rename if present
     if (definition.renameTemplate) {
-      const newTitle = await interpolate(definition.renameTemplate, execEnv);
+      const newTitle = await interpolateWithResultDescriptor(definition.renameTemplate, execEnv);
       const lines = sectionContent.split('\n');
       if (lines.length > 0 && lines[0].match(/^#+\s/)) {
         const newTitleTrimmed = newTitle.trim();
@@ -1690,7 +2265,7 @@ export async function evaluateExecInvocation(
     let payload: any = undefined;
     if (definition.payloadTemplate) {
       // Interpolate the payload template
-      const payloadStr = await interpolate(definition.payloadTemplate, execEnv);
+      const payloadStr = await interpolateWithResultDescriptor(definition.payloadTemplate, execEnv);
       try {
         // Try to parse as JSON
         payload = JSON.parse(payloadStr);
@@ -1736,7 +2311,7 @@ export async function evaluateExecInvocation(
       const { accessField } = await import('../utils/field-access');
       let current: any = result;
       for (const f of postFields) {
-        current = await accessField(current, f, { env, sourceLocation: node.location });
+        current = await accessField(current, f, { env, sourceLocation: nodeSourceLocation });
       }
       result = current;
     } catch (e) {
@@ -1756,16 +2331,22 @@ export async function evaluateExecInvocation(
           ? 'object'
           : 'text';
       const structured = wrapStructured(extracted as any, typeHint as any);
-      if (result.metadata) {
-        structured.metadata = {
-          ...structured.metadata,
-          variableMetadata: result.metadata
-        };
-      }
       result = structured;
     }
   }
+
+  mergeResultDescriptor(extractSecurityDescriptor(result));
   
+  if (resultSecurityDescriptor) {
+    const structured = wrapExecResult(result);
+    const existing = getStructuredSecurityDescriptor(structured);
+    const merged = existing
+      ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
+      : resultSecurityDescriptor;
+    setStructuredSecurityDescriptor(structured, merged);
+    result = structured;
+  }
+
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {
@@ -1837,9 +2418,28 @@ export async function evaluateExecInvocation(
       );
       
       // Still need to handle other withClause features (trust, needs)
-      return applyWithClause(wrapPipelineResult(pipelineResult), { ...node.withClause, pipeline: undefined }, execEnv);
+      let pipelineValue = wrapPipelineResult(pipelineResult);
+      const pipelineDescriptor = getStructuredSecurityDescriptor(pipelineValue);
+      const combinedDescriptor = pipelineDescriptor
+        ? (resultSecurityDescriptor
+            ? env.mergeSecurityDescriptors(pipelineDescriptor, resultSecurityDescriptor)
+            : pipelineDescriptor)
+        : resultSecurityDescriptor;
+      if (combinedDescriptor) {
+        setStructuredSecurityDescriptor(pipelineValue, combinedDescriptor);
+        mergeResultDescriptor(combinedDescriptor);
+      }
+      const withClauseResult = await applyWithClause(
+        pipelineValue,
+        { ...node.withClause, pipeline: undefined },
+        execEnv
+      );
+      const finalWithClauseResult = await finalizeResult(withClauseResult);
+      return finalWithClauseResult;
     } else {
-      return applyWithClause(result, node.withClause, execEnv);
+      const withClauseResult = await applyWithClause(result, node.withClause, execEnv);
+      const finalWithClauseResult = await finalizeResult(withClauseResult);
+      return finalWithClauseResult;
     }
   }
   
@@ -1852,8 +2452,70 @@ export async function evaluateExecInvocation(
       });
     } catch {}
   }
+  const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
+  return finalEvalResult;
+    });
+  });
+  } finally {
+    if (detachStreaming.length > 0) {
+      for (const unsub of detachStreaming) {
+        try {
+          unsub();
+        } catch {
+          // ignore teardown errors during streaming teardown
+        }
+      }
+    }
+  }
+}
 
-  return createEvalResult(result, execEnv);
+type SecurityCarrier = {
+  ctx?: VariableContext | StructuredValueContext;
+};
+
+function getVariableSecurityDescriptor(variable?: Variable): SecurityDescriptor | undefined {
+  if (!variable) {
+    return undefined;
+  }
+  return getSecurityDescriptorFromCarrier({ ctx: variable.ctx });
+}
+
+function getStructuredSecurityDescriptor(
+  value?: { ctx?: StructuredValueContext; metadata?: { security?: SecurityDescriptor } }
+): SecurityDescriptor | undefined {
+  return getSecurityDescriptorFromCarrier(value);
+}
+
+function setStructuredSecurityDescriptor(
+  value: { ctx?: StructuredValueContext },
+  descriptor?: SecurityDescriptor
+): void {
+  if (!descriptor || !value || typeof value !== 'object') {
+    return;
+  }
+  applySecurityDescriptorToStructuredValue(value as LegacyStructuredValue, descriptor);
+}
+
+function getSecurityDescriptorFromCarrier(carrier?: SecurityCarrier): SecurityDescriptor | undefined {
+  if (!carrier) {
+    return undefined;
+  }
+  return descriptorFromCtx(carrier.ctx);
+}
+
+function descriptorFromCtx(
+  ctx?: VariableContext | StructuredValueContext
+): SecurityDescriptor | undefined {
+  if (!ctx) {
+    return undefined;
+  }
+  const labels = Array.isArray(ctx.labels) ? ctx.labels : [];
+  const sources = Array.isArray(ctx.sources) ? ctx.sources : [];
+  const taint = (ctx as any).taint ?? 'unknown';
+  if (labels.length === 0 && sources.length === 0 && taint === 'unknown') {
+    return undefined;
+  }
+  return ctxToSecurityDescriptor(ctx as VariableContext);
 }
 
 /**

@@ -87,7 +87,7 @@ LeadingParallelPipeline
 
 PipelineStageFirst
   = ParallelSequence
-  / PipelineCommand
+  / PipelineStageEntry
 
 // A rest stage can be a single command or a parallel group separated by `||`
 PipelineRest
@@ -95,13 +95,13 @@ PipelineRest
       helpers.debug('PipelineRest matched (parallel)', { count: Array.isArray(group) ? group.length : 1 });
       return group; // Array of commands represents a parallel stage
     }
-  / _ "|" _ cmd:PipelineCommand {
+  / _ "|" _ cmd:PipelineStageEntry {
       helpers.debug('PipelineRest matched', { cmd: cmd?.rawIdentifier || cmd });
       return cmd;
     }
 
 // One pipeline stage consisting of multiple commands executed in parallel
 ParallelSequence
-  = first:PipelineCommand rest:(_ "||" _ c:PipelineCommand { return c; })+ {
+  = first:PipelineStageEntry rest:(_ "||" _ c:PipelineStageEntry { return c; })+ {
       return [first, ...rest];
     }

@@ -1,4 +1,4 @@
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 export type { FuzzyMatchConfig } from '@core/resolvers/utils/PathMatcher';
 
 /**
@@ -96,9 +96,28 @@ export interface ResolverCapabilities {
 /**
  * Content returned by a resolver
  */
+export interface ResolverContentContext {
+  source?: string;
+  timestamp?: Date;
+  author?: string;
+  hash?: string;
+  taintLevel?: TaintLevel;
+  mimeType?: string;
+  size?: number;
+  [key: string]: unknown;
+}
+
 export interface ResolverContent {
   content: string;
   contentType: ContentType;
+  /**
+   * User-facing runtime context (mirrors Variable.ctx semantics)
+   */
+  ctx?: ResolverContentContext;
+  /**
+   * @deprecated Legacy metadata field kept for transitional compatibility.
+   * Prefer the `ctx` object above.
+   */
   metadata?: {
     source: string;
     timestamp: Date;

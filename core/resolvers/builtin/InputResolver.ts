@@ -46,13 +46,15 @@ export class InputResolver implements Resolver {
 
     // Variable context - return all input data as JSON
     if (!config?.context || config.context === 'variable') {
+      const metadata = {
+        source: 'input',
+        timestamp: new Date()
+      };
       return {
         content: JSON.stringify(this.inputData, null, 2),
         contentType: 'data',
-        metadata: {
-          source: 'input',
-          timestamp: new Date()
-        }
+        ctx: metadata,
+        metadata
       };
     }
     
@@ -65,13 +67,15 @@ export class InputResolver implements Resolver {
         // Import all
         const exportData = { ...this.inputData };
         delete exportData._meta;
+        const metadata = {
+          source: 'input',
+          timestamp: new Date()
+        };
         return {
           content: JSON.stringify(exportData),
           contentType: 'data',
-          metadata: {
-            source: 'input',
-            timestamp: new Date()
-          }
+          ctx: metadata,
+          metadata
         };
       }
       
@@ -83,13 +87,15 @@ export class InputResolver implements Resolver {
         }
       }
       
+      const metadata = {
+        source: 'input',
+        timestamp: new Date()
+      };
       return {
         content: JSON.stringify(exports),
         contentType: 'data',
-        metadata: {
-          source: 'input',
-          timestamp: new Date()
-        }
+        ctx: metadata,
+        metadata
       };
     }
     

@@ -56,7 +56,8 @@ describe('Variable Passing Integration Tests', () => {
     it('should pass Variables with type information to JavaScript', async () => {
       // Create test data
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {
-        arrayType: 'test-array'
+        ctx: {},
+        internal: { arrayType: 'test-array' }
       });
       env.setVariable('data', arrayVar);
       
@@ -70,18 +71,21 @@ describe('Variable Passing Integration Tests', () => {
         'javascript',
         mockSource,
         {
-          executableDef: {
-            type: 'code',
-            language: 'javascript',
-            paramNames: ['value'],
-            codeTemplate: [{ type: 'Text', content: `
+          ctx: {},
+          internal: {
+            executableDef: {
+              type: 'code',
+              language: 'javascript',
+              paramNames: ['value'],
+              codeTemplate: [{ type: 'Text', content: `
               return {
                 type: mlld.getType(value),
-                metadata: mlld.getMetadata(value),
+                internal: mlld.getInternal(value),
                 isVariable: mlld.isVariable(value),
                 value: value
               };
             ` }]
+            }
           }
         }
       );
@@ -103,7 +107,7 @@ describe('Variable Passing Integration Tests', () => {
         : unwrappedResult.data;
       
       expect(output.type).toBe('array');
-      expect(output.metadata.arrayType).toBe('test-array');
+      expect(output.internal?.arrayType).toBe('test-array');
       expect(output.isVariable).toBe(true);
       expect(output.value).toEqual([1, 2, 3]);
     });
@@ -117,7 +121,10 @@ describe('Variable Passing Integration Tests', () => {
         { host: 'localhost', port: 3000 },
         false,
         mockSource,
-        { configType: 'server' }
+        {
+          ctx: {},
+          internal: { configType: 'server' }
+        }
       );
       env.setVariable('config', objVar);
       
@@ -131,19 +138,22 @@ describe('Variable Passing Integration Tests', () => {
         'node',
         mockSource,
         {
-          executableDef: {
-            type: 'code',
-            language: 'node',
-            paramNames: ['cfg'],
-            codeTemplate: [{ type: 'Text', content: `
+          ctx: {},
+          internal: {
+            executableDef: {
+              type: 'code',
+              language: 'node',
+              paramNames: ['cfg'],
+              codeTemplate: [{ type: 'Text', content: `
               return {
                 type: mlld.getType(cfg),
-                metadata: mlld.getMetadata(cfg),
+                internal: mlld.getInternal(cfg),
                 isVariable: mlld.isVariable(cfg),
                 host: cfg.host,
                 port: cfg.port
               };
             ` }]
+            }
           }
         }
       );
@@ -165,10 +175,53 @@ describe('Variable Passing Integration Tests', () => {
         : unwrappedResult.data;
       
       expect(output.type).toBe('object');
-      expect(output.metadata.configType).toBe('server');
+      expect(output.internal?.configType).toBe('server');
       expect(output.isVariable).toBe(true);
       expect(output.host).toBe('localhost');
       expect(output.port).toBe(3000);
+    });
+  });
+
+  describe('Context injection', () => {
+    it('injects ambient @ctx into JS executors via ContextManager', async () => {
+      env.setPipelineContext({
+        stage: 2,
+        totalStages: 3,
+        currentCommand: 'noop',
+        input: '{"foo":"bar"}',
+        previousOutputs: ['prev-output'],
+        format: 'json',
+        attemptCount: 2,
+        attemptHistory: ['first-attempt'],
+        hint: 'retry please',
+        hintHistory: ['retry please']
+      });
+
+      const commandExecutorFactory = (env as any).commandExecutorFactory;
+      const originalExecuteCode = commandExecutorFactory.executeCode;
+
+      let capturedCtx: any;
+      commandExecutorFactory.executeCode = async (
+        code: string,
+        language: string,
+        params?: Record<string, any>
+      ) => {
+        if (language === 'js' || language === 'javascript') {
+          capturedCtx = params?.ctx;
+          return '';
+        }
+        return originalExecuteCode.call(commandExecutorFactory, code, language, params);
+      };
+
+      await env.executeCode('return;', 'js', {});
+
+      expect(capturedCtx).toBeDefined();
+      expect(capturedCtx.try).toBe(2);
+      expect(capturedCtx.pipe?.stage).toBe(2);
+      expect(capturedCtx.input.foo).toBe('bar');
+
+      commandExecutorFactory.executeCode = originalExecuteCode;
+      env.clearPipelineContext();
     });
   });
   
@@ -176,7 +229,8 @@ describe('Variable Passing Integration Tests', () => {
     it('should pass Variables with type information to Python', async () => {
       // Create test data
       const arrayVar = createArrayVariable('items', ['apple', 'banana'], false, mockSource, {
-        itemType: 'fruit'
+        ctx: {},
+        internal: { itemType: 'fruit' }
       });
       env.setVariable('items', arrayVar);
       
@@ -190,11 +244,13 @@ describe('Variable Passing Integration Tests', () => {
         'python',
         mockSource,
         {
-          executableDef: {
-            type: 'code',
-            language: 'python',
-            paramNames: ['items'],
-            codeTemplate: [{ type: 'Text', content: `
+          ctx: {},
+          internal: {
+            executableDef: {
+              type: 'code',
+              language: 'python',
+              paramNames: ['items'],
+              codeTemplate: [{ type: 'Text', content: `
 import json
 
 result = {
@@ -207,6 +263,7 @@ result = {
 
 print(json.dumps(result))
 ` }]
+            }
           }
         }
       );
@@ -263,7 +320,7 @@ print(json.dumps(result))
       // Verify the simulated result
       const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
       expect(output.type).toBe('array');
-      expect(output.metadata.itemType).toBe('fruit');
+      expect(output.internal?.itemType).toBe('fruit');
       expect(output.is_variable).toBe(true);
       expect(output.length).toBe(2);
       expect(output.first).toBe('apple');
@@ -277,7 +334,8 @@ print(json.dumps(result))
     it('should pass Variables with type information to Bash', async () => {
       // Create test data
       const arrayVar = createArrayVariable('files', ['file1.txt', 'file2.txt'], false, mockSource, {
-        fileType: 'text'
+        ctx: {},
+        internal: { fileType: 'text' }
       });
       env.setVariable('files', arrayVar);
       
@@ -291,15 +349,17 @@ print(json.dumps(result))
         'bash',
         mockSource,
         {
-          executableDef: {
-            type: 'code',
-            language: 'bash',
-            paramNames: ['files'],
-            codeTemplate: [{ type: 'Text', content: `
+          ctx: {},
+          internal: {
+            executableDef: {
+              type: 'code',
+              language: 'bash',
+              paramNames: ['files'],
+              codeTemplate: [{ type: 'Text', content: `
 # Check if mlld helpers are available
 if type mlld_is_variable &>/dev/null; then
   echo "has_helpers:true"
-  
+
   # Check Variable info
   if mlld_is_variable files; then
     echo "is_variable:true"
@@ -315,6 +375,7 @@ fi
 # Access the value
 echo "value:$files"
 ` }]
+            }
           }
         }
       );
@@ -336,7 +397,7 @@ echo "value:$files"
             'has_helpers:true',
             'is_variable:true',
             'type:array',
-            'metadata:{"fileType":"text"}',
+            'metadata:{"ctx":{"fileType":"text"},"internal":{}}',
             'value:["file1.txt","file2.txt"]'
           ].join('\n');
         }
@@ -382,7 +443,8 @@ echo "value:$files"
       expect(parsed.has_helpers).toBe('true');
       expect(parsed.is_variable).toBe('true');
       expect(parsed.type).toBe('array');
-      expect(JSON.parse(parsed.metadata)).toEqual({ fileType: 'text' });
+      const parsedMetadata = JSON.parse(parsed.metadata);
+      expect(parsedMetadata.ctx).toEqual({ fileType: 'text' });
       expect(JSON.parse(parsed.value)).toEqual(['file1.txt', 'file2.txt']);
       
       // Restore original
@@ -395,7 +457,8 @@ echo "value:$files"
       
       // Create test data
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {
-        arrayType: 'test'
+        ctx: {},
+        internal: { arrayType: 'test' }
       });
       env.setVariable('data', arrayVar);
       
@@ -409,11 +472,13 @@ echo "value:$files"
         'javascript',
         mockSource,
         {
-          executableDef: {
-            type: 'code',
-            language: 'javascript',
-            paramNames: ['value'],
-            codeTemplate: [{ type: 'Text', content: `
+          ctx: {},
+          internal: {
+            executableDef: {
+              type: 'code',
+              language: 'javascript',
+              paramNames: ['value'],
+              codeTemplate: [{ type: 'Text', content: `
               return {
                 hasMlld: typeof mlld !== 'undefined',
                 hasType: value.__mlld_type || false,
@@ -421,6 +486,7 @@ echo "value:$files"
                 value: value
               };
             ` }]
+            }
           }
         }
       );

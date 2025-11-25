@@ -1,3 +1,11 @@
+---
+updated: 2025-11-13
+tags: #arch, #alligator, #content
+related-docs: docs/dev/DATA.md, docs/dev/PIPELINE.md
+related-code: interpreter/eval/content-loader.ts, interpreter/utils/load-content-structured.ts
+related-types: core/types { LoadContentResult, StructuredValue }
+---
+
 # Alligator Syntax and Load-Content Output Behavior
 
 ## Overview
@@ -6,7 +14,7 @@ The alligator syntax (`<file>` or `<pattern>`) in mlld provides powerful content
 
 **Conceptually**: Think of `<file>` as returning content directly - that's its primary purpose. The metadata (filename, frontmatter, etc.) is available when you need it, but content is the default.
 
-**Implementation detail**: Under the hood, mlld returns a LoadContentResult object, but in most contexts it automatically behaves as if you accessed its `.content` property - this is syntactic sugar that makes working with loaded content seamless. This means `<file>` acts like `<file>.content` automatically, while still allowing access to `<file>.filename`, `<file>.fm`, and other metadata when needed.
+**Implementation detail**: Under the hood, mlld stores the result in a `StructuredValue`. The wrapper's `.data` contains parsed content (string for text, object/array for JSON/JSONL), `.text` mirrors the display string, and `.ctx` flattens common metadata (filename, relative path, url, token counts) so `<file>.ctx.filename` stays available as values flow. Use `.keep`/`.keepStructured` when a JS/Node stage needs the wrapper and its `.ctx`; legacy surface fields like `.filename` and `.content` remain for compatibility.
 
 ## Basic Syntax
 
@@ -38,6 +46,11 @@ Currently supports JavaScript, TypeScript, Python, Go, Rust, Ruby, Java, C#, Sol
 - In templates/strings, `<...>` is treated as a file reference only when it contains one of: `.`, `/`, `*`, or `@`.
 - This allows XML-like tags such as `<thinking>` to remain literal text.
 - Angle brackets always mean “load contents”, not “filename string”. Use quotes for literal paths.
+
+### JSON/JSONL auto-parse
+- `<file.json>` and `<file.jsonl>` auto-parse to StructuredValues: `.data` holds parsed object/array, `.text` preserves raw content, `.ctx` keeps path metadata.
+- JSONL parses non-empty lines individually. Parse errors include line number and offending line preview.
+- Structured access: use `.keepStructured`/`.keep` or the `keepStructured()`/`keep()` helper to retain the StructuredValue/metadata when you need ctx/provenance instead of content-only sugar, and use `.text` when you need the raw string form inside JS/Node.
 
 ## The Content Extraction Magic
 
@@ -105,48 +118,67 @@ End of document.
 >> @sections is concatenated, not JSON-serialized
 ```
 
+## Metadata Surfaces
+
+- `.ctx` surfaces canonical metadata (`filename`, `relative`, `absolute`, `url`, `domain`, `title`, `description`, `tokens`, `tokest`, `fm`, provenance fields such as `source` and `retries`) as mutable runtime state.
+- `.data` contains the parsed content (string for text, object/array for JSON/JSONL, structured values for globs); `.keep`/`.keepStructured` preserves wrappers for JS/Node when metadata is required.
+- `.text` mirrors the user-visible content string, ensuring display paths never see `[object Object]`.
+
+Example:
+
+```mlld
+/var @readme = <README.md>
+/show `Path: @readme.ctx.relative`
+/show `Tokens: @readme.ctx.tokens (est: @readme.ctx.tokest)`
+/show `Frontmatter title: @readme.ctx.fm.title`
+```
+
 ### JavaScript Function Parameters
 
-When LoadContentResult objects are passed to JavaScript functions, they automatically unwrap to their content:
+When load-content StructuredValues are passed to JavaScript functions, they automatically unwrap to their `.data`:
 
 ```mlld
 /var @config = <config.json>
 
 /exe @parseConfig(@config) = js {
-  // 'config' here is the string content, not the LoadContentResult object
-  return JSON.parse(config);
+  return JSON.stringify({
+    type: typeof config,
+    hasFilename: 'filename' in config,
+    name: config.name
+  });
 }
 
->> If you need the full object with metadata:
-/exe @processFile(@config.content, @config.filename, @config.fm) = js {
-  // Explicitly pass the properties you need
-  console.log(`Processing ${filename}`);
-  return content;
-}
+>> If you need metadata in JS, pass `.keep`:
+/exe @processFile(@config.keep) = js {
+  return JSON.stringify({
+    filename: config.ctx.filename,
+    tokens: config.ctx.tokens
+  });
+} 
 ```
 
 ### Structured Value Behavior
 
-- Load-content results are stored as `StructuredValue` wrappers with both `.text` (string view) and `.data` (structured object) properties.
+- Load-content results are stored as `StructuredValue` wrappers with `.text` (string view), `.data` (content), and `.ctx` (metadata).
 - Display paths (templates, `/show`, pipelines) automatically use `.text`, so visible output stays content-focused.
-- Access metadata with `.data` or the helper `asData(value)` when you need the rich object. Use `.text` / `asText(value)` for the string form when writing to logs or shell commands.
+- Access metadata via `.ctx`; pass `.keep`/`.keepStructured` into JS/Node when code needs both `.data` and metadata.
 - Field access resolves through the underlying data while `.text` continues to mirror the content-first behaviour documented above.
 
 ## Type System Integration
 
-### LoadContentResult
+### Single file loads
 
-Single file loads create a `LoadContentResult` object:
-- Has a `.content` property containing the file content
-- Includes metadata: `filename`, `relative`, `absolute`, `fm` (frontmatter)
-- Auto-converts to string using the content
+Single file loads create a `StructuredValue` whose `.data` stores the file content (string for text, object/array for JSON/JSONL):
+- `.text` equals the file content string
+- `.ctx.filename`, `.ctx.relative`, `.ctx.absolute`, and `.ctx.url` surface path info
+- `.ctx.fm` exposes frontmatter when present; `.ctx.tokens`/`.ctx.tokest` surface token metrics
 
 ### LoadContentResultArray
 
-Glob patterns create a `LoadContentResultArray`:
-- Custom `.content` getter that concatenates all file contents
-- Custom `toString()` method for proper string conversion
-- Each element is a `LoadContentResult`
+Glob patterns create a `StructuredValue` that wraps a `LoadContentResultArray`:
+- `.text` concatenates contents with double newlines
+- `.ctx.length` reports the number of entries while `asData(@files)` keeps the raw array
+- Each element stays tagged so downstream pipelines retain provenance
 
 ### RenamedContentArray
 
@@ -157,19 +189,19 @@ When using the `as "pattern"` syntax:
 
 ## Variable Type Preservation
 
-The mlld type system preserves special behaviors through Variable metadata:
+The mlld type system preserves special behaviors through Variable internal metadata:
 
 ```typescript
-// Variables store metadata about array types
+// Variables store array type hints inside .internal
 {
   type: 'array',
-  metadata: {
+  internal: {
     arrayType: 'load-content-result' | 'renamed-content'
   }
 }
 ```
 
-This metadata enables the interpreter to:
+This internal metadata enables the interpreter to:
 1. Preserve custom toString() and content getters
 2. Apply correct behavior during template interpolation
 3. Maintain type information through variable resolution
@@ -209,7 +241,7 @@ The interpreter preserves array behaviors through:
    - Uses `extractVariableValue` from variable-migration
 
 2. **Variable Resolution** (`/interpreter/utils/variable-resolution.ts`):
-   - Checks for special array types via metadata
+   - Checks for special array types via `.internal.arrayType`
    - Preserves behaviors during value extraction
 
 3. **Template Interpolation** (`/interpreter/core/interpreter.ts`):
@@ -222,12 +254,12 @@ The interpreter preserves array behaviors through:
 // Check for special array types
 function isLoadContentResultArray(value: any): value is LoadContentResultArray {
   return Array.isArray(value) && 
-         value.__variable?.metadata?.arrayType === 'load-content-result';
+         value.__variable?.internal?.arrayType === 'load-content-result';
 }
 
 function isRenamedContentArray(value: any): value is RenamedContentArray {
   return Array.isArray(value) && 
-         value.__variable?.metadata?.arrayType === 'renamed-content';
+         value.__variable?.internal?.arrayType === 'renamed-content';
 }
 ```
 
@@ -274,30 +306,32 @@ Generated by mlld
 /var @file = <config.json>
 
 >> Access metadata
-/show `File: @file.filename`
-/show `Path: @file.relative`
-/show `Content: @file.content`
+/show `File: @file.ctx.filename`
+/show `Path: @file.ctx.relative`
+/show `Content: @file`
 
 >> With frontmatter
-/show `Title: @file.fm.title`
-/show `Author: @file.fm.author`
+/show `Title: @(asData(@file).fm.title)`
+/show `Author: @(asData(@file).fm.author)`
 ```
 
 ## Content Load Object Types
 
 ### LoadContentResult
-Single file load result with rich metadata:
+Single file load result with rich metadata stored inside `.data` and flattened via `.ctx`:
 - `content`: File contents (auto-unwrapped in JS/Node functions)
-- `filename`, `relative`, `absolute`: Path information
-- `tokest`/`tokens`: Token counts
-- `fm`: Frontmatter (markdown files)
-- `json`: Parsed JSON (JSON files)
+- `filename`, `relative`, `absolute`, `url`, `domain`, `title`, `description`: Access with `@file.ctx.<field>`
+- `tokest`/`tokens`: Token metrics available via `.ctx`
+- `fm`, `json`: Structured data retrieved from `asData(@file)`
+
+Token estimates come from the shared helper (`core/utils/token-metrics.ts`), so the same heuristics apply whether a string originates from `<file>` loads, `/var` assignments, or downstream guard evaluations. Every variable exposes these metrics via `.ctx` (for example `@doc.ctx.tokens` / `@doc.ctx.tokest`).
 
 ### LoadContentResultArray
 Array of LoadContentResult objects:
 - Auto-unwraps to array of content strings in JS/Node
 - Custom `toString()` joins with `\n\n`
 - `.content` getter returns concatenated content
+- `asData(@files)` preserves the original array so `.ctx.length` and provenance remain consistent
 
 ### RenamedContentArray
 Created by rename patterns (`<*.md> as "pattern"`):
@@ -306,10 +340,9 @@ Created by rename patterns (`<*.md> as "pattern"`):
 
 ### LoadContentResultURL
 Extended LoadContentResult for URLs:
-- All LoadContentResult properties plus:
-- `url`, `domain`, `title`, `description`
-- `status`, `statusText`, `contentType`
-- `text`, `md`, `html`: Converted formats
+- All LoadContentResult properties accessible through `asData(@urlResult)`
+- `.ctx.url`, `.ctx.domain`, `.ctx.title`, `.ctx.description`, `.ctx.status`, `.ctx.contentType`
+- `.ctx.html`, `.ctx.text`, `.ctx.md`: Converted formats available without touching `.text`
 
 ## Auto-unwrapping Behavior
 

@@ -4,7 +4,25 @@
  * Types and utilities for managing variable metadata and source information.
  */
 
-import { VariableSource, VariableMetadata } from './VariableTypes';
+import { VariableSource, VariableMetadata, type Variable, type VariableMetrics, type VariableContextSnapshot } from './VariableTypes';
+import type {
+  CapabilityContext,
+  SecurityDescriptor,
+  DataLabel,
+  TaintLevel,
+  CapabilityKind
+} from '../security';
+import {
+  makeSecurityDescriptor,
+  serializeSecurityDescriptor,
+  deserializeSecurityDescriptor,
+  serializeCapabilityContext,
+  deserializeCapabilityContext,
+  createCapabilityContext
+} from '../security';
+import { buildTokenMetrics, type TokenEstimationOptions, type TokenMetrics } from '@core/utils/token-metrics';
+
+const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 
 // =========================================================================
 // METADATA UTILITY FUNCTIONS
@@ -160,6 +178,301 @@ export class VariableMetadataUtils {
     
     return this.mergeMetadata(complexMetadata, additionalMetadata);
   }
+
+  /**
+   * Ensure metadata carries a security descriptor and optional capability context.
+   * When labels are provided, they override any existing descriptor.
+   * When no descriptor exists, a default descriptor is attached.
+   */
+  static applySecurityMetadata(
+    metadata?: VariableMetadata,
+    options?: {
+      labels?: DataLabel[];
+      existingDescriptor?: SecurityDescriptor;
+      capability?: CapabilityContext;
+      taintLevel?: TaintLevel;
+      sources?: string[];
+      policyContext?: Record<string, unknown>;
+      capabilityKind?: CapabilityKind;
+    }
+  ): VariableMetadata {
+    const result: VariableMetadata = { ...(metadata ?? {}) };
+    const baseDescriptor =
+      options?.existingDescriptor ??
+      result.security ??
+      makeSecurityDescriptor();
+
+    const overrideProvided =
+      options?.labels ||
+      options?.taintLevel ||
+      options?.sources ||
+      options?.policyContext ||
+      options?.capabilityKind;
+
+    const descriptor = overrideProvided
+      ? makeSecurityDescriptor({
+          labels: options?.labels ?? baseDescriptor.labels,
+          taintLevel: options?.taintLevel ?? baseDescriptor.taintLevel,
+          sources: options?.sources ?? baseDescriptor.sources,
+          capability: options?.capabilityKind ?? baseDescriptor.capability,
+          policyContext: {
+            ...(baseDescriptor.policyContext ?? {}),
+            ...(options?.policyContext ?? {})
+          }
+        })
+      : baseDescriptor;
+
+    result.security = descriptor;
+
+    if (options?.capability) {
+      result.capability =
+        options.capability.security === descriptor
+          ? options.capability
+          : createCapabilityContext({
+              kind: options.capability.kind,
+              importType: options.capability.importType,
+              descriptor,
+              metadata: options.capability.metadata
+                ? { ...options.capability.metadata }
+                : undefined,
+              policy: options.capability.policy
+                ? { ...options.capability.policy }
+                : undefined,
+              operation: options.capability.operation
+                ? { ...options.capability.operation }
+                : undefined
+            });
+    } else if (result.capability) {
+      const existing = result.capability;
+      if (existing.security !== descriptor) {
+        result.capability = createCapabilityContext({
+          kind: existing.kind,
+          importType: existing.importType,
+          descriptor,
+          metadata: existing.metadata ? { ...existing.metadata } : undefined,
+          policy: existing.policy ? { ...existing.policy } : undefined,
+          operation: existing.operation ? { ...existing.operation } : undefined
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Serialize security-aware metadata fragments for persistence.
+   */
+  static serializeSecurityMetadata(
+    metadata?: VariableMetadata
+  ): {
+    security?: ReturnType<typeof serializeSecurityDescriptor>;
+    capability?: ReturnType<typeof serializeCapabilityContext>;
+  } | undefined {
+    if (!metadata) {
+      return undefined;
+    }
+
+    const serializedSecurity = serializeSecurityDescriptor(metadata.security);
+    const serializedCapability = serializeCapabilityContext(metadata.capability);
+
+    if (!serializedSecurity && !serializedCapability) {
+      return undefined;
+    }
+
+    return {
+      security: serializedSecurity,
+      capability: serializedCapability
+    };
+  }
+
+  /**
+   * Deserialize persisted security metadata fragments.
+   */
+  static deserializeSecurityMetadata(
+    payload?:
+      | {
+          security?: ReturnType<typeof serializeSecurityDescriptor>;
+          capability?: ReturnType<typeof serializeCapabilityContext>;
+        }
+      | null
+  ): Pick<VariableMetadata, 'security' | 'capability'> {
+    if (!payload) {
+      return {};
+    }
+
+    const security = deserializeSecurityDescriptor(payload.security);
+    const capability = deserializeCapabilityContext(payload.capability);
+    return {
+      ...(security ? { security } : {}),
+      ...(capability ? { capability } : {})
+    };
+  }
+
+  static applyTextMetrics(
+    metadata: VariableMetadata | undefined,
+    text: string | undefined,
+    options?: TokenEstimationOptions
+  ): VariableMetadata | undefined {
+    if (typeof text !== 'string') {
+      return metadata;
+    }
+    const metrics = buildTokenMetrics(text, options);
+    if (!metadata) {
+      return { metrics };
+    }
+    return {
+      ...metadata,
+      metrics: VariableMetadataUtils.mergeMetrics(metadata.metrics, metrics)
+    };
+  }
+
+  static assignMetrics(variable: Variable, metrics: VariableMetrics): void {
+    if (!variable.internal) {
+      variable.internal = {};
+    }
+    variable.internal.metrics = metrics;
+    if (!variable.ctx) {
+      VariableMetadataUtils.attachContext(variable);
+    }
+    if (variable.ctx) {
+      variable.ctx.length = metrics.length;
+      variable.ctx.tokest = metrics.tokest;
+      variable.ctx.tokens = metrics.tokens ?? metrics.tokest;
+    }
+    if (variable.internal.ctxCache) {
+      variable.internal.ctxCache = variable.ctx as VariableContextSnapshot;
+    }
+  }
+
+  static attachContext(variable: Variable): Variable {
+    if ((variable as any).__ctxAttached) {
+      return variable;
+    }
+    if (!variable.internal) {
+      variable.internal = {};
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(variable, 'ctx');
+    if (descriptor && !descriptor.get && !descriptor.set) {
+      Object.defineProperty(variable, 'ctx', {
+        value: variable.ctx,
+        enumerable: false,
+        configurable: true,
+        writable: true
+      });
+      Object.defineProperty(variable, '__ctxAttached', {
+        value: true,
+        enumerable: false,
+        configurable: false
+      });
+      return variable;
+    }
+    Object.defineProperty(variable, '__ctxAttached', {
+      value: true,
+      enumerable: false,
+      configurable: false
+    });
+    Object.defineProperty(variable, 'ctx', {
+      enumerable: false,
+      configurable: true,
+      get() {
+        return VariableMetadataUtils.buildVariableContext(variable);
+      }
+    });
+    return variable;
+  }
+
+  private static buildVariableContext(variable: Variable): VariableContextSnapshot {
+    if (!variable.internal) {
+      variable.internal = {};
+    }
+    if (variable.internal.ctxCache) {
+      return variable.internal.ctxCache;
+    }
+    const metrics = VariableMetadataUtils.computeMetricsForVariable(variable);
+    const ctxSnapshot = variable.ctx ?? {};
+    const labels = normalizeLabelArray(ctxSnapshot.labels);
+    const tokenValue = metrics?.tokens ?? metrics?.tokest ?? undefined;
+    const tokestValue = metrics?.tokest ?? metrics?.tokens ?? undefined;
+    const context: VariableContextSnapshot = {
+      name: variable.name,
+      type: variable.type,
+      definedAt: variable.definedAt,
+      labels,
+      taint: ctxSnapshot.taint ?? 'unknown',
+      tokens: tokenValue,
+      tokest: tokestValue,
+      length: metrics?.length,
+      size: Array.isArray(variable.value) ? variable.value.length : undefined,
+      sources: ctxSnapshot.sources ?? [],
+      exported: Boolean(ctxSnapshot.exported),
+      policy: ctxSnapshot.policy ?? null
+    };
+    if (variable.type === 'array' && variable.internal) {
+      const aggregate = (variable.internal as any).arrayHelperAggregate;
+      if (aggregate) {
+        const hasAggregateContexts =
+          Array.isArray(aggregate.contexts) && aggregate.contexts.length > 0;
+        if (hasAggregateContexts) {
+          context.labels = aggregate.labels;
+          context.sources = aggregate.sources;
+        }
+        context.tokens = aggregate.tokens;
+        context.totalTokens = aggregate.totalTokens;
+        context.maxTokens = aggregate.maxTokens;
+      }
+    }
+    variable.internal.ctxCache = context;
+    return context;
+  }
+
+  private static computeMetricsForVariable(variable: Variable): VariableMetrics | undefined {
+    if (variable.internal?.metrics) {
+      return variable.internal.metrics;
+    }
+
+    if (typeof variable.value === 'string') {
+      const metrics = buildTokenMetrics(variable.value);
+      VariableMetadataUtils.assignMetrics(variable, metrics);
+      return metrics;
+    }
+
+    const text = (variable.value as any)?.text;
+    if (typeof text === 'string') {
+      const metrics = buildTokenMetrics(text);
+      VariableMetadataUtils.assignMetrics(variable, metrics);
+      return metrics;
+    }
+
+    return undefined;
+  }
+
+  private static mergeMetrics(
+    existing: VariableMetrics | undefined,
+    incoming: TokenMetrics
+  ): VariableMetrics {
+    if (!existing) {
+      return incoming;
+    }
+    if (existing.source === 'exact' && incoming.source !== 'exact') {
+      return existing;
+    }
+    return {
+      ...existing,
+      ...incoming
+    };
+  }
+}
+
+function normalizeLabelArray(
+  labels: readonly DataLabel[] | DataLabel | undefined | null
+): readonly DataLabel[] {
+  if (Array.isArray(labels)) {
+    return labels;
+  }
+  if (labels === undefined || labels === null) {
+    return EMPTY_LABELS;
+  }
+  return [labels];
 }
 
 // =========================================================================

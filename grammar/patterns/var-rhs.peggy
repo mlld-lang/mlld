@@ -23,6 +23,7 @@ VarRHSContent "var assignment value"
   / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
+  / InlineShowDirective         // show actions used inline (for expressions)
   / PrimitiveValue              // Direct primitives: 42, true, false, null, and strings WITHOUT pipes
 
 // Expression that definitely has an operator (to avoid matching simple variables)
@@ -42,19 +43,11 @@ ExpressionWithOperator
 
 // EXEC INVOCATION FOLLOWED BY FIELDS - e.g., @func()[1] or @obj.method().2
 ExecInvocationWithFields "exec invocation with post fields"
-  = base:FieldAccessExecPattern post:AnyFieldAccess+ {
-      // Allow chaining fields after a method call on an object
-      return {
-        ...base,
-        fields: post
-      };
+  = base:FieldAccessExecPattern post:PostFieldAccess+ {
+      return helpers.attachPostFields(base, post);
     }
-  / base:ExecInvocationPattern post:AnyFieldAccess+ {
-      // Allow chaining fields after a plain function call
-      return {
-        ...base,
-        fields: post
-      };
+  / base:ExecInvocationPattern post:PostFieldAccess+ {
+      return helpers.attachPostFields(base, post);
     }
 
 // Note: AlligatorWithTransform was removed because AlligatorExpression 
@@ -212,7 +205,7 @@ SpacedOrCondensedPipeChain "flexible pipe chain"
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Extract the last field as the method name
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;
@@ -233,12 +226,18 @@ FieldAccessExecPattern "field access exec invocation"
         objectReference: objectRef
       };
       
-      return helpers.createExecInvocation(ref, tail || null, location());
+      const exec = helpers.createExecInvocation(ref, tail || null, location());
+      if (streamPrefix) {
+        const mergedTail = tail ? { ...tail, stream: true } : { stream: true };
+        const execWithStream = helpers.createExecInvocation(ref, mergedTail, location());
+        return helpers.attachPostFields(execWithStream, post);
+      }
+      return helpers.attachPostFields(exec, post);
     }
 
 // EXEC INVOCATION PATTERN - Matches @func() specifically
 ExecInvocationPattern "exec invocation pattern"
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+  = streamPrefix:StreamKeyword? _ "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Create command reference with arguments
       const ref = {
         name,
@@ -247,7 +246,13 @@ ExecInvocationPattern "exec invocation pattern"
         isCommandReference: true
       };
       
-      return helpers.createExecInvocation(ref, tail || null, location());
+      const exec = helpers.createExecInvocation(ref, tail || null, location());
+      if (streamPrefix) {
+        const mergedTail = tail ? { ...tail, stream: true } : { stream: true };
+        const execWithStream = helpers.createExecInvocation(ref, mergedTail, location());
+        return helpers.attachPostFields(execWithStream, post);
+      }
+      return helpers.attachPostFields(exec, post);
     }
 
 // Note: BracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading
@@ -309,6 +314,7 @@ RunCommandValue
         meta: content.meta
       };
     }
+  / "run" _ InvalidBareCommandBrackets
   / "run" _ "@" invocation:UnifiedReferenceWithTail {
       // Handle run @command() syntax with unified patterns
       return {
@@ -353,6 +359,11 @@ NestedDirective
         directive: 'run',
         command: cmd
       };
+  }
+
+InlineShowDirective
+  = "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
+      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
     }
 
 // Command content inside brackets
@@ -384,6 +395,7 @@ CodeExecution "code execution"
         meta: content.meta
       };
     }
+  / "run" _ InvalidBareCommandBrackets
   / lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
       // Shorthand: language + code without 'run' keyword
       return {

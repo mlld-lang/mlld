@@ -4,11 +4,18 @@
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import type { Expression } from './primitives';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
+import type { DataLabel } from './security';
 
 /**
  * With clause for pipeline and dependency management
  */
-export type PipelineStage = PipelineCommand | PipelineCommand[];
+export type PipelineStageEntry = PipelineCommand | InlineCommandStage | InlineValueStage;
+export type PipelineStage = PipelineStageEntry | PipelineStageEntry[];
+
+export interface GuardOverrideOptions {
+  only?: string[];
+  except?: string[];
+}
 
 export interface WithClause {
   pipeline?: PipelineStage[];
@@ -17,6 +24,8 @@ export interface WithClause {
   parallel?: number;
   delayMs?: number;
   stdin?: Expression;
+  guards?: GuardOverrideOptions | false;
+  stream?: boolean;
   [key: string]: any; // For other with clause properties
 }
 
@@ -29,10 +38,34 @@ export interface PipelineCommand {
   fields?: any[]; // Field access array
   rawIdentifier: string;
   rawArgs: string[];
+  meta?: Record<string, unknown>;
   // Optional inline effects attached to this functional stage.
   // These are pipeline builtin "effect" commands (e.g., @log) that should
   // execute after this stage succeeds, and do not count as stages themselves.
   effects?: PipelineCommand[];
+}
+
+/**
+ * Inline shell command stage (cmd { ... }) executed directly in the pipeline
+ */
+export interface InlineCommandStage {
+  type: 'inlineCommand';
+  command: ContentNodeArray;
+  commandBases?: VariableNodeArray;
+  rawCommand: string;
+  meta?: Record<string, unknown>;
+  location?: any;
+}
+
+/**
+ * Inline data stage ({ ... }) treated as a structured value source
+ */
+export interface InlineValueStage {
+  type: 'inlineValue';
+  value: any;
+  rawIdentifier: string;
+  meta?: Record<string, unknown>;
+  location?: any;
 }
 
 /**
@@ -54,6 +87,7 @@ export interface RunRaw {
   code?: string;
   identifier?: string;
   withClause?: WithClause;
+  securityLabels?: string;
 }
 
 /**
@@ -65,6 +99,7 @@ export interface RunMeta {
   language?: string;
   hasVariables?: boolean;
   withClause?: WithClause;
+  securityLabels?: DataLabel[];
 }
 
 /**
@@ -91,6 +126,7 @@ export interface RunValues {
   code?: ContentNodeArray;
   identifier?: VariableNodeArray;
   withClause?: WithClause;
+  securityLabels?: DataLabel[];
 }
 
 /**
@@ -100,13 +136,16 @@ export interface RunCommandDirectiveNode extends RunDirectiveNode {
   subtype: 'runCommand';
   values: {
     command: ContentNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     command: string;
+    securityLabels?: string;
   };
   meta: {
     isMultiLine: boolean;
     hasVariables: boolean;
+    securityLabels?: DataLabel[];
   };
 }
 
@@ -119,15 +158,18 @@ export interface RunCodeDirectiveNode extends RunDirectiveNode {
     lang: TextNodeArray;
     args: VariableNodeArray;
     code: ContentNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     lang: string;
     args: string[];
     code: string;
+    securityLabels?: string;
   };
   meta: {
     isMultiLine: boolean;
     language: string;
+    securityLabels?: DataLabel[];
   };
 }
 
@@ -139,13 +181,16 @@ export interface RunExecDirectiveNode extends RunDirectiveNode {
   values: {
     identifier: VariableNodeArray;
     args: VariableNodeArray;
+    securityLabels?: DataLabel[];
   };
   raw: {
     identifier: string;
     args: string[];
+    securityLabels?: string;
   };
   meta: {
     argumentCount: number;
+    securityLabels?: DataLabel[];
   };
 }
 

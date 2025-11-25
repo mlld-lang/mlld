@@ -111,15 +111,17 @@ SlashImport
 
 // Shorthand import alias must include @ prefix when provided
 SlashImportShorthand
-  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
       helpers.mlldError(
         `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
         '@',
         location()
       );
     }
-  / DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ path:ImportPath alias:(_ "as" _ name:ImportAliasIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext "/import" _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ path:ImportPath alias:(_ "as" _ name:ImportAliasIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImportShorthand matched', { path, alias, tail, importType: typeInfo?.type });
+      
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // NEW: Derive namespace from path if no alias provided
       let namespace = alias;
@@ -145,6 +147,9 @@ SlashImportShorthand
         namespace: [helpers.createNode(NodeType.Text, { content: namespace, location: location() })],  // Store namespace as array for consistency
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       if (typeInfo) {
         values.importType = typeInfo.type;
@@ -166,6 +171,9 @@ SlashImportShorthand
       if (typeInfo) {
         raw.importType = typeInfo.raw;
       }
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Create meta object with path metadata
       const meta = {
@@ -173,6 +181,9 @@ SlashImportShorthand
       };
       if (typeInfo) {
         meta.importType = typeInfo.type;
+      }
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
       }
       
       return helpers.createStructuredDirective(
@@ -189,8 +200,10 @@ SlashImportShorthand
 
 // Full import with explicit imports list
 SlashImportFull
-  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImport matched', { imports, path, tail, importType: typeInfo?.type });
+      
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Get the raw imports text
       const importsRaw = imports.map(item => {
@@ -242,6 +255,9 @@ SlashImportFull
         }),
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle file, module, and URL paths
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
       
       if (typeInfo) {
         values.importType = typeInfo.type;
@@ -263,6 +279,9 @@ SlashImportFull
       if (typeInfo) {
         raw.importType = typeInfo.raw;
       }
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
       
       // Create meta object with path metadata
       const meta = {
@@ -273,6 +292,9 @@ SlashImportFull
       };
       if (typeInfo) {
         meta.importType = typeInfo.type;
+      }
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
       }
       
       return helpers.createStructuredDirective(

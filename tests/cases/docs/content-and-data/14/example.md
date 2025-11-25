@@ -1,15 +1,8 @@
-/var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
+/var @markdown = <*.md>                  >> All .md in current dir
+/var @tests = <**/*.test.js>             >> All test files recursively
+/var @docs = <docs/**/*.md>              >> All markdown in docs tree
+/var @source = <src/**/*.ts>             >> All TypeScript in src
 
->> Parse inside function
-/exe @filter1(users) = js {
-  const data = JSON.parse(users);
-  return data.filter(u => u.age > 25);
-}
-/run @filter1(@users)
-
->> Parse before passing
-/exe @filter2(users) = js {
-  return users.filter(u => u.age > 25);
-}
-/run @filter2(@users.data)   >> .data parses JSON
-/run @filter2(@users.json)   >> .json is alias
+>> Access individual files
+/show @docs[0].text                       >> First file's content
+/show @docs[0].ctx.filename               >> First file's name

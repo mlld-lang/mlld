@@ -6,11 +6,13 @@
  */
 
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand, VariableSource } from '@core/types';
+import type { PipelineStageEntry, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
+import type { GuardHistoryEntry, PipelineContextSnapshot } from '../../env/ContextManager';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable';
-import { createPipelineInput } from '../../utils/pipeline-input';
-import { wrapStructured, isStructuredValue, type StructuredValue } from '../../utils/structured-value';
+import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
+import { wrapStructured, isStructuredValue, type StructuredValue, type StructuredValueType } from '../../utils/structured-value';
+import { inheritExpressionProvenance } from '../../utils/expression-provenance';
 
 /**
  * Simplified pipeline context interface
@@ -33,6 +35,7 @@ export interface SimplifiedPipelineContext {
   retries?: {                     // Global retry accumulator
     all: Array<Array<string | StructuredValue>>;              // All attempts from all contexts
   };
+  guards?: ReadonlyArray<GuardHistoryEntry>;
 }
 
 /**
@@ -43,8 +46,14 @@ export interface SimplifiedPipelineContext {
  * WHY: Constructs @input (with format), @pipeline/@p, and seeds the ambient @ctx data.
  * CONTEXT: Hides the synthetic source stage from user-visible indices and stage numbers.
  */
+interface StageEnvironmentOptions {
+  capturePipelineContext?(context: PipelineContextSnapshot): void;
+  skipSetPipelineContext?: boolean;
+  sourceRetryable?: boolean;
+}
+
 export async function createStageEnvironment(
-  command: PipelineCommand,
+  command: PipelineStageEntry,
   input: string,
   structuredInput: StructuredValue,
   context: StageContext,
@@ -53,10 +62,12 @@ export async function createStageEnvironment(
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>,
-  structuredAccess?: StageOutputAccessor
+  structuredAccess?: StageOutputAccessor,
+  options?: StageEnvironmentOptions
 ): Promise<Environment> {
   // Adjust stage number for synthetic source (hide from user)
-  const userVisibleStage = hasSyntheticSource && command.rawIdentifier !== '__source__'
+  const rawId = (command as any)?.rawIdentifier || 'inline-stage';
+  const userVisibleStage = hasSyntheticSource && rawId !== '__source__'
     ? context.stage - 1
     : context.stage;
     
@@ -104,11 +115,10 @@ export async function createStageEnvironment(
     // Best-effort; keep original on failure
   }
 
-  // Set pipeline context in main environment
-  env.setPipelineContext({
+  const pipelineContextSnapshot: PipelineContextSnapshot = {
     stage: userVisibleStage,
     totalStages: userVisibleTotalStages,
-    currentCommand: command.rawIdentifier,
+    currentCommand: rawId,
     input: input,
     previousOutputs: context.previousOutputs,
     format: format,
@@ -118,14 +128,24 @@ export async function createStageEnvironment(
     attemptHistory: context.history,
     // Provide hint info for ambient @ctx.hint
     hint: normalizedHint,
-    hintHistory: context.hintHistory || []
-  });
+    hintHistory: context.hintHistory || [],
+    sourceRetryable: options?.sourceRetryable ?? false,
+    guards: env.getPipelineGuardHistory()
+  };
+
+  options?.capturePipelineContext?.(pipelineContextSnapshot);
+
+  if (!options?.skipSetPipelineContext) {
+    env.setPipelineContext(pipelineContextSnapshot);
+  }
 
   // Create child environment
   const stageEnv = env.createChild();
   
   // Set @input variable
-  await setSimplifiedInputVariable(stageEnv, input, wrapStructured(structuredInput), format);
+  const pipelineInputWrapper = wrapStructured(structuredInput);
+  inheritExpressionProvenance(pipelineInputWrapper, structuredInput);
+  await setSimplifiedInputVariable(stageEnv, input, pipelineInputWrapper, format);
   
   // Set @pipeline / @p variable
   setSimplifiedPipelineVariable(
@@ -159,8 +179,7 @@ async function setSimplifiedInputVariable(
   let inputVar;
 
   if (format) {
-    // Create PipelineInput with format
-    const pipelineInputObj = createPipelineInput(input, format);
+    const pipelineInputObj = buildPipelineStructuredValue(input, format as StructuredValueType);
     
     inputVar = createPipelineInputVariable(
       'input',
@@ -168,20 +187,21 @@ async function setSimplifiedInputVariable(
       format as 'json' | 'csv' | 'xml' | 'text',
       input,
       inputSource,
-      1,
-      {
-        isSystem: true,
-        isPipelineInput: true
-      }
+      1
     );
+    inputVar.internal = {
+      ...(inputVar.internal ?? {}),
+      isSystem: true,
+      isPipelineParameter: true
+    };
   } else if (structuredInput && isStructuredValue(structuredInput)) {
     const structuredVar = createStructuredValueVariable(
       'input',
       structuredInput,
       inputSource,
       {
-        isSystem: true,
-        isPipelineParameter: true
+        ctx: {},
+        internal: { isSystem: true, isPipelineParameter: true }
       }
     );
     env.setParameterVariable('input', structuredVar);
@@ -193,8 +213,8 @@ async function setSimplifiedInputVariable(
       input,
       inputSource,
       {
-        isSystem: true,
-        isPipelineParameter: true
+        ctx: {},
+        internal: { isSystem: true, isPipelineParameter: true }
       }
     );
   }
@@ -218,7 +238,8 @@ function setSimplifiedPipelineVariable(
     events,
     hasSyntheticSource,
     allRetryHistory,
-    structuredAccess
+    structuredAccess,
+    () => env.getPipelineGuardHistory()
   );
   
   const inputSource: VariableSource = {
@@ -235,8 +256,8 @@ function setSimplifiedPipelineVariable(
     false,
     inputSource,
     {
-      isPipelineContext: true,
-      isSystem: true
+      ctx: {},
+      internal: { isSystem: true, isPipelineContext: true }
     }
   );
   
@@ -252,7 +273,8 @@ function createSimplifiedPipelineContext(
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>,
-  structuredAccess?: StageOutputAccessor
+  structuredAccess?: StageOutputAccessor,
+  guardHistoryProvider?: () => ReadonlyArray<GuardHistoryEntry>
 ): SimplifiedPipelineContext {
   const userVisibleStage = hasSyntheticSource && context.stage > 0 
     ? context.stage - 1 
@@ -272,7 +294,7 @@ function createSimplifiedPipelineContext(
     if (stageIndex !== null && structuredAccess) {
       return structuredAccess.getStageOutput(stageIndex, fallback ?? '');
     }
-    return createPipelineInput(fallback ?? '', 'text');
+    return buildPipelineStructuredValue(fallback ?? '', 'text');
   };
 
   const baseInput = context.outputs?.[0] ?? '';
@@ -343,6 +365,12 @@ function createSimplifiedPipelineContext(
       return { all: allAttempts };
     },
     enumerable: false,
+    configurable: true
+  });
+
+  Object.defineProperty(pipelineContext, 'guards', {
+    get: () => (guardHistoryProvider ? guardHistoryProvider() : []),
+    enumerable: true,
     configurable: true
   });
 

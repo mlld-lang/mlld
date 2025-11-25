@@ -1,14 +1,13 @@
->> In directives
-/show @name
+>> Filter JSON array from command
+/var @json = run {./mkjson.sh}
+/exe @filterHigh(entries) = js {
+  return entries.filter(e => e.finding.startsWith("High"));
+}
+/var @result = @filterHigh(@json.data)
 
->> In double quotes
-/var @greeting = "Hello @name"
-
->> In command braces
-/run {echo "Welcome @name"}
-
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
-
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Process API response
+/var @response = run {curl -s api.example.com/data}
+/exe @getActive(data) = js {
+  return data.users.filter(u => u.active);
+}
+/var @active = @getActive(@response.data)

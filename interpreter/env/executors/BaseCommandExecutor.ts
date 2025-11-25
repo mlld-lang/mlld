@@ -93,6 +93,15 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
       
+      // Optional debug logging for bash executor failures
+      if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1' && command.startsWith('bash')) {
+        try {
+          console.error('[BashExecutor][debug] executeWithCommonHandling error', error);
+        } catch {
+          // ignore logging errors
+        }
+      }
+      
       // If it's already an MlldCommandExecutionError, preserve it
       let commandError: MlldCommandExecutionError;
       if (error instanceof MlldCommandExecutionError) {

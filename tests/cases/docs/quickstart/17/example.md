@@ -1,18 +1,6 @@
-/var @isProduction = true
-/var @debugMode = false
-/var @userCount = 150
+/var @docs = <docs/*.md>
+/show `Found @docs.length() documentation files`
 
-# Logical operators
-/var @canDeploy = @isProduction && !@debugMode
-/show @canDeploy
-
-# Comparison operators  
-/var @needsUpgrade = @userCount > 100
-/show @needsUpgrade
-
-# Ternary operator
-/var @environment = @isProduction ? "prod" : "dev"
-/show `Running in @environment environment`
-
-# Complex expressions
-/when (@userCount > 100 && @isProduction) || @debugMode => show "High-load monitoring enabled"
+# Transform each file with templates
+/var @toc = <docs/*.md> as "- [@filename](@relative)"
+/show @toc

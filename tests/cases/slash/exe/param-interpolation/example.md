@@ -8,9 +8,9 @@ This test verifies that @param syntax works consistently in exec functions acros
 
 ## Command Template Tests
 
-/exe @greet(name) = {echo "Hello, @name!"}
-/exe @greetQuoted(name) = {echo "Greetings, '@name'"}
-/exe @greetSpecial(name) = {echo "Welcome @name (special: \$@name)"}
+/exe @greet(name) = cmd {echo "Hello, @name!"}
+/exe @greetQuoted(name) = cmd {echo "Greetings, '@name'"}
+/exe @greetSpecial(name) = cmd {echo "Welcome @name (special: \$@name)"}
 
 Direct calls:
 /run @greet("Alice")
@@ -42,7 +42,7 @@ Direct calls:
 
 ## Multiple Parameters
 
-/exe @introduce(first, last) = {echo "@first @last"}
+/exe @introduce(first, last) = cmd {echo "@first @last"}
 /var @firstNames = ["Ian", "Jane"]
 /var @lastNames = ["Smith", "O'Brien"]
 /var @intros = foreach @introduce(@firstNames, @lastNames)
@@ -51,5 +51,5 @@ Direct calls:
 ## Nested Variable References
 
 /var @myName = "Kate"
-/exe @greetVariable(prefix) = {echo "@prefix @myName!"}
+/exe @greetVariable(prefix) = cmd {echo "@prefix @myName!"}
 /run @greetVariable("Hello")

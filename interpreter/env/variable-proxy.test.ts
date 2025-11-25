@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { createVariableProxy, VARIABLE_PROXY_PROPS, isVariableProxy, getVariableType, createMlldHelpers } from './variable-proxy';
+import { createVariableProxy, VARIABLE_PROXY_PROPS, isVariableProxy, getVariableType, createMlldHelpers, prepareParamsForShadow } from './variable-proxy';
 import { createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable/VariableFactories';
+import { makeSecurityDescriptor } from '@core/types/security';
 
 describe('Variable Proxy System', () => {
   const mockSource = {
@@ -45,7 +46,14 @@ describe('Variable Proxy System', () => {
       
       // Special properties work
       expect(proxy[VARIABLE_PROXY_PROPS.TYPE]).toBe('object');
-      expect(proxy[VARIABLE_PROXY_PROPS.METADATA]).toEqual({});
+      const metadata = proxy[VARIABLE_PROXY_PROPS.METADATA];
+      expect(metadata?.ctx).toEqual(
+        expect.objectContaining({
+          name: 'obj',
+          type: 'object'
+        })
+      );
+      expect(metadata?.internal).toEqual({});
     });
     
     it('should preserve custom toString behavior', () => {
@@ -120,11 +128,30 @@ describe('Variable Proxy System', () => {
       // Helper functions work
       expect(helpers.isVariable(proxy)).toBe(true);
       expect(helpers.getType(proxy)).toBe('array');
-      expect(helpers.getMetadata(proxy)).toEqual({ arrayType: 'load-content' });
+      const helperMetadata = helpers.getMetadata(proxy);
+      expect(helperMetadata?.internal).toMatchObject({ arrayType: 'load-content' });
       
       // Direct property access works
       expect(proxy[helpers.TYPE]).toBe('array');
-      expect(proxy[helpers.METADATA]).toEqual({ arrayType: 'load-content' });
+      const proxyMetadata = proxy[helpers.METADATA];
+      expect(proxyMetadata?.internal).toMatchObject({ arrayType: 'load-content' });
+    });
+
+    it('exposes ctx metadata for primitive parameters', () => {
+      const variable = createSimpleTextVariable(
+        'secret',
+        'value',
+        mockSource,
+        { security: makeSecurityDescriptor({ labels: ['secret'] }) }
+      );
+
+      const prepared = prepareParamsForShadow({ secret: variable });
+      const metadata = (prepared as any).__mlldPrimitiveMetadata;
+      delete (prepared as any).__mlldPrimitiveMetadata;
+
+      const helpers = createMlldHelpers(metadata);
+      const ctx = helpers.ctx(prepared.secret, 'secret');
+      expect(ctx?.labels).toContain('secret');
     });
   });
 });

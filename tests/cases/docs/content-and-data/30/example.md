@@ -1,14 +1,9 @@
->> Collect all module documentation
-/var @modules = <modules/**/*.md>
+>> Load and transform files
+/var @config = <config.json> | @json
+/var @uppercase = <readme.txt> | @upper
 
->> Build README with metadata
-/var @readme = `# Project Modules
-
-Total modules: @modules.length
-Last updated: @now
-
-@modules
-
-`
-
-/output @readme to "README.md"
+>> Chain transformations
+/exe @first(text, n) = js { 
+  return text.split('\n').slice(0, n).join('\n');
+}
+/var @summary = <docs.md> | @first(3) | @upper

@@ -42,7 +42,7 @@ describe('/for parallel - Runtime Behavior', () => {
     expect(process.env[MAX_KEY]).toBe('4');
   });
 
-  it('honors cap override: /for 2 parallel', async () => {
+  it('honors cap override: /for parallel(2)', async () => {
     const input = `
 /exe @slowEcho(input) = js {
   const a = Number(process.env.${ACTIVE_KEY} || '0') + 1;
@@ -54,7 +54,7 @@ describe('/for parallel - Runtime Behavior', () => {
   return input;
 }
 
-/for 2 parallel @x in ["a","b","c","d"] => show @slowEcho(@x)
+/for parallel(2) @x in ["a","b","c","d"] => show @slowEcho(@x)
 `;
 
     await interpret(input, { fileSystem, pathService });
@@ -73,18 +73,18 @@ describe('/for parallel - Runtime Behavior', () => {
   return input;
 }
 
-/for 3 parallel @outer in [1] => for @x in ["a","b","c","d","e","f"] => show @slowEcho(@x)
+/for parallel(3) @outer in [1] => for @x in ["a","b","c","d","e","f"] => show @slowEcho(@x)
 `;
 
     await interpret(input, { fileSystem, pathService });
     expect(process.env[MAX_KEY]).toBe('3');
   });
 
-  it('enforces pacing between iteration starts for /for (cap, wait) parallel', async () => {
+  it('enforces pacing between iteration starts for /for parallel(cap, wait)', async () => {
     const input = `
 /exe @id(input) = js { return input }
 
-/for (3, 0.02s) parallel @x in ["a","b","c","d","e","f"] => show @id(@x)
+/for parallel(3, 0.02s) @x in ["a","b","c","d","e","f"] => show @id(@x)
 `;
 
     const t0 = Date.now();

@@ -10,6 +10,7 @@ import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
 import { asData, asText, isStructuredValue } from './structured-value';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
 const STRING_TEXT_ACCESSORS = new Set(['text', 'content']);
@@ -57,7 +58,20 @@ export interface FieldAccessOptions {
 export async function accessField(value: any, field: FieldAccessNode, options?: FieldAccessOptions): Promise<any | FieldAccessResult> {
   // CRITICAL: Variable metadata properties whitelist
   // Only these properties access the Variable itself, not its value
-  const VARIABLE_METADATA_PROPS = ['type', 'isComplex', 'source', 'metadata'];
+  const VARIABLE_METADATA_PROPS = [
+    'type',
+    'isComplex',
+    'source',
+    'metadata',
+    'internal',
+    'ctx',
+    'any',
+    'all',
+    'none',
+    'raw',
+    'totalTokens',
+    'maxTokens'
+  ];
 
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
@@ -85,7 +99,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // Extract the raw value if we have a Variable
   let rawValue = isVariable(value) ? value.value : value;
   const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
-  const loadResultMetadata = structuredWrapper?.metadata?.loadResult;
+  const structuredCtx = (structuredWrapper?.ctx ?? undefined) as Record<string, unknown> | undefined;
   if (structuredWrapper) {
     rawValue = structuredWrapper.data;
   }
@@ -119,7 +133,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             rawValue &&
             typeof rawValue === 'object' &&
             name in (rawValue as any) &&
-            structuredWrapper.metadata?.source !== 'load-content'
+            structuredWrapper.ctx?.source !== 'load-content'
           ) {
             accessedValue = (rawValue as any)[name];
           } else {
@@ -135,6 +149,24 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           }
           break;
         }
+        if (name === 'keepStructured') {
+          if (structuredWrapper.internal) {
+            (structuredWrapper.internal as Record<string, unknown>).keepStructured = true;
+          } else {
+            (structuredWrapper as Record<string, unknown>).internal = { keepStructured: true };
+          }
+          accessedValue = structuredWrapper;
+          break;
+        }
+        if (name === 'keep') {
+          if (structuredWrapper.internal) {
+            (structuredWrapper.internal as Record<string, unknown>).keepStructured = true;
+          } else {
+            (structuredWrapper as Record<string, unknown>).internal = { keepStructured: true };
+          }
+          accessedValue = structuredWrapper;
+          break;
+        }
         if (name === 'type') {
           accessedValue = structuredWrapper.type;
           break;
@@ -143,13 +175,17 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredWrapper.metadata;
           break;
         }
+        if (name === 'ctx') {
+          accessedValue = structuredWrapper.ctx;
+          break;
+        }
         if (
-          loadResultMetadata &&
-          typeof loadResultMetadata === 'object' &&
-          loadResultMetadata !== null &&
-          name in (loadResultMetadata as Record<string, unknown>)
+          structuredCtx &&
+          typeof structuredCtx === 'object' &&
+          name in structuredCtx &&
+          structuredCtx[name] !== undefined
         ) {
-          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          accessedValue = structuredCtx[name];
           break;
         }
       }
@@ -187,16 +223,34 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = rawValue;
           break;
         }
+
+        // Check if this looks like a JSON string - provide helpful error
+        const trimmed = rawValue.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          const chain = [...(options?.parentPath || []), name];
+          throw new FieldAccessError(
+            `Cannot access field "${name}" on JSON string. Use \`.data.${name}\` or pipe through \`| @json\` first.`,
+            {
+              baseValue: rawValue,
+              fieldAccessChain: [],
+              failedAtIndex: Math.max(0, chain.length - 1),
+              failedKey: name,
+              isJsonString: true
+            },
+            { sourceLocation: options?.sourceLocation, env: options?.env }
+          );
+        }
       }
 
       if (typeof rawValue !== 'object' || rawValue === null) {
         if (
-          loadResultMetadata &&
-          typeof loadResultMetadata === 'object' &&
-          loadResultMetadata !== null &&
-          name in (loadResultMetadata as Record<string, unknown>)
+          structuredCtx &&
+          typeof structuredCtx === 'object' &&
+          name in structuredCtx &&
+          structuredCtx[name] !== undefined
         ) {
-          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          accessedValue = structuredCtx[name];
           break;
         }
         const chain = [...(options?.parentPath || []), name];
@@ -332,12 +386,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle regular objects (including Variables with type: 'object')
       if (!(name in rawValue)) {
         if (
-          loadResultMetadata &&
-          typeof loadResultMetadata === 'object' &&
-          loadResultMetadata !== null &&
-          name in (loadResultMetadata as Record<string, unknown>)
+          structuredCtx &&
+          typeof structuredCtx === 'object' &&
+          name in structuredCtx &&
+          structuredCtx[name] !== undefined
         ) {
-          accessedValue = (loadResultMetadata as Record<string, unknown>)[name];
+          accessedValue = structuredCtx[name];
           break;
         }
         if (options?.returnUndefinedForMissing) {
@@ -545,6 +599,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         failedKey: String((field as any).type || 'unknown')
       });
   }
+
+  const provenanceSource = parentVariable ?? structuredWrapper ?? value;
+  if (provenanceSource) {
+    inheritExpressionProvenance(accessedValue, provenanceSource);
+  }
   
   // Check if we need to return context-preserving result
   if (options?.preserveContext) {
@@ -609,7 +668,7 @@ export async function accessFields(
       isVariable: isVariable(current)
     };
   }
-  
+
   return current;
 }
 
@@ -624,14 +683,14 @@ export function createFieldAccessVariable(
   if (result.isVariable && isVariable(result.value)) {
     return result.value;
   }
-  
+  const internalSource = source ?? result.parentVariable?.source;
   // Create a computed Variable to preserve context
   return {
     type: 'computed',
     name: result.accessPath.join('.'),
     value: result.value,
-    metadata: {
-      source,
+    internal: {
+      source: internalSource,
       parentVariable: result.parentVariable,
       accessPath: result.accessPath,
       fieldAccess: true

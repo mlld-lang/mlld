@@ -1,30 +1,54 @@
 // ITERATION PATTERNS
 // Shared patterns for iteration constructs (for loops, etc.)
 
-// For iteration pattern: @var in @collection
+// For iteration pattern: @var in @collection (supports dotted field access)
 ForIterationPattern "for iteration pattern"
-  = "@" variable:BaseIdentifier _ "in" _ source:VarRHSContent {
-      const varNode = helpers.createVariableReferenceNode('varIdentifier', { 
-        identifier: variable 
-      }, location());
-      
+  = variable:UnifiedVariableNoTail _ "in" _ source:VarRHSContent {
       return { 
-        variable: varNode, 
+        variable, 
         source: Array.isArray(source) ? source : [source]
       };
     }
 
 // Optional parallel spec for /for and for-expressions
 ForParallelSpec
-  = _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" _ "parallel" {
+  // New syntax: parallel(cap, pacing)
+  = _ "parallel" _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" {
       const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
       return { parallel: true, cap: Number(cap), rateMs };
     }
-  / _ cap:NumberLiteral _ "parallel" {
+  // New syntax: parallel(cap)
+  / _ "parallel" _ "(" _ cap:NumberLiteral _ ")" {
       return { parallel: true, cap: Number(cap) };
     }
+  // New syntax: parallel()
+  / _ "parallel" _ "(" _ ")" {
+      return { parallel: true };
+    }
+  // New syntax: bare parallel
   / _ "parallel" {
       return { parallel: true };
+    }
+  // Legacy syntax: (cap, pacing) parallel
+  / _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" _ "parallel" {
+      helpers.warn(
+        'Use parallel(cap, pacing) instead of (cap, pacing) parallel',
+        'parallel(cap, pacing)',
+        location(),
+        'for-parallel-deprecated'
+      );
+      const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
+      return { parallel: true, cap: Number(cap), rateMs };
+    }
+  // Legacy syntax: cap parallel
+  / _ cap:NumberLiteral _ "parallel" {
+      helpers.warn(
+        'Use parallel(cap) instead of cap parallel',
+        'parallel(cap)',
+        location(),
+        'for-parallel-deprecated'
+      );
+      return { parallel: true, cap: Number(cap) };
     }
 
 // Single action for for loops - simpler than WhenAction
@@ -91,6 +115,36 @@ ForSingleAction "for action"
         location: location()
       })];
     }
+  // Support for /append directive inside /for actions
+  / "append" _ source:OutputSource _ "to" _ target:OutputTargetFile format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+      const values = {
+        source: source.values,
+        target
+      };
+
+      const raw = {
+        source: source.raw,
+        target: target.raw
+      };
+
+      const meta = {
+        sourceType: source.type,
+        targetType: 'file',
+        hasSource: true,
+        ...(format ? { format, explicitFormat: true } : {})
+      };
+
+      helpers.processPipelineEnding(values, raw, meta, ending);
+
+      return [helpers.createStructuredDirective(
+        'append',
+        'appendFile',
+        values,
+        raw,
+        meta,
+        location()
+      )];
+    }
   // Special handling for /log directive - syntactic sugar for output to stderr
   / "log" _ source:OutputSource? {
       // Create stdout target automatically (same as /log directive)
@@ -132,7 +186,7 @@ ForSingleAction "for action"
       })];
     }
   // Generic handling for other directives (with optional /)
-  / "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
+  / "show" _ content:WhenRHSShowContent ending:StandardDirectiveEnding {
       // Support both template/quote content and unified references for show actions
       // Pass along any tail pipeline from the standard directive ending
       return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
@@ -140,6 +194,10 @@ ForSingleAction "for action"
   / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
       // Create the action node; pass ending.tail so pipelines are embedded immutably
       return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null);
+    }
+  / whenAction:WhenRHSAction {
+      // Allow when-style actions (including directives) directly in for loop bodies
+      return Array.isArray(whenAction) ? whenAction : [whenAction];
     }
   / invocation:UnifiedReferenceWithTail {
       // Follow the /when pattern - no @ consumption

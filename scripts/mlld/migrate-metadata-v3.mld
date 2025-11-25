@@ -1,0 +1,208 @@
+---
+description: Migrate .metadata to .ctx/.internal using Edit tool (v3.0)
+author: adam
+version: 3.0.0
+---
+
+>> Get all TypeScript files with .metadata (including tests, excluding registry)
+/var @rawFiles = run {rg -l '\.metadata' -g '*.ts' -g '!node_modules' -g '!registry' -g '!registry-review'} | @json.fromlist
+/var @allFiles = for @f in @rawFiles => <@base/@f>
+
+/show "Found @allFiles.length files to migrate"
+
+>> Count test vs code files
+/exe @countByType(files) = js {
+  let tests = 0, code = 0;
+  for (const f of files) {
+    const path = f.ctx?.relative || '';
+    if (path.includes('.test.ts')) tests++;
+    else code++;
+  }
+  return { tests, code, total: files.length };
+}
+
+/var @counts = @countByType(@allFiles)
+/show "Files: @counts.code code (sonnet) + @counts.tests tests (haiku) = @counts.total total"
+
+>> Define LLM executables with Edit tool access ONLY
+/exe @sonnet(request) = run @request | { claude -p --model claude-sonnet-4-5 --allowedTools Edit }
+/exe @haiku(request) = run @request | { claude -p --model claude-haiku-4-5 --allowedTools Edit }
+
+>> Build migration request
+/exe @buildMigrationRequest(filepath) = `
+You are migrating a TypeScript file from .metadata API to .ctx/.internal API.
+
+You have access to the Edit tool. Use it to make ALL necessary changes to migrate this file.
+
+<critical_semantic_mapping>
+SEMANTIC FIELD CLASSIFICATION - Each field has ONE correct namespace:
+
+.ctx (USER-FACING runtime metadata):
+- labels, taint, sources, policy (security/taint tracking)
+- filename, relative, absolute, url, domain, title, description (file/URL provenance)
+- tokens, tokest, fm, json (content metrics)
+- definedAt, importPath, source, retries (execution context)
+- isImported (import tracking)
+
+.internal (IMPLEMENTATION DETAILS - runtime only):
+- isSystem, isReserved, isParameter (system flags) ← CRITICAL: These are .internal NOT .ctx
+- isBuiltinTransformer, isGuardHelper (type flags)
+- arrayType, configType, itemType (type hints)
+- executableDef, capturedModuleEnv, capturedShadowEnvs (executable system)
+- transformerImplementation, transformerVariants (transformer)
+- customToString, customToJSON, contentGetter (serialization)
+- isLazy, needsResolution, pipelineInput (lazy eval)
+- arrayHelperAggregate, wasEvaluated, evaluatedAt (tracking)
+- capability (import capabilities)
+- isNamespace, isComplex (type markers)
+
+WRONG namespace = bugs and test failures!
+</critical_semantic_mapping>
+
+<migration_patterns>
+## Pattern 1: Simple field access
+OLD: variable.metadata.arrayType
+NEW: variable.internal?.arrayType
+
+OLD: variable.metadata.security.labels
+NEW: variable.ctx.labels
+
+OLD: variable.metadata?.isSystem
+NEW: variable.internal?.isSystem  ← NOT .ctx!
+
+## Pattern 2: Object spreads (SPLIT into two properties)
+OLD:
+metadata: { ...var.metadata, isSystem: true }
+
+NEW:
+ctx: { ...var.ctx },
+internal: { ...var.internal, isSystem: true }
+
+OLD:
+metadata: { ...existingVar.metadata, ...baseMetadata }
+
+NEW:
+ctx: { ...existingVar.ctx, ...baseMetadata },  // if baseMetadata has .ctx fields
+internal: { ...existingVar.internal }
+
+## Pattern 3: Conditional checks
+OLD: if (variable.metadata?.isReserved && !variable.metadata?.isSystem)
+NEW: if (variable.internal?.isReserved && !variable.internal?.isSystem)
+
+OLD: if (metadata?.security?.labels)
+NEW: if (ctx.labels?.length > 0)
+
+## Pattern 4: Variable creation
+OLD:
+createSimpleTextVariable('name', 'value', {
+  metadata: { isSystem: true }
+})
+
+NEW:
+createSimpleTextVariable('name', 'value', {
+  ctx: {},
+  internal: { isSystem: true }
+})
+
+## Pattern 5: Null safety (CRITICAL)
+ALWAYS use ?. when accessing:
+- variable.internal?.arrayType  (not variable.internal.arrayType)
+- variable.ctx?.labels (not variable.ctx.labels)
+- variable.internal?.isSystem (not variable.internal.isSystem)
+
+Exception: When you KNOW it exists from prior check
+</migration_patterns>
+
+<examples>
+Example 1 - Reserved variable check (CRITICAL - was causing "already reserved" errors):
+// BEFORE:
+if (reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem)
+
+// AFTER:
+if (reservedNames.has(name) && !variable.internal?.isReserved && !variable.internal?.isSystem)
+// isReserved and isSystem are .internal (implementation), NOT .ctx (user-facing)
+
+Example 2 - Object spread split:
+// BEFORE:
+{
+  name: 'test',
+  type: 'text',
+  value: 'x',
+  metadata: { ...originalVar.metadata, isParameter: true }
+}
+
+// AFTER:
+{
+  name: 'test',
+  type: 'text',
+  value: 'x',
+  ctx: { ...originalVar.ctx },
+  internal: { ...originalVar.internal, isParameter: true }
+}
+
+Example 3 - Array type check (null safety):
+// BEFORE:
+const arrayType = variable.metadata?.arrayType;
+if (arrayType === 'load-content-result') { ... }
+
+// AFTER:
+const arrayType = variable.internal?.arrayType;  // Use ?. for safety!
+if (arrayType === 'load-content-result') { ... }
+</examples>
+
+<file_to_migrate>
+File: @filepath.relative
+
+<content>
+<@filepath>
+</content>
+</file_to_migrate>
+
+<strict_requirements>
+1. Use ONLY the Edit tool to modify @filepath
+2. Do NOT use the Write tool
+3. Do NOT create any new files (Edit tool cannot create files anyway)
+4. Migrate ALL .metadata references in the file
+5. Use semantic mapping above to choose .ctx vs .internal for each field
+6. ALWAYS use optional chaining (?.) for nested access
+7. Split all object spreads into separate ctx and internal properties
+8. If you need to import helpers, use existing ones:
+   - import { ctxToSecurityDescriptor, updateCtxFromDescriptor } from '@interpreter/utils/metadata-migration'
+9. Make multiple Edit calls if needed (one per distinct change)
+10. After all edits, file should have ZERO .metadata references
+
+BE AGGRESSIVE: Migrate everything, don't skip uncertain cases.
+</strict_requirements>
+
+<edit_tool_usage>
+Use the Edit tool like this:
+
+For each .metadata reference, make an Edit call:
+
+old_string: "variable.metadata?.isSystem"
+new_string: "variable.internal?.isSystem"
+
+For object spreads, replace the entire object literal:
+
+old_string: "metadata: { ...var.metadata, isSystem: true }"
+new_string: "ctx: { ...var.ctx },\n  internal: { ...var.internal, isSystem: true }"
+
+Make as many Edit calls as needed to migrate the entire file.
+</edit_tool_usage>
+`
+
+/show "Starting migration of @allFiles.length files..."
+
+>> Execute in parallel
+/var @results = for 20 parallel @file in @allFiles => @sonnet(@buildMigrationRequest(@file)) | log
+/output @results to "results.txt"
+
+/show ""
+/show "✅ Migration complete!"
+/show ""
+/show "Verification:"
+/show "1. Check remaining: rg '\\.metadata' -g '*.ts' -g '!node_modules' -g '!registry' | wc -l"
+/show "2. Check new files: git status | grep '^??.*\\.ts'"
+/show "3. Review changes: git diff --stat"
+/show "4. Run tests: npm test"
+/show "5. Expected: 0 new files, <50 .metadata refs remaining, most tests passing"

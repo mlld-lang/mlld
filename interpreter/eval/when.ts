@@ -16,7 +16,9 @@ import {
   createSimpleTextVariable,
   createObjectVariable
 } from '@core/types/variable';
-import { isStructuredValue, asData, asText } from '../utils/structured-value';
+import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
+
+const DENIED_KEYWORD = 'denied';
 
 /**
  * Compares two values according to mlld's when comparison rules
@@ -638,16 +640,24 @@ async function evaluateAnyMatch(
         // Create a variable from the condition value
         const variable = typeof conditionValue === 'string' ?
           createSimpleTextVariable(variableName, conditionValue, {
-            directive: 'var',
-            syntax: 'quoted',
-            hasInterpolation: false,
-            isMultiLine: false
+            ctx: {
+              source: {
+                directive: 'var',
+                syntax: 'quoted',
+                hasInterpolation: false,
+                isMultiLine: false
+              }
+            }
           }) :
           createObjectVariable(variableName, conditionValue, {
-            directive: 'var',
-            syntax: 'object',
-            hasInterpolation: false,
-            isMultiLine: false
+            ctx: {
+              source: {
+                directive: 'var',
+                syntax: 'object',
+                hasInterpolation: false,
+                isMultiLine: false
+              }
+            }
           });
         env.setVariable(variableName, variable);
       }
@@ -672,6 +682,8 @@ export async function evaluateCondition(
   env: Environment,
   variableName?: string
 ): Promise<boolean> {
+  const deniedContext = env.getContextManager().peekDeniedContext();
+  const deniedState = Boolean(deniedContext?.denied);
 
   // Handle new WhenCondition wrapper nodes from unified expressions
   if (condition.length === 1 && condition[0].type === 'WhenCondition') {
@@ -689,6 +701,9 @@ export async function evaluateCondition(
   if (condition.length === 1 && condition[0].type === 'UnaryExpression') {
     const unaryNode = condition[0] as any;
     if (unaryNode.operator === '!') {
+      if (isDeniedLiteralNode(unaryNode.operand)) {
+        return !deniedState;
+      }
       const innerCondition = [unaryNode.operand];
       
       // Evaluate the inner condition and negate the result
@@ -696,15 +711,20 @@ export async function evaluateCondition(
       return !innerResult;
     }
   }
+
+  if (condition.length === 1 && isDeniedLiteralNode(condition[0])) {
+    return deniedState;
+  }
   
   // Check if this is an expression node (BinaryExpression, TernaryExpression, UnaryExpression)
   if (condition.length === 1) {
     const node = condition[0];
     if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
       const { evaluateUnifiedExpression } = await import('./expressions');
-      let result: unknown;
+      let resultValue: unknown;
       try {
-        result = await evaluateUnifiedExpression(node as any, env);
+        const expressionResult = await evaluateUnifiedExpression(node as any, env);
+        resultValue = expressionResult.value;
       } catch (err) {
         // Add operator and operand previews for helpful diagnostics
         const op = (node as any).operator || (node as any).test?.type || node.type;
@@ -725,12 +745,12 @@ export async function evaluateCondition(
           ]
         } as any);
       }
-      const truthy = isTruthy(result);
+      const truthy = isTruthy(resultValue);
       if (process.env.MLLD_DEBUG === 'true') {
         try {
           console.error('[evaluateCondition] expression node result:', {
             nodeType: node.type,
-            result,
+            result: resultValue,
             truthy
           });
         } catch {}
@@ -945,6 +965,89 @@ export async function evaluateCondition(
   return isTruthy(finalValue);
 }
 
+function isDeniedLiteralNode(node: BaseMlldNode | undefined): boolean {
+  if (!node) {
+    return false;
+  }
+  if (node.type === 'Literal' && typeof (node as any).value === 'string') {
+    return (node as any).value.toLowerCase() === DENIED_KEYWORD;
+  }
+  if (node.type === 'Text' && typeof (node as any).content === 'string') {
+    return (node as any).content.trim().toLowerCase() === DENIED_KEYWORD;
+  }
+  if (
+    node.type === 'VariableReference' &&
+    typeof (node as any).identifier === 'string' &&
+    (node as any).identifier.toLowerCase() === DENIED_KEYWORD
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isDeniedField(field: any): boolean {
+  if (!field) {
+    return false;
+  }
+  if (typeof field.name === 'string' && field.name.toLowerCase() === DENIED_KEYWORD) {
+    return true;
+  }
+  if (typeof field.identifier === 'string' && field.identifier.toLowerCase() === DENIED_KEYWORD) {
+    return true;
+  }
+  return false;
+}
+
+export function conditionTargetsDenied(condition: BaseMlldNode[]): boolean {
+  const visited = new Set<BaseMlldNode>();
+  const stack = [...condition];
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') {
+      continue;
+    }
+    if (visited.has(node)) {
+      continue;
+    }
+    visited.add(node);
+
+    if (isDeniedLiteralNode(node)) {
+      return true;
+    }
+
+    if ((node as any).type === 'VariableReference') {
+      const identifier = typeof (node as any).identifier === 'string'
+        ? (node as any).identifier.toLowerCase()
+        : '';
+      if (identifier === DENIED_KEYWORD) {
+        return true;
+      }
+      if (
+        identifier === 'ctx' &&
+        Array.isArray((node as any).fields) &&
+        (node as any).fields.some(isDeniedField)
+      ) {
+        return true;
+      }
+    }
+
+    for (const value of Object.values(node as any)) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item && typeof item === 'object' && 'type' in item) {
+            stack.push(item as BaseMlldNode);
+          }
+        }
+      } else if (value && typeof value === 'object' && 'type' in value) {
+        stack.push(value as BaseMlldNode);
+      }
+    }
+  }
+
+  return false;
+}
+
 /**
  * Determines if a value is truthy according to mlld rules
  * WHY: mlld has specific truthiness rules that differ from JavaScript. Empty strings,
@@ -975,7 +1078,8 @@ function isTruthy(value: any): boolean {
       // Command results are truthy if they have output
       return variable.value.trim().length > 0;
     } else if (isPipelineInput(variable)) {
-      return variable.value.text.length > 0;
+      assertStructuredValue(variable.value, 'when:isTruthy:pipeline-input');
+      return asText(variable.value).length > 0;
     }
     
     // For other variable types, use their value

@@ -12,18 +12,31 @@ export interface TransformerDefinition {
   name: string;
   uppercase: string;
   description: string;
-  implementation: (input: string) => Promise<string> | string;
+  implementation: (input: any) => Promise<any> | any;
   variants?: TransformerVariant[];
 }
 
 export interface TransformerVariant {
   field: string;
   description: string;
-  implementation: (input: string) => Promise<string> | string;
+  implementation: (input: any) => Promise<any> | any;
 }
 
-function makeJsonTransformer(mode: 'loose' | 'strict') {
+function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
   return (input: string) => {
+    if (mode === 'llm') {
+      const extracted = extractJsonFromLLMResponse(input);
+      if (!extracted) {
+        return false;
+      }
+
+      try {
+        return JSON5.parse(extracted);
+      } catch {
+        return false;
+      }
+    }
+
     if (mode === 'strict') {
       try {
         return JSON.parse(input);
@@ -44,6 +57,65 @@ function makeJsonTransformer(mode: 'loose' | 'strict') {
 
     return parseJsonWithMarkdownFallback(input);
   };
+}
+
+/**
+ * Extract JSON from LLM-generated responses
+ * Handles code fences, inline JSON, and surrounding prose
+ * @param input String that may contain JSON
+ * @returns Extracted JSON string or null if no JSON found
+ */
+function extractJsonFromLLMResponse(input: string): string | null {
+  const trimmed = input.trim();
+
+  // Strategy 1: Extract from markdown code fences
+  const fencePatterns = [
+    /```json\s*\n([\s\S]*?)\n```/,     // ```json\n...\n```
+    /```\s*\n([\s\S]*?)\n```/,          // ```\n...\n```
+  ];
+
+  for (const pattern of fencePatterns) {
+    const match = trimmed.match(pattern);
+    if (match && match[1]) {
+      const candidate = match[1].trim();
+      if (looksLikeJson(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  // Strategy 2: Find JSON object/array in prose
+  const jsonPatterns = [
+    /\{[\s\S]*\}/,  // Find {...}
+    /\[[\s\S]*\]/,  // Find [...]
+  ];
+
+  for (const pattern of jsonPatterns) {
+    const match = trimmed.match(pattern);
+    if (match && match[0]) {
+      const candidate = match[0].trim();
+      if (looksLikeJson(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Quick heuristic to validate JSON-like structure
+ * Not a full parser - just filters obvious non-JSON
+ * @param str Potential JSON string
+ * @returns true if string looks like valid JSON structure
+ */
+function looksLikeJson(str: string): boolean {
+  const startsRight = str.startsWith('{') || str.startsWith('[');
+  const endsRight = str.endsWith('}') || str.endsWith(']');
+  const hasStructure = str.includes(':') || str.includes(',');
+  const minLength = str.length > 2;
+
+  return startsRight && endsRight && hasStructure && minLength;
 }
 
 function parseJsonWithMarkdownFallback(input: string): unknown {
@@ -101,7 +173,7 @@ export const builtinTransformers: TransformerDefinition[] = [
   },
   {
     name: 'json',
-    uppercase: 'JSON', 
+    uppercase: 'JSON',
     description: 'Format as JSON or convert to JSON structure (supports loose JSON syntax)',
     implementation: makeJsonTransformer('loose'),
     variants: [
@@ -114,6 +186,21 @@ export const builtinTransformers: TransformerDefinition[] = [
         field: 'strict',
         description: 'Parse strict JSON syntax only',
         implementation: makeJsonTransformer('strict')
+      },
+      {
+        field: 'llm',
+        description: 'Extract JSON from LLM responses (code fences, prose). Returns false if no JSON found.',
+        implementation: makeJsonTransformer('llm')
+      },
+      {
+        field: 'fromlist',
+        description: 'Convert plain text list (one item per line) to JSON array',
+        implementation: (input: string) => {
+          return input
+            .split('\n')
+            .map(line => line.trimEnd())
+            .filter(line => line.length > 0);
+        }
       }
     ]
   },
@@ -140,7 +227,7 @@ export const builtinTransformers: TransformerDefinition[] = [
  */
 export function createTransformerVariable(
   name: string,
-  implementation: (input: string) => Promise<string> | string,
+  implementation: (input: any) => Promise<any> | any,
   description: string,
   isUppercase: boolean
 ): MlldVariable {
@@ -155,11 +242,23 @@ export function createTransformerVariable(
   return {
     type: 'executable',
     name,
-    value: executableDef,
+    value: {
+      ...executableDef,
+      template: executableDef.codeTemplate
+    },
     metadata: {
       isSystem: true,
       isBuiltinTransformer: true,
       transformerImplementation: implementation,
+      description,
+      isUppercase,
+      executableDef
+    },
+    internal: {
+      executableDef,
+      isBuiltinTransformer: true,
+      transformerImplementation: implementation,
+      transformerVariants: undefined,
       description,
       isUppercase
     }

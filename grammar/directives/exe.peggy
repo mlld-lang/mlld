@@ -20,8 +20,10 @@ by the /run directive. It uses a unified LHS/RHS pattern where:
 
 // Primary /exe directive - unified LHS parsing with RHS delegation
 SlashExe
-  = DirectiveContext "/exe" _ "@"? id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
+  = DirectiveContext "/exe" labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
       helpers.debug('SlashExe matched with ExeRHSContent', { id, params, content });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // Create identifier node  
       const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
@@ -36,13 +38,13 @@ SlashExe
           params: processedParams,
           content: [content]
         };
-        
+
         const raw = {
           identifier: id,
           params: processedParams.map(p => p.name),
           content: 'when: [...]'  // Simplified representation
         };
-        
+
         const metaObj = {
           parameterCount: processedParams.length,
           isWhenExpression: true,
@@ -62,7 +64,13 @@ SlashExe
           raw.withClause = withClause;
           metaObj.withClause = withClause;
         }
-        
+
+        if (labelInfo) {
+          values.securityLabels = labelInfo.labels;
+          raw.securityLabels = labelInfo.raw;
+          metaObj.securityLabels = labelInfo.labels;
+        }
+
         return helpers.createStructuredDirective(
           DirectiveKind.exe,
           'exeWhen',
@@ -81,13 +89,13 @@ SlashExe
           params: processedParams,
           content: [content]
         };
-        
+
         const raw = {
           identifier: id,
           params: processedParams.map(p => p.name),
           content: 'for ... => ...'  // Simplified representation
         };
-        
+
         const metaObj = {
           parameterCount: processedParams.length,
           isForExpression: true,
@@ -107,7 +115,13 @@ SlashExe
           raw.withClause = withClause;
           metaObj.withClause = withClause;
         }
-        
+
+        if (labelInfo) {
+          values.securityLabels = labelInfo.labels;
+          raw.securityLabels = labelInfo.raw;
+          metaObj.securityLabels = labelInfo.labels;
+        }
+
         return helpers.createStructuredDirective(
           DirectiveKind.exe,
           'exeFor',
@@ -129,14 +143,14 @@ SlashExe
         ...(subtype !== 'environment' ? { params: processedParams } : {}),
         ...content.values
       };
-      
+
       // Build raw based on content type
       const raw = {
         identifier: id,
         ...(subtype !== 'environment' ? { params: processedParams.map(p => p.name) } : {}),
         ...content.raw
       };
-      
+
       // Build metadata
       const metaObj = {
         ...(subtype !== 'environment' ? { parameterCount: processedParams.length } : {}),
@@ -157,7 +171,13 @@ SlashExe
         raw.withClause = withClause;
         metaObj.withClause = withClause;
       }
-      
+
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+        raw.securityLabels = labelInfo.raw;
+        metaObj.securityLabels = labelInfo.labels;
+      }
+
       return helpers.createStructuredDirective(
         DirectiveKind.exe,
         subtype,
@@ -176,7 +196,6 @@ SlashExe
       }
       
       helpers.debug('SlashExe matched environment declaration (no @)', { id, content });
-      
       // Create identifier node  
       const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
@@ -185,12 +204,12 @@ SlashExe
         identifier: [identifierNode],
         ...content.values
       };
-      
+
       const raw = {
         identifier: id,
         ...content.raw
       };
-      
+
       // Metadata
       const metaObj = {
         ...content.meta
@@ -202,7 +221,7 @@ SlashExe
         raw.withClause = withClause;
         metaObj.withClause = withClause;
       }
-      
+
       return helpers.createStructuredDirective(
         DirectiveKind.exe,
         'environment',

@@ -15,7 +15,21 @@ import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transfor
 import { logger } from '@core/utils/logger';
 import { attachBuiltinEffects } from './effects-attachment';
 import { wrapExecResult } from '../../utils/structured-exec';
-import { ensureStructuredValue, isStructuredValue, wrapStructured, type StructuredValue, type StructuredValueMetadata } from '../../utils/structured-value';
+import {
+  ensureStructuredValue,
+  isStructuredValue,
+  wrapStructured,
+  extractSecurityDescriptor,
+  applySecurityDescriptorToStructuredValue,
+  type StructuredValue,
+  type StructuredValueMetadata
+} from '../../utils/structured-value';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
+import { wrapLoadContentValue } from '../../utils/load-content-structured';
+import { resolveNestedValue } from '../../utils/display-materialization';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 /**
  * Context for pipeline processing
@@ -29,6 +43,7 @@ export interface UnifiedPipelineContext {
   // Required
   value: any;                    // Initial value (Variable, string, object, etc.)
   env: Environment;              // Execution environment
+  descriptorHint?: SecurityDescriptor; // Optional descriptor hint when value lost metadata
   
   // Optional detection sources
   node?: any;                    // AST node that might have pipeline
@@ -38,6 +53,7 @@ export interface UnifiedPipelineContext {
   pipeline?: PipelineStage[];  // Explicit pipeline to execute
   format?: string;               // Data format hint
   isRetryable?: boolean;         // Override retryability
+  stream?: boolean;              // Enable streaming for this pipeline
   
   // Metadata
   identifier?: string;           // Variable name for debugging
@@ -58,7 +74,47 @@ export interface UnifiedPipelineContext {
 export async function processPipeline(
   context: UnifiedPipelineContext
 ): Promise<any> {
-  const { value, env, node, directive, identifier } = context;
+  const { value, env, node, directive, identifier, descriptorHint } = context;
+  const streamRequested =
+    context.stream ??
+    Boolean(
+      (node as any)?.withClause?.stream ??
+      (directive as any)?.values?.withClause?.stream ??
+      (directive as any)?.meta?.withClause?.stream
+    );
+  const sourceNode = getSourceFunctionFromValue(value);
+  const descriptorFromValue = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  const descriptorFromAst = extractDescriptorFromAst(node, env);
+  if (process.env.MLLD_DEBUG === 'true') {
+    const payload = {
+      nodeType: node?.type,
+      descriptorFromValue,
+      descriptorFromAst,
+      descriptorHint
+    };
+    console.error('[processPipeline] descriptor sources', payload);
+    try {
+      const fs = await import('node:fs');
+      fs.appendFileSync('/tmp/pipeline-debug.log', `${JSON.stringify(payload)}\n`);
+    } catch {}
+  }
+  let pipelineDescriptor: SecurityDescriptor | undefined =
+    descriptorHint ?? descriptorFromValue ?? descriptorFromAst;
+  const directiveLabels = directive
+    ? (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined
+    : undefined;
+  if (directiveLabels && directiveLabels.length > 0) {
+    pipelineDescriptor = mergeDescriptors(
+      pipelineDescriptor,
+      makeSecurityDescriptor({ labels: directiveLabels })
+    );
+  }
+  if (pipelineDescriptor) {
+    env.recordSecurityDescriptor(pipelineDescriptor);
+  }
   
   // Debug detection
   if (identifier && process.env.MLLD_DEBUG === 'true') {
@@ -113,14 +169,14 @@ export async function processPipeline(
     logger.debug('[processPipeline] Checking for synthetic source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
-      hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata),
-      hasSourceFunction: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata && value.metadata.sourceFunction),
+      hasMetadata: !!(value && typeof value === 'object' && ('ctx' in value || 'internal' in value) && ((value as any).ctx || (value as any).internal)),
+      hasSourceFunction: !!sourceNode,
       valueType: value && typeof value === 'object' && 'type' in value ? value.type : typeof value
     });
   }
   
   // Normalize pipeline - prepend source stage if retryable
-  const normalizedPipeline = detected.isRetryable && value?.metadata?.sourceFunction
+  const normalizedPipeline = detected.isRetryable && sourceNode
     ? [SOURCE_STAGE, ...detected.pipeline]
     : detected.pipeline;
 
@@ -132,30 +188,38 @@ export async function processPipeline(
   await validatePipeline(pipelineToValidate, env, identifier);
   
   // Prepare input value for pipeline
-  const input = await prepareInput(value, env);
+  const input = await prepareInput(value, env, pipelineDescriptor);
   
   // Create source function for retrying stage 0 if applicable
   let sourceFunction: (() => Promise<string | StructuredValue>) | undefined;
-  if (detected.isRetryable && value?.metadata?.sourceFunction) {
+  if (detected.isRetryable && sourceNode) {
+    const attachDescriptorToRetryInput = (value: unknown): string | StructuredValue => {
+      if (!pipelineDescriptor) {
+        return value as string | StructuredValue;
+      }
+      const wrapped = isStructuredValue(value) ? value : wrapExecResult(value);
+      applySecurityDescriptorToStructuredValue(wrapped, pipelineDescriptor);
+      setExpressionProvenance(wrapped, pipelineDescriptor);
+      return wrapped;
+    };
     // Create a function that re-executes the source AST node
-    const sourceNode = value.metadata.sourceFunction;
     sourceFunction = async () => {
       // Re-evaluate the source node to get fresh input
       if (sourceNode.type === 'ExecInvocation') {
         const { evaluateExecInvocation } = await import('../exec-invocation');
         const result = await evaluateExecInvocation(sourceNode, env);
-        return wrapExecResult(result.value);
+        return attachDescriptorToRetryInput(result.value);
       } else if (sourceNode.type === 'command') {
         const { evaluateCommand } = await import('../run');
         const result = await evaluateCommand(sourceNode, env);
         if (structuredEnabled) {
-          return wrapExecResult(result.value);
+          return attachDescriptorToRetryInput(result.value);
         }
-        return String(result.value);
+        return attachDescriptorToRetryInput(String(result.value));
       } else if (sourceNode.type === 'code') {
         const { evaluateCodeExecution } = await import('../code-execution');
         const result = await evaluateCodeExecution(sourceNode, env);
-        return wrapExecResult(result.value);
+        return attachDescriptorToRetryInput(result.value);
       }
       // Fallback - return original input
       return input;
@@ -166,6 +230,7 @@ export async function processPipeline(
   const hasSyntheticSource = functionalPipeline[0]?.rawIdentifier === '__source__';
   
   // Execute pipeline with normalized stages
+let executionResult: StructuredValue;
   try {
     const executor = new PipelineExecutor(
       functionalPipeline,
@@ -177,9 +242,11 @@ export async function processPipeline(
       detected.parallelCap,
       detected.delayMs
     );
+    executionResult = await executor.execute(input, {
+      returnStructured: true,
+      stream: streamRequested
+    }) as StructuredValue;
 
-    return await executor.execute(input, { returnStructured: true });
-    
   } catch (error) {
     // Enhance error with context
     if (error instanceof Error) {
@@ -192,6 +259,17 @@ export async function processPipeline(
     }
     throw error;
   }
+  if (pipelineDescriptor && isStructuredValue(executionResult)) {
+    const metadata: StructuredValueMetadata = {
+      ...(executionResult.metadata || {}),
+      security: pipelineDescriptor
+    };
+    return wrapStructured(executionResult, undefined, undefined, metadata);
+  }
+  if (pipelineDescriptor) {
+    env.recordSecurityDescriptor(pipelineDescriptor);
+  }
+  return executionResult;
 }
 
 /**
@@ -205,6 +283,9 @@ async function validatePipeline(
   for (const stage of pipeline) {
     if (Array.isArray(stage)) {
       await validatePipeline(stage, env, identifier);
+      continue;
+    }
+    if ((stage as any).type === 'inlineCommand' || (stage as any).type === 'inlineValue') {
       continue;
     }
     const funcName = stage.rawIdentifier;
@@ -244,16 +325,31 @@ async function validatePipeline(
  */
 async function prepareInput(
   value: any,
-  env: Environment
+  env: Environment,
+  descriptor?: SecurityDescriptor
 ): Promise<string | StructuredValue> {
-  return prepareStructuredInput(value, env);
+  return prepareStructuredInput(value, env, undefined, descriptor);
 }
 
 async function prepareStructuredInput(
   value: any,
   env: Environment,
-  incomingMetadata?: StructuredValueMetadata
+  incomingMetadata?: StructuredValueMetadata,
+  providedDescriptor?: SecurityDescriptor
 ): Promise<StructuredValue> {
+  const sourceDescriptor = providedDescriptor ?? extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  const finalizeWrapper = (wrapper: StructuredValue): StructuredValue => {
+    if (sourceDescriptor) {
+      applySecurityDescriptorToStructuredValue(wrapper, sourceDescriptor);
+      setExpressionProvenance(wrapper, sourceDescriptor);
+    } else {
+      inheritExpressionProvenance(wrapper, value);
+    }
+    return wrapper;
+  };
   const mergedMetadata = (current?: StructuredValueMetadata): StructuredValueMetadata | undefined => {
     if (!incomingMetadata && !current) {
       return undefined;
@@ -265,10 +361,10 @@ async function prepareStructuredInput(
   };
 
   if (isStructuredValue(value)) {
-    if (incomingMetadata) {
-      return wrapStructured(value, value.type, value.text, mergedMetadata(value.metadata));
-    }
-    return value;
+    const normalizedData = sanitizeStructuredData(value.data);
+    return finalizeWrapper(
+      wrapStructured(normalizedData, value.type, value.text, mergedMetadata(value.metadata))
+    );
   }
 
   if (
@@ -280,63 +376,60 @@ async function prepareStructuredInput(
     typeof (value as any).text === 'string' &&
     typeof (value as any).type === 'string'
   ) {
-    return wrapStructured(
-      value as StructuredValue,
-      (value as any).type,
-      (value as any).text,
-      mergedMetadata((value as any).metadata)
+    const normalizedData = sanitizeStructuredData((value as any).data);
+    return finalizeWrapper(
+      wrapStructured(normalizedData, (value as any).type, (value as any).text, mergedMetadata((value as any).metadata))
     );
   }
 
-  if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
-    const metadata = mergedMetadata(value.metadata as StructuredValueMetadata | undefined);
-    return prepareStructuredInput(value.value, env, metadata);
+  if (value && typeof value === 'object' && 'value' in value && ('ctx' in value || 'internal' in value)) {
+    const metadata = mergedMetadata(undefined);
+    const nested = await prepareStructuredInput(value.value, env, metadata, providedDescriptor);
+    return finalizeWrapper(nested);
   }
 
   if (value && typeof value === 'object') {
     const { resolveValue, ResolutionContext } = await import('../../utils/variable-resolution');
     if ('type' in value && 'value' in value && 'name' in value) {
       const resolved = await resolveValue(value, env, ResolutionContext.PipelineInput);
-      return prepareStructuredInput(resolved, env, incomingMetadata);
+      const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
+      return finalizeWrapper(nested);
     }
   }
 
-  const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-  if (isLoadContentResult(value)) {
-    return wrapStructured(
-      value,
-      'object',
-      value.content ?? '',
-      mergedMetadata({ loadResult: value })
-    );
-  }
-
-  if (isLoadContentResultArray(value)) {
-    return wrapStructured(
-      value,
-      'array',
-      value.content ?? '',
-      mergedMetadata({ loadResult: value })
+  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
+    const wrapped = wrapLoadContentValue(value);
+    return finalizeWrapper(
+      wrapStructured(
+        wrapped,
+        wrapped.type,
+        wrapped.text,
+        mergedMetadata(wrapped.metadata)
+      )
     );
   }
 
   if (typeof value === 'string') {
-    return ensureStructuredValue(value, 'text', value, incomingMetadata);
+    return finalizeWrapper(ensureStructuredValue(value, 'text', value, incomingMetadata));
   }
 
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return ensureStructuredValue(value, 'text', String(value), incomingMetadata);
+    return finalizeWrapper(ensureStructuredValue(value, 'text', String(value), incomingMetadata));
   }
 
   if (Array.isArray(value)) {
-    return wrapStructured(value, 'array', undefined, incomingMetadata);
+    const normalizedArray = value.map(item => sanitizeStructuredData(item));
+    return finalizeWrapper(wrapStructured(normalizedArray, 'array', undefined, incomingMetadata));
   }
 
   if (value && typeof value === 'object') {
-    return wrapStructured(value, 'object', undefined, incomingMetadata);
+    const normalizedObject = sanitizeStructuredData(value);
+    return finalizeWrapper(
+      wrapStructured(normalizedObject as Record<string, unknown>, 'object', undefined, incomingMetadata)
+    );
   }
 
-  return ensureStructuredValue('', 'text', '', incomingMetadata);
+  return finalizeWrapper(ensureStructuredValue('', 'text', '', incomingMetadata));
 }
 
 /**
@@ -355,6 +448,75 @@ function getAvailableFunctions(env: Environment): string[] {
   return funcs;
 }
 
+function sanitizeStructuredData(value: unknown): unknown {
+  return resolveNestedValue(value, { preserveProvenance: true });
+}
+
+function extractDescriptorFromAst(node: any, env: Environment): SecurityDescriptor | undefined {
+  if (!node || typeof node !== 'object') {
+    return undefined;
+  }
+  if (node.type === 'ExecInvocation' && node.commandRef) {
+    const execDescriptor =
+      extractDescriptorFromAst(node.commandRef.objectReference, env) ??
+      extractDescriptorFromAst(node.commandRef.objectSource, env);
+    if (execDescriptor) {
+      return execDescriptor;
+    }
+    if (typeof node.commandRef.identifier === 'string') {
+      const variable = env.getVariable(node.commandRef.identifier);
+      if (variable?.ctx) {
+        return ctxToSecurityDescriptor(variable.ctx);
+      }
+    } else if (Array.isArray(node.commandRef.identifier)) {
+      for (const identifierNode of node.commandRef.identifier) {
+        const descriptor = extractDescriptorFromAst(identifierNode, env);
+        if (descriptor) {
+          return descriptor;
+        }
+      }
+    }
+  }
+
+  if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
+    const variable = env.getVariable(node.identifier);
+    if (variable?.ctx) {
+      return ctxToSecurityDescriptor(variable.ctx);
+    }
+  }
+
+  if (node.objectReference) {
+    const descriptor = extractDescriptorFromAst(node.objectReference, env);
+    if (descriptor) {
+      return descriptor;
+    }
+  }
+
+  if (node.commandRef?.objectReference) {
+    const descriptor = extractDescriptorFromAst(node.commandRef.objectReference, env);
+    if (descriptor) {
+      return descriptor;
+    }
+  }
+  if (node.commandRef?.objectSource) {
+    const descriptor = extractDescriptorFromAst(node.commandRef.objectSource, env);
+    if (descriptor) {
+      return descriptor;
+    }
+  }
+
+  if (Array.isArray(node.value)) {
+    for (const child of node.value) {
+      const descriptor = extractDescriptorFromAst(child, env);
+      if (descriptor) {
+        return descriptor;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Check if a value might need pipeline processing
  * 
@@ -370,4 +532,15 @@ export function needsPipelineProcessing(
     directive?.values?.withClause?.pipeline ||
     directive?.meta?.withClause?.pipeline
   );
+}
+
+function getSourceFunctionFromValue(value: unknown): any | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const candidate = value as { internal?: Record<string, unknown> };
+  if (candidate.internal && candidate.internal.sourceFunction) {
+    return candidate.internal.sourceFunction;
+  }
+  return undefined;
 }

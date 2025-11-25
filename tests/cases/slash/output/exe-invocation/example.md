@@ -2,8 +2,8 @@
 
 This tests the @output directive with command invocation syntax.
 
-/exe @listFiles() = {ls -la}
-/exe @countWords(file) = {wc -w @file}
+/exe @listFiles() = cmd {ls -la}
+/exe @countWords(file) = cmd {wc -w @file}
 
 # Direct command invocation output
 /output @listFiles() to "file-list.txt"

@@ -1,0 +1,9 @@
+/var @items = [
+  { "path": "alpha.md", "size": 10 },
+  { "path": "beta.md", "size": 0 }
+]
+
+/for @item.path in @items => when [
+  @item.size > 0 => show `keep @item.path`
+  * => show `skip @item.path`
+]

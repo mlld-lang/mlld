@@ -12,7 +12,7 @@ This tests that inline comments at the end of directives are properly handled.
 
 /import { x, y } from "./inline-test-utils.mld" >> Import some utilities
 
-/exe @sayHello(name) = {echo "Hello, {{name}}!"} << Parameterized command
+/exe @sayHello(name) = cmd {echo "Hello, {{name}}!"} << Parameterized command
 
 /run {echo "@greeting"} >> Output the greeting
 

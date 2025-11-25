@@ -1,21 +1,14 @@
->> Files
-/var @config = <settings.json>
-@config.json              >> Parsed JSON object
-@config.data              >> Alias for .json
-@config.content           >> Raw string
-@config.text              >> Alias for .content
+/var @file = <package.json>
 
->> Variables
-/var @str = '{"status": "ok"}'
-@str.data                 >> Parsed JSON object
-@str.json                 >> Alias for .data
-@str.text                 >> Original string
-@str.content              >> Alias for .text
-@str                      >> Original string (default)
+>> Basic metadata
+/show @file.ctx.filename                 >> "package.json"
+/show @file.ctx.relative                 >> "./package.json" 
+/show @file.ctx.absolute                 >> Full path
 
->> Command output
-/var @result = run {curl api.com/data}
-@result.data              >> Parse as JSON
-@result.json              >> Alias for .data
-@result.text              >> Keep as string
-@result.content           >> Alias for .text
+>> Token counting
+/show @file.ctx.tokest                   >> Estimated tokens (fast)
+/show @file.ctx.tokens                   >> Exact tokens
+
+>> Content access
+/show @file.content                      >> File contents (explicit)
+/show @file                              >> Same as above (implicit)

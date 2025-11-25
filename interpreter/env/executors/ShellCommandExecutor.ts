@@ -1,12 +1,17 @@
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
+import { StringDecoder } from 'string_decoder';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
+import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
+import { randomUUID } from 'crypto';
+import { extractTextFromEvent, classifyEvent } from '@interpreter/streaming/ndjson-extract';
+import * as fs from 'fs';
 
 /**
- * Executes shell commands using execSync
+ * Executes shell commands using async exec for true parallel execution
  */
 export class ShellCommandExecutor extends BaseCommandExecutor {
   constructor(
@@ -251,24 +256,395 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       );
     }
 
-    // Execute the validated command
+    const streamingEnabled = Boolean(context?.streamingEnabled);
+    if (streamingEnabled) {
+      return await this.executeStreamingCommand(safeCommand, options, context, startTime);
+    }
+
+    // Handle stdin input if provided (exec doesn't support input option like execSync)
+    const { stdout, stderr, duration } = await this.executeBufferedCommand(safeCommand, options, startTime);
+
+    return {
+      output: stdout,
+      duration,
+      exitCode: 0,
+      stderr
+    };
+  }
+
+  private async executeBufferedCommand(
+    safeCommand: string,
+    options: CommandExecutionOptions | undefined,
+    startTime: number
+  ): Promise<{ stdout: string; stderr: string; duration: number }> {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
     // In test environments with MLLD_NO_STREAMING, suppress stderr to keep output clean
     const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
-    const result = execSync(safeCommand, {
+
+    let finalCommand = safeCommand;
+    if (options?.input) {
+      // Use printf piping for stdin input
+      const escapedInput = options.input.replace(/'/g, "'\\''");
+      finalCommand = `printf '%s' '${escapedInput}' | ${safeCommand}`;
+    } else if (!CommandUtils.hasPipeOperator(safeCommand)) {
+      finalCommand = `${safeCommand} < /dev/null`;
+    }
+
+    const { stdout, stderr } = await execAsync(finalCommand, {
       encoding: 'utf8',
       cwd: this.workingDirectory,
       env: { ...process.env, ...(options?.env || {}) },
-      maxBuffer: 10 * 1024 * 1024, // 10MB limit
-      ...(options?.input ? { input: options.input } : {}),
-      ...(suppressStderr ? { stdio: ['pipe', 'pipe', 'pipe'] } : {})
+      maxBuffer: 10 * 1024 * 1024 // 10MB limit
     });
 
+    if (stderr && !suppressStderr) {
+      process.stderr.write(stderr);
+    }
+
     const duration = Date.now() - startTime;
-    
-    return {
-      output: result,
-      duration,
-      exitCode: 0
-    };
+    return { stdout, stderr, duration };
   }
+
+  private async executeStreamingCommand(
+    safeCommand: string,
+    options: CommandExecutionOptions | undefined,
+    context: CommandExecutionContext | undefined,
+    startTime: number
+  ): Promise<CommandExecutionResult> {
+    const showRawStream =
+      (Array.isArray(process.argv) && process.argv.includes('--show-json')) ||
+      process.env.MLLD_SHOW_JSON === 'true';
+    const appendTarget = (() => {
+      const argv = Array.isArray(process.argv) ? process.argv : [];
+      const idx = argv.indexOf('--append-json');
+      if (idx === -1) return undefined;
+      const candidate = argv[idx + 1];
+      if (candidate && !candidate.startsWith('--')) {
+        return candidate;
+      }
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}-stream.jsonl`;
+    })();
+    const appendStream = appendTarget ? fs.createWriteStream(appendTarget, { flags: 'a' }) : null;
+    const bus = getStreamBus();
+    const pipelineId = context?.pipelineId || 'pipeline';
+    const stageIndex = context?.stageIndex ?? 0;
+    const parallelIndex = context?.parallelIndex;
+    const streamId = context?.streamId || randomUUID();
+    const env = { ...process.env, ...(options?.env || {}) };
+
+    const child = spawn(safeCommand, {
+      cwd: this.workingDirectory,
+      env,
+      shell: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    const stdoutDecoder = new StringDecoder('utf8');
+    const stderrDecoder = new StringDecoder('utf8');
+    let streamJsonCarry = '';
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+    const chunkEffect = context?.emitEffect;
+    const ndjsonParser = context?.ndjsonParser;
+    const useNdjson = Boolean(ndjsonParser);
+
+    const emitChunk = (chunk: string, source: 'stdout' | 'stderr', parsed?: boolean) => {
+      if (!chunk) return;
+      bus.emit({
+        type: 'CHUNK',
+        pipelineId,
+        stageIndex,
+        parallelIndex,
+        chunk,
+        source,
+        timestamp: Date.now(),
+        parsed
+      });
+      // When streaming, forward chunks to terminal if not suppressed by caller
+      if (context?.streamingEnabled && !context?.suppressTerminal) {
+        const dest = source === 'stderr' ? process.stderr : process.stdout;
+        dest.write(chunk);
+      }
+    };
+
+    return await new Promise<CommandExecutionResult>((resolve, reject) => {
+      let settled = false;
+      if (options?.input) {
+        child.stdin.write(options.input);
+      }
+      // Always end stdin to avoid hangs
+      child.stdin.end();
+
+      child.stdout.on('data', (data: Buffer) => {
+        const text = stdoutDecoder.write(data);
+        if (useNdjson && ndjsonParser) {
+          const events = ndjsonParser.processChunk(text);
+          for (const evt of events) {
+            const rawLine = JSON.stringify(evt);
+            if (appendStream) {
+              appendStream.write(rawLine + '\n');
+            }
+            if (showRawStream) {
+              emitChunk(`${rawLine}\n`, 'stderr', true);
+            }
+            const classified = classifyEvent(evt);
+            switch (classified.kind) {
+              case 'message': {
+                const extracted = classified.text?.trim();
+                if (extracted) {
+                  stdoutBuffer += extracted;
+                  emitChunk(extracted, 'stdout', true);
+                  if (chunkEffect) {
+                    chunkEffect(extracted, 'stdout');
+                  }
+                }
+                break;
+              }
+              case 'thinking': {
+                if (classified.text) {
+                  emitChunk(`💭 ${classified.text}\n`, 'stderr', true);
+                }
+                break;
+              }
+              case 'tool-use': {
+                if (classified.text) {
+                  emitChunk(`${classified.text}\n`, 'stderr', true);
+                }
+                break;
+              }
+              case 'tool-result': {
+                // Skip noisy tool results for now
+                break;
+              }
+              case 'error': {
+                if (classified.text) {
+                  emitChunk(`❌ ${classified.text}\n`, 'stderr', true);
+                }
+                break;
+              }
+              default:
+                break;
+            }
+          }
+        } else {
+          const processed = processStreamJsonChunk(text, streamJsonCarry);
+          streamJsonCarry = processed.remainder;
+          if (processed.parsed) {
+            if (processed.text) {
+              stdoutBuffer += processed.text;
+              emitChunk(processed.text, 'stdout');
+            } else {
+              stdoutBuffer += text;
+              emitChunk(text, 'stdout');
+            }
+          } else {
+            stdoutBuffer += text;
+            emitChunk(text, 'stdout');
+          }
+        }
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        const text = stderrDecoder.write(data);
+        stderrBuffer += text;
+        emitChunk(text, 'stderr');
+      });
+
+      child.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        const duration = Date.now() - startTime;
+        reject(
+          new MlldCommandExecutionError(
+            `Command failed: ${err.message}`,
+            context?.sourceLocation,
+            {
+              command: safeCommand,
+              exitCode: 1,
+              stderr: err.message,
+              duration,
+              workingDirectory: this.workingDirectory,
+              directiveType: context?.directiveType || 'run'
+            }
+          )
+        );
+      });
+
+      child.on('close', (code) => {
+        if (settled) return;
+        const finalOut = stdoutDecoder.end();
+        if (finalOut) {
+          if (useNdjson && ndjsonParser) {
+            const events = ndjsonParser.processChunk(finalOut);
+            const flushed = ndjsonParser.flush();
+            for (const evt of [...events, ...flushed]) {
+              const rawLine = JSON.stringify(evt);
+              if (appendStream) {
+                appendStream.write(rawLine + '\n');
+              }
+              if (showRawStream) {
+                emitChunk(`${rawLine}\n`, 'stderr', true);
+              }
+              const classified = classifyEvent(evt);
+              switch (classified.kind) {
+                case 'message': {
+                  const extracted = classified.text?.trim();
+                  if (extracted) {
+                    stdoutBuffer += extracted;
+                    emitChunk(extracted, 'stdout', true);
+                    if (chunkEffect) {
+                      chunkEffect(extracted, 'stdout');
+                    }
+                  }
+                  break;
+                }
+                case 'thinking': {
+                  if (classified.text) {
+                    emitChunk(`💭 ${classified.text}\n`, 'stderr', true);
+                  }
+                  break;
+                }
+                case 'tool-use': {
+                  if (classified.text) {
+                    emitChunk(`${classified.text}\n`, 'stderr', true);
+                  }
+                  break;
+                }
+                case 'tool-result': {
+                  // Skip noisy tool results for now
+                  break;
+                }
+                case 'error': {
+                  if (classified.text) {
+                    emitChunk(`❌ ${classified.text}\n`, 'stderr', true);
+                  }
+                  break;
+                }
+                default:
+                  break;
+              }
+            }
+          } else {
+            const processed = processStreamJsonChunk(finalOut, streamJsonCarry);
+            streamJsonCarry = processed.remainder;
+            if (processed.parsed) {
+              if (processed.text) {
+                stdoutBuffer += processed.text;
+                emitChunk(processed.text, 'stdout');
+              } else {
+                stdoutBuffer += finalOut;
+                emitChunk(finalOut, 'stdout');
+              }
+            } else {
+              stdoutBuffer += finalOut;
+              emitChunk(finalOut, 'stdout');
+            }
+          }
+        }
+        if (!useNdjson && streamJsonCarry) {
+          stdoutBuffer += streamJsonCarry;
+          emitChunk(streamJsonCarry, 'stdout');
+          streamJsonCarry = '';
+        }
+        if (appendStream) {
+          appendStream.end();
+        }
+        const finalErr = stderrDecoder.end();
+        if (finalErr) {
+          stderrBuffer += finalErr;
+          emitChunk(finalErr, 'stderr');
+        }
+        const duration = Date.now() - startTime;
+
+        if (code && code !== 0) {
+          settled = true;
+          reject(
+            new MlldCommandExecutionError(
+              `Command failed with exit code ${code}`,
+              context?.sourceLocation,
+              {
+                command: safeCommand,
+                exitCode: code,
+                stderr: stderrBuffer,
+                stdout: stdoutBuffer,
+                duration,
+                workingDirectory: this.workingDirectory,
+                directiveType: context?.directiveType || 'run',
+                streamId
+              }
+            )
+          );
+          return;
+        }
+
+        settled = true;
+        resolve({
+          output: stdoutBuffer,
+          duration,
+          exitCode: code ?? 0,
+          stderr: stderrBuffer || undefined
+        });
+      });
+    });
+  }
+}
+
+function extractStreamJsonText(data: any): string | null {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+  if (typeof (data as any).completion === 'string') {
+    return (data as any).completion;
+  }
+  const delta = (data as any).delta;
+  if (delta && typeof delta === 'object') {
+    if (typeof delta.text === 'string') {
+      return delta.text;
+    }
+    if (typeof delta.partial_json === 'string') {
+      return delta.partial_json;
+    }
+  }
+  if (typeof (data as any).text === 'string') {
+    return (data as any).text;
+  }
+  return null;
+}
+
+function processStreamJsonChunk(
+  chunk: string,
+  carry: string
+): { text: string; remainder: string; parsed: boolean; hadText: boolean } {
+  const combined = (carry || '') + chunk;
+  const lines = combined.split(/\r?\n/);
+  const remainder = lines.pop() ?? '';
+  let parsedAny = false;
+  let textOut = '';
+  let hadText = false;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line);
+      parsedAny = true;
+      const text = extractStreamJsonText(parsed);
+      if (text) {
+        textOut += text;
+        hadText = true;
+      }
+    } catch {
+      // ignore parse errors; fall through
+    }
+  }
+
+  if (!parsedAny) {
+    return { text: combined, remainder: '', parsed: false, hadText: false };
+  }
+
+  return { text: hadText ? textOut : combined, remainder, parsed: true, hadText };
 }

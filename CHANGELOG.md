@@ -5,6 +5,100 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc70]
+
+### Added
+- Streaming support: `stream` keyword, `/stream` directive, and `with { stream: true }` enable live chunk emission with progress sinks and executor streaming (shell, bash, node). Parallel groups stream concurrently and buffer results. Suppress with `--no-stream` or `MLLD_NO_STREAM`.
+- Streaming UX MVP:
+  - Auto-parse NDJSON for `stream` execs (paths: message.content[].text/result/delta.text/completion/error.message).
+  - Live stdout for message text with spacing/dedupe; thinking/tool-use to stderr (`💭 text`, `🔧 name input=preview`); tool results suppressed for noise.
+  - Raw event visibility: `--show-json` (or `MLLD_SHOW_JSON=true`) mirrors NDJSON to stderr; `--append-json [file]` writes NDJSON to JSONL (default `YYYY-MM-DD-HH-MM-SS-stream.jsonl` when omitted).
+  - Streaming `/show ...` avoids double-print of streamed content.
+
+### Security
+
+**Guards**:
+- Policy enforcement for data access and operations
+- Syntax: `/guard <label> { allow/deny/retry }` with optional conditions
+- Guards trigger on data labels (`secret`, `pii`) or operations (`op:run`, `op:exe`)
+- Support `allow`, `deny`, and `retry` decisions
+- Can transform data with `allow @transform(@input)`
+- Fire before operations (input validation) or after operations (output validation)
+
+**Expression Tracking**:
+- Guards see security labels through all transformations (closes `@secret.trim()` bypass hole)
+- Provenance preserved through: chained builtin methods, template interpolation, field access, iterators, pipelines, nested expressions
+- Example: `@secret.trim().slice(0, 5)` preserves `secret` label through entire chain
+- Guards fire at directive boundaries, exe invocations, and pipeline stages
+
+**Guard Composition**:
+- All guards execute in registration order (file top-to-bottom, imports flatten at position)
+- Multiple guards compose with decision precedence: deny > retry > allow @value > allow
+- Transform chaining: Guard N output → Guard N+1 input with full provenance tracking
+- Guard history exposed via `@ctx.guard.trace/hints/reasons` for denied handlers
+- Pipeline guard history via `@p.guards` tracks guard activity across all pipeline stages
+- Deterministic IDs for unnamed guards: `<unnamed-guard-N>`
+- Per-input guards (data labels) and per-operation guards (`op:run`, `op:exe`, etc.)
+
+**Before/After Guards**:
+- Guards fire before operations (input validation) or after operations (output validation)
+- Syntax: `/guard @name before datalabel = when [...]` where TIMING is `before`, `after`, or `always`
+- Syntactic sugar: `/guard @name for LABEL` is equivalent to `before` timing (explicit `before` recommended)
+- Context: `@input` in before guards, `@output` in after guards, both available in denied handlers
+- Execution order: before guards → operation → after guards
+- Retries supported in pipeline context for both before and after guards
+
+**Allow @value Transforms**:
+- Guards transform inputs/outputs: `allow @redact(@input)` or `allow @sanitize(@output)`
+- Transforms chain with metadata preservation (`guard:@name` appended to sources)
+- Works in both before guards (input sanitization) and after guards (output sanitization)
+- Cross-scope chaining: per-input guard transforms flow to per-operation guards
+- Provenance tracking: labels union, taint maximum, sources accumulate
+
+**Guard Overrides**:
+- Per-operation control: `with { guards: { only: [...], except: [...], false } }`
+- `guards: false` disables all guards (emits warning to stderr)
+- `only: ["@guard"]` runs specified guards only (unnamed guards excluded)
+- `except: ["@guard"]` skips named guards (unnamed guards still run)
+- Conflict detection: throws error if both `only` and `except` specified
+
+### Added
+- StructuredValue `.ctx`/`.internal` surfaces power provenance, security, and behavior metadata
+- `/append` directive and `| append` pipeline builtin for incremental file writes (JSONL/text) with shared `/output` source evaluation
+- `@json.llm` transformer extracts JSON from LLM responses with code fences or embedded prose. Returns `false` when no JSON found.
+- `@json.fromlist` transformer converts plain text lists (one item per line) to JSON arrays
+- Chained builtin methods on variables: string methods (slice, substring, substr, replace, replaceAll, padStart, padEnd, repeat, split, join) and array methods (slice, concat, reverse, sort) work in chains like `@secret.trim().slice(0, 6)` with security labels preserved
+- Structured-value helpers: added `keepStructured`/`keep` helper and `.keepStructured`/`.keep` field-access sugar to retain metadata/provenance without unwrapping content. Built-in `@keep`/`@keepStructured` executables allow helper-style usage in scripts.
+- For loops accept dotted iteration variables and bind both the base element and its field (e.g., `for @item.path in @files`) with proper field access errors.
+- For loop bodies can be `when [...]` across /for, /var, and /exe, using first-match semantics per iteration and feeding branch results into loop outputs.
+
+- Alligator JSON ergonomics: `<*.json>` and `<*.jsonl>` auto-parse to StructuredValues (parsed `.data`, raw `.text`, `.ctx` preserved); use `.text` when raw strings are needed.
+
+### Fixed
+- Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
+
+- Inline `/for` loops in templates only trigger at line start (not mid-line)
+- **When-expression pipelines**: `/exe … = when [...]` actions now accept `| append`, `| log`, `| output`, and `| show` stages without misparsing ternary expressions (fixes `slash/when/exe-when-expressions-operators`).
+
+- Backtick and `::` templates handle XML-like tags identically
+
+- Fixed false circular reference warnings when parallel tasks load the same file
+- Inline pipeline effect detection now differentiates builtin `append` from user-defined commands, restoring stage execution for execs named `append`
+- Alligator syntax in for expressions: `for @f in @files => <@f>` and property access like `for @f in @files => <@f>.fm.title` now work correctly
+- Module content suppression during imports - imported module content no longer appears in stdout
+- Shell pipe detection respects quoted strings - pipe characters inside quoted arguments no longer trigger pipe handling
+- Transformer variant resolution in pipelines - `@json.fromlist`, `@json.llm`, `@json.loose`, and `@json.strict` work correctly in all pipeline contexts
+- Alligator `.relative` resolves from inferred `@base` (or the script path when base is unavailable) so metadata matches project-root paths
+- Comma in `when` condition lists now emits a targeted parse error instead of a generic /exe syntax failure
+- Wrong parallel syntax order (`/for parallel 18` instead of `/for 18 parallel`) now shows helpful error with correct syntax examples
+
+### Changed
+- Braced commands require explicit `cmd { ... }`; bare `{ ... }` parses as structured data, pipelines accept inline value stages with structured output, and bare brace commands raise a targeted parse error
+- Enhanced error message for `run sh` in `/exe` explains distinction between bare commands and shell scripts
+- Shell commands now run from project root when `@base` is inferred, otherwise from script directory
+- `/for` parallel syntax uses `parallel(cap, pacing)` instead of `(cap, pacing) parallel`. Old syntax still parses with a warning.
+- Unified file loading uses StructuredValue metadata consistently: text files unwrap to strings by default, JSON/JSONL unwrap to parsed objects/arrays, `.ctx` carries file/URL metadata, `.keep` passes wrappers into JS/Node, and `MLLD_LOAD_JSON_RAW` is removed in favor of `.text` for raw access.
+
 ## [2.0.0-rc69]
 ### Fixed
 - JS and Node executors treat expression-style blocks as implicit returns, so `/var` assignments and pipelines receive native objects/arrays and property access like `@repo.name` works without helper wrappers.

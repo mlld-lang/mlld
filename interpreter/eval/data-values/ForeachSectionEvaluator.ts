@@ -2,6 +2,29 @@ import type { Environment } from '../../env/Environment';
 import type { DataValue } from '@core/types/var';
 import { createObjectVariable, createArrayVariable } from '@core/types/variable';
 import { interpolate } from '../../core/interpreter';
+import type { SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../../core/interpolation-context';
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Handles evaluation of foreach section expressions.
@@ -121,8 +144,10 @@ export class ForeachSectionEvaluator {
             hasInterpolation: false,
             isMultiLine: false
           }, {
-            isParameter: true,
-            isFullyEvaluated: true
+            internal: {
+              isParameter: true,
+              isFullyEvaluated: true
+            }
           }) :
           createObjectVariable(actualArrayVariable, item, {
             directive: 'var',
@@ -130,8 +155,10 @@ export class ForeachSectionEvaluator {
             hasInterpolation: false,
             isMultiLine: false
           }, {
-            isParameter: true,
-            isFullyEvaluated: true
+            internal: {
+              isParameter: true,
+              isFullyEvaluated: true
+            }
           });
         childEnv.setParameterVariable(actualArrayVariable, itemVar);
         
@@ -140,7 +167,7 @@ export class ForeachSectionEvaluator {
         
         if (actualPath) {
           // For flexible path expressions, evaluate the entire path
-          pathValue = await interpolate(actualPath, childEnv);
+          pathValue = await interpolateAndRecord(actualPath, childEnv);
           // Trim any trailing whitespace from path
           pathValue = pathValue.trim();
         } else if (actualPathField) {
@@ -173,14 +200,14 @@ export class ForeachSectionEvaluator {
           sectionName = sectionNodes[0].content;
         } else if (sectionNodes.length === 1 && sectionNodes[0].type === 'VariableReference') {
           // Evaluate section variable in child environment (with current item bound)
-          const sectionValue = await interpolate(sectionNodes, childEnv);
+          const sectionValue = await interpolateAndRecord(sectionNodes, childEnv);
           if (typeof sectionValue !== 'string') {
             throw new Error(`Section variable must resolve to a string, got ${typeof sectionValue}`);
           }
           sectionName = sectionValue;
         } else if (sectionNodes.length > 0) {
           // Multiple nodes - interpolate them all
-          const sectionValue = await interpolate(sectionNodes, childEnv);
+          const sectionValue = await interpolateAndRecord(sectionNodes, childEnv);
           if (typeof sectionValue !== 'string') {
             throw new Error(`Section must resolve to a string, got ${typeof sectionValue}`);
           }
@@ -217,7 +244,7 @@ export class ForeachSectionEvaluator {
         }
         
         // 8. Apply template with current item context
-        const templateResult = await interpolate(template.values.content, childEnv);
+        const templateResult = await interpolateAndRecord(template.values.content, childEnv);
         
         // 9. Replace the first line (header) of section content with template result
         // This mimics the behavior of the 'as' clause in @add directive

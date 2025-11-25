@@ -208,7 +208,10 @@ export type DirectiveKind =
   | 'exe'
   | 'path'
   | 'output'
-  | 'when';
+  | 'append'
+  | 'when'
+  | 'guard'
+  | 'stream';
 
 export type DirectiveSubtype =
   // Import subtypes
@@ -227,8 +230,12 @@ export type DirectiveSubtype =
   | 'runCommand' | 'runExec' | 'runCode'
   // Output subtypes
   | 'outputResolver' | 'outputFile' | 'outputCommand'
+  // Append subtypes
+  | 'appendFile'
   // When subtypes
-  | 'whenSimple' | 'whenBlock' | 'whenMatch';
+  | 'whenSimple' | 'whenBlock' | 'whenMatch'
+  // Guard subtype
+  | 'guard';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

@@ -1,2 +1,5 @@
-/var @access = @score > 80 && @verified ? "granted" : "denied"
-/var @status = @isAdmin || (@isMod && @active) ? "privileged" : "standard"
+/var @fruits = ["apple", "banana", "cherry"]
+/show @fruits.includes("banana")        # true
+/show @fruits.indexOf("cherry")         # 2
+/show @fruits.length()                  # 3
+/show @fruits.join(", ")               # "apple, banana, cherry"

@@ -29,18 +29,63 @@ export const DirectiveKind = {
     run: 'run',
     var: 'var', // NEW: Replaces text/data
     show: 'show', // NEW: Replaces add
+    stream: 'stream',
     exe: 'exe', // NEW: Replaces exec
     for: 'for', // For loops
     path: 'path',
     import: 'import',
     output: 'output',
+    append: 'append',
     when: 'when',
+    guard: 'guard',
     // NO deprecated entries - clean break!
 };
+let warningCollector = null;
 export const helpers = {
     debug(msg, ...args) {
         if (process.env.DEBUG_MLLD_GRAMMAR)
             console.log('[DEBUG GRAMMAR]', msg, ...args);
+    },
+    warn(message, suggestion, loc, code) {
+        const warning = {
+            message,
+            ...(suggestion ? { suggestion } : {}),
+            ...(loc ? { location: loc } : {}),
+            ...(code ? { code } : {})
+        };
+        if (warningCollector) {
+            try {
+                warningCollector(warning);
+                return warning;
+            }
+            catch {
+                // ignore collector errors and fall back to console
+            }
+        }
+        try {
+            // eslint-disable-next-line no-console
+            console.warn(`[mlld grammar warning] ${warning.message}`);
+        }
+        catch {
+            // ignore console failures
+        }
+        return warning;
+    },
+    setWarningCollector(collector) {
+        if (!collector) {
+            warningCollector = null;
+            return;
+        }
+        if (Array.isArray(collector)) {
+            warningCollector = (warning) => {
+                collector.push(warning);
+            };
+            return;
+        }
+        warningCollector = collector;
+    },
+    clearWarningCollector() {
+        warningCollector = null;
     },
     isExecutableReference(ref) {
         // Check if reference is a function call (has execution semantics)
@@ -589,6 +634,57 @@ export const helpers = {
             withClause: withClause || null,
             location
         });
+    },
+    attachPostFields(exec, post) {
+        if (!post || post.length === 0) {
+            return exec;
+        }
+        let current = exec;
+        const tail = current.withClause || null;
+        if (tail) {
+            current = { ...current, withClause: null };
+        }
+        const additionalFields = [];
+        for (const entry of post) {
+            if (entry?.type === 'methodCall') {
+                const methodRef = {
+                    name: entry.name,
+                    identifier: [
+                        this.createNode(NodeType.Text, {
+                            content: entry.name,
+                            location: entry.location
+                        })
+                    ],
+                    args: entry.args || [],
+                    isCommandReference: true,
+                    objectSource: current
+                };
+                current = this.createExecInvocation(methodRef, null, entry.location);
+            }
+            else {
+                additionalFields.push(entry);
+            }
+        }
+        if (additionalFields.length > 0) {
+            const existingFields = current.fields || [];
+            current = {
+                ...current,
+                fields: [...existingFields, ...additionalFields]
+            };
+        }
+        if (tail) {
+            current = { ...current, withClause: tail };
+        }
+        return current;
+    },
+    applyTail(exec, tail) {
+        if (!tail) {
+            return exec;
+        }
+        return {
+            ...exec,
+            withClause: tail
+        };
     },
     /**
      * Get the command name from an ExecInvocation node

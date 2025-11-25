@@ -1,0 +1,4 @@
+/import { @secretProtection } from "./guards/secrets.mld"
+
+/var secret @key = "sk-12345"
+/run { echo @key }                         # Protected by imported guard

@@ -1,12 +1,12 @@
 /var @greeting = "Hello from module"
 
-/exe @sayHello() = {echo "Hello, World!"}
+/exe @sayHello() = cmd {echo "Hello, World!"}
 
-/exe @greetUser(name) = {echo "Hello, @name!"}
+/exe @greetUser(name) = cmd {echo "Hello, @name!"}
 
-/exe @multiLine() = {
+/exe @multiLine() = cmd {
 echo "Line 1"
 echo "Line 2"
 }
 
-/exe @withParams(first, second) = {echo "First: @first, Second: @second"}
+/exe @withParams(first, second) = cmd {echo "First: @first, Second: @second"}

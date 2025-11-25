@@ -328,8 +328,8 @@ export class SetupCommand {
           await fs.mkdir(absolutePath, { recursive: true });
           console.log(chalk.green(`✔ Created directory: ${localPath}`));
           
-          // Create a sample module with proper .mlld.md format
-          const samplePath = path.join(absolutePath, 'example.mlld.md');
+          // Create a sample module with proper .mld.md format
+          const samplePath = path.join(absolutePath, 'example.mld.md');
           const sampleContent = `---
 name: example
 author: local
@@ -372,7 +372,7 @@ A friendly greeting message.
 Information about this module.
 `;
           await fs.writeFile(samplePath, sampleContent);
-          console.log(chalk.gray(`Created sample module: ${path.join(localPath, 'example.mlld.md')}`));
+          console.log(chalk.gray(`Created sample module: ${path.join(localPath, 'example.mld.md')}`));
         } catch (error) {
           console.log(chalk.red(`✘ Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
           return null;

@@ -107,7 +107,10 @@ class ${varName}_MlldArray(list):
         super().__init__(items)
         self.__mlld_type__ = ${JSON.stringify(variable.type)}
         self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
-        self.__mlld_metadata__ = ${JSON.stringify(variable.metadata || {})}
+        self.__mlld_metadata__ = ${JSON.stringify({
+            ctx: variable.ctx,
+            internal: variable.internal
+          })}
         self.__mlld_is_variable__ = True
 
 ${varName} = ${varName}_MlldArray(${JSON.stringify(value)})
@@ -126,7 +129,10 @@ class ${varName}_MlldObject(dict):
         super().__init__(items)
         self.__mlld_type__ = ${JSON.stringify(variable.type)}
         self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
-        self.__mlld_metadata__ = ${JSON.stringify(variable.metadata || {})}
+        self.__mlld_metadata__ = ${JSON.stringify({
+            ctx: variable.ctx,
+            internal: variable.internal
+          })}
         self.__mlld_is_variable__ = True
     
     def __getattr__(self, key):
@@ -149,7 +155,10 @@ class ${varName}_MlldValue:
         self.value = value
         self.__mlld_type__ = ${JSON.stringify(variable.type)}
         self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
-        self.__mlld_metadata__ = ${JSON.stringify(variable.metadata || {})}
+        self.__mlld_metadata__ = ${JSON.stringify({
+            ctx: variable.ctx,
+            internal: variable.internal
+          })}
         self.__mlld_is_variable__ = True
     
     def __str__(self):

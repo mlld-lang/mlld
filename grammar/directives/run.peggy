@@ -21,26 +21,33 @@ It can be used in three main forms:
 // Primary /run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 SlashRun
-  = DirectiveContext "/run" _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? comment:InlineComment? {
-      // Leading parallel pipeline: /run || @a() || @b() || @c()
+  = DirectiveContext "/run" _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched leading parallel pipeline', { leading, caps });
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
 
       const pipeline = leading.withClause.pipeline || [];
       const withClause = {
-        pipeline: pipeline,
+        pipeline,
         ...(caps ? { parallel: caps.parallel, delayMs: caps.delayMs } : {})
       };
 
       const values = {
-        withClause: withClause
+        withClause
       };
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+      }
 
       const raw = {
-        pipeline: pipeline.map(p => Array.isArray(p) ?
-          `[${p.map(c => c.rawIdentifier).join(' || ')}]` :
-          p.rawIdentifier
+        pipeline: pipeline.map(p => Array.isArray(p)
+          ? `[${p.map(c => c.rawIdentifier).join(' || ')}]`
+          : p.rawIdentifier
         ).join(' | ')
       };
+      if (labelInfo) {
+        raw.securityLabels = labelInfo.raw;
+      }
 
       const meta = {
         isPipeline: true,
@@ -48,6 +55,9 @@ SlashRun
         stageCount: pipeline.length,
         ...(comment ? { comment } : {})
       };
+      if (labelInfo) {
+        meta.securityLabels = labelInfo.labels;
+      }
 
       return helpers.createStructuredDirective(
         'run',
@@ -59,18 +69,15 @@ SlashRun
         'pipeline'
       );
     }
-  / DirectiveContext "/run" _ "\"" command:$([^"]*) "\"" tail:TailModifiers? comment:InlineComment? {
-      // Quoted command syntax: /run "echo hello"
+  / DirectiveContext "/run" _ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched quoted command', { command, tail });
-      
-      // Parse the command string to extract parts with proper location
+
       const commandLocation = location();
       const parts = helpers.parseCommandContent(command, commandLocation);
-      
-      // Extract command base
-      let commandBases = [];
-      let rawBases = [];
-      
+
+      const commandBases = [];
+      const rawBases = [];
+
       if (parts.length > 0 && parts[0].type === NodeType.Text) {
         const cmdMatch = parts[0].content.match(/^(\S+)/);
         if (cmdMatch) {
@@ -81,31 +88,45 @@ SlashRun
           rawBases.push(cmdMatch[1]);
         }
       }
-      
+
+      const values = {
+        command: parts,
+        commandBases
+      };
+      const raw = {
+        command,
+        commandBases: rawBases
+      };
       const meta = {
         isMultiLine: false,
         commandCount: commandBases.length,
         hasScriptRunner: false,
         ...(comment ? { comment } : {})
       };
-      
-      const values = {
-        command: parts,
-        commandBases: commandBases
-      };
-      
-      const raw = {
-        command: command,
-        commandBases: rawBases
-      };
-      
-      // Add withClause from tail if present
+
       if (tail) {
         values.withClause = tail;
         raw.withClause = tail;
         meta.withClause = tail;
       }
-      
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+        raw.securityLabels = labelInfo.raw;
+        meta.securityLabels = labelInfo.labels;
+      }
+
+      const endingInfo = {
+        tail: tail && tail.pipeline ? { pipeline: tail.pipeline } : null,
+        parallel: null,
+        comment: comment || null
+      };
+
+      if (endingInfo.tail || endingInfo.comment) {
+        helpers.processPipelineEnding(values, raw, meta, endingInfo);
+      }
+
       return helpers.createStructuredDirective(
         'run',
         'runCommand',
@@ -116,25 +137,40 @@ SlashRun
         'command'
       );
     }
-  / DirectiveContext "/run" _ content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
-      // Command syntax: /run {command}
+  / DirectiveContext "/run" _ content:UnifiedCommandBrackets tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched command', { content, tail });
 
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
+
+      const values = content.values;
+      const raw = content.raw;
       const meta = {
         ...content.meta,
         ...(comment ? { comment } : {})
       };
-      
-      const values = content.values;
-      const raw = content.raw;
-      
-      // Add withClause from tail if present
+
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+        raw.securityLabels = labelInfo.raw;
+        meta.securityLabels = labelInfo.labels;
+      }
+
       if (tail) {
         values.withClause = tail;
         raw.withClause = tail;
         meta.withClause = tail;
       }
-      
+
+      const endingInfo = {
+        tail: tail && tail.pipeline ? { pipeline: tail.pipeline } : null,
+        parallel: null,
+        comment: comment || null
+      };
+
+      if (endingInfo.tail || endingInfo.comment) {
+        helpers.processPipelineEnding(values, raw, meta, endingInfo);
+      }
+
       return helpers.createStructuredDirective(
         'run',
         content.subtype,
@@ -145,17 +181,17 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext "/run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
-      // Pipe sugar: /run <expr> | { command }
+  / DirectiveContext "/run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, tail });
 
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
+
+      const values = content.values;
+      const raw = content.raw;
       const meta = {
         ...content.meta,
         ...(comment ? { comment } : {})
       };
-
-      const values = content.values;
-      const raw = content.raw;
 
       const withClause = {
         stdin: stdinExpr,
@@ -166,6 +202,22 @@ SlashRun
       raw.withClause = withClause;
       meta.withClause = withClause;
 
+      const endingInfo = {
+        tail: tail && tail.pipeline ? { pipeline: tail.pipeline } : null,
+        parallel: null,
+        comment: comment || null
+      };
+
+      if (endingInfo.tail || endingInfo.comment) {
+        helpers.processPipelineEnding(values, raw, meta, endingInfo);
+      }
+
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+        raw.securityLabels = labelInfo.raw;
+        meta.securityLabels = labelInfo.labels;
+      }
+
       return helpers.createStructuredDirective(
         'run',
         content.subtype,
@@ -176,27 +228,40 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext "/run" _ codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
-      // Language + code syntax: /run language {code} or /run language (args) {code}
+  / DirectiveContext "/run" _ codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched with language code pattern', { codeCore, tail });
-      
-      // Use values and raw from the core pattern
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
+
       const values = codeCore.values;
       const raw = codeCore.raw;
-      
-      // Merge metadata
       const meta = {
         ...codeCore.meta,
         ...(comment ? { comment } : {})
       };
-      
-      // Add withClause from tail if present
+
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+        raw.securityLabels = labelInfo.raw;
+        meta.securityLabels = labelInfo.labels;
+      }
+
       if (tail) {
         values.withClause = tail;
         raw.withClause = tail;
         meta.withClause = tail;
       }
-      
+
+      const endingInfo = {
+        tail: tail && tail.pipeline ? { pipeline: tail.pipeline } : null,
+        parallel: null,
+        comment: comment || null
+      };
+
+      if (endingInfo.tail || endingInfo.comment) {
+        helpers.processPipelineEnding(values, raw, meta, endingInfo);
+      }
+
       return helpers.createStructuredDirective(
         'run',
         'runCode',
@@ -207,30 +272,26 @@ SlashRun
         'code'
       );
     }
-  / DirectiveContext "/run" _ commandRef:UnifiedReferenceWithTail comment:InlineComment? {
-      // @ detected -> Command reference (exec)
+  / DirectiveContext "/run" _ commandRef:UnifiedReferenceWithTail labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched unified command reference', { commandRef });
-      
-      // Handle both ExecInvocation and VariableReference types from unified patterns
+
+      const labelInfo = labelsSegment ? labelsSegment[1] : null;
+
       let values, raw, meta;
-      
+
       if (commandRef.type === 'ExecInvocation') {
         const isExecResultMethod = commandRef.commandRef && commandRef.commandRef.objectSource;
         if (isExecResultMethod) {
-          // For method calls on exec results, emit a specialized subtype so the evaluator
-          // runs the invocation directly without resolving an env executable by name.
           values = {
             execInvocation: commandRef
           };
         } else {
-          // Preserve legacy structure for simple exec calls: identifier + args
           values = {
             identifier: commandRef.commandRef.identifier,
             args: commandRef.commandRef.args || []
           };
         }
-        
-        // Construct the full identifier path for raw
+
         let rawIdentifier = commandRef.commandRef.name;
         if (commandRef.commandRef.identifier && commandRef.commandRef.identifier.length > 0) {
           const varRef = commandRef.commandRef.identifier[0];
@@ -241,11 +302,11 @@ SlashRun
             }
           }
         }
-        
+
         raw = {
           identifier: rawIdentifier,
-          args: commandRef.commandRef.args ? commandRef.commandRef.args.map(arg => 
-            arg.type === NodeType.Text ? arg.content : 
+          args: commandRef.commandRef.args ? commandRef.commandRef.args.map(arg =>
+            arg.type === NodeType.Text ? arg.content :
             arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
           ) : []
         };
@@ -253,15 +314,13 @@ SlashRun
           argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
           ...(comment ? { comment } : {})
         };
-        
-        // Add withClause from unified pattern
+
         if (commandRef.withClause) {
           values.withClause = commandRef.withClause;
           raw.withClause = commandRef.withClause;
           meta.withClause = commandRef.withClause;
         }
       } else if (commandRef.type === 'VariableReferenceWithTail') {
-        // Handle variable with tail modifiers
         values = {
           identifier: [commandRef.variable],
           args: []
@@ -274,14 +333,13 @@ SlashRun
           argumentCount: 0,
           ...(comment ? { comment } : {})
         };
-        
+
         if (commandRef.withClause) {
           values.withClause = commandRef.withClause;
           raw.withClause = commandRef.withClause;
           meta.withClause = commandRef.withClause;
         }
       } else {
-        // Plain variable reference without tail
         values = {
           identifier: [commandRef],
           args: []
@@ -295,11 +353,25 @@ SlashRun
           ...(comment ? { comment } : {})
         };
       }
-      
-      // Choose subtype based on whether we have a direct ExecInvocation
+
+      if (labelInfo) {
+        values.securityLabels = labelInfo.labels;
+        raw.securityLabels = labelInfo.raw;
+        meta.securityLabels = labelInfo.labels;
+      }
+
       const subtype = (commandRef.type === 'ExecInvocation' && (commandRef.commandRef && commandRef.commandRef.objectSource))
         ? 'runExecInvocation'
         : 'runExec';
+
+      const endingInfo = {
+        tail: null,
+        parallel: null,
+        comment: comment || null
+      };
+
+      helpers.processPipelineEnding(values, raw, meta, endingInfo);
+
       return helpers.createStructuredDirective(
         'run',
         subtype,
@@ -310,8 +382,7 @@ SlashRun
         'exec'
       );
     }
-    
-  // Error Recovery Rules for /run directive
+// Error Recovery Rules for /run directive
   // ----------------------------------------
   
   // Error: Unclosed quoted command

@@ -1,18 +1,11 @@
->> .att files (default for 5+ lines)
->> file: templates/deploy.att
-# Deployment: @env
-Status: @status
-Config: <@base/config/@env.json>
+/var @items = ["first", "second", "third", "fourth", "last"]
 
->> usage
-/exe @deploy(env, status) = template "./templates/deploy.att"
-/show @deploy("prod", "success")
+>> Basic slicing
+/show @items[0:3]                        >> ["first", "second", "third"]
+/show @items[2:]                         >> ["third", "fourth", "last"]
+/show @items[:3]                         >> ["first", "second", "third"]
 
->> .mtt files (Discord/social only)
->> file: templates/discord.mtt
-🚨 Alert <@{{adminId}}>!
-Reporter: <@{{reporterId}}>
-Severity: {{severity}}
-
->> usage
-/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
+>> Negative indices
+/show @items[-2:]                        >> ["fourth", "last"]
+/show @items[:-1]                        >> ["first", "second", "third", "fourth"]
+/show @items[1:-1]                       >> ["second", "third", "fourth"]

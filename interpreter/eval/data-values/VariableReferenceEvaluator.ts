@@ -14,6 +14,31 @@ import {
 import { interpolate } from '../../core/interpreter';
 import { accessField, accessFields } from '../../utils/field-access';
 import { logger } from '@core/utils/logger';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import type { SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../../core/interpolation-context';
+
+async function interpolateAndRecord(
+  nodes: any,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
+): Promise<string> {
+  const descriptors: SecurityDescriptor[] = [];
+  const text = await interpolate(nodes, env, context, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        descriptors.push(descriptor);
+      }
+    }
+  });
+  if (descriptors.length > 0) {
+    const merged =
+      descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
+    env.recordSecurityDescriptor(merged);
+  }
+  return text;
+}
 
 /**
  * Handles evaluation of variable references and related operations.
@@ -103,7 +128,7 @@ export class VariableReferenceEvaluator {
     
     // Handle template interpolation
     if (isTemplateValue(value)) {
-      return await interpolate(value, env);
+      return await interpolateAndRecord(value, env);
     }
     
     // Handle ExecInvocation nodes
@@ -123,7 +148,7 @@ export class VariableReferenceEvaluator {
     
     // Handle content arrays (like template content)
     if (value && typeof value === 'object' && value.content && Array.isArray(value.content)) {
-      return await interpolate(value.content, env);
+      return await interpolateAndRecord(value.content, env);
     }
     
     // Handle executable code objects (from imported executable variables)
@@ -154,6 +179,7 @@ export class VariableReferenceEvaluator {
     
     // Extract the actual value
     let result = await this.extractVariableValue(variable, env);
+    this.attachProvenance(result, variable as Variable);
     
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
@@ -237,6 +263,8 @@ export class VariableReferenceEvaluator {
     }
     
     // Apply field access if present
+    this.attachProvenance(result, variable as Variable);
+
     if (varRef.fields && varRef.fields.length > 0) {
       // DEBUG: Log what we're about to access  
       if (process.env.MLLD_DEBUG === 'true') {
@@ -265,7 +293,8 @@ export class VariableReferenceEvaluator {
         value: result,
         env,
         node: value,
-        identifier: varRef.identifier
+        identifier: varRef.identifier,
+        descriptorHint: variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
       });
     }
     
@@ -300,6 +329,7 @@ export class VariableReferenceEvaluator {
     
     // Extract value using new type guards
     let result = await this.extractVariableValue(variable, env);
+    this.attachProvenance(result, variable);
     
     // DEBUG: Log what we extracted
     if (process.env.MLLD_DEBUG === 'true') {
@@ -315,7 +345,7 @@ export class VariableReferenceEvaluator {
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
       // If the variable has complex metadata indicating it needs further evaluation
-      if ((variable as Variable).metadata?.isComplex) {
+      if ((variable as Variable).internal?.isComplex) {
         // For complex variables, we need to evaluate the raw value
         result = await this.evaluateDataValue(result, env);
       }
@@ -436,7 +466,7 @@ export class VariableReferenceEvaluator {
       const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
       result = await extractVariableValue(variable, env);
     }
-    
+    inheritExpressionProvenance(result, variable);
     return result;
   }
 
@@ -454,8 +484,15 @@ export class VariableReferenceEvaluator {
    */
   private async evaluatePathNode(value: any, env: Environment): Promise<any> {
     // Resolve path segments and read file
-    const resolvedPath = await interpolate(value.segments || [], env);
+    const resolvedPath = await interpolateAndRecord(value.segments || [], env);
     const content = await env.fileSystem.readFile(resolvedPath);
     return content;
+  }
+
+  private attachProvenance(value: unknown, source?: Variable): void {
+    if (!source) {
+      return;
+    }
+    inheritExpressionProvenance(value, source);
   }
 }

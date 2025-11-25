@@ -44,7 +44,7 @@ export async function executePipeline(
   hasSyntheticSource: boolean,
   parallelCap: number | undefined,
   delayMs: number | undefined,
-  options: { returnStructured: true }
+  options: ExecuteOptions & { returnStructured: true }
 ): Promise<StructuredValue>;
 export async function executePipeline(
   baseOutput: string | StructuredValue,

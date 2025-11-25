@@ -94,13 +94,14 @@ UnifiedAtomicExpression
       });
     }
   / NoneLiteral  // NoneLiteral already returns a properly formatted Literal node
+  / DeniedLiteral  // DeniedLiteral maps to @ctx.denied during evaluation
 
 // Method call on the result of an exec invocation
 // Example: @helper(@input).includes("APPROVE")
 // Note: We intentionally keep this here (base) so WhenConditionAdapter (UnifiedExpression)
 // can parse it in simple /when forms.
 ExecResultMethodCall
-  = "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:AnyFieldAccess* {
+  = streamPrefix:StreamKeyword? _ "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:PostFieldAccess* tail:TailModifiers? {
       // Build the base exec invocation: @func(args)
       const baseRef = {
         name: func,
@@ -121,8 +122,10 @@ ExecResultMethodCall
         objectSource: baseInvocation // Non-standard: handled by evaluator
       };
 
+      const finalTail = streamPrefix ? (tail ? { ...tail, stream: true } : { stream: true }) : tail;
       const exec = helpers.createExecInvocation(methodRef, null, location());
-      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
+      const execWithPost = helpers.attachPostFields(exec, post);
+      return finalTail ? helpers.applyTail(execWithPost, finalTail) : execWithPost;
     }
 
 // Array operations for advanced filtering and manipulation

@@ -1,2 +1,3 @@
-/var @handlers = <src/service.ts { createUser, (logger.info) }>
-/var @templated = <src/**/*.py { create_user }> as ::## <>.name\n```\n<>.code\n```::
+/exe @process(f) = js { return f.ctx.filename; }
+/show @process(@file.keep)  # Works - wrapper has .ctx
+/show @process(@file)        # Error - unwrapped to string/object

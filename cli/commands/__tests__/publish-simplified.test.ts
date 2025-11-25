@@ -68,7 +68,7 @@ describe.skip('PublishCommand - Simplified Syntax (TODO: Implement registry reso
       
       // Mock module file exists
       vi.mocked(fs.access)
-        .mockRejectedValueOnce(new Error()) // .mlld.md doesn't exist
+        .mockRejectedValueOnce(new Error()) // .mld.md doesn't exist
         .mockRejectedValueOnce(new Error()) // .mld doesn't exist
         .mockResolvedValueOnce(undefined); // .md exists
       
@@ -81,16 +81,16 @@ describe.skip('PublishCommand - Simplified Syntax (TODO: Implement registry reso
       expect(result.publishOptions.registry.resolver).toBe('GITHUB');
     });
     
-    it('should prefer .mlld.md extension over others', async () => {
+    it('should prefer .mld.md extension over others', async () => {
       vi.mocked(fs.access).mockResolvedValueOnce(undefined);
       vi.mocked(fs.readFile).mockResolvedValueOnce(JSON.stringify(mockLockFile));
       
-      // Mock .mlld.md file exists
+      // Mock .mld.md file exists
       vi.mocked(fs.access).mockResolvedValueOnce(undefined);
       
       const result = await (publisher as any).resolvePublishTarget('@adam/utils');
       
-      expect(result.filePath).toBe(path.join('llm/modules', 'utils.mlld.md'));
+      expect(result.filePath).toBe(path.join('llm/modules', 'utils.mld.md'));
     });
     
     it('should throw error if no registry configured for prefix', async () => {
@@ -108,10 +108,10 @@ describe.skip('PublishCommand - Simplified Syntax (TODO: Implement registry reso
       
       // Mock file not found for all extension checks
       vi.mocked(fs.access)
-        .mockRejectedValueOnce(new Error('ENOENT')) // .mlld.md
+        .mockRejectedValueOnce(new Error('ENOENT')) // .mld.md
         .mockRejectedValueOnce(new Error('ENOENT')) // .mld
         .mockRejectedValueOnce(new Error('ENOENT')) // .md
-        .mockRejectedValueOnce(new Error('ENOENT')) // For REGISTRY check, .mlld.md
+        .mockRejectedValueOnce(new Error('ENOENT')) // For REGISTRY check, .mld.md
         .mockRejectedValueOnce(new Error('ENOENT')) // For REGISTRY check, .mld
         .mockRejectedValueOnce(new Error('ENOENT')); // For REGISTRY check, .md
       
@@ -155,7 +155,7 @@ describe.skip('PublishCommand - Simplified Syntax (TODO: Implement registry reso
       const result = await (publisher as any).resolvePublishTarget('@test/module');
       
       expect(result.publishOptions.registry.resolver).toBe('GITHUB');
-      expect(result.filePath).toBe(path.join('./github', 'module.mlld.md'));
+      expect(result.filePath).toBe(path.join('./github', 'module.mld.md'));
     });
     
     it('should return null for non-matching format', async () => {

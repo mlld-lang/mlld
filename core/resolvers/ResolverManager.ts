@@ -340,16 +340,18 @@ export class ResolverManager {
               logger.debug(`Cache hit for ${ref} (hash: ${hash})`);
               const resolutionTime = Date.now() - startTime;
 
+              const metadata = {
+                source: cached.metadata?.source || ref,
+                timestamp: cached.metadata?.timestamp || new Date(),
+                hash: cached.hash,
+                size: cached.metadata?.size
+              };
               return {
                 content: {
                   content: cached.content,
                   contentType: cached.contentType || 'module', // Default to module if not stored
-                  metadata: {
-                    source: cached.metadata?.source || ref,
-                    timestamp: cached.metadata?.timestamp || new Date(),
-                    hash: cached.hash,
-                    size: cached.metadata?.size
-                  }
+                  ctx: metadata,
+                  metadata
                 },
                 resolverName: 'cache',
                 matchedPrefix: undefined,
@@ -462,6 +464,10 @@ export class ResolverManager {
           // Add hash to metadata
           content.metadata = {
             ...content.metadata,
+            hash: cacheEntry.hash
+          };
+          content.ctx = {
+            ...(content.ctx ?? content.metadata ?? {}),
             hash: cacheEntry.hash
           };
           

@@ -3,6 +3,7 @@ import { URLValidator } from './url';
 import { RegistryResolver } from './registry';
 import { AdvisoryChecker } from './registry';
 import { TaintTracker, TaintLevel } from './taint';
+import { deriveImportTaint } from '@core/security/taint';
 import { ImportApproval } from './import';
 import { ImmutableCache } from './cache';
 import { PathValidator } from './path';
@@ -52,7 +53,8 @@ export class SecurityManager {
    */
   async checkCommand(command: string, context?: SecurityContext): Promise<SecurityDecision> {
     // 1. Check taint level
-    const taint = this.taintTracker.getTaint(command);
+    const taintSnapshot = this.taintTracker.get(command);
+    const taint = taintSnapshot?.level ?? 'unknown';
     
     // 2. Analyze command for dangerous patterns
     const analysis = await this.commandAnalyzer.analyze(command, taint);
@@ -98,7 +100,20 @@ export class SecurityManager {
    * Track data from untrusted sources
    */
   trackTaint(value: any, source: TaintSource): void {
-    this.taintTracker.mark(value, source);
+    let id: string;
+    if (typeof value === 'string') {
+      id = value;
+    } else {
+      try {
+        id = JSON.stringify(value);
+      } catch {
+        id = String(value);
+      }
+    }
+    const level = mapSourceToTaintLevel(source);
+    this.taintTracker.track(id, level, {
+      sources: [`source:${source}`]
+    });
   }
   
   /**
@@ -164,15 +179,24 @@ export class SecurityManager {
       advisories = await this.advisoryChecker.checkForAdvisories(null, gistId);
     }
     
-    // Determine taint level
-    const taint = this.taintTracker.markImport(
-      importURL,
-      resolvedURL,
-      importURL,
-      advisories
-    );
+    const importType = this.registryResolver.isRegistryURL(importURL)
+      ? 'module'
+      : importURL.startsWith('http')
+        ? 'live'
+        : 'local';
+
+    const snapshot = deriveImportTaint({
+      importType,
+      source: resolvedURL,
+      advisoryLevel: advisories.length > 0 ? 'warning' : 'none'
+    });
+
+    this.taintTracker.track(importURL, snapshot.level, {
+      sources: snapshot.sources,
+      labels: snapshot.labels
+    });
     
-    return { resolvedURL, taint, advisories };
+    return { resolvedURL, taint: snapshot.level, advisories };
   }
   
   /**
@@ -226,4 +250,22 @@ export enum TaintSource {
   NETWORK = 'network',
   LLM_OUTPUT = 'llm_output',
   COMMAND_OUTPUT = 'command_output'
+}
+
+function mapSourceToTaintLevel(source: TaintSource): TaintLevel {
+  switch (source) {
+    case TaintSource.USER_INPUT:
+      return 'userInput';
+    case TaintSource.FILE_SYSTEM:
+      return 'localFile';
+    case TaintSource.LLM_OUTPUT:
+      return 'llmOutput';
+    case TaintSource.COMMAND_OUTPUT:
+      return 'commandOutput';
+    case TaintSource.NETWORK:
+      return 'networkLive';
+    case TaintSource.TRUSTED:
+    default:
+      return 'literal';
+  }
 }

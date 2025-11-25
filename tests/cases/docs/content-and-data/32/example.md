@@ -1,22 +1,18 @@
->> Process API data
-/var @users = run {curl -s api.example.com/users}
-/var @parsed = @users | @json
+>> Extract from code fence
+/var @llmResponse = `Here's your data:
+\`\`\`json
+{"name": "Alice", "status": "active"}
+\`\`\``
 
->> Define filter function for active users
-/exe @filterActive(users) = js {
-  return users.filter(u => u.status === "active")
-}
-/var @active = @filterActive(@parsed)
+/var @data = @llmResponse | @json.llm
+/show @data.name                                >> Alice
 
->> Generate report
-/var @report = `# User Report
+>> Extract from inline prose
+/var @inline = `The result is {"count": 42} for this query.`
+/var @extracted = @inline | @json.llm
+/show @extracted.count                          >> 42
 
-Active users: @active.length
-Generated: @now
-
-## Users
-@active
-
-`
-
-/output @report to "user-report.md"
+>> Returns false when no JSON found
+/var @text = `Just plain text, no JSON here.`
+/var @result = @text | @json.llm
+/show @result                                   >> false

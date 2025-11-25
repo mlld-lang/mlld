@@ -6,7 +6,7 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
-import { TaintLevel } from '@security/taint/TaintTracker';
+import type { TaintLevel } from '@core/types/security';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { logger } from '@core/utils/logger';
 import * as fs from 'fs';
@@ -150,15 +150,17 @@ export class GitHubResolver implements Resolver {
     const cached = this.getCached(cacheKey, config.cacheTimeout);
     if (cached) {
       const contentType = await this.detectContentType(path, cached.content);
+      const metadata = {
+        source: `github://${config.repository}/${path}`,
+        timestamp: new Date(),
+        taintLevel: 'networkCached' as TaintLevel,
+        author: owner
+      };
       return {
         content: cached.content,
         contentType,
-        metadata: {
-          source: `github://${config.repository}/${path}`,
-          timestamp: new Date(),
-          taintLevel: (await this.getAuthToken(config)) ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
-          author: owner
-        }
+        ctx: metadata,
+        metadata
       };
     }
 
@@ -177,16 +179,18 @@ export class GitHubResolver implements Resolver {
       });
 
       const contentType = await this.detectContentType(path, content);
+      const metadata = {
+        source: `github://${config.repository}/${path}`,
+        timestamp: new Date(),
+        taintLevel: 'networkLive' as TaintLevel,
+        author: owner,
+        mimeType: this.getMimeType(path)
+      };
       return {
         content,
         contentType,
-        metadata: {
-          source: `github://${config.repository}/${path}`,
-          timestamp: new Date(),
-          taintLevel: token ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
-          author: owner,
-          mimeType: this.getMimeType(path)
-        }
+        ctx: metadata,
+        metadata
       };
     } catch (error) {
       const err = error as { status?: number; message?: string };
@@ -405,9 +409,9 @@ export class GitHubResolver implements Resolver {
     if (ref) {
       let modulePath = ref.replace(/^\/|\/$/g, '');
       
-      // Auto-append .mlld.md extension if no extension is provided
+      // Auto-append .mld.md extension if no extension is provided
       if (modulePath && !modulePath.includes('.')) {
-        modulePath += '.mlld.md';
+        modulePath += '.mld.md';
       }
       
       parts.push(modulePath);

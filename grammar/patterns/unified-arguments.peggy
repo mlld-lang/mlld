@@ -56,6 +56,9 @@ UnifiedArgumentListItems
 UnifiedArgument "unified argument"
   = WhenExpression              // Allow when-expressions as arguments
   / ForeachCommandExpression    // Allow foreach as argument (returns array)
+  / ExecResultMethodCall        // Allow chained helper calls (e.g., @secret.trim().slice())
+  / FieldAccessExecPattern      // Allow builtin helpers invoked on variables (@var.trim())
+  / ExecInvocationPattern       // Allow direct exec invocations @helper()
   / CommandTemplateArgument     // Template arguments ::...:: 
   / BacktickTemplateArgument    // Backtick templates `...`
   / NestedExecInvocation       // Nested function calls @func(args)

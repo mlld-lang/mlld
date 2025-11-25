@@ -112,3 +112,37 @@ jobs:
             TAG=latest
           fi
           npm run publish:all -- --tag $TAG
+
+      - name: Build VS Code extension package
+        if: steps.check_release.outputs.skip == 'false'
+        run: |
+          set -e
+          VERSION=${{ steps.check_release.outputs.version }}
+          cd editors/vscode
+          npm ci
+          npm version "$VERSION" --no-git-tag-version
+          npx @vscode/vsce package --out "../mlld-vscode-${VERSION}.vsix"
+
+      - name: Publish VS Code extension
+        if: steps.check_release.outputs.skip == 'false'
+        env:
+          VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+        run: |
+          set -e
+          VERSION=${{ steps.check_release.outputs.version }}
+          cd editors/vscode
+          VSIX_PATH="../mlld-vscode-${VERSION}.vsix"
+          npx @vscode/vsce publish --packagePath "$VSIX_PATH" --pat "$VSCE_TOKEN"
+          rm -f "$VSIX_PATH"
+
+      - name: Commit VS Code extension version bump
+        if: steps.check_release.outputs.skip == 'false'
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- editors/vscode/package.json editors/vscode/package-lock.json; then
+            git add editors/vscode/package.json editors/vscode/package-lock.json
+            git commit -m "chore: release VS Code extension v${{ steps.check_release.outputs.version }}"
+            git push
+          fi

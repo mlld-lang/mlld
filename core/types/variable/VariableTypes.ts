@@ -10,6 +10,10 @@ import type {
   StructuredValue,
   StructuredValueType
 } from '@interpreter/utils/structured-value';
+import type { CapabilityContext, SecurityDescriptor, DataLabel, TaintLevel } from '../security';
+import type { TokenMetricSource } from '@core/utils/token-metrics';
+import type { QuantifierHelper } from './ArrayHelpers';
+import type { ExecutableDefinition } from '../executable';
 
 // =========================================================================
 // BASE TYPES
@@ -24,6 +28,8 @@ export interface BaseVariable {
   modifiedAt: number;
   definedAt?: SourceLocation;
   source: VariableSource;
+  ctx?: VariableContextSnapshot;
+  internal?: VariableInternalMetadata;
 }
 
 /**
@@ -78,6 +84,85 @@ export interface VariableMetadata extends Record<string, any> {
   
   // Template metadata
   templateAst?: any[]; // For lazy-evaluated templates
+
+  // Security metadata
+  security?: SecurityDescriptor;
+  capability?: CapabilityContext;
+  metrics?: VariableMetrics;
+  ctxCache?: VariableContextSnapshot;
+}
+
+export interface VariableMetrics {
+  length: number;
+  tokest: number;
+  tokens?: number;
+  source?: TokenMetricSource;
+}
+
+export interface VariableContext {
+  name?: string;
+  type?: VariableTypeDiscriminator;
+  definedAt?: SourceLocation;
+  labels: readonly DataLabel[];
+  taint: TaintLevel;
+  tokens?: number | readonly number[];
+  tokest?: number;
+  length?: number;
+  size?: number;
+  sources: readonly string[];
+  exported?: boolean;
+  policy?: Readonly<Record<string, unknown>> | null;
+  totalTokens?: () => number;
+  maxTokens?: () => number;
+  filename?: string;
+  relative?: string;
+  absolute?: string;
+  url?: string;
+  domain?: string;
+  title?: string;
+  description?: string;
+  source?: string;
+  retries?: number;
+  fm?: unknown;
+  json?: unknown;
+}
+
+export type VariableContextSnapshot = VariableContext;
+
+export interface VariableInternalMetadata extends Record<string, unknown> {
+  executableDef?: ExecutableDefinition;
+  transformerImplementation?: (...args: unknown[]) => unknown;
+  transformerVariants?: Record<string, unknown>;
+  isBuiltinTransformer?: boolean;
+  sourceFunction?: unknown;
+  isRetryable?: boolean;
+  capturedModuleEnv?: Map<string, Variable>;
+  capturedShadowEnvs?: unknown;
+  arrayType?: 'renamed-content' | 'load-content-result' | 'regular' | string;
+  joinSeparator?: string;
+  customToString?: () => string;
+  customToJSON?: () => any;
+  contentGetter?: () => string | Promise<string>;
+  isLazy?: boolean;
+  needsResolution?: boolean;
+  pipelineInput?: unknown;
+  pipelineStage?: number;
+  isPipelineInput?: boolean;
+  importPath?: string;
+  isNamespace?: boolean;
+  isSystem?: boolean;
+  headerTransform?: {
+    applied: boolean;
+    template: string;
+  };
+  templateAst?: any[];
+  configType?: string;
+  itemType?: string;
+  wasEvaluated?: boolean;
+  evaluatedAt?: number;
+  fromGlobPattern?: boolean;
+  globPattern?: string;
+  fileCount?: number;
 }
 
 // =========================================================================
@@ -191,6 +276,12 @@ export interface ArrayVariable extends BaseVariable {
   value: unknown[];
   isComplex?: boolean; // Contains embedded directives
   metadata?: VariableMetadata;
+  any?: QuantifierHelper;
+  all?: QuantifierHelper;
+  none?: QuantifierHelper;
+  raw?: readonly unknown[];
+  totalTokens?: () => number;
+  maxTokens?: () => number;
 }
 
 // =========================================================================

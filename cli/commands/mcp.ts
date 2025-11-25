@@ -332,9 +332,9 @@ function normalizeExportName(name: string): string {
 }
 
 function isBuiltinExecutable(variable: ExecutableVariable): boolean {
-  const metadata = variable.metadata as Record<string, unknown> | undefined;
-  if (!metadata) return false;
-  return Boolean(metadata.isSystem || metadata.isBuiltinTransformer);
+  const internal = variable.internal;
+  if (!internal) return false;
+  return Boolean(internal.isSystem || internal.isBuiltinTransformer);
 }
 
 function parseExportedNamesFromSource(source: string): string[] {
@@ -370,12 +370,12 @@ function attachModuleEnvironment(
   variable: ExecutableVariable,
   moduleEnv: Map<string, Variable>
 ): void {
-  if (!variable.metadata) {
-    variable.metadata = {};
+  if (!variable.internal) {
+    variable.internal = {};
   }
 
-  if (!variable.metadata.capturedModuleEnv) {
-    variable.metadata.capturedModuleEnv = moduleEnv;
+  if (!variable.internal.capturedModuleEnv) {
+    variable.internal.capturedModuleEnv = moduleEnv;
   }
 }
 

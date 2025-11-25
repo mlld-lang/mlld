@@ -25,7 +25,8 @@ export async function applyWithClause(
       env,
       pipeline: withClause.pipeline,
       format: withClause.format as string | undefined,
-      isRetryable: false // with-clause doesn't track source function
+      isRetryable: false, // with-clause doesn't track source function
+      stream: withClause.stream === true
     });
     result = wrapPipelineResult(pipelineResult);
   }

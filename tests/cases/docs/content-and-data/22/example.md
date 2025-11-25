@@ -1,26 +1,13 @@
->> Double-colon (default)
-/var @msg = ::Hello @name!::
-/var @doc = ::Use `npm test` before @env::
-/var @report = ::
-Status: @status
-Config: <@base/config.json>
-Data: @data|@json
-::
+/var @user = {"name": "Alice", "scores": [10, 20, 30]}
 
->> Backticks (alternative)
-/var @msg = `Hello @name!`
-/var @multi = `
-Line 1: @var
-Line 2: @other
-`
+>> Object fields
+/show @user.name                         >> "Alice"
 
->> Double quotes (single-line only)
-/var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+>> Array elements by index
+/show @user.scores[0]                     >> 10
+/show @user.scores[1]                     >> 20
 
->> Triple-colon (Discord/social only)
-/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
-
->> Single quotes (literal)
-/var @literal = '@name stays literal'
+>> Nested access
+/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
+/show @config.db.host                    >> "localhost"
+/show @config.db.users[1]                 >> "guest"

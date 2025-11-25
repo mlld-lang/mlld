@@ -1,4 +1,6 @@
->> Load different file types
-/var @config = <package.json>            >> JSON file
-/var @docs = <README.md>                 >> Markdown file  
-/var @script = <build.sh>                >> Shell script
+/var @file = <README.md>
+
+/show @file.ctx.filename                 # "README.md"
+/show @file.ctx.tokens                   # Token count
+/show @file.ctx.labels                   # Security labels
+/show @file.ctx.absolute                 # Full path

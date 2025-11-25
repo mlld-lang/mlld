@@ -1,2 +1,4 @@
-/var @result = run {cat data.json} | @json | @csv
-/var @processed = @data | @validate | @transform
+/exe @left() = sh { echo "L" }
+/exe @right() = sh { echo "R" }
+/var @results = stream @left() || stream @right()
+/show @results   # => ["L","R"]

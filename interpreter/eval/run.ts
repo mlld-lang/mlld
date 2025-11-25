@@ -1,21 +1,33 @@
 import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
-import type { EvalResult } from '../core/interpreter';
+import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
-import { TaintLevel } from '@security/taint';
+import type { TaintLevel, DataLabel, SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { deriveCommandTaint } from '@core/security/taint';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
+import type { Variable } from '@core/types/variable';
+import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
-import { asText, isStructuredValue } from '../utils/structured-value';
+import {
+  asText,
+  normalizeWhenShowEffect,
+  applySecurityDescriptorToStructuredValue,
+  extractSecurityDescriptor
+} from '../utils/structured-value';
+import { materializeDisplayValue } from '../utils/display-materialization';
+import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
 import { coerceValueForStdin } from '../utils/shell-value';
+import { resolveDirectiveExecInvocation } from './directive-replay';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -115,13 +127,13 @@ function determineTaintLevel(nodes: MlldNode[], env: Environment): TaintLevel {
       if (varName) {
         // TODO: Get actual taint level from variable metadata
         // For now, be conservative and assume variables could be tainted
-        return TaintLevel.REGISTRY_WARNING;
+        return 'resolver';
       }
     }
   }
   
   // Literal commands are trusted
-  return TaintLevel.TRUSTED;
+  return 'literal';
 }
 
 /**
@@ -133,7 +145,8 @@ function determineTaintLevel(nodes: MlldNode[], env: Environment): TaintLevel {
 export async function evaluateRun(
   directive: DirectiveNode,
   env: Environment,
-  callStack: string[] = []
+  callStack: string[] = [],
+  context?: EvaluationContext
 ): Promise<EvalResult> {
   // Check if we're importing - skip execution if so
   if (env.getIsImporting()) {
@@ -142,9 +155,40 @@ export async function evaluateRun(
 
   let outputValue: unknown;
   let outputText: string;
+  let pendingOutputDescriptor: SecurityDescriptor | undefined;
+  let lastOutputDescriptor: SecurityDescriptor | undefined;
+  const mergePendingDescriptor = (descriptor?: SecurityDescriptor): void => {
+    if (!descriptor) {
+      return;
+    }
+    pendingOutputDescriptor = pendingOutputDescriptor
+      ? env.mergeSecurityDescriptors(pendingOutputDescriptor, descriptor)
+      : descriptor;
+  };
+  const interpolateWithPendingDescriptor = async (
+    nodes: any,
+    interpolationContext: InterpolationContext = InterpolationContext.Default,
+    targetEnv: Environment = env
+  ): Promise<string> => {
+    return interpolate(nodes, targetEnv, interpolationContext, {
+      collectSecurityDescriptor: mergePendingDescriptor
+    });
+  };
 
   const setOutput = (value: unknown) => {
     const wrapped = wrapExecResult(value);
+    if (pendingOutputDescriptor) {
+      const existingDescriptor =
+        wrapped.ctx && hasSecurityContext(wrapped.ctx) ? ctxToSecurityDescriptor(wrapped.ctx) : undefined;
+      const descriptor = existingDescriptor
+        ? env.mergeSecurityDescriptors(existingDescriptor, pendingOutputDescriptor)
+        : pendingOutputDescriptor;
+      applySecurityDescriptorToStructuredValue(wrapped, descriptor);
+      lastOutputDescriptor = descriptor;
+      pendingOutputDescriptor = undefined;
+    } else {
+      lastOutputDescriptor = undefined;
+    }
     outputValue = wrapped;
     outputText = asText(wrapped as any);
   };
@@ -172,6 +216,7 @@ export async function evaluateRun(
     }
   }
   
+  try {
   if (directive.subtype === 'runCommand') {
     // Handle command execution
     const commandNodes = directive.values?.identifier || directive.values?.command;
@@ -179,8 +224,17 @@ export async function evaluateRun(
       throw new Error('Run command directive missing command');
     }
     
+    const preExtractedCommand = getPreExtractedRunCommand(context);
     // Interpolate command (resolve variables) with shell command context
-    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+    const command =
+      preExtractedCommand ??
+      (await interpolateWithPendingDescriptor(commandNodes, InterpolationContext.ShellCommand));
+    const commandTaint = deriveCommandTaint({ command });
+    pendingOutputDescriptor = makeSecurityDescriptor({
+      taintLevel: commandTaint.level,
+      labels: commandTaint.labels,
+      sources: commandTaint.sources
+    });
 
     // Friendly pre-check for oversized simple /run command payloads
     // Rationale: Some environments may not hit ShellCommandExecutor's guard early enough.
@@ -267,7 +321,7 @@ export async function evaluateRun(
         }
         
         // Block LLM output execution
-        if (taintLevel === TaintLevel.LLM_OUTPUT) {
+        if (taintLevel === 'llmOutput') {
           throw new MlldCommandExecutionError(
             'Security: Cannot execute LLM-generated commands',
             directive.location,
@@ -317,37 +371,39 @@ export async function evaluateRun(
     
     // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
     const args = directive.values?.args || [];
-    const argValues: Record<string, any> = {};
-    
-    if (args.length > 0) {
-      // Process each argument
-      for (let i = 0; i < args.length; i++) {
-        const arg = args[i];
-        
-        if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
-          // This is a variable reference like @myVar
-          const varName = arg.identifier;
-          const variable = env.getVariable(varName);
-          if (!variable) {
-            throw new Error(`Variable not found: ${varName}`);
-          }
-          
-          // Extract the variable value
-          const { extractVariableValue } = await import('../utils/variable-resolution');
-          const value = await extractVariableValue(variable, env);
-          
-          // Auto-unwrap LoadContentResult objects
-          const unwrappedValue = AutoUnwrapManager.unwrap(value);
-          
-          // The parameter name in the code will be the variable name without @
-          argValues[varName] = unwrappedValue;
-        } else if (typeof arg === 'string') {
-          // Simple string argument - shouldn't happen with current grammar
-          // but handle it just in case
-          argValues[`arg${i}`] = arg;
-        }
-      }
-    }
+    const argValues: Record<string, any> =
+      args.length === 0
+        ? {}
+        : await AutoUnwrapManager.executeWithPreservation(async () => {
+            const extracted: Record<string, any> = {};
+            for (let i = 0; i < args.length; i++) {
+              const arg = args[i];
+
+              if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
+                // This is a variable reference like @myVar
+                const varName = arg.identifier;
+                const variable = env.getVariable(varName);
+                if (!variable) {
+                  throw new Error(`Variable not found: ${varName}`);
+                }
+
+                // Extract the variable value
+                const { extractVariableValue } = await import('../utils/variable-resolution');
+                const value = await extractVariableValue(variable, env);
+
+                // Auto-unwrap LoadContentResult objects
+                const unwrappedValue = AutoUnwrapManager.unwrap(value);
+
+                // The parameter name in the code will be the variable name without @
+                extracted[varName] = unwrappedValue;
+              } else if (typeof arg === 'string') {
+                // Simple string argument - shouldn't happen with current grammar
+                // but handle it just in case
+                extracted[`arg${i}`] = arg;
+              }
+            }
+            return extracted;
+          });
     
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
@@ -387,7 +443,7 @@ export async function evaluateRun(
         throw new Error(`Base variable not found: ${varRef.identifier}`);
       }
       
-      const variantMap = baseVar.metadata?.transformerVariants as Record<string, any> | undefined;
+      const variantMap = baseVar.internal?.transformerVariants as Record<string, any> | undefined;
       let value: any;
       let remainingFields = Array.isArray(varRef.fields) ? [...varRef.fields] : [];
 
@@ -433,7 +489,7 @@ export async function evaluateRun(
         const fullName = `${varRef.identifier}.${varRef.fields.map(f => f.value).join('.')}`;
         
         // Deserialize shadow environments if present (convert objects back to Maps)
-        let capturedShadowEnvs = value.metadata?.capturedShadowEnvs;
+        let capturedShadowEnvs = value.internal?.capturedShadowEnvs;
         if (capturedShadowEnvs && typeof capturedShadowEnvs === 'object') {
           const deserialized: any = {};
           for (const [lang, shadowObj] of Object.entries(capturedShadowEnvs)) {
@@ -462,8 +518,11 @@ export async function evaluateRun(
           },
           createdAt: Date.now(),
           modifiedAt: Date.now(),
-          metadata: {
-            ...(value.metadata || {}),
+          ctx: {
+            ...(value.ctx || {})
+          },
+          internal: {
+            ...(value.internal || {}),
             executableDef: value.executableDef,
             // CRITICAL: Preserve captured shadow environments from imports (deserialized)
             capturedShadowEnvs: capturedShadowEnvs
@@ -487,7 +546,7 @@ export async function evaluateRun(
         throw new Error('Run exec directive identifier must be a command reference');
       }
       
-      const variable = env.getVariable(commandName);
+      const variable = getPreExtractedExec(context, commandName) ?? env.getVariable(commandName);
       if (!variable || !isExecutableVariable(variable)) {
         throw new Error(`Executable variable not found: ${commandName}`);
       }
@@ -495,13 +554,13 @@ export async function evaluateRun(
     }
     
     // Get the executable definition from metadata
-    const definition = execVar.metadata?.executableDef as ExecutableDefinition;
+    const definition = execVar.internal?.executableDef as ExecutableDefinition | undefined;
     if (!definition) {
       // For field access, provide more helpful error message
       const fullPath = identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0
         ? `${(identifierNode as VariableReference).identifier}.${(identifierNode as VariableReference).fields.map(f => f.value).join('.')}`
         : commandName;
-      throw new Error(`Executable ${fullPath} has no definition in metadata`);
+      throw new Error(`Executable ${fullPath} has no definition (missing executableDef)`);
     }
     
     // Get arguments from the run directive
@@ -528,7 +587,7 @@ export async function evaluateRun(
           argValue = String(arg);
         } else if (arg && typeof arg === 'object' && 'type' in arg) {
           // Node object - interpolate normally
-          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValue = await interpolateWithPendingDescriptor([arg], InterpolationContext.Default);
         } else {
           // Fallback
           argValue = String(arg);
@@ -554,7 +613,11 @@ export async function evaluateRun(
       });
       
       // Interpolate the command template with parameters
-      const command = await interpolate(cleanTemplate, tempEnv, InterpolationContext.ShellCommand);
+      const command = await interpolateWithPendingDescriptor(
+        cleanTemplate,
+        InterpolationContext.ShellCommand,
+        tempEnv
+      );
       
       // NEW: Security check for exec commands
       const security = env.getSecurityManager();
@@ -622,7 +685,11 @@ export async function evaluateRun(
       }
       
       // Interpolate executable code templates with parameters (canonical behavior)
-      const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.ShellCommand);
+      const code = await interpolateWithPendingDescriptor(
+        definition.codeTemplate,
+        InterpolationContext.ShellCommand,
+        tempEnv
+      );
       if (process.env.DEBUG_EXEC) {
         logger.debug('run.ts code execution debug:', {
           codeTemplate: definition.codeTemplate,
@@ -633,7 +700,7 @@ export async function evaluateRun(
       
       // Pass captured shadow environments to code execution
       const codeParams = { ...argValues };
-      const capturedEnvs = execVar.metadata?.capturedShadowEnvs;
+      const capturedEnvs = execVar.internal?.capturedShadowEnvs;
       if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
                            definition.language === 'node' || definition.language === 'nodejs')) {
         (codeParams as any).__capturedShadowEnvs = capturedEnvs;
@@ -660,14 +727,8 @@ export async function evaluateRun(
         const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
         // If the when-expression tagged a side-effect show, unwrap to its text
         // so /run echoes it as output (tests expect duplicate lines).
-        const rawValue = whenResult.value as any;
-        if (rawValue && typeof rawValue === 'object' && (rawValue as any).__whenEffect === 'show') {
-          setOutput((rawValue as any).text ?? '');
-        } else if (isStructuredValue(rawValue) && rawValue.data && typeof rawValue.data === 'object' && (rawValue.data as any).__whenEffect === 'show') {
-          setOutput((rawValue.data as any).text ?? asText(rawValue));
-        } else {
-          setOutput(rawValue);
-        }
+        const normalized = normalizeWhenShowEffect(whenResult.value);
+        setOutput(normalized.normalized);
         
         logger.debug('🎯 mlld-when result:', {
           outputType: typeof outputValue,
@@ -685,7 +746,12 @@ export async function evaluateRun(
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
       
-      setOutput(await interpolate(definition.template, tempEnv, InterpolationContext.Default));
+      const templateOutput = await interpolateWithPendingDescriptor(
+        definition.template,
+        InterpolationContext.Default,
+        tempEnv
+      );
+      setOutput(templateOutput);
     } else {
       throw new Error(`Unsupported executable type: ${definition.type}`);
     }
@@ -697,8 +763,7 @@ export async function evaluateRun(
     }
     
     // Evaluate the exec invocation
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execInvocation, env);
+    const result = await resolveDirectiveExecInvocation(directive, env, execInvocation);
     setOutput(result.value);
     sourceNodeForPipeline = execInvocation;
     
@@ -710,8 +775,7 @@ export async function evaluateRun(
     }
 
     // Evaluate the exec invocation
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    const result = await evaluateExecInvocation(execRef, env);
+    const result = await resolveDirectiveExecInvocation(directive, env, execRef);
     setOutput(result.value);
     sourceNodeForPipeline = execRef;
 
@@ -748,8 +812,17 @@ export async function evaluateRun(
       const enableStage0 = !!sourceNodeForPipeline;
       const pipelineInput = outputValue;
       const valueForPipeline = enableStage0
-        ? { value: pipelineInput, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
+        ? { value: pipelineInput, ctx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;
+      const outputDescriptor = lastOutputDescriptor ?? extractSecurityDescriptor(pipelineInput, {
+        recursive: true,
+        mergeArrayElements: true
+      });
+      const pipelineDescriptorHint = pendingOutputDescriptor
+        ? outputDescriptor
+          ? env.mergeSecurityDescriptors(pendingOutputDescriptor, outputDescriptor)
+          : pendingOutputDescriptor
+        : outputDescriptor;
       const pipelineResult = await processPipeline({
         value: valueForPipeline,
         env,
@@ -757,7 +830,8 @@ export async function evaluateRun(
         pipeline: withClause.pipeline,
         format: withClause.format as string | undefined,
         isRetryable: enableStage0,
-        location: directive.location
+        location: directive.location,
+        descriptorHint: pipelineDescriptorHint
       });
       setOutput(pipelineResult);
     }
@@ -785,7 +859,17 @@ export async function evaluateRun(
   
   // Emit effect only for top-level run directives (not data/RHS contexts)
   if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef) {
-    env.emitEffect('both', displayText);
+    const materializedEffect = materializeDisplayValue(
+      outputValue,
+      undefined,
+      outputValue,
+      displayText
+    );
+    const effectText = materializedEffect.text;
+    if (materializedEffect.descriptor) {
+      env.recordSecurityDescriptor(materializedEffect.descriptor);
+    }
+    env.emitEffect('both', effectText);
   }
   
   // Return the output value
@@ -793,4 +877,46 @@ export async function evaluateRun(
     value: outputValue,
     env
   };
+  } catch (error) {
+    throw error;
+  }
+}
+
+function getPreExtractedRunCommand(context?: EvaluationContext): string | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const input of context.extractedInputs) {
+    if (
+      input &&
+      typeof input === 'object' &&
+      'name' in input &&
+      (input as any).name === '__run_command__' &&
+      typeof (input as any).value === 'string'
+    ) {
+      return (input as any).value as string;
+    }
+  }
+  return undefined;
+}
+
+function getPreExtractedExec(
+  context: EvaluationContext | undefined,
+  name: string
+): ExecutableVariable | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const input of context.extractedInputs) {
+    if (
+      input &&
+      typeof input === 'object' &&
+      'name' in input &&
+      (input as Variable).name === name &&
+      (input as Variable).type === 'executable'
+    ) {
+      return input as ExecutableVariable;
+    }
+  }
+  return undefined;
 }
