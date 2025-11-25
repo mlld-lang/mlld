@@ -9,4 +9,4 @@
 ]
 
 /var secret @items = ["  north  ", "  south  "]
-/for 2 parallel @item in @items => @displayParallel(@item.trim())
+/for parallel(2) @item in @items => @displayParallel(@item.trim())

@@ -12,15 +12,43 @@ ForIterationPattern "for iteration pattern"
 
 // Optional parallel spec for /for and for-expressions
 ForParallelSpec
-  = _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" _ "parallel" {
+  // New syntax: parallel(cap, pacing)
+  = _ "parallel" _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" {
       const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
       return { parallel: true, cap: Number(cap), rateMs };
     }
-  / _ cap:NumberLiteral _ "parallel" {
+  // New syntax: parallel(cap)
+  / _ "parallel" _ "(" _ cap:NumberLiteral _ ")" {
       return { parallel: true, cap: Number(cap) };
     }
+  // New syntax: parallel()
+  / _ "parallel" _ "(" _ ")" {
+      return { parallel: true };
+    }
+  // New syntax: bare parallel
   / _ "parallel" {
       return { parallel: true };
+    }
+  // Legacy syntax: (cap, pacing) parallel
+  / _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" _ "parallel" {
+      helpers.warn(
+        'Use parallel(cap, pacing) instead of (cap, pacing) parallel',
+        'parallel(cap, pacing)',
+        location(),
+        'for-parallel-deprecated'
+      );
+      const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
+      return { parallel: true, cap: Number(cap), rateMs };
+    }
+  // Legacy syntax: cap parallel
+  / _ cap:NumberLiteral _ "parallel" {
+      helpers.warn(
+        'Use parallel(cap) instead of cap parallel',
+        'parallel(cap)',
+        location(),
+        'for-parallel-deprecated'
+      );
+      return { parallel: true, cap: Number(cap) };
     }
 
 // Single action for for loops - simpler than WhenAction

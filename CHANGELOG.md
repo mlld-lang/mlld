@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Braced commands require explicit `cmd { ... }`; bare `{ ... }` parses as structured data, pipelines accept inline value stages with structured output, and bare brace commands raise a targeted parse error
 - Enhanced error message for `run sh` in `/exe` explains distinction between bare commands and shell scripts
 - Shell commands now run from project root when `@base` is inferred, otherwise from script directory
+- `/for` parallel syntax uses `parallel(cap, pacing)` instead of `(cap, pacing) parallel`. Old syntax still parses with a warning.
 
 ## [2.0.0-rc69]
 ### Fixed

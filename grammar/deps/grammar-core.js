@@ -40,10 +40,52 @@ export const DirectiveKind = {
     guard: 'guard',
     // NO deprecated entries - clean break!
 };
+let warningCollector = null;
 export const helpers = {
     debug(msg, ...args) {
         if (process.env.DEBUG_MLLD_GRAMMAR)
             console.log('[DEBUG GRAMMAR]', msg, ...args);
+    },
+    warn(message, suggestion, loc, code) {
+        const warning = {
+            message,
+            ...(suggestion ? { suggestion } : {}),
+            ...(loc ? { location: loc } : {}),
+            ...(code ? { code } : {})
+        };
+        if (warningCollector) {
+            try {
+                warningCollector(warning);
+                return warning;
+            }
+            catch {
+                // ignore collector errors and fall back to console
+            }
+        }
+        try {
+            // eslint-disable-next-line no-console
+            console.warn(`[mlld grammar warning] ${warning.message}`);
+        }
+        catch {
+            // ignore console failures
+        }
+        return warning;
+    },
+    setWarningCollector(collector) {
+        if (!collector) {
+            warningCollector = null;
+            return;
+        }
+        if (Array.isArray(collector)) {
+            warningCollector = (warning) => {
+                collector.push(warning);
+            };
+            return;
+        }
+        warningCollector = collector;
+    },
+    clearWarningCollector() {
+        warningCollector = null;
     },
     isExecutableReference(ref) {
         // Check if reference is a function call (has execution semantics)

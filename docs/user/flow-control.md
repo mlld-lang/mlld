@@ -171,10 +171,10 @@ Run iterations in parallel with an optional per-loop cap and pacing between star
 /for parallel @x in ["a","b","c","d"] => show @x
 
 # Cap override and pacing between task starts
-/for (2, 1s) parallel @n in [1,2,3,4] => show `Item: @n`
+/for parallel(2, 1s) @n in [1,2,3,4] => show `Item: @n`
 
 # Collection form (preserves input order)
-/var @res = for 2 parallel @x in ["x","y","z"] => @upper(@x)
+/var @res = for parallel(2) @x in ["x","y","z"] => @upper(@x)
 /show @res
 ```
 

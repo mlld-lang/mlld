@@ -6,6 +6,6 @@ Item: @item
 <parallel-stack-shared.md>
 `
 
-/var @results = for 3 parallel @item in @items => @processItem(@item)
+/var @results = for parallel(3) @item in @items => @processItem(@item)
 
 /show @results

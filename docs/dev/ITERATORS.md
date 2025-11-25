@@ -178,18 +178,18 @@ Syntax options:
 /for parallel @x in @items => show @x
 
 # Per-loop cap override
-/for 3 parallel @x in @items => show @x
+/for parallel(3) @x in @items => show @x
 
 # Cap with pacing between task starts (time units: s, m, h, d, w)
-/for (3, 1s) parallel @x in @items => show @x
+/for parallel(3, 1s) @x in @items => show @x
 
 # Collection form with parallel
-/var @out = for 2 parallel @x in ["a","b","c"] => @upper(@x)
+/var @out = for parallel(2) @x in ["a","b","c"] => @upper(@x)
 ```
 
 Semantics:
 - Concurrency cap: defaults to `MLLD_PARALLEL_LIMIT` (env), overridable per loop; cap never exceeds collection length.
-- Pacing: optional minimum delay between iteration starts; `(n, 1s)` adds ~1 second between starts across the loop.
+- Pacing: optional minimum delay between iteration starts; `parallel(n, 1s)` adds ~1 second between starts across the loop.
 - Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff.
 - Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is `null`.
 - Nested loops: inner loops inherit outer `forOptions` unless overridden.

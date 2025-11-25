@@ -411,8 +411,8 @@ Use `foreach` to transform collections; use `/for` to execute/collect. Batch pip
 
 # Optional parallel forms
 /for parallel @n in @names => show @n              # uses MLLD_PARALLEL_LIMIT (default 4)
-/var @caps = for 2 parallel @n in @names => @greet(@n)  # per-loop cap override
-/for (3, 1s) parallel @n in @names => show @n      # cap 3 with 1s pacing between starts
+/var @caps = for parallel(2) @n in @names => @greet(@n)  # per-loop cap override
+/for parallel(3, 1s) @n in @names => show @n      # cap 3 with 1s pacing between starts
 ```
 
 </RULE_11_ITERATION_OVERVIEW>
@@ -1034,16 +1034,16 @@ Parallel /for (optional):
 /for parallel @x in @items => show @x
 
 # Cap override and pacing between starts (units: s, m, h, d, w)
-/for (2, 1s) parallel @x in @items => show @x
+/for parallel(2, 1s) @x in @items => show @x
 
 # Collection form preserves input order
-/var @out = for 3 parallel @x in ["a","b","c"] => @upper(@x)
+/var @out = for parallel(3) @x in ["a","b","c"] => @upper(@x)
 ```
 
 Notes:
 - Directive form streams results as iterations finish (order not guaranteed); expression form returns results in input order.
 - Concurrency capped by `MLLD_PARALLEL_LIMIT` unless overridden per loop.
-- Pacing: optional minimum delay between iteration starts via `/for (n, interval) parallel ...` (units: ms, s, m, h).
+- Pacing: optional minimum delay between iteration starts via `/for parallel(n, interval) ...` (units: ms, s, m, h).
 - Rate limits: per‑iteration 429/"rate limit" errors use exponential backoff.
 
 <NO_EARLY_EXIT>
