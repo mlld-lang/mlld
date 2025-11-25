@@ -21,7 +21,7 @@
 
 import { existsSync, statSync, writeFileSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
-import { glob } from 'glob';
+import { globSync } from 'glob';
 import { join } from 'path';
 
 // Track last build time
@@ -144,7 +144,7 @@ function hasFilesNewerThan(pattern, timestamp, dirtyFiles) {
   }
 
   // Fallback: check all files matching pattern (used when no dirty files or not a git repo)
-  const filesToCheck = Array.isArray(pattern) ? pattern : glob.sync(pattern);
+  const filesToCheck = Array.isArray(pattern) ? pattern : globSync(pattern);
   for (const file of filesToCheck) {
     if (existsSync(file)) {
       const fileMtime = statSync(file).mtimeMs;
