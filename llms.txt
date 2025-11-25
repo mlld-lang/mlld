@@ -1488,26 +1488,30 @@ Guards protect data and operations. Label sensitive data, define policies:
 /var secret @apiKey = "sk-12345"         # Label as 'secret'
 /var pii @email = "user@example.com"     # Label as 'pii'
 
-/guard @noShellSecrets for secret = when [
+/guard @noShellSecrets before secret = when [
   @ctx.op.type == "run" => deny "Secrets blocked from shell"
   * => allow
 ]
 
 /run { echo @apiKey }                    # Blocked by guard
 
+Syntax: /guard [@name] TIMING LABEL = when [...]
+- TIMING: before, after, or always (required)
+- Syntactic sugar: 'for' is equivalent to 'before' (e.g., /guard for secret = /guard before secret)
+
 Before guards (input validation):
-/guard before @sanitize for untrusted = when [
+/guard @sanitize before untrusted = when [
   * => allow @input.trim().slice(0, 100)
 ]
 
 After guards (output validation):
-/guard after @validateJson for op:exe = when [
+/guard @validateJson after op:exe = when [
   @isValidJson(@output) => allow
   * => deny "Invalid JSON"
 ]
 
 Transform with allow @value:
-/guard @redact for secret = when [
+/guard @redact secret = when [
   @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]

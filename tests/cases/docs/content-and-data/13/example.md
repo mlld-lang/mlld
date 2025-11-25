@@ -1,8 +1,8 @@
-/var @config = <settings.json>
+/var @markdown = <*.md>                  >> All .md in current dir
+/var @tests = <**/*.test.js>             >> All test files recursively
+/var @docs = <docs/**/*.md>              >> All markdown in docs tree
+/var @source = <src/**/*.ts>             >> All TypeScript in src
 
->> Direct field access on parsed JSON
-/show @config.json.apiUrl
-/show @config.json.users[0].email
-
->> Raw content still available
-/show @config.content                    >> Raw JSON string
+>> Access individual files
+/show @docs[0].content                    >> First file's content
+/show @docs[0].ctx.filename               >> First file's name

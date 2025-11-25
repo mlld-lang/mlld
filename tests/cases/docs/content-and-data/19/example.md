@@ -1,15 +1,11 @@
-/var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
+/var @page = <https://example.com/data.json>
 
->> Parse inside function
-/exe @filter1(users) = js {
-  const data = JSON.parse(users);
-  return data.filter(u => u.age > 25);
-}
-/run @filter1(@users)
+>> URL-specific metadata
+/show @page.ctx.url                      >> Full URL
+/show @page.ctx.domain                   >> "example.com"
+/show @page.ctx.status                   >> HTTP status code
+/show @page.ctx.title                    >> Page title (if HTML)
 
->> Parse before passing
-/exe @filter2(users) = js {
-  return users.filter(u => u.age > 25);
-}
-/run @filter2(@users.data)   >> .data parses JSON
-/run @filter2(@users.json)   >> .json is alias
+>> HTML is converted to markdown
+/show @page.content                      >> Markdown version
+/show @page.ctx.html                     >> Original HTML

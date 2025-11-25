@@ -1,8 +1,8 @@
-/var @post = <blog/post.md>
+>> Extract single section
+/var @install = <README.md # Installation>
 
-/show @post.ctx.fm.title                 >> Post title
-/show @post.ctx.fm.author                >> Author name
-/show @post.ctx.fm.tags                  >> Array of tags
+>> Extract from multiple files  
+/var @apis = <docs/*.md # API Reference>
 
->> Conditional processing
-/when @post.ctx.fm.published => show @post.content
+>> Rename sections with 'as'
+/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"

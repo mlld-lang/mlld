@@ -2,8 +2,55 @@
 // Implements /guard parsing for security policy hooks.
 
 SlashGuard
-  = DirectiveContext "/guard" _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
-      helpers.debug('SlashGuard matched', { name, filter, guardBody });
+  = DirectiveContext "/guard" _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+      helpers.debug('SlashGuard matched (new syntax - timing required)', { name: nameTiming?.name, timing, filter, guardBody });
+      const guardTiming = timing;
+
+      const values = {
+        filter: [filter.node],
+        guard: [guardBody.node]
+      };
+
+      if (nameTiming?.name) {
+        values.name = [nameTiming.name];
+      }
+
+      const raw = {
+        filter: filter.raw
+      };
+
+      if (nameTiming?.name) {
+        raw.name = `@${nameTiming.name.identifier}`;
+      }
+      raw.timing = guardTiming;
+
+      if (guardBody.modifier && guardBody.modifier !== 'default') {
+        raw.modifier = guardBody.modifier;
+      }
+
+      const meta = {
+        filterKind: filter.node.filterKind,
+        filterValue: filter.node.value,
+        scope: filter.node.scope,
+        modifier: guardBody.modifier,
+        ruleCount: guardBody.node.rules.length,
+        hasName: Boolean(nameTiming?.name),
+        timing: guardTiming,
+        ...(ending?.comment ? { comment: ending.comment } : {})
+      };
+
+      return helpers.createStructuredDirective(
+        DirectiveKind.guard,
+        'guard',
+        values,
+        raw,
+        meta,
+        location(),
+        'guard'
+      );
+    }
+  / DirectiveContext "/guard" _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+      helpers.debug('SlashGuard matched (old syntax with for)', { timing, name, filter, guardBody });
       const guardTiming = timing ?? 'before';
 
       const values = {
@@ -50,7 +97,7 @@ SlashGuard
       );
     }
   / DirectiveContext "/guard" {
-      helpers.mlldError('Invalid /guard syntax. Expected `/guard [@name] for <filter> = when [...]`.', 'guard', location());
+      return peg$FAILED;
     }
 
 GuardDirectiveName
@@ -59,9 +106,9 @@ GuardDirectiveName
     }
 
 GuardTiming
-  = "before" { return 'before'; }
-  / "after" { return 'after'; }
-  / "always" { return 'always'; }
+  = "before" ![a-zA-Z0-9_] { return 'before'; }
+  / "after" ![a-zA-Z0-9_] { return 'after'; }
+  / "always" ![a-zA-Z0-9_] { return 'always'; }
 
 GuardFilterClause
   = filter:GuardOperationFilter { return filter; }
@@ -120,7 +167,7 @@ GuardRuleList
     }
 
 GuardRuleSeparator
-  = WhenConditionSeparator
+  = __
 
 GuardRule
   = "*" _ "=>" _ action:GuardAction {
@@ -173,8 +220,8 @@ GuardAction
     }
 
 GuardActionValue
-  = _ expr:UnifiedExpression {
-      const nodes = Array.isArray(expr) ? expr : [expr];
+  = HWS value:(UnifiedQuoteOrTemplate / UnifiedExpression) {
+      const nodes = Array.isArray(value) ? value : [value];
       return {
         nodes,
         raw: text().trim()

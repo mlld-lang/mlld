@@ -1,26 +1,28 @@
->> Double-colon (default)
-/var @msg = ::Hello @name!::
-/var @doc = ::Use `npm test` before @env::
-/var @report = ::
-Status: @status
-Config: <@base/config.json>
-Data: @data|@json
-::
+/var @text = "Hello World"
+/var @phrase = "  JavaScript rocks!  "
 
->> Backticks (alternative)
-/var @msg = `Hello @name!`
-/var @multi = `
-Line 1: @var
-Line 2: @other
-`
+>> Check if string contains substring
+/show @text.includes("World")            >> true
+/show @text.includes("world")            >> false
 
->> Double quotes (single-line only)
-/var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+>> Find substring position
+/show @text.indexOf("W")                 >> 6
+/show @text.indexOf("xyz")               >> -1
 
->> Triple-colon (Discord/social only)
-/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
+>> Get string length
+/show @text.length()                     >> 11
 
->> Single quotes (literal)
-/var @literal = '@name stays literal'
+>> Change case
+/show @text.toLowerCase()                >> "hello world"
+/show @text.toUpperCase()                >> "HELLO WORLD"
+
+>> Trim whitespace
+/show @phrase.trim()                     >> "JavaScript rocks!"
+
+>> Check start/end
+/show @text.startsWith("Hello")          >> true
+/show @text.endsWith("World")            >> true
+
+>> Split into array
+/show @text.split(" ")                   >> ["Hello", "World"]
+/show @text.split("")                    >> ["H", "e", "l", "l", "o", " ", "W", "o", "r", "l", "d"]

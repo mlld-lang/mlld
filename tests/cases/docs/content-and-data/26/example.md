@@ -1,15 +1,21 @@
->> Format JSON with indentation
-/var @data = <file.csv>
-/var @tojson = @data | @json
-/show @tojson
+>> Files
+/var @config = <settings.json>
+@config.json              >> Parsed JSON object
+@config.data              >> Alias for .json
+@config.content           >> Raw string
+@config.text              >> Alias for .content
 
->> Convert to XML (SCREAMING_SNAKE_CASE)
-/var @toxml = @data | @XML
-/show @toxml
+>> Variables
+/var @str = '{"status": "ok"}'
+@str.data                 >> Parsed JSON object
+@str.json                 >> Alias for .data
+@str.text                 >> Original string
+@str.content              >> Alias for .text
+@str                      >> Original string (default)
 
->> Convert arrays to CSV
-/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
-/var @tocsv = @users | @CSV
-/show @tocsv
-
-`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:
+>> Command output
+/var @result = run {curl api.com/data}
+@result.data              >> Parse as JSON
+@result.json              >> Alias for .data
+@result.text              >> Keep as string
+@result.content           >> Alias for .text

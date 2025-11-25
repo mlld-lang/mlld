@@ -1,11 +1,8 @@
-/var @items = ["first", "second", "third", "fourth", "last"]
+/var @post = <blog/post.md>
 
->> Basic slicing
-/show @items[0:3]                        >> ["first", "second", "third"]
-/show @items[2:]                         >> ["third", "fourth", "last"]
-/show @items[:3]                         >> ["first", "second", "third"]
+/show @post.ctx.fm.title                 >> Post title
+/show @post.ctx.fm.author                >> Author name
+/show @post.ctx.fm.tags                  >> Array of tags
 
->> Negative indices
-/show @items[-2:]                        >> ["fourth", "last"]
-/show @items[:-1]                        >> ["first", "second", "third", "fourth"]
-/show @items[1:-1]                       >> ["second", "third", "fourth"]
+>> Conditional processing
+/when @post.ctx.fm.published => show @post.content

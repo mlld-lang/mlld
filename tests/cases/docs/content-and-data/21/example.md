@@ -1,13 +1,13 @@
->> Filter JSON array from command
-/var @json = run {./mkjson.sh}
-/exe @filterHigh(entries) = js {
-  return entries.filter(e => e.finding.startsWith("High"));
-}
-/var @result = @filterHigh(@json.data)
+/var @user = {"name": "Alice", "scores": [10, 20, 30]}
 
->> Process API response
-/var @response = run {curl -s api.example.com/data}
-/exe @getActive(data) = js {
-  return data.users.filter(u => u.active);
-}
-/var @active = @getActive(@response.data)
+>> Object fields
+/show @user.name                         >> "Alice"
+
+>> Array elements by index
+/show @user.scores[0]                     >> 10
+/show @user.scores[1]                     >> 20
+
+>> Nested access
+/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
+/show @config.db.host                    >> "localhost"
+/show @config.db.users[1]                 >> "guest"

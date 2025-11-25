@@ -1,14 +1,26 @@
->> In directives
-/show @name
+>> Double-colon (default)
+/var @msg = ::Hello @name!::
+/var @doc = ::Use `npm test` before @env::
+/var @report = ::
+Status: @status
+Config: <@base/config.json>
+Data: @data|@json
+::
 
->> In double quotes
-/var @greeting = "Hello @name"
+>> Backticks (alternative)
+/var @msg = `Hello @name!`
+/var @multi = `
+Line 1: @var
+Line 2: @other
+`
 
->> In command braces
-/run {echo "Welcome @name"}
+>> Double quotes (single-line only)
+/var @path = "@base/files/@filename"
+/run {echo "Processing @file"}
 
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
+>> Triple-colon (Discord/social only)
+/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
+/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
 
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Single quotes (literal)
+/var @literal = '@name stays literal'

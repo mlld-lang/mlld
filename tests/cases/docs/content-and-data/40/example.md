@@ -1,6 +1,14 @@
-/var @checks = for @service in ["auth", "payments", "search"] =>
-  {"service": @service, "status": "ok", "timestamp": @now}
+>> Collect all module documentation
+/var @modules = <modules/**/*.md>
 
-/for @entry in @checks => append @entry to "health.jsonl"
+>> Build README with metadata
+/var @readme = `# Project Modules
 
-/show <health.jsonl>
+Total modules: @modules.length
+Last updated: @now
+
+@modules
+
+`
+
+/output @readme to "README.md"

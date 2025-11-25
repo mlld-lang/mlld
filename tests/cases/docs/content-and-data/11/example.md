@@ -1,2 +1,5 @@
-/var @handlers = <src/service.ts { createUser, (logger.info) }>
-/var @templated = <src/**/*.py { create_user }> as ::## <>.name\n```\n<>.code\n```::
+/exe @left() = sh { echo "L" }
+/exe @right() = sh { echo "R" }
+
+/var @results = stream @left() || stream @right()
+/show @results

@@ -1,13 +1,8 @@
-/var @user = {"name": "Alice", "scores": [10, 20, 30]}
+/var @config = <settings.json>
 
->> Object fields
-/show @user.name                         >> "Alice"
+>> Direct field access on parsed JSON
+/show @config.json.apiUrl
+/show @config.json.users[0].email
 
->> Array elements by index
-/show @user.scores[0]                     >> 10
-/show @user.scores[1]                     >> 20
-
->> Nested access
-/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
-/show @config.db.host                    >> "localhost"
-/show @config.db.users[1]                 >> "guest"
+>> Raw content still available
+/show @config.content                    >> Raw JSON string

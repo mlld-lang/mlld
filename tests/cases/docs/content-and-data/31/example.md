@@ -1,15 +1,18 @@
->> ✗ Using {{}} in ::...::
-/var @msg = ::Hello {{name}}::        >> {{name}} is literal
-/var @msg = ::Hello @name::           >> ✓
+>> Extract from code fence
+/var @llmResponse = `Here's your data:
+\`\`\`json
+{"name": "Alice", "status": "active"}
+\`\`\``
 
->> ✗ Using @var in :::...:::
-/var @msg = :::Hello @name:::         >> @name is literal
-/var @msg = :::Hello {{name}}:::      >> ✓
+/var @data = @llmResponse | @json.llm
+/show @data.name                                >> Alice
 
->> ✗ Using ::: without Discord/social need
-/var @msg = :::Status: {{status}}:::  >> Loses all features
-/var @msg = ::Status: @status::       >> ✓ Full features
+>> Extract from inline prose
+/var @inline = `The result is {"count": 42} for this query.`
+/var @extracted = @inline | @json.llm
+/show @extracted.count                          >> 42
 
->> ✗ Importing template files
-/import { @tpl } from "./file.att"    >> Error
-/exe @tpl(x) = template "./file.att"  >> ✓
+>> Returns false when no JSON found
+/var @text = `Just plain text, no JSON here.`
+/var @result = @text | @json.llm
+/show @result                                   >> false

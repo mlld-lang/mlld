@@ -1,15 +1,14 @@
->> Primitives
-/var @name = "Alice"
-/var @age = 30
-/var @active = true
+/var @file = <package.json>
 
->> Arrays
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
+>> Basic metadata
+/show @file.ctx.filename                 >> "package.json"
+/show @file.ctx.relative                 >> "./package.json" 
+/show @file.ctx.absolute                 >> Full path
 
->> Objects
-/var @user = {"name": "Alice", "role": "admin"}
-/var @config = {
-  "database": {"host": "localhost", "port": 5432},
-  "features": ["auth", "api"]
-}
+>> Token counting
+/show @file.ctx.tokest                   >> Estimated tokens (fast)
+/show @file.ctx.tokens                   >> Exact tokens
+
+>> Content access
+/show @file.content                      >> File contents (explicit)
+/show @file                              >> Same as above (implicit)

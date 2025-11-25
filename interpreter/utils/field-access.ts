@@ -213,6 +213,24 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = rawValue;
           break;
         }
+
+        // Check if this looks like a JSON string - provide helpful error
+        const trimmed = rawValue.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          const chain = [...(options?.parentPath || []), name];
+          throw new FieldAccessError(
+            `Cannot access field "${name}" on JSON string. Use \`.data.${name}\` or pipe through \`| @json\` first.`,
+            {
+              baseValue: rawValue,
+              fieldAccessChain: [],
+              failedAtIndex: Math.max(0, chain.length - 1),
+              failedKey: name,
+              isJsonString: true
+            },
+            { sourceLocation: options?.sourceLocation, env: options?.env }
+          );
+        }
       }
 
       if (typeof rawValue !== 'object' || rawValue === null) {

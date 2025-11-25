@@ -1,5 +1,2 @@
-/run sh {
-  if [ -f "package.json" ]; then
-    npm install
-  fi
-}
+/var secret @data = "sensitive"
+/show @data.ctx.labels                     # ["secret"]

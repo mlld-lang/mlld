@@ -880,7 +880,7 @@ Pipeline stages receive string input by default:
 /var @result = @file | @process          # @process gets string, no .ctx
 
 # ✓ Keep structured form
-/exe @process(file) = show `Name: @file.ctx.filename, Tokens: @file.ctx.tokens`
+/exe @process(file) = `Name: @file.ctx.filename, Tokens: @file.ctx.tokens`
 /var @result = @file.keep | @process
 ```
 

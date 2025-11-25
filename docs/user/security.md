@@ -7,7 +7,7 @@ Guards protect data and operations. Label sensitive data, define guards to contr
 ```mlld
 /var secret @apiKey = "sk-live-12345"
 
-/guard @noShellSecrets for secret = when [
+/guard @noShellSecrets before secret = when [
   @ctx.op.type == "run" => deny "Secrets cannot appear in shell commands"
   * => allow
 ]
@@ -22,7 +22,7 @@ Mark data as sensitive by adding labels to variable declarations:
 ```mlld
 /var secret @apiKey = "sk-12345"           # Labeled 'secret'
 /var pii @email = "user@example.com"       # Labeled 'pii'
-/var secret pii @ssn = "123-45-6789"       # Multiple labels
+/var secret,pii @ssn = "123-45-6789"       # Multiple labels (comma-separated, no spaces)
 ```
 
 Labels track through operations:
@@ -47,12 +47,19 @@ Guards enforce policies on labeled data or operations.
 
 ### Basic Guard Syntax
 
-```mlld
-/guard @name for <label> = when [
-  <condition> => <action>
+```
+/guard [@name] TIMING LABEL = when [
+  CONDITION => ACTION
   * => allow
 ]
 ```
+
+Where:
+- `@name` is optional guard name
+- `TIMING` is required: `before`, `after`, or `always`
+- `LABEL` is a data label (`secret`, `pii`) or operation filter (`op:run`, `op:exe`)
+
+**Syntactic sugar:** `/guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
 
 Actions:
 - `allow` - Operation proceeds
@@ -65,7 +72,7 @@ Actions:
 Block secrets from shell commands:
 
 ```mlld
-/guard @noShellSecrets for secret = when [
+/guard @noShellSecrets before secret = when [
   @ctx.op.type == "run" => deny "Secrets cannot appear in shell"
   * => allow
 ]
@@ -79,7 +86,7 @@ Block secrets from shell commands:
 Block all shell commands regardless of data:
 
 ```mlld
-/guard @noShell for op:run = when [
+/guard @noShell before op:run = when [
   * => deny "Shell access disabled"
 ]
 
@@ -89,7 +96,7 @@ Block all shell commands regardless of data:
 Filter by operation name:
 
 ```mlld
-/guard @blockSend for op:exe = when [
+/guard @blockSend before op:exe = when [
   @ctx.op.name == "sendData" => deny "Network calls blocked"
   * => allow
 ]
@@ -103,7 +110,7 @@ Filter by operation name:
 Handle guard denials gracefully with `denied =>` branches:
 
 ```mlld
-/guard @secretBlock for secret = when [
+/guard @secretBlock before secret = when [
   @ctx.op.type == "show" => deny "Cannot display secrets"
   * => allow
 ]
@@ -134,7 +141,7 @@ Access guard context in denied handlers:
 Before guards check inputs before operations execute:
 
 ```mlld
-/guard before @validateInput for op:exe = when [
+/guard @validateInput before op:exe = when [
   @input.length > 1000 => deny "Input too large"
   @input.includes("<script") => deny "Potentially malicious input"
   * => allow
@@ -147,12 +154,12 @@ Before guards check inputs before operations execute:
 Transform inputs with `allow @value`:
 
 ```mlld
-/guard before @sanitize for untrusted = when [
+/guard @sanitize before untrusted = when [
   * => allow @input.trim().slice(0, 100)
 ]
 
 /var untrusted @userInput = "  very long input...  "
-/exe @process(data) = show `Processed: @data`
+/exe @process(data) = `Processed: @data`
 /show @process(@userInput)                 # Input trimmed and truncated
 ```
 
@@ -161,7 +168,7 @@ Transform inputs with `allow @value`:
 After guards validate outputs after operations complete:
 
 ```mlld
-/guard after @validateOutput for op:exe = when [
+/guard @validateOutput after op:exe = when [
   @output.includes("ERROR") => deny "Operation failed"
   * => allow
 ]
@@ -173,7 +180,7 @@ After guards validate outputs after operations complete:
 Sanitize outputs:
 
 ```mlld
-/guard after @redactSecrets for op:exe = when [
+/guard @redactSecrets after op:exe = when [
   @output.includes("sk-") => allow @output.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]')
   * => allow
 ]
@@ -185,7 +192,7 @@ Sanitize outputs:
 Check LLM output:
 
 ```mlld
-/guard after @validateJson for op:exe = when [
+/guard @validateJson after op:exe = when [
   @isValidJson(@output) => allow
   * => deny "LLM did not return valid JSON"
 ]
@@ -198,15 +205,15 @@ Check LLM output:
 Guards can run before, after, or both:
 
 ```mlld
-/guard before @checkInput for secret = when [...]    # Before operation
-/guard after @checkOutput for secret = when [...]    # After operation
-/guard always @checkBoth for secret = when [...]     # Both before and after
+/guard @checkInput before secret = when [...]    # Before operation
+/guard @checkOutput after secret = when [...]    # After operation
+/guard @checkBoth always secret = when [...]     # Both before and after
 ```
 
 Use `@ctx.guard.timing` to differentiate:
 
 ```mlld
-/guard always @tag for op:exe = when [
+/guard @tag always op:exe = when [
   * => allow @tagValue(@ctx.guard.timing, @output, @input)
 ]
 
@@ -224,27 +231,29 @@ Use `@ctx.guard.timing` to differentiate:
 Multiple guards execute in order (top-to-bottom in file):
 
 ```mlld
-/guard @first for secret = when [
+/guard @first before secret = when [
   * => allow @input.trim()
 ]
 
-/guard @second for secret = when [
+/guard @second before secret = when [
   * => allow `safe:@input`
 ]
 
 /var secret @data = "  hello  "
-/exe @deliver(v) = show `Result: @v`
-/show @deliver(@data)                      # Result: safe:hello
+/exe @deliver(v) = `Result: @v`
+
+>> Result: safe:hello
+/show @deliver(@data)
 ```
 
 Decision precedence: deny > retry > allow @value > allow
 
 ```mlld
-/guard @retryGuard for secret = when [
+/guard @retryGuard before secret = when [
   * => retry "need retry"
 ]
 
-/guard @denyGuard for secret = when [
+/guard @denyGuard before secret = when [
   * => deny "hard stop"
 ]
 
@@ -258,7 +267,7 @@ Guards can transform data with `allow @value`:
 ```mlld
 /exe @redact(text) = js { return text.replace(/./g, '*'); }
 
-/guard @redactSecrets for secret = when [
+/guard @redactSecrets before secret = when [
   @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
@@ -270,11 +279,11 @@ Guards can transform data with `allow @value`:
 Transforms chain across multiple guards:
 
 ```mlld
-/guard @trim for secret = when [
+/guard @trim before secret = when [
   * => allow @input.trim()
 ]
 
-/guard @wrap for secret = when [
+/guard @wrap before secret = when [
   * => allow `[REDACTED: @input]`
 ]
 
@@ -289,7 +298,7 @@ Access guard evaluation context with `@ctx.guard.*`:
 ### In Guard Expressions
 
 ```mlld
-/guard @retryOnce for op:exe = when [
+/guard @retryOnce before op:exe = when [
   @ctx.guard.try == 1 => retry "first attempt failed"
   @ctx.guard.try == 2 => retry "second attempt failed"
   * => allow
@@ -329,7 +338,7 @@ Selectively control guards per operation:
 Disable all guards:
 
 ```mlld
-/guard @block for secret = when [
+/guard @block before secret = when [
   * => deny "blocked"
 ]
 
@@ -340,11 +349,11 @@ Disable all guards:
 Skip specific guards:
 
 ```mlld
-/guard @blocker for secret = when [
+/guard @blocker before secret = when [
   * => deny "should skip"
 ]
 
-/guard @allowed for secret = when [
+/guard @allowed before secret = when [
   * => allow
 ]
 
@@ -364,7 +373,7 @@ Define guards in modules:
 
 ```mlld
 # guards/secrets.mld
-/guard @secretProtection for secret = when [
+/guard @secretProtection before secret = when [
   @ctx.op.type == "run" => deny "Secrets blocked from shell"
   * => allow
 ]
@@ -375,7 +384,7 @@ Define guards in modules:
 Import and use:
 
 ```mlld
-/import { @secretProtection } from ./guards/secrets.mld
+/import { @secretProtection } from "./guards/secrets.mld"
 
 /var secret @key = "sk-12345"
 /run { echo @key }                         # Protected by imported guard
@@ -386,7 +395,7 @@ Import and use:
 Guards see labels through all transformations:
 
 ```mlld
-/guard @secretBlock for secret = when [
+/guard @secretBlock before secret = when [
   @ctx.op.type == "show" => deny "No secrets"
   * => allow
 ]
@@ -415,7 +424,7 @@ Labels track through:
 ```mlld
 /exe @redact(text) = js { return text.slice(0, 4) + '****'; }
 
-/guard @redactSecrets for secret = when [
+/guard @redactSecrets before secret = when [
   @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
@@ -432,7 +441,7 @@ Labels track through:
   catch { return false; }
 }
 
-/guard after @validateJson for op:exe = when [
+/guard @validateJson after op:exe = when [
   @ctx.op.name == "llmCall" && !@isValidJson(@output) => deny "Invalid JSON from LLM"
   * => allow
 ]
@@ -441,12 +450,12 @@ Labels track through:
 ### Block Network Access
 
 ```mlld
-/guard @noNetwork for op:run = when [
+/guard @noNetwork before op:run = when [
   @ctx.op.subtype == "sh" => deny "Shell access blocked"
   * => allow
 ]
 
-/guard @noExecNetwork for op:exe = when [
+/guard @noExecNetwork before op:exe = when [
   @input.any.ctx.labels.includes("network") => deny "Network calls blocked"
   * => allow
 ]
@@ -462,7 +471,7 @@ Labels track through:
     .trim();
 }
 
-/guard before @sanitizeUntrusted for untrusted = when [
+/guard @sanitizeUntrusted before untrusted = when [
   * => allow @sanitize(@input)
 ]
 
@@ -473,12 +482,12 @@ Labels track through:
 ### Operation-Specific Guards
 
 ```mlld
-/guard @fileWritePolicy for secret = when [
+/guard @fileWritePolicy before secret = when [
   @ctx.op.type == "output" => deny "Cannot write secrets to files"
   * => allow
 ]
 
-/guard @displayPolicy for secret = when [
+/guard @displayPolicy before secret = when [
   @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
@@ -517,7 +526,7 @@ Properties available in guard expressions and denied handlers:
 Guards can retry operations in pipeline contexts:
 
 ```mlld
-/guard for secret = when [
+/guard before secret = when [
   @ctx.op.type == "pipeline-stage" && @ctx.guard.try == 1 => retry "Try again"
   * => allow
 ]
@@ -541,14 +550,14 @@ Retry budget is shared across guard chain (max 3 attempts).
 
 **Use operation-level guards for broad policies:**
 ```mlld
-/guard @noShell for op:run = when [
+/guard @noShell before op:run = when [
   * => deny "Shell disabled in production"
 ]
 ```
 
 **Use data-level guards for specific protections:**
 ```mlld
-/guard @secretProtection for secret = when [
+/guard @secretProtection before secret = when [
   @ctx.op.type == "run" => deny "No secrets in shell"
   @ctx.op.type == "output" => deny "No secrets to files"
   * => allow
@@ -558,7 +567,7 @@ Retry budget is shared across guard chain (max 3 attempts).
 **Always handle denials in production code:**
 ```mlld
 /exe @handler(value) = when [
-  denied => log "Operation blocked: @ctx.guard.reason"
+  denied => show "Operation blocked: @ctx.guard.reason"
   denied => "fallback-value"
   * => @value
 ]
@@ -566,7 +575,7 @@ Retry budget is shared across guard chain (max 3 attempts).
 
 **Transform instead of deny when possible:**
 ```mlld
-/guard @redactSecrets for secret = when [
+/guard @redactSecrets before secret = when [
   @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
@@ -580,7 +589,7 @@ mlld provides helpers in guard contexts:
 Add prefix to values:
 
 ```mlld
-/guard before @tag for op:exe = when [
+/guard @tag before op:exe = when [
   * => allow @prefixWith("tagged", @input)
 ]
 ```
@@ -589,7 +598,7 @@ Add prefix to values:
 Tag based on guard timing:
 
 ```mlld
-/guard always @tag for op:exe = when [
+/guard @tag always op:exe = when [
   * => allow @tagValue(@ctx.guard.timing, @output, @input)
 ]
 ```
@@ -598,7 +607,7 @@ Tag based on guard timing:
 Array quantifiers for per-operation guards:
 
 ```mlld
-/guard @blockSecretsInRun for op:run = when [
+/guard @blockSecretsInRun before op:run = when [
   @input.any.ctx.labels.includes("secret") => deny "Shell cannot access secrets"
   @input.all.ctx.tokest < 1000 => allow
   @input.none.ctx.labels.includes("pii") => allow
@@ -617,7 +626,7 @@ mlld's security is based on three pillars:
 
 **Guards** - Enforce policies
 ```mlld
-/guard for secret = when [
+/guard before secret = when [
   @ctx.op.type == "run" => deny "No shell access"
   * => allow
 ]

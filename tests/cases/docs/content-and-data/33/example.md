@@ -1,10 +1,18 @@
->> Import specific variables
-/import { API_KEY, NODE_ENV } from @input
-/show `Deploying to @NODE_ENV with key @API_KEY`
+>> .att files (default for 5+ lines)
+>> file: templates/deploy.att
+# Deployment: @env
+Status: @status
+Config: <@base/config/@env.json>
 
->> Import and use in objects
-/var @config = {
-  "apiKey": @API_KEY,
-  "environment": @NODE_ENV,
-  "timestamp": @now
-}
+>> usage
+/exe @deploy(env, status) = template "./templates/deploy.att"
+/show @deploy("prod", "success")
+
+>> .mtt files (Discord/social only)
+>> file: templates/discord.mtt
+🚨 Alert <@{{adminId}}>!
+Reporter: <@{{reporterId}}>
+Severity: {{severity}}
+
+>> usage
+/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"

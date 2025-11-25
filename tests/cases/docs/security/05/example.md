@@ -1,3 +1,7 @@
->> Dangerous: Direct execution of LLM output
-/var @llmResponse = run {llm "@userPrompt"}
-/run @llmResponse | { cat } | @processResponse
+/guard @noShellSecrets before secret = when [
+  @ctx.op.type == "run" => deny "Secrets cannot appear in shell"
+  * => allow
+]
+
+/var secret @key = "sk-12345"
+/run { echo @key }                         # Blocked

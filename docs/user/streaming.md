@@ -26,10 +26,9 @@ stream /exe @llm(prompt) = run { claude "@prompt" }
 ### 2. `/stream` Directive
 
 ```mlld
-/stream
-
 /exe @llm(prompt) = run { claude "@prompt" }
-/show @llm("Hello")                        # Streams output
+
+/stream @llm("Hello")                      # Streams output directly
 ```
 
 ### 3. `with { stream: true }` Clause
@@ -223,7 +222,7 @@ Streaming is disabled when:
 - Solution: Use `with { stream: false }` or change guards to `before`
 
 ```mlld
-/guard after @validate for op:exe = when [...]  # After guard
+/guard @validate after op:exe = when [...]  # After guard
 
 stream /exe @llm(p) = run { claude "@p" }
 /show @llm("test")                         # Error: streaming + after-guards conflict
