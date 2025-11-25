@@ -783,8 +783,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       metadata: input.metadata ? Object.freeze({ ...input.metadata }) : undefined,
       operation: input.operation ? Object.freeze({ ...input.operation }) : undefined,
       previousDescriptor,
-      previousPolicy: runtime.policy,
-      policyOverride: input.policy ? Object.freeze({ ...input.policy }) : undefined
+      previousPolicy: runtime.policy
     });
     runtime.descriptor = merged;
     runtime.policy = policy;

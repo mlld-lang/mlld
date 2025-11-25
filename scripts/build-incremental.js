@@ -144,6 +144,12 @@ function hasFilesNewerThan(pattern, timestamp, dirtyFiles) {
   }
 
   // Fallback: check all files matching pattern (used when no dirty files or not a git repo)
+  // Note: Function patterns can't be converted to glob patterns
+  if (typeof pattern === 'function') {
+    // Can't check function patterns without dirty files - force rebuild to be safe
+    return 'unknown-file-matching-function-pattern';
+  }
+
   const filesToCheck = Array.isArray(pattern) ? pattern : globSync(pattern);
   for (const file of filesToCheck) {
     if (existsSync(file)) {
