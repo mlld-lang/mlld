@@ -377,7 +377,7 @@ export async function evaluateShow(
     }
     
     // Handle field access if present in the variable node
-    if (variableNode.fields && variableNode.fields.length > 0 && typeof value === 'object' && value !== null) {
+    if (variableNode.fields && variableNode.fields.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
       const { accessField } = await import('../utils/field-access');
       for (const field of variableNode.fields) {
         // Handle variableIndex type - need to resolve the variable first

@@ -336,7 +336,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         
         // Handle field access if present
         let fieldsToProcess = node.fields || [];
-        if (fieldsToProcess.length > 0 && typeof value === 'object' && value !== null) {
+        if (fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
           const { accessField } = await import('../utils/field-access');
           for (const field of fieldsToProcess) {
             // Handle variableIndex type - need to resolve the variable first

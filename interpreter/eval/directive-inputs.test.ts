@@ -97,8 +97,7 @@ describe('extractDirectiveInputs', () => {
             type: 'VariableReference',
             nodeId: 'secret-ref',
             location: null,
-            identifier: 'secret',
-            fields: [{ type: 'field', value: 'trim', location: null }]
+            identifier: 'secret'
           },
           { type: 'Text', content: '"', nodeId: 'text-2', location: null }
         ]

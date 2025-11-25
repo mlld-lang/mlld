@@ -726,38 +726,8 @@ export class VariableImporter {
       ? astLocationToSourceLocation(aliasLocationNode.location, importerFilePath)
       : astLocationToSourceLocation(directive.location, importerFilePath);
 
-    // Smart namespace unwrapping: If the module exports a single main object
-    // with a conventional name, unwrap it for better ergonomics
-    let namespaceObject = moduleObject;
-    
-    // Get the module name from the import path (for unwrapping heuristics)
-    const importRef = directive.values?.from?.[0]?.content || '';
-    const moduleName = importRef.split('/').pop()?.replace(/\.mld$/, '') || '';
-    
-    // Check if there's a single export with the module name or common patterns
-    const exportKeys = Object.keys(moduleObject);
-    const commonNames = [moduleName, 'main', 'default', 'exports'];
-    
-    // If there's only one export, or if there's an export matching common patterns
-    if (exportKeys.length === 1) {
-      // Single export - use it directly
-      namespaceObject = moduleObject[exportKeys[0]];
-    } else {
-      // Multiple exports - check for common patterns
-      for (const name of commonNames) {
-        if (name && moduleObject[name] && typeof moduleObject[name] === 'object') {
-          // Found a main export object - check if it looks like the primary export
-          const mainExport = moduleObject[name];
-          const otherExports = exportKeys.filter(k => k !== name && !k.startsWith('_'));
-          
-          // If the main export has most of the functionality, use it
-          if (Object.keys(mainExport).length > otherExports.length) {
-            namespaceObject = mainExport;
-            break;
-          }
-        }
-      }
-    }
+    // Namespace imports always create objects with exported properties
+    const namespaceObject = moduleObject;
     
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
     const importDisplay = this.getImportDisplayPath(directive, importPath);

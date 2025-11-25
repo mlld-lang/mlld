@@ -444,7 +444,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       )
     );
 
-    const directive = parseSync('/run {curl "@secret.trim()"}')[0] as DirectiveNode;
+    const directive = parseSync('/run {curl "@secret"}')[0] as DirectiveNode;
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked secret run/);
   });
 

@@ -14,7 +14,7 @@ import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied } from './when';
 import { logger } from '@core/utils/logger';
-import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+import { asText, asData, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -42,10 +42,7 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
   let normalized = value;
 
   if (isStructuredValue(normalized)) {
-    normalized =
-      normalized.type === 'array' || normalized.type === 'object'
-        ? normalized.data
-        : asText(normalized);
+    normalized = asData(normalized);
   }
 
   if (
@@ -68,30 +65,6 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
       normalized = await extractVariableValue(normalized as any, actionEnv);
     } catch (error) {
       logger.debug('Could not extract variable value in when expression:', error);
-    }
-  }
-
-  if (typeof normalized !== 'string') {
-    try {
-      if (normalized && typeof normalized === 'object') {
-        if (
-          'wrapperType' in (normalized as Record<string, unknown>) &&
-          Array.isArray((normalized as { content?: unknown[] }).content)
-        ) {
-          const interpolateFn = await getInterpolateFn();
-          normalized = await interpolateFn((normalized as { content: any[] }).content, actionEnv);
-        } else if ('type' in (normalized as Record<string, unknown>)) {
-          const { extractVariableValue } = await import('../utils/variable-resolution');
-          const extracted = await extractVariableValue(normalized as any, actionEnv);
-          normalized = typeof extracted === 'string' ? extracted : JSON.stringify(extracted);
-        } else {
-          normalized = JSON.stringify(normalized);
-        }
-      } else {
-        normalized = String(normalized ?? '');
-      }
-    } catch {
-      normalized = String(normalized ?? '');
     }
   }
 
