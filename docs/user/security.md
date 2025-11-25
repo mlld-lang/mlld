@@ -639,5 +639,3 @@ Labels propagate through:
 - Builtin methods, template interpolation, field access
 - Pipelines, iterators, nested expressions
 - Transform chains, guard evaluations
-
-This ensures sensitive data cannot bypass guards by transforming it.
