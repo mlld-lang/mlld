@@ -5,7 +5,7 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0-rc70 (unreleased)]
+## [2.0.0-rc70]
 
 ### Added
 - Streaming support: `stream` keyword, `/stream` directive, and `with { stream: true }` enable live chunk emission with progress sinks and executor streaming (shell, bash, node). Parallel groups stream concurrently and buffer results. Suppress with `--no-stream` or `MLLD_NO_STREAM`.
