@@ -167,7 +167,7 @@ GuardRuleList
     }
 
 GuardRuleSeparator
-  = __
+  = WhenConditionSeparator
 
 GuardRule
   = "*" _ "=>" _ action:GuardAction {
@@ -220,7 +220,7 @@ GuardAction
     }
 
 GuardActionValue
-  = HWS value:(UnifiedQuoteOrTemplate / UnifiedExpression) {
+  = HWS !LineTerminator value:(UnifiedQuoteOrTemplate / UnifiedExpression) {
       const nodes = Array.isArray(value) ? value : [value];
       return {
         nodes,
