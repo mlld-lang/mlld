@@ -29,7 +29,7 @@ import {
   VariableInternalMetadata
 } from './VariableTypes';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
-import { ensureStructuredValue } from '@interpreter/utils/structured-value';
+import { ensureStructuredValue, applySecurityDescriptorToStructuredValue } from '@interpreter/utils/structured-value';
 import { legacyMetadataToCtx, legacyMetadataToInternal } from './CtxHelpers';
 import { VariableMetadataUtils } from './VariableMetadata';
 import { attachArrayHelpers } from './ArrayHelpers';
@@ -849,9 +849,18 @@ export class VariableFactory {
     const baseMetadata = isFactoryInitOptions(enrichedInput)
       ? enrichedInput.metadata
       : enrichedInput;
-    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(baseMetadata, {
+    const mergedMetadata = VariableMetadataUtils.mergeMetadata(
+      structuredValue.metadata as any,
+      baseMetadata as any
+    );
+    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(mergedMetadata, {
       existingDescriptor: structuredValue.metadata?.security
     });
+    // Attach metadata/security in place to preserve identity
+    structuredValue.metadata = securityAwareMetadata as any;
+    if (securityAwareMetadata?.security) {
+      applySecurityDescriptorToStructuredValue(structuredValue, securityAwareMetadata.security);
+    }
     const init = normalizeFactoryOptions(
       isFactoryInitOptions(enrichedInput)
         ? { ...enrichedInput, metadata: securityAwareMetadata }
