@@ -586,7 +586,10 @@ export class PipelineExecutor {
       }
       
       if (firstTime) {
-        return { result: this.initialInputText };
+        const sourceOutput = this.initialOutput
+          ? cloneStructuredValue(this.initialOutput)
+          : wrapStructured(this.initialInputText, 'text', this.initialInputText);
+        return { result: sourceOutput };
       }
       
       // Retry execution - need to call source function
@@ -606,7 +609,7 @@ export class PipelineExecutor {
       this.initialOutput = freshWrapper;
       this.finalOutput = freshWrapper;
       this.initialInputText = freshWrapper.text;
-      return { result: freshWrapper.text };
+      return { result: freshWrapper };
     }
 
     // Synthetic identity stage for pipelines that only have inline effects
@@ -630,7 +633,7 @@ export class PipelineExecutor {
     // Smart parameter binding for pipeline functions
     if (args.length === 0) {
       args = await AutoUnwrapManager.executeWithPreservation(async () => {
-        return await this.bindParametersAutomatically(commandVar, input);
+        return await this.bindParametersAutomatically(commandVar, input, structuredInput);
       });
     }
     
@@ -803,9 +806,9 @@ export class PipelineExecutor {
   /**
    * Smart parameter binding for functions without explicit arguments
    */
-  private async bindParametersAutomatically(commandVar: any, input: string): Promise<any[]> {
+  private async bindParametersAutomatically(commandVar: any, input: string, structuredInput?: StructuredValue): Promise<any[]> {
     let paramNames: string[] | undefined;
-    
+
     if (commandVar && commandVar.type === 'executable' && commandVar.value) {
       paramNames = commandVar.value.paramNames;
     } else if (commandVar && commandVar.paramNames) {
@@ -821,7 +824,11 @@ export class PipelineExecutor {
     const unwrappedOutput = AutoUnwrapManager.unwrap(input);
 
     // Single parameter - pass input directly
+    // Preserve StructuredValue wrapper per DATA.md: "Pipeline stages must preserve StructuredValue wrappers"
     if (paramNames.length === 1) {
+      if (structuredInput && isStructuredValue(structuredInput)) {
+        return [structuredInput];
+      }
       return [{ type: 'Text', content: unwrappedOutput }];
     }
 
