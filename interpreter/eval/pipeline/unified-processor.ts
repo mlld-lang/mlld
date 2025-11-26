@@ -123,14 +123,14 @@ export async function processPipeline(
   
   // Detect pipeline from various sources
   let detected: DetectedPipeline | null = null;
-  
+
   if (context.pipeline) {
     // Explicit pipeline provided
     detected = {
       pipeline: context.pipeline,
       source: 'directive-values', // Default source
       format: context.format,
-      isRetryable: context.isRetryable ?? false
+      isRetryable: context.isRetryable ?? true
     };
   } else {
     // Auto-detect from node/directive
@@ -138,6 +138,10 @@ export async function processPipeline(
     // Allow explicit override of retryability
     if (detected && context.isRetryable !== undefined) {
       detected.isRetryable = context.isRetryable;
+    }
+    if (detected && detected.pipeline && detected.pipeline.length > 0 && detected.isRetryable === false) {
+      // Default to retryable sources; static inputs retry by reusing original value
+      detected.isRetryable = true;
     }
     if (process.env.MLLD_DEBUG === 'true' && identifier) {
       logger.debug('[processPipeline] Detection result:', {
@@ -175,10 +179,8 @@ export async function processPipeline(
     });
   }
   
-  // Normalize pipeline - prepend source stage if retryable
-  const normalizedPipeline = detected.isRetryable && sourceNode
-    ? [SOURCE_STAGE, ...detected.pipeline]
-    : detected.pipeline;
+  // Normalize pipeline - keep original stages (synthetic source handled elsewhere if needed)
+  const normalizedPipeline = detected.pipeline;
 
   // Partition: attach builtin effect commands to the preceding functional stage
   const { functionalPipeline, hadLeadingEffects } = attachBuiltinEffects(normalizedPipeline);
@@ -191,39 +193,43 @@ export async function processPipeline(
   const input = await prepareInput(value, env, pipelineDescriptor);
   
   // Create source function for retrying stage 0 if applicable
+  const attachDescriptorToRetryInput = (value: unknown): string | StructuredValue => {
+    if (!pipelineDescriptor) {
+      return value as string | StructuredValue;
+    }
+    const wrapped = isStructuredValue(value) ? value : wrapExecResult(value);
+    applySecurityDescriptorToStructuredValue(wrapped, pipelineDescriptor);
+    setExpressionProvenance(wrapped, pipelineDescriptor);
+    return wrapped;
+  };
+
+  // Create a function that replays the source; for static inputs, reuse the original value
   let sourceFunction: (() => Promise<string | StructuredValue>) | undefined;
-  if (detected.isRetryable && sourceNode) {
-    const attachDescriptorToRetryInput = (value: unknown): string | StructuredValue => {
-      if (!pipelineDescriptor) {
-        return value as string | StructuredValue;
-      }
-      const wrapped = isStructuredValue(value) ? value : wrapExecResult(value);
-      applySecurityDescriptorToStructuredValue(wrapped, pipelineDescriptor);
-      setExpressionProvenance(wrapped, pipelineDescriptor);
-      return wrapped;
-    };
-    // Create a function that re-executes the source AST node
-    sourceFunction = async () => {
-      // Re-evaluate the source node to get fresh input
-      if (sourceNode.type === 'ExecInvocation') {
-        const { evaluateExecInvocation } = await import('../exec-invocation');
-        const result = await evaluateExecInvocation(sourceNode, env);
-        return attachDescriptorToRetryInput(result.value);
-      } else if (sourceNode.type === 'command') {
-        const { evaluateCommand } = await import('../run');
-        const result = await evaluateCommand(sourceNode, env);
-        if (structuredEnabled) {
+  if (detected.isRetryable) {
+    if (sourceNode) {
+      sourceFunction = async () => {
+        if (sourceNode.type === 'ExecInvocation') {
+          const { evaluateExecInvocation } = await import('../exec-invocation');
+          const result = await evaluateExecInvocation(sourceNode, env);
           return attachDescriptorToRetryInput(result.value);
         }
-        return attachDescriptorToRetryInput(String(result.value));
-      } else if (sourceNode.type === 'code') {
-        const { evaluateCodeExecution } = await import('../code-execution');
-        const result = await evaluateCodeExecution(sourceNode, env);
-        return attachDescriptorToRetryInput(result.value);
-      }
-      // Fallback - return original input
-      return input;
-    };
+        if (sourceNode.type === 'command') {
+          const { evaluateCommand } = await import('../run');
+          const result = await evaluateCommand(sourceNode, env);
+          return attachDescriptorToRetryInput(structuredEnabled ? result.value : String(result.value));
+        }
+        if (sourceNode.type === 'code') {
+          const { evaluateCodeExecution } = await import('../code-execution');
+          const result = await evaluateCodeExecution(sourceNode, env);
+          return attachDescriptorToRetryInput(result.value);
+        }
+        return attachDescriptorToRetryInput(input);
+      };
+    } else {
+      // Static input: retry by returning the same input value
+      const cachedInput = attachDescriptorToRetryInput(input);
+      sourceFunction = async () => cachedInput;
+    }
   }
   
   // Store whether we added a synthetic source stage for context adjustment

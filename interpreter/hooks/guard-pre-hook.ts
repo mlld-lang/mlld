@@ -303,9 +303,15 @@ function resolveWithClause(node: HookableNode): unknown {
   if (isExecHookTarget(node)) {
     return (node as any).withClause;
   }
+  if ((node as any).withClause) {
+    return (node as any).withClause;
+  }
   const values = (node as any).values;
   if (values?.withClause) {
     return values.withClause;
+  }
+  if (values?.value?.withClause) {
+    return values.value.withClause;
   }
   if (values?.invocation?.withClause) {
     return values.invocation.withClause;
