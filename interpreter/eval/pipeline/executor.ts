@@ -586,7 +586,10 @@ export class PipelineExecutor {
       }
       
       if (firstTime) {
-        return { result: this.initialInputText };
+        const sourceOutput = this.initialOutput
+          ? cloneStructuredValue(this.initialOutput)
+          : wrapStructured(this.initialInputText, 'text', this.initialInputText);
+        return { result: sourceOutput };
       }
       
       // Retry execution - need to call source function
@@ -606,7 +609,7 @@ export class PipelineExecutor {
       this.initialOutput = freshWrapper;
       this.finalOutput = freshWrapper;
       this.initialInputText = freshWrapper.text;
-      return { result: freshWrapper.text };
+      return { result: freshWrapper };
     }
 
     // Synthetic identity stage for pipelines that only have inline effects

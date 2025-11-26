@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - JSON escape sequences (`\n`, `\t`, etc.) now preserved when piping data through shell commands like `echo` ([#456](https://github.com/mlld-lang/mlld/issues/456)). Previously, escape sequence normalization in command executables would convert properly-escaped `\\n` back to actual newlines, corrupting JSON data.
+- Pipeline synthetic source stage preserves StructuredValue wrappers so with-clause pipelines keep JSON arrays/objects intact through `/exe` when-expression actions ([#461](https://github.com/mlld-lang/mlld/issues/461)).
 
 ## [2.0.0-rc70]
 
