@@ -1,3 +1,3 @@
-# Testing negation in block form
+# Testing negation with || operator
 
 At least one condition is true

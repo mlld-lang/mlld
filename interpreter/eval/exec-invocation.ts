@@ -185,6 +185,7 @@ type StringBuiltinMethod =
   | 'repeat';
 type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort';
 type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
+type TypeCheckingMethod = 'isArray' | 'isObject' | 'isString' | 'isNumber' | 'isBoolean' | 'isNull' | 'isDefined';
 
 function ensureStringTarget(method: string, target: unknown): string {
   if (typeof target === 'string') {
@@ -296,6 +297,26 @@ function handleSplitBuiltin(target: unknown, separator: unknown): string[] {
   const value = ensureStringTarget('split', target);
   const splitOn = separator !== undefined ? String(separator) : '';
   return value.split(splitOn);
+}
+
+function handleTypeCheckingBuiltin(method: TypeCheckingMethod, target: unknown): boolean {
+  switch (method) {
+    case 'isArray':
+      return Array.isArray(target);
+    case 'isObject':
+      return typeof target === 'object' && target !== null && !Array.isArray(target);
+    case 'isString':
+      return typeof target === 'string';
+    case 'isNumber':
+      return typeof target === 'number';
+    case 'isBoolean':
+      return typeof target === 'boolean';
+    case 'isNull':
+      return target === null;
+    case 'isDefined':
+      return target !== null && target !== undefined;
+  }
+  throw new MlldInterpreterError(`Unsupported type checking builtin: ${method}`);
 }
 
 function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: unknown): boolean | number {
@@ -525,7 +546,14 @@ export async function evaluateExecInvocation(
       'endsWith',
       'concat',
       'reverse',
-      'sort'
+      'sort',
+      'isArray',
+      'isObject',
+      'isString',
+      'isNumber',
+      'isBoolean',
+      'isNull',
+      'isDefined'
     ];
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
@@ -536,7 +564,12 @@ export async function evaluateExecInvocation(
       if (commandRefWithObject.objectReference) {
         const objectRef = commandRefWithObject.objectReference;
         objectVar = env.getVariable(objectRef.identifier);
+
+        // Special handling for isDefined - return false for missing variables
         if (!objectVar) {
+          if (commandName === 'isDefined') {
+            return createEvalResult(false, env);
+          }
           throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
         }
         // Extract the value from the variable reference
@@ -549,6 +582,10 @@ export async function evaluateExecInvocation(
             if (typeof objectValue === 'object' && objectValue !== null) {
               objectValue = (objectValue as any)[field.value];
             } else {
+              // Special handling for isDefined - return false for non-object field access
+              if (commandName === 'isDefined') {
+                return createEvalResult(false, env);
+              }
               throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
             }
           }
@@ -569,6 +606,10 @@ export async function evaluateExecInvocation(
 
       // Fallback if we still don't have an object value
       if (typeof objectValue === 'undefined') {
+        // Special handling for isDefined - return false for undefined values
+        if (commandName === 'isDefined') {
+          return createEvalResult(false, env);
+        }
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
 
@@ -675,6 +716,15 @@ export async function evaluateExecInvocation(
       case 'endsWith':
           result = handleSearchBuiltin(commandName as SearchBuiltinMethod, objectValue, evaluatedArgs[0]);
           break;
+      case 'isArray':
+      case 'isObject':
+      case 'isString':
+      case 'isNumber':
+      case 'isBoolean':
+      case 'isNull':
+      case 'isDefined':
+        result = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, objectValue);
+        break;
         default:
           throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
       }

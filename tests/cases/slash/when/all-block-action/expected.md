@@ -1,2 +1,2 @@
-# all: with block action - executes if ALL conditions match
+# && with block action - executes if ALL conditions match
 Full access enabled

@@ -714,6 +714,16 @@ export const helpers = {
     const additionalFields: any[] = [];
     for (const entry of post) {
       if (entry?.type === 'methodCall') {
+        // Before creating a new method invocation, apply any accumulated fields to current
+        if (additionalFields.length > 0) {
+          const existingFields = current.fields || [];
+          current = {
+            ...current,
+            fields: [...existingFields, ...additionalFields]
+          };
+          additionalFields.length = 0;
+        }
+
         const methodRef = {
           name: entry.name,
           identifier: [
@@ -732,6 +742,7 @@ export const helpers = {
       }
     }
 
+    // Apply any remaining fields to the final current node
     if (additionalFields.length > 0) {
       const existingFields = current.fields || [];
       current = {

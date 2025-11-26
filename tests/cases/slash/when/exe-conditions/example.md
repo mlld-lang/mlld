@@ -16,18 +16,14 @@
   "true" => show "Unknown mode"
 ]
 
-## Test 3: any modifier
+## Test 3: || operator (replacing any modifier)
 /exe @has_node() = cmd {echo "true"}
 /exe @has_npm() = cmd {echo "true"}
 /exe @has_yarn() = cmd {echo ""}
 
-/when @tools any: [
-  @has_node()
-  @has_npm()
-  @has_yarn()
-] => show "Package manager found"
+/when (@has_node() || @has_npm() || @has_yarn()) => show "Package manager found"
 
-## Test 4: all modifier
+## Test 4: bare when block with individual actions
 /when [
   @has_node() => show "Node.js installed"
   @has_npm() => show "npm installed"

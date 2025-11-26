@@ -1,7 +1,7 @@
 // WHEN DIRECTIVE
 // Implementation of the /when directive for conditional execution
 
-/* 
+/*
 # When Directive
 
 The when directive provides conditional execution based on truthiness.
@@ -12,8 +12,10 @@ It can be used in several forms:
 
 Modifiers:
 - first: Execute only the first truthy condition's action (switch behavior)
-- all: All conditions must be truthy
-- any: At least one condition must be truthy
+
+For AND/OR logic, use && and || operators in conditions instead of deprecated any/all modifiers:
+- Use: /when (@cond1 && @cond2) => action  (instead of: /when all [@cond1 @cond2] => action)
+- Use: /when (@cond1 || @cond2) => action  (instead of: /when any [@cond1 @cond2] => action)
 */
 
 // Core content handlers (context, tokens, whitespace, variables, commands)
@@ -27,25 +29,16 @@ Modifiers:
 SlashWhen
   = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
-  // Error recovery: any: with individual actions (MUST come before WhenBlockForm)
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; }) _ "any" _ ":"? _ "[" _ &{
-      // Look ahead to see if there are individual actions (=> inside the block)
-      let i = peg$currPos;
-      let depth = 1;
-      while (i < input.length && depth > 0) {
-        if (input[i] === '[') depth++;
-        else if (input[i] === ']') depth--;
-        else if (input[i] === '=' && i + 1 < input.length && input[i + 1] === '>' && depth === 1) {
-          return true; // Found => at the top level of the block
-        }
-        i++;
-      }
-      return false;
-    } {
-      helpers.mlldError("Invalid /when syntax. The 'any' modifier requires a block action after the conditions.\\n" +
-            "Individual actions are not allowed with 'any'.\\n\\n" +
-            "Incorrect: /when @var any [@cond1 => action1, @cond2 => action2]\\n" +
-            "Correct:   /when @var any [@cond1, @cond2] => /show \"Any matched\"", "=>", location());
+  // Error recovery: deprecated 'any' modifier
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
+      helpers.mlldError(
+        "The 'any' modifier has been removed from mlld. Use the || operator instead.\n\n" +
+        "Old syntax: /when any [@cond1 @cond2] => action\n" +
+        "New syntax: /when (@cond1 || @cond2) => action\n\n" +
+        "The || operator is more familiar and flexible.",
+        "||",
+        location()
+      );
     }
   / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
   // Bare block form with modifier: /when <modifier>: [...] => <action>
@@ -98,37 +91,16 @@ SlashWhen
   / DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ !. {
       helpers.mlldError("Missing action in /when directive. Expected a directive after '=>'.", "directive", location());
     }
-  // Error recovery: all: with individual actions AND block action
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" _ &{
-      // Look ahead to see if there are BOTH individual actions AND a block action
-      let i = peg$currPos;
-      let depth = 1;
-      let hasIndividualActions = false;
-      let hasBlockAction = false;
-      
-      while (i < input.length && depth > 0) {
-        if (input[i] === '[') depth++;
-        else if (input[i] === ']') depth--;
-        else if (input[i] === '=' && i + 1 < input.length && input[i + 1] === '>' && depth === 1) {
-          hasIndividualActions = true;
-        }
-        i++;
-      }
-      
-      // After closing ], check for => (block action)
-      if (depth === 0 && i < input.length) {
-        while (i < input.length && (input[i] === ' ' || input[i] === '\t' || input[i] === '\n')) i++;
-        if (i + 1 < input.length && input[i] === '=' && input[i + 1] === '>') {
-          hasBlockAction = true;
-        }
-      }
-      
-      return hasIndividualActions && hasBlockAction;
-    } {
-      helpers.mlldError("Invalid /when syntax. The 'all' modifier cannot have both individual actions and a block action.\\n" +
-            "Use either:\\n" +
-            "  /when @var all [@cond1 => action1, @cond2 => action2]  (individual actions)\\n" +
-            "  /when @var all [@cond1, @cond2] => /show \"All matched\"  (block action)", "]", location());
+  // Error recovery: deprecated 'all' modifier
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
+      helpers.mlldError(
+        "The 'all' modifier has been removed from mlld. Use the && operator instead.\n\n" +
+        "Old syntax: /when all [@cond1 @cond2] => action\n" +
+        "New syntax: /when (@cond1 && @cond2) => action\n\n" +
+        "The && operator is more familiar and flexible.",
+        "&&",
+        location()
+      );
     }
   // Error recovery: Unclosed brackets in block form
   / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":"? _ "[" _ &{
@@ -153,13 +125,14 @@ SlashWhen
       helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
     }
   // Error recovery: Invalid modifier - check it's not a valid modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
-    modifier:BaseIdentifier &{ return modifier !== "first" && modifier !== "all" && modifier !== "any"; } _ ":"? _ "[" {
-      helpers.mlldError("Invalid /when modifier: '" + modifier + "'. Valid modifiers are: 'first', 'all', 'any'.\\n" +
-            "Examples:\\n" +
-            "  /when @var first [...] => action\\n" +
-            "  /when @var all [...] => action\\n" +
-            "  /when @var any [...] => action", "modifier", location());
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _
+    modifier:BaseIdentifier &{ return modifier !== "first"; } _ ":"? _ "[" {
+      helpers.mlldError("Invalid /when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
+            "For AND/OR logic, use && and || operators instead.\n\n" +
+            "Examples:\n" +
+            "  /when @var first [...] => action\n" +
+            "  /when (@cond1 && @cond2) => action  (instead of 'all')\n" +
+            "  /when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
     }
   // Error recovery: Generic catch-all
   / DirectiveContext "/when" {
@@ -328,10 +301,10 @@ WhenBareBlockForm
 // -------------------------------------------------------------
 
 WhenModifier
-  = mod:("first" / "all" / "any") {
-      return helpers.createNode(NodeType.Text, { 
-        content: mod, 
-        location: location() 
+  = mod:("first") {
+      return helpers.createNode(NodeType.Text, {
+        content: mod,
+        location: location()
       });
     }
 

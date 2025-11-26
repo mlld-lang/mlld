@@ -7,7 +7,7 @@ import type { DirectiveNode, BaseMlldNode } from './nodes';
 /**
  * Modifiers for when block form that control evaluation behavior
  */
-export type WhenModifier = 'first' | 'all' | 'any';
+export type WhenModifier = 'first';
 
 /**
  * Represents a condition-action pair in when block form
