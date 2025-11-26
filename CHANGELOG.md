@@ -5,6 +5,17 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+- **Deprecated `when any` and `when all` modifiers** (RFC #66): Use `&&` and `||` operators instead
+  - `when any [@cond1 @cond2] => action` → `when (@cond1 || @cond2) => action`
+  - `when all [@cond1 @cond2] => action` → `when (@cond1 && @cond2) => action`
+  - Grammar now rejects `any` and `all` modifiers with helpful migration messages
+  - Bare `when [...]` (no modifier) still executes all matching conditions
+  - `when first [...]` continues to work as before
+  - Rationale: Reduces language surface area, encourages familiar operators, maintains single way to express AND/OR logic
+
 ## [2.0.0-rc70]
 
 ### Added
