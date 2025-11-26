@@ -3,6 +3,7 @@ import { GuardRetrySignal, isGuardRetrySignal } from '@core/errors/GuardRetrySig
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import type { GuardContextSnapshot, OperationContext } from '../env/ContextManager';
 import type { Environment } from '../env/Environment';
+import { appendFileSync } from 'fs';
 
 const DEFAULT_GUARD_MAX = 3;
 const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
@@ -94,26 +95,56 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
     } catch (error) {
       const isRetrySignal =
         (error instanceof GuardError && error.decision === 'retry') || isGuardRetrySignal(error);
-      logAfterRetryDebug('guard retry caught', {
+      const debugPayload = {
         attempt: state.attempt,
         isRetrySignal,
         sourceRetryable: options.sourceRetryable ?? null,
         pipeline: Boolean(options.env.getPipelineContext())
-      });
+      };
+      logAfterRetryDebug('guard retry caught', debugPayload);
+      try {
+        appendFileSync(
+          '/tmp/mlld_guard_retry.log',
+          JSON.stringify(
+            {
+              event: 'caught',
+              ...debugPayload,
+              hint:
+                (error as any)?.retryHint ??
+                extractGuardRetryDetails(error).hints?.[0]?.hint ??
+                (error as GuardError).reason ??
+                null
+            },
+            null,
+            2
+          ) + '\n'
+        );
+      } catch {
+        // ignore file debug failures
+      }
       if (!isRetrySignal) {
         throw error;
       }
 
       // Allow pipeline executor to handle retries inside pipelines
       if (options.env.getPipelineContext()) {
-        logAfterRetryDebug('rethrow to pipeline executor', {
+        const rethrowPayload = {
           attempt: state.attempt,
           hint:
             (error as GuardError).retryHint ??
             (error as any)?.retryHint ??
             extractGuardRetryDetails(error).hints?.[0]?.hint ??
             null
-        });
+        };
+        logAfterRetryDebug('rethrow to pipeline executor', rethrowPayload);
+        try {
+          appendFileSync(
+            '/tmp/mlld_guard_retry.log',
+            JSON.stringify({ event: 'rethrow', ...rethrowPayload }, null, 2) + '\n'
+          );
+        } catch {
+          // ignore file debug failures
+        }
         throw error;
       }
 
@@ -132,12 +163,21 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       state.attempt += 1;
 
       if (!options.sourceRetryable) {
-        logAfterRetryDebug('guard retry denied (non-retryable source)', {
+        const denyPayload = {
           attempt: state.attempt - 1,
           hint,
           sourceRetryable: options.sourceRetryable ?? null,
           guardName: details.guardName ?? guardContext?.name ?? null
-        });
+        };
+        logAfterRetryDebug('guard retry denied (non-retryable source)', denyPayload);
+        try {
+          appendFileSync(
+            '/tmp/mlld_guard_retry.log',
+            JSON.stringify({ event: 'deny-non-retryable', ...denyPayload }, null, 2) + '\n'
+          );
+        } catch {
+          // ignore file debug failures
+        }
         throw new GuardError({
           decision: 'deny',
           guardName: details.guardName ?? guardContext?.name ?? null,

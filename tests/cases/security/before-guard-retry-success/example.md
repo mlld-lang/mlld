@@ -6,12 +6,12 @@
   * => allow
 ]
 
-/exe retryable @seed() = js { return "seed"; }
-
-/exe @flakyStage(value) = js {
-  globalThis.__beforeRetry = (globalThis.__beforeRetry || 0) + 1;
-  return globalThis.__beforeRetry === 1 ? "bad" : "ok";
+/exe retryable @seed() = js {
+  globalThis.__beforeSeed = (globalThis.__beforeSeed || 0) + 1;
+  return globalThis.__beforeSeed === 1 ? "bad" : "ok";
 }
+
+/exe @flakyStage(value) = js { return value; }
 
 /var retryable @value = @seed() with { pipeline: [@flakyStage] }
 /show `value: @value`

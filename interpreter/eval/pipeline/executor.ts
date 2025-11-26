@@ -256,6 +256,9 @@ export class PipelineExecutor {
             contextAttempt: nextStep.context.contextAttempt
           });
         }
+
+        // Clear cached outputs for this stage and downstream when retrying to avoid stale inputs
+        this.clearStageOutputsFrom(nextStep.stage);
         
         if (process.env.MLLD_DEBUG === 'true') {
           console.error('[PipelineExecutor] Execute stage:', {
@@ -385,11 +388,27 @@ export class PipelineExecutor {
     let ctxManager: ReturnType<Environment['getContextManager']> | undefined;
     let pipelineSnapshot: PipelineContextSnapshot | undefined;
     let stageDescriptor: SecurityDescriptor | undefined;
+    let parentPipelineContextPushed = false;
 
     try {
       const structuredInput = this.getStageOutput(stageIndex - 1, input);
-      this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
+    this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
+      if (process.env.MLLD_DEBUG === 'true') {
+        try {
+          const prevOut = this.structuredOutputs.get(stageIndex - 1);
+          const currOut = this.structuredOutputs.get(stageIndex);
+          console.error('[PipelineExecutor] Stage input snapshot', {
+            stageIndex,
+            command: command.rawIdentifier,
+            input,
+            structuredInput: this.debugNormalize(structuredInput),
+            previousStageOutput: this.debugNormalize(prevOut),
+            cachedCurrentOutput: this.debugNormalize(currOut)
+          });
+        } catch {}
+      }
       // Set up execution environment for a single command stage
+      parentPipelineContextPushed = true;
       stageEnv = await createStageEnvironment(
         command,
         input,
@@ -407,7 +426,7 @@ export class PipelineExecutor {
           capturePipelineContext: snapshot => {
             pipelineSnapshot = snapshot;
           },
-          skipSetPipelineContext: true,
+          skipSetPipelineContext: false,
           sourceRetryable: this.isRetryable
         }
       );
@@ -490,7 +509,7 @@ export class PipelineExecutor {
           return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
         }
 
-        let normalized = this.normalizeOutput(output);
+    let normalized = this.normalizeOutput(output);
         if (this.debugStructured) {
           console.error('[PipelineExecutor][pre-output]', {
             stage: command.rawIdentifier,
@@ -504,13 +523,31 @@ export class PipelineExecutor {
             stageIndex
           });
         }
-        normalized = this.finalizeStageOutput(
-          normalized,
-          structuredInput,
-          output,
-          stageDescriptor,
-          stageExecution?.labelDescriptor
-        );
+    normalized = this.finalizeStageOutput(
+      normalized,
+      structuredInput,
+      output,
+      stageDescriptor,
+      stageExecution?.labelDescriptor
+    );
+    if (process.env.MLLD_DEBUG === 'true') {
+      try {
+        console.error('[PipelineExecutor] Stage output snapshot', {
+          stageIndex,
+          command: command.rawIdentifier,
+          normalized: this.debugNormalize(normalized)
+        });
+      } catch {}
+    }
+        if (process.env.MLLD_DEBUG === 'true') {
+          try {
+            console.error('[PipelineExecutor] Stage output snapshot', {
+              stageIndex,
+              command: command.rawIdentifier,
+              normalized: this.debugNormalize(normalized)
+            });
+          } catch {}
+        }
         if (this.debugStructured) {
           try {
             console.error('[PipelineExecutor][finalized-output]', {
@@ -521,7 +558,7 @@ export class PipelineExecutor {
             });
           } catch {}
         }
-        this.structuredOutputs.set(stageIndex, normalized);
+    this.structuredOutputs.set(stageIndex, normalized);
         this.finalOutput = normalized;
         this.lastStageIndex = stageIndex;
 
@@ -555,6 +592,11 @@ export class PipelineExecutor {
       return await this.env.withPipeContext(pipelineSnapshot, runWithinPipeline);
     } catch (error) {
       return { type: 'error', error: error as Error };
+    } finally {
+      // Ensure the parent environment does not retain the pipeline context after this stage
+      if (parentPipelineContextPushed && this.env.getPipelineContext()) {
+        this.env.clearPipelineContext();
+      }
     }
   }
 
@@ -970,7 +1012,7 @@ export class PipelineExecutor {
               capturePipelineContext: snapshot => {
                 pipelineSnapshot = snapshot;
               },
-              skipSetPipelineContext: true,
+              skipSetPipelineContext: false,
               sourceRetryable: this.isRetryable
             }
           );
@@ -1289,6 +1331,15 @@ export class PipelineExecutor {
     return wrapStructured('', 'text', '');
   }
 
+  private clearStageOutputsFrom(startStage: number): void {
+    const keys = Array.from(this.structuredOutputs.keys());
+    for (const key of keys) {
+      if (key >= startStage) {
+        this.structuredOutputs.delete(key);
+      }
+    }
+  }
+
   private createStageHookNode(command: PipelineStageEntry): ExecInvocation {
     const nodeId = `pipeline-stage-${this.stageHookNodeCounter++}`;
     const commandRef: CommandReference = {
@@ -1350,6 +1401,27 @@ export class PipelineExecutor {
         stageIndex,
         error: error instanceof Error ? error.message : error
       });
+    }
+  }
+
+  private debugNormalize(value: any): any {
+    try {
+      if (value === undefined || value === null) return value;
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object') {
+        const base: any = { type: (value as any).type };
+        if ((value as any).text !== undefined) base.text = (value as any).text;
+        if ((value as any).data !== undefined && typeof (value as any).data !== 'object') {
+          base.data = (value as any).data;
+        }
+        if (Array.isArray((value as any).ctx?.labels)) {
+          base.labels = (value as any).ctx.labels;
+        }
+        return base;
+      }
+      return value;
+    } catch {
+      return '[unserializable]';
     }
   }
 

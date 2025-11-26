@@ -31,6 +31,7 @@ import {
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
+import { appendFileSync } from 'fs';
 
 const DEFAULT_GUARD_MAX = 3;
 const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
@@ -216,24 +217,50 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
 
     const streamingActive = Boolean(operation?.metadata && (operation.metadata as any).streaming);
     if (process.env.MLLD_DEBUG_GUARDS === '1') {
+      const guardNames = [
+        ...perInputCandidates.flatMap(c => c.guards.map(g => g.name || g.filterKind)),
+        ...operationGuards.map(g => g.name || g.filterKind)
+      ].filter(Boolean);
       try {
-        console.error('[guard-post-hook] streaming metadata', {
+        console.error('[guard-post-hook] selection', {
+          operation: summarizeOperation(operation),
           streamingFlag: (operation.metadata as any)?.streaming,
-          operation: summarizeOperation(operation)
+          selectionSources,
+          guardNames
         });
+        appendFileSync(
+          '/tmp/mlld_guard_post.log',
+          JSON.stringify(
+            {
+              operation: summarizeOperation(operation),
+              streamingFlag: (operation.metadata as any)?.streaming,
+              selectionSources,
+              guardNames
+            },
+            null,
+            2
+          ) + '\n'
+        );
       } catch {
         // ignore debug logging failures
       }
     }
     if (streamingActive && (perInputCandidates.length > 0 || operationGuards.length > 0)) {
-      throw new GuardError(
-        [
-          'Cannot run after-guards when streaming is enabled.',
-          'Options:',
-          '- Remove after-timed guards or change them to before',
-          '- Disable streaming with `with { stream: false }`'
-        ].join('\n')
-      );
+      const streamingMessage = [
+        'Cannot run after-guards when streaming is enabled.',
+        'Options:',
+        '- Remove after-timed guards or change them to before',
+        '- Disable streaming with `with { stream: false }`'
+      ].join('\n');
+      throw new GuardError({
+        decision: 'deny',
+        message: streamingMessage,
+        reason: streamingMessage,
+        operation,
+        timing: 'after',
+        guardResults: [],
+        reasons: [streamingMessage]
+      });
     }
 
     if (perInputCandidates.length === 0 && operationGuards.length === 0) {

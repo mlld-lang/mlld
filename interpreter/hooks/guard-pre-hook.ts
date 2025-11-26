@@ -26,6 +26,7 @@ import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
+import { appendFileSync } from 'fs';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -575,6 +576,74 @@ export const guardPreHook: PreHook = async (
       guardContext: aggregateContext
     });
     appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+
+    if (process.env.MLLD_DEBUG_GUARDS === '1') {
+      try {
+        const inputPreview = Array.isArray(inputs)
+          ? inputs
+              .slice(0, 3)
+              .map(entry =>
+                isVariable(entry as any)
+                  ? {
+                      name: (entry as any).name,
+                      text: (entry as any).value?.text ?? (entry as any).text ?? (entry as any).value,
+                      labels: (entry as any).ctx?.labels
+                    }
+                  : entry
+              )
+          : inputs;
+        console.error('[guard-pre-hook] decision', {
+          decision: currentDecision,
+          operation: {
+            type: operation?.type,
+            subtype: operation?.subtype,
+            name: operation?.name,
+            labels: operation?.labels,
+            metadata: operation?.metadata
+          },
+          inputs: inputPreview,
+          reasons,
+          hints: hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
+          guardTrace: guardTrace.map(trace => ({
+            guard: trace.guard?.name ?? trace.guard?.filterKind,
+            decision: trace.decision,
+            reason: trace.reason,
+            hint: trace.hint
+          }))
+        });
+        try {
+          appendFileSync(
+            '/tmp/mlld_guard_pre.log',
+            JSON.stringify(
+              {
+                decision: currentDecision,
+                operation: {
+                  type: operation?.type,
+                  subtype: operation?.subtype,
+                  name: operation?.name,
+                  labels: operation?.labels,
+                  metadata: operation?.metadata
+                },
+                reasons,
+                hints: hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
+                guardTrace: guardTrace.map(trace => ({
+                  guard: trace.guard?.name ?? trace.guard?.filterKind,
+                  decision: trace.decision,
+                  reason: trace.reason,
+                  hint: trace.hint
+                }))
+              },
+              null,
+              2
+            ) + '\n'
+          );
+        } catch {
+          // ignore file debug failures
+        }
+      } catch {
+        // ignore debug logging failures
+      }
+    }
 
     if (currentDecision === 'allow') {
       for (const key of usedAttemptKeys) {
