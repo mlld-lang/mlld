@@ -185,6 +185,7 @@ type StringBuiltinMethod =
   | 'repeat';
 type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort';
 type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
+type TypeCheckingMethod = 'isArray' | 'isObject' | 'isString' | 'isNumber' | 'isBoolean' | 'isNull' | 'isDefined';
 
 function ensureStringTarget(method: string, target: unknown): string {
   if (typeof target === 'string') {
@@ -323,6 +324,25 @@ function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: 
       return value.endsWith(searchValue);
   }
   throw new MlldInterpreterError(`Unsupported search builtin: ${method}`);
+}
+function handleTypeCheckingBuiltin(method: TypeCheckingMethod, target: unknown): boolean {
+  switch (method) {
+    case 'isArray':
+      return Array.isArray(target);
+    case 'isObject':
+      return typeof target === 'object' && target !== null && !Array.isArray(target);
+    case 'isString':
+      return typeof target === 'string';
+    case 'isNumber':
+      return typeof target === 'number';
+    case 'isBoolean':
+      return typeof target === 'boolean';
+    case 'isNull':
+      return target === null;
+    case 'isDefined':
+      return target !== null && target !== undefined;
+  }
+  throw new MlldInterpreterError(`Unsupported type checking builtin: ${method}`);
 }
 
 /**
@@ -525,7 +545,14 @@ export async function evaluateExecInvocation(
       'endsWith',
       'concat',
       'reverse',
-      'sort'
+      'sort',
+      'isArray',
+      'isObject',
+      'isString',
+      'isNumber',
+      'isBoolean',
+      'isNull',
+      'isDefined'
     ];
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
@@ -675,6 +702,15 @@ export async function evaluateExecInvocation(
       case 'endsWith':
           result = handleSearchBuiltin(commandName as SearchBuiltinMethod, objectValue, evaluatedArgs[0]);
           break;
+      case 'isArray':
+      case 'isObject':
+      case 'isString':
+      case 'isNumber':
+      case 'isBoolean':
+      case 'isNull':
+      case 'isDefined':
+        result = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, objectValue);
+        break;
         default:
           throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
       }
