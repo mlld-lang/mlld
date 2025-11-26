@@ -76,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Templates now correctly parse comparison operators like `<70%` and `< 70` instead of treating them as file references
+- Implicit placeholder field access in templates: `.field` syntax now parses as shorthand for `<>.field` in template contexts (backtick, double-quote, double-colon templates, and alligator `as` clauses). This enables patterns like `<*.md> as "### .filename"` as an alternative to `<*.md> as "### <>.filename"` for file-based template transformations. Note: Runtime evaluation of standalone `.field` expressions (outside `as` clauses) requires additional interpreter work (relates to #349)
 
 - Inline `/for` loops in templates only trigger at line start (not mid-line)
 - **When-expression pipelines**: `/exe … = when [...]` actions now accept `| append`, `| log`, `| output`, and `| show` stages without misparsing ternary expressions (fixes `slash/when/exe-when-expressions-operators`).
