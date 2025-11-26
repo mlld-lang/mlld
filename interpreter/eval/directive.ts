@@ -22,6 +22,9 @@ import { evaluateForDirective } from './for';
 import { evaluateExport } from './export';
 import { evaluateGuard } from './guard';
 import { clearDirectiveReplay } from './directive-replay';
+import { runWithGuardRetry } from '../hooks/guard-retry-runner';
+import { extractSecurityDescriptor } from '../utils/structured-value';
+import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
 
 /**
  * Extract trace information from a directive
@@ -122,41 +125,89 @@ export async function evaluateDirective(
   const operationContext = buildOperationContext(directive, traceInfo);
 
   try {
-    return await env.withOpContext(operationContext, async () => {
-      let extractedInputs: readonly unknown[] = [];
-      let precomputedVarAssignment: VarAssignmentResult | undefined;
+    const executeOnce = async (): Promise<EvalResult> => {
+      return await env.withOpContext(operationContext, async () => {
+        let extractedInputs: readonly unknown[] = [];
+        let precomputedVarAssignment: VarAssignmentResult | undefined;
 
-      if (directive.kind === 'var') {
-        precomputedVarAssignment = await prepareVarAssignment(directive, env);
-        extractedInputs = [precomputedVarAssignment.variable];
-      } else {
-        extractedInputs = await extractDirectiveInputs(directive, env);
-      }
-      const preDecision = await hookManager.runPre(directive, extractedInputs, env, operationContext);
-      const transformedInputs = getGuardTransformedInputs(preDecision, extractedInputs);
-      if (precomputedVarAssignment && transformedInputs && transformedInputs[0]) {
-        const firstTransformed = transformedInputs[0];
-        if (isVariable(firstTransformed)) {
-          precomputedVarAssignment = {
-            ...precomputedVarAssignment,
-            variable: firstTransformed as Variable
-          };
+        if (directive.kind === 'var') {
+          precomputedVarAssignment = await prepareVarAssignment(directive, env);
+          extractedInputs = [precomputedVarAssignment.variable];
+        } else {
+          extractedInputs = await extractDirectiveInputs(directive, env);
         }
-      }
+        const preDecision = await hookManager.runPre(
+          directive,
+          extractedInputs,
+          env,
+          operationContext
+        );
+        const transformedInputs = getGuardTransformedInputs(preDecision, extractedInputs);
+        if (precomputedVarAssignment && transformedInputs && transformedInputs[0]) {
+          const firstTransformed = transformedInputs[0];
+          if (isVariable(firstTransformed)) {
+            precomputedVarAssignment = {
+              ...precomputedVarAssignment,
+              variable: firstTransformed as Variable
+            };
+          }
+        }
 
-      const resolvedInputs = transformedInputs ?? extractedInputs;
-      await handleGuardDecision(preDecision, directive, env, operationContext);
+        const resolvedInputs = transformedInputs ?? extractedInputs;
+        await handleGuardDecision(preDecision, directive, env, operationContext);
 
-      const mergedContext = mergeEvaluationContext(
-        context,
-        resolvedInputs,
-        operationContext,
-        precomputedVarAssignment
-      );
+        const mergedContext = mergeEvaluationContext(
+          context,
+          resolvedInputs,
+          operationContext,
+          precomputedVarAssignment
+        );
 
-      let result = await dispatchDirective(directive, env, mergedContext);
-      result = await hookManager.runPost(directive, result, resolvedInputs, env, operationContext);
-      return result;
+        let result = await dispatchDirective(directive, env, mergedContext);
+        result = await hookManager.runPost(directive, result, resolvedInputs, env, operationContext);
+
+        if (directive.kind === 'var' && precomputedVarAssignment && (result as any).__guardTransformed) {
+          const targetVar = env.getVariable(precomputedVarAssignment.identifier) ?? {
+            ...precomputedVarAssignment.variable
+          };
+
+          if (isVariable(result.value)) {
+            const replacement = result.value as Variable;
+            targetVar.value = (replacement as any).value ?? replacement;
+            targetVar.ctx = {
+              ...(targetVar.ctx ?? {}),
+              ...(replacement.ctx ?? {})
+            };
+          } else {
+            targetVar.value = result.value;
+            const descriptor = extractSecurityDescriptor(result.value, {
+              recursive: true,
+              mergeArrayElements: true
+            });
+            if (descriptor) {
+              const ctx = (targetVar.ctx ?? (targetVar.ctx = {} as any)) as Record<string, unknown>;
+              updateCtxFromDescriptor(ctx, descriptor);
+              if ('ctxCache' in ctx) {
+                delete (ctx as any).ctxCache;
+              }
+            }
+          }
+        }
+        return result;
+      });
+    };
+
+    const sourceRetryable =
+      (operationContext.metadata &&
+        typeof (operationContext.metadata as any).sourceRetryable === 'boolean' &&
+        (operationContext.metadata as any).sourceRetryable === true) ||
+      false;
+
+    return await runWithGuardRetry({
+      env,
+      operationContext,
+      sourceRetryable,
+      execute: executeOnce
     });
   } catch (error) {
     // Enhance errors with directive trace
@@ -218,9 +269,7 @@ function buildOperationContext(
   const baseMetadata: Record<string, unknown> = {
     trace: traceInfo.directive
   };
-  const streamingEnabled =
-    directive.values?.withClause?.stream === true ||
-    directive.meta?.withClause?.stream === true;
+  const streamingEnabled = readStreamFlag(directive);
   const context: OperationContext = {
     type: directive.kind,
     subtype: directive.subtype,
@@ -365,13 +414,26 @@ function applyVarMetadata(context: OperationContext, directive: DirectiveNode): 
   if (varName) {
     context.target = varName;
   }
+  metadata.sourceRetryable = true;
   context.metadata = metadata;
 }
 
 function applyShowMetadata(context: OperationContext, directive: DirectiveNode): void {
   const metadata: Record<string, unknown> = { ...(context.metadata ?? {}) };
   metadata.showSubtype = directive.subtype;
+  metadata.sourceRetryable = true;
   context.metadata = metadata;
+}
+
+function readStreamFlag(directive: DirectiveNode): boolean {
+  const candidates = [
+    (directive.values as any)?.withClause?.stream,
+    (directive.values as any)?.invocation?.withClause?.stream,
+    (directive.values as any)?.execInvocation?.withClause?.stream,
+    directive.meta?.withClause?.stream
+  ];
+
+  return candidates.some(value => value === true || value === 'true');
 }
 
 function summarizeNodes(nodes: unknown): string | undefined {

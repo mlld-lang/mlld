@@ -42,6 +42,7 @@ import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
 import type { OperationContext } from '../env/ContextManager';
 import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
+import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import {
   materializeGuardInputsWithMapping,
   type GuardInputMappingEntry
@@ -351,6 +352,32 @@ function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: 
  * This executes a previously defined exec command with arguments and optional tail modifiers
  */
 export async function evaluateExecInvocation(
+  node: ExecInvocation,
+  env: Environment
+): Promise<EvalResult> {
+  const operationPreview = buildExecOperationPreview(node);
+  return await runWithGuardRetry({
+    env,
+    operationContext: operationPreview,
+    sourceRetryable: true,
+    execute: () => evaluateExecInvocationInternal(node, env)
+  });
+}
+
+function buildExecOperationPreview(node: ExecInvocation): OperationContext | undefined {
+  const identifier = (node.commandRef as any)?.identifier;
+  if (typeof identifier === 'string' && identifier.length > 0) {
+    return {
+      type: 'exe',
+      name: identifier,
+      location: node.location ?? null,
+      metadata: { sourceRetryable: true }
+    };
+  }
+  return undefined;
+}
+
+async function evaluateExecInvocationInternal(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
@@ -1409,7 +1436,8 @@ export async function evaluateExecInvocation(
     location: node.location ?? null,
     metadata: {
       executableType: definition.type,
-      command: commandName
+      command: commandName,
+      sourceRetryable: true
     }
   };
   const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {

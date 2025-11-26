@@ -30,8 +30,17 @@ import {
 } from '../utils/structured-value';
 import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
+import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 
 const DEFAULT_GUARD_MAX = 3;
+const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
+
+interface GuardRetryRuntimeContext {
+  attempt?: number;
+  tries?: Array<{ attempt?: number; decision?: string; hint?: string | null }>;
+  hintHistory?: Array<string | null>;
+  max?: number;
+}
 
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
@@ -66,6 +75,59 @@ interface OperationSnapshot {
   labels: readonly DataLabel[];
   sources: readonly string[];
   variables: readonly Variable[];
+}
+
+function logAfterRetryDebug(label: string, payload: Record<string, unknown>): void {
+  if (!afterRetryDebugEnabled) {
+    return;
+  }
+  try {
+    console.error(`[after-guard-debug] ${label}`, payload);
+  } catch {
+    // ignore debug failures
+  }
+}
+
+function summarizeOperation(operation: OperationContext | undefined): Record<string, unknown> {
+  if (!operation) {
+    return {};
+  }
+  return {
+    type: operation.type,
+    subtype: operation.subtype,
+    name: operation.name,
+    labels: operation.labels,
+    metadata: operation.metadata
+  };
+}
+
+function getGuardRetryContext(env: Environment): {
+  attempt: number;
+  tries: Array<{ attempt: number; decision: string; hint?: string | null }>;
+  hintHistory: Array<string | null>;
+  max: number;
+} {
+  const context = env
+    .getContextManager()
+    .peekGenericContext('guardRetry') as GuardRetryRuntimeContext | undefined;
+
+  const attempt = typeof context?.attempt === 'number' && context.attempt > 0 ? context.attempt : 1;
+  const tries = Array.isArray(context?.tries)
+    ? context!.tries!.map(entry => ({
+        attempt: typeof entry.attempt === 'number' ? entry.attempt : attempt,
+        decision: typeof entry.decision === 'string' ? entry.decision : 'retry',
+        hint: typeof entry.hint === 'string' || entry.hint === null ? entry.hint : null
+      }))
+    : [];
+  const hintHistory = Array.isArray(context?.hintHistory)
+    ? context!.hintHistory!.map(value =>
+        typeof value === 'string' || value === null ? value : String(value ?? '')
+      )
+    : tries.map(entry => entry.hint ?? null);
+  const max =
+    typeof context?.max === 'number' && context.max > 0 ? context.max : DEFAULT_GUARD_MAX;
+
+  return { attempt, tries, hintHistory, max };
 }
 
 function normalizeRawOutput(value: unknown): unknown {
@@ -107,10 +169,13 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
       env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
       return result;
     }
+    const selectionSources: string[] = ['output'];
 
+    const retryContext = getGuardRetryContext(env);
     const registry = env.getGuardRegistry();
     const baseOutputValue = normalizeRawOutput(result.value);
     const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
+    const inputVariables = materializeGuardInputs(inputs ?? [], { nameHint: '__guard_input__' });
     if (outputVariables.length === 0) {
       const fallbackValue =
         typeof baseOutputValue === 'string'
@@ -129,8 +194,25 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     let activeOutputs = outputVariables.slice();
     let currentDescriptor = extractOutputDescriptor(result, activeOutputs[0]);
 
-    const perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride);
-    const operationGuards = collectOperationGuards(registry, operation, guardOverride, outputVariables);
+    let perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride);
+    if (perInputCandidates.length === 0 && inputVariables.length > 0) {
+      const mergedDescriptor = mergeDescriptors(
+        currentDescriptor,
+        ...inputVariables
+          .map(variable => extractSecurityDescriptor(variable, { recursive: true, mergeArrayElements: true }))
+          .filter(Boolean) as SecurityDescriptor[]
+      );
+      if (mergedDescriptor) {
+        currentDescriptor = mergedDescriptor;
+      }
+      activeOutputs = inputVariables.slice();
+      perInputCandidates = buildPerInputCandidates(registry, activeOutputs, guardOverride);
+      selectionSources.push('input-fallback');
+    }
+    let operationGuards = collectOperationGuards(registry, operation, guardOverride, outputVariables);
+    if (operationGuards.length === 0 && activeOutputs === inputVariables && inputVariables.length > 0) {
+      operationGuards = collectOperationGuards(registry, operation, guardOverride, inputVariables);
+    }
 
     const streamingActive = Boolean(operation?.metadata && (operation.metadata as any).streaming);
     if (streamingActive && (perInputCandidates.length > 0 || operationGuards.length > 0)) {
@@ -145,8 +227,27 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     }
 
     if (perInputCandidates.length === 0 && operationGuards.length === 0) {
+      logAfterRetryDebug('no after-guards collected', {
+        operation: summarizeOperation(operation),
+        selectionSources,
+        outputCount: outputVariables.length,
+        inputCount: inputVariables.length
+      });
       return result;
     }
+
+    logAfterRetryDebug('after-guard selection', {
+      operation: summarizeOperation(operation),
+      selectionSources,
+      perInputCandidates: perInputCandidates.map(candidate => ({
+        index: candidate.index,
+        labels: candidate.labels,
+        sources: candidate.sources,
+        guards: candidate.guards.map(def => def.name ?? `${def.filterKind}:${def.filterValue}`)
+      })),
+      operationGuards: operationGuards.map(def => def.name ?? `${def.filterKind}:${def.filterValue}`),
+      streamingActive
+    });
 
     const guardTrace: GuardResult[] = [];
     const reasons: string[] = [];
@@ -170,7 +271,11 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
           labelsOverride: currentDescriptor.labels,
           sourcesOverride: currentDescriptor.sources,
           inputPreviewOverride: buildVariablePreview(currentInput),
-          outputRaw: resolveGuardValue(currentInput, currentInput)
+          outputRaw: resolveGuardValue(currentInput, currentInput),
+          attemptNumber: retryContext.attempt,
+          attemptHistory: retryContext.tries,
+          maxAttempts: retryContext.max,
+          hintHistory: retryContext.hintHistory
         });
         guardTrace.push(resultEntry);
         if (resultEntry.hint) {
@@ -224,7 +329,11 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
           labelsOverride: opSnapshot.labels,
           sourcesOverride: opSnapshot.sources,
           inputPreviewOverride: `Array(len=${opSnapshot.variables.length})`,
-          outputRaw: currentOutputValue
+          outputRaw: currentOutputValue,
+          attemptNumber: retryContext.attempt,
+          attemptHistory: retryContext.tries,
+          maxAttempts: retryContext.max,
+          hintHistory: retryContext.hintHistory
         });
         guardTrace.push(resultEntry);
         if (resultEntry.hint) {
@@ -268,20 +377,65 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     }
 
     if (currentDecision === 'retry') {
-      const retryReasons = reasons.slice();
-      const defaultReason = 'Guard retry not implemented for after guards';
-      if (!retryReasons.includes(defaultReason)) {
-        retryReasons.unshift(defaultReason);
+      const retryReasons = reasons.length > 0 ? reasons : ['Guard requested retry'];
+      const retryHint =
+        hints.length > 0 && hints[0] && typeof hints[0].hint === 'string'
+          ? hints[0].hint
+          : retryReasons[0];
+      const pipelineContext = env.getPipelineContext();
+      const sourceRetryable =
+        pipelineContext?.sourceRetryable ??
+        Boolean(operation?.metadata && (operation.metadata as any).sourceRetryable);
+
+      if (pipelineContext && !sourceRetryable) {
+        logAfterRetryDebug('after-guard retry denied (non-retryable source)', {
+          operation: summarizeOperation(operation),
+          selectionSources,
+          reasons: retryReasons,
+          hints,
+          sourceRetryable,
+          pipeline: Boolean(pipelineContext),
+          attempt: retryContext.attempt
+        });
+        throw new GuardError({
+          decision: 'deny',
+          guardName: guardTrace[0]?.guardName ?? null,
+          guardFilter: guardTrace[0]?.metadata?.guardFilter as string | undefined,
+          scope: guardTrace[0]?.metadata?.scope,
+          operation,
+          inputPreview: guardTrace[0]?.metadata?.inputPreview as string | undefined,
+          outputPreview: buildVariablePreview(activeOutputs[0] ?? outputVariables[0] ?? null),
+          reasons: retryReasons,
+          guardResults: guardTrace,
+          hints,
+          retryHint,
+          reason: `Cannot retry: ${retryHint ?? 'guard requested retry'} (source not retryable)`,
+          timing: 'after'
+        });
       }
-      const error = buildGuardError({
+
+      logAfterRetryDebug('after-guard retry signal', {
+        operation: summarizeOperation(operation),
+        selectionSources,
+        reasons: retryReasons,
+        hints,
+        sourceRetryable,
+        pipeline: Boolean(pipelineContext),
+        attempt: retryContext.attempt,
+        guardTrace: guardTrace.map(entry => ({
+          guard: entry.guardName ?? entry.metadata?.guardFilter,
+          decision: entry.decision
+        }))
+      });
+
+      throw buildGuardRetrySignal({
         guardResults: guardTrace,
         reasons: retryReasons,
+        hints,
         operation,
         output: activeOutputs[0] ?? outputVariables[0],
-        timing: 'after',
-        retry: true
+        retryHint
       });
-      throw error;
     }
 
     if (transformsApplied && activeOutputs[0]) {
@@ -292,9 +446,12 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         applySecurityDescriptorToStructuredValue(structured, currentDescriptor);
         const nextResult = { ...result, value: structured };
         (nextResult as any).stdout = finalValue;
+        (nextResult as any).__guardTransformed = structured;
         return nextResult;
       }
-      return { ...result, value: finalVariable };
+      const nextResult = { ...result, value: finalVariable };
+      (nextResult as any).__guardTransformed = finalVariable;
+      return nextResult;
     }
 
     return result;
@@ -388,6 +545,10 @@ async function evaluateGuard(options: {
   sourcesOverride?: readonly string[];
   inputPreviewOverride?: string | null;
   outputRaw?: unknown;
+  attemptNumber?: number;
+  attemptHistory?: Array<{ attempt?: number; decision?: string; hint?: string | null }>;
+  maxAttempts?: number;
+  hintHistory?: Array<string | null>;
 }): Promise<GuardResult> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
@@ -476,19 +637,35 @@ async function evaluateGuard(options: {
     labels: contextLabels,
     operationLabels: operation.labels ?? []
   });
-
+  const attemptNumber =
+    typeof options.attemptNumber === 'number' && options.attemptNumber > 0
+      ? options.attemptNumber
+      : 1;
+  const attemptHistory = Array.isArray(options.attemptHistory) ? options.attemptHistory : [];
+  const hintHistory = Array.isArray(options.hintHistory)
+    ? options.hintHistory.map(value =>
+        typeof value === 'string' || value === null ? value : String(value ?? '')
+      )
+    : attemptHistory.map(entry =>
+        typeof entry.hint === 'string' || entry.hint === null ? entry.hint : null
+      );
+  const maxAttempts =
+    typeof options.maxAttempts === 'number' && options.maxAttempts > 0
+      ? options.maxAttempts
+      : DEFAULT_GUARD_MAX;
   const guardContext: GuardContextSnapshot = {
     name: guard.name,
-    attempt: 1,
-    try: 1,
-    tries: [],
-    max: DEFAULT_GUARD_MAX,
+    attempt: attemptNumber,
+    try: attemptNumber,
+    tries: attemptHistory.map(entry => ({ ...entry })),
+    max: maxAttempts,
     input: inputVariable,
     output: guardOutputVariable,
     labels: contextLabels,
     sources: contextSources,
     inputPreview,
     outputPreview: buildVariablePreview(guardOutputVariable),
+    hintHistory,
     timing: 'after'
   } as GuardContextSnapshot;
 
@@ -1053,6 +1230,33 @@ function buildGuardError(options: {
     guardResults: options.guardResults,
     hints: options.guardResults.flatMap(entry => (entry.hint ? [entry.hint] : [])),
     timing: 'after',
+    reason: primaryReason,
+    guardContext
+  });
+}
+
+function buildGuardRetrySignal(options: {
+  guardResults: GuardResult[];
+  reasons: string[];
+  hints?: GuardHint[];
+  operation: OperationContext;
+  output?: Variable;
+  retryHint?: string | null;
+}): GuardRetrySignal {
+  const primaryReason = options.reasons[0] ?? 'Guard requested retry';
+  const guardContext = options.guardResults[0]?.metadata?.guardContext as GuardContextSnapshot | undefined;
+  return new GuardRetrySignal({
+    guardName: options.guardResults[0]?.guardName ?? null,
+    guardFilter: options.guardResults[0]?.metadata?.guardFilter as string | undefined,
+    scope: options.guardResults[0]?.metadata?.scope,
+    operation: options.operation,
+    inputPreview: options.guardResults[0]?.metadata?.inputPreview as string | undefined,
+    outputPreview: options.output ? buildVariablePreview(options.output) : null,
+    reasons: options.reasons,
+    guardResults: options.guardResults,
+    hints: options.hints ?? options.guardResults.flatMap(entry => (entry.hint ? [entry.hint] : [])),
+    timing: 'after',
+    retryHint: options.retryHint ?? null,
     reason: primaryReason,
     guardContext
   });

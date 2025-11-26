@@ -12,6 +12,7 @@ import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { guardPostHook } from '@interpreter/hooks/guard-post-hook';
+import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 
 function createEnv(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -120,13 +121,13 @@ describe('guard post-hook integration', () => {
       'step2'
     );
     const ctx = (finalVar ?? (isStructuredValue(finalValue) ? (finalValue as any) : undefined))?.ctx;
-    expect(ctx?.labels).toContain('secret');
-    expect(Array.isArray(ctx?.sources) && ctx.sources.some((source: string) => source.includes('guard:first'))).toBe(
-      true
-    );
+  expect(ctx?.labels).toContain('secret');
+  expect(Array.isArray(ctx?.sources) && ctx.sources.some((source: string) => source.includes('guard:first'))).toBe(
+    true
+  );
   });
 
-  it('surfaces clear not-implemented reason for after guard retry', async () => {
+  it('emits a retry signal for after guard retry decisions', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
       '/guard after for secret = when [ * => retry "try again" ]'
@@ -150,7 +151,42 @@ describe('guard post-hook integration', () => {
     expect(error).toBeInstanceOf(GuardError);
     const guardErr = error as GuardError;
     expect(guardErr.decision).toBe('retry');
-    expect(guardErr.reason ?? guardErr.details.reason).toMatch(/not implemented/i);
+    expect(guardErr.retryHint ?? guardErr.reason ?? guardErr.details.reason).toMatch(/try again/i);
+  });
+
+  it('denies retry inside pipelines when the source is not retryable', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after for secret = when [ * => retry "again" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createSecretVariable('secretVar', 'pipeline-output');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+    const pipelineContext: PipelineContextSnapshot = {
+      stage: 1,
+      totalStages: 1,
+      currentCommand: 'emit',
+      input: 'input',
+      previousOutputs: [],
+      attemptCount: 1,
+      attemptHistory: [],
+      hint: null,
+      hintHistory: [],
+      sourceRetryable: false,
+      guards: []
+    };
+    env.setPipelineContext(pipelineContext);
+
+    await expect(
+      guardPostHook(node, result, [outputVar], env, { type: 'exe', name: 'emit' })
+    ).rejects.toBeInstanceOf(GuardError);
+
+    env.clearPipelineContext();
   });
 
   it('suppresses nested guard evaluation invoked inside guard actions', async () => {

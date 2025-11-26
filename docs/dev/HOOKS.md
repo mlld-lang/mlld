@@ -160,6 +160,7 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
 - Pipeline guard history: when a pipeline context is active, each guard evaluation appends `{ stage, operation, decision, trace, hints, reasons }` to `@p.guards` (and `@ctx.pipe.guards`), one entry per attempt. Retries append new entries instead of replacing earlier attempts, preserving a full audit trail across stages.
 - Guard non-reentrancy: while a guard evaluates, all guards are suppressed for nested directive/exe operations. Helper executables invoked from guard actions run unguarded to prevent recursion loops; treat them as trusted.
 - Retry shared budget: guard retries reuse the pipeline retry machinery; `@ctx.guard.try` increments per attempt across the guard chain, and history is visible in `@p.guards` entries for each attempt. A retry on any guard in the chain causes the whole operation to be retried once; subsequent attempts see updated `@ctx.guard.try` values.
+- Streaming compatibility: guard-post-hook denies when streaming is enabled and after-timed guards are registered. After-guards require non-streaming execution so the hook can validate a stable output; streamed effects are not retractable.
 
 ### OperationContext
 
