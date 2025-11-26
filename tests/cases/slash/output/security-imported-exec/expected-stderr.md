@@ -1,1 +1,1 @@
-[FILE] ./greeting.txt (23 bytes)
+[FILE] /greeting.txt (23 bytes)

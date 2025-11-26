@@ -152,6 +152,28 @@ When fixtures are built with `npm run build:fixtures`, skipped tests will show:
 ⏭️  Skipping integration/security/ttl-durations: skip-known-issue-99.md
 ```
 
+### Testing File Operations
+
+The `/output` directive and similar file operations can be validated using `expected-stderr.md` files. When tests are in the `slash/output/` directory, file operations are automatically logged to stderr.
+
+**Example:**
+
+Test file: `tests/cases/slash/output/file/example.md`
+```mlld
+/var @content = "Hello, world!"
+/output @content to "greeting.txt"
+```
+
+Expected stderr: `tests/cases/slash/output/file/expected-stderr.md`
+```
+[FILE] /greeting.txt (13 bytes)
+```
+
+**Notes:**
+- File operation logging format: `[FILE] <path> (<bytes> bytes)`
+- Paths are resolved to absolute paths in the virtual filesystem
+- See [OUTPUT-TESTING.md](./OUTPUT-TESTING.md) for detailed documentation
+
 ### Test Types
 
 #### 1. Valid Tests
