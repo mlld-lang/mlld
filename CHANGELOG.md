@@ -5,6 +5,11 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Type-checking builtin methods for cleaner conditional logic: `@value.isArray()`, `@value.isObject()`, `@value.isString()`, `@value.isNumber()`, `@value.isBoolean()`, `@value.isNull()`, `@value.isDefined()`. These methods return boolean values and work on any variable, complementing the existing `@typeof` for type inspection.
+
 ## [2.0.0-rc70]
 
 ### Added
