@@ -120,12 +120,14 @@ UnifiedInterpolationContent "Shared interpolation content"
   / FileReferenceInterpolation   // <file.md> references with fields/pipes
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
+  / ImplicitPlaceholderFieldAccess   // .field as shorthand for <>.field
 
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 UnifiedBacktickInterpolation "Backtick interpolation content"
   = TemplateSlashForBlockBacktick    // Inline for-block
   / TemplateInlineShow               // Inline /show
   / UnifiedInterpolationContent      // Use shared interpolation
+  / ImplicitPlaceholderFieldAccess   // .field as shorthand for <>.field
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -206,6 +208,33 @@ TemplateSlashForBlockBacktick "slash for-block (backtick)"
       };
     }
 
+
+// Implicit placeholder field access - .field as shorthand for <>.field
+ImplicitPlaceholderFieldAccess "implicit placeholder field access"
+  = fieldStart:("" { return peg$currPos; }) "." first:BaseIdentifier rest:AnyFieldAccess* pipes:TemplatePipeChain? {
+      // Create the first field access with proper location
+      const firstField = {
+        type: 'field',
+        value: first,
+        location: {
+          start: {
+            offset: fieldStart + 1,  // +1 to skip the '.'
+            line: location().start.line,
+            column: location().start.column + 1
+          },
+          end: location().end
+        }
+      };
+      const fields = [firstField, ...rest];
+      
+      // Create a file reference node with placeholder source
+      return helpers.createFileReferenceNode(
+        { type: 'placeholder', raw: '' },
+        fields,
+        pipes || [],
+        location()
+      );
+    }
 // -------------------------------------------------------------
 // DEPENDENCIES (defined elsewhere but referenced here)
 // -------------------------------------------------------------

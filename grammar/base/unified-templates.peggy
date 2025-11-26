@@ -146,6 +146,7 @@ UnifiedAtInterpolation "At-sign interpolation"
   / UnifiedAngleBracketContent   // <file.md> or literal <xml> - USE UNIFIED PATTERN
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
+  / ImplicitPlaceholderFieldAccess   // .field as shorthand for <>.field
   / "@" !BaseIdentifier char:. { // @ followed by non-identifier
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }

@@ -222,7 +222,8 @@ AsSectionRenameString "section rename string template"
 // Parts inside rename string - reuse file reference interpolation
 RenameStringPart
   = FileReferenceInterpolation  // Reuse the existing pattern that handles <> and <file> 
-  / chars:(![<"] char:. { return char; })+ {
+  / ImplicitPlaceholderFieldAccess   // .field as shorthand for <>.field
+  / chars:(![<".] char:. { return char; } / "." !BaseIdentifier { return "."; })+ {
       // Plain text
       return helpers.createNode(NodeType.Text, { 
         content: chars.join(''), 
@@ -233,6 +234,7 @@ RenameStringPart
 // Parts inside rename backtick template - supports <> placeholder and @variables
 RenameBacktickPart
   = FileReferenceInterpolation  // Handles <> and <file> with field access
+  / ImplicitPlaceholderFieldAccess   // .field as shorthand for <>.field
   / "@" id:BaseIdentifier fields:AnyFieldAccess* {
       // Regular variable reference
       return helpers.createVariableReferenceNode('varIdentifier', {
@@ -240,7 +242,7 @@ RenameBacktickPart
         ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
     }
-  / chars:(![`<@] char:. { return char; })+ {
+  / chars:(![`<@.] char:. { return char; } / "." !BaseIdentifier { return "."; })+ {
       // Plain text
       return helpers.createNode(NodeType.Text, { 
         content: chars.join(''), 
@@ -285,7 +287,7 @@ BacktickTransformPart
         ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
     }
-  / chars:(![`<@] char:. { return char; })+ {
+  / chars:(![`<@.] char:. { return char; } / "." !BaseIdentifier { return "."; })+ {
       // Plain text
       return helpers.createNode(NodeType.Text, { 
         content: chars.join(''), 
@@ -300,6 +302,7 @@ DoubleColonTemplatePart
         fields: fields
       };
     }
+  / ImplicitPlaceholderFieldAccess   // .field as shorthand for <>.field
   / "@" id:BaseIdentifier fields:AnyFieldAccess* {
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
