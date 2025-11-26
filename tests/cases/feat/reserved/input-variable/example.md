@@ -3,18 +3,16 @@
 This tests the @input reserved variable with various usage patterns.
 
 ## Direct Usage
-Input content: /show @input
+/show @input
 
 ## Template Usage
-/var @greeting = :::Received input: {{input}}:::
+/var @greeting = `Received input: @input`
 /show @greeting
 
 ## Import from @input
-/import { config } from @input
-
-Config value: /show @config
+/import { @config } from "@input"
+/show @config
 
 ## Import again from @input
-/import { data } from @input
-
-Data value: /show @data
+/import { @data } from "@input"
+/show @data

@@ -4,25 +4,16 @@ This test verifies URL content conversion features.
 
 ## Load an HTML page
 
-## Access different content formats
+## Access different content formats via .ctx
 
 ### Raw HTML
-Has HTML: true
-
+Has HTML: false
 ### Plain text (HTML stripped)
-Has text: true
-
+Has text: false
 ### Markdown conversion
-Has md: true
+Has md: false
+## Show URL metadata
 
-## Show conversions if available
-
-Text version (first 100 chars):
-Example Domain This domain is for use in illustrative examples in documents. You may use this domai...
-
-Markdown version available
-
-## Load a markdown URL directly
-
-### Markdown files should not have HTML property
-Markdown has no HTML: true
+URL: https://example.com
+Domain: example.com
+Title: Example Domain

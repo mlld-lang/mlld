@@ -61,7 +61,10 @@ ExportMember
     }
 
 ExportIdentifier
-  = prefix:"@"? name:BaseIdentifier {
+  = "*" {
+      return { name: '*', raw: '*', isGuard: false, location: location() };
+    }
+  / prefix:"@"? name:BaseIdentifier {
       const raw = prefix ? `@${name}` : name;
       return { name, raw, isGuard: Boolean(prefix), location: location() };
     }

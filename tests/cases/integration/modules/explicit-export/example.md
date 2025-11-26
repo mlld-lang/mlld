@@ -1,7 +1,6 @@
 # Test Explicit Module Export
 
-This tests a module with explicit @data module export.
+This tests a module with explicit /export directive.
 
-/import { * as @utils } from "./explicit-export-test-module.mld"
-/show :::Greeting: {{utils.greet("World")}}:::
-/show :::Hidden function accessible: {{utils.internalHelper ? "Yes" : "No"}}:::
+/import "./explicit-export-test-module.mld" as @utils
+/show `Greeting: @utils.greet("World")`

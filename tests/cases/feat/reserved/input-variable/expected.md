@@ -3,16 +3,16 @@
 This tests the @input reserved variable with various usage patterns.
 
 ## Direct Usage
-Input content: {"config": "test-value", "data": "sample-data"}
-
-## Lowercase Alias
-Input lowercase: {"config": "test-value", "data": "sample-data"}
-
+{
+  "config": "test-value",
+  "data": "sample-data"
+}
 ## Template Usage
-Received input: {"config": "test-value", "data": "sample-data"}
 
+Received input: {"config":"test-value","data":"sample-data"}
 ## Import from @input
-Config value: test-value
 
-## Import from lowercase
-Data value: sample-data
+test-value
+## Import again from @input
+
+sample-data

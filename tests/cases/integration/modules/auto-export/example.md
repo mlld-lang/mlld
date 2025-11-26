@@ -2,7 +2,7 @@
 
 This tests a module without explicit module export (auto-generated).
 
-/import { * as @utils } from "./auto-export-test-module.mld"
-/show :::Function 1: {{utils.func1()}}:::
-/show :::Function 2: {{utils.func2()}}:::
-/show :::Internal helper: {{utils._internal()}}:::
+/import "./auto-export-test-module.mld" as @utils
+/show `Var 1: @utils.func1`
+/show `Var 2: @utils.func2`
+/show `Internal var: @utils._internal`

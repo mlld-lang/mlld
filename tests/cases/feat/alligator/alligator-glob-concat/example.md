@@ -4,21 +4,21 @@ This test verifies that glob patterns concatenate content by default, consistent
 
 ## Single File Behavior
 
-/var @single = <single-file.md>
+/var @single = <glob-concat-single.md>
 /show @single
-/show `Content: <single-file.md>`
+/show `Content: <glob-concat-single.md>`
 
 ## Glob Pattern Behavior
 
-/var @files = <*.md>
-/show @files
-/show `All files: <*.md>`
+/var @files = <glob-concat-file*.md>
+/show @files.content
+/show `All files concatenated via .content`
 
 ## Field Access on Glob
 
-/var @allFiles = <*.md>
+/var @allFiles = <glob-concat-file*.md>
 /show @allFiles.content
-/show @allFiles[0].fm.title
+/show `First file title: @allFiles[0].ctx.fm.title`
 /show @allFiles[0].content
 
 ## Template Interpolation

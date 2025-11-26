@@ -4,4 +4,4 @@
   * => allow
 ]
 
-/export guard @secretProtection
+/export { @secretProtection }

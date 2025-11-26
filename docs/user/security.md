@@ -378,7 +378,7 @@ Define guards in modules:
   * => allow
 ]
 
-/export guard @secretProtection
+/export { @secretProtection }
 ```
 
 Import and use:
