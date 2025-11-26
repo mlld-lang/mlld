@@ -1566,14 +1566,23 @@ export async function evaluateExecInvocation(
       execEnv,
       InterpolationContext.ShellCommand
     );
-    // Normalize common escaped sequences for usability in oneliners
-    // Only handle simple \n, \t, \r, \0 to their literal counterparts
-    // Leave quotes/backslashes intact for shell correctness
-    command = command
-      .replace(/\\n/g, '\n')
-      .replace(/\\t/g, '\t')
-      .replace(/\\r/g, '\r')
-      .replace(/\\0/g, '\0');
+    // DISABLED (2025-11-25, issue #456): This escape sequence normalization was
+    // intended to allow \n in literal string arguments to become actual newlines
+    // (e.g., /exe @echo(msg) = run { echo @msg } with @echo("line1\nline2")).
+    // However, it runs on the ENTIRE interpolated command, including properly-escaped
+    // JSON data. When JSON containing "\n" (literal backslash-n) passes through,
+    // shell-quote correctly escapes it to "\\n", but this code then converts it
+    // back to actual newlines, corrupting the JSON.
+    //
+    // Result of disabling: Literal \n in string arguments will no longer become
+    // newlines. Users who need multiline output should use actual newlines in
+    // their mlld source or use heredocs/printf in their shell commands.
+    //
+    // command = command
+    //   .replace(/\\n/g, '\n')
+    //   .replace(/\\t/g, '\t')
+    //   .replace(/\\r/g, '\r')
+    //   .replace(/\\0/g, '\0');
     
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
       logger.debug('Executing command', {

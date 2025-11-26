@@ -5,6 +5,11 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc71]
+
+### Fixed
+- JSON escape sequences (`\n`, `\t`, etc.) now preserved when piping data through shell commands like `echo` ([#456](https://github.com/mlld-lang/mlld/issues/456)). Previously, escape sequence normalization in command executables would convert properly-escaped `\\n` back to actual newlines, corrupting JSON data.
+
 ## [2.0.0-rc70]
 
 ### Added
