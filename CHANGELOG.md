@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc73]
 
 ### Fixed
+- Export directive grammar now correctly distinguishes guards from variables ([#498](https://github.com/mlld-lang/mlld/issues/498)). Previously all exports were marked as `guardExport`, breaking `/export` for executables and variables. Now uses runtime guard registry check.
 - `/export` directive now recognized by grammar context detection - added missing `export` keyword to `DirectiveKind` enum. Export filtering now works correctly for namespace imports.
 - `/export { * }` wildcard syntax now parses correctly - added `*` as valid export identifier
 - Module tests updated to use current `/export { name }` and `/exe @func() = \`...\`` syntax

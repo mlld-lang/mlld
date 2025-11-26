@@ -14,6 +14,7 @@ export async function evaluateExport(
     const filePath = env.getCurrentFilePath();
     const entries: ExportManifestEntry[] = [];
     let hasWildcard = false;
+    const guardRegistry = env.getGuardRegistry();
 
     for (const node of exportNodes) {
       const identifier = node?.identifier ?? '';
@@ -25,7 +26,8 @@ export async function evaluateExport(
       }
 
       const location = astLocationToSourceLocation(node?.location, filePath);
-      const kind = node?.valueType === 'guardExport' ? 'guard' : 'variable';
+      const isGuard = guardRegistry.getByName(identifier) !== undefined;
+      const kind = isGuard ? 'guard' : 'variable';
       entries.push({ name: identifier, location, kind });
     }
 
