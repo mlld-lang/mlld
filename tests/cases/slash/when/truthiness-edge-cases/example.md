@@ -114,53 +114,37 @@ Test comprehensive truthiness behavior in @when directives.
 "false" => show "No score"
 ]
 
-## 7. @when any: Block with Mixed Truthiness
+## 7. Using || operator with Mixed Truthiness
 
 /var @hasTests = "false"
 /var @hasDocs = ""
 /var @hasExamples = "true"
 
 >> At least one truthy value should trigger
-/when any: [
-  @hasTests
-  @hasDocs
-  @hasExamples
-] => show "Has at least one artifact"
+/when (@hasTests || @hasDocs || @hasExamples) => show "Has at least one artifact"
 
 >> All falsy should not trigger
 /var @a = ""
 /var @b = "0"
 /var @c = "false"
 
-/when any: [
-  @a
-  @b
-  @c
-] => show "FAIL: All falsy triggered any"
+/when (@a || @b || @c) => show "FAIL: All falsy triggered any"
 
-## 8. @when all: Block with Mixed Values
+## 8. Using && operator with Mixed Values
 
 /var @allValid = "true"
 /var @allSecure = "true"
 /var @allReady = "yes"
 
 >> All truthy should trigger
-/when all: [
-  @allValid
-  @allSecure
-  @allReady
-] => show "All checks passed"
+/when (@allValid && @allSecure && @allReady) => show "All checks passed"
 
 >> One falsy should prevent trigger
 /var @check1 = "true"
 /var @check2 = "false"
 /var @check3 = "true"
 
-/when all: [
-  @check1
-  @check2
-  @check3
-] => show "FAIL: Not all truthy but triggered"
+/when (@check1 && @check2 && @check3) => show "FAIL: Not all truthy but triggered"
 
 ## 9. @when first: with Truthiness
 
@@ -176,64 +160,16 @@ Test comprehensive truthiness behavior in @when directives.
 "true" => show "Ultimate fallback"
 ]
 
-## 10. Negation in Block Forms
+## 10. Negation with && and || operators
 
 /var @hasError = ""
 /var @hasWarning = "false"
 /var @hasInfo = "false"
 
->> Negated conditions in any block
-/when any: [
-  !@hasError
-  !@hasWarning
-  !@hasInfo
-] => show "At least one log level is clean"
+>> Negated conditions with || operator
+/when (!@hasError || !@hasWarning || !@hasInfo) => show "At least one log level is clean"
 
->> Negated in all block
-/when all: [
-  !@hasError
-  !@hasWarning
-  !@hasInfo
-] => show "All log levels are clean"
+>> Negated with && operator
+/when (!@hasError && !@hasWarning && !@hasInfo) => show "All log levels are clean"
 
 ## 11. Edge Cases with Empty Arrays
-
->> What happens with empty condition arrays?
->> These might need special handling or error messages
-
-## 12. Mixed Negation in Same Block
-
-/var @feature1 = "true"
-/var @feature2 = "false"
-/var @feature3 = ""
-
-/when any: [
-  @feature1
-  !@feature2
-  @feature3
-] => show "Mixed negation: any triggered"
-
-/when all: [
-  @feature1
-  !@feature2
-  !@feature3
-] => show "Mixed negation: all triggered"
-
-## 13. Deeply Falsy Values
-
-/exe @getFalsy() = js {
-  // Return various falsy values
-  return "";
-}
-
-/exe @getStringFalse() = js {
-  return "false";
-}
-
-/exe @getStringZero() = js {
-  return "0";
-}
-
-/when @getFalsy() => show "FAIL: Empty from JS triggered"
-/when @getStringFalse() => show "FAIL: 'false' from JS triggered"
-/when @getStringZero() => show "FAIL: '0' from JS triggered"

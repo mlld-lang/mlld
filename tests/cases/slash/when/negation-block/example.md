@@ -4,10 +4,5 @@
   "experimental": "false"
 }
 
-# Testing negation in block form
-
-/when any: [
-  !@features.darkMode
-  !@features.experimental  
-  @features.analytics
-] => show "At least one condition is true"
+# Testing negation with || operator
+/when (!@features.darkMode || !@features.experimental || @features.analytics) => show "At least one condition is true"

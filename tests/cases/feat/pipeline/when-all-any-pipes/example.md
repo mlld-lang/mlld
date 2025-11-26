@@ -1,4 +1,4 @@
->> Test pipes in /when all and /when any actions
+>> Test pipes with && and || operators in /when actions
 
 /exe @toUpper(input) = js { return input.toUpperCase() }
 /exe @addBrackets(input) = js { return "[" + input + "]" }
@@ -7,18 +7,18 @@
 /var @hasPermission = true
 /var @isActive = false
 
->> Test 1: When all with piped action
-/when all [@isValid @hasPermission] => show "all conditions met" | @toUpper | @addBrackets
+>> Test 1: When with && operator and piped action
+/when (@isValid && @hasPermission) => show "all conditions met" | @toUpper | @addBrackets
 
->> Test 2: When any with piped action  
-/when any [@isActive @hasPermission] => show "at least one true" | @toUpper
+>> Test 2: When with || operator and piped action  
+/when (@isActive || @hasPermission) => show "at least one true" | @toUpper
 
->> Test 3: When all with implicit var and pipes
+>> Test 3: When with && operator, implicit var and pipes
 /var @data = "process"
-/when all [@isValid @hasPermission] => @result1 = @data | @toUpper | @addBrackets
+/when (@isValid && @hasPermission) => @result1 = @data | @toUpper | @addBrackets
 /show @result1
 
->> Test 4: When any with function call and pipes
+>> Test 4: When with || operator, function call and pipes
 /exe @getMessage() = js { return "message" }
-/when any [@isActive @isValid] => @result2 = @getMessage() | @toUpper | @addBrackets
+/when (@isActive || @isValid) => @result2 = @getMessage() | @toUpper | @addBrackets
 /show @result2
