@@ -555,6 +555,16 @@ export async function evaluateExecInvocation(
       'isNull',
       'isDefined'
     ];
+    const typeCheckingMethods: TypeCheckingMethod[] = [
+      'isArray',
+      'isObject',
+      'isString',
+      'isNumber',
+      'isBoolean',
+      'isNull',
+      'isDefined'
+    ];
+    const isTypeCheckingBuiltin = typeCheckingMethods.includes(commandName as TypeCheckingMethod);
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
       let objectValue: any;
@@ -565,10 +575,10 @@ export async function evaluateExecInvocation(
         const objectRef = commandRefWithObject.objectReference;
         objectVar = env.getVariable(objectRef.identifier);
 
-        // Special handling for isDefined - return false for missing variables
         if (!objectVar) {
-          if (commandName === 'isDefined') {
-            return createEvalResult(false, env);
+          if (isTypeCheckingBuiltin) {
+            const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined);
+            return createEvalResult(typeCheckResult, env);
           }
           throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
         }
@@ -582,9 +592,9 @@ export async function evaluateExecInvocation(
             if (typeof objectValue === 'object' && objectValue !== null) {
               objectValue = (objectValue as any)[field.value];
             } else {
-              // Special handling for isDefined - return false for non-object field access
-              if (commandName === 'isDefined') {
-                return createEvalResult(false, env);
+              if (isTypeCheckingBuiltin) {
+                const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined);
+                return createEvalResult(typeCheckResult, env);
               }
               throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
             }
@@ -606,9 +616,9 @@ export async function evaluateExecInvocation(
 
       // Fallback if we still don't have an object value
       if (typeof objectValue === 'undefined') {
-        // Special handling for isDefined - return false for undefined values
-        if (commandName === 'isDefined') {
-          return createEvalResult(false, env);
+        if (isTypeCheckingBuiltin) {
+          const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, objectValue);
+          return createEvalResult(typeCheckResult, env);
         }
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
