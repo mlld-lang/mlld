@@ -1,0 +1,5 @@
+[FILE] ./output.md (34 bytes)
+[FILE] ./data.json (58 bytes)
+[FILE] ./page.html (33 bytes)
+[FILE] ./config.yaml (58 bytes)
+[FILE] ./content.txt (34 bytes)

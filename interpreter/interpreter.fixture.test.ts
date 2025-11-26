@@ -36,7 +36,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     private documentBuffer: string[] = [];
     private stdoutBuffer: string[] = [];
     private stderrBuffer: string[] = [];
-    constructor(private outRoot: string, private fs: MemoryFileSystem) {}
+    constructor(private outRoot: string, private fs: MemoryFileSystem, private logFileOps = false) {}
     
     handleEffect(effect: Effect): void {
       switch (effect.type) {
@@ -58,6 +58,15 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           if (effect.path) {
             const mapped = this.mapPath(effect.path);
             this.fs.writeFile(mapped, effect.content).catch(() => {/* noop */});
+            
+            // Log file operations to stderr for test validation when enabled
+            if (this.logFileOps) {
+              // Format: [FILE] path/to/file.ext (nnn bytes)
+              const byteCount = effect.content.length;
+              const logMessage = `[FILE] ${effect.path} (${byteCount} bytes)
+`;
+              this.stderrBuffer.push(logMessage);
+            }
           }
           break;
       }
@@ -1299,7 +1308,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
           
           // For error fixtures, expect interpretation to fail and validate error format
-          const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem);
+          // Enable file operation logging for /output directive tests
+          const enableFileLogging = fixture.name.includes('slash/output/');
+          const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem, enableFileLogging);
           let caughtError: any = null;
           try {
             await interpret(fixture.input, {
@@ -1483,7 +1494,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               .mockImplementation(async () => '/var @value = "cached angle from fixture"');
           }
 
-          const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem);
+          // Enable file operation logging for /output directive tests
+          const enableFileLogging = fixture.name.includes('slash/output/');
+          const effectHandler = new TestRedirectEffectHandler('/tmp-tests', fileSystem, enableFileLogging);
           let result: string;
           try {
             // For valid fixtures, expect successful interpretation
