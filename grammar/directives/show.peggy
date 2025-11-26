@@ -191,6 +191,25 @@ SlashShow
         'foreach'
       );
     }
+  // Error: Multiple arguments - must come EARLY to catch before partial matches
+  / DirectiveContext "/show" (_ DataLabelList)? _ (
+      // Match common first argument patterns
+      TemplateCore / UnifiedReference / AlligatorExpression / PathExpression / "\"" $([^"]*) "\""
+    ) HWS !"|" !">>" !"<<" !"as " !"under " &(
+      // Followed by another argument-like token (within same line)
+      "@" / "\"" / "'" / "`" / "<" / "[" / [a-zA-Z0-9]
+    ) {
+      helpers.mlldError(
+        "Multiple arguments in /show directive. The /show directive accepts only a single argument.\n\n" +
+        "If you want to show multiple variables, use multiple /show directives:\n" +
+        "  /show @var1\n" +
+        "  /show @var2\n\n" +
+        "Or combine them in a template:\n" +
+        "  /show `@var1 @var2`",
+        "single argument",
+        location()
+      );
+    }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
   / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched double-bracketed path section', { content, rename, ending });
