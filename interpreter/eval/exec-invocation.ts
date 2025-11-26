@@ -1077,7 +1077,14 @@ export async function evaluateExecInvocation(
     let argValue: string;
     let argValueAny: any;
 
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[DEBUG ARG] Processing arg:', { isStructured: isStructuredValue(arg), argType: typeof arg, argKeys: arg && typeof arg === 'object' ? Object.keys(arg).slice(0, 5) : null });
+    }
+
     if (isStructuredValue(arg)) {
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[DEBUG ARG] StructuredValue detected:', { type: arg.type, dataType: typeof arg.data, isArray: Array.isArray(arg.data) });
+      }
       argValueAny = arg;
       argValue = asText(arg);
     } else if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
@@ -1411,7 +1418,7 @@ export async function evaluateExecInvocation(
         if (argValue !== undefined) {
           const paramVar = createParameterVariable({
             name: paramName,
-            value: argValue,
+            value: evaluatedArgs[i], // Use evaluatedArgs (preserves StructuredValue), not argValue (string)
             stringValue: argStringValue,
             originalVariable: originalVar,
             allowOriginalReuse,

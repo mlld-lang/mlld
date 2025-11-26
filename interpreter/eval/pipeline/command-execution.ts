@@ -737,6 +737,15 @@ export async function executeCommandVariable(
         const hasNativeStructuredInput =
           structuredInput && structuredInput.type && structuredInput.type !== 'text';
 
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[DEBUG isPipelineParam]:', {
+            paramName,
+            structuredInputType: structuredInput?.type,
+            hasNative: hasNativeStructuredInput,
+            textValuePreview: textValue?.substring(0, 50)
+          });
+        }
+
         if (hasNativeStructuredInput) {
           const typedVar = createTypedPipelineVariable(paramName, structuredInput.data, textValue);
           assignPipelineParameter(execEnv, {
