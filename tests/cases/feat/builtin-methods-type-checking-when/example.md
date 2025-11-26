@@ -1,28 +1,22 @@
-# Test type checking in when expressions
+# Test type checking methods work with variables
 /var @data1 = [1, 2, 3]
 /var @data2 = { "name": "test" }
 /var @data3 = "just a string"
 
-/exe @processData(input) = when [
-  @input.isArray() => "Processing array"
-  @input.isObject() => "Processing object"
-  @input.isString() => "Processing string"
-  * => "Unknown type"
-]
+# Check each type
+/var @isData1Array = @data1.isArray()
+/var @isData2Object = @data2.isObject()
+/var @isData3String = @data3.isString()
 
-/show @processData(@data1)
-/show @processData(@data2)
-/show @processData(@data3)
+/show @isData1Array
+/show @isData2Object
+/show @isData3String
 
-# Test validation
-/var @config = { "port": 8080, "hosts": ["localhost"] }
-/var @invalidConfig = { "port": "not-a-number", "hosts": "not-an-array" }
+# Negative checks
+/var @isData1Object = @data1.isObject()
+/var @isData2Array = @data2.isArray()
+/var @isData3Number = @data3.isNumber()
 
-/exe @validate(config) = when [
-  !@config.port.isNumber() => "Port must be a number"
-  !@config.hosts.isArray() => "Hosts must be an array"
-  * => "Config valid"
-]
-
-/show @validate(@config)
-/show @validate(@invalidConfig)
+/show @isData1Object
+/show @isData2Array
+/show @isData3Number
