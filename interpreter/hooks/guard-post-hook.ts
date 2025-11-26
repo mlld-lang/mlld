@@ -215,6 +215,16 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     }
 
     const streamingActive = Boolean(operation?.metadata && (operation.metadata as any).streaming);
+    if (process.env.MLLD_DEBUG_GUARDS === '1') {
+      try {
+        console.error('[guard-post-hook] streaming metadata', {
+          streamingFlag: (operation.metadata as any)?.streaming,
+          operation: summarizeOperation(operation)
+        });
+      } catch {
+        // ignore debug logging failures
+      }
+    }
     if (streamingActive && (perInputCandidates.length > 0 || operationGuards.length > 0)) {
       throw new GuardError(
         [

@@ -207,6 +207,13 @@ export class PipelineStateMachine {
     this.stage0BaseOutput = input;
     this.stage0BaseOutput = input;
 
+    // Short-circuit empty pipelines
+    if (this.totalStages === 0) {
+      this.state.status = 'COMPLETED';
+      this.recordEvent({ type: 'PIPELINE_COMPLETE', output: input });
+      return { type: 'COMPLETE', output: input };
+    }
+
     // Start first stage
     this.recordEvent({ type: 'STAGE_START', stage: 0, input });
     
