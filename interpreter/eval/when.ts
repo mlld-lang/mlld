@@ -302,28 +302,22 @@ async function evaluateWhenBlock(
         break;
         
       case 'all':
-        // all: modifier requires a block action
-        if (!node.values.action) {
-          throw new MlldConditionError(
-            'Invalid @when syntax: \'all:\' modifier requires a block action. Use either @when all: [...] => show "action" OR use a bare @when for individual actions',
-            'all',
-            node.location
-          );
-        }
-        result = await evaluateAllMatches(conditions, childEnv, variableName, node.values.action);
-        break;
-        
+        // 'all' modifier has been removed - this should never be reached
+        throw new MlldConditionError(
+          'The \'all\' modifier has been removed. Use the && operator instead.\n' +
+          'Example: /when (@cond1 && @cond2) => action',
+          'all',
+          node.location
+        );
+
       case 'any':
-        // any: modifier requires a block action
-        if (!node.values.action) {
-          throw new MlldConditionError(
-            'Invalid @when syntax: \'any:\' modifier requires a block action. Use @when any: [...] => show "action"',
-            'any',
-            node.location
-          );
-        }
-        result = await evaluateAnyMatch(conditions, childEnv, variableName, node.values.action);
-        break;
+        // 'any' modifier has been removed - this should never be reached
+        throw new MlldConditionError(
+          'The \'any\' modifier has been removed. Use the || operator instead.\n' +
+          'Example: /when (@cond1 || @cond2) => action',
+          'any',
+          node.location
+        );
         
       case 'default':
         // Bare @when behavior depends on whether there's a block action

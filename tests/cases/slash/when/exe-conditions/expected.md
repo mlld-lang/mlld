@@ -4,10 +4,10 @@ This should appear
 ## Test 2: Block with first modifier
 
 Development mode
-## Test 3: any modifier
+## Test 3: || operator (replacing any modifier)
 
 Package manager found
 
-## Test 4: all modifier
+## Test 4: bare when block with individual actions
 Node.js installed
 npm installed

@@ -5,6 +5,19 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc72]
+
+### Added
+- Type-checking builtin methods: `.isArray()`, `.isObject()`, `.isString()`, `.isNumber()`, `.isBoolean()`, `.isNull()`, `.isDefined()` return booleans for conditional logic ([#414](https://github.com/mlld-lang/mlld/issues/414)). Note: `.isDefined()` safely returns `false` for missing variables or fields without throwing.
+- Test infrastructure for `/output` directive file operations - enables validation of file writes in fixture tests ([#340](https://github.com/mlld-lang/mlld/issues/340))
+
+### Fixed
+- Method chaining after array access now works: `@msg.split("_")[0].toUpperCase()` ([#408](https://github.com/mlld-lang/mlld/issues/408))
+- `mlld init` is now path-aware - selecting "llm/modules" while already in that directory no longer creates nested paths ([#453](https://github.com/mlld-lang/mlld/issues/453))
+
+### Removed
+- Grammar cleanup: Removed undocumented `when any` and `when all` modifiers. Use `&&` and `||` operators for AND/OR logic in conditions.
+
 ## [2.0.0-rc71]
 
 ### Fixed

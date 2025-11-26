@@ -4,8 +4,4 @@
 /var @isModerator = ""
 /var @isVerified = ""
 
-/when any: [
-  @isAdmin
-  @isModerator
-  @isVerified
-] => show "Access granted"
+/when (@isAdmin || @isModerator || @isVerified) => show "Access granted"

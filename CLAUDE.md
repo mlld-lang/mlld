@@ -2,18 +2,16 @@
 
 repo: github.com/mlld-lang/mlld
 
-## Agents
-Agents dispatched with the 'Task' tool can sometimes perform work you did not intend and the results can be counterproductive or even destructive. Please do not send Task agents on tasks without having a discussion with the user first.
-
 ## Style Guide
 - **Name convention**: Always write "mlld" in all lowercase when referring to the language (not "MLLD", "Mlld", or "MllD")
 
 ## Reduce Clutter
-- Use /tmp for temporary test files and throwaway scripts
+- Use tmp/ for temporary test files and throwaway scripts
 - Edit existing files rather than writing new 'revised' versions of the same file.
 
 ## Git Guidelines
 - **NEVER EVER USE `git add -A`** ALWAYS add the specific files to be committed
+- NEVER use `git clean -fd` -- we use uncommitted files for temporary project files and scripts, etc.
 
 ## Module System (JavaScript/TypeScript)
 - **Package Type**: ESM-first (`"type": "module"`) - all `.js` files are ES modules
