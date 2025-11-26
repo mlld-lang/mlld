@@ -1096,9 +1096,10 @@ export async function evaluateShow(
   }
 
   // Apply tail pipeline when requested (used by inline /show in templates)
-  if ((directive as any).values?.withClause?.pipeline && (directive as any).meta?.applyTailPipeline) {
+  const tailPipeline = (directive as any).values?.withClause?.pipeline;
+  if (Array.isArray(tailPipeline) && tailPipeline.length > 0 && (directive as any).meta?.applyTailPipeline) {
     const { processPipeline } = await import('./pipeline/unified-processor');
-    const pipeline = (directive as any).values.withClause.pipeline;
+    const pipeline = tailPipeline;
     const processed = await processPipeline({
       value: content,
       env,

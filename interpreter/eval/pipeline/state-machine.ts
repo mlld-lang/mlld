@@ -122,10 +122,15 @@ export class PipelineStateMachine {
   private readonly maxGlobalRetriesPerStage = 20;
   private readonly totalStages: number;
   private readonly isStage0Retryable: boolean;
+  private stage0Exhausted: boolean = false;
+  private stage0BaseOutput: string | null = null;
+  private readonly hasStage0Replay: boolean;
+  private stage0RetryConsumed: boolean = false;
 
-  constructor(totalStages: number, isStage0Retryable: boolean = false) {
+  constructor(totalStages: number, isStage0Retryable: boolean = false, hasStage0Replay: boolean = false) {
     this.totalStages = totalStages;
     this.isStage0Retryable = isStage0Retryable;
+    this.hasStage0Replay = hasStage0Replay;
     this.state = this.initialState();
   }
 
@@ -199,6 +204,8 @@ export class PipelineStateMachine {
     this.state.currentStage = 0;
     this.state.currentInput = input;
     this.state.baseInput = input;
+    this.stage0BaseOutput = input;
+    this.stage0BaseOutput = input;
 
     // Start first stage
     this.recordEvent({ type: 'STAGE_START', stage: 0, input });
@@ -337,13 +344,36 @@ export class PipelineStateMachine {
     
     // Special case: Stage 0 self-retry (synthetic source retrying itself)
     if (stage === 0 && targetStage === 0) {
-      if (!this.isStage0Retryable) {
-        return this.handleAbort('Cannot retry stage 0: input is not a function. Make the source a function to enable retries.');
+      // Non-replayable source: consume retry once and return base input without looping
+      if (!this.hasStage0Replay) {
+        // Only allow a single no-op retry; subsequent requests short-circuit
+        if (this.stage0RetryConsumed) {
+          return this.advanceToNextStage(this.state.baseInput);
+        }
+        this.stage0RetryConsumed = true;
+        this.stage0Exhausted = true;
+        // Do not increment global retry count; just record the request
+        this.recordEvent({
+          type: 'STAGE_RETRY_REQUEST',
+          requestingStage: 0,
+          targetStage: 0,
+          contextId: 'stage0-self-retry'
+        });
+        // Treat base input as the stage 0 output and continue
+        this.recordEvent({
+          type: 'STAGE_SUCCESS',
+          stage: 0,
+          output: this.state.baseInput,
+          contextId: 'stage0-self-retry'
+        });
+        this.state.currentStage = 0;
+        this.state.currentInput = this.state.baseInput;
+        return this.advanceToNextStage(this.state.baseInput);
       }
       
       // Use simplified retry tracking for stage 0
       const globalRetries = this.state.globalStageRetryCount.get(0) || 0;
-      if (globalRetries >= this.maxGlobalRetriesPerStage) {
+      if (globalRetries >= this.maxGlobalRetriesPerStage || this.stage0Exhausted) {
         return this.handleAbort(`Stage 0 exceeded global retry limit (${this.maxGlobalRetriesPerStage} attempts).`);
       }
       
@@ -585,6 +615,10 @@ export class PipelineStateMachine {
     // Global attempt count for this stage
     const globalStageRetries = this.state.globalStageRetryCount.get(stage) || 0;
     const attempt = globalStageRetries + 1;
+    if (!context) {
+      // Keep @pipeline.try in sync with actual executions even without an active retry context
+      contextAttempt = attempt;
+    }
     
     // Total retries across all stages
     let totalRetries = 0;
@@ -636,5 +670,41 @@ export class PipelineStateMachine {
 
   private recordEvent(event: PipelineEvent): void {
     this.state.events.push(event);
+  }
+
+  /**
+   * Advance to the next stage without creating a retry context.
+   * Used for non-replayable stage-0 retries to avoid spinning.
+   */
+  private advanceToNextStage(output: string): NextStep {
+    const nextStage = this.state.currentStage + 1;
+
+    if (output === '') {
+      this.state.status = 'COMPLETED';
+      this.recordEvent({ type: 'PIPELINE_COMPLETE', output: '' });
+      return { type: 'COMPLETE', output: '' };
+    }
+
+    if (nextStage >= this.totalStages) {
+      this.state.status = 'COMPLETED';
+      this.recordEvent({ type: 'PIPELINE_COMPLETE', output });
+      return { type: 'COMPLETE', output };
+    }
+
+    this.state.currentStage = nextStage;
+    this.state.currentInput = output;
+    this.recordEvent({
+      type: 'STAGE_START',
+      stage: nextStage,
+      input: output,
+      contextId: this.state.activeRetryContext?.id
+    });
+
+    return {
+      type: 'EXECUTE_STAGE',
+      stage: nextStage,
+      input: output,
+      context: this.buildStageContext(nextStage)
+    };
   }
 }

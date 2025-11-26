@@ -179,7 +179,7 @@ export async function processPipeline(
     });
   }
   
-  // Normalize pipeline - keep original stages (synthetic source handled elsewhere if needed)
+  // Keep pipeline stages as defined; retryability handled by executor/state-machine
   const normalizedPipeline = detected.pipeline;
 
   // Partition: attach builtin effect commands to the preceding functional stage

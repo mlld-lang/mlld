@@ -42,11 +42,12 @@ SlashShow
       // Apply unified pipeline processing
       helpers.processPipelineEnding(content.values, content.raw, meta, ending);
 
-      // Add withClause from tail if present
-      if (tail) {
-        content.values.withClause = tail;
-        content.raw.withClause = tail;
-        meta.withClause = tail;
+      // Add withClause from tail (either immediate tail or ending tail) if present
+      const withClause = tail || ending?.tail;
+      if (withClause) {
+        content.values.withClause = withClause;
+        content.raw.withClause = withClause;
+        meta.withClause = withClause;
       }
 
       if (labelInfo) {
@@ -107,11 +108,12 @@ SlashShow
       // Apply unified pipeline processing
       helpers.processPipelineEnding(values, raw, meta, ending);
       
-      // Add withClause from tail if present
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      // Add withClause from tail (either immediate tail or ending tail) if present
+      const withClause = tail || ending?.tail;
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
       }
       
       return helpers.createStructuredDirective(
@@ -369,6 +371,14 @@ SlashShow
       // Apply unified pipeline processing (consolidates with when.peggy)
       helpers.processPipelineEnding(values, raw, meta, ending);
       
+      // Preserve withClause (guards/pipeline/stream) from ending tail modifiers
+      const withClause = ending?.tail;
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showTemplate', 
@@ -443,6 +453,14 @@ SlashShow
       // Add comment from ending if present
       if (ending.comment) {
         meta.comment = ending.comment;
+      }
+      
+      // Preserve withClause (guards/pipeline/stream) from ending tail modifiers
+      const withClause = ending?.tail;
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
       }
       
       return helpers.createStructuredDirective(
@@ -538,6 +556,14 @@ SlashShow
       
       // Apply unified pipeline processing for ending tail (adds values.pipeline/meta.withClause)
       helpers.processPipelineEnding(values, raw, meta, ending);
+      
+      // Preserve withClause (guards/pipeline/stream) from ending tail modifiers
+      const withClause = ending?.tail;
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
 
       // Determine subtype based on invocation type
       const subtype = isExecInvocation ? 'showInvocation' : 'showVariable';
@@ -629,6 +655,14 @@ SlashShow
         meta.comment = ending.comment;
       }
       
+      // Preserve withClause (guards/pipeline/stream) from ending tail modifiers
+      const withClause = ending?.tail;
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showPath', 
@@ -704,6 +738,14 @@ SlashShow
       // Add comment from ending if present
       if (ending.comment) {
         meta.comment = ending.comment;
+      }
+      
+      // Preserve withClause (guards/pipeline/stream) from ending tail modifiers
+      const withClause = ending?.tail;
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
       }
       
       return helpers.createStructuredDirective(

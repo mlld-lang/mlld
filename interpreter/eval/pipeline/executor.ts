@@ -125,7 +125,11 @@ export class PipelineExecutor {
     }
     
     // Use simplified state machine
-    this.stateMachine = new PipelineStateMachine(pipeline.length, isRetryable);
+    this.stateMachine = new PipelineStateMachine(
+      pipeline.length,
+      isRetryable,
+      Boolean(sourceFunction)
+    );
     this.pipeline = pipeline;
     this.env = env;
     this.format = format;
