@@ -170,6 +170,25 @@ export class InitModuleCommand {
         // Ignore errors loading config
       }
       
+      // Check if we're already in the configured modules directory
+      // If so, use current directory instead of creating nested paths
+      let projectRoot = process.cwd();
+      try {
+        const tempConfig = new ProjectConfig(process.cwd());
+        projectRoot = tempConfig.getProjectRoot();
+      } catch (error) {
+        // If no project root found, use cwd
+      }
+      
+      const absoluteModulesPath = path.resolve(projectRoot, localModulesPath);
+      const currentDir = process.cwd();
+      
+      // If current directory is within or is the modules path, use current directory
+      if (currentDir === absoluteModulesPath || currentDir.startsWith(absoluteModulesPath + path.sep)) {
+        // We're already in the modules directory, so use current directory
+        localModulesPath = '.';
+      }
+      
       // If we have a resolver path, we know exactly where to create it
       if (resolverPath && resolverPrefix) {
         const moduleFileName = suggestedModuleName + '.mld.md';
