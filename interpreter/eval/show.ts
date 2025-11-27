@@ -339,6 +339,51 @@ export async function evaluateShow(
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
 
+    // Handle field access BEFORE pipeline processing
+    // For VariableReferenceWithTail, fields are in variableNode.variable.fields
+    // For VariableReference, fields are in variableNode.fields
+    const fieldsToProcess = variableNode?.type === 'VariableReferenceWithTail'
+      ? (variableNode as any).variable?.fields
+      : variableNode?.fields;
+
+    if (fieldsToProcess && fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
+      const { accessField } = await import('../utils/field-access');
+      for (const field of fieldsToProcess) {
+        // Handle variableIndex type - need to resolve the variable first
+        if (field.type === 'variableIndex') {
+          const indexVar = env.getVariable(field.value);
+          if (!indexVar) {
+            const { FieldAccessError } = await import('@core/errors');
+            throw new FieldAccessError(`Variable not found for index: ${field.value}`,
+              { baseValue: value, fieldAccessChain: [], failedAtIndex: 0, failedKey: String(field.value) },
+              { sourceLocation: directiveLocation, env }
+            );
+          }
+          // Get the actual value to use as index
+          let indexValue = indexVar.value;
+          if (isTextLike(indexVar)) {
+            indexValue = indexVar.value;
+          }
+          // Create a new field with the resolved value
+          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+          const fieldResult = await accessField(value, resolvedField, {
+            preserveContext: true,
+            env,
+            sourceLocation: directiveLocation
+          });
+          value = (fieldResult as any).value;
+        } else {
+          const fieldResult = await accessField(value, field, {
+            preserveContext: true,
+            env,
+            sourceLocation: directiveLocation
+          });
+          value = (fieldResult as any).value;
+        }
+        if (value === undefined) break;
+      }
+    }
+
     // Legacy compatibility: only apply this path when not using unified invocation tail
     if (!(directive as any)?.values?.invocation) {
       if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
@@ -375,46 +420,7 @@ export async function evaluateShow(
         valueKeys: value && typeof value === 'object' ? Object.keys(value) : undefined
       });
     }
-    
-    // Handle field access if present in the variable node
-    if (variableNode.fields && variableNode.fields.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
-      const { accessField } = await import('../utils/field-access');
-      for (const field of variableNode.fields) {
-        // Handle variableIndex type - need to resolve the variable first
-        if (field.type === 'variableIndex') {
-          const indexVar = env.getVariable(field.value);
-          if (!indexVar) {
-            const { FieldAccessError } = await import('@core/errors');
-            throw new FieldAccessError(`Variable not found for index: ${field.value}`,
-              { baseValue: value, fieldAccessChain: [], failedAtIndex: 0, failedKey: String(field.value) },
-              { sourceLocation: directiveLocation, env }
-            );
-          }
-          // Get the actual value to use as index
-          let indexValue = indexVar.value;
-          if (isTextLike(indexVar)) {
-            indexValue = indexVar.value;
-          }
-          // Create a new field with the resolved value
-          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = await accessField(value, resolvedField, { 
-            preserveContext: true,
-            env,
-            sourceLocation: directiveLocation
-          });
-          value = (fieldResult as any).value;
-        } else {
-          const fieldResult = await accessField(value, field, { 
-            preserveContext: true,
-            env,
-            sourceLocation: directiveLocation
-          });
-          value = (fieldResult as any).value;
-        }
-        if (value === undefined) break;
-      }
-    }
-    
+
     // Check if the value contains unevaluated directives
     if (!isStructuredValue(value) && hasUnevaluatedDirectives(value)) {
       // Evaluate any embedded directives
