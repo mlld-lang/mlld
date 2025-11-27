@@ -9,7 +9,7 @@
   <RULE_5_INTERPOLATION_CONTEXTS> .. Backticks/double-colon/triple-colon, quotes, and command contexts.
   <RULE_6_FIELD_ACCESS> ............ Dot + index access for objects/arrays; array slicing [start:end]; .data/.json parse JSON strings.
   <RULE_7_PARAMETERIZED_CONTENT> ... Reusable templates and functions via /exe.
-  <RULE_8_FILE_LOADING> ............ Angle brackets load file contents; globs; metadata fields; safety.
+  <RULE_8_FILE_LOADING> ............ Angle brackets load file contents; globs; AST selectors with wildcards/type-filters/name-lists; metadata.
   <RULE_9_IMPORTS> ................. Modules, paths, registries; "as namespace."
   <RULE_10_WHEN_OVERVIEW> .......... When forms (bare, first, simple) – full detail in CONTROL_FLOW.
   <RULE_11_ITERATION_OVERVIEW> ..... foreach and /for – full detail in CONTROL_FLOW.
@@ -18,7 +18,7 @@
 <SYNTAX>
   <VARIABLES> ...................... Types, primitives, command results, code execution.
   <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
-  <FILE_LOADING> ................... Angle brackets, metadata fields, detection rules.
+  <FILE_LOADING> ................... Angle brackets, AST selectors (wildcards/types/names), metadata, glob behavior.
   <FILE_LOADING_GLOBS> ............. Glob patterns, array access, "as" templates, common patterns.
   <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
   <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects, parallel groups with ||.
@@ -114,7 +114,7 @@ Create with `/var @name = "Alice"`. Reference with `@name` in templates/commands
 ```mlld
 /var @name = "Alice"
 /show `Hello @name!`
-/run {echo "User: @name"}
+/run cmd {echo "User: @name"}
 /run js (@name) { console.log("Hi", name) }
 ```
 
@@ -124,8 +124,8 @@ Create with `/var @name = "Alice"`. Reference with `@name` in templates/commands
 Every command needs braces. Use language specifiers when needed. Define executables with `/exe`.
 
 ```mlld
-❌ /run echo "hello"
-✅ /run {echo "hello"}
+❌ /run cmd echo "hello"
+✅ /run cmd {echo "hello"}
 
 # Language specifiers.
 /run js {console.log("hi")}
@@ -145,7 +145,7 @@ Only these produce output: `/show`, `/run`, `/output`. Everything else mutates s
 ```mlld
 /var @secret = "hidden"      # no output
 /show `Visible`
-/run {echo "Also visible"}
+/run cmd {echo "Also visible"}
 ```
 
 </RULE_4_OUTPUT_SOURCES>
@@ -189,7 +189,7 @@ Line 2: @other
 
 >> Double quotes (single-line only)
 /var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+/run cmd {echo "Processing @file"}
 
 >> Triple-colon (Discord/social only)
 /var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
@@ -531,14 +531,48 @@ Angle brackets load, quotes store literal paths. Field access and globs are supp
 AST selection: add `{ ... }` inside the angle brackets to pull specific definitions or usages.
 
 ```mlld
-/var @handlers = <src/service.ts { handleRequest, (logger.warn) }>
-/var @templated = <src/**/*.py { fetch_user }> as "## <>.name\n<>.code"
+# Exact names
+/var @user = <src/service.ts { createUser }>
+/var @callers = <src/**/*.ts { (logger.warn) }>
+
+# Wildcards
+/var @handlers = <api.ts { handle* }>          # prefix: handleRequest, handleError
+/var @validators = <api.ts { *Validator }>     # suffix: emailValidator, phoneValidator
+/var @requests = <api.ts { *Request* }>        # contains: getUserRequest, createUserRequest
+
+# Type filters
+/var @funcs = <service.ts { *fn }>             # all functions/methods
+/var @vars = <service.ts { *var }>             # all variables/constants
+/var @classes = <service.ts { *class }>        # all classes
+/var @everything = <service.ts { * }>          # all top-level definitions
+
+# Name listing (returns string arrays, not code)
+/var @names = <api.ts { ?? }>                  # all definition names
+/var @funcNames = <api.ts { fn?? }>            # function names only
+/var @classNames = <api.ts { class?? }>        # class names only
+
+# Section listing (markdown)
+/var @headings = <guide.md # ??>               # all heading titles
+/var @h2s = <guide.md # ##??>                  # H2 headings only
+
+# Variable interpolation
+/var @type = "fn"
+/var @defs = <service.ts { *@type }>           # dynamic type filter
+/var @nameList = <service.ts { @type?? }>      # dynamic name listing
+
+# Usage patterns (find functions that USE matched symbols)
+/var @callers = <api.ts { (validateEmail) }>   # functions using validateEmail
+/var @serviceUsers = <api.ts { (*Service) }>   # functions using any *Service
 ```
 
-- Bare identifiers return matching definitions; parentheses return definitions that reference the name.
-- Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
-- Glob matches add a `file` property so you can trace the source path.
-- Patterns that miss return `null`, preserving the request order.
+Glob + name-list behavior:
+- Single file: `<file.ts { ?? }>` → plain array `["name1", "name2"]`
+- Glob pattern: `<**/*.ts { ?? }>` → per-file objects `[{ names: [...], file, relative, absolute }]`
+- Example: `/for @f in <**/*.py { class?? }> => show "@f.names.length classes in @f.relative"`
+
+Supported: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
+Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`, `trait`, `module`.
+Missing patterns return `null` preserving request order. Cannot mix content selectors with name-lists.
 
 Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
 
@@ -756,11 +790,11 @@ Parameter syntax:
 
 ```mlld
 # run (pipes only)
-/run {echo Hello | tr '[:lower:]' '[:upper:]'}
+/run cmd {echo Hello | tr '[:lower:]' '[:upper:]'}
 
 # run with stdin (avoids shell escaping)
 /var @data = '[{"name":"Alice"},{"name":"Bob"}]'
-/run { cat | jq '.[] | select(.name == "Alice")' } with { stdin: @data }
+/run cmd { cat | jq '.[] | select(.name == "Alice")' } with { stdin: @data }
 >> OR pipe sugar:
 /run @data | { cat | jq '.[] | select(.name == "Alice")' }
 
@@ -946,9 +980,27 @@ Forms:
 ]
 ```
 
+Local variables in when blocks:
+
+```mlld
+/when @mode: [
+  let @prefix = "Status:"
+  "active" => show "@prefix Active"
+  * => show "@prefix Unknown"
+]
+
+/exe @format(name) = when [
+  let @greeting = "Hello"
+  * => "@greeting @name!"
+]
+```
+
+`let` declares a variable scoped to the when block. It's evaluated before conditions are checked.
+
 Notes:
 
-* RHS uses action words (no `/show` slash): `show`, `@func()`, `@var = "x"`
+* RHS uses action words (no `/show` slash): `show`, `@func()`
+* Use `let @var = value` for local variables in when blocks (not `@var = value`)
 * `*` wildcard matches anything (catch-all)
 * `none` executes only if no conditions matched (must appear after all regular conditions, incompatible with `*`)
 * One action per line (repeat condition for multiple actions)
@@ -1436,7 +1488,7 @@ mlld publish my-module.mld.md --private --path lib/modules --pr
 
 ```mlld
 ❌ # inside shell trying to call @func
-/run {
+/run cmd {
   RESULT=$(@helper("x"))   # won't work
   echo $RESULT
 }
@@ -1493,7 +1545,7 @@ Guards protect data and operations. Label sensitive data, define policies:
   * => allow
 ]
 
-/run { echo @apiKey }                    # Blocked by guard
+/run cmd { echo @apiKey }                    # Blocked by guard
 
 Syntax: /guard [@name] TIMING LABEL = when [...]
 - TIMING: before, after, or always (required)

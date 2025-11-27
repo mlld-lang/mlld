@@ -81,11 +81,11 @@ export class OperatorTokenHelper {
         // We need to verify the dot is actually before it
         const sourceText = this.document.getText();
         const dotOffset = field.location.start.offset - 1;
-        
+
         // Verify there's actually a dot at this position
         if (sourceText[dotOffset] === '.') {
           const dotPosition = this.document.positionAt(dotOffset);
-          
+
           this.tokenBuilder.addToken({
             line: dotPosition.line,
             char: dotPosition.character,
@@ -93,15 +93,19 @@ export class OperatorTokenHelper {
             tokenType: 'operator',
             modifiers: []
           });
-          
+
+          // Check if this is a type-checking builtin method
+          const typeCheckMethods = ['isArray', 'isObject', 'isString', 'isNumber', 'isBoolean', 'isNull', 'isDefined'];
+          const isTypeCheckMethod = typeCheckMethods.includes(field.value);
+
           // Token for property name (field location already points to it)
           const propPosition = this.document.positionAt(field.location.start.offset);
           this.tokenBuilder.addToken({
             line: propPosition.line,
             char: propPosition.character,
             length: field.value.length,
-            tokenType: 'property',
-            modifiers: []
+            tokenType: isTypeCheckMethod ? 'function' : 'property',
+            modifiers: isTypeCheckMethod ? ['defaultLibrary'] : []
           });
         } else {
           // If no dot found, the location might be off - try to find it

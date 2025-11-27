@@ -1,8 +1,8 @@
-/var @post = <blog/post.md>
+/var @config = <settings.json>
 
-/show @post.ctx.fm.title                 >> Post title
-/show @post.ctx.fm.author                >> Author name
-/show @post.ctx.fm.tags                  >> Array of tags
+>> Direct field access on parsed JSON
+/show @config.json.apiUrl
+/show @config.json.users[0].email
 
->> Conditional processing
-/when @post.ctx.fm.published => show @post.content
+>> Raw content still available
+/show @config.content                    >> Raw JSON string

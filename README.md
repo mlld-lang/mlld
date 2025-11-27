@@ -76,7 +76,7 @@ npm install -g mlld
 /show `Hello @name!`                    # Display output
 /show {echo "System: @name logged in"}  # Run a command and display output
 /show js { console.log("Hello from JS"); "Done" }  # Run JS and display
-/run {echo "Hidden output"}             # Silent run (no document output unless using show/log/output)
+/run cmd {echo "Hidden output"}             # Silent run (no document output unless using show/log/output)
 ```
 
 Only `/show`, `/output`, and `/log` produce output. Everything else sets up state.
@@ -92,7 +92,7 @@ Review this PR against our style guide:
 Style: @codeStyle
 PR: @currentPR
 `
-/run {claude -p "@prompt"}
+/run cmd {claude -p "@prompt"}
 ```
 
 ### 3. Pipeline Refinement

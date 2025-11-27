@@ -1,7 +1,11 @@
-/exe @sum(values) = js {
-  if (!Array.isArray(values)) throw new Error('expected array input');
-  return values.reduce((total, value) => total + Number(value), 0);
-}
+/exe @upper(s) = js { return String(s).toUpperCase() }
 
-/var @total = for @n in [1, 2, 3, 4] => @n => | @sum
-/show @total
+# Directive form (streams as done; order not guaranteed)
+/for parallel @x in ["a","b","c","d"] => show @x
+
+# Cap override and pacing between task starts
+/for parallel(2, 1s) @n in [1,2,3,4] => show `Item: @n`
+
+# Collection form (preserves input order)
+/var @res = for parallel(2) @x in ["x","y","z"] => @upper(@x)
+/show @res

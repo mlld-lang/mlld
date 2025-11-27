@@ -16,7 +16,7 @@ Line 2: @other
 
 >> Double quotes (single-line only)
 /var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+/run cmd {echo "Processing @file"}
 
 >> Triple-colon (Discord/social only)
 /var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::

@@ -20,10 +20,11 @@ describe('Pipeline @ctx/@p and retry behavior', () => {
     expect(output).toContain('hint=null');
   });
 
-  it('disallows retry of stage 0 when source is a literal', async () => {
+  it('allows retry of stage 0 even when source is a literal', async () => {
     const failing = `/var @literal = \"text\"\n/exe @retryer(input) = when first [\n  @pipeline.try < 2 => retry \"x\"\n  * => @input\n]\n/var @out = @literal with { pipeline: [@retryer] }\n/show @out`;
 
-    await expect(testWithEffects(failing)).rejects.toThrow(/(Cannot retry stage 0|Stage 0 is not retryable)/i);
+    const { output } = await testWithEffects(failing);
+    expect(output.trim()).toBe('text');
   });
 
   it('supports negative index access on @p', async () => {

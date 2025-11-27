@@ -1,10 +1,11 @@
-import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenMatchNode, WhenConditionPair } from '@core/types/when';
+import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenMatchNode, WhenConditionPair, WhenEntry } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
-import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode } from '@core/types/when';
+import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isConditionPair } from '@core/types/when';
+import { VariableImporter } from './import/VariableImporter';
 import { evaluate } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
 import {
@@ -17,8 +18,44 @@ import {
   createObjectVariable
 } from '@core/types/variable';
 import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
+import type { LetAssignmentNode } from '@core/types/when';
 
 const DENIED_KEYWORD = 'denied';
+
+/**
+ * Helper to evaluate a let assignment and return updated environment
+ */
+async function evaluateLetAssignment(
+  entry: LetAssignmentNode,
+  env: Environment
+): Promise<Environment> {
+  let value: unknown;
+  // Check if value is a raw primitive or contains nodes
+  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+  const isRawPrimitive = firstValue === null ||
+    typeof firstValue === 'number' ||
+    typeof firstValue === 'boolean' ||
+    (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+  if (isRawPrimitive) {
+    value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+  } else {
+    const valueResult = await evaluate(entry.value, env);
+    value = valueResult.value;
+  }
+
+  const importer = new VariableImporter();
+  const variable = importer.createVariableFromValue(
+    entry.identifier,
+    value,
+    'let',
+    undefined,
+    { env }
+  );
+  const newEnv = env.createChild();
+  newEnv.setVariable(entry.identifier, variable);
+  return newEnv;
+}
 
 /**
  * Compares two values according to mlld's when comparison rules
@@ -155,14 +192,24 @@ async function evaluateWhenMatch(
   }
   
   // Create a child environment for the switch block
-  const childEnv = env.createChild();
-  
+  let childEnv = env.createChild();
+
+  // Process let assignments first to build up the environment
+  for (const entry of node.values.conditions) {
+    if (isLetAssignment(entry)) {
+      childEnv = await evaluateLetAssignment(entry, childEnv);
+    }
+  }
+
+  // Filter to only condition pairs for iteration
+  const conditionPairs = node.values.conditions.filter(isConditionPair);
+
   // Track if any non-none condition matched
   let anyNonNoneMatched = false;
-  
+
   try {
     // First pass: Check each non-none condition value against the expression result
-    for (const pair of node.values.conditions) {
+    for (const pair of conditionPairs) {
       // Skip none conditions in first pass
       if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
         continue;
@@ -222,7 +269,7 @@ async function evaluateWhenMatch(
     
     // Second pass: Handle none conditions if no non-none conditions matched
     if (!anyNonNoneMatched) {
-      for (const pair of node.values.conditions) {
+      for (const pair of conditionPairs) {
         // Only process none conditions in second pass
         if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
           if (pair.action) {
@@ -262,36 +309,45 @@ async function evaluateWhenBlock(
   env: Environment
 ): Promise<EvalResult> {
   const modifier = node.meta.modifier;
-  const conditions = node.values.conditions;
-  
+
   // For comparison-based modifiers (first, any, all), we need the expression to compare against
   let expressionNodes: BaseMlldNode[] | undefined;
-  
+
   // Store variable value if specified
   let originalValue: any;
   let variableName: string | undefined;
-  
-  
+
+
   if (node.values.variable && node.meta.hasVariable) {
     // The variable nodes contain the expression to evaluate
     expressionNodes = node.values.variable;
-    
-    
+
+
     // Extract variable name from the VariableReference node
     if (expressionNodes.length === 1 && expressionNodes[0].type === 'VariableReference') {
       const varRef = expressionNodes[0] as any;
       variableName = varRef.identifier;
-      
-      
+
+
       if (variableName) {
         // Store original value to restore later
         originalValue = env.hasVariable(variableName) ? env.getVariable(variableName) : undefined;
       }
     }
   }
-  
+
   // Create a child environment for the when block
-  const childEnv = env.createChild();
+  let childEnv = env.createChild();
+
+  // Process let assignments first to build up the environment
+  for (const entry of node.values.conditions) {
+    if (isLetAssignment(entry)) {
+      childEnv = await evaluateLetAssignment(entry, childEnv);
+    }
+  }
+
+  // Filter to only condition pairs for evaluation
+  const conditions = node.values.conditions.filter(isConditionPair);
   
   try {
     let result: EvalResult;

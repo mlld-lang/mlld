@@ -1,11 +1,13 @@
-/var @items = ["first", "second", "third", "fourth", "last"]
+/var @user = {"name": "Alice", "scores": [10, 20, 30]}
 
->> Basic slicing
-/show @items[0:3]                        >> ["first", "second", "third"]
-/show @items[2:]                         >> ["third", "fourth", "last"]
-/show @items[:3]                         >> ["first", "second", "third"]
+>> Object fields
+/show @user.name                         >> "Alice"
 
->> Negative indices
-/show @items[-2:]                        >> ["fourth", "last"]
-/show @items[:-1]                        >> ["first", "second", "third", "fourth"]
-/show @items[1:-1]                       >> ["second", "third", "fourth"]
+>> Array elements by index
+/show @user.scores[0]                     >> 10
+/show @user.scores[1]                     >> 20
+
+>> Nested access
+/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
+/show @config.db.host                    >> "localhost"
+/show @config.db.users[1]                 >> "guest"

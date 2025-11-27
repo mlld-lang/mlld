@@ -1,6 +1,5 @@
 # Test Explicit Module Export
 
-This tests a module with explicit @data module export.
+This tests a module with explicit /export directive.
 
 Greeting: Hello, World!
-Hidden function accessible: No

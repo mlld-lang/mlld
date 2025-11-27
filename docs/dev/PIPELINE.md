@@ -791,7 +791,7 @@ When StructuredValue pipeline inputs are used in string interpolation, they must
 
 ```mlld
 /exe @format() = {echo "Result: @input"}
-/run {echo "test"} with { pipeline: [@format] }
+/run cmd {echo "test"} with { pipeline: [@format] }
 # Should output "Result: test" not "Result: {"text":"test","type":"text"}"
 ```
 

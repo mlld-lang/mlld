@@ -1,14 +1,8 @@
-/var @file = <package.json>
+>> Find functions that use specific symbols
+/var @callers = <api.ts { (validateEmail) }>
 
->> Basic metadata
-/show @file.ctx.filename                 >> "package.json"
-/show @file.ctx.relative                 >> "./package.json" 
-/show @file.ctx.absolute                 >> Full path
+>> Find functions that use any wildcard-matched symbol
+/var @serviceUsers = <api.ts { (*Service) }>
 
->> Token counting
-/show @file.ctx.tokest                   >> Estimated tokens (fast)
-/show @file.ctx.tokens                   >> Exact tokens
-
->> Content access
-/show @file.content                      >> File contents (explicit)
-/show @file                              >> Same as above (implicit)
+>> Find functions that use any function
+/var @functionCallers = <api.ts { (*fn) }>

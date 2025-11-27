@@ -2,6 +2,6 @@
 
 This tests a module without explicit module export (auto-generated).
 
-Function 1: Function 1 output
-Function 2: Function 2 output
-Internal helper: Internal function output
+Var 1: Function 1 output
+Var 2: Function 2 output
+Internal var: Internal function output

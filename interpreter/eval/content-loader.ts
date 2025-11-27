@@ -7,7 +7,8 @@ import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-
 import { wrapLoadContentValue } from '../utils/load-content-structured';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
-import { extractAst, type AstResult } from './ast-extractor';
+import { extractAst, extractNames, hasNameListPattern, hasContentPattern, type AstResult, type AstPattern } from './ast-extractor';
+import { MlldDirectiveError } from '@core/errors';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
@@ -111,6 +112,118 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // AST extraction takes precedence for local files
   if (ast && actualSource.type === 'path') {
+    let astPatterns = ast as AstPattern[];
+
+    // Resolve variables in patterns (type-filter-var, name-list-var)
+    astPatterns = astPatterns.map(pattern => {
+      if (pattern.type === 'type-filter-var') {
+        const variable = env.getVariable(pattern.identifier);
+        if (!variable) {
+          throw new MlldDirectiveError(
+            `Variable @${pattern.identifier} is not defined`,
+            { identifier: pattern.identifier }
+          );
+        }
+        const varValue = extractVariableValue(variable);
+        const filter = varValue ? String(varValue) : undefined;
+        if (!filter) {
+          throw new MlldDirectiveError(
+            `Variable @${pattern.identifier} is empty`,
+            { identifier: pattern.identifier }
+          );
+        }
+        return { type: 'type-filter', filter, usage: pattern.usage };
+      } else if (pattern.type === 'name-list-var') {
+        const variable = env.getVariable(pattern.identifier);
+        if (!variable) {
+          throw new MlldDirectiveError(
+            `Variable @${pattern.identifier} is not defined`,
+            { identifier: pattern.identifier }
+          );
+        }
+        const varValue = extractVariableValue(variable);
+        const filter = varValue ? String(varValue) : undefined;
+        if (!filter) {
+          throw new MlldDirectiveError(
+            `Variable @${pattern.identifier} is empty`,
+            { identifier: pattern.identifier }
+          );
+        }
+        return { type: 'name-list', filter, usage: pattern.usage };
+      }
+      return pattern;
+    }) as AstPattern[];
+
+    // Validate: cannot mix content patterns with name-list patterns
+    const hasNames = hasNameListPattern(astPatterns);
+    const hasContent = hasContentPattern(astPatterns);
+    if (hasNames && hasContent) {
+      throw new MlldDirectiveError(
+        'Cannot mix content selectors with name-list selectors',
+        { patterns: astPatterns.map(p => p.type) }
+      );
+    }
+
+    // Handle name-list patterns: ??, fn??, var??, class??, etc.
+    if (hasNames) {
+      const loadNameResults = async (): Promise<string[] | Array<{ names: string[]; file: string; relative: string; absolute: string }>> => {
+        // Get the filter from the first name-list pattern (variables already resolved above)
+        const namePattern = astPatterns.find(p =>
+          p.type === 'name-list' || p.type === 'name-list-all'
+        );
+        const filter = namePattern?.type === 'name-list' ? namePattern.filter : undefined;
+        // name-list-all has no filter (returns all names)
+
+        if (isGlob) {
+          // For glob patterns, return per-file structure with metadata
+          const baseDir = env.getFileDirectory();
+          const matches = await glob(pathOrUrl, {
+            cwd: baseDir,
+            absolute: true,
+            followSymlinks: true,
+            ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
+          });
+          const results: Array<{ names: string[]; file: string; relative: string; absolute: string }> = [];
+          const fileList = Array.isArray(matches) ? matches : [];
+          for (const filePath of fileList) {
+            try {
+              const content = await env.readFile(filePath);
+              const names = extractNames(content, filePath, filter);
+              if (names.length > 0) {
+                results.push({
+                  names,
+                  file: path.basename(filePath),
+                  relative: formatRelativePath(env, filePath),
+                  absolute: filePath
+                });
+              }
+            } catch {
+              // skip unreadable files
+            }
+          }
+          return results;
+        }
+
+        // Single file - return plain string array
+        const content = await env.readFile(pathOrUrl);
+        return extractNames(content, pathOrUrl, filter);
+      };
+
+      const nameResults = await loadNameResults();
+
+      if (hasPipes) {
+        const piped = await processPipeline({
+          value: nameResults,
+          env,
+          node: { pipes }
+        });
+        return finalizeLoaderResult(piped, { type: 'array' });
+      }
+
+      return finalizeLoaderResult(nameResults, { type: 'array' });
+    }
+
+    // Handle content patterns (definitions, type filters, wildcards)
     const loadAstResults = async (): Promise<Array<AstResult | null>> => {
       if (isGlob) {
         const baseDir = env.getFileDirectory();
@@ -125,7 +238,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
         for (const filePath of fileList) {
           try {
             const content = await env.readFile(filePath);
-            const extracted = extractAst(content, filePath, ast);
+            const extracted = extractAst(content, filePath, astPatterns);
             for (const entry of extracted) {
               if (entry) {
                 aggregated.push({ ...entry, file: filePath });
@@ -141,7 +254,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
       }
 
       const content = await env.readFile(pathOrUrl);
-      return extractAst(content, pathOrUrl, ast);
+      return extractAst(content, pathOrUrl, astPatterns);
     };
 
     const astResults = await loadAstResults();
@@ -180,10 +293,27 @@ export async function processContentLoader(node: any, env: Environment): Promise
       
       // Extract section if specified
       if (options?.section) {
+        // Handle section-list patterns (??, ##??, etc.)
+        if (isSectionListPattern(options.section)) {
+          const level = getSectionListLevel(options.section);
+          const sections = listSections(processedContent, level);
+
+          if (hasPipes) {
+            const piped = await processPipeline({
+              value: sections,
+              env,
+              node: { pipes }
+            });
+            return finalizeLoaderResult(piped, { type: 'array', metadata: { url: pathOrUrl } });
+          }
+
+          return finalizeLoaderResult(sections, { type: 'array', metadata: { url: pathOrUrl } });
+        }
+
         const sectionName = await extractSectionName(options.section, env);
         // URLs don't have frontmatter, so no file context for rename interpolation
         const sectionContent = await extractSection(processedContent, sectionName, options.section.renamed, undefined, env);
-        
+
         // Apply pipes if present
         if (hasPipes) {
           const pipedSection = await processPipeline({
@@ -193,7 +323,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
           });
           return finalizeLoaderResult(pipedSection, { type: 'text', metadata: { url: pathOrUrl } });
         }
-        
+
         // For URLs with sections, return plain string (backward compatibility)
         return finalizeLoaderResult(sectionContent, { type: 'text', metadata: { url: pathOrUrl } });
       }
@@ -268,14 +398,27 @@ export async function processContentLoader(node: any, env: Environment): Promise
     }
     
     // Single file loading
-    const result = await loadSingleFile(pathOrUrl, options, env);
-    
+    const result = await loadSingleFile(pathOrUrl, options, env, pipes);
+
+    // Handle array results (from section-list patterns)
+    if (Array.isArray(result)) {
+      if (hasPipes) {
+        const piped = await processPipeline({
+          value: result,
+          env,
+          node: { pipes }
+        });
+        return finalizeLoaderResult(piped, { type: 'array' });
+      }
+      return finalizeLoaderResult(result, { type: 'array' });
+    }
+
     // Apply transform if specified (for single file)
     if (hasTransform && options.transform) {
       const transformed = await applyTransformToResults([result], options.transform, env);
       return finalizeLoaderResult(transformed[0], { type: typeof transformed[0] === 'string' ? 'text' : 'object' });
     }
-    
+
     // Apply pipes if present
     if (hasPipes) {
       // Check if result is a string (from section extraction) or LoadContentResult
@@ -321,12 +464,12 @@ export async function processContentLoader(node: any, env: Environment): Promise
     
     // Otherwise, treat it as a file loading error
     let errorMessage = `Failed to load content: ${pathOrUrl}`;
-    
+
     // Add helpful hint for relative paths
     if (!pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
       errorMessage += `\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`;
     }
-    
+
     throw new MlldError(errorMessage, {
       path: pathOrUrl,
       error: error.message
@@ -337,7 +480,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
 /**
  * Load a single file and return LoadContentResult or string (if section extracted)
  */
-async function loadSingleFile(filePath: string, options: any, env: Environment): Promise<LoadContentResult | string> {
+async function loadSingleFile(filePath: string, options: any, env: Environment, pipes?: any[]): Promise<LoadContentResult | string | string[]> {
+  const hasPipes = pipes && pipes.length > 0;
   // Let Environment handle path resolution and fuzzy matching
   const rawContent = await env.readFile(filePath);
   const resolvedPath = await env.resolvePath(filePath);
@@ -348,6 +492,14 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
     
     // Extract section if specified
     if (options?.section) {
+      // Handle section-list patterns (??, ##??, etc.)
+      if (isSectionListPattern(options.section)) {
+        const level = getSectionListLevel(options.section);
+        const sections = listSections(markdownContent, level);
+        // Return array directly - pipes will be handled by caller
+        return sections;
+      }
+
       const sectionName = await extractSectionName(options.section, env);
       // Create file context for rename interpolation
       const fileContext = new LoadContentResultImpl({
@@ -356,17 +508,17 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
         relative: formatRelativePath(env, resolvedPath),
         absolute: resolvedPath
       });
-      
+
       const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed, fileContext, env);
-      
+
       // Extract HTML metadata
       const dom = new JSDOM(rawContent);
       const doc = dom.window.document;
-      
+
       const title = doc.querySelector('title')?.textContent || '';
-      const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
+      const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
                          doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-      
+
       // Always return LoadContentResult to maintain metadata
       const result = new LoadContentResultHTMLImpl({
         content: sectionContent,
@@ -404,6 +556,14 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
   
   // Extract section if specified (for non-HTML files)
   if (options?.section) {
+    // Handle section-list patterns (??, ##??, etc.)
+    if (isSectionListPattern(options.section)) {
+      const level = getSectionListLevel(options.section);
+      const sections = listSections(rawContent, level);
+      // Return array directly - pipes will be handled by caller
+      return sections;
+    }
+
     const sectionName = await extractSectionName(options.section, env);
     // Create file context for rename interpolation
     const fileContext = new LoadContentResultImpl({
@@ -412,9 +572,9 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
       relative: formatRelativePath(env, resolvedPath),
       absolute: resolvedPath
     });
-    
+
     const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed, fileContext, env);
-    
+
     // Always return LoadContentResult to maintain metadata
     // The result will have the section content but preserve the full file for frontmatter parsing
     const result = new LoadContentResultImpl({
@@ -487,6 +647,22 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
         
         // Skip files if section extraction is requested and section doesn't exist
         if (options?.section) {
+          // Handle section-list patterns (??, ##??, etc.)
+          if (isSectionListPattern(options.section)) {
+            const level = getSectionListLevel(options.section);
+            const sections = listSections(markdownContent, level);
+            // For glob patterns with section lists, preserve per-file structure
+            if (sections.length > 0) {
+              results.push({
+                names: sections,
+                file: path.basename(filePath),
+                relative: computeRelative(filePath),
+                absolute: filePath
+              } as any);
+            }
+            continue;
+          }
+
           const sectionName = await extractSectionName(options.section, env);
           try {
             // Create file context for rename interpolation
@@ -496,9 +672,9 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
               relative: computeRelative(filePath),
               absolute: filePath
             });
-            
+
             const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed, fileContext, env);
-            
+
             // If there's a rename, return the string directly
             if (options.section.renamed) {
               results.push(sectionContent);
@@ -506,11 +682,11 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
               // Extract HTML metadata even for sections
               const dom = new JSDOM(rawContent);
               const doc = dom.window.document;
-              
+
               const title = doc.querySelector('title')?.textContent || '';
-              const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
+              const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
                                  doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-              
+
               // Use HTML result to preserve metadata
               results.push(new LoadContentResultHTMLImpl({
                 content: sectionContent,
@@ -548,6 +724,22 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
       } else {
         // Non-HTML file handling
         if (options?.section) {
+          // Handle section-list patterns (??, ##??, etc.)
+          if (isSectionListPattern(options.section)) {
+            const level = getSectionListLevel(options.section);
+            const sections = listSections(rawContent, level);
+            // For glob patterns with section lists, preserve per-file structure
+            if (sections.length > 0) {
+              results.push({
+                names: sections,
+                file: path.basename(filePath),
+                relative: computeRelative(filePath),
+                absolute: filePath
+              } as any);
+            }
+            continue;
+          }
+
           const sectionName = await extractSectionName(options.section, env);
           try {
             // Create file context for rename interpolation
@@ -557,9 +749,9 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
               relative: computeRelative(filePath),
               absolute: filePath
             });
-            
+
             const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed, fileContext, env);
-            
+
             // If there's a rename, we're returning a transformed string that should be used directly
             if (options.section.renamed) {
               // For renamed sections, return the string directly (will be collected as string array)
@@ -679,6 +871,20 @@ function reconstructUrl(urlNode: any): string {
 /**
  * Extract section name from section AST node
  */
+/**
+ * Check if section node is a section-list pattern
+ */
+function isSectionListPattern(sectionNode: any): boolean {
+  return sectionNode?.identifier?.type === 'section-list';
+}
+
+/**
+ * Get level from section-list pattern
+ */
+function getSectionListLevel(sectionNode: any): number {
+  return sectionNode?.identifier?.level ?? 0;
+}
+
 async function extractSectionName(sectionNode: any, env: Environment): Promise<string> {
   if (!sectionNode || !sectionNode.identifier) {
     throw new MlldError('Invalid section node', {
@@ -686,9 +892,15 @@ async function extractSectionName(sectionNode: any, env: Environment): Promise<s
     });
   }
 
-  // Section identifier might be Text, VariableReference, or array of nodes
+  // Section identifier might be Text, VariableReference, array of nodes, or section-list
   const identifier = sectionNode.identifier;
-  
+
+  if (identifier.type === 'section-list') {
+    throw new MlldError('Section list patterns (??) should be handled separately', {
+      identifierType: identifier.type
+    });
+  }
+
   if (identifier.type === 'Text') {
     return identifier.content;
   } else if (identifier.type === 'VariableReference') {
@@ -817,16 +1029,42 @@ async function getAvailableSections(content: string): Promise<string[]> {
     // Fallback to simple regex if llmxml fails
     const sections: string[] = [];
     const lines = content.split('\n');
-    
+
     for (const line of lines) {
       const match = line.match(/^#+\s+(.+)$/);
       if (match) {
         sections.push(match[1]);
       }
     }
-    
+
     return sections;
   }
+}
+
+/**
+ * List section headings from markdown content
+ * @param content - Markdown content to extract headings from
+ * @param level - Heading level to filter (0 = all levels, 1 = H1, 2 = H2, etc.)
+ * @returns Array of heading titles (strings)
+ */
+function listSections(content: string, level?: number): string[] {
+  const lines = content.split('\n');
+  const headings: string[] = [];
+
+  for (const line of lines) {
+    const match = line.match(/^(#{1,6})\s+(.+)$/);
+    if (match) {
+      const headingLevel = match[1].length;
+      const title = match[2].trim();
+
+      // Filter by level if specified (level 0 means all headings)
+      if (level === undefined || level === 0 || headingLevel === level) {
+        headings.push(title);
+      }
+    }
+  }
+
+  return headings;
 }
 
 /**

@@ -20,6 +20,7 @@ describe('evaluateExecInvocation (structured)', () => {
 /exe @emitText() = js { return 'hello' }
 /exe @emitJson() = js { return '{"count":3}' }
 /exe @parseJson(value) = js { return JSON.parse(value) }
+/var @sampleObject = { "nested": { "value": 1 } }
 `;
     const { ast } = await parse(source);
     await evaluate(ast, env);
@@ -80,5 +81,51 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(result.value.data).toEqual({ count: 3 });
     expect(asText(result.value)).toBe('{"count":3}');
     expect(result.stdout).toBe(asText(result.value));
+  });
+
+  it('returns false for isDefined on missing variables', async () => {
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'missing-var',
+      commandRef: {
+        name: 'isDefined',
+        objectReference: {
+          type: 'VariableReference',
+          nodeId: 'missing-ref',
+          identifier: 'doesNotExist',
+          fields: []
+        },
+        args: []
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('false');
+  });
+
+  it('returns false for isDefined on missing fields', async () => {
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'missing-field',
+      commandRef: {
+        name: 'isDefined',
+        objectReference: {
+          type: 'VariableReference',
+          nodeId: 'obj-ref',
+          identifier: 'sampleObject',
+          fields: [
+            {
+              type: 'Field',
+              nodeId: 'missing-field-node',
+              value: 'notPresent'
+            }
+          ]
+        },
+        args: []
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('false');
   });
 });

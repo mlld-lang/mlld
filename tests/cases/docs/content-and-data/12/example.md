@@ -1,5 +1,11 @@
-/exe @left() = sh { echo "L" }
-/exe @right() = sh { echo "R" }
+>> Prefix matching
+/var @handlers = <api.ts { handle* }>           # All functions starting with "handle"
 
-/var @results = stream @left() || stream @right()
-/show @results
+>> Suffix matching
+/var @validators = <api.ts { *Validator }>      # All functions ending with "Validator"
+
+>> Contains matching
+/var @requests = <api.ts { *Request* }>         # All functions containing "Request"
+
+>> Single character wildcard
+/var @getters = <api.ts { get? }>               # getA, getB, getC (not getAllItems)

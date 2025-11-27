@@ -13,7 +13,7 @@ syn region mlldRunContent start="." end="\ze^\s*```\s*$" contained contains=mlld
 
 " Define our syntax patterns directly
 syn match mlldComment "\(>>\|<<\).*$"
-syn match mlldDirective "^/\(var\|show\|run\|exe\|path\|import\|when\|output\|for\|log\)\>"
+syn match mlldDirective "^/\(var\|show\|stream\|run\|exe\|path\|import\|when\|output\|append\|for\|log\|guard\|export\)\>"
 syn match mlldLogicalOp "&&\|||\|!"
 syn match mlldComparisonOp "==\|!=\|<=\|>=\|<\|>"
 syn match mlldTernaryOp "[?:]"

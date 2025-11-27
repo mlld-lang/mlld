@@ -7,12 +7,15 @@ This test verifies that glob patterns concatenate content by default, consistent
 # Single File
 
 This is the content of the single file.
-
 Content: # Single File
 
 This is the content of the single file.
 ## Glob Pattern Behavior
 
+---
+title: File One
+---
+
 # File 1
 
 Content of first file.
@@ -20,16 +23,13 @@ Content of first file.
 # File 2
 
 Content of second file.
-
-All files: # File 1
-
-Content of first file.
-
-# File 2
-
-Content of second file.
+All files concatenated via .content
 ## Field Access on Glob
 
+---
+title: File One
+---
+
 # File 1
 
 Content of first file.
@@ -37,13 +37,21 @@ Content of first file.
 # File 2
 
 Content of second file.
-File One
+First file title: File One
+---
+title: File One
+---
+
 # File 1
 
 Content of first file.
 ## Template Interpolation
 
-Combined: # File 1
+Combined: ---
+title: File One
+---
+
+# File 1
 
 Content of first file.
 
@@ -52,7 +60,11 @@ Content of first file.
 Content of second file.
 ## Direct Interpolation
 
-Direct: # File 1
+Direct: ---
+title: File One
+---
+
+# File 1
 
 Content of first file.
 

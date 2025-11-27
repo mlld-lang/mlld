@@ -5,9 +5,8 @@ SlashExport
   = DirectiveContext "/export" _ "{" _ members:ExportMemberList _ "}" comment:InlineComment? {
 const exports = members.map((member) => {
         const nodeLocation = member.identifier.location || location();
-        const valueType = member.identifier.isGuard ? 'guardExport' : 'export';
         return helpers.createVariableReferenceNode(
-          valueType,
+          'identifier',
           {
             identifier: member.identifier.name,
             ...(member.alias ? { alias: member.alias } : {})
@@ -61,7 +60,10 @@ ExportMember
     }
 
 ExportIdentifier
-  = prefix:"@"? name:BaseIdentifier {
+  = "*" {
+      return { name: '*', raw: '*', location: location() };
+    }
+  / prefix:"@"? name:BaseIdentifier {
       const raw = prefix ? `@${name}` : name;
-      return { name, raw, isGuard: Boolean(prefix), location: location() };
+      return { name, raw, location: location() };
     }

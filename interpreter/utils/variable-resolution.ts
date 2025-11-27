@@ -35,7 +35,7 @@ export enum ResolutionContext {
   ObjectProperty = 'object-property',            // WHY: Objects can store Variables with types
   FunctionArgument = 'function-argument',        // WHY: Shadow envs need type introspection (mlld.isVariable)
   DataStructure = 'data-structure',              // WHY: Data structures preserve Variable types
-  FieldAccess = 'field-access',                  // WHY: TODO - Why preserve for field access?
+  FieldAccess = 'field-access',                  // WHY: Metadata property access (@var.ctx, @var.type, @items.any)
   ImportResult = 'import-result',                // WHY: Imports preserve module Variable types
   
   // Contexts where we must extract values
@@ -131,7 +131,9 @@ export async function resolveVariable(
      * We evaluate them on access but create a new Variable with the result to
      * preserve type information and track that evaluation occurred.
      * GOTCHA: The wasEvaluated metadata prevents re-evaluation of the same content.
-     * TODO: Why create new Variable instead of caching in the original?
+     * WHY new Variable: Maintains immutability. Mutating would affect all references
+     * to the original Variable. New Variable tracks that THIS resolution was evaluated
+     * without polluting the original (different contexts may need different results).
      */
     if (isStructured(variable)) {
       const complexFlag = (variable as any).isComplex;

@@ -43,7 +43,7 @@
     /* Syntax highlighting colors - dark theme */
     --token-keyword: #ff79c6;
     --token-operator: #bd93f9;
-    --token-string: #30653c;
+    --token-string: #7ec699;
     --token-bracket: #666666;
     --token-selector: #f1fa8c;
     --token-variable: #8be9fd;
@@ -209,12 +209,19 @@ pre {
 
 pre code {
   font-family: 'Cousine', monospace;
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--terminal-text);
   background: transparent;
   padding: 0;
   border-radius: 0;
+}
+
+.code-block-wrapper {
+  background-color: var(--terminal-bg);
+  padding: 0 5px;
+  border-radius: 5px;
+  margin-bottom: 1.5rem;
 }
 
 /* Apply syntax highlighting to code blocks */
@@ -228,7 +235,6 @@ pre code .token.operator {
 
 pre code .token.string {
   color: var(--token-string);
-  opacity: 0.5;
 }
 
 pre code .token.bracket {
@@ -270,7 +276,6 @@ hr {
 .hero-content {
   flex: 0 0 33%;
   text-align: left;
-  padding-top: 1rem;
 }
 
 .hero-content p {
@@ -352,9 +357,11 @@ hr {
 .dot.yellow { background-color: #ffbd2e; }
 .dot.green { background-color: #27c93f; }
 
+
+
 .terminal-content {
   font-family: 'Cousine', monospace;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--terminal-text);
   white-space: pre-wrap;
@@ -362,6 +369,10 @@ hr {
   max-height: 100%;
   overflow-y: visible;
   position: relative;
+}
+
+.hero-terminal-container .terminal-content {
+  font-size: 16px !important;
 }
 
 .terminal-content.not-visible .animated-line {
@@ -838,6 +849,10 @@ body.sidebar-open {
   margin-bottom: 2rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border-color);
+}
+
+.docs-content a:link, .docs-content a:visited {
+  border-bottom: 1px solid var(--token-variable);
 }
 
 /* Responsive */
@@ -1425,9 +1440,10 @@ section.content-section h2 {
   width: 52px;
 }
 
+
 .terminal-window .terminal-content {
   font-family: 'Cousine', monospace;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--terminal-text);
   white-space: pre-wrap;

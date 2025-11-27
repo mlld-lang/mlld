@@ -1,4 +1,5 @@
 import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause } from '@core/types';
+import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
@@ -197,14 +198,6 @@ export async function evaluateRun(
   // Track source node to optionally enable stage-0 retry
   let sourceNodeForPipeline: any | undefined;
 
-  // Create execution context with source information
-  const executionContext = {
-    sourceLocation: directive.location,
-    directiveNode: directive,
-    filePath: env.getCurrentFilePath(),
-    directiveType: directive.meta?.directiveType as string || 'run'
-  };
-  
   let withClause = (directive.meta?.withClause || directive.values?.withClause) as WithClause | undefined;
   if (process.env.MLLD_DEBUG_STDIN === 'true') {
     try {
@@ -215,6 +208,54 @@ export async function evaluateRun(
       console.error('[mlld] directive values withClause', directive.values?.withClause);
     }
   }
+
+  const streamingOptions = env.getStreamingOptions();
+  const streamingRequested = Boolean(withClause && (withClause as any).stream);
+  const streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
+  const pipelineId = `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+  if (streamingEnabled) {
+    const registry = env.getGuardRegistry?.();
+    const subtypeKey =
+      directive.subtype === 'runCommand'
+        ? 'runCommand'
+        : directive.subtype === 'runCode'
+          ? 'runCode'
+          : undefined;
+    const afterGuards = registry
+      ? [
+          ...registry.getOperationGuardsForTiming('run', 'after'),
+          ...(subtypeKey ? registry.getOperationGuardsForTiming(subtypeKey, 'after') : [])
+        ]
+      : [];
+    if (afterGuards.length > 0) {
+      const streamingMessage = [
+        'Cannot run after-guards when streaming is enabled.',
+        'Options:',
+        '- Remove after-timed guards or change them to before',
+        '- Disable streaming with `with { stream: false }`'
+      ].join('\n');
+      throw new GuardError({
+        decision: 'deny',
+        message: streamingMessage,
+        reason: streamingMessage,
+        operation: {
+          type: 'run',
+          subtype: directive.subtype === 'runCode' ? 'runCode' : 'runCommand'
+        } as any,
+        timing: 'after',
+        guardResults: [],
+        reasons: [streamingMessage]
+      });
+    }
+  }
+
+  // Create execution context with source information
+  const executionContext = {
+    sourceLocation: directive.location,
+    directiveNode: directive,
+    filePath: env.getCurrentFilePath(),
+    directiveType: directive.meta?.directiveType as string || 'run'
+  };
   
   try {
   if (directive.subtype === 'runCommand') {
@@ -357,7 +398,11 @@ export async function evaluateRun(
     }
 
     const commandOptions = stdinInput !== undefined ? { input: stdinInput } : undefined;
-    setOutput(await env.executeCommand(command, commandOptions, executionContext));
+    setOutput(await env.executeCommand(command, commandOptions, {
+      ...executionContext,
+      streamingEnabled,
+      pipelineId
+    }));
     
   } else if (directive.subtype === 'runCode') {
     // Handle code execution
@@ -408,7 +453,11 @@ export async function evaluateRun(
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
     setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await env.executeCode(code, language, argValues, executionContext);
+      return await env.executeCode(code, language, argValues, {
+        ...executionContext,
+        streamingEnabled,
+        pipelineId
+      });
     }));
     
   } else if (directive.subtype === 'runExec') {
@@ -646,7 +695,11 @@ export async function evaluateRun(
       }
       
       // Pass context for exec command errors too
-      setOutput(await env.executeCommand(command, undefined, executionContext));
+      setOutput(await env.executeCommand(command, undefined, {
+        ...executionContext,
+        streamingEnabled,
+        pipelineId
+      }));
       
     } else if (definition.type === 'commandRef') {
       // This command references another command

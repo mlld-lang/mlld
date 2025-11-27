@@ -18,3 +18,5 @@
 /exe @listfiles(dir,ext) = run {find @dir -type f -name "*.@ext" | head -5}
 
 /exe @ask(context, role, task) = run {llm --context @context --instructions @task --system @role}
+
+/export { @docs, @role, @task, @listfiles, @ask }

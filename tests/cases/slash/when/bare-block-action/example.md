@@ -29,12 +29,12 @@
   none => show "Should not appear"
 ]
 
->> Test mixed conditions with none and implicit variable assignment
+>> Test mixed conditions with none and explicit variable assignment
 /var @status = "unknown"
 /when [
   @status == "ok" => show "Success"
   @status == "error" => show "Failed"
-  none => @result = "Unhandled status"
+  none => var @result = "Unhandled status"
   none => show "Status: unknown"
 ]
 /show @result

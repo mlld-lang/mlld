@@ -18,6 +18,34 @@ export interface WhenConditionPair {
 }
 
 /**
+ * Let assignment entry in a when block for local variable declarations
+ */
+export interface LetAssignmentNode extends BaseMlldNode {
+  type: 'LetAssignment';
+  identifier: string;
+  value: BaseMlldNode[];
+}
+
+/**
+ * Union type for when block entries (let assignments and condition pairs)
+ */
+export type WhenEntry = WhenConditionPair | LetAssignmentNode;
+
+/**
+ * Type guard for let assignment nodes
+ */
+export function isLetAssignment(entry: WhenEntry | BaseMlldNode): entry is LetAssignmentNode {
+  return (entry as any).type === 'LetAssignment';
+}
+
+/**
+ * Type guard for condition pairs (not let assignments)
+ */
+export function isConditionPair(entry: WhenEntry): entry is WhenConditionPair {
+  return !isLetAssignment(entry);
+}
+
+/**
  * Simple form of @when directive: @when <condition> => <action>
  */
 export interface WhenSimpleNode extends DirectiveNode {
@@ -38,7 +66,7 @@ export interface WhenBlockNode extends DirectiveNode {
   values: {
     variable?: BaseMlldNode[];
     modifier: BaseMlldNode[]; // Text node containing modifier value
-    conditions: WhenConditionPair[];
+    conditions: WhenEntry[];  // Mixed let assignments and condition pairs
     action?: BaseMlldNode[]; // Optional block-level action
   };
   meta: {
@@ -57,7 +85,7 @@ export interface WhenMatchNode extends DirectiveNode {
   subtype: 'whenMatch';
   values: {
     expression: BaseMlldNode[];  // Expression to evaluate
-    conditions: WhenConditionPair[]; // value => action pairs
+    conditions: WhenEntry[];     // Mixed let assignments and value => action pairs
   };
   meta: {
     conditionCount: number;
@@ -110,7 +138,7 @@ export interface TailModifiers {
  */
 export interface WhenExpressionNode extends BaseMlldNode {
   type: 'WhenExpression';
-  conditions: WhenConditionPair[];
+  conditions: WhenEntry[];  // Mixed let assignments and condition pairs
   withClause?: TailModifiers;
   meta: {
     conditionCount: number;

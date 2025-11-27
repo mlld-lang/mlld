@@ -1,3 +1,2 @@
-/var @numbers = [1, 2, 3, 4]
-/var @doubled = for @n in @numbers => js { return @n * 2 }
-/show @doubled
+/var @fruits = ["apple", "banana", "cherry"]
+/for @fruit in @fruits => show `Fruit: @fruit`

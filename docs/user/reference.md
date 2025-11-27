@@ -48,10 +48,10 @@ Output variables and templates:
 Execute shell commands:
 
 ```mlld
-/run {echo "Hello World"}
-/run {ls -la}
+/run cmd {echo "Hello World"}
+/run cmd {ls -la}
 /run @data | { cat | jq '.[]' }       << stdin pipe sugar
-/run { cat | jq '.[]' } with { stdin: @data }  << explicit stdin
+/run cmd { cat | jq '.[]' } with { stdin: @data }  << explicit stdin
 ```
 
 Multi-line commands with `run sh`:

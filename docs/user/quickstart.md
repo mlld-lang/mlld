@@ -72,7 +72,7 @@ Execute shell commands and capture results:
 /var @currentDir = run {pwd}
 /show `Current directory: @currentDir`
 
-/run {echo "Running a quick check..."}
+/run cmd {echo "Running a quick check..."}
 /var @files = run {ls -la | head -5}
 /show @files
 ```

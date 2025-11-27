@@ -422,11 +422,16 @@ NonNegatedCondition
 // CONDITION LIST AND PAIRS
 // -------------------------------------------------------------
 
-// List of condition => action pairs
+// List of when block entries (let assignments and condition pairs)
 WhenConditionList
-  = first:WhenConditionPair rest:(WhenConditionSeparator pair:WhenConditionPair { return pair; })* {
+  = first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* {
       return [first, ...rest];
     }
+
+// Single entry in a when block - either a let assignment or a condition pair
+WhenEntry
+  = LetAssignment      // let @x = value (local variable)
+  / WhenConditionPair  // condition => action
 
 // Separator for condition pairs - whitespace only, with helpful error for commas
 WhenConditionSeparator
@@ -857,7 +862,8 @@ WhenOutputTarget
 // Implicit action patterns - these match the same syntax as explicit directives but without "/"
 WhenImplicitAction
   = WhenImplicitRetryAction
-  / WhenImplicitVarAssignment
+  / WhenImplicitExplicitVarAssignment // var @x = value (outer-scope variable)
+  / WhenImplicitVarAssignmentError    // Error: @x = value - use let or var instead
   / WhenImplicitFunctionCall
   / WhenImplicitShowWithPipeline  // NEW: Support show with pipeline syntax
   / WhenImplicitRichContent
@@ -912,16 +918,35 @@ WhenImplicitShowWithPipeline
       }
     }
 
-// Implicit var assignment: @x = "value"
-WhenImplicitVarAssignment
+// Error: Implicit var assignment @x = "value" is no longer supported - use let or var
+WhenImplicitVarAssignmentError
   = "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+      helpers.mlldError(
+        `Variable assignment \`@${id} = ...\` is not allowed in when actions.\n\n` +
+        `Use \`let\` for local variables scoped to the when block:\n` +
+        `  /when [let @${id} = value ...]\n\n` +
+        `Or use \`var\` in actions to set outer-scope variables:\n` +
+        `  "match" => var @${id} = "value"\n\n` +
+        `Example:\n` +
+        `  /when @mode: [\n` +
+        `    let @local = "scoped"      # Local to when block\n` +
+        `    "match" => var @${id} = @local  # Sets outer-scope variable\n` +
+        `  ]`,
+        "let",
+        location()
+      );
+    }
+
+// Explicit var assignment in when action: var @x = "value" (sets outer-scope variable)
+WhenImplicitExplicitVarAssignment
+  = "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
       // Create the same structure as explicit /var but with implicit flag
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
-      
+
       // Process the value using the same logic as explicit /var directive
       let processedValue;
       let metaInfo = { implicit: true };
-      
+
       // Handle template content (backtick, [[...]], quotes)
       if (value && value.content && value.wrapperType) {
         processedValue = value.content;
@@ -987,9 +1012,9 @@ WhenImplicitVarAssignment
       }
       // Handle string literals (backward compatibility)
       else if (typeof value === 'string') {
-        processedValue = [helpers.createNode(NodeType.Text, { 
-          content: value, 
-          location: location() 
+        processedValue = [helpers.createNode(NodeType.Text, {
+          content: value,
+          location: location()
         })];
         metaInfo.inferredType = 'text';
       }
@@ -998,11 +1023,11 @@ WhenImplicitVarAssignment
         processedValue = Array.isArray(value) ? value : [value];
         metaInfo.inferredType = 'unknown';
       }
-      
+
       return [helpers.createNode(NodeType.Directive, {
         kind: 'var',
         subtype: 'var',
-        values: { 
+        values: {
           identifier: [idNode],
           value: processedValue
         },

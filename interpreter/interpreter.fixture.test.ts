@@ -645,7 +645,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Copy all other files to the virtual filesystem
         const content = fs.readFileSync(sourceFile, 'utf8');
         await fileSystem.writeFile(targetFile, content);
-        
+
         // Debug: For pipeline-file-spaced, verify the file is actually written and readable
         if (sourcePath.includes('pipeline-file-spaced') && entry.name === 'test-pipeline-data.json') {
           try {

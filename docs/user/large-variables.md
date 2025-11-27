@@ -29,20 +29,20 @@ Node.js can't pass variables larger than ~128KB to commands - it throws an `E2BI
 
 ### Use Shell Mode
 
-Switch from simple `/run {...}` to shell mode `/run sh {...}` when writing workflows, even though mlld auto-fallbacks, because:
+Switch from simple `/run cmd {...}` to shell mode `/run sh {...}` when writing workflows, even though mlld auto-fallbacks, because:
  - It’s explicit about using `$var` syntax inside the block
  - It avoids implicit fallback and makes intent clear in reviews
 
 ```mlld
 >> Simple run - limited to ~128KB, uses @var syntax
-/run {tool "@data"}
+/run cmd {tool "@data"}
 
 >> Shell mode - handles any size, pass params then use $var syntax
 /run sh (@data) { echo "$data" | tool }
 ```
 
 **Important syntax difference:**
-- Simple `/run {...}` interpolates mlld variables with `@var` syntax
+- Simple `/run cmd {...}` interpolates mlld variables with `@var` syntax
 - Shell `/run sh (@var) {...}` declares parameters in parentheses, then uses `$var` syntax inside
 
 ### For Executables
@@ -81,7 +81,7 @@ Pipe data to tools instead of passing as arguments:
 
 ## How It Works
 
-- Simple `/run {...}` now auto-falls back to bash when command/env payloads are large. The script is streamed via stdin to avoid args+env limits.
+- Simple `/run cmd {...}` now auto-falls back to bash when command/env payloads are large. The script is streamed via stdin to avoid args+env limits.
 - Shell mode `/run sh {...}` injects large variables directly into the shell script instead of the environment (via heredoc), bypassing Node's limit.
 - Your variables work the same - just use `$varname` in shell mode.
 

@@ -2,4 +2,4 @@
   * => deny "Shell access disabled"
 ]
 
-/run { ls }                                # Blocked
+/run cmd { ls }                                # Blocked

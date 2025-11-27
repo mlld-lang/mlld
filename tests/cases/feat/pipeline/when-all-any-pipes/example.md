@@ -13,12 +13,12 @@
 >> Test 2: When || with piped action
 /when (@isActive || @hasPermission) => show "at least one true" | @toUpper
 
->> Test 3: When && with implicit var and pipes
+>> Test 3: When && with explicit var and pipes
 /var @data = "process"
-/when (@isValid && @hasPermission) => @result1 = @data | @toUpper | @addBrackets
+/when (@isValid && @hasPermission) => var @result1 = @data | @toUpper | @addBrackets
 /show @result1
 
 >> Test 4: When || with function call and pipes
 /exe @getMessage() = js { return "message" }
-/when (@isActive || @isValid) => @result2 = @getMessage() | @toUpper | @addBrackets
+/when (@isActive || @isValid) => var @result2 = @getMessage() | @toUpper | @addBrackets
 /show @result2

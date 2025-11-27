@@ -6,26 +6,19 @@ This test verifies URL content conversion features.
 
 /var @html_page = <https://example.com>
 
-## Access different content formats
+## Access different content formats via .ctx
 
 ### Raw HTML
-/show `Has HTML: @{typeof @html_page.html !== 'undefined'}`
+/show `Has HTML: @html_page.ctx.html.isDefined()`
 
 ### Plain text (HTML stripped)
-/show `Has text: @{typeof @html_page.text !== 'undefined'}`
+/show `Has text: @html_page.ctx.text.isDefined()`
 
 ### Markdown conversion
-/show `Has md: @{typeof @html_page.md !== 'undefined'}`
+/show `Has md: @html_page.ctx.md.isDefined()`
 
-## Show conversions if available
+## Show URL metadata
 
-/when @html_page.text => show "Text version (first 100 chars):"
-/when @html_page.text => show `@{@html_page.text.substring(0, 100)}...`
-
-/when @html_page.md => show "Markdown version available"
-
-## Load a markdown URL directly
-
-/var @md_page = <https://raw.githubusercontent.com/example/repo/main/README.md>
-
-### Markdown files should not have HTML property
+/show `URL: @html_page.ctx.url`
+/show `Domain: @html_page.ctx.domain`
+/show `Title: @html_page.ctx.title`

@@ -5,11 +5,45 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc73]
+
+### Added
+- `let` keyword for local variables in `/when` blocks: `let @x = value` creates block-scoped variables before conditions, enabling cleaner conditional logic without polluting outer scope
+- `/run cmd {command}` syntax for shell commands, consistent with `cmd {..}` in other contexts. Bare `/run {command}` still works for backwards compatibility.
+- AST selector wildcards ([#505](https://github.com/mlld-lang/mlld/issues/505)): `{ handle* }`, `{ *Validator }`, `{ *Request* }`, `{ get? }` for pattern-based symbol matching
+- AST type filters: `{ *fn }`, `{ *var }`, `{ *class }`, `{ *interface }`, `{ *type }`, `{ *enum }`, `{ *struct }`, `{ *trait }`, `{ *module }`, `{ * }` to get all definitions of a specific type
+- AST name listing: `{ ?? }`, `{ fn?? }`, `{ var?? }`, `{ class?? }` return string arrays of definition names instead of code
+  - Single file: returns plain string array for simple iteration
+  - Glob patterns: returns per-file structured results `[{ names: string[], file, relative, absolute }]` enabling queries like `/for @f in <**/*.py { class?? }> => show "@f.names.length classes in @f.relative"`
+- Section listing for markdown: `# ??`, `# ##??`, `# ###??` return arrays of heading titles
+  - Single file: plain string array
+  - Glob patterns: per-file structured results `[{ names: string[], file, relative, absolute }]`
+- Variable interpolation in AST selectors: `{ *@type }`, `{ @type?? }` for dynamic pattern construction
+- Usage patterns with wildcards and type filters: `{ (handle*) }`, `{ (*fn) }` find functions that use matched symbols
+- Validation: mixing content selectors with name-list selectors now throws clear error
+- LSP/syntax highlighting: `/guard`, `/stream`, `/append`, `/export` directives; guard keywords (`before`, `after`, `always`, `allow`, `deny`, `retry`); `let`/`var` in when blocks; import types (`module`, `static`, `live`, `cached`, `local`); data labels; pipeline operators (`|`, `||`); type-checking methods (`.isArray()`, etc.); AST selector patterns
+
+### Changed
+- **BREAKING**: Variable assignments in `/when` actions now require explicit `var` prefix. Use `var @x = value` for outer-scope variables, `let @x = value` for block-local variables. Bare `@x = value` syntax now throws an educational error.
+
+### Fixed
+- Field access with pipes in `/show` now correctly extracts field values before piping ([#506](https://github.com/mlld-lang/mlld/issues/506)). Previously `@data.0.code | cmd {head -3}` would pipe the parent array instead of the code field value. Field access now happens before pipeline processing for both `VariableReference` and `VariableReferenceWithTail` node types.
+- Export directive grammar now correctly distinguishes guards from variables ([#498](https://github.com/mlld-lang/mlld/issues/498)). Previously all exports were marked as `guardExport`, breaking `/export` for executables and variables. Now uses runtime guard registry check.
+- `/export` directive now recognized by grammar context detection - added missing `export` keyword to `DirectiveKind` enum. Export filtering now works correctly for namespace imports.
+- `/export { * }` wildcard syntax now parses correctly - added `*` as valid export identifier
+- Module tests updated to use current `/export { name }` and `/exe @func() = \`...\`` syntax
+- Documentation updated: `/export guard @name` changed to `/export { @guardName }`
+- JSON field access in executables now requires explicit `.data` accessor (e.g., `@var.data.field`)
+- Glob pattern test files renamed with unique prefixes to prevent virtual filesystem collisions
+- Frontmatter access in glob results now uses `.ctx.fm.field` accessor
+- Test expectations updated for current JSON formatting and blank line behavior
+
 ## [2.0.0-rc72]
 
 ### Added
 - Type-checking builtin methods: `.isArray()`, `.isObject()`, `.isString()`, `.isNumber()`, `.isBoolean()`, `.isNull()`, `.isDefined()` return booleans for conditional logic ([#414](https://github.com/mlld-lang/mlld/issues/414)). Note: `.isDefined()` safely returns `false` for missing variables or fields without throwing.
 - Test infrastructure for `/output` directive file operations - enables validation of file writes in fixture tests ([#340](https://github.com/mlld-lang/mlld/issues/340))
+- `.isDefined()` now returns `false` for missing variables or fields instead of throwing
 
 ### Fixed
 - Method chaining after array access now works: `@msg.split("_")[0].toUpperCase()` ([#408](https://github.com/mlld-lang/mlld/issues/408))

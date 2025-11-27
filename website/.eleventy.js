@@ -32,10 +32,7 @@ module.exports = function(eleventyConfig) {
     '../llms.txt': 'llms.txt'
   });
   
-  // Copy Prism CSS theme
-  eleventyConfig.addPassthroughCopy({
-    'node_modules/prismjs/themes/prism-tomorrow.css': 'css/prism-theme.css'
-  });
+  // Prism CSS theme is now in css/prism-theme.css (copied via 'css' passthrough)
   
   // Create a collection for documentation pages
   eleventyConfig.addCollection('docs', function(collectionApi) {

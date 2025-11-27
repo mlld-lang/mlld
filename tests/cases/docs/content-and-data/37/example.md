@@ -5,7 +5,7 @@
 /var @greeting = "Hello @name"
 
 >> In command braces
-/run {echo "Welcome @name"}
+/run cmd {echo "Welcome @name"}
 
 >> NOT in single quotes (literal)
 /var @literal = 'Hello @name'               >> Outputs: Hello @name

@@ -16,7 +16,7 @@ mlld uses context-aware escaping during interpolation. Variables store raw value
 - **Context determines strategy**: `InterpolationContext.ShellCommand` vs `Template` vs `Default`
 - **StructuredValue unwrapping**: `asText()` extracts `.text` before classification
 - **Shell value classification**: Simple, array-simple, or complex → different serialization
-- **Use stdin for raw payloads**: `/run { cmd } with { stdin: @data }` and `/run @data | { cmd }` send unescaped content via `asText()`
+- **Use stdin for raw payloads**: `/run cmd { command } with { stdin: @data }` and `/run @data | { cmd }` send unescaped content via `asText()`
 
 ## Principles
 
@@ -78,7 +78,7 @@ Shell value classification (`interpreter/utils/shell-value.ts`):
 ### The Critical Flow
 
 ```
-/run {echo "@dangerous"}
+/run cmd {echo "@dangerous"}
           ↓
 evaluateRun() calls interpolate(nodes, env, InterpolationContext.ShellCommand)
           ↓
@@ -101,7 +101,7 @@ env.executeCommand("echo \"has \`backticks\`\"")
 
 ### Stdin Bypass
 
-`/run { cmd } with { stdin: @data }` and `/run @data | { cmd }` bypass shell escaping entirely:
+`/run cmd { command } with { stdin: @data }` and `/run @data | cmd { command }` bypass shell escaping entirely:
 
 1. Expression evaluated via `resolveStdinInput()`
 2. Result passed to `coerceValueForStdin()` which classifies and serializes

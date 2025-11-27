@@ -10,7 +10,7 @@ import {
   isCommandResult, 
   isPipelineInput 
 } from '@core/types/variable';
-import { asText, assertStructuredValue } from '../utils/structured-value';
+import { asText, assertStructuredValue, isStructuredValue } from '../utils/structured-value';
 import { executeParallelExecInvocations } from './helpers/parallel-exec';
 
 /**
@@ -290,7 +290,10 @@ export function isEqual(a: unknown, b: unknown): boolean {
 function extractValue(value: unknown): unknown {
   if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
     const variable = value as Variable;
-    return variable.value;
+    return extractValue(variable.value);
+  }
+  if (isStructuredValue(value)) {
+    return value.data ?? value.text;
   }
   return value;
 }

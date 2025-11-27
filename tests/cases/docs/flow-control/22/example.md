@@ -1,6 +1,5 @@
-/var @tpl = `
-/for @v in ["x","y"]
-- @v
-/end
-`
-/show @tpl
+/var @runs = ["alpha", "beta", "gamma"]
+/var @_ = for @name in @runs =>
+  `processed @name` | append "runs.log"
+
+/show <runs.log>

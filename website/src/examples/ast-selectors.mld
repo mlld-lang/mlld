@@ -1,0 +1,2 @@
+/var @handlers = <src/**/*.ts { handle* }>
+/for @h in @handlers => show "@h.name in @h.relative"

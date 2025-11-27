@@ -44,17 +44,68 @@ AlligatorAstPatterns "AST pattern list"
     }
 
 AlligatorAstPattern "AST pattern"
-  = "(" _ id:AlligatorAstIdentifier _ ")" {
-      return { type: 'usage', name: id };
+  = "(" _ pattern:AlligatorAstPatternInner _ ")" {
+      return { ...pattern, usage: true };
     }
-  / id:AlligatorAstIdentifier {
+  / pattern:AlligatorAstPatternInner {
+      return pattern;
+    }
+
+// Inner pattern types - order matters for PEG parsing
+AlligatorAstPatternInner "AST pattern inner"
+  // Name list patterns: ??, fn??, var??, class??, etc.
+  = "??" {
+      return { type: 'name-list-all' };
+    }
+  / type:AstTypeKeyword "??" {
+      return { type: 'name-list', filter: type };
+    }
+  // Type filters: *fn, *var, *class, etc. (type keyword must be followed by non-identifier char)
+  / "*" type:AstTypeKeyword !AlligatorPatternContinue {
+      return { type: 'type-filter', filter: type };
+    }
+  // Type filter with variable: *@type
+  / "*" "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      return {
+        type: 'type-filter-var',
+        identifier: id,
+        ...(fields.length > 0 ? { fields } : {})
+      };
+    }
+  // All definitions: * (only when * is alone, not followed by identifier chars)
+  / "*" !AlligatorPatternContinue {
+      return { type: 'type-filter-all' };
+    }
+  // Name list with variable: @type??
+  / "@" id:BaseIdentifier fields:AnyFieldAccess* "??" {
+      return {
+        type: 'name-list-var',
+        identifier: id,
+        ...(fields.length > 0 ? { fields } : {})
+      };
+    }
+  // Standard definition (may include wildcards in name like *Validator, handle*)
+  / id:AlligatorAstIdentifierPattern {
       return { type: 'definition', name: id };
     }
 
-AlligatorAstIdentifier "AST identifier"
-  = $(BaseIdentifier ("." BaseIdentifier)*) {
+// Lookahead for pattern continuation (identifier chars after * or type keyword)
+AlligatorPatternContinue
+  = [A-Za-z0-9_]
+
+// Type keywords for filters
+AstTypeKeyword "AST type keyword"
+  = "fn" / "var" / "class" / "interface" / "type" / "enum" / "struct" / "trait" / "module"
+
+// AST identifier pattern - supports wildcards (* and ?) in symbol names
+AlligatorAstIdentifierPattern "AST identifier pattern"
+  = $(AlligatorPatternPart ("." AlligatorPatternPart)*) {
       return text();
     }
+
+// Pattern part - identifier characters plus wildcards
+AlligatorPatternPart "pattern part"
+  = $([A-Za-z_*?] [A-Za-z0-9_*?]*)
 
 // Source types - what we're loading from
 AlligatorSource
@@ -175,22 +226,30 @@ SectionClause
       };
     }
 
-// Section identifier - can be literal or variable  
+// Section identifier - can be literal, variable, or section list pattern
 AlligatorSectionIdentifier "alligator section identifier"
-  = "@" varRef:BaseIdentifier fields:FieldAccess* {
+  = hashes:$("#"*) "??" {
+      // Section list pattern: ??, #??, ##??, ###??, etc.
+      // The number of # indicates the heading level to filter (0 = all)
+      return {
+        type: 'section-list',
+        level: hashes.length
+      };
+    }
+  / "@" varRef:BaseIdentifier fields:FieldAccess* {
       // Variable reference as section name
       return helpers.createVariableReferenceNode('sectionVariable', {
         identifier: varRef,
         ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
     }
-  / chars:AlligatorSectionChar+ { 
+  / chars:AlligatorSectionChar+ {
       // Literal section name
       const content = chars.join('').trim();
-      return helpers.createNode(NodeType.Text, { 
-        content: content, 
-        location: location() 
-      }); 
+      return helpers.createNode(NodeType.Text, {
+        content: content,
+        location: location()
+      });
     }
 
 // Characters allowed in section names (inside alligators)

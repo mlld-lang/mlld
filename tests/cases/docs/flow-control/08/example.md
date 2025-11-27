@@ -1,2 +1,7 @@
-/var @config = {"host": "localhost", "port": 3000}
-/for @value in @config => show `@value_key: @value`
+/exe @format(name) = when [
+  let @greeting = "Hello"
+  let @punctuation = "!"
+  * => "@greeting @name@punctuation"
+]
+
+/show @format("World")

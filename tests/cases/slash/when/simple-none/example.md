@@ -16,11 +16,11 @@
   none => show "Should not appear"
 ]
 
->> Test implicit variable assignment with none
+>> Test explicit variable assignment with none
 /var @level = 0
 /when [
-  @level > 10 => @result = "high"
-  @level > 5 => @result = "medium"
-  none => @result = "low"
+  @level > 10 => var @result = "high"
+  @level > 5 => var @result = "medium"
+  none => var @result = "low"
 ]
 /show @result

@@ -1,0 +1,5 @@
+/export { greet }
+
+/var @_internalHelper = "This is internal"
+
+/exe @greet(name) = `Hello, @name!`

@@ -48,7 +48,16 @@ class MlldSyntaxGenerator {
       whenKeyword: 'when\\s*:',
       whenArrow: '=>',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to|format|parallel)\\b',
+      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|let|var|stream|module|static|live|cached|local|cmd|in|for)\\b',
+      // Guard filter syntax
+      guardFilter: '\\bop:(run|exe|output|show|import)\\b',
+      // Type-checking builtin methods
+      typeCheckMethods: '\\.(isArray|isObject|isString|isNumber|isBoolean|isNull|isDefined)\\s*\\(',
+      // AST selector patterns inside { }
+      astSelectorWildcard: '\\{\\s*[\\w]*\\*[\\w]*\\s*\\}',
+      astSelectorTypeFilter: '\\{\\s*\\*?(fn|var|class|type|interface|method|property|const|let|function)\\s*\\}',
+      astSelectorListing: '\\{\\s*(\\w+)?\\?\\?\\s*\\}',
+      astSelectorUsage: '\\{\\s*\\([^)]+\\)\\s*\\}',
       // Specific keywords
       parallelKeyword: '\\bparallel\\b',
       withFormatKey: '\\bformat\\b',
@@ -81,7 +90,7 @@ class MlldSyntaxGenerator {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
           // Ensure newer directives are present even if grammar scan misses them
-          ['for', 'log'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
+          ['for', 'log', 'guard', 'export', 'stream', 'append'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -91,7 +100,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'run', 'exe', 'path', 'import', 'when', 'output', 'for', 'log'];
+    return ['var', 'show', 'stream', 'run', 'exe', 'path', 'import', 'when', 'output', 'append', 'for', 'log', 'guard', 'export'];
   }
 
   generatePrism() {
@@ -800,12 +809,42 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         match: this.patterns.negationOperator
       },
       {
+        // Type-checking builtin methods (before generic field access)
+        name: 'support.function.builtin.mlld',
+        match: this.patterns.typeCheckMethods
+      },
+      {
+        // AST selector with wildcard (e.g., { handle* }, { *Handler })
+        name: 'entity.name.tag.ast-selector.mlld',
+        match: this.patterns.astSelectorWildcard
+      },
+      {
+        // AST selector type filter (e.g., { *fn }, { *class })
+        name: 'entity.name.type.ast-selector.mlld',
+        match: this.patterns.astSelectorTypeFilter
+      },
+      {
+        // AST selector name listing (e.g., { ?? }, { fn?? })
+        name: 'keyword.other.ast-listing.mlld',
+        match: this.patterns.astSelectorListing
+      },
+      {
+        // AST selector usage/references (e.g., { (handleUser) })
+        name: 'entity.name.function.ast-usage.mlld',
+        match: this.patterns.astSelectorUsage
+      },
+      {
         name: 'variable.other.member.mlld',
         match: this.patterns.fieldAccess
       },
       {
         name: 'keyword.operator.mlld',
         match: this.patterns.operators
+      },
+      {
+        // Guard filter syntax (op:run, op:exe, etc.)
+        name: 'support.type.guard-filter.mlld',
+        match: this.patterns.guardFilter
       },
       {
         // Pipe operator

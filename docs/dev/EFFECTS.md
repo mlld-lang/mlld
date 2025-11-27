@@ -16,6 +16,10 @@ The system defines 5 effect types in `interpreter/env/EffectHandler.ts`:
 4. **`'stderr'`** - Error output
 5. **`'file'`** - File output (from `/output` directives)
 
+### Guard Compatibility
+
+After-guards require non-streaming execution because streaming emits effects immediately and cannot retract them. `guard-post-hook` blocks any directive or executable that has after-timed guards when streaming is enabled; disable streaming in `with { stream: false }` or move validation to before-guards when streaming is required.
+
 ### Architecture Components
 
 ```

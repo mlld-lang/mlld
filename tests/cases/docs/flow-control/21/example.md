@@ -1,6 +1,4 @@
-/var @xs = [1, null, 2, null, 3]
-/var @filtered = for @x in @xs => when [
-  @x != null => @x
-  none => skip
-]
-/show @filtered   # => ["1","2","3"]
+/var @names = ["Ann","Ben"]
+/exe @greet(n) = `Hello @n`
+/show foreach @greet(@names) with { separator: " | ", template: "{{index}}={{result}}" }
+# Output: 0=Hello Ann | 1=Hello Ben

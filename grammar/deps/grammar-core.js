@@ -34,6 +34,7 @@ export const DirectiveKind = {
     for: 'for', // For loops
     path: 'path',
     import: 'import',
+    export: 'export',
     output: 'output',
     append: 'append',
     when: 'when',

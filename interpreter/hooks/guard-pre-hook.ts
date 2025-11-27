@@ -17,6 +17,9 @@ import { attachArrayHelpers, buildArrayAggregate } from '@core/types/variable/Ar
 import type { ArrayAggregateSnapshot, GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
+import { isLetAssignment } from '@core/types/when';
+import { VariableImporter } from '../eval/import/VariableImporter';
+import { evaluate } from '../core/interpreter';
 import { isVariable } from '../utils/variable-resolution';
 import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
@@ -26,6 +29,7 @@ import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
+import { appendFileSync } from 'fs';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -303,9 +307,15 @@ function resolveWithClause(node: HookableNode): unknown {
   if (isExecHookTarget(node)) {
     return (node as any).withClause;
   }
+  if ((node as any).withClause) {
+    return (node as any).withClause;
+  }
   const values = (node as any).values;
   if (values?.withClause) {
     return values.withClause;
+  }
+  if (values?.value?.withClause) {
+    return values.value.withClause;
   }
   if (values?.invocation?.withClause) {
     return values.invocation.withClause;
@@ -569,6 +579,74 @@ export const guardPreHook: PreHook = async (
       guardContext: aggregateContext
     });
     appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+
+    if (process.env.MLLD_DEBUG_GUARDS === '1') {
+      try {
+        const inputPreview = Array.isArray(inputs)
+          ? inputs
+              .slice(0, 3)
+              .map(entry =>
+                isVariable(entry as any)
+                  ? {
+                      name: (entry as any).name,
+                      text: (entry as any).value?.text ?? (entry as any).text ?? (entry as any).value,
+                      labels: (entry as any).ctx?.labels
+                    }
+                  : entry
+              )
+          : inputs;
+        console.error('[guard-pre-hook] decision', {
+          decision: currentDecision,
+          operation: {
+            type: operation?.type,
+            subtype: operation?.subtype,
+            name: operation?.name,
+            labels: operation?.labels,
+            metadata: operation?.metadata
+          },
+          inputs: inputPreview,
+          reasons,
+          hints: hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
+          guardTrace: guardTrace.map(trace => ({
+            guard: trace.guard?.name ?? trace.guard?.filterKind,
+            decision: trace.decision,
+            reason: trace.reason,
+            hint: trace.hint
+          }))
+        });
+        try {
+          appendFileSync(
+            '/tmp/mlld_guard_pre.log',
+            JSON.stringify(
+              {
+                decision: currentDecision,
+                operation: {
+                  type: operation?.type,
+                  subtype: operation?.subtype,
+                  name: operation?.name,
+                  labels: operation?.labels,
+                  metadata: operation?.metadata
+                },
+                reasons,
+                hints: hints.map(h => (typeof h === 'string' ? h : h?.hint ?? h)),
+                guardTrace: guardTrace.map(trace => ({
+                  guard: trace.guard?.name ?? trace.guard?.filterKind,
+                  decision: trace.decision,
+                  reason: trace.reason,
+                  hint: trace.hint
+                }))
+              },
+              null,
+              2
+            ) + '\n'
+          );
+        } catch {
+          // ignore file debug failures
+        }
+      } catch {
+        // ignore debug logging failures
+      }
+    }
 
     if (currentDecision === 'allow') {
       for (const key of usedAttemptKeys) {
@@ -874,12 +952,47 @@ async function evaluateGuardBlock(
   block: GuardBlockNode,
   guardEnv: Environment
 ): Promise<GuardActionNode | undefined> {
-  for (const rule of block.rules) {
+  // Create a child environment for let scoping
+  let currentEnv = guardEnv;
+
+  for (const entry of block.rules) {
+    // Handle let assignments
+    if (isLetAssignment(entry)) {
+      let value: unknown;
+      // Check if value is a raw primitive or contains nodes
+      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+      const isRawPrimitive = firstValue === null ||
+        typeof firstValue === 'number' ||
+        typeof firstValue === 'boolean' ||
+        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+      if (isRawPrimitive) {
+        value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+      } else {
+        const valueResult = await evaluate(entry.value, currentEnv);
+        value = valueResult.value;
+      }
+
+      const importer = new VariableImporter();
+      const variable = importer.createVariableFromValue(
+        entry.identifier,
+        value,
+        'let',
+        undefined,
+        { env: currentEnv }
+      );
+      currentEnv = currentEnv.createChild();
+      currentEnv.setVariable(entry.identifier, variable);
+      continue;
+    }
+
+    // Handle guard rules
+    const rule = entry;
     let matches = false;
     if (rule.isWildcard) {
       matches = true;
     } else if (rule.condition && rule.condition.length > 0) {
-      matches = await evaluateCondition(rule.condition, guardEnv);
+      matches = await evaluateCondition(rule.condition, currentEnv);
     }
 
     if (matches) {

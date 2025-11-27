@@ -1,5 +1,6 @@
 import type { TypedDirectiveNode } from './base';
 import type { BaseMlldNode, DirectiveNode, SourceLocation } from './primitives';
+import type { LetAssignmentNode } from './when';
 
 export type GuardScope = 'perInput' | 'perOperation';
 export type GuardFilterKind = 'data' | 'operation';
@@ -29,10 +30,15 @@ export interface GuardRuleNode extends BaseMlldNode {
   action: GuardActionNode;
 }
 
+/**
+ * Union type for guard block entries (let assignments and guard rules)
+ */
+export type GuardEntry = GuardRuleNode | LetAssignmentNode;
+
 export interface GuardBlockNode extends BaseMlldNode {
   type: 'GuardBlock';
   modifier?: string;
-  rules: GuardRuleNode[];
+  rules: GuardEntry[];  // Mixed let assignments and guard rules
 }
 
 export interface GuardDirectiveValues {

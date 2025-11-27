@@ -1,1 +1,6 @@
-/for @x in ["red", "blue"] => for @y in [1, 2] => for @z in ["a", "b"] => show "@x-@y-@z"
+/var @status = "ok"
+/when @status: [
+  let @msg = "Completed"
+  "ok" => show @msg
+]
+# @msg is not accessible here
