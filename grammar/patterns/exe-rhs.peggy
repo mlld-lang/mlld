@@ -130,7 +130,7 @@ ExeUnifiedReference "exe unified reference"
       };
     }
 
-// Run command with stdin pattern for exe context - handles "run {command} with { stdin: @var }"
+// Run command with stdin pattern for exe context - handles "run {command} with { stdin: @var }" or "run cmd {command} with { stdin: @var }"
 ExeRunCommandWithStdin "exe run command with stdin"
   = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) _ withClause:WithClause {
       // Only allow with clauses that have stdin
@@ -158,7 +158,7 @@ ExeRunCommandWithStdin "exe run command with stdin"
       };
     }
 
-// Run command pipe stdin pattern for exe context - handles "run @var | {command}"
+// Run command pipe stdin pattern for exe context - handles "run @var | {command}" or "run @var | cmd {command}"
 ExeRunCommandPipeStdin "exe run command pipe stdin"
   = "run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
@@ -217,9 +217,9 @@ ExeStreamCommandPattern "exe stream command pattern"
       };
     }
 
-// Run command pattern for exe context - handles "run {command}" syntax
+// Run command pattern for exe context - handles "run cmd {command}" or "run {command}" syntax
 ExeRunCommandPattern "exe run command pattern"
-  = "run" _ content:UnifiedCommandBrackets {
+  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
       return {
         subtype: 'exeCommand',
         source: 'command',
@@ -234,7 +234,6 @@ ExeRunCommandPattern "exe run command pattern"
         meta: content.meta
       };
     }
-  / "run" _ InvalidBareCommandBrackets
 
 // Code pattern for exe context - wraps RunLanguageCodeCore
 ExeCodePattern "exe code pattern"

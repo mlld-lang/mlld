@@ -87,7 +87,7 @@ npm install -g mlld
 
 # Local variables in when blocks
 /exe @format(score) = when first [
-  let @grade = when first [@score >= 90 => "A", @score >= 80 => "B", * => "C"]
+  let @grade = when first [@score >= 90 => "A" @score >= 80 => "B" * => "C"]
   * => `Score: @score (@grade)`
 ]
 

@@ -304,8 +304,9 @@ RunCommandValue
         }
       };
     }
-  / "run" _ content:UnifiedCommandBrackets {
+  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
       // Use the same command parsing as regular /run directives
+      // Supports both "run cmd {...}" and "run {...}" (implicit cmd)
       return {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
@@ -314,7 +315,6 @@ RunCommandValue
         meta: content.meta
       };
     }
-  / "run" _ InvalidBareCommandBrackets
   / "run" _ "@" invocation:UnifiedReferenceWithTail {
       // Handle run @command() syntax with unified patterns
       return {
@@ -385,8 +385,8 @@ CodeExecution "code execution"
         hasRunKeyword: true
       };
     }
-  / "run" _ content:UnifiedCommandBrackets {
-      // Shell command - use proper command parsing
+  / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+      // Shell command - supports both "run cmd {...}" and "run {...}"
       return {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
@@ -395,7 +395,6 @@ CodeExecution "code execution"
         meta: content.meta
       };
     }
-  / "run" _ InvalidBareCommandBrackets
   / lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
       // Shorthand: language + code without 'run' keyword
       return {
