@@ -130,7 +130,8 @@ ExeUnifiedReference "exe unified reference"
       };
     }
 
-// Run command with stdin pattern for exe context - handles "run {command} with { stdin: @var }" or "run cmd {command} with { stdin: @var }"
+// Run command with stdin pattern for exe context
+// In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandWithStdin "exe run command with stdin"
   = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) _ withClause:WithClause {
       // Only allow with clauses that have stdin
@@ -158,7 +159,8 @@ ExeRunCommandWithStdin "exe run command with stdin"
       };
     }
 
-// Run command pipe stdin pattern for exe context - handles "run @var | {command}" or "run @var | cmd {command}"
+// Run command pipe stdin pattern for exe context
+// In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPipeStdin "exe run command pipe stdin"
   = "run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
@@ -217,7 +219,8 @@ ExeStreamCommandPattern "exe stream command pattern"
       };
     }
 
-// Run command pattern for exe context - handles "run cmd {command}" or "run {command}" syntax
+// Run command pattern for exe context
+// In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPattern "exe run command pattern"
   = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
       return {

@@ -305,8 +305,8 @@ RunCommandValue
       };
     }
   / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
-      // Use the same command parsing as regular /run directives
-      // Supports both "run cmd {...}" and "run {...}" (implicit cmd)
+      // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
+      // In standalone contexts: bare {...} requires explicit cmd prefix
       return {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
@@ -386,7 +386,7 @@ CodeExecution "code execution"
       };
     }
   / "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
-      // Shell command - supports both "run cmd {...}" and "run {...}"
+      // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
       return {
         type: 'command',
         command: content.values.command,  // Parsed command nodes
