@@ -166,7 +166,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
     // Handle name-list patterns: ??, fn??, var??, class??, etc.
     if (hasNames) {
-      const loadNameResults = async (): Promise<string[]> => {
+      const loadNameResults = async (): Promise<string[] | Array<{ names: string[]; file: string; relative: string; absolute: string }>> => {
         // Get the filter from the first name-list pattern (variables already resolved above)
         const namePattern = astPatterns.find(p =>
           p.type === 'name-list' || p.type === 'name-list-all'
@@ -175,6 +175,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
         // name-list-all has no filter (returns all names)
 
         if (isGlob) {
+          // For glob patterns, return per-file structure with metadata
           const baseDir = env.getFileDirectory();
           const matches = await glob(pathOrUrl, {
             cwd: baseDir,
@@ -182,21 +183,28 @@ export async function processContentLoader(node: any, env: Environment): Promise
             followSymlinks: true,
             ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
           });
-          const allNames: string[] = [];
+          const results: Array<{ names: string[]; file: string; relative: string; absolute: string }> = [];
           const fileList = Array.isArray(matches) ? matches : [];
           for (const filePath of fileList) {
             try {
               const content = await env.readFile(filePath);
               const names = extractNames(content, filePath, filter);
-              allNames.push(...names);
+              if (names.length > 0) {
+                results.push({
+                  names,
+                  file: path.basename(filePath),
+                  relative: formatRelativePath(env, filePath),
+                  absolute: filePath
+                });
+              }
             } catch {
               // skip unreadable files
             }
           }
-          // Return unique sorted names
-          return [...new Set(allNames)].sort();
+          return results;
         }
 
+        // Single file - return plain string array
         const content = await env.readFile(pathOrUrl);
         return extractNames(content, pathOrUrl, filter);
       };
@@ -643,8 +651,15 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
           if (isSectionListPattern(options.section)) {
             const level = getSectionListLevel(options.section);
             const sections = listSections(markdownContent, level);
-            // For glob patterns with section lists, add all sections to results
-            results.push(...sections);
+            // For glob patterns with section lists, preserve per-file structure
+            if (sections.length > 0) {
+              results.push({
+                names: sections,
+                file: path.basename(filePath),
+                relative: computeRelative(filePath),
+                absolute: filePath
+              } as any);
+            }
             continue;
           }
 
@@ -713,8 +728,15 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
           if (isSectionListPattern(options.section)) {
             const level = getSectionListLevel(options.section);
             const sections = listSections(rawContent, level);
-            // For glob patterns with section lists, add all sections to results
-            results.push(...sections);
+            // For glob patterns with section lists, preserve per-file structure
+            if (sections.length > 0) {
+              results.push({
+                names: sections,
+                file: path.basename(filePath),
+                relative: computeRelative(filePath),
+                absolute: filePath
+              } as any);
+            }
             continue;
           }
 

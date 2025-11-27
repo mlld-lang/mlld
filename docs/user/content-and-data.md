@@ -58,6 +58,12 @@ JS/Node receive `.data` by default (text → string, JSON → object). Extract t
 /show @process(@file)         # Error - unwrapped to string/object
 ```
 
+**When do you need `.keep`?**
+
+- **Single file loads** `<file.md>` → string (loses metadata) → use `.keep` to preserve as `LoadContentResult`
+- **Glob patterns** `<*.md>` → array (already structured) → no `.keep` needed - metadata preserved automatically
+- **AST/name-lists with globs** automatically return per-file structures with metadata - no `.keep` needed
+
 ## File Loading
 
 Load file contents with angle brackets `<>`:
@@ -233,7 +239,7 @@ Use curly braces after a file path to pull specific definitions or usages from s
 Returns string arrays instead of code:
 
 ```mlld
->> List all definition names
+>> Single file - returns plain string array
 /var @names = <api.ts { ?? }>
 /show @names.join(", ")                         # "createUser, deleteUser, User, Status"
 
@@ -241,6 +247,13 @@ Returns string arrays instead of code:
 /var @funcNames = <api.ts { fn?? }>            # Function names only
 /var @classNames = <api.ts { class?? }>        # Class names only
 /var @varNames = <api.ts { var?? }>            # Variable names only
+
+>> Glob patterns - returns per-file structured results
+/var @pythonClasses = <**/*.py { class?? }>
+/for @file in @pythonClasses => show "@file.names.length classes in @file.relative"
+# Output:
+# 3 classes in ./models/user.py
+# 2 classes in ./services/auth.py
 ```
 
 #### Variable Interpolation
@@ -258,13 +271,17 @@ Returns string arrays instead of code:
 #### Section Listing (Markdown)
 
 ```mlld
->> List all section headings
+>> Single file - returns plain string array
 /var @headings = <guide.md # ??>
 /show @headings.join("\n")
 
 >> List specific heading levels
 /var @h2s = <guide.md # ##??>                  # H2 headings only
 /var @h3s = <guide.md # ###??>                 # H3 headings only
+
+>> Glob patterns - returns per-file structured results
+/var @docSections = <docs/**/*.md # ##??>
+/for @doc in @docSections => show "**@doc.file**: @doc.names.join(', ')"
 ```
 
 #### Usage Patterns
@@ -286,7 +303,10 @@ Wrap any selector in parentheses to find functions that USE the matched symbols:
 
 - **Mixing selectors**: Cannot mix content selectors with name-list selectors: `{ createUser, fn?? }` is an error
 - **Supported languages**: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`
-- **Glob support**: Works with glob patterns; `file` metadata shows which match came from which file
+- **Glob behavior**:
+  - Single file: `<file.ts { ?? }>` → plain string array `["name1", "name2"]`
+  - Glob pattern: `<**/*.ts { ?? }>` → per-file objects `[{ names: [...], file, relative, absolute }]`
+  - Iterate naturally: `/for @f in @results => show "@f.names.length items in @f.relative"`
 - **Null handling**: Missing patterns yield `null` to keep output aligned with request order
 - **Top-level only**: `{ ?? }` and `{ * }` exclude nested definitions (methods, constructors)
 
