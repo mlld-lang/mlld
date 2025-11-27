@@ -1,8 +1,11 @@
-/var @config = <settings.json>
+/var @items = ["first", "second", "third", "fourth", "last"]
 
->> Direct field access on parsed JSON
-/show @config.json.apiUrl
-/show @config.json.users[0].email
+>> Basic slicing
+/show @items[0:3]                        >> ["first", "second", "third"]
+/show @items[2:]                         >> ["third", "fourth", "last"]
+/show @items[:3]                         >> ["first", "second", "third"]
 
->> Raw content still available
-/show @config.content                    >> Raw JSON string
+>> Negative indices
+/show @items[-2:]                        >> ["fourth", "last"]
+/show @items[:-1]                        >> ["first", "second", "third", "fourth"]
+/show @items[1:-1]                       >> ["second", "third", "fourth"]

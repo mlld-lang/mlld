@@ -95,12 +95,12 @@
     },
     {
       "name": "meta.embedded.mlld",
-      "begin": "^(?=/(var|show|run|exe|path|import|when|output|for|log)\\b)",
+      "begin": "^(?=/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export)\\b)",
       "end": "$",
       "patterns": [
         {
           "name": "keyword.control.directive.mlld",
-          "match": "\\G/(var|show|run|exe|path|import|when|output|for|log)\\b"
+          "match": "\\G/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export)\\b"
         },
         {
           "name": "comment.line.double-slash.mlld",
@@ -492,12 +492,36 @@
           "match": "!@"
         },
         {
+          "name": "support.function.builtin.mlld",
+          "match": "\\.(isArray|isObject|isString|isNumber|isBoolean|isNull|isDefined)\\s*\\("
+        },
+        {
+          "name": "entity.name.tag.ast-selector.mlld",
+          "match": "\\{\\s*[\\w]*\\*[\\w]*\\s*\\}"
+        },
+        {
+          "name": "entity.name.type.ast-selector.mlld",
+          "match": "\\{\\s*\\*?(fn|var|class|type|interface|method|property|const|let|function)\\s*\\}"
+        },
+        {
+          "name": "keyword.other.ast-listing.mlld",
+          "match": "\\{\\s*(\\w+)?\\?\\?\\s*\\}"
+        },
+        {
+          "name": "entity.name.function.ast-usage.mlld",
+          "match": "\\{\\s*\\([^)]+\\)\\s*\\}"
+        },
+        {
           "name": "variable.other.member.mlld",
           "match": "\\.(\\w+|\\d+)"
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to|format|parallel)\\b"
+          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|let|var|stream|module|static|live|cached|local|cmd|in|for)\\b"
+        },
+        {
+          "name": "support.type.guard-filter.mlld",
+          "match": "\\bop:(run|exe|output|show|import)\\b"
         },
         {
           "name": "keyword.operator.pipe.mlld",

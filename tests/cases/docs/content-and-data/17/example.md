@@ -1,11 +1,8 @@
->> Prefix matching
-/var @handlers = <api.ts { handle* }>           # All functions starting with "handle"
+>> Find functions that use specific symbols
+/var @callers = <api.ts { (validateEmail) }>
 
->> Suffix matching
-/var @validators = <api.ts { *Validator }>      # All functions ending with "Validator"
+>> Find functions that use any wildcard-matched symbol
+/var @serviceUsers = <api.ts { (*Service) }>
 
->> Contains matching
-/var @requests = <api.ts { *Request* }>         # All functions containing "Request"
-
->> Single character wildcard
-/var @getters = <api.ts { get? }>               # getA, getB, getC (not getAllItems)
+>> Find functions that use any function
+/var @functionCallers = <api.ts { (*fn) }>

@@ -1,18 +1,10 @@
->> Extract from code fence
-/var @llmResponse = `Here's your data:
-\`\`\`json
-{"name": "Alice", "status": "active"}
-\`\`\``
+>> Import specific variables
+/import { API_KEY, NODE_ENV } from @input
+/show `Deploying to @NODE_ENV with key @API_KEY`
 
-/var @data = @llmResponse | @json.llm
-/show @data.name                                >> Alice
-
->> Extract from inline prose
-/var @inline = `The result is {"count": 42} for this query.`
-/var @extracted = @inline | @json.llm
-/show @extracted.count                          >> 42
-
->> Returns false when no JSON found
-/var @text = `Just plain text, no JSON here.`
-/var @result = @text | @json.llm
-/show @result                                   >> false
+>> Import and use in objects
+/var @config = {
+  "apiKey": @API_KEY,
+  "environment": @NODE_ENV,
+  "timestamp": @now
+}

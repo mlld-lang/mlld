@@ -137,7 +137,7 @@ SlashRun
         'command'
       );
     }
-  / DirectiveContext "/run" _ content:UnifiedCommandBrackets tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext "/run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched command', { content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -181,7 +181,7 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext "/run" _ stdinExpr:Expression _ "|" _ content:UnifiedCommandBrackets tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext "/run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -447,7 +447,7 @@ SlashRun
     
   // Error: Generic /run syntax error (catch-all)
   / DirectiveContext "/run" {
-      helpers.mlldError("Invalid /run syntax. Expected: /run \"command\", /run {command}, /run language {code}, or /run @exec", String.fromCharCode(123));
+      helpers.mlldError("Invalid /run syntax. Expected: /run cmd {command}, /run language {code}, or /run @exec", String.fromCharCode(123));
     }
 
 // -------------------------------------------------------------
@@ -542,15 +542,15 @@ RunDirectiveRef
         'exec'
       );
     }
-  / content:UnifiedCommandBrackets {
+  / content:(CmdCommandBrackets / UnifiedCommandBrackets) {
       helpers.debug('RunDirectiveRef matched command in RHS', { content });
-      
+
       return helpers.createStructuredDirective(
         'run',
         content.subtype,
         content.values,
         content.raw,
-        { 
+        {
           ...content.meta,
           isRHSRef: true
         },

@@ -68,6 +68,19 @@ export class DirectiveVisitor extends BaseVisitor {
       this.visitExportDirective(node, context);
       return;
     }
+
+    if (node.kind === 'guard') {
+      this.visitGuardDirective(node, context);
+      return;
+    }
+
+    // /append is like /output - writes to a target
+    if (node.kind === 'append') {
+      this.visitOutputDirective(node, context);
+      return;
+    }
+
+    // /stream falls through to general directive processing like /show
     
     // Handle implicit exe directives (e.g., @transform() = @applyFilter(@data))
     if (node.kind === 'exe' && node.meta?.implicit && node.values?.commandRef) {
@@ -459,8 +472,11 @@ export class DirectiveVisitor extends BaseVisitor {
     if (values.withClause && !values.value) {
       this.visitWithClause(values.withClause, directive, context);
     }
-    
+
     this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+
+    // Tokenize security labels if present (for /var, /exe, /path, etc.)
+    this.tokenizeSecurityLabels(directive);
   }
   
   private visitWithClause(withClause: any, directive: any, context: VisitorContext): void {
@@ -820,8 +836,14 @@ export class DirectiveVisitor extends BaseVisitor {
     } else {
       this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
     }
+
+    // Tokenize pipeline operators (| and ||)
+    this.tokenizePipelineOperators(directive);
+
+    // Tokenize security labels if present
+    this.tokenizeSecurityLabels(directive);
   }
-  
+
   private visitOutputDirective(directive: any, context: VisitorContext): void {
     const values = directive.values;
     if (!values) return;
@@ -2010,6 +2032,433 @@ export class DirectiveVisitor extends BaseVisitor {
           this.visitOutputDirective(actionNode, context);
         } else {
           this.mainVisitor.visitNode(actionNode, context);
+        }
+      }
+    }
+
+    // Tokenize pipeline operators (| and ||) for batch pipelines
+    this.tokenizePipelineOperators(directive);
+  }
+
+  private visitGuardDirective(directive: any, context: VisitorContext): void {
+    const values = directive.values;
+    if (!values || !directive.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+
+    // Tokenize the guard name if present (@guardName)
+    if (values.name && Array.isArray(values.name) && values.name[0]?.location) {
+      const nameNode = values.name[0];
+      this.tokenBuilder.addToken({
+        line: nameNode.location.start.line - 1,
+        char: nameNode.location.start.column - 1,
+        length: (nameNode.identifier?.length || 0) + 1, // +1 for @
+        tokenType: 'variable',
+        modifiers: ['declaration']
+      });
+    }
+
+    // Tokenize timing keyword (before/after/always)
+    const timingMatch = directiveText.match(/\b(before|after|always)\b/);
+    if (timingMatch && timingMatch.index !== undefined) {
+      const timingOffset = directive.location.start.offset + timingMatch.index;
+      const timingPosition = this.document.positionAt(timingOffset);
+
+      this.tokenBuilder.addToken({
+        line: timingPosition.line,
+        char: timingPosition.character,
+        length: timingMatch[1].length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize guard filter (op:run, op:exe, or data label)
+    if (values.filter && Array.isArray(values.filter) && values.filter[0]) {
+      const filterNode = values.filter[0];
+
+      if (filterNode.filterKind === 'operation') {
+        // op:run, op:exe, etc.
+        const opMatch = directiveText.match(/\bop:(\w+(?:\.\w+)*)/);
+        if (opMatch && opMatch.index !== undefined) {
+          const opOffset = directive.location.start.offset + opMatch.index;
+          const opPosition = this.document.positionAt(opOffset);
+
+          // Tokenize 'op' as keyword
+          this.tokenBuilder.addToken({
+            line: opPosition.line,
+            char: opPosition.character,
+            length: 2, // 'op'
+            tokenType: 'keyword',
+            modifiers: []
+          });
+
+          // Tokenize ':' as operator
+          this.tokenBuilder.addToken({
+            line: opPosition.line,
+            char: opPosition.character + 2,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+
+          // Tokenize the operation identifier
+          this.tokenBuilder.addToken({
+            line: opPosition.line,
+            char: opPosition.character + 3,
+            length: opMatch[1].length,
+            tokenType: 'variable',
+            modifiers: []
+          });
+        }
+      } else if (filterNode.filterKind === 'data') {
+        // Data label filter - find and tokenize
+        const labelValue = filterNode.value;
+        if (labelValue) {
+          const labelMatch = directiveText.match(new RegExp(`\\b${labelValue}\\b`));
+          if (labelMatch && labelMatch.index !== undefined) {
+            const labelOffset = directive.location.start.offset + labelMatch.index;
+            const labelPosition = this.document.positionAt(labelOffset);
+
+            this.tokenBuilder.addToken({
+              line: labelPosition.line,
+              char: labelPosition.character,
+              length: labelValue.length,
+              tokenType: 'label',
+              modifiers: []
+            });
+          }
+        }
+      }
+    }
+
+    // Tokenize '=' operator
+    const equalMatch = directiveText.match(/\s+=\s+/);
+    if (equalMatch && equalMatch.index !== undefined) {
+      const equalOffset = directive.location.start.offset + equalMatch.index + equalMatch[0].indexOf('=');
+      this.operatorHelper.addOperatorToken(equalOffset, 1);
+    }
+
+    // Tokenize 'when' keyword
+    const whenMatch = directiveText.match(/\bwhen\b/);
+    if (whenMatch && whenMatch.index !== undefined) {
+      const whenOffset = directive.location.start.offset + whenMatch.index;
+      const whenPosition = this.document.positionAt(whenOffset);
+
+      this.tokenBuilder.addToken({
+        line: whenPosition.line,
+        char: whenPosition.character,
+        length: 4,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize guard block brackets and rules
+    if (values.guard && Array.isArray(values.guard) && values.guard[0]) {
+      const guardBlock = values.guard[0];
+
+      // Find opening bracket
+      const openBracketIndex = directiveText.indexOf('[');
+      if (openBracketIndex !== -1) {
+        const openBracketPosition = this.document.positionAt(directive.location.start.offset + openBracketIndex);
+        this.tokenBuilder.addToken({
+          line: openBracketPosition.line,
+          char: openBracketPosition.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      }
+
+      // Process guard rules
+      if (guardBlock.rules && Array.isArray(guardBlock.rules)) {
+        for (const rule of guardBlock.rules) {
+          // Handle let assignments
+          if (rule.type === 'LetAssignment') {
+            this.visitLetAssignment(rule, directive, context);
+            continue;
+          }
+
+          // Handle wildcard condition
+          if (rule.isWildcard && rule.location) {
+            const wildcardMatch = directiveText.match(/\*/);
+            if (wildcardMatch && wildcardMatch.index !== undefined) {
+              const wildcardOffset = directive.location.start.offset + wildcardMatch.index;
+              const wildcardPosition = this.document.positionAt(wildcardOffset);
+
+              this.tokenBuilder.addToken({
+                line: wildcardPosition.line,
+                char: wildcardPosition.character,
+                length: 1,
+                tokenType: 'keyword',
+                modifiers: []
+              });
+            }
+          }
+
+          // Process condition
+          if (rule.condition) {
+            this.mainVisitor.visitNode(rule.condition, context);
+          }
+
+          // Find and tokenize '=>' operator between condition and action
+          if (rule.location) {
+            const ruleText = sourceText.substring(rule.location.start.offset, rule.location.end.offset);
+            const arrowMatch = ruleText.match(/=>/);
+            if (arrowMatch && arrowMatch.index !== undefined) {
+              const arrowOffset = rule.location.start.offset + arrowMatch.index;
+              this.operatorHelper.addOperatorToken(arrowOffset, 2);
+            }
+          }
+
+          // Process action (allow/deny/retry)
+          if (rule.action) {
+            const action = rule.action;
+            const decision = action.decision;
+
+            // Find and tokenize the action keyword
+            if (decision && rule.location) {
+              const ruleText = sourceText.substring(rule.location.start.offset, rule.location.end.offset);
+              const actionMatch = ruleText.match(new RegExp(`\\b${decision}\\b`));
+              if (actionMatch && actionMatch.index !== undefined) {
+                const actionOffset = rule.location.start.offset + actionMatch.index;
+                const actionPosition = this.document.positionAt(actionOffset);
+
+                this.tokenBuilder.addToken({
+                  line: actionPosition.line,
+                  char: actionPosition.character,
+                  length: decision.length,
+                  tokenType: 'keyword',
+                  modifiers: []
+                });
+              }
+            }
+
+            // Tokenize action value (for allow @transform(@input))
+            if (action.value && Array.isArray(action.value)) {
+              for (const valueNode of action.value) {
+                this.mainVisitor.visitNode(valueNode, context);
+              }
+            }
+
+            // Tokenize message string (for deny "msg" or retry "hint")
+            if (action.message && action.rawMessage) {
+              // Find and tokenize the message string
+              if (rule.location) {
+                const ruleText = sourceText.substring(rule.location.start.offset, rule.location.end.offset);
+                const msgMatch = ruleText.match(/"[^"]*"/);
+                if (msgMatch && msgMatch.index !== undefined) {
+                  const msgOffset = rule.location.start.offset + msgMatch.index;
+                  const msgPosition = this.document.positionAt(msgOffset);
+
+                  this.tokenBuilder.addToken({
+                    line: msgPosition.line,
+                    char: msgPosition.character,
+                    length: msgMatch[0].length,
+                    tokenType: 'string',
+                    modifiers: []
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Find closing bracket
+      const closeBracketIndex = directiveText.lastIndexOf(']');
+      if (closeBracketIndex !== -1) {
+        const closeBracketPosition = this.document.positionAt(directive.location.start.offset + closeBracketIndex);
+        this.tokenBuilder.addToken({
+          line: closeBracketPosition.line,
+          char: closeBracketPosition.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      }
+    }
+  }
+
+  private visitLetAssignment(letNode: any, directive: any, context: VisitorContext): void {
+    if (!letNode.location) return;
+
+    const sourceText = this.document.getText();
+    const letText = sourceText.substring(letNode.location.start.offset, letNode.location.end.offset);
+
+    // Tokenize 'let' keyword
+    const letMatch = letText.match(/^let\b/);
+    if (letMatch) {
+      const letPosition = this.document.positionAt(letNode.location.start.offset);
+      this.tokenBuilder.addToken({
+        line: letPosition.line,
+        char: letPosition.character,
+        length: 3, // 'let'
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize the variable being assigned
+    if (letNode.variable) {
+      const varNode = Array.isArray(letNode.variable) ? letNode.variable[0] : letNode.variable;
+      if (varNode?.location) {
+        this.tokenBuilder.addToken({
+          line: varNode.location.start.line - 1,
+          char: varNode.location.start.column - 1,
+          length: (varNode.identifier?.length || 0) + 1, // +1 for @
+          tokenType: 'variable',
+          modifiers: ['declaration']
+        });
+      }
+    }
+
+    // Tokenize '=' operator
+    const equalMatch = letText.match(/\s*=\s*/);
+    if (equalMatch && equalMatch.index !== undefined) {
+      const equalOffset = letNode.location.start.offset + equalMatch.index + equalMatch[0].indexOf('=');
+      this.operatorHelper.addOperatorToken(equalOffset, 1);
+    }
+
+    // Process the value expression
+    if (letNode.value) {
+      const valueNodes = Array.isArray(letNode.value) ? letNode.value : [letNode.value];
+      for (const valueNode of valueNodes) {
+        this.mainVisitor.visitNode(valueNode, context);
+      }
+    }
+  }
+
+  /**
+   * Tokenizes inline pipeline operators (| and ||) in directive text.
+   * - | separates sequential pipeline stages
+   * - || separates parallel stages within a group
+   */
+  private tokenizePipelineOperators(directive: any): void {
+    if (!directive.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+
+    // Find all | and || operators (but not inside strings or braces)
+    let inString = false;
+    let stringChar = '';
+    let braceDepth = 0;
+    let i = 0;
+
+    // Skip past the directive keyword
+    const directiveKeyword = '/' + directive.kind;
+    i = directiveText.indexOf(directiveKeyword);
+    if (i !== -1) {
+      i += directiveKeyword.length;
+    } else {
+      i = 0;
+    }
+
+    while (i < directiveText.length) {
+      const ch = directiveText[i];
+      const nextCh = directiveText[i + 1];
+
+      // Track string boundaries
+      if (!inString && (ch === '"' || ch === "'" || ch === '`')) {
+        inString = true;
+        stringChar = ch;
+        i++;
+        continue;
+      }
+      if (inString && ch === stringChar && directiveText[i - 1] !== '\\') {
+        inString = false;
+        i++;
+        continue;
+      }
+
+      // Track brace depth
+      if (!inString) {
+        if (ch === '{') braceDepth++;
+        if (ch === '}') braceDepth--;
+      }
+
+      // Look for pipe operators (only outside strings and braces)
+      if (!inString && braceDepth === 0 && ch === '|') {
+        const pipeOffset = directive.location.start.offset + i;
+        const pipePosition = this.document.positionAt(pipeOffset);
+
+        if (nextCh === '|') {
+          // || parallel operator
+          this.tokenBuilder.addToken({
+            line: pipePosition.line,
+            char: pipePosition.character,
+            length: 2,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          i += 2;
+          continue;
+        } else {
+          // | sequential operator
+          this.tokenBuilder.addToken({
+            line: pipePosition.line,
+            char: pipePosition.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          i++;
+          continue;
+        }
+      }
+
+      i++;
+    }
+  }
+
+  /**
+   * Tokenizes security/data labels that appear at the end of directives.
+   * Labels appear as comma-separated identifiers after the main directive content.
+   * Example: /run {echo hello} sensitive, pii
+   */
+  private tokenizeSecurityLabels(directive: any): void {
+    const labels = directive.values?.securityLabels || directive.meta?.securityLabels;
+    const rawLabels = directive.raw?.securityLabels;
+
+    if (!labels || !rawLabels || !directive.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+
+    // Find the raw labels string in the directive text
+    // Labels appear at the end, so search from the end
+    const labelsIndex = directiveText.lastIndexOf(rawLabels);
+    if (labelsIndex === -1) return;
+
+    // Tokenize each label
+    const labelsArray = Array.isArray(labels) ? labels : [labels];
+    let searchStart = labelsIndex;
+
+    for (const label of labelsArray) {
+      const labelIndex = directiveText.indexOf(label, searchStart);
+      if (labelIndex !== -1) {
+        const labelOffset = directive.location.start.offset + labelIndex;
+        const labelPosition = this.document.positionAt(labelOffset);
+
+        this.tokenBuilder.addToken({
+          line: labelPosition.line,
+          char: labelPosition.character,
+          length: label.length,
+          tokenType: 'label',
+          modifiers: []
+        });
+
+        searchStart = labelIndex + label.length;
+
+        // Also tokenize comma if there are more labels
+        const commaIndex = directiveText.indexOf(',', searchStart);
+        if (commaIndex !== -1 && commaIndex < directiveText.length) {
+          const commaOffset = directive.location.start.offset + commaIndex;
+          this.operatorHelper.addOperatorToken(commaOffset, 1);
+          searchStart = commaIndex + 1;
         }
       }
     }

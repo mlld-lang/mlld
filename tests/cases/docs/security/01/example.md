@@ -5,4 +5,4 @@
   * => allow
 ]
 
-/run { echo @apiKey }  # Blocked by guard
+/run cmd { echo @apiKey }  # Blocked by guard

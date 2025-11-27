@@ -1,13 +1,21 @@
-/var @user = {"name": "Alice", "scores": [10, 20, 30]}
+>> Files
+/var @config = <settings.json>
+@config.json              >> Parsed JSON object
+@config.data              >> Alias for .json
+@config.content           >> Raw string
+@config.text              >> Alias for .content
 
->> Object fields
-/show @user.name                         >> "Alice"
+>> Variables
+/var @str = '{"status": "ok"}'
+@str.data                 >> Parsed JSON object
+@str.json                 >> Alias for .data
+@str.text                 >> Original string
+@str.content              >> Alias for .text
+@str                      >> Original string (default)
 
->> Array elements by index
-/show @user.scores[0]                     >> 10
-/show @user.scores[1]                     >> 20
-
->> Nested access
-/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
-/show @config.db.host                    >> "localhost"
-/show @config.db.users[1]                 >> "guest"
+>> Command output
+/var @result = run {curl api.com/data}
+@result.data              >> Parse as JSON
+@result.json              >> Alias for .data
+@result.text              >> Keep as string
+@result.content           >> Alias for .text

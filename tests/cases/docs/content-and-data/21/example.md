@@ -1,11 +1,11 @@
->> Single file - returns plain string array
-/var @headings = <guide.md # ??>
-/show @headings.join("\n")
+/var @page = <https://example.com/data.json>
 
->> List specific heading levels
-/var @h2s = <guide.md # ##??>                  # H2 headings only
-/var @h3s = <guide.md # ###??>                 # H3 headings only
+>> URL-specific metadata
+/show @page.ctx.url                      >> Full URL
+/show @page.ctx.domain                   >> "example.com"
+/show @page.ctx.status                   >> HTTP status code
+/show @page.ctx.title                    >> Page title (if HTML)
 
->> Glob patterns - returns per-file structured results
-/var @docSections = <docs/**/*.md # ##??>
-/for @doc in @docSections => show "**@doc.file**: @doc.names.join(', ')"
+>> HTML is converted to markdown
+/show @page.content                      >> Markdown version
+/show @page.ctx.html                     >> Original HTML

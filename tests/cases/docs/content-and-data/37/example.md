@@ -1,15 +1,14 @@
->> Format JSON with indentation
-/var @data = <file.csv>
-/var @tojson = @data | @json
-/show @tojson
+>> In directives
+/show @name
 
->> Convert to XML (SCREAMING_SNAKE_CASE)
-/var @toxml = @data | @XML
-/show @toxml
+>> In double quotes
+/var @greeting = "Hello @name"
 
->> Convert arrays to CSV
-/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
-/var @tocsv = @users | @CSV
-/show @tocsv
+>> In command braces
+/run cmd {echo "Welcome @name"}
 
-`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:
+>> NOT in single quotes (literal)
+/var @literal = 'Hello @name'               >> Outputs: Hello @name
+
+>> NOT in plain markdown lines
+Hello @name                                 >> Plain text, no interpolation

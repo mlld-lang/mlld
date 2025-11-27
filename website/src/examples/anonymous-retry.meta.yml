@@ -1,0 +1,3 @@
+filename: anonymous-retry.mld
+className: possibility-example
+heading: "Anonymous retries let you send back hints. One LLM reviews another with a feedback loop."

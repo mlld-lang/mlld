@@ -7,7 +7,6 @@
   return items.map(pr => `- PR: ${pr.title} (${pr.url})`).join('\n');
 }
 
->> simple template
 /var @standup = `
   Write a standup update in markdown summarizing the work I did 
   yesterday based on the following commits and PRs.
@@ -19,7 +18,6 @@
   @formatPRs(@prs)
 `
 
->> executable template
 /exe @reviewPrompt(input) = `
 Review the following standup update to ensure I'm not taking credit for work I didn't do.
 
@@ -44,7 +42,7 @@ Your response should contain APPROVE or DENY in all caps.
 }
 
 /exe @review(@input) = when [
-  @input => @check = @claude(@reviewPrompt(@input)) 
+  let @check = @claude(@reviewPrompt(@input))
   @hasApproval(@check) => show "Approved: @check"
   @hasApproval(@check) => @input
   !@hasApproval(@check) && @ctx.retries < 3 => retry

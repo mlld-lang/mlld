@@ -1,15 +1,13 @@
->> Primitives
-/var @name = "Alice"
-/var @age = 30
-/var @active = true
-
->> Arrays
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
-
->> Objects
-/var @user = {"name": "Alice", "role": "admin"}
-/var @config = {
-  "database": {"host": "localhost", "port": 5432},
-  "features": ["auth", "api"]
+>> Filter JSON array from command
+/var @json = run {./mkjson.sh}
+/exe @filterHigh(entries) = js {
+  return entries.filter(e => e.finding.startsWith("High"));
 }
+/var @result = @filterHigh(@json.data)
+
+>> Process API response
+/var @response = run {curl -s api.example.com/data}
+/exe @getActive(data) = js {
+  return data.users.filter(u => u.active);
+}
+/var @active = @getActive(@response.data)

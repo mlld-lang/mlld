@@ -2,18 +2,18 @@
 
 ## tldr
 
-Load files with `<file.txt>`, work with data structures using dot notation, transform data with built-in methods, and access environment variables through `@input` imports.
+Load files with `<file.txt>` "alligators", work with data structures using dot notation, transform data with built-in methods, and access environment variables through `@input` imports.
 
 ```mlld
 /var @config = <config.json>             >> Load and parse JSON
 /show @config.database.host              >> Access nested fields
 /var @files = <docs/*.md>                >> Load multiple files
-/show @files[0].ctx.filename              >> Access file metadata via .ctx
+/show @files[0].ctx.filename             >> Access file metadata via .ctx
 ```
 
-## StructuredValue and .ctx
+## .ctx has all the metadata
 
-Loaded files and data are `StructuredValue` objects with three key parts:
+Loaded files and data are objects with three key parts:
 
 ```mlld
 /var @file = <package.json>
@@ -26,7 +26,7 @@ Loaded files and data are `StructuredValue` objects with three key parts:
 The `.ctx` namespace is where all metadata lives:
 
 ```mlld
-/var @file = <README.md>
+/var @file = <README.md>.keep
 
 /show @file.ctx.filename                 # "README.md"
 /show @file.ctx.tokens                   # Token count
@@ -48,21 +48,21 @@ The `.ctx` namespace is where all metadata lives:
 /var @name = @file.ctx.filename
 ```
 
-### JS/Node defaults and `.keep`
+### `.keep` alligator metadata
 
-JS/Node receive `.data` by default (text → string, JSON → object). Extract the metadata you want to pass at the time of instantiating a variable or use `.keep` to preserve metadata when passing the value:
+If you set a variable to the value of a single-file load like `<file.md>` it will lose the rich metadata like `<file.md>.ctx.relative` when passing the value.
+
+Use `<file.md>.keep` when setting as the value of a variable to preserve the structure.
 
 ```mlld
-/exe @process(f) = js { return f.ctx.filename; }
-/show @process(@file.keep)    # Works - wrapper has .ctx
-/show @process(@file)         # Error - unwrapped to string/object
+/var @file = <file.md>
+/show @file.ctx.relative
+>> No value here
+
+/var @file = <file.md>.keep
+/show @file.ctx.relative
+>> Returns a path
 ```
-
-**When do you need `.keep`?**
-
-- **Single file loads** `<file.md>` → string (loses metadata) → use `.keep` to preserve as `LoadContentResult`
-- **Glob patterns** `<*.md>` → array (already structured) → no `.keep` needed - metadata preserved automatically
-- **AST/name-lists with globs** automatically return per-file structures with metadata - no `.keep` needed
 
 ## File Loading
 
@@ -75,74 +75,6 @@ Load file contents with angle brackets `<>`:
 /show @readme                            # Shows file contents
 /show @filename                          # Shows "README.md"
 ```
-
-## Streaming Output
-
-For long-running operations, streaming shows progress as chunks arrive instead of waiting for completion.
-
-```mlld
-/stream @claude("Write a story")
-```
-
-While streaming, chunks appear incrementally as the story generates. Progress displays to stderr:
-
-```
-⟳ stage 1: 142 tokens
-```
-
-### How to Enable Streaming
-
-Use the `stream` keyword before a function call or code block:
-
-```mlld
-stream @claude("Write a haiku")
-
-stream sh {
-  echo "Processing..."
-  sleep 2
-  echo "Done!"
-}
-```
-
-The `stream` keyword is syntactic sugar for `with { stream: true }`:
-
-```mlld
-@claude("prompt") with { stream: true }
-```
-
-Or use the `/stream` directive to output with streaming:
-
-```mlld
-/stream @generateReport()
-```
-
-### Parallel Streaming
-
-Multiple streams show progress concurrently, then output buffered results:
-
-```mlld
-/exe @left() = sh { echo "L" }
-/exe @right() = sh { echo "R" }
-
-/var @results = stream @left() || stream @right()
-/show @results
-```
-
-Output:
-```
-[
-  "L",
-  "R"
-]
-```
-
-### Disabling Streaming
-
-Suppress streaming when you only need final output:
-
-- CLI: `--no-stream`
-- Environment: `MLLD_NO_STREAM=true`
-- API: `interpret(..., { streaming: { enabled: false } })`
 
 ### Basic Loading
 
@@ -183,7 +115,7 @@ Extract specific sections from markdown files:
 /var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"
 ```
 
-The `<>` placeholder in `as` templates represents each file's StructuredValue; use `.ctx` to read metadata.
+The `<>` placeholder in `as` templates represents each file's structured value; use `.ctx` to read metadata.
 
 ### AST-Based Code Selection
 
@@ -331,7 +263,7 @@ Every loaded file exposes metadata through its `.ctx` namespace:
 /show @file                              >> Same as above (implicit)
 ```
 
-**StructuredValue properties:**
+**Properties:**
 - `.text` - String content (used by display/templates)
 - `.data` - Parsed payload (JSON objects, arrays, etc.)
 - `.ctx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
@@ -636,12 +568,14 @@ mlld provides built-in transformers (both uppercase and lowercase work):
 
 For extracting JSON from LLM responses that may contain markdown code fences or surrounding prose, use `@json.llm`:
 
-```mlld
+
+````mlld
 >> Extract from code fence
-/var @llmResponse = `Here's your data:
-\`\`\`json
+/var @llmResponse = ::Here's your data:
+```json
 {"name": "Alice", "status": "active"}
-\`\`\``
+```
+::
 
 /var @data = @llmResponse | @json.llm
 /show @data.name                                >> Alice
@@ -655,7 +589,7 @@ For extracting JSON from LLM responses that may contain markdown code fences or 
 /var @text = `Just plain text, no JSON here.`
 /var @result = @text | @json.llm
 /show @result                                   >> false
-```
+````
 ```
 
 ## Templates and Interpolation
@@ -698,7 +632,7 @@ Line 2: @other
 
 >> Double quotes (single-line only)
 /var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+/run cmd {echo "Processing @file"}
 
 >> Triple-colon (Discord/social only)
 /var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
@@ -797,7 +731,7 @@ Variable interpolation works in specific contexts:
 /var @greeting = "Hello @name"
 
 >> In command braces
-/run {echo "Welcome @name"}
+/run cmd {echo "Welcome @name"}
 
 >> NOT in single quotes (literal)
 /var @literal = 'Hello @name'               >> Outputs: Hello @name

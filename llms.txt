@@ -114,7 +114,7 @@ Create with `/var @name = "Alice"`. Reference with `@name` in templates/commands
 ```mlld
 /var @name = "Alice"
 /show `Hello @name!`
-/run {echo "User: @name"}
+/run cmd {echo "User: @name"}
 /run js (@name) { console.log("Hi", name) }
 ```
 
@@ -124,8 +124,8 @@ Create with `/var @name = "Alice"`. Reference with `@name` in templates/commands
 Every command needs braces. Use language specifiers when needed. Define executables with `/exe`.
 
 ```mlld
-❌ /run echo "hello"
-✅ /run {echo "hello"}
+❌ /run cmd echo "hello"
+✅ /run cmd {echo "hello"}
 
 # Language specifiers.
 /run js {console.log("hi")}
@@ -145,7 +145,7 @@ Only these produce output: `/show`, `/run`, `/output`. Everything else mutates s
 ```mlld
 /var @secret = "hidden"      # no output
 /show `Visible`
-/run {echo "Also visible"}
+/run cmd {echo "Also visible"}
 ```
 
 </RULE_4_OUTPUT_SOURCES>
@@ -189,7 +189,7 @@ Line 2: @other
 
 >> Double quotes (single-line only)
 /var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
+/run cmd {echo "Processing @file"}
 
 >> Triple-colon (Discord/social only)
 /var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
@@ -790,11 +790,11 @@ Parameter syntax:
 
 ```mlld
 # run (pipes only)
-/run {echo Hello | tr '[:lower:]' '[:upper:]'}
+/run cmd {echo Hello | tr '[:lower:]' '[:upper:]'}
 
 # run with stdin (avoids shell escaping)
 /var @data = '[{"name":"Alice"},{"name":"Bob"}]'
-/run { cat | jq '.[] | select(.name == "Alice")' } with { stdin: @data }
+/run cmd { cat | jq '.[] | select(.name == "Alice")' } with { stdin: @data }
 >> OR pipe sugar:
 /run @data | { cat | jq '.[] | select(.name == "Alice")' }
 
@@ -1488,7 +1488,7 @@ mlld publish my-module.mld.md --private --path lib/modules --pr
 
 ```mlld
 ❌ # inside shell trying to call @func
-/run {
+/run cmd {
   RESULT=$(@helper("x"))   # won't work
   echo $RESULT
 }
@@ -1545,7 +1545,7 @@ Guards protect data and operations. Label sensitive data, define policies:
   * => allow
 ]
 
-/run { echo @apiKey }                    # Blocked by guard
+/run cmd { echo @apiKey }                    # Blocked by guard
 
 Syntax: /guard [@name] TIMING LABEL = when [...]
 - TIMING: before, after, or always (required)

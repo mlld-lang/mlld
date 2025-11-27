@@ -1,13 +1,14 @@
->> Get all of a specific type
-/var @allFunctions = <service.ts { *fn }>       # All functions and methods
-/var @allVariables = <service.ts { *var }>      # All variables and constants
-/var @allClasses = <service.ts { *class }>      # All classes
-/var @everything = <service.ts { * }>           # All top-level definitions
+/var @file = <package.json>
 
->> Other supported types
-{ *interface }  # All interfaces
-{ *type }       # All type aliases
-{ *enum }       # All enums
-{ *struct }     # All structs (Go, Rust, C++)
-{ *trait }      # All traits (Rust)
-{ *module }     # All modules (Ruby)
+>> Basic metadata
+/show @file.ctx.filename                 >> "package.json"
+/show @file.ctx.relative                 >> "./package.json" 
+/show @file.ctx.absolute                 >> Full path
+
+>> Token counting
+/show @file.ctx.tokest                   >> Estimated tokens (fast)
+/show @file.ctx.tokens                   >> Exact tokens
+
+>> Content access
+/show @file.content                      >> File contents (explicit)
+/show @file                              >> Same as above (implicit)

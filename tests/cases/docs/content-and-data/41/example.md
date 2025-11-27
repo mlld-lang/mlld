@@ -1,8 +1,14 @@
-/var @list = ::
-/for @item in @items
-- @item.name: @item.value
-/end
-::
+>> Collect all module documentation
+/var @modules = <modules/**/*.md>
 
->> Requirements: /for and /end at line start
->> NOT supported in :::...:::, .mtt, or "..."
+>> Build README with metadata
+/var @readme = `# Project Modules
+
+Total modules: @modules.length
+Last updated: @now
+
+@modules
+
+`
+
+/output @readme to "README.md"

@@ -1,11 +1,9 @@
-/var @page = <https://example.com/data.json>
+/var @jsonStr = '{"name": "Alice", "active": true}'
 
->> URL-specific metadata
-/show @page.ctx.url                      >> Full URL
-/show @page.ctx.domain                   >> "example.com"
-/show @page.ctx.status                   >> HTTP status code
-/show @page.ctx.title                    >> Page title (if HTML)
+/exe @length(str) = js {
+  return str.length;
+}
 
->> HTML is converted to markdown
-/show @page.content                      >> Markdown version
-/show @page.ctx.html                     >> Original HTML
+/run @length(@jsonStr)          >> Default: string
+/run @length(@jsonStr.text)     >> Explicit string
+/run @length(@jsonStr.content)  >> Alias for .text

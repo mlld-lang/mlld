@@ -1,8 +1,15 @@
->> Find functions that use specific symbols
-/var @callers = <api.ts { (validateEmail) }>
+>> Primitives
+/var @name = "Alice"
+/var @age = 30
+/var @active = true
 
->> Find functions that use any wildcard-matched symbol
-/var @serviceUsers = <api.ts { (*Service) }>
+>> Arrays
+/var @fruits = ["apple", "banana", "cherry"]
+/var @numbers = [1, 2, 3, 4, 5]
 
->> Find functions that use any function
-/var @functionCallers = <api.ts { (*fn) }>
+>> Objects
+/var @user = {"name": "Alice", "role": "admin"}
+/var @config = {
+  "database": {"host": "localhost", "port": 5432},
+  "features": ["auth", "api"]
+}

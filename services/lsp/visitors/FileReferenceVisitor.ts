@@ -326,7 +326,12 @@ export class FileReferenceVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     const nodeStartChar = node.location.start.column - 1;
-    
+
+    // Check for AST selectors { } and tokenize them
+    if (node.ast && Array.isArray(node.ast) && node.ast.length > 0) {
+      this.tokenizeAstSelectors(nodeText, node.location.start.offset, node.location.start.line - 1);
+    }
+
     // Token for "<"
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
@@ -776,6 +781,78 @@ export class FileReferenceVisitor extends BaseVisitor {
         tokenType: 'embeddedCode',
         modifiers: [],
         data: { language: node.language }
+      });
+    }
+  }
+
+  /**
+   * Tokenizes AST selectors in file references: { selector }
+   * Handles wildcards (*), type filters (*fn), name listing (??), and usage patterns
+   */
+  private tokenizeAstSelectors(nodeText: string, nodeStartOffset: number, line: number): void {
+    // Find all { } blocks in the text
+    const selectorRegex = /\{([^}]+)\}/g;
+    let match;
+
+    while ((match = selectorRegex.exec(nodeText)) !== null) {
+      const fullMatch = match[0];
+      const selectorContent = match[1].trim();
+      const matchStart = match.index;
+
+      // Token for opening brace
+      const openBraceOffset = nodeStartOffset + matchStart;
+      const openBracePos = this.document.positionAt(openBraceOffset);
+      this.tokenBuilder.addToken({
+        line: openBracePos.line,
+        char: openBracePos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+
+      // Determine selector type and tokenize content
+      const contentStart = matchStart + 1 + (match[0].indexOf(selectorContent) - 1);
+      const contentOffset = nodeStartOffset + matchStart + nodeText.substring(matchStart).indexOf(selectorContent);
+      const contentPos = this.document.positionAt(contentOffset);
+
+      // Determine token type based on selector pattern
+      let tokenType = 'variable'; // default
+      const modifiers: string[] = [];
+
+      if (selectorContent.includes('??')) {
+        // Name listing: { ?? }, { fn?? }
+        tokenType = 'keyword';
+      } else if (selectorContent.startsWith('(') && selectorContent.endsWith(')')) {
+        // Usage pattern: { (handleUser) }
+        tokenType = 'function';
+      } else if (selectorContent.includes('*')) {
+        // Wildcard: { handle* }, { *Handler }, { *Validator* }
+        tokenType = 'type';
+      } else if (/^(fn|var|class|type|interface|method|property|const|let|function)$/.test(selectorContent) ||
+                 /^\*(fn|var|class|type|interface|method|property|const|let|function)$/.test(selectorContent)) {
+        // Type filter: { *fn }, { *class }
+        tokenType = 'type';
+        modifiers.push('declaration');
+      }
+
+      // Token for selector content
+      this.tokenBuilder.addToken({
+        line: contentPos.line,
+        char: contentPos.character,
+        length: selectorContent.length,
+        tokenType,
+        modifiers
+      });
+
+      // Token for closing brace
+      const closeBraceOffset = nodeStartOffset + matchStart + fullMatch.length - 1;
+      const closeBracePos = this.document.positionAt(closeBraceOffset);
+      this.tokenBuilder.addToken({
+        line: closeBracePos.line,
+        char: closeBracePos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
       });
     }
   }

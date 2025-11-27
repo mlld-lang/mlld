@@ -131,7 +131,7 @@ But you don't want _everything_ to `run` and `show`.
 You can `/run` all shell command, javascript, and node in mlld:
 
 ```mlld
-/run {..}       << one-line command (| allowed but no && ; || continuation, no shell scripts)
+/run cmd {..}       << one-line command (| allowed but no && ; || continuation, no shell scripts)
 /run sh {..}    << multiline shell scripts and more permissive 
 /run js {..}    << javascript
 /run node {..}  << runs node scripts
@@ -139,7 +139,7 @@ You can `/run` all shell command, javascript, and node in mlld:
 
 Or create them and run them later with `/exe`
 
-`/run {echo @var}` will interpolate `@var` but language commands use their own native variable syntax.
+`/run cmd {echo @var}` will interpolate `@var` but language commands use their own native variable syntax.
 
 Any values used in `sh`, `js`, or `node` must be passed in:
 

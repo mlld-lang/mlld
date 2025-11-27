@@ -1,8 +1,7 @@
->> Extract single section
-/var @install = <README.md # Installation>
+>> Dynamic type filtering
+/var @targetType = "fn"
+/var @definitions = <service.ts { *@targetType }>
 
->> Extract from multiple files  
-/var @apis = <docs/*.md # API Reference>
-
->> Rename sections with 'as'
-/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"
+>> Dynamic name listing
+/var @listType = "class"
+/var @classNames = <service.ts { @listType?? }>

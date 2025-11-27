@@ -1,4 +1,4 @@
-/var @file = <README.md>
+/var @file = <README.md>.keep
 
 /show @file.ctx.filename                 # "README.md"
 /show @file.ctx.tokens                   # Token count

@@ -12,7 +12,7 @@ Guards protect data and operations. Label sensitive data, define guards to contr
   * => allow
 ]
 
-/run { echo @apiKey }  # Blocked by guard
+/run cmd { echo @apiKey }  # Blocked by guard
 ```
 
 ## Data Labels
@@ -78,7 +78,7 @@ Block secrets from shell commands:
 ]
 
 /var secret @key = "sk-12345"
-/run { echo @key }                         # Blocked
+/run cmd { echo @key }                         # Blocked
 ```
 
 ### Guard on Operations
@@ -90,7 +90,7 @@ Block all shell commands regardless of data:
   * => deny "Shell access disabled"
 ]
 
-/run { ls }                                # Blocked
+/run cmd { ls }                                # Blocked
 ```
 
 Filter by operation name:
@@ -387,7 +387,7 @@ Import and use:
 /import { @secretProtection } from "./guards/secrets.mld"
 
 /var secret @key = "sk-12345"
-/run { echo @key }                         # Protected by imported guard
+/run cmd { echo @key }                         # Protected by imported guard
 ```
 
 ## Expression Tracking

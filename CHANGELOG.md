@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `let` keyword for local variables in `/when` blocks: `let @x = value` creates block-scoped variables before conditions, enabling cleaner conditional logic without polluting outer scope
+- `/run cmd {command}` syntax for shell commands, consistent with `cmd {..}` in other contexts. Bare `/run {command}` still works for backwards compatibility.
 - AST selector wildcards ([#505](https://github.com/mlld-lang/mlld/issues/505)): `{ handle* }`, `{ *Validator }`, `{ *Request* }`, `{ get? }` for pattern-based symbol matching
 - AST type filters: `{ *fn }`, `{ *var }`, `{ *class }`, `{ *interface }`, `{ *type }`, `{ *enum }`, `{ *struct }`, `{ *trait }`, `{ *module }`, `{ * }` to get all definitions of a specific type
 - AST name listing: `{ ?? }`, `{ fn?? }`, `{ var?? }`, `{ class?? }` return string arrays of definition names instead of code
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Variable interpolation in AST selectors: `{ *@type }`, `{ @type?? }` for dynamic pattern construction
 - Usage patterns with wildcards and type filters: `{ (handle*) }`, `{ (*fn) }` find functions that use matched symbols
 - Validation: mixing content selectors with name-list selectors now throws clear error
+- LSP/syntax highlighting: `/guard`, `/stream`, `/append`, `/export` directives; guard keywords (`before`, `after`, `always`, `allow`, `deny`, `retry`); `let`/`var` in when blocks; import types (`module`, `static`, `live`, `cached`, `local`); data labels; pipeline operators (`|`, `||`); type-checking methods (`.isArray()`, etc.); AST selector patterns
 
 ### Changed
 - **BREAKING**: Variable assignments in `/when` actions now require explicit `var` prefix. Use `var @x = value` for outer-scope variables, `let @x = value` for block-local variables. Bare `@x = value` syntax now throws an educational error.

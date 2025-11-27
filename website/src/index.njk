@@ -4,12 +4,12 @@ layout: base.njk
 
 <section class="hero">
   <div class="hero-content">
-    <h1>Modular LLM scripting. Finally.</h1>
-    <p>Orchestrate with retryable pipes. Turn your markdown into context modules.</p>
+    <h1>Secure LLM scripting. Finally.</h1>
+    <p>Context meets engineering for pragmatic orchestration without giving away your keys.</p>
   </div>
   
   <div class="hero-terminal-container">
-    {% set example = examples.default['code-review'] or examples['code-review'] %}
+    {% set example = examples.default['injection-defense'] or examples['injection-defense'] %}
     {% include "components/mlld-example.njk" %}
   </div>
 
@@ -35,7 +35,7 @@ layout: base.njk
 </section>
 
 <section class="content-section">  
-  <h2>what is prompt scripting?</h2>
+  <h2>what is llm scripting?</h2>
   <h3 class="section-description">If you've experienced the <strong>pain</strong>,<br> you know what you <strong>need</strong> it to be.</h3>
   
   <div class="container">
@@ -67,9 +67,27 @@ layout: base.njk
 
       <div class="grid-row">
         <span class="vertical-line"></span>
-        <h3 class="card-heading">{{ (examples.default['standup'] or examples['standup']).heading }}</h3>
+        <h3 class="card-heading">{{ (examples.default['parallel-fanout'] or examples['parallel-fanout']).heading }}</h3>
         <div class="card-content">
-          {% set example = examples.default['standup'] or examples['standup'] %}
+          {% set example = examples.default['parallel-fanout'] or examples['parallel-fanout'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">{{ (examples.default['anonymous-retry'] or examples['anonymous-retry']).heading }}</h3>
+        <div class="card-content">
+          {% set example = examples.default['anonymous-retry'] or examples['anonymous-retry'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">{{ (examples.default['ast-selectors'] or examples['ast-selectors']).heading }}</h3>
+        <div class="card-content">
+          {% set example = examples.default['ast-selectors'] or examples['ast-selectors'] %}
           {% include "components/mlld-example.njk" %}
         </div>
       </div>
@@ -82,7 +100,7 @@ layout: base.njk
           {% include "components/mlld-example.njk" %}
         </div>
       </div>
-      
+
       <div class="grid-row">
         <span class="vertical-line"></span>
         <h3 class="card-heading">{{ (examples.default['test-plan'] or examples['test-plan']).heading }}</h3>
@@ -102,6 +120,16 @@ layout: base.njk
           {% include "components/mlld-example.njk" %}
         </div>
       </div>
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">{{ (examples.default['standup'] or examples['standup']).heading }}</h3>
+        <div class="card-content">
+          {% set example = examples.default['standup'] or examples['standup'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
     </div>
   </div>
 </section>

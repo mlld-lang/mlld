@@ -1,14 +1,22 @@
->> In directives
-/show @name
+>> Process API data
+/var @users = run {curl -s api.example.com/users}
+/var @parsed = @users | @json
 
->> In double quotes
-/var @greeting = "Hello @name"
+>> Define filter function for active users
+/exe @filterActive(users) = js {
+  return users.filter(u => u.status === "active")
+}
+/var @active = @filterActive(@parsed)
 
->> In command braces
-/run {echo "Welcome @name"}
+>> Generate report
+/var @report = `# User Report
 
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
+Active users: @active.length
+Generated: @now
 
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+## Users
+@active
+
+`
+
+/output @report to "user-report.md"

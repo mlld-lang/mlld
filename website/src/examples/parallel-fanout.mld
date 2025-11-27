@@ -1,0 +1,3 @@
+/exe @review(f) = cmd {claude -p "Review @f"}
+/var @files = <src/**/*.ts>
+/for parallel @f in @files => @review(@f)

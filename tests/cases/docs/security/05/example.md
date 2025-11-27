@@ -4,4 +4,4 @@
 ]
 
 /var secret @key = "sk-12345"
-/run { echo @key }                         # Blocked
+/run cmd { echo @key }                         # Blocked

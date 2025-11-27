@@ -1,7 +1,6 @@
->> Access piped JSON data
-/import { version, author } from @input
-/show `Release @version by @author`
+/var @checks = for @service in ["auth", "payments", "search"] =>
+  {"service": @service, "status": "ok", "timestamp": @now}
 
->> Access piped text (becomes 'content' field)
-/import { content } from @input
-/show `Received: @content`
+/for @entry in @checks => append @entry to "health.jsonl"
+
+/show <health.jsonl>

@@ -1,9 +1,9 @@
 ---
 layout: docs.njk
-title: "Testing mlld Modules and Scripts"
+title: "Testing modules"
 ---
 
-# Testing mlld Modules and Scripts
+# Testing modules
 
 mlld provides a native test system designed for the unique needs of LLM orchestration and dynamic workflows.
 
@@ -129,9 +129,9 @@ Test `/when` logic by checking outcomes:
 /var @result = ""
 
 /when [
-  @user.role == "admin" && @user.active => @result = "admin-access"
-  @user.role == "user" => @result = "user-access"
-  none => @result = "no-access"
+  @user.role == "admin" && @user.active => var @result = "admin-access"
+  @user.role == "user" => var @result = "user-access"
+  none => var @result = "no-access"
 ]
 
 /var @test_admin_access = @result == "admin-access"
@@ -220,14 +220,14 @@ Use descriptive test names:
 
 ```mlld
 # ✅ Good - descriptive names
-/var @test_user_validation_requires_email = ...
-/var @test_password_must_be_8_characters = ...
-/var @test_admin_can_delete_posts = ...
+/var @test_user_validation_requires_email = @validateEmail(@user.email)
+/var @test_password_must_be_8_characters = @checkPasswordLength(@password)
+/var @test_admin_can_delete_posts = @canDelete(@user, @post)
 
 # ❌ Bad - unclear names  
-/var @test_validation = ...
-/var @test_user = ...
-/var @test_1 = ...
+/var @test_validation = @validate()
+/var @test_user = @check(@user)
+/var @test_1 = @test()
 ```
 
 ### Keep Tests Focused

@@ -1,17 +1,18 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
+>> .att files (default for 5+ lines)
+>> file: templates/deploy.att
+# Deployment: @env
+Status: @status
+Config: <@base/config/@env.json>
 
->> Check if array contains value
-/show @fruits.includes("banana")         >> true
-/show @fruits.includes("orange")         >> false
+>> usage
+/exe @deploy(env, status) = template "./templates/deploy.att"
+/show @deploy("prod", "success")
 
->> Find index of value
-/show @fruits.indexOf("cherry")          >> 2
-/show @fruits.indexOf("missing")         >> -1
+>> .mtt files (Discord/social only)
+>> file: templates/discord.mtt
+🚨 Alert <@{{adminId}}>!
+Reporter: <@{{reporterId}}>
+Severity: {{severity}}
 
->> Get array length
-/show @fruits.length()                   >> 3
-
->> Join array elements
-/show @fruits.join(", ")                 >> "apple, banana, cherry"
-/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"
+>> usage
+/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"

@@ -116,7 +116,7 @@ describe('Mlld API', () => {
     });
 
     it('should handle run directive', async () => {
-      const content = '/run {echo "test"}';
+      const content = '/run cmd {echo "test"}';
       const result = await processMlld(content);
       // Run command directives produce output
       expect(result.trim()).toBe('test');

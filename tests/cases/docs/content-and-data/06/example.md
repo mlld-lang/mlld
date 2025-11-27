@@ -1,3 +1,7 @@
-/exe @process(f) = js { return f.ctx.filename; }
-/show @process(@file.keep)    # Works - wrapper has .ctx
-/show @process(@file)         # Error - unwrapped to string/object
+/var @file = <file.md>
+/show @file.ctx.relative
+>> No value here
+
+/var @file = <file.md>.keep
+/show @file.ctx.relative
+>> Returns a path

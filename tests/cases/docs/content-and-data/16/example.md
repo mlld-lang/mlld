@@ -1,6 +1,11 @@
->> Exact symbol names
-/var @user = <src/service.ts { createUser }>
-/var @multiple = <src/api.ts { handleRequest, processData }>
+>> Single file - returns plain string array
+/var @headings = <guide.md # ??>
+/show @headings.join("\n")
 
->> Usage patterns - find functions that use a symbol
-/var @callers = <src/**/*.ts { (logger.info) }>
+>> List specific heading levels
+/var @h2s = <guide.md # ##??>                  # H2 headings only
+/var @h3s = <guide.md # ###??>                 # H3 headings only
+
+>> Glob patterns - returns per-file structured results
+/var @docSections = <docs/**/*.md # ##??>
+/for @doc in @docSections => show "**@doc.file**: @doc.names.join(', ')"
