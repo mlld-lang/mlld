@@ -5,6 +5,11 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc74]
+
+### Fixed
+- `run cmd {...}` syntax now works consistently in `/var` and `/exe` contexts, not just `/run` directives. Previously `/var @x = run cmd {echo "hi"}` and `/exe @f() = run cmd {echo "hi"}` would fail to parse. Both `run {...}` (implicit cmd) and `run cmd {...}` (explicit) are now supported everywhere for backwards compatibility.
+
 ## [2.0.0-rc73]
 
 ### Added
