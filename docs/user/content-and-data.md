@@ -183,15 +183,112 @@ The `<>` placeholder in `as` templates represents each file's StructuredValue; u
 
 Use curly braces after a file path to pull specific definitions or usages from source files.
 
+#### Basic Selection
+
 ```mlld
-/var @handlers = <src/service.ts { createUser, (logger.info) }>
-/var @templated = <src/**/*.py { create_user }> as ::## <>.name\n```\n<>.code\n```::
+>> Exact symbol names
+/var @user = <src/service.ts { createUser }>
+/var @multiple = <src/api.ts { handleRequest, processData }>
+
+>> Usage patterns - find functions that use a symbol
+/var @callers = <src/**/*.ts { (logger.info) }>
 ```
 
-- Plain identifiers match top-level definitions by name.
-- Parentheses match definitions that reference the identifier anywhere in their body.
-- Supported extensions: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`.
-- Glob patterns return `file` metadata so you can tell which match came from which file; missing patterns yield `null` so the output order stays aligned with your request.
+#### Wildcard Patterns
+
+```mlld
+>> Prefix matching
+/var @handlers = <api.ts { handle* }>           # All functions starting with "handle"
+
+>> Suffix matching
+/var @validators = <api.ts { *Validator }>      # All functions ending with "Validator"
+
+>> Contains matching
+/var @requests = <api.ts { *Request* }>         # All functions containing "Request"
+
+>> Single character wildcard
+/var @getters = <api.ts { get? }>               # getA, getB, getC (not getAllItems)
+```
+
+#### Type Filters
+
+```mlld
+>> Get all of a specific type
+/var @allFunctions = <service.ts { *fn }>       # All functions and methods
+/var @allVariables = <service.ts { *var }>      # All variables and constants
+/var @allClasses = <service.ts { *class }>      # All classes
+/var @everything = <service.ts { * }>           # All top-level definitions
+
+>> Other supported types
+{ *interface }  # All interfaces
+{ *type }       # All type aliases
+{ *enum }       # All enums
+{ *struct }     # All structs (Go, Rust, C++)
+{ *trait }      # All traits (Rust)
+{ *module }     # All modules (Ruby)
+```
+
+#### Name Listing ("what's here?")
+
+Returns string arrays instead of code:
+
+```mlld
+>> List all definition names
+/var @names = <api.ts { ?? }>
+/show @names.join(", ")                         # "createUser, deleteUser, User, Status"
+
+>> List specific types
+/var @funcNames = <api.ts { fn?? }>            # Function names only
+/var @classNames = <api.ts { class?? }>        # Class names only
+/var @varNames = <api.ts { var?? }>            # Variable names only
+```
+
+#### Variable Interpolation
+
+```mlld
+>> Dynamic type filtering
+/var @targetType = "fn"
+/var @definitions = <service.ts { *@targetType }>
+
+>> Dynamic name listing
+/var @listType = "class"
+/var @classNames = <service.ts { @listType?? }>
+```
+
+#### Section Listing (Markdown)
+
+```mlld
+>> List all section headings
+/var @headings = <guide.md # ??>
+/show @headings.join("\n")
+
+>> List specific heading levels
+/var @h2s = <guide.md # ##??>                  # H2 headings only
+/var @h3s = <guide.md # ###??>                 # H3 headings only
+```
+
+#### Usage Patterns
+
+Wrap any selector in parentheses to find functions that USE the matched symbols:
+
+```mlld
+>> Find functions that use specific symbols
+/var @callers = <api.ts { (validateEmail) }>
+
+>> Find functions that use any wildcard-matched symbol
+/var @serviceUsers = <api.ts { (*Service) }>
+
+>> Find functions that use any function
+/var @functionCallers = <api.ts { (*fn) }>
+```
+
+#### Rules and Limitations
+
+- **Mixing selectors**: Cannot mix content selectors with name-list selectors: `{ createUser, fn?? }` is an error
+- **Supported languages**: `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.py`, `.pyi`, `.rb`, `.go`, `.rs`, `.sol`, `.java`, `.cs`, `.c`, `.cpp`, `.h`, `.hpp`
+- **Glob support**: Works with glob patterns; `file` metadata shows which match came from which file
+- **Null handling**: Missing patterns yield `null` to keep output aligned with request order
+- **Top-level only**: `{ ?? }` and `{ * }` exclude nested definitions (methods, constructors)
 
 ## File Metadata
 

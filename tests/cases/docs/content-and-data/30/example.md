@@ -1,9 +1,15 @@
->> Load and transform files
-/var @config = <config.json> | @json
-/var @uppercase = <readme.txt> | @upper
+/var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
 
->> Chain transformations
-/exe @first(text, n) = js { 
-  return text.split('\n').slice(0, n).join('\n');
+>> Parse inside function
+/exe @filter1(users) = js {
+  const data = JSON.parse(users);
+  return data.filter(u => u.age > 25);
 }
-/var @summary = <docs.md> | @first(3) | @upper
+/run @filter1(@users)
+
+>> Parse before passing
+/exe @filter2(users) = js {
+  return users.filter(u => u.age > 25);
+}
+/run @filter2(@users.data)   >> .data parses JSON
+/run @filter2(@users.json)   >> .json is alias

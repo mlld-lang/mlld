@@ -1,17 +1,13 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
+/var @user = {"name": "Alice", "scores": [10, 20, 30]}
 
->> Check if array contains value
-/show @fruits.includes("banana")         >> true
-/show @fruits.includes("orange")         >> false
+>> Object fields
+/show @user.name                         >> "Alice"
 
->> Find index of value
-/show @fruits.indexOf("cherry")          >> 2
-/show @fruits.indexOf("missing")         >> -1
+>> Array elements by index
+/show @user.scores[0]                     >> 10
+/show @user.scores[1]                     >> 20
 
->> Get array length
-/show @fruits.length()                   >> 3
-
->> Join array elements
-/show @fruits.join(", ")                 >> "apple, banana, cherry"
-/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"
+>> Nested access
+/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
+/show @config.db.host                    >> "localhost"
+/show @config.db.users[1]                 >> "guest"

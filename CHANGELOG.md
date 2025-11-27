@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc73]
 
+### Added
+- AST selector wildcards ([#505](https://github.com/mlld-lang/mlld/issues/505)): `{ handle* }`, `{ *Validator }`, `{ *Request* }`, `{ get? }` for pattern-based symbol matching
+- AST type filters: `{ *fn }`, `{ *var }`, `{ *class }`, `{ *interface }`, `{ *type }`, `{ *enum }`, `{ *struct }`, `{ *trait }`, `{ *module }`, `{ * }` to get all definitions of a specific type
+- AST name listing: `{ ?? }`, `{ fn?? }`, `{ var?? }`, `{ class?? }` return string arrays of definition names instead of code
+- Section listing for markdown: `# ??`, `# ##??`, `# ###??` return arrays of heading titles at specified levels
+- Variable interpolation in AST selectors: `{ *@type }`, `{ @type?? }` for dynamic pattern construction
+- Usage patterns with wildcards and type filters: `{ (handle*) }`, `{ (*fn) }` find functions that use matched symbols
+- Validation: mixing content selectors with name-list selectors now throws clear error
+
 ### Fixed
 - Export directive grammar now correctly distinguishes guards from variables ([#498](https://github.com/mlld-lang/mlld/issues/498)). Previously all exports were marked as `guardExport`, breaking `/export` for executables and variables. Now uses runtime guard registry check.
 - `/export` directive now recognized by grammar context detection - added missing `export` keyword to `DirectiveKind` enum. Export filtering now works correctly for namespace imports.

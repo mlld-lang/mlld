@@ -1,13 +1,8 @@
-/var @user = {"name": "Alice", "scores": [10, 20, 30]}
+>> Find functions that use specific symbols
+/var @callers = <api.ts { (validateEmail) }>
 
->> Object fields
-/show @user.name                         >> "Alice"
+>> Find functions that use any wildcard-matched symbol
+/var @serviceUsers = <api.ts { (*Service) }>
 
->> Array elements by index
-/show @user.scores[0]                     >> 10
-/show @user.scores[1]                     >> 20
-
->> Nested access
-/var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
-/show @config.db.host                    >> "localhost"
-/show @config.db.users[1]                 >> "guest"
+>> Find functions that use any function
+/var @functionCallers = <api.ts { (*fn) }>

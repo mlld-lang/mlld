@@ -1,13 +1,11 @@
->> Filter JSON array from command
-/var @json = run {./mkjson.sh}
-/exe @filterHigh(entries) = js {
-  return entries.filter(e => e.finding.startsWith("High"));
-}
-/var @result = @filterHigh(@json.data)
+/var @page = <https://example.com/data.json>
 
->> Process API response
-/var @response = run {curl -s api.example.com/data}
-/exe @getActive(data) = js {
-  return data.users.filter(u => u.active);
-}
-/var @active = @getActive(@response.data)
+>> URL-specific metadata
+/show @page.ctx.url                      >> Full URL
+/show @page.ctx.domain                   >> "example.com"
+/show @page.ctx.status                   >> HTTP status code
+/show @page.ctx.title                    >> Page title (if HTML)
+
+>> HTML is converted to markdown
+/show @page.content                      >> Markdown version
+/show @page.ctx.html                     >> Original HTML

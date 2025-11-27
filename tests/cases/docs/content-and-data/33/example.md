@@ -1,26 +1,21 @@
->> Double-colon (default)
-/var @msg = ::Hello @name!::
-/var @doc = ::Use `npm test` before @env::
-/var @report = ::
-Status: @status
-Config: <@base/config.json>
-Data: @data|@json
-::
+>> Files
+/var @config = <settings.json>
+@config.json              >> Parsed JSON object
+@config.data              >> Alias for .json
+@config.content           >> Raw string
+@config.text              >> Alias for .content
 
->> Backticks (alternative)
-/var @msg = `Hello @name!`
-/var @multi = `
-Line 1: @var
-Line 2: @other
-`
+>> Variables
+/var @str = '{"status": "ok"}'
+@str.data                 >> Parsed JSON object
+@str.json                 >> Alias for .data
+@str.text                 >> Original string
+@str.content              >> Alias for .text
+@str                      >> Original string (default)
 
->> Double quotes (single-line only)
-/var @path = "@base/files/@filename"
-/run {echo "Processing @file"}
-
->> Triple-colon (Discord/social only)
-/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
-
->> Single quotes (literal)
-/var @literal = '@name stays literal'
+>> Command output
+/var @result = run {curl api.com/data}
+@result.data              >> Parse as JSON
+@result.json              >> Alias for .data
+@result.text              >> Keep as string
+@result.content           >> Alias for .text

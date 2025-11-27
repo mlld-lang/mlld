@@ -1,18 +1,13 @@
->> Extract from code fence
-/var @llmResponse = `Here's your data:
-\`\`\`json
-{"name": "Alice", "status": "active"}
-\`\`\``
+>> Filter JSON array from command
+/var @json = run {./mkjson.sh}
+/exe @filterHigh(entries) = js {
+  return entries.filter(e => e.finding.startsWith("High"));
+}
+/var @result = @filterHigh(@json.data)
 
-/var @data = @llmResponse | @json.llm
-/show @data.name                                >> Alice
-
->> Extract from inline prose
-/var @inline = `The result is {"count": 42} for this query.`
-/var @extracted = @inline | @json.llm
-/show @extracted.count                          >> 42
-
->> Returns false when no JSON found
-/var @text = `Just plain text, no JSON here.`
-/var @result = @text | @json.llm
-/show @result                                   >> false
+>> Process API response
+/var @response = run {curl -s api.example.com/data}
+/exe @getActive(data) = js {
+  return data.users.filter(u => u.active);
+}
+/var @active = @getActive(@response.data)

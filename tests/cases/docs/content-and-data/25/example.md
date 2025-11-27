@@ -1,9 +1,8 @@
-/var @jsonStr = '{"name": "Alice", "active": true}'
+/var @post = <blog/post.md>
 
-/exe @length(str) = js {
-  return str.length;
-}
+/show @post.ctx.fm.title                 >> Post title
+/show @post.ctx.fm.author                >> Author name
+/show @post.ctx.fm.tags                  >> Array of tags
 
-/run @length(@jsonStr)          >> Default: string
-/run @length(@jsonStr.text)     >> Explicit string
-/run @length(@jsonStr.content)  >> Alias for .text
+>> Conditional processing
+/when @post.ctx.fm.published => show @post.content

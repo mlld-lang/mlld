@@ -1,17 +1,15 @@
->> Load files and check context limits
-/var @files = <src/**/*.ts>
+>> ✗ Using {{}} in ::...::
+/var @msg = ::Hello {{name}}::        >> {{name}} is literal
+/var @msg = ::Hello @name::           >> ✓
 
->> Define filter for large files (over 2000 tokens)
-/exe @filterLarge(files) = js {
-  return files.filter(f => f.tokest > 2000)
-}
-/var @large = @filterLarge(@files)
+>> ✗ Using @var in :::...:::
+/var @msg = :::Hello @name:::         >> @name is literal
+/var @msg = :::Hello {{name}}:::      >> ✓
 
->> Calculate total tokens
-/exe @sumTokens(files) = js {
-  return files.reduce((sum, f) => sum + (f.tokest || 0), 0)
-}
-/var @totalTokens = @sumTokens(@files)
+>> ✗ Using ::: without Discord/social need
+/var @msg = :::Status: {{status}}:::  >> Loses all features
+/var @msg = ::Status: @status::       >> ✓ Full features
 
-/show `Found @large.length files over 2000 tokens`
-/show `Total estimated tokens: @totalTokens`
+>> ✗ Importing template files
+/import { @tpl } from "./file.att"    >> Error
+/exe @tpl(x) = template "./file.att"  >> ✓

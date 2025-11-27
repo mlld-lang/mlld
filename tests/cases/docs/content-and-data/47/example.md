@@ -1,8 +1,14 @@
-/var @file = <config.json>
+>> Collect all module documentation
+/var @modules = <modules/**/*.md>
 
-# ✗ This loses metadata
-/var @result = @file | @process          # @process gets string, no .ctx
+>> Build README with metadata
+/var @readme = `# Project Modules
 
-# ✓ Keep structured form
-/exe @process(file) = `Name: @file.ctx.filename, Tokens: @file.ctx.tokens`
-/var @result = @file.keep | @process
+Total modules: @modules.length
+Last updated: @now
+
+@modules
+
+`
+
+/output @readme to "README.md"

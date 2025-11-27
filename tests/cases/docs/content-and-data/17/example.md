@@ -1,14 +1,11 @@
-/var @file = <package.json>
+>> Prefix matching
+/var @handlers = <api.ts { handle* }>           # All functions starting with "handle"
 
->> Basic metadata
-/show @file.ctx.filename                 >> "package.json"
-/show @file.ctx.relative                 >> "./package.json" 
-/show @file.ctx.absolute                 >> Full path
+>> Suffix matching
+/var @validators = <api.ts { *Validator }>      # All functions ending with "Validator"
 
->> Token counting
-/show @file.ctx.tokest                   >> Estimated tokens (fast)
-/show @file.ctx.tokens                   >> Exact tokens
+>> Contains matching
+/var @requests = <api.ts { *Request* }>         # All functions containing "Request"
 
->> Content access
-/show @file.content                      >> File contents (explicit)
-/show @file                              >> Same as above (implicit)
+>> Single character wildcard
+/var @getters = <api.ts { get? }>               # getA, getB, getC (not getAllItems)

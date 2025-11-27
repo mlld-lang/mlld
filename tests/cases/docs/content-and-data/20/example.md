@@ -1,11 +1,7 @@
-/var @page = <https://example.com/data.json>
+>> Dynamic type filtering
+/var @targetType = "fn"
+/var @definitions = <service.ts { *@targetType }>
 
->> URL-specific metadata
-/show @page.ctx.url                      >> Full URL
-/show @page.ctx.domain                   >> "example.com"
-/show @page.ctx.status                   >> HTTP status code
-/show @page.ctx.title                    >> Page title (if HTML)
-
->> HTML is converted to markdown
-/show @page.content                      >> Markdown version
-/show @page.ctx.html                     >> Original HTML
+>> Dynamic name listing
+/var @listType = "class"
+/var @classNames = <service.ts { @listType?? }>

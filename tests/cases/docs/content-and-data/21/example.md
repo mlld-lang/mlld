@@ -1,15 +1,7 @@
->> Primitives
-/var @name = "Alice"
-/var @age = 30
-/var @active = true
+>> List all section headings
+/var @headings = <guide.md # ??>
+/show @headings.join("\n")
 
->> Arrays
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
-
->> Objects
-/var @user = {"name": "Alice", "role": "admin"}
-/var @config = {
-  "database": {"host": "localhost", "port": 5432},
-  "features": ["auth", "api"]
-}
+>> List specific heading levels
+/var @h2s = <guide.md # ##??>                  # H2 headings only
+/var @h3s = <guide.md # ###??>                 # H3 headings only
