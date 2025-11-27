@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc73]
 
 ### Added
+- `let` keyword for local variables in `/when` blocks: `let @x = value` creates block-scoped variables before conditions, enabling cleaner conditional logic without polluting outer scope
 - AST selector wildcards ([#505](https://github.com/mlld-lang/mlld/issues/505)): `{ handle* }`, `{ *Validator }`, `{ *Request* }`, `{ get? }` for pattern-based symbol matching
 - AST type filters: `{ *fn }`, `{ *var }`, `{ *class }`, `{ *interface }`, `{ *type }`, `{ *enum }`, `{ *struct }`, `{ *trait }`, `{ *module }`, `{ * }` to get all definitions of a specific type
 - AST name listing: `{ ?? }`, `{ fn?? }`, `{ var?? }`, `{ class?? }` return string arrays of definition names instead of code
@@ -19,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Variable interpolation in AST selectors: `{ *@type }`, `{ @type?? }` for dynamic pattern construction
 - Usage patterns with wildcards and type filters: `{ (handle*) }`, `{ (*fn) }` find functions that use matched symbols
 - Validation: mixing content selectors with name-list selectors now throws clear error
+
+### Changed
+- **BREAKING**: Variable assignments in `/when` actions now require explicit `var` prefix. Use `var @x = value` for outer-scope variables, `let @x = value` for block-local variables. Bare `@x = value` syntax now throws an educational error.
 
 ### Fixed
 - Export directive grammar now correctly distinguishes guards from variables ([#498](https://github.com/mlld-lang/mlld/issues/498)). Previously all exports were marked as `guardExport`, breaking `/export` for executables and variables. Now uses runtime guard registry check.

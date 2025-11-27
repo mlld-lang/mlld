@@ -17,9 +17,9 @@
   * => show "low"
 ]
 
->> Test 3: When with implicit var assignment and pipes
+>> Test 3: When with explicit var assignment and pipes
 /var @data = "test"
-/when @status == "active" => @result = @data | @toUpper | @addPrefix
+/when @status == "active" => var @result = @data | @toUpper | @addPrefix
 /show @result
 
 >> Test 4: When with complex expression and piped result

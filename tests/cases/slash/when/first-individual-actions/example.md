@@ -32,7 +32,7 @@
   @code == 200 => show "OK"
   @code == 404 => show "Not Found"
   @code == 500 => show "Server Error"
-  none => @message = "Unknown code"
-  none => @message = "This won't execute"
+  none => var @message = "Unknown code"
+  none => var @message = "This won't execute"
 ]
 /show @message

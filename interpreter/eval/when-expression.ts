@@ -5,7 +5,8 @@
  * Distinct from directive /when which executes side effects.
  */
 
-import type { WhenExpressionNode, WhenConditionPair } from '@core/types/when';
+import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
+import { isLetAssignment, isConditionPair } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -15,6 +16,7 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied } from './when';
 import { logger } from '@core/utils/logger';
 import { asText, asData, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+import { VariableImporter } from './import/VariableImporter';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -73,14 +75,18 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
 
 /**
  * Validate that 'none' conditions are placed correctly in a when block
+ * Only checks condition pairs, not let assignments
  */
-function validateNonePlacement(conditions: WhenConditionPair[]): void {
+function validateNonePlacement(entries: WhenEntry[]): void {
+  // Filter to only condition pairs for validation
+  const conditionPairs = entries.filter(isConditionPair);
+
   let foundNone = false;
   let foundWildcard = false;
-  
-  for (let i = 0; i < conditions.length; i++) {
-    const condition = conditions[i].condition;
-    
+
+  for (let i = 0; i < conditionPairs.length; i++) {
+    const condition = conditionPairs[i].condition;
+
     if (condition.length === 1 && isNoneCondition(condition[0])) {
       foundNone = true;
     } else if (condition.length === 1 && condition[0]?.type === 'Literal' && condition[0]?.valueType === 'wildcard') {
@@ -95,7 +101,7 @@ function validateNonePlacement(conditions: WhenConditionPair[]): void {
         condition[0]?.location
       );
     }
-    
+
     if (foundWildcard && condition.length === 1 && isNoneCondition(condition[0])) {
       throw new MlldWhenExpressionError(
         'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached',
@@ -150,25 +156,26 @@ export async function evaluateWhenExpression(
     return buildResult(null, env);
   }
   
-  // Check if any condition has an action
-  const hasAnyAction = node.conditions.some(c => c.action && c.action.length > 0);
+  // Check if any condition pair has an action (filter out let assignments)
+  const conditionPairs = node.conditions.filter(isConditionPair);
+  const hasAnyAction = conditionPairs.some(c => c.action && c.action.length > 0);
   if (!hasAnyAction) {
     logger.warn('WhenExpression has no actions defined');
     return buildResult(null, env);
   }
-  
-  // Check all actions for code blocks upfront
-  for (let i = 0; i < node.conditions.length; i++) {
-    const pair = node.conditions[i];
+
+  // Check all actions for code blocks upfront (only condition pairs, not let assignments)
+  for (let i = 0; i < conditionPairs.length; i++) {
+    const pair = conditionPairs[i];
     if (pair.action && pair.action.length > 0) {
       const hasCodeExecution = pair.action.some(actionNode => {
         if (typeof actionNode === 'object' && actionNode !== null && 'type' in actionNode) {
-          return actionNode.type === 'code' || actionNode.type === 'command' || 
+          return actionNode.type === 'code' || actionNode.type === 'command' ||
                  (actionNode.type === 'nestedDirective' && actionNode.directive === 'run');
         }
         return false;
       });
-      
+
       if (hasCodeExecution) {
         throw new MlldWhenExpressionError(
           'Code blocks are not supported in when expressions. Define your logic in a separate /exe function and call it instead.',
@@ -179,10 +186,45 @@ export async function evaluateWhenExpression(
     }
   }
   
-  // First pass: Evaluate non-none conditions in order
+  // First pass: Evaluate entries in order (let assignments and non-none conditions)
   for (let i = 0; i < node.conditions.length; i++) {
-    const pair = node.conditions[i];
-    
+    const entry = node.conditions[i];
+
+    // Handle let assignments - evaluate and store in accumulated environment
+    if (isLetAssignment(entry)) {
+      let value: unknown;
+      // Check if value is a raw primitive (number, boolean, null, string) or contains nodes
+      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+      const isRawPrimitive = firstValue === null ||
+        typeof firstValue === 'number' ||
+        typeof firstValue === 'boolean' ||
+        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+      if (isRawPrimitive) {
+        // For raw primitives, use the value directly
+        value = entry.value.length === 1 ? firstValue : entry.value;
+      } else {
+        // For nodes, evaluate them
+        const valueResult = await evaluate(entry.value, accumulatedEnv, context);
+        value = valueResult.value;
+      }
+
+      const importer = new VariableImporter();
+      const variable = importer.createVariableFromValue(
+        entry.identifier,
+        value,
+        'let',
+        undefined,
+        { env: accumulatedEnv }
+      );
+      accumulatedEnv = accumulatedEnv.createChild();
+      accumulatedEnv.setVariable(entry.identifier, variable);
+      continue;
+    }
+
+    // From here on, entry is a condition pair
+    const pair = entry;
+
     // Check if this is a none condition
     if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
       // Skip none conditions in first pass
@@ -193,11 +235,9 @@ export async function evaluateWhenExpression(
       continue;
     }
 
-    
-    
-      try {
-        // Evaluate the condition
-        const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
+    try {
+      // Evaluate the condition
+      const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
@@ -414,8 +454,15 @@ export async function evaluateWhenExpression(
   // Second pass: Evaluate none conditions if no value-producing conditions matched
   if (!hasValueProducingMatch && !denyMode) {
     for (let i = 0; i < node.conditions.length; i++) {
-      const pair = node.conditions[i];
-      
+      const entry = node.conditions[i];
+
+      // Skip let assignments in second pass (already processed)
+      if (isLetAssignment(entry)) {
+        continue;
+      }
+
+      const pair = entry;
+
       // Only process none conditions in second pass
       if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
         continue;
@@ -531,7 +578,13 @@ export async function peekWhenExpressionType(
   // Analyze action types without evaluation
   const actionTypes = new Set<import('@core/types/variable').VariableTypeDiscriminator>();
   
-  for (const pair of node.conditions) {
+  for (const entry of node.conditions) {
+    // Skip let assignments - they don't produce action types
+    if (isLetAssignment(entry)) {
+      continue;
+    }
+
+    const pair = entry;
     if (pair.action && pair.action.length > 0) {
       // Simple heuristic based on first node type
       const firstNode = pair.action[0];

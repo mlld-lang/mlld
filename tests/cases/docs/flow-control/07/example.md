@@ -1,2 +1,6 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/for @fruit in @fruits => show `Fruit: @fruit`
+/var @mode = "active"
+/when @mode: [
+  let @prefix = "Status:"
+  "active" => show "@prefix Active"
+  * => show "@prefix Unknown"
+]

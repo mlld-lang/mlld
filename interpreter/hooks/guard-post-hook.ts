@@ -14,6 +14,9 @@ import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import { ctxToSecurityDescriptor, updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
+import { isLetAssignment } from '@core/types/when';
+import { VariableImporter } from '../eval/import/VariableImporter';
+import { evaluate } from '../core/interpreter';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import type { PostHook } from './HookManager';
@@ -766,12 +769,47 @@ async function evaluateGuard(options: {
 }
 
 async function evaluateGuardBlock(block: GuardBlockNode, guardEnv: Environment): Promise<GuardActionNode | undefined> {
-  for (const rule of block.rules) {
+  // Create a child environment for let scoping
+  let currentEnv = guardEnv;
+
+  for (const entry of block.rules) {
+    // Handle let assignments
+    if (isLetAssignment(entry)) {
+      let value: unknown;
+      // Check if value is a raw primitive or contains nodes
+      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+      const isRawPrimitive = firstValue === null ||
+        typeof firstValue === 'number' ||
+        typeof firstValue === 'boolean' ||
+        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+      if (isRawPrimitive) {
+        value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+      } else {
+        const valueResult = await evaluate(entry.value, currentEnv);
+        value = valueResult.value;
+      }
+
+      const importer = new VariableImporter();
+      const variable = importer.createVariableFromValue(
+        entry.identifier,
+        value,
+        'let',
+        undefined,
+        { env: currentEnv }
+      );
+      currentEnv = currentEnv.createChild();
+      currentEnv.setVariable(entry.identifier, variable);
+      continue;
+    }
+
+    // Handle guard rules
+    const rule = entry;
     let matches = false;
     if (rule.isWildcard) {
       matches = true;
     } else if (rule.condition && rule.condition.length > 0) {
-      matches = await evaluateCondition(rule.condition, guardEnv);
+      matches = await evaluateCondition(rule.condition, currentEnv);
     }
 
     if (matches) {

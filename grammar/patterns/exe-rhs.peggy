@@ -499,7 +499,7 @@ WhenExprModifier = mod:("first") { return mod; }
 
 // Value-oriented condition list for when expressions
 WhenExpressionConditionList
-  = first:WhenExpressionConditionPair rest:(_ (
+  = first:WhenExpressionEntry rest:(_ (
       "," {
         helpers.mlldError(
           "Unexpected ',' in when condition list. Separate conditions with whitespace or newlines (no commas).",
@@ -507,11 +507,16 @@ WhenExpressionConditionList
           location()
         );
       }
-    / pair:WhenExpressionConditionPair { return pair; }
+    / entry:WhenExpressionEntry { return entry; }
     ))* {
-      const restPairs = rest.map(entry => entry && entry[1]).filter(Boolean);
-      return [first, ...restPairs];
+      const restEntries = rest.map(entry => entry && entry[1]).filter(Boolean);
+      return [first, ...restEntries];
     }
+
+// Single entry in a when expression - either a let assignment or a condition pair
+WhenExpressionEntry
+  = LetAssignment             // let @x = value (local variable)
+  / WhenExpressionConditionPair  // condition => action
 
 // Single condition => value pair for expressions
 WhenExpressionConditionPair

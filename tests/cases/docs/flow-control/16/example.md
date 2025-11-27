@@ -1,5 +1,8 @@
-/var @greetings = ["Hello", "Hi", "Hey"]
-/var @names = ["Alice", "Bob", "Charlie"]
-/exe @custom_greeting(greet, name) = :::{{greet}}, {{name}}! Nice to see you.:::
-/var @messages = foreach @custom_greeting(@greetings, @names)
-/show @messages
+/exe @wrap(x) = js { return [x, x * 2]; }
+/exe @flat(values) = js {
+  if (!Array.isArray(values)) throw new Error('expected array input');
+  return values.flat();
+}
+
+/var @pairs = for @x in [1, 2, 3] => @wrap(@x) => | @flat
+/show @pairs

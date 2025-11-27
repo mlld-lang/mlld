@@ -2,10 +2,6 @@
 
 Test implicit actions within `/when` blocks - simplified syntax without directive prefixes.
 
-## Variable assignments
-/when @prod => @config = "production"
-/when @dev => @setup = { host: "localhost", port: 3000 }
-
 ## Function calls
 /when @initialized => @setupDatabase()
 /when @ready => @startServer(8080)

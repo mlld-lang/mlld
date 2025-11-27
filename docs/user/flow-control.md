@@ -92,6 +92,52 @@ Complex conditions with operators:
 /when (@role == "admin" || @role == "editor") && @isActive => show "Can edit"
 ```
 
+### Local Variables in When Blocks
+
+Use `let` to declare local variables scoped to a when block:
+
+```mlld
+/var @mode = "active"
+/when @mode: [
+  let @prefix = "Status:"
+  "active" => show "@prefix Active"
+  * => show "@prefix Unknown"
+]
+```
+
+Output:
+```
+Status: Active
+```
+
+Local variables work in all when forms:
+
+```mlld
+/exe @format(name) = when [
+  let @greeting = "Hello"
+  let @punctuation = "!"
+  * => "@greeting @name@punctuation"
+]
+
+/show @format("World")
+```
+
+Output:
+```
+Hello World!
+```
+
+`let` variables are scoped to their when block and don't persist outside:
+
+```mlld
+/var @status = "ok"
+/when @status: [
+  let @msg = "Completed"
+  "ok" => show @msg
+]
+# @msg is not accessible here
+```
+
 ## Iteration
 
 ### For Loops

@@ -980,9 +980,27 @@ Forms:
 ]
 ```
 
+Local variables in when blocks:
+
+```mlld
+/when @mode: [
+  let @prefix = "Status:"
+  "active" => show "@prefix Active"
+  * => show "@prefix Unknown"
+]
+
+/exe @format(name) = when [
+  let @greeting = "Hello"
+  * => "@greeting @name!"
+]
+```
+
+`let` declares a variable scoped to the when block. It's evaluated before conditions are checked.
+
 Notes:
 
-* RHS uses action words (no `/show` slash): `show`, `@func()`, `@var = "x"`
+* RHS uses action words (no `/show` slash): `show`, `@func()`
+* Use `let @var = value` for local variables in when blocks (not `@var = value`)
 * `*` wildcard matches anything (catch-all)
 * `none` executes only if no conditions matched (must appear after all regular conditions, incompatible with `*`)
 * One action per line (repeat condition for multiple actions)

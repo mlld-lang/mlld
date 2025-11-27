@@ -162,12 +162,17 @@ GuardModifier
   = WhenModifier
 
 GuardRuleList
-  = first:GuardRule rest:(GuardRuleSeparator rule:GuardRule { return rule; })* {
+  = first:GuardEntry rest:(GuardRuleSeparator entry:GuardEntry { return entry; })* {
       return [first, ...rest];
     }
 
 GuardRuleSeparator
   = WhenConditionSeparator
+
+// Single entry in a guard block - either a let assignment or a guard rule
+GuardEntry
+  = LetAssignment  // let @x = value (local variable)
+  / GuardRule      // condition => allow/deny
 
 GuardRule
   = "*" _ "=>" _ action:GuardAction {

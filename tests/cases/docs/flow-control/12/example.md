@@ -1,4 +1,1 @@
-/var @names = ["Alice", "Bob", "Charlie"]
-/exe @greeting(name) = :::{{name}}, welcome to the team!:::
-/var @welcomes = foreach @greeting(@names)
-/show @welcomes
+/for @x in ["red", "blue"] => for @y in [1, 2] => for @z in ["a", "b"] => show "@x-@y-@z"
