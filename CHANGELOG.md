@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: Variable assignments in `/when` actions now require explicit `var` prefix. Use `var @x = value` for outer-scope variables, `let @x = value` for block-local variables. Bare `@x = value` syntax now throws an educational error.
 
 ### Fixed
+- Field access with pipes in `/show` now correctly extracts field values before piping ([#506](https://github.com/mlld-lang/mlld/issues/506)). Previously `@data.0.code | cmd {head -3}` would pipe the parent array instead of the code field value. Field access now happens before pipeline processing for both `VariableReference` and `VariableReferenceWithTail` node types.
 - Export directive grammar now correctly distinguishes guards from variables ([#498](https://github.com/mlld-lang/mlld/issues/498)). Previously all exports were marked as `guardExport`, breaking `/export` for executables and variables. Now uses runtime guard registry check.
 - `/export` directive now recognized by grammar context detection - added missing `export` keyword to `DirectiveKind` enum. Export filtering now works correctly for namespace imports.
 - `/export { * }` wildcard syntax now parses correctly - added `*` as valid export identifier
