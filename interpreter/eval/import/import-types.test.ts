@@ -180,4 +180,43 @@ describe('Import type handling', () => {
       })
     ).rejects.toThrow(/requires a registry module reference/);
   });
+
+  it('handles quoted resolver paths with liberal syntax', async () => {
+    await fileSystem.writeFile(
+      '/project/config.mld',
+      '/var @apiKey = "secret-key"\n/export { @apiKey }'
+    );
+
+    const source = `/import { @apiKey } from "@base/config.mld"\n/show @apiKey`;
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect(typeof output).toBe('string');
+    expect((output as string).trim()).toBe('secret-key');
+  });
+
+  it('treats quoted non-resolver namespace as module reference', async () => {
+    // This tests that "@author/module" in quotes gets treated as a module import
+    // even though it goes through variable interpolation in the grammar
+    const env = new Environment(fileSystem, pathService, PROJECT_ROOT);
+    const evaluator = new ImportDirectiveEvaluator(env);
+    const pathResolver = (evaluator as any).pathResolver;
+
+    const directive = {
+      values: {
+        path: [
+          { type: 'VariableReference', identifier: 'author', isSpecial: true },
+          { type: 'Text', content: '/module' }
+        ]
+      }
+    };
+
+    const resolution = await pathResolver.resolveImportPath(directive);
+    expect(resolution.type).toBe('module');
+    expect(resolution.resolvedPath).toBe('@author/module');
+  });
 });

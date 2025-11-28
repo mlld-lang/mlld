@@ -26,6 +26,8 @@ export type { WhenExpressionErrorDetails } from './MlldWhenExpressionError';
 export { DeprecationError } from './DeprecationError';
 export { GuardError } from './GuardError';
 export { GuardRetrySignal } from './GuardRetrySignal';
+export { CircularReferenceError } from './CircularReferenceError';
+export type { CircularReferenceErrorContext } from './CircularReferenceError';
 
 // Export error message collections
 export * from './messages/index'; 

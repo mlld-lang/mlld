@@ -24,10 +24,17 @@
       "integrity": "sha256:1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
       "fetchedAt": "2025-07-20T03:33:04.018Z",
       "sourceUrl": "registry://@mlld/ai-cli"
+    },
+    "@base/llm/modules/array.mld.md": {
+      "version": "latest",
+      "resolved": "63e154500c74693ecffcecfdbd40d7863a489ab5a7c34ec171680e09ea209f1c",
+      "source": "/Users/adam/dev/mlld/llm/modules/array.mld.md",
+      "integrity": "sha256:63e154500c74693ecffcecfdbd40d7863a489ab5a7c34ec171680e09ea209f1c",
+      "fetchedAt": "2025-11-28T07:53:30.184Z"
     }
   },
   "metadata": {
     "createdAt": "2025-09-27T19:54:02.369Z",
-    "updatedAt": "2025-09-27T19:54:02.384Z"
+    "updatedAt": "2025-11-28T07:53:30.185Z"
   }
 }

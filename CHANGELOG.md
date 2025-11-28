@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc76]
+
+### Fixed
+- Circular reference detection for executables ([#255](https://github.com/mlld-lang/mlld/issues/255)): mlld now detects when an executable calls itself recursively without a terminating condition and throws a clear `CircularReferenceError` instead of causing a stack overflow. This includes both direct recursion (`@f()` calling `@f()`) and mutual recursion (`@ping()` ↔ `@pong()`). Legitimate patterns like pipeline retries and builtin method calls are excluded from detection.
+- Liberal import syntax: quoted module paths like `"@local/module"` and `"@base/file.mld"` now work alongside unquoted forms ([#300](https://github.com/mlld-lang/mlld/issues/300)). The interpreter detects resolver patterns in quoted strings and routes them correctly instead of treating them as variable interpolation.
+- ProjectPathResolver now recognizes `.mld.md` and `.mlld.md` extensions as modules, fixing imports from `@base/...` paths
+- SpecialVariablePath in grammar now stops at line boundaries, preventing path parsing from consuming content across newlines
+
 ## [2.0.0-rc75]
 
 ### Added

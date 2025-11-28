@@ -171,7 +171,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // File interpolation circular detection
   private interpolationStack: Set<string> = new Set();
   private enableFileInterpolation: boolean = true;
-  
+
+  // Executable resolution circular detection
+  private resolutionStack: Set<string> = new Set();
+
   // Current iteration file for <> placeholder
   private currentIterationFile?: any;
   
@@ -882,7 +885,29 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   popInterpolationStack(path: string): void {
     this.interpolationStack.delete(path);
   }
-  
+
+  /**
+   * Check if an executable is currently being resolved (circular reference detection)
+   */
+  isResolving(identifier: string): boolean {
+    if (this.resolutionStack.has(identifier)) return true;
+    return this.parent?.isResolving(identifier) || false;
+  }
+
+  /**
+   * Mark an executable as being resolved
+   */
+  beginResolving(identifier: string): void {
+    this.resolutionStack.add(identifier);
+  }
+
+  /**
+   * Mark an executable as finished resolving
+   */
+  endResolving(identifier: string): void {
+    this.resolutionStack.delete(identifier);
+  }
+
   /**
    * Get the current iteration file for <> placeholder
    */

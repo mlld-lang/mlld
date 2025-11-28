@@ -77,9 +77,10 @@ export class ImportPathResolver {
 
   /**
    * Detect special imports (@input, @stdin, resolver imports)
+   * Also handles "liberal" quoted syntax like "@local/module" where @local is a resolver
    */
   private async detectSpecialImports(
-    pathNodes: ContentNodeArray, 
+    pathNodes: ContentNodeArray,
     directive: DirectiveNode
   ): Promise<ImportResolution | null> {
     if (pathNodes.length === 0) {
@@ -110,7 +111,7 @@ export class ImportPathResolver {
     // Handle variable reference special imports
     if (firstNode.type === 'VariableReference') {
       const varRef = firstNode as any;
-      
+
       // Handle @input/@stdin as variable references
       if (varRef.identifier === 'INPUT' || varRef.identifier === 'input') {
         return {
@@ -127,13 +128,51 @@ export class ImportPathResolver {
       }
 
       // Handle resolver imports with isSpecial flag
-      if (varRef.isSpecial && varRef.identifier) {
+      // But only if there's no path following (e.g., @TIME alone, not @base/path)
+      if (varRef.isSpecial && varRef.identifier && pathNodes.length === 1) {
         const resolverManager = this.env.getResolverManager();
         if (resolverManager && resolverManager.isResolverName(varRef.identifier)) {
           return {
             type: 'resolver',
             resolvedPath: `@${varRef.identifier}`,
             resolverName: varRef.identifier
+          };
+        }
+      }
+
+      // Handle quoted paths like "@author/module" that should be module references
+      // (not resolver paths like @base or @local, which resolve to file system paths)
+      // This supports Postel's Law - "be liberal in what you accept"
+      const resolverManager = this.env.getResolverManager();
+      if (varRef.isSpecial && varRef.identifier) {
+        const potentialName = varRef.identifier;
+
+        // If this is a known resolver (e.g., @base, @local), let it go through
+        // normal interpolation - the resolver will expand to a path
+        if (resolverManager && resolverManager.isResolverName(potentialName)) {
+          // Don't intercept - let interpolation handle it
+          return null;
+        }
+
+        // Build the full path from remaining nodes
+        // Handle both Text nodes and PathSeparator nodes
+        const remainingPath = pathNodes.slice(1)
+          .map(node => {
+            if (node.type === 'Text') {
+              return (node as any).content;
+            } else if (node.type === 'PathSeparator') {
+              return (node as any).value || '/';
+            }
+            return '';
+          })
+          .join('');
+
+        // For non-resolver namespaces like @author/module, treat as module reference
+        if (remainingPath.startsWith('/') || remainingPath.length > 0) {
+          const fullRef = `@${potentialName}${remainingPath.startsWith('/') ? '' : '/'}${remainingPath}`;
+          return {
+            type: 'module',
+            resolvedPath: fullRef
           };
         }
       }
