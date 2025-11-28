@@ -53,11 +53,13 @@ export interface InterpretOptions {
 
 export interface StructuredEffect extends Effect {
   capability?: CapabilityContext;
+  security?: SecurityDescriptor;
   provenance?: SecurityDescriptor;
 }
 
 export interface ExportMetadata {
   capability?: CapabilityContext;
+  security?: SecurityDescriptor;
   provenance?: SecurityDescriptor;
 }
 

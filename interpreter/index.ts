@@ -1,12 +1,20 @@
 import { parse } from '@grammar/parser';
 import { Environment } from './env/Environment';
+import { DefaultEffectHandler, type EffectHandler } from './env/EffectHandler';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import * as path from 'path';
-import { PathContextBuilder } from '@core/services/PathContextService';
-import type { InterpretOptions, InterpretResult } from '@sdk/types';
+import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
+import type {
+  InterpretOptions,
+  InterpretResult,
+  StructuredEffect,
+  ExportMap
+} from '@sdk/types';
+import { getExpressionProvenance } from './utils/expression-provenance';
+import { makeSecurityDescriptor } from '@core/types/security';
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -127,6 +135,11 @@ export async function interpret(
     );
   }
   
+  const mode = options.mode ?? 'document';
+  const streamingDisabled = process.env.MLLD_NO_STREAM === 'true' || (options.streaming && options.streaming.enabled === false);
+  const streamingOptions = options.streaming ?? { enabled: !streamingDisabled };
+  const recordEffects = options.recordEffects ?? (mode !== 'document');
+  
   const ast = parseResult.ast;
   
   // Build or use provided PathContext
@@ -153,13 +166,20 @@ export async function interpret(
     };
   }
   
+  const effectHandler =
+    options.effectHandler ??
+    new DefaultEffectHandler({
+      streaming: streamingOptions.enabled,
+      recordEffects
+    });
+
   // Create the root environment with PathContext
   const env = new Environment(
     options.fileSystem,
     options.pathService,
     pathContext,
     undefined,
-    options.effectHandler
+    effectHandler
   );
 
   if (options.allowAbsolutePaths !== undefined) {
@@ -205,9 +225,6 @@ export async function interpret(
     env.setOutputOptions(options.outputOptions);
   }
 
-  // Configure streaming options (flags override environment defaults)
-  const streamingDisabled = process.env.MLLD_NO_STREAM === 'true' || (options.streaming && options.streaming.enabled === false);
-  const streamingOptions = options.streaming ?? { enabled: !streamingDisabled };
   env.setStreamingOptions(streamingOptions);
   
   // Set stdin content if provided
@@ -257,12 +274,12 @@ export async function interpret(
   }
   
   // Get the document from the effect handler
-  const effectHandler = env.getEffectHandler();
+  const activeEffectHandler = env.getEffectHandler();
   let output: string;
   
-  if (effectHandler && typeof effectHandler.getDocument === 'function') {
+  if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
     // Get the accumulated document from the effect handler
-    output = effectHandler.getDocument();
+    output = activeEffectHandler.getDocument();
     
     // Apply markdown formatting if requested
     if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
@@ -293,7 +310,22 @@ export async function interpret(
   if (options.captureEnvironment) {
     options.captureEnvironment(env);
   }
-  
+
+  if (mode === 'structured') {
+    const effects = collectEffects(env.getEffectHandler());
+    const exports = collectExports(env);
+    return {
+      output,
+      effects,
+      exports,
+      environment: env
+    };
+  }
+
+  if (mode !== 'document') {
+    throw new Error(`Interpret mode '${mode}' is not implemented yet.`);
+  }
+
   return output;
 }
 
@@ -301,3 +333,45 @@ export async function interpret(
 export { Environment } from './env/Environment';
 export type { EvalResult } from './core/interpreter';
 export type { InterpretOptions, InterpretResult } from '@sdk/types';
+
+function collectEffects(handler: EffectHandler | undefined): StructuredEffect[] {
+  if (!handler || typeof handler.getEffects !== 'function') {
+    return [];
+  }
+  return handler.getEffects().map(effect => ({
+    ...effect,
+    security: effect.capability?.security ?? makeSecurityDescriptor(),
+    provenance: (effect as any).provenance ?? effect.capability?.security
+  }));
+}
+
+function collectExports(env: Environment): ExportMap {
+  const manifest = env.getExportManifest();
+  const exports: ExportMap = {};
+  if (!manifest) {
+    return exports;
+  }
+
+  for (const name of manifest.getNames()) {
+    const variableName = name.startsWith('@') ? name.slice(1) : name;
+    const variable = env.getVariable(variableName);
+    if (!variable) continue;
+    exports[name] = {
+      name,
+      value: env.getVariableValue(variableName),
+      metadata: {
+        capability: variable.capability ?? variable.metadata?.capability,
+        security:
+          variable.metadata?.security ??
+          variable.security ??
+          makeSecurityDescriptor(),
+        provenance:
+          getExpressionProvenance(variable.value) ??
+          variable.metadata?.security ??
+          variable.security
+      }
+    };
+  }
+
+  return exports;
+}
