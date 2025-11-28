@@ -9,6 +9,7 @@ export class StreamExecution implements StreamExecutionInterface {
   private resultReject!: (error: unknown) => void;
   private readonly donePromise: Promise<void>;
   private readonly resultPromise: Promise<StructuredResult>;
+  private aborted = false;
 
   constructor(private readonly emitter: ExecutionEmitter) {
     this.donePromise = new Promise<void>((resolve, reject) => {
@@ -61,4 +62,3 @@ export class StreamExecution implements StreamExecutionInterface {
 
   abort?: () => void;
 }
-

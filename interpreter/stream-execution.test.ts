@@ -88,4 +88,51 @@ describe('StreamExecution', () => {
     expect(received.length).toBeGreaterThan(0);
     expect(received[0].effect.content).toBe('hello');
   });
+
+  it('delivers chunk events during execution (timing)', async () => {
+    const emitter = new ExecutionEmitter();
+    const received: any[] = [];
+    emitter.on('stream:chunk', e => received.push(e));
+
+    const bus = getStreamBus();
+
+    const handle = (await interpret('/show \"hi\"', {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'stream',
+      emitter,
+      streaming: { enabled: true }
+    })) as StreamHandle;
+
+    // Emit a chunk immediately after getting the handle to simulate in-flight streaming.
+    bus.emit({ type: 'CHUNK', pipelineId: 'p', stageIndex: 0, chunk: 'early', source: 'stdout', timestamp: Date.now() });
+
+    await handle.done();
+
+    expect(received.some(e => e.event.chunk === 'early')).toBe(true);
+  });
+
+  it('suppresses chunk events when streaming is disabled', async () => {
+    const emitter = new ExecutionEmitter();
+    const received: any[] = [];
+    emitter.on('stream:chunk', e => received.push(e));
+
+    const bus = getStreamBus();
+
+    const handle = (await interpret('/show \"hi\"', {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'stream',
+      emitter,
+      streaming: { enabled: false }
+    })) as StreamHandle;
+
+    bus.emit({ type: 'CHUNK', pipelineId: 'p', stageIndex: 0, chunk: 'early', source: 'stdout', timestamp: Date.now() });
+
+    await handle.done();
+
+    expect(received.length).toBe(0);
+  });
 });

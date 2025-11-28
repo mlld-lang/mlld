@@ -273,62 +273,63 @@ export async function interpret(
   }
   
   // Evaluate the AST
-  await evaluate(ast, env);
-  
-  // Display collected errors with rich formatting if enabled
-  if (options.outputOptions?.collectErrors) {
-    await env.displayCollectedErrors();
-  }
-  
-  // Get the document from the effect handler
-  const activeEffectHandler = env.getEffectHandler();
-  let output: string;
-  
-  if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
-    // Get the accumulated document from the effect handler
-    output = activeEffectHandler.getDocument();
+  const runExecution = async (): Promise<string> => {
+    await evaluate(ast, env);
     
-    // Apply markdown formatting if requested
-    if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
-      const { formatMarkdown } = await import('./utils/markdown-formatter');
-      output = await formatMarkdown(output);
+    // Display collected errors with rich formatting if enabled
+    if (options.outputOptions?.collectErrors) {
+      await env.displayCollectedErrors();
     }
-  } else {
-    // Fallback to old node-based system if effect handler doesn't have getDocument
-    const nodes = env.getNodes();
     
-    if (process.env.DEBUG_WHEN) {
-      console.log('Final nodes count:', nodes.length);
-      nodes.forEach((node, i) => {
-        console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
+    // Get the document from the effect handler
+    const activeEffectHandler = env.getEffectHandler();
+    let output: string;
+    
+    if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
+      // Get the accumulated document from the effect handler
+      output = activeEffectHandler.getDocument();
+      
+      // Apply markdown formatting if requested
+      if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
+        const { formatMarkdown } = await import('./utils/markdown-formatter');
+        output = await formatMarkdown(output);
+      }
+    } else {
+      // Fallback to old node-based system if effect handler doesn't have getDocument
+      const nodes = env.getNodes();
+      
+      if (process.env.DEBUG_WHEN) {
+        console.log('Final nodes count:', nodes.length);
+        nodes.forEach((node, i) => {
+          console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
+        });
+      }
+      
+      // Format the output
+      output = await formatOutput(nodes, {
+        format: options.format || 'markdown',
+        variables: env.getAllVariables(),
+        useMarkdownFormatter: options.useMarkdownFormatter,
+        normalizeBlankLines: options.normalizeBlankLines
       });
     }
     
-    // Format the output
-    output = await formatOutput(nodes, {
-      format: options.format || 'markdown',
-      variables: env.getAllVariables(),
-      useMarkdownFormatter: options.useMarkdownFormatter,
-      normalizeBlankLines: options.normalizeBlankLines
-    });
-  }
-  
-  // Call captureEnvironment callback if provided
-  if (options.captureEnvironment) {
-    options.captureEnvironment(env);
-  }
+    // Call captureEnvironment callback if provided
+    if (options.captureEnvironment) {
+      options.captureEnvironment(env);
+    }
 
-  if (mode === 'structured') {
-    return buildStructuredResult(env, output);
-  }
+    return output;
+  };
 
   if (mode === 'stream') {
     const emitter = options.emitter ?? new ExecutionEmitter();
     const streamExecution = new StreamExecution(emitter);
     env.enableSDKEvents(emitter);
 
-    (async () => {
+    void (async () => {
       try {
+        const output = await runExecution();
         const structured = buildStructuredResult(env, output);
         emitter.emit({ type: 'execution:complete', result: structured, timestamp: Date.now() });
         streamExecution.resolve(structured);
@@ -338,6 +339,12 @@ export async function interpret(
     })();
 
     return streamExecution as unknown as StreamExecutionHandle;
+  }
+
+  const output = await runExecution();
+
+  if (mode === 'structured') {
+    return buildStructuredResult(env, output);
   }
 
   if (mode !== 'document') {
