@@ -357,8 +357,15 @@ hr {
 .dot.yellow { background-color: #ffbd2e; }
 .dot.green { background-color: #27c93f; }
 
-
-
+.security-more {
+  max-width: 450px;
+  margin: 0 auto;
+}
+.security-more p {
+  text-align: left;
+  margin-bottom: 20px;
+  font-size: 18px;
+}
 .terminal-content {
   font-family: 'Cousine', monospace;
   font-size: 13px;
@@ -966,9 +973,9 @@ section.content-section h2 {
   font-weight: 300 !important;
 }
 
-.second-section-description {
+/* .second-section-description {
   margin-top: 100px;
-}
+} */
 
 .section-description strong {
   font-weight: 600;
