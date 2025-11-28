@@ -367,9 +367,9 @@ export async function prepareVarAssignment(
     
   } else if (valueNode.type === 'object') {
     // Object literal: { "key": "value" }
-    
+
     // Check if this object has complex values that need lazy evaluation
-    const isComplex = hasComplexValues(valueNode.properties);
+    const isComplex = hasComplexValues(valueNode.entries || valueNode.properties);
     
     if (isComplex) {
       // For complex objects, store the AST node for lazy evaluation
@@ -377,16 +377,13 @@ export async function prepareVarAssignment(
     } else {
       // Process simple object properties immediately
       const processedObject: Record<string, any> = {};
-      if (valueNode.properties) {
-        // Debug logging for Phase 2
-        if (identifier === 'complex') {
-          logger.debug('Processing object properties for @complex:', {
-            propertyKeys: Object.keys(valueNode.properties),
-            users: valueNode.properties.users
-          });
-        }
-        
-        for (const [key, propValue] of Object.entries(valueNode.properties)) {
+
+      // Handle entries format (new)
+      if (valueNode.entries) {
+        for (const entry of valueNode.entries) {
+          if (entry.type === 'pair') {
+            const key = entry.key;
+            const propValue = entry.value;
           // Each property value might need interpolation
           if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
             // Handle wrapped string content (quotes, backticks, etc.)
@@ -411,9 +408,62 @@ export async function prepareVarAssignment(
           } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
             // Handle nested objects recursively
             const nestedObj: Record<string, any> = {};
-            if (propValue.properties) {
+            // Handle entries format
+            if (propValue.entries) {
+              for (const nestedEntry of propValue.entries) {
+                if (nestedEntry.type === 'pair') {
+                  nestedObj[nestedEntry.key] = await evaluateArrayItem(nestedEntry.value, env, mergeResolvedDescriptor);
+                }
+              }
+            }
+            // Handle properties format (legacy)
+            else if (propValue.properties) {
               for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
                 nestedObj[nestedKey] = await evaluateArrayItem(nestedValue, env, mergeResolvedDescriptor);
+              }
+            }
+            processedObject[key] = nestedObj;
+          } else if (propValue && typeof propValue === 'object' && propValue.type) {
+            // Handle other node types (load-content, VariableReference, etc.)
+            processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
+          } else {
+            // For primitive types (numbers, booleans, null, strings), use as-is
+            processedObject[key] = propValue;
+          }
+          }
+          // Spread entries shouldn't be here (isComplex would be true)
+        }
+      }
+      // Handle properties format (legacy)
+      else if (valueNode.properties) {
+        for (const [key, propValue] of Object.entries(valueNode.properties)) {
+          // Each property value might need interpolation
+          if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
+            // Handle wrapped string content (quotes, backticks, etc.)
+            processedObject[key] = await interpolateWithSecurity(propValue.content as any);
+          } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
+            // Handle array values in objects
+            const processedArray = [];
+            for (const item of (propValue.items || [])) {
+              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor);
+              processedArray.push(evaluated);
+            }
+            processedObject[key] = processedArray;
+          } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
+            // Handle nested objects recursively
+            const nestedObj: Record<string, any> = {};
+            const nestedData = propValue.entries || propValue.properties;
+            if (nestedData) {
+              if (propValue.entries) {
+                for (const nestedEntry of propValue.entries) {
+                  if (nestedEntry.type === 'pair') {
+                    nestedObj[nestedEntry.key] = await evaluateArrayItem(nestedEntry.value, env, mergeResolvedDescriptor);
+                  }
+                }
+              } else if (propValue.properties) {
+                for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
+                  nestedObj[nestedKey] = await evaluateArrayItem(nestedValue, env, mergeResolvedDescriptor);
+                }
               }
             }
             processedObject[key] = nestedObj;
@@ -936,7 +986,7 @@ export async function prepareVarAssignment(
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, options);
     
   } else if (valueNode.type === 'object') {
-    const isComplex = hasComplexValues(valueNode.properties);
+    const isComplex = hasComplexValues(valueNode.entries || valueNode.properties);
     const options = applySecurityOptions();
     variable = createObjectVariable(identifier, resolvedValue, isComplex, source, options);
     
@@ -1206,14 +1256,60 @@ export async function evaluateVar(
 /**
  * Check if an object has complex values that need lazy evaluation
  */
-function hasComplexValues(properties: any): boolean {
-  if (!properties) return false;
-  
-  for (const value of Object.values(properties)) {
+function hasComplexValues(objOrProperties: any): boolean {
+  if (!objOrProperties) return false;
+
+  // Handle entries format (new)
+  if (Array.isArray(objOrProperties)) {
+    for (const entry of objOrProperties) {
+      if (entry.type === 'spread') {
+        // Spreads always need lazy evaluation
+        return true;
+      }
+      if (entry.type === 'pair') {
+        const value = entry.value;
+        if (value && typeof value === 'object') {
+          if ('type' in value && (
+            value.type === 'code' ||
+            value.type === 'command' ||
+            value.type === 'VariableReference' ||
+            value.type === 'path' ||
+            value.type === 'section' ||
+            value.type === 'runExec' ||
+            value.type === 'ExecInvocation' ||
+            value.type === 'load-content'
+          )) {
+            return true;
+          }
+          // Check if it's a nested object with complex values
+          if (value.type === 'object') {
+            const nestedData = value.entries || value.properties;
+            if (nestedData && hasComplexValues(nestedData)) {
+              return true;
+            }
+          }
+          // Check if it's an array with complex items
+          if (value.type === 'array' && hasComplexArrayItems(value.items || value.elements || [])) {
+            return true;
+          }
+          // Check plain objects (without type field) recursively
+          if (!value.type && typeof value === 'object' && !Array.isArray(value)) {
+            if (hasComplexValues(value)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // Handle properties format (legacy) - it's a Record<string, any>
+  for (const value of Object.values(objOrProperties)) {
     if (value && typeof value === 'object') {
       if ('type' in value && (
-        value.type === 'code' || 
-        value.type === 'command' || 
+        value.type === 'code' ||
+        value.type === 'command' ||
         value.type === 'VariableReference' ||
         value.type === 'path' ||
         value.type === 'section' ||
@@ -1224,8 +1320,11 @@ function hasComplexValues(properties: any): boolean {
         return true;
       }
       // Check if it's a nested object with complex values
-      if (value.type === 'object' && hasComplexValues(value.properties)) {
-        return true;
+      if (value.type === 'object') {
+        const nestedData = value.entries || value.properties;
+        if (nestedData && hasComplexValues(nestedData)) {
+          return true;
+        }
       }
       // Check if it's an array with complex items
       if (value.type === 'array' && hasComplexArrayItems(value.items || value.elements || [])) {
@@ -1239,7 +1338,7 @@ function hasComplexValues(properties: any): boolean {
       }
     }
   }
-  
+
   return false;
 }
 
@@ -1349,7 +1448,17 @@ async function evaluateArrayItem(
     case 'object':
       // Object in array
       const processedObject: Record<string, any> = {};
-      if (item.properties) {
+      // Handle entries format (new)
+      if (item.entries) {
+        for (const entry of item.entries) {
+          if (entry.type === 'pair') {
+            processedObject[entry.key] = await evaluateArrayItem(entry.value, env, collectDescriptor);
+          }
+          // Spreads shouldn't be in simple objects (isComplex would be true)
+        }
+      }
+      // Handle properties format (legacy)
+      else if (item.properties) {
         for (const [key, propValue] of Object.entries(item.properties)) {
           processedObject[key] = await evaluateArrayItem(propValue, env, collectDescriptor);
         }

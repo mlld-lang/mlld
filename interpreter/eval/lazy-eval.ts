@@ -239,11 +239,34 @@ export async function evaluateDataValue(
   }
   
   // Handle DataObject type
-  if (value?.type === 'object' && 'properties' in value) {
+  if (value?.type === 'object' && ('entries' in value || 'properties' in value)) {
     const evaluatedObject: Record<string, any> = {};
-    for (const [key, propValue] of Object.entries(value.properties)) {
-      evaluatedObject[key] = await evaluateDataValue(propValue, env);
+
+    // New format: entries
+    if ('entries' in value && value.entries) {
+      for (const entry of value.entries) {
+        if (entry.type === 'pair') {
+          evaluatedObject[entry.key] = await evaluateDataValue(entry.value, env);
+        } else if (entry.type === 'spread') {
+          // Evaluate spread - interpolate the variable reference
+          const varName = await interpolateWithDescriptor(entry.value, env);
+          const spreadVar = env.getVariable(varName);
+          if (spreadVar) {
+            const spreadValue = spreadVar.value !== undefined ? spreadVar.value : spreadVar;
+            if (typeof spreadValue === 'object' && spreadValue !== null && !Array.isArray(spreadValue)) {
+              Object.assign(evaluatedObject, spreadValue);
+            }
+          }
+        }
+      }
     }
+    // Old format: properties (legacy support)
+    else if ('properties' in value && value.properties) {
+      for (const [key, propValue] of Object.entries(value.properties)) {
+        evaluatedObject[key] = await evaluateDataValue(propValue, env);
+      }
+    }
+
     return evaluatedObject;
   }
   
@@ -305,8 +328,22 @@ export function hasUnevaluatedDirectives(value: DataValue): boolean {
     return value.elements.some(hasUnevaluatedDirectives);
   }
   
-  if (value?.type === 'object' && 'properties' in value) {
-    return Object.values(value.properties).some(hasUnevaluatedDirectives);
+  if (value?.type === 'object') {
+    // New format: entries
+    if ('entries' in value && value.entries) {
+      return value.entries.some((entry: any) => {
+        if (entry.type === 'pair') {
+          return hasUnevaluatedDirectives(entry.value);
+        }
+        // Spread entries always need evaluation
+        return true;
+      });
+    }
+    // Old format: properties (legacy)
+    if ('properties' in value && value.properties) {
+      return Object.values(value.properties).some(hasUnevaluatedDirectives);
+    }
+    return false;
   }
   
   if (typeof value === 'object' && value !== null && !value.type) {

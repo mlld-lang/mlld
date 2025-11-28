@@ -153,12 +153,34 @@ export class ASTEvaluator {
     // Handle normalized objects
     if (normalized && normalized.type === 'object') {
       const evaluatedObject: Record<string, any> = {};
-      
-      for (const [key, val] of Object.entries(normalized.properties)) {
-        // Recursively evaluate each property
-        evaluatedObject[key] = await this.evaluateToRuntime(val, env);
+
+      // New format: entries
+      if (normalized.entries) {
+        for (const entry of normalized.entries) {
+          if (entry.type === 'pair') {
+            // Recursively evaluate each property value
+            evaluatedObject[entry.key] = await this.evaluateToRuntime(entry.value, env);
+          } else if (entry.type === 'spread') {
+            // Spread entry - interpolate variable name and merge
+            const varName = await interpolateAndRecord(entry.value, env);
+            const spreadVar = env.getVariable(varName);
+            if (spreadVar) {
+              const spreadValue = spreadVar.value !== undefined ? spreadVar.value : spreadVar;
+              if (typeof spreadValue === 'object' && spreadValue !== null && !Array.isArray(spreadValue)) {
+                Object.assign(evaluatedObject, spreadValue);
+              }
+            }
+          }
+        }
       }
-      
+      // Old format: properties (legacy)
+      else if (normalized.properties) {
+        for (const [key, val] of Object.entries(normalized.properties)) {
+          // Recursively evaluate each property
+          evaluatedObject[key] = await this.evaluateToRuntime(val, env);
+        }
+      }
+
       return evaluatedObject;
     }
     

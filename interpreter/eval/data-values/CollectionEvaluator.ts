@@ -130,23 +130,57 @@ export class CollectionEvaluator {
 
   /**
    * Evaluates an object with recursive property evaluation and error isolation
+   * Supports both pair entries and spread entries for object composition
    */
   private async evaluateObject(value: DataObjectValue, env: Environment): Promise<Record<string, any>> {
     const evaluatedObj: Record<string, any> = {};
-    
-    for (const [key, propValue] of Object.entries(value.properties)) {
-      try {
-        let evaluated = await this.evaluateDataValue(propValue, env);
-        if (isStructuredValue(evaluated)) {
-          evaluated = unwrapStructuredPrimitive(evaluated);
+
+    // Process each entry in order (pairs and spreads)
+    for (const entry of value.entries) {
+      if (entry.type === 'pair') {
+        // Regular key-value pair
+        try {
+          let evaluated = await this.evaluateDataValue(entry.value, env);
+          if (isStructuredValue(evaluated)) {
+            evaluated = unwrapStructuredPrimitive(evaluated);
+          }
+          evaluatedObj[entry.key] = evaluated;
+        } catch (error) {
+          // Store error information but continue evaluating other properties
+          evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
         }
-        evaluatedObj[key] = evaluated;
-      } catch (error) {
-        // Store error information but continue evaluating other properties
-        evaluatedObj[key] = this.createPropertyError(key, error);
+      } else if (entry.type === 'spread') {
+        // Spread entry: evaluate the variable and merge its properties
+        try {
+          // Interpolate the variable reference to get the variable name
+          const varName = await interpolateAndRecord(entry.value, env);
+
+          // Get the variable value from environment
+          const spreadVariable = await env.getVariable(varName);
+          if (!spreadVariable) {
+            throw new Error(`Cannot spread undefined variable: ${varName}`);
+          }
+
+          // Extract the actual value (handles Variable wrapper)
+          const spreadValue = spreadVariable.value !== undefined ? spreadVariable.value : spreadVariable;
+
+          // Validate it's an object
+          if (typeof spreadValue !== 'object' || spreadValue === null || Array.isArray(spreadValue)) {
+            throw new Error(
+              `Cannot spread non-object value from ${varName} (got ${Array.isArray(spreadValue) ? 'array' : typeof spreadValue})`
+            );
+          }
+
+          // Merge spread properties (later entries override earlier ones)
+          Object.assign(evaluatedObj, spreadValue);
+        } catch (error) {
+          // For spread errors, we can't assign to a specific key
+          // Re-throw since this affects the whole object
+          throw error;
+        }
       }
     }
-    
+
     return evaluatedObj;
   }
 

@@ -27,7 +27,8 @@ interface ASTArrayNode {
 
 interface ASTObjectNode {
   type: 'object';
-  properties: Record<string, ASTDataNode>;
+  entries?: Array<{ type: 'pair'; key: string; value: ASTDataNode } | { type: 'spread'; value: any }>;
+  properties?: Record<string, ASTDataNode>; // Legacy format
 }
 
 // Union type for all possible AST nodes that can be passed to parseDataValue
@@ -134,25 +135,56 @@ export function parseDataValue(node: ASTDataNode): DataValue {
   
   // Handle objects
   if (typeof node === 'object' && node !== null) {
-    if ('type' in node && node.type === 'object' && 'properties' in node) {
-      // AST object node
-      const properties: Record<string, DataValue> = {};
-      for (const [key, value] of Object.entries((node as { type: 'object'; properties: Record<string, ASTDataNode> }).properties)) {
-        properties[key] = parseDataValue(value);
+    if ('type' in node && node.type === 'object') {
+      const objNode = node as ASTObjectNode;
+
+      // New format: entries array
+      if (objNode.entries) {
+        return {
+          type: 'object',
+          entries: objNode.entries.map(entry => {
+            if (entry.type === 'pair') {
+              return {
+                type: 'pair' as const,
+                key: entry.key,
+                value: parseDataValue(entry.value)
+              };
+            } else {
+              // Spread entry - keep as-is
+              return entry;
+            }
+          })
+        } as DataObjectValue;
       }
+
+      // Old format: properties record (convert to entries)
+      if (objNode.properties) {
+        const entries = Object.entries(objNode.properties).map(([key, value]) => ({
+          type: 'pair' as const,
+          key,
+          value: parseDataValue(value)
+        }));
+        return {
+          type: 'object',
+          entries
+        } as DataObjectValue;
+      }
+
+      // Empty object
       return {
         type: 'object',
-        properties
+        entries: []
       } as DataObjectValue;
     } else if (!('type' in node)) {
-      // Plain object
-      const properties: Record<string, DataValue> = {};
-      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-        properties[key] = parseDataValue(value as ASTDataNode);
-      }
+      // Plain object - convert to entries format
+      const entries = Object.entries(node as Record<string, unknown>).map(([key, value]) => ({
+        type: 'pair' as const,
+        key,
+        value: parseDataValue(value as ASTDataNode)
+      }));
       return {
         type: 'object',
-        properties
+        entries
       } as DataObjectValue;
     }
   }
@@ -193,9 +225,18 @@ export function extractPlainValue(value: DataValue): PlainValue {
   
   if ((value as any)?.type === 'object') {
     const obj: PlainObject = {};
-    for (const [key, val] of Object.entries((value as DataObjectValue).properties)) {
-      obj[key] = extractPlainValue(val);
+    const objValue = value as DataObjectValue;
+
+    // New format: entries
+    if (objValue.entries) {
+      for (const entry of objValue.entries) {
+        if (entry.type === 'pair') {
+          obj[entry.key] = extractPlainValue(entry.value);
+        }
+        // Skip spreads - they should be evaluated before extraction
+      }
     }
+
     return obj;
   }
   
@@ -244,7 +285,17 @@ export function needsEvaluation(value: DataValue): boolean {
   }
   
   if ((value as any)?.type === 'object') {
-    return Object.values((value as DataObjectValue).properties).some(needsEvaluation);
+    const objValue = value as DataObjectValue;
+    if (objValue.entries) {
+      return objValue.entries.some(entry => {
+        if (entry.type === 'pair') {
+          return needsEvaluation(entry.value);
+        }
+        // Spread entries always need evaluation
+        return true;
+      });
+    }
+    return false;
   }
   
   if ((value as any)?.type === 'array') {
