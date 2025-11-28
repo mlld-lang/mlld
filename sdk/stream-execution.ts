@@ -10,8 +10,9 @@ export class StreamExecution implements StreamExecutionInterface {
   private readonly donePromise: Promise<void>;
   private readonly resultPromise: Promise<StructuredResult>;
   private aborted = false;
+  private abortFn?: () => void;
 
-  constructor(private readonly emitter: ExecutionEmitter) {
+  constructor(private readonly emitter: ExecutionEmitter, options?: { abort?: () => void }) {
     this.donePromise = new Promise<void>((resolve, reject) => {
       this.doneResolve = resolve;
       this.doneReject = reject;
@@ -20,6 +21,7 @@ export class StreamExecution implements StreamExecutionInterface {
       this.resultResolve = resolve;
       this.resultReject = reject;
     });
+    this.abortFn = options?.abort;
   }
 
   on(type: SDKEvent['type'], handler: SDKEventHandler): void {
@@ -60,5 +62,16 @@ export class StreamExecution implements StreamExecutionInterface {
     this.doneReject(error);
   }
 
-  abort?: () => void;
+  abort = (): void => {
+    if (this.aborted || this.completed) return;
+    this.aborted = true;
+    if (this.abortFn) {
+      try {
+        this.abortFn();
+      } catch {
+        // Swallow abort errors; handle will reject below.
+      }
+    }
+    this.reject(new Error('StreamExecution aborted'));
+  };
 }

@@ -135,4 +135,40 @@ describe('StreamExecution', () => {
 
     expect(received.length).toBe(0);
   });
+
+  it('rejects handle on execution error', async () => {
+    const emitter = new ExecutionEmitter();
+    const handle = (await interpret(
+      `
+/exe @boom() = js { throw new Error('boom') }
+/show @boom()
+      `.trim(),
+      {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'stream',
+      emitter,
+      streaming: { enabled: true }
+    })) as StreamHandle;
+
+    await expect(handle.result()).rejects.toThrow();
+    await expect(handle.done()).rejects.toThrow();
+  });
+
+  it('aborts stream execution via handle.abort()', async () => {
+    const emitter = new ExecutionEmitter();
+    const handle = (await interpret('/show \"hi\"', {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'stream',
+      emitter,
+      streaming: { enabled: true }
+    })) as StreamHandle;
+
+    handle.abort?.();
+    await expect(handle.result()).rejects.toThrow(/aborted/i);
+    await expect(handle.done()).rejects.toThrow(/aborted/i);
+  });
 });

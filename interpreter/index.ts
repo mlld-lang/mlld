@@ -324,7 +324,11 @@ export async function interpret(
 
   if (mode === 'stream') {
     const emitter = options.emitter ?? new ExecutionEmitter();
-    const streamExecution = new StreamExecution(emitter);
+    const streamExecution = new StreamExecution(emitter, {
+      abort: () => {
+        env.cleanup();
+      }
+    });
     env.enableSDKEvents(emitter);
 
     void (async () => {

@@ -1423,6 +1423,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   private mapStreamEvent(event: StreamEvent): SDKStreamEvent | null {
+    const streamingSuppressed = this.streamingOptions.enabled === false;
+    if (streamingSuppressed && event.type === 'CHUNK') {
+      return null;
+    }
     if (event.type === 'CHUNK') {
       return { type: 'stream:chunk', event };
     }
