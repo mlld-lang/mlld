@@ -182,6 +182,10 @@ export async function interpret(
     effectHandler
   );
 
+  if (options.emitter) {
+    env.enableSDKEvents(options.emitter);
+  }
+
   if (options.allowAbsolutePaths !== undefined) {
     env.setAllowAbsolutePaths(options.allowAbsolutePaths);
   }

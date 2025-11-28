@@ -11,6 +11,7 @@ import type { EffectHandler, Effect } from '@interpreter/env/EffectHandler';
 import type { Environment } from '@interpreter/env/Environment';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
+import type { ExecutionEmitter } from './execution-emitter';
 
 export type InterpretMode = 'document' | 'structured' | 'stream' | 'debug';
 
@@ -49,6 +50,7 @@ export interface InterpretOptions {
   mode?: InterpretMode;
   provenance?: boolean;
   recordEffects?: boolean;
+  emitter?: ExecutionEmitter;
 }
 
 export interface StructuredEffect extends Effect {

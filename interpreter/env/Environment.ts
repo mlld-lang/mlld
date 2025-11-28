@@ -52,6 +52,7 @@ import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
+import { getStreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
 import { ExportManifest } from '../eval/import/ExportManifest';
 import {
   ContextManager,
@@ -67,6 +68,8 @@ import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
+import type { ExecutionEmitter } from '@sdk/execution-emitter';
+import type { SDKEvent, SDKStreamEvent } from '@sdk/types';
 
 interface ImportBindingInfo {
   source: string;
@@ -199,6 +202,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Effect handler for immediate output
   private effectHandler: EffectHandler;
+  private sdkEmitter?: ExecutionEmitter;
+  private streamBridgeUnsub?: () => void;
 
   // Import evaluation guard - prevents directive execution during import
   private isImportingContent: boolean = false;
@@ -1377,6 +1382,37 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     return current;
   }
+
+  enableSDKEvents(emitter: ExecutionEmitter): void {
+    const root = this.getRootEnvironment();
+    root.sdkEmitter = emitter;
+
+    if (root.streamBridgeUnsub) {
+      root.streamBridgeUnsub();
+      root.streamBridgeUnsub = undefined;
+    }
+
+    const bus = getStreamBus();
+    const unsubscribe = bus.subscribe(event => {
+      const sdkEvent = this.mapStreamEvent(event);
+      if (sdkEvent) {
+        root.sdkEmitter?.emit(sdkEvent);
+      }
+    });
+    root.streamBridgeUnsub = unsubscribe;
+  }
+
+  emitSDKEvent(event: SDKEvent): void {
+    const root = this.getRootEnvironment();
+    root.sdkEmitter?.emit(event);
+  }
+
+  private mapStreamEvent(event: StreamEvent): SDKStreamEvent | null {
+    if (event.type === 'CHUNK') {
+      return { type: 'stream:chunk', event };
+    }
+    return { type: 'stream:progress', event };
+  }
   
   /**
    * Get the parent environment (if this is a child environment).
@@ -1755,6 +1791,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this,
       this.effectHandler  // Share the same effect handler
     );
+    child.sdkEmitter = this.sdkEmitter;
+    child.streamBridgeUnsub = this.streamBridgeUnsub;
     child.allowAbsolutePaths = this.allowAbsolutePaths;
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
@@ -2292,6 +2330,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   cleanup(): void {
     logger.debug('Environment cleanup called');
     
+    if (!this.parent && this.streamBridgeUnsub) {
+      try {
+        this.streamBridgeUnsub();
+      } catch (error) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[Environment] Failed to detach stream bridge', error);
+        }
+      }
+      this.streamBridgeUnsub = undefined;
+    }
+
     // Clean up NodeShadowEnvironment if it exists
     if (this.nodeShadowEnv) {
       logger.debug('Cleaning up NodeShadowEnvironment');
