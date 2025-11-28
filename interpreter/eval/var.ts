@@ -1416,9 +1416,23 @@ async function evaluateArrayItem(
           items: item.content.map((node: any) => node.type)
         });
       }
-      return item.content
+      const joined = item.content
         .map((node: any) => (node.type === 'Literal' ? node.value : node.content))
         .join('');
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        try {
+          const fs = require('fs');
+          fs.appendFileSync(
+            '/tmp/mlld-debug.log',
+            JSON.stringify({
+              source: 'evaluateArrayItem',
+              wrapperType: item.wrapperType,
+              joined
+            }) + '\n'
+          );
+        } catch {}
+      }
+      return joined;
     }
     if (process.env.MLLD_DEBUG_FIX === 'true') {
       console.error('[evaluateArrayItem] interpolating wrapper', {

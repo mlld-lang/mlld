@@ -537,8 +537,25 @@ export class VariableImporter {
           name,
           importPath,
           isComplex,
-          keys: Object.keys(normalizedObject || {}).slice(0, 5)
+          keys: Object.keys(normalizedObject || {}).slice(0, 5),
+          agentRosterPreview: normalizedObject && (normalizedObject as any).agent_roster
         });
+        try {
+          const fs = require('fs');
+          fs.appendFileSync(
+            '/tmp/mlld-debug.log',
+            JSON.stringify({
+              source: 'VariableImporter',
+              name,
+              importPath,
+              isComplex,
+              keys: Object.keys(normalizedObject || {}).slice(0, 5),
+              agentRosterType: normalizedObject && typeof (normalizedObject as any).agent_roster,
+              agentRosterIsVariable: this.isVariableLike((normalizedObject as any).agent_roster),
+              agentRosterIsArray: Array.isArray((normalizedObject as any).agent_roster)
+            }) + '\n'
+          );
+        } catch {}
       }
       
       return createObjectVariable(

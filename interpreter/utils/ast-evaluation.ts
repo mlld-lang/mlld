@@ -61,11 +61,16 @@ export function createASTAwareJSONReplacer() {
     }
     
     // Convert nested DataObject types to plain objects
-    if (val && typeof val === 'object' && 'type' in val && (val as any).type === 'object') {
+    if (
+      val &&
+      typeof val === 'object' &&
+      'type' in val &&
+      (val as any).type === 'object'
+    ) {
       const dataObj = val as any;
 
       // New format: entries
-      if (dataObj.entries) {
+      if (Array.isArray(dataObj.entries)) {
         const plainObj: Record<string, unknown> = {};
         for (const entry of dataObj.entries) {
           if (entry.type === 'pair') {
@@ -81,8 +86,8 @@ export function createASTAwareJSONReplacer() {
         return dataObj.properties;
       }
 
-      // Empty object
-      return {};
+      // Not an AST object node – let JSON.stringify handle it normally
+      return val;
     }
     
     // Convert nested DataArray types to plain arrays

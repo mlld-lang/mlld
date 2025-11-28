@@ -28,8 +28,11 @@ export class ObjectReferenceResolver {
     }
     
     if (typeof value === 'object') {
-      // Handle AST object nodes with type and properties
-      if (value.type === 'object' && value.properties) {
+      // Handle AST object nodes with type and properties/entries
+      if (value.type === 'object' && (value as any).properties) {
+        return this.resolveASTObjectNode(value, variableMap);
+      }
+      if (value.type === 'object' && Array.isArray((value as any).entries)) {
         return this.resolveASTObjectNode(value, variableMap);
       }
       
@@ -206,11 +209,70 @@ export class ObjectReferenceResolver {
    */
   private resolveASTObjectNode(value: any, variableMap: Map<string, Variable>): any {
     const resolved: Record<string, any> = {};
-    for (const [key, val] of Object.entries(value.properties)) {
-      resolved[key] = this.resolveObjectReferences(val, variableMap);
+
+    // New entries format (supports spreads)
+    if (Array.isArray(value.entries) && value.entries.length > 0) {
+      for (const entry of value.entries) {
+        if (entry.type === 'pair') {
+          resolved[entry.key] = this.resolveObjectReferences(entry.value, variableMap);
+        } else if (entry.type === 'spread') {
+          for (const spreadNode of entry.value || []) {
+            const spreadValue = this.resolveObjectReferences(spreadNode, variableMap);
+            if (spreadValue && typeof spreadValue === 'object' && !Array.isArray(spreadValue)) {
+              Object.assign(resolved, spreadValue);
+            } else {
+              throw new Error('Cannot spread non-object value during import resolution');
+            }
+          }
+        }
+      }
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[ObjectReferenceResolver] resolved entries object', {
+          keys: Object.keys(resolved),
+          hasEntries: true
+        });
+        try {
+          const fs = require('fs');
+          fs.appendFileSync(
+            '/tmp/mlld-debug.log',
+            JSON.stringify({
+              source: 'ObjectReferenceResolver',
+              keys: Object.keys(resolved),
+              hasEntries: true
+            }) + '\n'
+          );
+        } catch {}
+      }
+      return resolved;
     }
-    // Return the resolved object directly, not as an AST node
-    return resolved;
+
+    // Legacy properties format
+    if (value.properties) {
+      for (const [key, val] of Object.entries(value.properties)) {
+        resolved[key] = this.resolveObjectReferences(val, variableMap);
+      }
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[ObjectReferenceResolver] resolved properties object', {
+          keys: Object.keys(resolved),
+          hasProperties: true
+        });
+        try {
+          const fs = require('fs');
+          fs.appendFileSync(
+            '/tmp/mlld-debug.log',
+            JSON.stringify({
+              source: 'ObjectReferenceResolver',
+              keys: Object.keys(resolved),
+              hasProperties: true
+            }) + '\n'
+          );
+        } catch {}
+      }
+      return resolved;
+    }
+
+    // Fallback - treat as plain object
+    return this.resolveNestedStructures(value, variableMap);
   }
 
   /**

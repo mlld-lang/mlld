@@ -2464,6 +2464,37 @@ async function evaluateExecInvocationInternal(
     result = structured;
   }
 
+  if (process.env.MLLD_DEBUG_FIX === 'true') {
+    try {
+      const summary = {
+        commandName,
+        type: typeof result,
+        isStructured: isStructuredValue(result),
+        keys: result && typeof result === 'object' ? Object.keys(result as any).slice(0, 5) : undefined,
+        preview:
+          isStructuredValue(result) && typeof (result as any).data === 'object'
+            ? Object.keys((result as any).data || {}).slice(0, 5)
+            : undefined,
+        text:
+          isStructuredValue(result) && typeof (result as any).text === 'string'
+            ? String((result as any).text).slice(0, 120)
+            : undefined
+      };
+      console.error('[evaluateExecInvocation] result summary', summary);
+      if (
+        commandName === 'needsMeta' ||
+        commandName === 'jsDefault' ||
+        commandName === 'jsKeep' ||
+        commandName === 'agentsContext'
+      ) {
+        try {
+          const fs = require('fs');
+          fs.appendFileSync('/tmp/mlld-debug.log', JSON.stringify(summary) + '\n');
+        } catch {}
+      }
+    } catch {}
+  }
+
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {

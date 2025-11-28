@@ -177,6 +177,39 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'bracketAccess': {
       // All handle string-based property access
       const name = String(fieldValue);
+      if (process.env.MLLD_DEBUG_FIX === 'true' && name === 'length') {
+        console.error('[field-access] length access', {
+          isVariable: isVariable(value),
+          rawType: typeof rawValue,
+          rawKeys: rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : null,
+          rawValueTypeField: (rawValue as any)?.type
+        });
+        try {
+          const fs = require('fs');
+          const util = require('util');
+          const preview =
+            Array.isArray(rawValue) && rawValue.length > 0
+              ? { isArray: true, length: rawValue.length, first: rawValue[0] }
+              : rawValue && typeof rawValue === 'object'
+                ? {
+                    isArray: Array.isArray(rawValue),
+                    sample: util.inspect(rawValue, { depth: 2, breakLength: 120 })
+                  }
+                : rawValue;
+          fs.appendFileSync(
+            '/tmp/mlld-debug.log',
+            JSON.stringify({
+              source: 'field-access',
+              field: name,
+              isVariable: isVariable(value),
+              rawType: typeof rawValue,
+              rawKeys: rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : null,
+              rawValueTypeField: (rawValue as any)?.type,
+              preview
+            }) + '\n'
+          );
+        } catch {}
+      }
       if (structuredWrapper) {
         if (name === 'text') {
           if (

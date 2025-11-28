@@ -204,9 +204,45 @@ export class CollectionEvaluator {
   private async evaluateArray(value: DataArrayValue, env: Environment): Promise<any[]> {
     const evaluatedElements: any[] = [];
     
-    
     for (let i = 0; i < value.items.length; i++) {
       try {
+        const item = value.items[i] as any;
+
+        // Fast-path literal/text wrappers so nested arrays keep their string content
+        if (item && typeof item === 'object' && 'content' in item && Array.isArray(item.content)) {
+          const hasOnlyLiteralsOrText = (item.content as any[]).every(
+            node =>
+              node &&
+              typeof node === 'object' &&
+              ((node.type === 'Literal' && 'value' in node) || (node.type === 'Text' && 'content' in node))
+          );
+          if (hasOnlyLiteralsOrText) {
+            if (process.env.MLLD_DEBUG_FIX === 'true') {
+              console.error('[CollectionEvaluator] literal/text wrapper', {
+                index: i,
+                wrapperType: (item as any).wrapperType,
+                itemTypes: (item.content as any[]).map(n => n?.type)
+              });
+              try {
+                const fs = require('fs');
+                fs.appendFileSync(
+                  '/tmp/mlld-debug.log',
+                  JSON.stringify({
+                    source: 'CollectionEvaluator',
+                    index: i,
+                    wrapperType: (item as any).wrapperType,
+                    itemTypes: (item.content as any[]).map((n: any) => n?.type)
+                  }) + '\n'
+                );
+              } catch {}
+            }
+            evaluatedElements.push(
+              (item.content as any[]).map(node => (node.type === 'Literal' ? node.value : node.content)).join('')
+            );
+            continue;
+          }
+        }
+
         let evaluatedItem = await this.evaluateDataValue(value.items[i], env);
         if (isStructuredValue(evaluatedItem)) {
           evaluatedItem = unwrapStructuredPrimitive(evaluatedItem);
