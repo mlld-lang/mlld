@@ -35,8 +35,18 @@ DataObjectEntries
 
 // DATA OBJECT ENTRY - Either a pair or a spread
 DataObjectEntry
-  = SpreadProperty
+  = DataSpreadProperty
   / DataObjectPair
+
+// DATA SPREAD PROPERTY - Spread syntax for objects
+// Example: ...@user
+DataSpreadProperty "spread property"
+  = "..." variable:UnifiedVariableNoTail {
+      return {
+        type: 'spread',
+        value: [variable]  // Wrap in array to match VariableNodeArray type
+      };
+    }
 
 // DATA OBJECT PAIR - Key-value pair
 DataObjectPair

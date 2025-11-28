@@ -1403,6 +1403,29 @@ async function evaluateArrayItem(
   // This includes strings in objects: {"name": "alice"} where "alice" becomes
   // {content: [{type: 'Text', content: 'alice'}], wrapperType: 'doubleQuote'}
   if ('content' in item && Array.isArray(item.content) && 'wrapperType' in item) {
+    const hasOnlyLiteralsOrText = item.content.every(
+      (node: any) =>
+        node &&
+        typeof node === 'object' &&
+        ((node.type === 'Literal' && 'value' in node) || (node.type === 'Text' && 'content' in node))
+    );
+    if (hasOnlyLiteralsOrText) {
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[evaluateArrayItem] literal/text wrapper', {
+          wrapperType: item.wrapperType,
+          items: item.content.map((node: any) => node.type)
+        });
+      }
+      return item.content
+        .map((node: any) => (node.type === 'Literal' ? node.value : node.content))
+        .join('');
+    }
+    if (process.env.MLLD_DEBUG_FIX === 'true') {
+      console.error('[evaluateArrayItem] interpolating wrapper', {
+        wrapperType: item.wrapperType,
+        itemTypes: item.content.map((node: any) => node?.type)
+      });
+    }
     return await interpolateAndCollect(item.content, env, collectDescriptor);
   }
 

@@ -209,6 +209,21 @@ export class VariableReferenceEvaluator {
             sourceLocation: (value as any)?.location 
           });
           result = (fieldResult as any).value;
+
+          // Resolve nested variable references returned from AST objects
+          if (
+            result &&
+            typeof result === 'object' &&
+            result.type === 'VariableReference' &&
+            'identifier' in result
+          ) {
+            const nestedVar = env.getVariable((result as any).identifier);
+            if (!nestedVar) {
+              throw new Error(`Variable not found: ${(result as any).identifier}`);
+            }
+            const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+            result = await resolveVariable(nestedVar, env, ResolutionContext.FieldAccess);
+          }
         }
       }
     }

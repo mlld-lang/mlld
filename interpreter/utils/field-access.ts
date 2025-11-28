@@ -421,6 +421,20 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         accessedValue = getObjectField(rawValue, name);
         break;
       }
+
+      // Handle normalized AST arrays with direct length access
+      if (rawValue && typeof rawValue === 'object' && rawValue.type === 'array' && Array.isArray(rawValue.items)) {
+        if (name === 'length') {
+          if (process.env.MLLD_DEBUG_FIX === 'true') {
+            console.error('[field-access] AST array length', {
+              length: rawValue.items.length,
+              itemsPreview: rawValue.items.slice(0, 2)
+            });
+          }
+          accessedValue = rawValue.items.length;
+          break;
+        }
+      }
       
       // DEBUG: Log what we're checking
       if (process.env.MLLD_DEBUG === 'true' && name === 'try') {

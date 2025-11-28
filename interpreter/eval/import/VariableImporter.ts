@@ -505,6 +505,14 @@ export class VariableImporter {
     // For array types, create an ArrayVariable to preserve array behaviors
     if (originalType === 'array' && Array.isArray(processedValue)) {
       const isComplexArray = this.hasComplexContent(processedValue);
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[VariableImporter] create array variable', {
+          name,
+          importPath,
+          isComplexArray,
+          sample: processedValue.slice(0, 2)
+        });
+      }
 
       return createArrayVariable(
         name,
@@ -524,6 +532,14 @@ export class VariableImporter {
       const normalizedObject = this.unwrapArraySnapshots(processedValue, importPath);
       // Check if the object contains complex AST nodes that need evaluation
       const isComplex = this.hasComplexContent(normalizedObject);
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[VariableImporter] create object variable', {
+          name,
+          importPath,
+          isComplex,
+          keys: Object.keys(normalizedObject || {}).slice(0, 5)
+        });
+      }
       
       return createObjectVariable(
         name,

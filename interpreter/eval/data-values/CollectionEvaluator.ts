@@ -1,7 +1,9 @@
 import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { accessFields } from '@interpreter/utils/field-access';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
 
@@ -152,17 +154,29 @@ export class CollectionEvaluator {
       } else if (entry.type === 'spread') {
         // Spread entry: evaluate the variable and merge its properties
         try {
-          // Interpolate the variable reference to get the variable name
-          const varName = await interpolateAndRecord(entry.value, env);
-
+          const [varRef] = entry.value;
+          const varName = varRef?.identifier;
           // Get the variable value from environment
-          const spreadVariable = await env.getVariable(varName);
+          const spreadVariable = varName ? env.getVariable(varName) : undefined;
           if (!spreadVariable) {
             throw new Error(`Cannot spread undefined variable: ${varName}`);
           }
 
           // Extract the actual value (handles Variable wrapper)
-          const spreadValue = spreadVariable.value !== undefined ? spreadVariable.value : spreadVariable;
+          let spreadValue = await extractVariableValue(spreadVariable, env);
+
+          // Apply any field access on the spread reference
+          if (varRef?.fields && varRef.fields.length > 0) {
+            const fieldResult = await accessFields(spreadValue, varRef.fields, {
+              env,
+              preserveContext: false
+            });
+            spreadValue = (fieldResult as any).value ?? fieldResult;
+          }
+
+          if (isStructuredValue(spreadValue)) {
+            spreadValue = asData(spreadValue);
+          }
 
           // Validate it's an object
           if (typeof spreadValue !== 'object' || spreadValue === null || Array.isArray(spreadValue)) {

@@ -87,6 +87,30 @@ export class PrimitiveEvaluator {
     
     // Handle wrapped string values (quotes, backticks, or brackets)
     if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
+      const contentArray: any[] = value.content as any[];
+      const hasOnlyLiteralsOrText = contentArray.every(
+        node =>
+          node &&
+          typeof node === 'object' &&
+          ((node.type === 'Literal' && 'value' in node) || (node.type === 'Text' && 'content' in node))
+      );
+      if (hasOnlyLiteralsOrText) {
+        if (process.env.MLLD_DEBUG_FIX === 'true') {
+          console.error('[PrimitiveEvaluator] literal/text wrapper', {
+            wrapperType: (value as any).wrapperType,
+            items: contentArray.map(n => n?.type)
+          });
+        }
+        return contentArray
+          .map(node => (node.type === 'Literal' ? (node as any).value : (node as any).content))
+          .join('');
+      }
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[PrimitiveEvaluator] interpolating wrapper', {
+          wrapperType: (value as any).wrapperType,
+          itemTypes: contentArray.map(n => n?.type)
+        });
+      }
       return await interpolateAndRecord(value.content, env);
     }
     
