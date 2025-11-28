@@ -1,0 +1,3 @@
+/exe @length(@arr) = js { return arr.length; }
+
+/export { @length }
