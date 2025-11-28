@@ -69,7 +69,7 @@ import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
-import type { SDKEvent, SDKStreamEvent } from '@sdk/types';
+import type { SDKEffectEvent, SDKEvent, SDKStreamEvent, SDKCommandEvent } from '@sdk/types';
 
 interface ImportBindingInfo {
   source: string;
@@ -1221,8 +1221,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.recordSecurityDescriptor(descriptor);
     }
 
-    // Always emit effects (handler decides whether to actually output)
-    this.effectHandler.handleEffect({
+    const effect = {
       type,
       content,
       path: options?.path,
@@ -1230,7 +1229,23 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       mode: options?.mode,
       metadata: options?.metadata,
       capability
-    });
+    };
+
+    // Always emit effects (handler decides whether to actually output)
+    this.effectHandler.handleEffect(effect);
+
+    if (this.sdkEmitter) {
+      const event: SDKEffectEvent = {
+        type: 'effect',
+        effect: {
+          ...effect,
+          security: capability?.security ?? makeSecurityDescriptor(),
+          provenance: capability?.security ?? makeSecurityDescriptor()
+        },
+        timestamp: Date.now()
+      };
+      this.emitSDKEvent(event);
+    }
   }
   
   /**
@@ -1395,9 +1410,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const bus = getStreamBus();
     const unsubscribe = bus.subscribe(event => {
       const sdkEvent = this.mapStreamEvent(event);
-      if (sdkEvent) {
-        root.sdkEmitter?.emit(sdkEvent);
-      }
+      const commandEvent = this.mapCommandEvent(event);
+      if (sdkEvent) root.sdkEmitter?.emit(sdkEvent);
+      if (commandEvent) root.sdkEmitter?.emit(commandEvent);
     });
     root.streamBridgeUnsub = unsubscribe;
   }
@@ -1412,6 +1427,40 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return { type: 'stream:chunk', event };
     }
     return { type: 'stream:progress', event };
+  }
+
+  private mapCommandEvent(event: StreamEvent): SDKCommandEvent | null {
+    switch (event.type) {
+      case 'STAGE_START':
+        return {
+          type: 'command:start',
+          command: (event.command as any)?.rawIdentifier,
+          stageIndex: event.stageIndex,
+          parallelIndex: event.parallelIndex,
+          pipelineId: event.pipelineId,
+          timestamp: event.timestamp
+        };
+      case 'STAGE_SUCCESS':
+        return {
+          type: 'command:complete',
+          stageIndex: event.stageIndex,
+          parallelIndex: event.parallelIndex,
+          pipelineId: event.pipelineId,
+          durationMs: event.durationMs,
+          timestamp: event.timestamp
+        };
+      case 'STAGE_FAILURE':
+        return {
+          type: 'command:complete',
+          stageIndex: event.stageIndex,
+          parallelIndex: event.parallelIndex,
+          pipelineId: event.pipelineId,
+          error: event.error,
+          timestamp: event.timestamp
+        };
+      default:
+        return null;
+    }
   }
   
   /**

@@ -11,10 +11,13 @@ import type {
   InterpretOptions,
   InterpretResult,
   StructuredEffect,
-  ExportMap
+  ExportMap,
+  StreamExecution as StreamExecutionHandle
 } from '@sdk/types';
 import { getExpressionProvenance } from './utils/expression-provenance';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { ExecutionEmitter } from '@sdk/execution-emitter';
+import { StreamExecution } from '@sdk/stream-execution';
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -316,14 +319,25 @@ export async function interpret(
   }
 
   if (mode === 'structured') {
-    const effects = collectEffects(env.getEffectHandler());
-    const exports = collectExports(env);
-    return {
-      output,
-      effects,
-      exports,
-      environment: env
-    };
+    return buildStructuredResult(env, output);
+  }
+
+  if (mode === 'stream') {
+    const emitter = options.emitter ?? new ExecutionEmitter();
+    const streamExecution = new StreamExecution(emitter);
+    env.enableSDKEvents(emitter);
+
+    (async () => {
+      try {
+        const structured = buildStructuredResult(env, output);
+        emitter.emit({ type: 'execution:complete', result: structured, timestamp: Date.now() });
+        streamExecution.resolve(structured);
+      } catch (error) {
+        streamExecution.reject(error);
+      }
+    })();
+
+    return streamExecution as unknown as StreamExecutionHandle;
   }
 
   if (mode !== 'document') {
@@ -337,6 +351,17 @@ export async function interpret(
 export { Environment } from './env/Environment';
 export type { EvalResult } from './core/interpreter';
 export type { InterpretOptions, InterpretResult } from '@sdk/types';
+
+function buildStructuredResult(env: Environment, output: string) {
+  const effects = collectEffects(env.getEffectHandler());
+  const exports = collectExports(env);
+  return {
+    output,
+    effects,
+    exports,
+    environment: env
+  };
+}
 
 function collectEffects(handler: EffectHandler | undefined): StructuredEffect[] {
   if (!handler || typeof handler.getEffects !== 'function') {

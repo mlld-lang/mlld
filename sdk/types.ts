@@ -109,6 +109,7 @@ export type SDKCommandEvent =
       durationMs?: number;
       error?: Error;
       timestamp: number;
+      capability?: CapabilityContext;
     };
 
 export type SDKStreamEvent =

@@ -22,6 +22,7 @@ export type { FormattedErrorResult, ErrorFormatOptions };
 export { DependencyDetector } from '@core/utils/dependency-detector';
 export { PathContextBuilder } from '@core/services/PathContextService';
 export { ExecutionEmitter } from './execution-emitter';
+export { StreamExecution } from './stream-execution';
 
 // Export types
 export type { Location, Position } from '@core/types/index';
