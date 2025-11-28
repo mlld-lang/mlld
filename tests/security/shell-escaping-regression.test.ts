@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { processMlld } from '@api/index';
+import { processMlld } from '@sdk/index';
 
 describe('Shell Escaping Security Tests', () => {
   const dangerousInputs = [

@@ -14,7 +14,7 @@ MCP Client ── JSON-RPC over stdio ── MCPServer ── FunctionRouter ─
 ## Loading Modules
 
 1. Resolve the module path (file, directory, or glob).
-2. Interpret each module with `interpret(..., { returnEnvironment: true })`.
+2. Interpret each module with `interpret(..., { captureEnvironment })`.
 3. Collect exported executables from the manifest when available; otherwise fall back to every executable variable.
 4. Detect duplicate names before registering functions on the shared environment.
 5. Apply config/tool filters (from `--config`, `--tools`) to the exported map.
@@ -75,7 +75,7 @@ Expose exported `/exe` functions as Model Context Protocol tools without inventi
 ### Module loading
 
 - `resolveModulePaths()` expands files, directories, or globs into absolute module paths.
-- Each module runs through `interpret(..., { returnEnvironment: true })` so we capture an `Environment` and export manifest snapshot.
+- Each module runs through `interpret(..., { captureEnvironment })` so we capture an `Environment` and export manifest snapshot.
 - `/export` directives drive the primary tool list; if absent, the command falls back to all non-builtin executables in the environment.
 - Captured module environments attach to each executable to keep `/import` state available during invocation.
 

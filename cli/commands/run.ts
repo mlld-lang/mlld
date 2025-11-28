@@ -12,6 +12,7 @@ import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { interpret } from '@interpreter/index';
+import type { Environment } from '@interpreter/env/Environment';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { PathContextBuilder } from '@core/services/PathContextService';
@@ -109,7 +110,7 @@ export class RunCommand {
     
     console.log(chalk.gray(`Running ${path.relative(process.cwd(), scriptPath)}...\n`));
     
-    let environment: any = null; // Define outside try block for cleanup access
+    let environment: Environment | null = null; // Define outside try block for cleanup access
     
     try {
       // Read the script file
@@ -132,14 +133,15 @@ export class RunCommand {
         format: 'markdown',
         fileSystem,
         pathService,
-        returnEnvironment: true,
         enableTrace: true,
-        useMarkdownFormatter: false // Scripts should output raw results
+        useMarkdownFormatter: false, // Scripts should output raw results
+        captureEnvironment: env => {
+          environment = env;
+        }
       });
       
       // Extract output and environment
       const output = typeof result === 'string' ? result : result.output;
-      environment = typeof result === 'string' ? null : result.environment;
       
       // Output the result
       console.log(output);

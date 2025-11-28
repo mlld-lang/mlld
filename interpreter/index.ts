@@ -1,65 +1,12 @@
 import { parse } from '@grammar/parser';
 import { Environment } from './env/Environment';
-import type { EffectHandler } from './env/EffectHandler';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
-import type { IFileSystemService } from '@services/fs/IFileSystemService';
-import type { IPathService } from '@services/fs/IPathService';
-import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import * as path from 'path';
-import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
-
-import type { ResolvedURLConfig } from '@core/config/types';
-import type { StreamingOptions } from './eval/pipeline/streaming-options';
-
-interface CommandExecutionOptions {
-  showProgress?: boolean;
-  maxOutputLines?: number;
-  errorBehavior?: 'halt' | 'continue';
-  collectErrors?: boolean;
-  showCommandContext?: boolean;
-  timeout?: number;
-}
-
-/**
- * Options for the interpreter
- */
-export interface InterpretOptions {
-  basePath?: string; // @deprecated Use filePath or pathContext instead
-  filePath?: string; // Current file being processed (for error reporting)
-  pathContext?: PathContext; // Explicit path context
-  strict?: boolean;
-  format?: 'markdown' | 'xml';
-  fileSystem: IFileSystemService;
-  pathService: IPathService;
-  urlConfig?: ResolvedURLConfig;
-  outputOptions?: CommandExecutionOptions;
-  stdinContent?: string; // Optional stdin content
-  returnEnvironment?: boolean; // Return environment with result
-  approveAllImports?: boolean; // Bypass interactive import approval
-  normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
-  enableTrace?: boolean; // Enable directive trace for debugging (default: true)
-  useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
-  localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
-  // Test injection: provide a resolverManager with fetchURL stub to override global fetch in tests
-  resolverManager?: any;
-  captureEnvironment?: (env: Environment) => void; // Callback to capture environment after execution
-  captureErrors?: boolean; // Capture parse errors for pattern development
-  ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
-  effectHandler?: EffectHandler; // Optional custom effect handler (tests/CI)
-  allowAbsolutePaths?: boolean; // Allow absolute paths outside project root
-  streaming?: StreamingOptions; // Streaming configuration
-}
-
-/**
- * Result from the interpreter when returnEnvironment is true
- */
-export interface InterpretResult {
-  output: string;
-  environment: Environment;
-}
+import { PathContextBuilder } from '@core/services/PathContextService';
+import type { InterpretOptions, InterpretResult } from '@sdk/types';
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -68,7 +15,7 @@ export interface InterpretResult {
 export async function interpret(
   source: string,
   options: InterpretOptions
-): Promise<string | InterpretResult> {
+): Promise<InterpretResult> {
   // Initialize error patterns on first use
   await initializePatterns();
   
@@ -347,17 +294,10 @@ export async function interpret(
     options.captureEnvironment(env);
   }
   
-  // Return environment if requested
-  if (options.returnEnvironment) {
-    return {
-      output,
-      environment: env
-    };
-  }
-  
   return output;
 }
 
 // Re-export key types for convenience
 export { Environment } from './env/Environment';
 export type { EvalResult } from './core/interpreter';
+export type { InterpretOptions, InterpretResult } from '@sdk/types';

@@ -8,6 +8,7 @@ import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
+import type { Environment } from '@interpreter/env/Environment';
 import type { CLIOptions } from '../index';
 import type { UserInteraction } from '../interaction/UserInteraction';
 import type { OptionProcessor } from '../parsers/OptionProcessor';
@@ -70,7 +71,7 @@ export class FileProcessor {
       environment = await this.setupEnvironment(cliOptions);
     }
     
-    let interpretEnvironment: any = null; // Define outside try block for cleanup access
+    let interpretEnvironment: Environment | null = null; // Define outside try block for cleanup access
     
     try {
       // Read stdin if available
@@ -167,7 +168,7 @@ export class FileProcessor {
     environment: ProcessingEnvironment,
     stdinContent?: string,
     isURL?: boolean
-  ): Promise<{ result: string; hasExplicitOutput: boolean; interpretEnvironment?: any }> {
+  ): Promise<{ result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null }> {
     // Get content either from URL or file
     let content: string;
     let effectivePath: string;
@@ -201,6 +202,8 @@ export class FileProcessor {
     );
     
     // Call the interpreter with PathContext
+    let resultEnvironment: Environment | null = null;
+
     const interpretResult = await interpret(content, {
       pathContext,
       filePath: effectivePath, // Use effective path for error reporting
@@ -218,19 +221,20 @@ export class FileProcessor {
         showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext,
         timeout: cliOptions.commandTimeout
       },
-      returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
       enableTrace: true,
       useMarkdownFormatter: !cliOptions.noFormat,
       captureErrors: cliOptions.captureErrors,
       ephemeral: cliOptions.ephemeral,
-      allowAbsolutePaths: cliOptions.allowAbsolute
+      allowAbsolutePaths: cliOptions.allowAbsolute,
+      captureEnvironment: env => {
+        resultEnvironment = env;
+      }
     });
     
     // Extract result and environment
     const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;
-    const resultEnvironment = typeof interpretResult === 'string' ? null : interpretResult.environment;
     
     // Check if @output was used in the document
     const hasExplicitOutput = resultEnvironment && (resultEnvironment as any).hasExplicitOutput;
@@ -243,7 +247,7 @@ export class FileProcessor {
     options: CLIOptions, 
     environment: ProcessingEnvironment,
     hasExplicitOutput: boolean,
-    interpretEnvironment?: any
+    interpretEnvironment?: Environment | null
   ): Promise<void> {
     const stdout = options.stdout || (!options.output);
     

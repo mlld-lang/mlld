@@ -76,7 +76,7 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     useMarkdownFormatter: options?.useMarkdownFormatter
   });
 
-  // The interpreter returns a string when returnEnvironment is false (default)
+  // Interpret returns string output in document mode; other modes carry output on the object
   return typeof result === 'string' ? result : result.output;
 }
 
