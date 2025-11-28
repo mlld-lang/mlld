@@ -5,6 +5,15 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc75]
+
+### Added
+- Object spread syntax `{ ...@var, key: value }` for composing objects with left-to-right overrides; spreading non-objects now errors.
+
+### Fixed
+- Improved error message for alligator field access inside XML/HTML tags - now detects pattern and suggests variable workaround
+- Fixed `as` transform pattern for glob patterns - `<*.md> as "### <>.ctx.filename"` now correctly transforms each file instead of returning empty array
+
 ## [2.0.0-rc74]
 
 ### Fixed

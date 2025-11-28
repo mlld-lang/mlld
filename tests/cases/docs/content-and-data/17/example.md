@@ -1,8 +1,11 @@
->> Find functions that use specific symbols
-/var @callers = <api.ts { (validateEmail) }>
+>> Single file - returns plain string array
+/var @headings = <guide.md # ??>
+/show @headings.join("\n")
 
->> Find functions that use any wildcard-matched symbol
-/var @serviceUsers = <api.ts { (*Service) }>
+>> List specific heading levels
+/var @h2s = <guide.md # ##??>                  # H2 headings only
+/var @h3s = <guide.md # ###??>                 # H3 headings only
 
->> Find functions that use any function
-/var @functionCallers = <api.ts { (*fn) }>
+>> Glob patterns - returns per-file structured results
+/var @docSections = <docs/**/*.md # ##??>
+/for @doc in @docSections => show "**@doc.file**: @doc.names.join(', ')"

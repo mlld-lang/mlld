@@ -1,0 +1,1 @@
+Glob pattern with `as` transform template using <>.ctx.filename (regression test for issue #368)

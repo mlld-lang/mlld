@@ -510,17 +510,29 @@ export async function prepareVarAssignment(
     
     // Pass the withClause to the content loader if it has asSection
     if (directive.values?.withClause?.asSection) {
-      // Add the asSection to the load-content options
       if (!valueNode.options) {
         valueNode.options = {};
       }
-      if (!valueNode.options.section) {
-        valueNode.options.section = {};
+
+      // Check if this is a glob pattern - use transform instead of section.renamed
+      const isGlob = valueNode.source?.raw?.includes('*') || valueNode.source?.raw?.includes('?');
+
+      if (isGlob) {
+        // For globs, use options.transform which content-loader expects for array transforms
+        valueNode.options.transform = {
+          type: 'template',
+          parts: directive.values.withClause.asSection
+        };
+      } else {
+        // For single files with sections, use options.section.renamed
+        if (!valueNode.options.section) {
+          valueNode.options.section = {};
+        }
+        valueNode.options.section.renamed = {
+          type: 'rename-template',
+          parts: directive.values.withClause.asSection
+        };
       }
-      valueNode.options.section.renamed = {
-        type: 'rename-template',
-        parts: directive.values.withClause.asSection
-      };
     }
     
     resolvedValue = await processContentLoader(valueNode, env);

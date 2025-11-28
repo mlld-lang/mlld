@@ -773,10 +773,26 @@ export async function interpolateFileReference(
       } else {
         console.error(`Warning: Failed to load file '${resolvedPath}': ${error.message}`);
 
+        // Check for angle bracket in path (likely XML/HTML context)
+        const hasAngleBracket = resolvedPath.includes('<') || resolvedPath.includes('>');
+        if (hasAngleBracket) {
+          console.error('');
+          console.error('This looks like you tried to use alligator field access inside XML/HTML tags.');
+          console.error('Due to grammar ambiguity with nested angle brackets, this pattern is not supported.');
+          console.error('');
+          console.error('Workaround: Use a variable instead:');
+          console.error('  /var @file = <file.md>.keep');
+          console.error('  /show `<@file.ctx.filename>@file</@file.ctx.filename>`');
+          console.error('');
+          return '';
+        }
+
         // Check for failed variable interpolation
+        let hasVariableHint = false;
         if (resolvedPath.includes('@')) {
           const varMatches = resolvedPath.match(/@(\w+)/g);
           if (varMatches && varMatches.length > 0) {
+            hasVariableHint = true;
             console.error('');
             for (const match of varMatches) {
               const varName = match.substring(1);
@@ -796,8 +812,8 @@ export async function interpolateFileReference(
           }
         }
 
-        // Check if the path looks like it might be relative
-        if (!resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
+        // Check if the path looks like it might be relative (only if no other hint shown)
+        if (!hasVariableHint && !resolvedPath.startsWith('/') && !resolvedPath.startsWith('@')) {
           console.error(`Hint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`);
         }
         return '';
