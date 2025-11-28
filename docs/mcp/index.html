@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Server Support - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">pre-release</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/cli/" >CLI Usage </a></li>
+          
+        
+          
+            <li><a href="/docs/content-and-data/" >Content and Data</a></li>
+          
+        
+          
+            <li><a href="/docs/flow-control/" >Control Flow</a></li>
+          
+        
+          
+            <li><a href="/docs/mcp/" aria-current=&quot;page&quot;>MCP Server Support</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/registry/" >mlld Registry</a></li>
+          
+        
+          
+            <li><a href="/docs/resolvers/" >mlld Resolvers</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >Security</a></li>
+          
+        
+          
+            <li><a href="/docs/streaming/" >Streaming</a></li>
+          
+        
+          
+            <li><a href="/docs/reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/" >Testing modules</a></li>
+          
+        
+          
+            <li><a href="/docs/large-variables/" >Working with Large Variables</a></li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>⚠️ mlld is pre-release</h1>
+    <p><a href="https://discord.gg/mlld">Join the discord</a> if you have questions. <a href="https://github.com/mlld-lang/mlld/issues">Report bugs on GitHub</a>.</p>
+    <h1 id="mcp-server-support" tabindex="-1">MCP Server Support</h1>
+<h2 id="tldr" tabindex="-1">tldr</h2>
+<p>Turn exported <code>/exe</code> functions into MCP tools with one command:</p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token backtick-template"><span class="token punctuation">`</span>Hello ${name}<span class="token punctuation">`</span></span>; <span class="token punctuation">}</span>
+/<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@greet</span> <span class="token punctuation">}</span>
+</code></pre>
+<pre class="language-bash"><code class="language-bash"><span class="token builtin class-name">printf</span> <span class="token string">'%s\n'</span> <span class="token punctuation">\</span>
+  <span class="token string">'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"demo","version":"1.0"}}}'</span> <span class="token punctuation">\</span>
+  <span class="token string">'{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"greet","arguments":{"name":"Ada"}}}'</span> <span class="token punctuation">\</span>
+<span class="token operator">|</span> mlld mcp tools.mld.md
+</code></pre>
+<p>Output:</p>
+<pre><code>{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;result&quot;:{&quot;protocolVersion&quot;:&quot;2024-11-05&quot;,&quot;capabilities&quot;:{&quot;tools&quot;:{}},&quot;serverInfo&quot;:{&quot;name&quot;:&quot;mlld&quot;,&quot;version&quot;:&quot;2.0.0-rc57&quot;}}}
+{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:2,&quot;result&quot;:{&quot;content&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;text&quot;:&quot;Hello Ada&quot;}]}}
+</code></pre>
+<h2 id="basic-usage" tabindex="-1">Basic Usage</h2>
+<ol>
+<li>Export functions you want to serve:<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">exe</span> <span class="token variable variable">@status</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-literal">'ok'</span>; <span class="token punctuation">}</span>
+/<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@status</span> <span class="token punctuation">}</span>
+</code></pre>
+</li>
+<li>Run the server:<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld.md
+</code></pre>
+If <code>llm/mcp/</code> exists, <code>mlld mcp</code> with no arguments serves every module in that directory.</li>
+<li>Point your MCP client (Claude Desktop, custom agent, etc.) at the same command and pass any required environment variables.</li>
+</ol>
+<p>Tips:</p>
+<ul>
+<li>Serve a directory or glob: <code>mlld mcp llm/mcp/</code> or <code>mlld mcp &quot;llm/mcp/*.mld.md&quot;</code>.</li>
+<li>JSON-RPC responses always print to stdout. Logs and warnings stay on stderr, so piping works cleanly.</li>
+</ul>
+<h2 id="common-patterns" tabindex="-1">Common Patterns</h2>
+<ul>
+<li>
+<p><strong>Environment overrides</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld.md <span class="token parameter variable">--env</span> <span class="token assign-left variable">MLLD_GITHUB_TOKEN</span><span class="token operator">=</span>ghp_xxx
+</code></pre>
+<p>Keys must start with <code>MLLD_</code>. Modules read them with <code>/import { @MLLD_GITHUB_TOKEN } from @input</code>.</p>
+</li>
+<li>
+<p><strong>Directory defaults</strong><br>
+Structure multi-tool projects under <code>llm/mcp/</code> so <code>mlld mcp</code> “just works” without arguments.</p>
+</li>
+<li>
+<p><strong>Name collisions</strong><br>
+If two modules export the same function name, the command prints both source paths and exits. Rename one of the exports or split the modules into separate servers.</p>
+</li>
+</ul>
+<h2 id="advanced-usage" tabindex="-1">Advanced Usage</h2>
+<ul>
+<li>
+<p><strong>Config modules</strong><br>
+Provide a companion module that exports <code>@config</code>:</p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">var</span> <span class="token variable variable">@config</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  tools<span class="token ternary-operator operator">:</span> <span class="token path"><span class="token punctuation">[</span>'status'<span class="token punctuation">]</span></span><span class="token punctuation">,</span>
+  env<span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> MLLD_PERMISSION_LEVEL<span class="token ternary-operator operator">:</span> <span class="token string-literal">'read'</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Run with:</p>
+<pre class="language-bash"><code class="language-bash">mlld mcp llm/mcp/ <span class="token parameter variable">--config</span> llm/configs/agent.mld.md
+</code></pre>
+<p><code>config.tools</code> filters the served tools (snake_case or camelCase both match). <code>config.env</code> merges into the process environment after CLI overrides.</p>
+</li>
+<li>
+<p><strong>Manual allow-list</strong><br>
+Override everything with <code>--tools</code>:</p>
+<pre class="language-bash"><code class="language-bash">mlld mcp llm/mcp/ <span class="token parameter variable">--tools</span> status,create_issue
+</code></pre>
+</li>
+<li>
+<p><strong>Multiple modules</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp <span class="token string">"llm/mcp/{github,party}.mld.md"</span>
+</code></pre>
+<p>The command merges exports into a single environment so shared helpers remain available during execution.</p>
+</li>
+</ul>
+<h2 id="troubleshooting" tabindex="-1">Troubleshooting</h2>
+<ul>
+<li><strong>No tools listed</strong>: Ensure the module exports functions with <code>/export { @name }</code>, or remove the directive to expose every executable.</li>
+<li><strong>Tool not found</strong>: Confirm the MCP client calls the snake_case name (<code>greet_user</code>), which maps back to <code>@greetUser</code>.</li>
+<li><strong>Environment ignored</strong>: Only <code>MLLD_</code>-prefixed variables apply. Anything else is skipped deliberately.</li>
+<li><strong>Config module skipped</strong>: Export <code>@config</code> and run <code>mlld mcp … --config path.mld.md</code>. Errors during config evaluation appear on stderr.</li>
+<li><strong>Client connection issues</strong>: Verify the client runs the same command you use locally and inherits the required environment variables. A quick local check is to pipe JSON requests as shown in the tldr example.</li>
+</ul>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>
