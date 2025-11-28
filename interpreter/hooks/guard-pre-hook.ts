@@ -17,10 +17,12 @@ import { attachArrayHelpers, buildArrayAggregate } from '@core/types/variable/Ar
 import type { ArrayAggregateSnapshot, GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
-import { isLetAssignment } from '@core/types/when';
+import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluate } from '../core/interpreter';
-import { isVariable } from '../utils/variable-resolution';
+import { isVariable, extractVariableValue } from '../utils/variable-resolution';
+import { combineValues } from '../utils/value-combine';
+import { MlldWhenExpressionError } from '@core/errors';
 import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
@@ -983,6 +985,46 @@ async function evaluateGuardBlock(
       );
       currentEnv = currentEnv.createChild();
       currentEnv.setVariable(entry.identifier, variable);
+      continue;
+    }
+
+    // Handle augmented assignments
+    if (isAugmentedAssignment(entry)) {
+      const existing = currentEnv.getVariable(entry.identifier);
+      if (!existing) {
+        throw new MlldWhenExpressionError(
+          `Cannot use += on undefined variable @${entry.identifier}. ` +
+          `Use "let @${entry.identifier} = ..." first.`,
+          entry.location
+        );
+      }
+
+      let rhsValue: unknown;
+      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+      const isRawPrimitive = firstValue === null ||
+        typeof firstValue === 'number' ||
+        typeof firstValue === 'boolean' ||
+        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+      if (isRawPrimitive) {
+        rhsValue = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+      } else {
+        const rhsResult = await evaluate(entry.value, currentEnv);
+        rhsValue = rhsResult.value;
+      }
+
+      const existingValue = await extractVariableValue(existing, currentEnv);
+      const combined = combineValues(existingValue, rhsValue, entry.identifier);
+
+      const importer = new VariableImporter();
+      const updatedVar = importer.createVariableFromValue(
+        entry.identifier,
+        combined,
+        'let',
+        undefined,
+        { env: currentEnv }
+      );
+      currentEnv.updateVariable(entry.identifier, updatedVar);
       continue;
     }
 

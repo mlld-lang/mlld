@@ -910,7 +910,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   setParameterVariable(name: string, variable: Variable): void {
     this.variableManager.setParameterVariable(name, variable);
   }
-  
+
+  /**
+   * Update an existing variable's value in place.
+   * Used for augmented assignment (+=) on local let bindings.
+   */
+  updateVariable(name: string, variable: Variable): void {
+    this.variableManager.updateVariable(name, variable);
+  }
+
   getVariable(name: string): Variable | undefined {
     // Delegate entirely to VariableManager which handles local, captured, and parent lookups
     return this.variableManager.getVariable(name);

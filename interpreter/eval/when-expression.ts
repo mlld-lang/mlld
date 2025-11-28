@@ -6,7 +6,7 @@
  */
 
 import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
-import { isLetAssignment, isConditionPair } from '@core/types/when';
+import { isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -17,6 +17,8 @@ import { evaluateCondition, conditionTargetsDenied } from './when';
 import { logger } from '@core/utils/logger';
 import { asText, asData, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
 import { VariableImporter } from './import/VariableImporter';
+import { combineValues } from '../utils/value-combine';
+import { extractVariableValue } from '../utils/variable-resolution';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -222,8 +224,54 @@ export async function evaluateWhenExpression(
       continue;
     }
 
+    // Handle augmented assignments - modify existing local variable
+    if (isAugmentedAssignment(entry)) {
+      // Get existing variable - must exist and be a let binding
+      const existing = accumulatedEnv.getVariable(entry.identifier);
+      if (!existing) {
+        throw new MlldWhenExpressionError(
+          `Cannot use += on undefined variable @${entry.identifier}. ` +
+          `Use "let @${entry.identifier} = ..." first.`,
+          entry.location
+        );
+      }
+
+      // Evaluate the RHS value
+      let rhsValue: unknown;
+      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+      const isRawPrimitive = firstValue === null ||
+        typeof firstValue === 'number' ||
+        typeof firstValue === 'boolean' ||
+        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+      if (isRawPrimitive) {
+        rhsValue = entry.value.length === 1 ? firstValue : entry.value;
+      } else {
+        const rhsResult = await evaluate(entry.value, accumulatedEnv, context);
+        rhsValue = rhsResult.value;
+      }
+
+      // Get current value of the variable
+      const existingValue = await extractVariableValue(existing, accumulatedEnv);
+
+      // Combine values using the += semantics
+      const combined = combineValues(existingValue, rhsValue, entry.identifier);
+
+      // Update variable in local scope (use updateVariable to bypass redefinition check)
+      const importer = new VariableImporter();
+      const updatedVar = importer.createVariableFromValue(
+        entry.identifier,
+        combined,
+        'let',
+        undefined,
+        { env: accumulatedEnv }
+      );
+      accumulatedEnv.updateVariable(entry.identifier, updatedVar);
+      continue;
+    }
+
     // From here on, entry is a condition pair
-    const pair = entry;
+    const pair = entry as WhenConditionPair;
 
     // Check if this is a none condition
     if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {

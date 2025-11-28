@@ -1,0 +1,24 @@
+/exe @collectArray() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  @items += ["c", "d"]
+  * => @items
+]
+/show @collectArray() | @json
+
+/exe @buildString() = when [
+  let @msg = "Hello"
+  @msg += " "
+  @msg += "World"
+  * => @msg
+]
+/show @buildString()
+
+/exe @mergeObjects() = when [
+  let @obj = {"a": 1}
+  @obj += {"b": 2}
+  @obj += {"c": 3}
+  * => @obj
+]
+/show @mergeObjects() | @json

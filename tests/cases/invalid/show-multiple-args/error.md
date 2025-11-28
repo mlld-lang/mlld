@@ -1,0 +1,1 @@
+/show accepts only a single argument

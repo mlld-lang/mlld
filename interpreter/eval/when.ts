@@ -4,7 +4,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
-import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isConditionPair } from '@core/types/when';
+import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
 import { VariableImporter } from './import/VariableImporter';
 import { evaluate } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
@@ -18,7 +18,10 @@ import {
   createObjectVariable
 } from '@core/types/variable';
 import { isStructuredValue, asData, asText, assertStructuredValue } from '../utils/structured-value';
-import type { LetAssignmentNode } from '@core/types/when';
+import type { LetAssignmentNode, AugmentedAssignmentNode } from '@core/types/when';
+import { combineValues } from '../utils/value-combine';
+import { extractVariableValue } from '../utils/variable-resolution';
+import { MlldWhenExpressionError } from '@core/errors';
 
 const DENIED_KEYWORD = 'denied';
 
@@ -55,6 +58,57 @@ async function evaluateLetAssignment(
   const newEnv = env.createChild();
   newEnv.setVariable(entry.identifier, variable);
   return newEnv;
+}
+
+/**
+ * Helper to evaluate an augmented assignment and return updated environment
+ */
+async function evaluateAugmentedAssignment(
+  entry: AugmentedAssignmentNode,
+  env: Environment
+): Promise<Environment> {
+  // Get existing variable - must exist
+  const existing = env.getVariable(entry.identifier);
+  if (!existing) {
+    throw new MlldWhenExpressionError(
+      `Cannot use += on undefined variable @${entry.identifier}. ` +
+      `Use "let @${entry.identifier} = ..." first.`,
+      entry.location
+    );
+  }
+
+  // Evaluate the RHS value
+  let rhsValue: unknown;
+  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+  const isRawPrimitive = firstValue === null ||
+    typeof firstValue === 'number' ||
+    typeof firstValue === 'boolean' ||
+    (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+  if (isRawPrimitive) {
+    rhsValue = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+  } else {
+    const rhsResult = await evaluate(entry.value, env);
+    rhsValue = rhsResult.value;
+  }
+
+  // Get current value of the variable
+  const existingValue = await extractVariableValue(existing, env);
+
+  // Combine values using the += semantics
+  const combined = combineValues(existingValue, rhsValue, entry.identifier);
+
+  // Update variable in local scope (use updateVariable to bypass redefinition check)
+  const importer = new VariableImporter();
+  const updatedVar = importer.createVariableFromValue(
+    entry.identifier,
+    combined,
+    'let',
+    undefined,
+    { env }
+  );
+  env.updateVariable(entry.identifier, updatedVar);
+  return env;
 }
 
 /**
@@ -194,10 +248,12 @@ async function evaluateWhenMatch(
   // Create a child environment for the switch block
   let childEnv = env.createChild();
 
-  // Process let assignments first to build up the environment
+  // Process let and augmented assignments first to build up the environment
   for (const entry of node.values.conditions) {
     if (isLetAssignment(entry)) {
       childEnv = await evaluateLetAssignment(entry, childEnv);
+    } else if (isAugmentedAssignment(entry)) {
+      childEnv = await evaluateAugmentedAssignment(entry, childEnv);
     }
   }
 
@@ -339,10 +395,12 @@ async function evaluateWhenBlock(
   // Create a child environment for the when block
   let childEnv = env.createChild();
 
-  // Process let assignments first to build up the environment
+  // Process let and augmented assignments first to build up the environment
   for (const entry of node.values.conditions) {
     if (isLetAssignment(entry)) {
       childEnv = await evaluateLetAssignment(entry, childEnv);
+    } else if (isAugmentedAssignment(entry)) {
+      childEnv = await evaluateAugmentedAssignment(entry, childEnv);
     }
   }
 
