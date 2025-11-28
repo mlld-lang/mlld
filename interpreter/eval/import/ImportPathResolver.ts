@@ -128,7 +128,8 @@ export class ImportPathResolver {
       }
 
       // Handle resolver imports with isSpecial flag
-      if (varRef.isSpecial && varRef.identifier) {
+      // But only if there's no path following (e.g., @TIME alone, not @base/path)
+      if (varRef.isSpecial && varRef.identifier && pathNodes.length === 1) {
         const resolverManager = this.env.getResolverManager();
         if (resolverManager && resolverManager.isResolverName(varRef.identifier)) {
           return {
@@ -139,31 +140,39 @@ export class ImportPathResolver {
         }
       }
 
-      // Liberal syntax: Handle quoted paths like "@local/module" or "@author/module"
+      // Handle quoted paths like "@author/module" that should be module references
+      // (not resolver paths like @base or @local, which resolve to file system paths)
       // This supports Postel's Law - "be liberal in what you accept"
+      const resolverManager = this.env.getResolverManager();
       if (varRef.identifier) {
         const potentialName = varRef.identifier;
 
-        // Build the full path from remaining nodes (e.g., "/module" -> "module")
+        // If this is a known resolver (e.g., @base, @local), let it go through
+        // normal interpolation - the resolver will expand to a path
+        if (resolverManager && resolverManager.isResolverName(potentialName)) {
+          // Don't intercept - let interpolation handle it
+          return null;
+        }
+
+        // Build the full path from remaining nodes
+        // Handle both Text nodes and PathSeparator nodes
         const remainingPath = pathNodes.slice(1)
           .map(node => {
             if (node.type === 'Text') {
               return (node as any).content;
+            } else if (node.type === 'PathSeparator') {
+              return (node as any).value || '/';
             }
             return '';
           })
           .join('');
 
-        // If we have a path pattern like @something/path, treat it as a module reference
-        // This handles both:
-        // - "@local/module" where @local is a resolver prefix
-        // - "@author/module" where @author is a registry namespace
-        // The module resolution system will handle routing to the appropriate resolver
-        if (remainingPath.startsWith('/')) {
-          const moduleRef = `@${potentialName}${remainingPath}`;
+        // For non-resolver namespaces like @author/module, treat as module reference
+        if (remainingPath.startsWith('/') || remainingPath.length > 0) {
+          const fullRef = `@${potentialName}${remainingPath.startsWith('/') ? '' : '/'}${remainingPath}`;
           return {
             type: 'module',
-            resolvedPath: moduleRef
+            resolvedPath: fullRef
           };
         }
       }

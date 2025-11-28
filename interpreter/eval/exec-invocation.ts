@@ -13,7 +13,7 @@ import {
 import type { Variable, VariableContext } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
-import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
+import { MlldInterpreterError, MlldCommandExecutionError, CircularReferenceError } from '@core/errors';
 import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
@@ -381,6 +381,40 @@ async function evaluateExecInvocationInternal(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  let commandName: string | undefined; // Declare at function scope for finally block
+
+  // Define builtin methods list at function scope for use in circular reference checks
+  const builtinMethods = [
+    'includes',
+    'length',
+    'indexOf',
+    'join',
+    'split',
+    'toLowerCase',
+    'toUpperCase',
+    'trim',
+    'slice',
+    'substring',
+    'substr',
+    'replace',
+    'replaceAll',
+    'padStart',
+    'padEnd',
+    'repeat',
+    'startsWith',
+    'endsWith',
+    'concat',
+    'reverse',
+    'sort',
+    'isArray',
+    'isObject',
+    'isString',
+    'isNumber',
+    'isBoolean',
+    'isNull',
+    'isDefined'
+  ];
+
   const streamingOptions = env.getStreamingOptions();
   let streamingRequested =
     node.stream === true ||
@@ -506,9 +540,8 @@ async function evaluateExecInvocationInternal(
     logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
   }
   const nodeSourceLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
-  
+
   // Get the command name from the command reference or legacy format
-  let commandName: string;
   let args: any[] = [];
   
   // Handle legacy format where name and arguments are directly on the node
@@ -545,43 +578,34 @@ async function evaluateExecInvocationInternal(
   if (!commandName) {
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
-  
+
+  // Check for circular reference before resolving (skip builtin methods and reserved names)
+  const isBuiltinMethod = builtinMethods.includes(commandName);
+  const isReservedName = env.hasVariable(commandName) &&
+    (env.getVariable(commandName) as any)?.internal?.isReserved;
+  const shouldTrackResolution = !isBuiltinMethod && !isReservedName;
+
+  if (shouldTrackResolution && env.isResolving(commandName)) {
+    throw new CircularReferenceError(
+      `Circular reference detected: executable '@${commandName}' calls itself recursively without a terminating condition`,
+      {
+        identifier: commandName,
+        location: nodeSourceLocation
+      }
+    );
+  }
+
+  // Mark this executable as being resolved (skip builtin methods and reserved names)
+  if (shouldTrackResolution) {
+    env.beginResolving(commandName);
+  }
+
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
   let variable;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     // Check if this is a builtin method call (e.g., @list.includes())
-    const builtinMethods = [
-      'includes',
-      'length',
-      'indexOf',
-      'join',
-      'split',
-      'toLowerCase',
-      'toUpperCase',
-      'trim',
-      'slice',
-      'substring',
-      'substr',
-      'replace',
-      'replaceAll',
-      'padStart',
-      'padEnd',
-      'repeat',
-      'startsWith',
-      'endsWith',
-      'concat',
-      'reverse',
-      'sort',
-      'isArray',
-      'isObject',
-      'isString',
-      'isNumber',
-      'isBoolean',
-      'isNull',
-      'isDefined'
-    ];
     const typeCheckingMethods: TypeCheckingMethod[] = [
       'isArray',
       'isObject',
@@ -1041,6 +1065,11 @@ async function evaluateExecInvocationInternal(
             const resolvedValue = normalized.value;
             const wrapOptions = normalized.options;
             
+            // Clean up resolution tracking before returning
+            if (commandName && shouldTrackResolution) {
+              env.endResolving(commandName);
+            }
+
             // Apply withClause transformations if present
             if (node.withClause) {
               if (node.withClause.pipeline) {
@@ -1060,7 +1089,7 @@ async function evaluateExecInvocationInternal(
                 return applyWithClause(resolvedValue, node.withClause, env);
               }
             }
-            
+
             return createEvalResult(resolvedValue, env, wrapOptions);
           }
         }
@@ -1092,7 +1121,12 @@ async function evaluateExecInvocationInternal(
     const normalized = normalizeTransformerResult(commandName, result);
     const resolvedValue = normalized.value;
     const wrapOptions = normalized.options;
-    
+
+    // Clean up resolution tracking before returning
+    if (commandName && shouldTrackResolution) {
+      env.endResolving(commandName);
+    }
+
     // Apply withClause transformations if present
     if (node.withClause) {
       if (node.withClause.pipeline) {
@@ -1112,7 +1146,7 @@ async function evaluateExecInvocationInternal(
         return applyWithClause(resolvedValue, node.withClause, env);
       }
     }
-    
+
     return createEvalResult(resolvedValue, env, wrapOptions);
   }
   
@@ -2453,7 +2487,7 @@ async function evaluateExecInvocationInternal(
   }
 
   mergeResultDescriptor(extractSecurityDescriptor(result));
-  
+
   if (resultSecurityDescriptor) {
     const structured = wrapExecResult(result);
     const existing = getStructuredSecurityDescriptor(structured);
@@ -2462,6 +2496,15 @@ async function evaluateExecInvocationInternal(
       : resultSecurityDescriptor;
     setStructuredSecurityDescriptor(structured, merged);
     result = structured;
+  }
+
+  // Clean up resolution tracking after executable body completes, before pipeline/with clause processing
+  // This allows pipelines to retry/re-execute the same function without false circular reference detection
+  // Skip builtin methods and reserved names as they were never added to the resolution stack
+  const cleanupShouldTrack = !builtinMethods.includes(commandName) &&
+    !(env.hasVariable(commandName) && (env.getVariable(commandName) as any)?.internal?.isReserved);
+  if (commandName && cleanupShouldTrack) {
+    env.endResolving(commandName);
   }
 
   if (process.env.MLLD_DEBUG_FIX === 'true') {
@@ -2605,6 +2648,16 @@ async function evaluateExecInvocationInternal(
     });
   });
   } finally {
+    // Ensure resolution tracking is always cleaned up, even on error paths
+    // Check if we added it to the tracking (skip builtins/reserved)
+    if (commandName) {
+      const wasTracked = !builtinMethods.includes(commandName) &&
+        !(env.hasVariable(commandName) && (env.getVariable(commandName) as any)?.internal?.isReserved);
+      if (wasTracked) {
+        env.endResolving(commandName);
+      }
+    }
+
     if (detachStreaming.length > 0) {
       for (const unsub of detachStreaming) {
         try {
