@@ -454,6 +454,7 @@ Create primitives, arrays, objects, or assign from command/code results. Primiti
 /var @ok = true
 /var @arr = [1,2,3]
 /var @obj = {"key":"value"}
+/var @merged = { ...@obj, "extra": 1 }    # object spread; later entries override earlier
 
 /exe @add(a,b) = js { return a + b }
 /var @sum = @add(@n, 8)         # 50 (number)
@@ -461,6 +462,8 @@ Create primitives, arrays, objects, or assign from command/code results. Primiti
 /var @date = run "date"         # result of command
 /var @readme = <README.md>      # file contents
 ```
+
+Object spread merges objects left-to-right; each spread target must be an object or it throws.
 
 </VARIABLES>
 
@@ -997,10 +1000,28 @@ Local variables in when blocks:
 
 `let` declares a variable scoped to the when block. It's evaluated before conditions are checked.
 
+Augmented assignment (`+=`) modifies local variables:
+
+```mlld
+/exe @collect() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  * => @items  # ["a", "b"]
+]
+```
+
+`+=` semantics:
+* Arrays: concat (`[1, 2] += 3` → `[1, 2, 3]`, `[1] += [2, 3]` → `[1, 2, 3]`)
+* Strings: append (`"hello" += " world"` → `"hello world"`)
+* Objects: shallow merge (`{a: 1} += {b: 2}` → `{a: 1, b: 2}`)
+* Only works with local `let` bindings (not global variables)
+
 Notes:
 
 * RHS uses action words (no `/show` slash): `show`, `@func()`
 * Use `let @var = value` for local variables in when blocks (not `@var = value`)
+* Use `@var += value` to accumulate into local variables
 * `*` wildcard matches anything (catch-all)
 * `none` executes only if no conditions matched (must appear after all regular conditions, incompatible with `*`)
 * One action per line (repeat condition for multiple actions)

@@ -1,11 +1,8 @@
-/var @page = <https://example.com/data.json>
+/var @post = <blog/post.md>
 
->> URL-specific metadata
-/show @page.ctx.url                      >> Full URL
-/show @page.ctx.domain                   >> "example.com"
-/show @page.ctx.status                   >> HTTP status code
-/show @page.ctx.title                    >> Page title (if HTML)
+/show @post.ctx.fm.title                 >> Post title
+/show @post.ctx.fm.author                >> Author name
+/show @post.ctx.fm.tags                  >> Array of tags
 
->> HTML is converted to markdown
-/show @page.content                      >> Markdown version
-/show @page.ctx.html                     >> Original HTML
+>> Conditional processing
+/when @post.ctx.fm.published => show @post.content

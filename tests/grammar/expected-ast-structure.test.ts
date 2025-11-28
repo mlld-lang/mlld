@@ -114,7 +114,7 @@ describe('Expected AST Structure - Basic Data Types', () => {
       // Verify ASTEvaluator normalization
       const normalized = ASTEvaluator.normalizeObject(objectValue);
       expect(normalized.type).toBe('object');
-      expect(normalized.properties).toBeDefined();
+      expect(normalized.entries).toBeDefined();
       expect(normalized.location).toBeDefined();
     });
     
@@ -135,7 +135,7 @@ describe('Expected AST Structure - Basic Data Types', () => {
       // Verify ASTEvaluator normalization
       const normalized = ASTEvaluator.normalizeObject(objectValue);
       expect(normalized.type).toBe('object');
-      expect(normalized.properties).toEqual({});
+      expect(normalized.entries).toEqual([]);
     });
     
     it('should handle nested objects with consistent typing', () => {
@@ -164,9 +164,12 @@ describe('Expected AST Structure - Basic Data Types', () => {
       
       // Current: strings might be wrapped in AST nodes
       // Expected: plain string values in data structures
-      // Objects now have type: 'object' with properties field
+      // Objects now have type: 'object' with entries field
       expect(objectValue.type).toBe('object');
-      expect(objectValue.properties.message).toBe('Hello, world!');
+      expect(objectValue.entries).toBeDefined();
+      expect(objectValue.entries[0].type).toBe('pair');
+      expect(objectValue.entries[0].key).toBe('message');
+      expect(objectValue.entries[0].value).toBe('Hello, world!');
     });
     
     it('should unwrap single-quoted strings in data structures', () => {
@@ -177,9 +180,12 @@ describe('Expected AST Structure - Basic Data Types', () => {
       const objectValue = varDirective.values.value[0];
       
       // Single quotes should also produce plain strings
-      // Objects now have type: 'object' with properties field
+      // Objects now have type: 'object' with entries field
       expect(objectValue.type).toBe('object');
-      expect(objectValue.properties.message).toBe('Hello, world!');
+      expect(objectValue.entries).toBeDefined();
+      expect(objectValue.entries[0].type).toBe('pair');
+      expect(objectValue.entries[0].key).toBe('message');
+      expect(objectValue.entries[0].value).toBe('Hello, world!');
     });
   });
 });
@@ -280,9 +286,12 @@ describe('Expected AST Structure - mlld Expressions', () => {
       const objectValue = varDirective.values.value[0];
       
       // Variable references should be preserved as AST nodes
-      // Objects now have type: 'object' with properties field
+      // Objects now have type: 'object' with entries field
       expect(objectValue.type).toBe('object');
-      expect(objectValue.properties.user).toMatchObject({
+      expect(objectValue.entries).toBeDefined();
+      expect(objectValue.entries[0].type).toBe('pair');
+      expect(objectValue.entries[0].key).toBe('user');
+      expect(objectValue.entries[0].value).toMatchObject({
         type: 'VariableReference',
         valueType: 'varIdentifier',
         identifier: 'currentUser'
@@ -334,9 +343,12 @@ describe('Expected AST Structure - mlld Expressions', () => {
       const objectValue = varDirective.values.value[0];
       
       // Exec invocations should be AST nodes
-      // Objects now have type: 'object' with properties field
+      // Objects now have type: 'object' with entries field
       expect(objectValue.type).toBe('object');
-      expect(objectValue.properties.data).toMatchObject({
+      expect(objectValue.entries).toBeDefined();
+      expect(objectValue.entries[0].type).toBe('pair');
+      expect(objectValue.entries[0].key).toBe('data');
+      expect(objectValue.entries[0].value).toMatchObject({
         type: 'ExecInvocation',
         commandRef: expect.objectContaining({
           name: 'loadConfig'
@@ -354,9 +366,12 @@ describe('Expected AST Structure - mlld Expressions', () => {
       const objectValue = varDirective.values.value[0];
       
       // Nested directives should be marked appropriately
-      // Objects now have type: 'object' with properties field
+      // Objects now have type: 'object' with entries field
       expect(objectValue.type).toBe('object');
-      expect(objectValue.properties.output).toMatchObject({
+      expect(objectValue.entries).toBeDefined();
+      expect(objectValue.entries[0].type).toBe('pair');
+      expect(objectValue.entries[0].key).toBe('output');
+      expect(objectValue.entries[0].value).toMatchObject({
         type: expect.stringMatching(/command|nestedDirective/)
       });
     });

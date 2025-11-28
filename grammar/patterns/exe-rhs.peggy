@@ -515,10 +515,11 @@ WhenExpressionConditionList
       return [first, ...restEntries];
     }
 
-// Single entry in a when expression - either a let assignment or a condition pair
+// Single entry in a when expression - let assignment, augmented assignment, or condition pair
 WhenExpressionEntry
-  = LetAssignment             // let @x = value (local variable)
-  / WhenExpressionConditionPair  // condition => action
+  = LetAssignment               // let @x = value (local variable)
+  / AugmentedAssignment         // @x += value (augmented assignment)
+  / WhenExpressionConditionPair // condition => action
 
 // Single condition => value pair for expressions
 WhenExpressionConditionPair

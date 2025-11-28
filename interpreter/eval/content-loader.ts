@@ -465,8 +465,9 @@ export async function processContentLoader(node: any, env: Environment): Promise
     // Otherwise, treat it as a file loading error
     let errorMessage = `Failed to load content: ${pathOrUrl}`;
 
-    // Add helpful hint for relative paths
-    if (!pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
+    // Add helpful hint for relative paths (but not for XML/HTML ambiguity cases)
+    const hasAngleBracket = pathOrUrl.includes('<') || pathOrUrl.includes('>');
+    if (!hasAngleBracket && !pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
       errorMessage += `\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`;
     }
 
@@ -1158,7 +1159,11 @@ async function applyTransformToResults(
     const processedParts: any[] = [];
     
     for (const part of templateParts) {
-      if (part.type === 'placeholder') {
+      // Check for placeholder: either part.type === 'placeholder' or FileReference with source.type === 'placeholder'
+      const isPlaceholder = part.type === 'placeholder' ||
+        (part.type === 'FileReference' && part.source?.type === 'placeholder');
+
+      if (isPlaceholder) {
         // Handle <> and <>.field references
         if (part.fields && part.fields.length > 0) {
           // Access fields on the result
@@ -1166,7 +1171,12 @@ async function applyTransformToResults(
           for (const field of part.fields) {
             if (value && typeof value === 'object') {
               const fieldName = field.value;
-              value = value[fieldName];
+              // Handle .ctx accessor - use the ctx getter on LoadContentResult
+              if (fieldName === 'ctx' && typeof value.ctx === 'object') {
+                value = value.ctx;
+              } else {
+                value = value[fieldName];
+              }
             } else {
               value = undefined;
               break;

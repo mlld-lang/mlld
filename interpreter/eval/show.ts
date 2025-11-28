@@ -252,7 +252,12 @@ export async function evaluateShow(
       originalValue = value;
       
       // Check if it's a lazy-evaluated object (still in AST form)
-      if (value && typeof value === 'object' && value.type === 'object' && 'properties' in value) {
+      if (
+        value &&
+        typeof value === 'object' &&
+        value.type === 'object' &&
+        ('properties' in value || 'entries' in value)
+      ) {
         // Evaluate the object to get the actual values
         value = await evaluateDataValue(value, env);
       }
@@ -441,6 +446,29 @@ export async function evaluateShow(
     value = await resolveValue(value, env, ResolutionContext.Display);
     const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
     const isNamespaceVariable = variable?.internal?.isNamespace && !hadFieldAccess;
+
+    if (process.env.MLLD_DEBUG_FIX === 'true' && varName === 'complex') {
+      try {
+        const fs = require('fs');
+        fs.appendFileSync(
+          '/tmp/mlld-debug.log',
+          JSON.stringify({
+            source: 'show-variable',
+            name: varName,
+            valueType: typeof value,
+            isStructured: isStructuredValue(value),
+            valuePreview:
+              value && typeof value === 'object'
+                ? {
+                    keys: Object.keys(value).slice(0, 5),
+                    settings: (value as any).config?.settings,
+                    dataKeys: (value as any).data ? Object.keys((value as any).data) : undefined
+                  }
+                : value
+          }) + '\n'
+        );
+      } catch {}
+    }
 
     if (isNamespaceVariable && value && typeof value === 'object') {
       if (process.env.DEBUG_NAMESPACE) {
@@ -1131,7 +1159,9 @@ export async function evaluateShow(
   if (typeof content !== 'string') {
     try {
       const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-      if (isLoadContentResult(content)) {
+      if (isStructuredValue(content)) {
+        content = asText(content);
+      } else if (isLoadContentResult(content)) {
         content = content.content;
       } else if (isLoadContentResultArray(content)) {
         content = content.map(item => item.content).join('\n\n');
@@ -1159,6 +1189,24 @@ export async function evaluateShow(
   const displayMaterialized = materializeDisplayValue(content, undefined, resultValue);
   content = displayMaterialized.text;
   const textForWrapper = content;
+
+  if (process.env.MLLD_DEBUG_FIX === 'true') {
+    try {
+      const fs = require('fs');
+      fs.appendFileSync(
+        '/tmp/mlld-debug.log',
+        JSON.stringify({
+          source: 'show-final',
+          invocationName: (directive.values as any)?.invocation?.commandRef?.name,
+          contentType: typeof content,
+          contentPreview: typeof content === 'string' ? content.slice(0, 160) : content,
+          resultValueType: typeof resultValue,
+          resultValueIsStructured: resultValue ? (resultValue as any)[Symbol.for('mlld.StructuredValue')] === true : false,
+          resultValueKeys: resultValue && typeof resultValue === 'object' ? Object.keys(resultValue as any).slice(0, 5) : undefined
+        }) + '\n'
+      );
+    } catch {}
+  }
 
   if (!content.endsWith('\n')) {
     content = `${content}\n`;

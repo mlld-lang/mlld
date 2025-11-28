@@ -27,9 +27,20 @@ export interface LetAssignmentNode extends BaseMlldNode {
 }
 
 /**
- * Union type for when block entries (let assignments and condition pairs)
+ * Augmented assignment entry in a when block for local variable mutation
+ * Supports: arrays (concat), strings (append), objects (shallow merge)
  */
-export type WhenEntry = WhenConditionPair | LetAssignmentNode;
+export interface AugmentedAssignmentNode extends BaseMlldNode {
+  type: 'AugmentedAssignment';
+  identifier: string;
+  operator: '+=';  // Extensible for future -=, *=, etc.
+  value: BaseMlldNode[];
+}
+
+/**
+ * Union type for when block entries (let assignments, augmented assignments, and condition pairs)
+ */
+export type WhenEntry = WhenConditionPair | LetAssignmentNode | AugmentedAssignmentNode;
 
 /**
  * Type guard for let assignment nodes
@@ -39,10 +50,17 @@ export function isLetAssignment(entry: WhenEntry | BaseMlldNode): entry is LetAs
 }
 
 /**
- * Type guard for condition pairs (not let assignments)
+ * Type guard for augmented assignment nodes
+ */
+export function isAugmentedAssignment(entry: WhenEntry | BaseMlldNode): entry is AugmentedAssignmentNode {
+  return (entry as any).type === 'AugmentedAssignment';
+}
+
+/**
+ * Type guard for condition pairs (not let or augmented assignments)
  */
 export function isConditionPair(entry: WhenEntry): entry is WhenConditionPair {
-  return !isLetAssignment(entry);
+  return !isLetAssignment(entry) && !isAugmentedAssignment(entry);
 }
 
 /**

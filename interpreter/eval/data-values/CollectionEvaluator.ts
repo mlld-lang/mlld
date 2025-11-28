@@ -1,7 +1,9 @@
 import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { accessFields } from '@interpreter/utils/field-access';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
 
@@ -130,23 +132,69 @@ export class CollectionEvaluator {
 
   /**
    * Evaluates an object with recursive property evaluation and error isolation
+   * Supports both pair entries and spread entries for object composition
    */
   private async evaluateObject(value: DataObjectValue, env: Environment): Promise<Record<string, any>> {
     const evaluatedObj: Record<string, any> = {};
-    
-    for (const [key, propValue] of Object.entries(value.properties)) {
-      try {
-        let evaluated = await this.evaluateDataValue(propValue, env);
-        if (isStructuredValue(evaluated)) {
-          evaluated = unwrapStructuredPrimitive(evaluated);
+
+    // Process each entry in order (pairs and spreads)
+    for (const entry of value.entries) {
+      if (entry.type === 'pair') {
+        // Regular key-value pair
+        try {
+          let evaluated = await this.evaluateDataValue(entry.value, env);
+          if (isStructuredValue(evaluated)) {
+            evaluated = unwrapStructuredPrimitive(evaluated);
+          }
+          evaluatedObj[entry.key] = evaluated;
+        } catch (error) {
+          // Store error information but continue evaluating other properties
+          evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
         }
-        evaluatedObj[key] = evaluated;
-      } catch (error) {
-        // Store error information but continue evaluating other properties
-        evaluatedObj[key] = this.createPropertyError(key, error);
+      } else if (entry.type === 'spread') {
+        // Spread entry: evaluate the variable and merge its properties
+        try {
+          const [varRef] = entry.value;
+          const varName = varRef?.identifier;
+          // Get the variable value from environment
+          const spreadVariable = varName ? env.getVariable(varName) : undefined;
+          if (!spreadVariable) {
+            throw new Error(`Cannot spread undefined variable: ${varName}`);
+          }
+
+          // Extract the actual value (handles Variable wrapper)
+          let spreadValue = await extractVariableValue(spreadVariable, env);
+
+          // Apply any field access on the spread reference
+          if (varRef?.fields && varRef.fields.length > 0) {
+            const fieldResult = await accessFields(spreadValue, varRef.fields, {
+              env,
+              preserveContext: false
+            });
+            spreadValue = (fieldResult as any).value ?? fieldResult;
+          }
+
+          if (isStructuredValue(spreadValue)) {
+            spreadValue = asData(spreadValue);
+          }
+
+          // Validate it's an object
+          if (typeof spreadValue !== 'object' || spreadValue === null || Array.isArray(spreadValue)) {
+            throw new Error(
+              `Cannot spread non-object value from ${varName} (got ${Array.isArray(spreadValue) ? 'array' : typeof spreadValue})`
+            );
+          }
+
+          // Merge spread properties (later entries override earlier ones)
+          Object.assign(evaluatedObj, spreadValue);
+        } catch (error) {
+          // For spread errors, we can't assign to a specific key
+          // Re-throw since this affects the whole object
+          throw error;
+        }
       }
     }
-    
+
     return evaluatedObj;
   }
 
@@ -156,9 +204,45 @@ export class CollectionEvaluator {
   private async evaluateArray(value: DataArrayValue, env: Environment): Promise<any[]> {
     const evaluatedElements: any[] = [];
     
-    
     for (let i = 0; i < value.items.length; i++) {
       try {
+        const item = value.items[i] as any;
+
+        // Fast-path literal/text wrappers so nested arrays keep their string content
+        if (item && typeof item === 'object' && 'content' in item && Array.isArray(item.content)) {
+          const hasOnlyLiteralsOrText = (item.content as any[]).every(
+            node =>
+              node &&
+              typeof node === 'object' &&
+              ((node.type === 'Literal' && 'value' in node) || (node.type === 'Text' && 'content' in node))
+          );
+          if (hasOnlyLiteralsOrText) {
+            if (process.env.MLLD_DEBUG_FIX === 'true') {
+              console.error('[CollectionEvaluator] literal/text wrapper', {
+                index: i,
+                wrapperType: (item as any).wrapperType,
+                itemTypes: (item.content as any[]).map(n => n?.type)
+              });
+              try {
+                const fs = require('fs');
+                fs.appendFileSync(
+                  '/tmp/mlld-debug.log',
+                  JSON.stringify({
+                    source: 'CollectionEvaluator',
+                    index: i,
+                    wrapperType: (item as any).wrapperType,
+                    itemTypes: (item.content as any[]).map((n: any) => n?.type)
+                  }) + '\n'
+                );
+              } catch {}
+            }
+            evaluatedElements.push(
+              (item.content as any[]).map(node => (node.type === 'Literal' ? node.value : node.content)).join('')
+            );
+            continue;
+          }
+        }
+
         let evaluatedItem = await this.evaluateDataValue(value.items[i], env);
         if (isStructuredValue(evaluatedItem)) {
           evaluatedItem = unwrapStructuredPrimitive(evaluatedItem);

@@ -1,13 +1,11 @@
->> Get all of a specific type
-/var @allFunctions = <service.ts { *fn }>       # All functions and methods
-/var @allVariables = <service.ts { *var }>      # All variables and constants
-/var @allClasses = <service.ts { *class }>      # All classes
-/var @everything = <service.ts { * }>           # All top-level definitions
+>> Prefix matching
+/var @handlers = <api.ts { handle* }>           # All functions starting with "handle"
 
->> Other supported types
-{ *interface }  # All interfaces
-{ *type }       # All type aliases
-{ *enum }       # All enums
-{ *struct }     # All structs (Go, Rust, C++)
-{ *trait }      # All traits (Rust)
-{ *module }     # All modules (Ruby)
+>> Suffix matching
+/var @validators = <api.ts { *Validator }>      # All functions ending with "Validator"
+
+>> Contains matching
+/var @requests = <api.ts { *Request* }>         # All functions containing "Request"
+
+>> Single character wildcard
+/var @getters = <api.ts { get? }>               # getA, getB, getC (not getAllItems)

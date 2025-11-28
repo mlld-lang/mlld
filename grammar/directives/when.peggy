@@ -428,10 +428,11 @@ WhenConditionList
       return [first, ...rest];
     }
 
-// Single entry in a when block - either a let assignment or a condition pair
+// Single entry in a when block - let assignment, augmented assignment, or condition pair
 WhenEntry
-  = LetAssignment      // let @x = value (local variable)
-  / WhenConditionPair  // condition => action
+  = LetAssignment        // let @x = value (local variable)
+  / AugmentedAssignment  // @x += value (augmented assignment)
+  / WhenConditionPair    // condition => action
 
 // Separator for condition pairs - whitespace only, with helpful error for commas
 WhenConditionSeparator

@@ -11,6 +11,57 @@ import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
 import { asData, asText, isStructuredValue } from './structured-value';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import type { DataObjectValue } from '@core/types/var';
+
+/**
+ * Helper to get a field from an object AST node.
+ * Handles both new entries format and old properties format.
+ */
+function getObjectField(obj: any, fieldName: string): any | undefined {
+  // New format: entries array
+  if (obj.entries && Array.isArray(obj.entries)) {
+    for (const entry of obj.entries) {
+      if (entry.type === 'pair' && entry.key === fieldName) {
+        return entry.value;
+      }
+    }
+    return undefined;
+  }
+
+  // Old format: properties record (shouldn't happen with new grammar, but keep for safety)
+  if (obj.properties && typeof obj.properties === 'object') {
+    return obj.properties[fieldName];
+  }
+
+  return undefined;
+}
+
+/**
+ * Helper to check if an object AST node has a specific field.
+ */
+function hasObjectField(obj: any, fieldName: string): boolean {
+  // New format: entries array
+  if (obj.entries && Array.isArray(obj.entries)) {
+    return obj.entries.some((entry: any) => entry.type === 'pair' && entry.key === fieldName);
+  }
+
+  // Old format: properties record
+  if (obj.properties && typeof obj.properties === 'object') {
+    return fieldName in obj.properties;
+  }
+
+  return false;
+}
+
+/**
+ * Helper to check if a value is an object AST node.
+ */
+function isObjectAST(value: any): boolean {
+  return value &&
+         typeof value === 'object' &&
+         value.type === 'object' &&
+         (value.entries || value.properties);
+}
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
 const STRING_TEXT_ACCESSORS = new Set(['text', 'content']);
@@ -112,8 +163,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       rawValueType: typeof rawValue,
       rawValueKeys: Object.keys(rawValue || {}),
       rawValueTypeField: rawValue?.type,
-      rawValuePropertiesField: rawValue?.properties,
-      hasProperties: rawValue?.properties && typeof rawValue.properties === 'object'
+      isObjectAST: isObjectAST(rawValue)
     });
   }
   
@@ -127,6 +177,39 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'bracketAccess': {
       // All handle string-based property access
       const name = String(fieldValue);
+      if (process.env.MLLD_DEBUG_FIX === 'true' && name === 'length') {
+        console.error('[field-access] length access', {
+          isVariable: isVariable(value),
+          rawType: typeof rawValue,
+          rawKeys: rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : null,
+          rawValueTypeField: (rawValue as any)?.type
+        });
+        try {
+          const fs = require('fs');
+          const util = require('util');
+          const preview =
+            Array.isArray(rawValue) && rawValue.length > 0
+              ? { isArray: true, length: rawValue.length, first: rawValue[0] }
+              : rawValue && typeof rawValue === 'object'
+                ? {
+                    isArray: Array.isArray(rawValue),
+                    sample: util.inspect(rawValue, { depth: 2, breakLength: 120 })
+                  }
+                : rawValue;
+          fs.appendFileSync(
+            '/tmp/mlld-debug.log',
+            JSON.stringify({
+              source: 'field-access',
+              field: name,
+              isVariable: isVariable(value),
+              rawType: typeof rawValue,
+              rawKeys: rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : null,
+              rawValueTypeField: (rawValue as any)?.type,
+              preview
+            }) + '\n'
+          );
+        } catch {}
+      }
       if (structuredWrapper) {
         if (name === 'text') {
           if (
@@ -326,7 +409,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
       
       // Handle Variable objects with type 'object' and value field
-      if (rawValue.type === 'object' && rawValue.value && !rawValue.properties) {
+      if (rawValue.type === 'object' && rawValue.value && !isObjectAST(rawValue)) {
         // This is a Variable object, access fields in the value
         const actualValue = rawValue.value;
         if (!(name in actualValue)) {
@@ -348,11 +431,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         accessedValue = actualValue[name];
         break;
       }
-      
-      // Handle normalized AST objects (must have both type and properties)
-      if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {
-        // Access the properties object for normalized AST objects
-        if (!(name in rawValue.properties)) {
+
+      // Handle normalized AST objects (with entries or properties)
+      if (isObjectAST(rawValue)) {
+        // Access the field using helper that handles both formats
+        if (!hasObjectField(rawValue, name)) {
           if (options?.returnUndefinedForMissing) {
             accessedValue = undefined;
             break;
@@ -368,8 +451,22 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           }, { sourceLocation: options?.sourceLocation, env: options?.env });
           }
         }
-        accessedValue = rawValue.properties[name];
+        accessedValue = getObjectField(rawValue, name);
         break;
+      }
+
+      // Handle normalized AST arrays with direct length access
+      if (rawValue && typeof rawValue === 'object' && rawValue.type === 'array' && Array.isArray(rawValue.items)) {
+        if (name === 'length') {
+          if (process.env.MLLD_DEBUG_FIX === 'true') {
+            console.error('[field-access] AST array length', {
+              length: rawValue.items.length,
+              itemsPreview: rawValue.items.slice(0, 2)
+            });
+          }
+          accessedValue = rawValue.items.length;
+          break;
+        }
       }
       
       // DEBUG: Log what we're checking
@@ -434,9 +531,9 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Historically this path emitted a deprecation warning for array access
       // like obj.0. Property style access is now supported, so we skip the warning.
 
-      // Handle normalized AST objects (must have both type and properties)
-      if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {
-        if (!(numKey in rawValue.properties)) {
+      // Handle normalized AST objects (with entries or properties)
+      if (isObjectAST(rawValue)) {
+        if (!hasObjectField(rawValue, numKey)) {
           if (options?.returnUndefinedForMissing) {
             accessedValue = undefined;
             break;
@@ -450,7 +547,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             accessPath: chain
           });
         }
-        accessedValue = rawValue.properties[numKey];
+        accessedValue = getObjectField(rawValue, numKey);
         break;
       }
       
@@ -505,10 +602,10 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         // Try object access with numeric key as fallback
         const numKey = String(fieldValue);
         if (typeof arrayData === 'object' && arrayData !== null) {
-          // Handle normalized AST objects (must have both type and properties)
-          if (arrayData.type === 'object' && arrayData.properties && typeof arrayData.properties === 'object') {
-            if (numKey in arrayData.properties) {
-              accessedValue = arrayData.properties[numKey];
+          // Handle normalized AST objects (with entries or properties)
+          if (isObjectAST(arrayData)) {
+            if (hasObjectField(arrayData, numKey)) {
+              accessedValue = getObjectField(arrayData, numKey);
               break;
             }
           } else if (numKey in arrayData) {

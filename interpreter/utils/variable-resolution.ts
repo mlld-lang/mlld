@@ -231,6 +231,24 @@ export async function extractVariableValue(
     }
     
     return variable.value;
+  } else if (
+    (variable.type === 'object' || variable.type === 'array') &&
+    (variable as any).isComplex
+  ) {
+    if (process.env.MLLD_DEBUG_FIX === 'true') {
+      console.error('[extractVariableValue] evaluating complex collection', {
+        name: (variable as any).name,
+        type: variable.type,
+        isComplex: (variable as any).isComplex,
+        valuePreview:
+          variable.value && typeof variable.value === 'object'
+            ? { type: (variable.value as any).type, keys: Object.keys(variable.value || {}) }
+            : typeof variable.value
+      });
+    }
+    // Lazy-evaluate complex object/array AST nodes to plain JS values
+    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+    return await evaluateDataValue((variable as any).value, env);
   } else if (isPath(variable)) {
     return variable.value.resolvedPath;
   } else if (isPipelineInput(variable)) {

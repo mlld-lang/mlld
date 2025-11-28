@@ -1,5 +1,5 @@
-/var @readme = <README.md>               # Load file content
-/var @filename = "README.md"             # Literal string
+/var @base = { "name": "Ada", "role": "user" }
+/var @admin = { ...@base, "role": "admin", "active": true }
 
-/show @readme                            # Shows file contents
-/show @filename                          # Shows "README.md"
+/show @admin.role        # admin
+/show @admin.active      # true

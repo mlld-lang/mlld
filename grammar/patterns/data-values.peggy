@@ -16,27 +16,46 @@ The key difference from regular parsing:
 - Data: strings become plain JavaScript strings
 */
 
-// DATA OBJECT LITERAL - Creates typed object nodes
+// DATA OBJECT LITERAL - Creates typed object nodes with entries
 // This replaces ObjectLiteral in data context
 DataObjectLiteral "data object literal"
-  = "{" _ props:DataObjectProperties? _ "}" {
-      return helpers.createObjectFromProperties(props, location());
+  = "{" _ entries:DataObjectEntries? _ "}" {
+      return {
+        type: 'object',
+        entries: entries || [],
+        location: location()
+      };
     }
 
-// DATA OBJECT PROPERTIES - Build property map
-DataObjectProperties
-  = first:DataObjectProperty rest:(_ "," _ p:DataObjectProperty { return p; })* {
-      const result = {};
-      for (const [key, value] of [first, ...rest]) {
-        result[key] = value;
-      }
-      return result;
+// DATA OBJECT ENTRIES - Build entries array (pairs and spreads)
+DataObjectEntries
+  = first:DataObjectEntry rest:(_ "," _ entry:DataObjectEntry { return entry; })* _ ","? {
+      return [first, ...rest];
     }
 
-// DATA OBJECT PROPERTY - Key-value pair
-DataObjectProperty
+// DATA OBJECT ENTRY - Either a pair or a spread
+DataObjectEntry
+  = DataSpreadProperty
+  / DataObjectPair
+
+// DATA SPREAD PROPERTY - Spread syntax for objects
+// Example: ...@user
+DataSpreadProperty "spread property"
+  = "..." variable:UnifiedVariableNoTail {
+      return {
+        type: 'spread',
+        value: [variable]  // Wrap in array to match VariableNodeArray type
+      };
+    }
+
+// DATA OBJECT PAIR - Key-value pair
+DataObjectPair
   = key:PropertyKey _ ":" _ value:DataPropertyValue {
-      return [key, value];
+      return {
+        type: 'pair',
+        key: key,
+        value: value
+      };
     }
 
 // DATA PROPERTY VALUE - All valid RHS expressions with data-specific handling

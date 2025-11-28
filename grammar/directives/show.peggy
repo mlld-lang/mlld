@@ -22,8 +22,16 @@ It can be used in these forms:
 
 // Primary /show directive with all variants
 SlashShow
+  // Error: Multiple arguments - must come FIRST to catch before successful parse
+  = DirectiveContext "/show" (_ DataLabelList)? _ "@" id:BaseIdentifier fields:("." BaseIdentifier)* _ "@" {
+      helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
+    }
+  // Error: Multiple quoted strings
+  / DirectiveContext "/show" (_ DataLabelList)? _ ("\"" [^"]* "\"" / "'" [^']* "'") _ ("\"" / "'" / "@") {
+      helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
+    }
   // Command execution syntax: /show {echo "test"}
-  = DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
       // Command syntax for display: /show {command}
       helpers.debug('SlashShow matched command for display', { content, tail });
 
@@ -839,7 +847,7 @@ SlashShow
     } {
       helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
     }
-    
+
   // Error: Generic /show syntax error (catch-all)
   / DirectiveContext "/show" {
       helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show <path # section>", "`", location());

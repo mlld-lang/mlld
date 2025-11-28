@@ -505,6 +505,14 @@ export class VariableImporter {
     // For array types, create an ArrayVariable to preserve array behaviors
     if (originalType === 'array' && Array.isArray(processedValue)) {
       const isComplexArray = this.hasComplexContent(processedValue);
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[VariableImporter] create array variable', {
+          name,
+          importPath,
+          isComplexArray,
+          sample: processedValue.slice(0, 2)
+        });
+      }
 
       return createArrayVariable(
         name,
@@ -524,6 +532,31 @@ export class VariableImporter {
       const normalizedObject = this.unwrapArraySnapshots(processedValue, importPath);
       // Check if the object contains complex AST nodes that need evaluation
       const isComplex = this.hasComplexContent(normalizedObject);
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[VariableImporter] create object variable', {
+          name,
+          importPath,
+          isComplex,
+          keys: Object.keys(normalizedObject || {}).slice(0, 5),
+          agentRosterPreview: normalizedObject && (normalizedObject as any).agent_roster
+        });
+        try {
+          const fs = require('fs');
+          fs.appendFileSync(
+            '/tmp/mlld-debug.log',
+            JSON.stringify({
+              source: 'VariableImporter',
+              name,
+              importPath,
+              isComplex,
+              keys: Object.keys(normalizedObject || {}).slice(0, 5),
+              agentRosterType: normalizedObject && typeof (normalizedObject as any).agent_roster,
+              agentRosterIsVariable: this.isVariableLike((normalizedObject as any).agent_roster),
+              agentRosterIsArray: Array.isArray((normalizedObject as any).agent_roster)
+            }) + '\n'
+          );
+        } catch {}
+      }
       
       return createObjectVariable(
         name,

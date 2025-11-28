@@ -1,26 +1,15 @@
->> Double-colon (default)
-/var @msg = ::Hello @name!::
-/var @doc = ::Use `npm test` before @env::
-/var @report = ::
-Status: @status
-Config: <@base/config.json>
-Data: @data|@json
-::
+>> Format JSON with indentation
+/var @data = <file.csv>
+/var @tojson = @data | @json
+/show @tojson
 
->> Backticks (alternative)
-/var @msg = `Hello @name!`
-/var @multi = `
-Line 1: @var
-Line 2: @other
-`
+>> Convert to XML (SCREAMING_SNAKE_CASE)
+/var @toxml = @data | @XML
+/show @toxml
 
->> Double quotes (single-line only)
-/var @path = "@base/files/@filename"
-/run cmd {echo "Processing @file"}
+>> Convert arrays to CSV
+/var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+/var @tocsv = @users | @CSV
+/show @tocsv
 
->> Triple-colon (Discord/social only)
-/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
-
->> Single quotes (literal)
-/var @literal = '@name stays literal'
+`@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:

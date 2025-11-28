@@ -1,17 +1,21 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/var @numbers = [1, 2, 3, 4, 5]
+>> Files
+/var @config = <settings.json>
+@config.json              >> Parsed JSON object
+@config.data              >> Alias for .json
+@config.content           >> Raw string
+@config.text              >> Alias for .content
 
->> Check if array contains value
-/show @fruits.includes("banana")         >> true
-/show @fruits.includes("orange")         >> false
+>> Variables
+/var @str = '{"status": "ok"}'
+@str.data                 >> Parsed JSON object
+@str.json                 >> Alias for .data
+@str.text                 >> Original string
+@str.content              >> Alias for .text
+@str                      >> Original string (default)
 
->> Find index of value
-/show @fruits.indexOf("cherry")          >> 2
-/show @fruits.indexOf("missing")         >> -1
-
->> Get array length
-/show @fruits.length()                   >> 3
-
->> Join array elements
-/show @fruits.join(", ")                 >> "apple, banana, cherry"
-/show @numbers.join(" | ")               >> "1 | 2 | 3 | 4 | 5"
+>> Command output
+/var @result = run {curl api.com/data}
+@result.data              >> Parse as JSON
+@result.json              >> Alias for .data
+@result.text              >> Keep as string
+@result.content           >> Alias for .text

@@ -1338,6 +1338,19 @@ async function evaluateExecInvocationInternal(
     evaluatedArgStrings.push(argValue);
     evaluatedArgs.push(argValueAny);
   }
+
+  if (process.env.MLLD_DEBUG_FIX === 'true') {
+    console.error('[evaluateExecInvocation] evaluated args', {
+      commandName,
+      argCount: evaluatedArgs.length,
+      argTypes: evaluatedArgs.map(a => (a === null ? 'null' : Array.isArray(a) ? 'array' : typeof a)),
+      argPreview: evaluatedArgs.map(a => {
+        if (isStructuredValue(a)) return { structured: true, type: a.type, dataType: typeof a.data };
+        if (a && typeof a === 'object') return { keys: Object.keys(a).slice(0, 5) };
+        return a;
+      })
+    });
+  }
   
   // Track original Variables for arguments
   const originalVariables: (Variable | undefined)[] = new Array(args.length);
@@ -2449,6 +2462,37 @@ async function evaluateExecInvocationInternal(
       : resultSecurityDescriptor;
     setStructuredSecurityDescriptor(structured, merged);
     result = structured;
+  }
+
+  if (process.env.MLLD_DEBUG_FIX === 'true') {
+    try {
+      const summary = {
+        commandName,
+        type: typeof result,
+        isStructured: isStructuredValue(result),
+        keys: result && typeof result === 'object' ? Object.keys(result as any).slice(0, 5) : undefined,
+        preview:
+          isStructuredValue(result) && typeof (result as any).data === 'object'
+            ? Object.keys((result as any).data || {}).slice(0, 5)
+            : undefined,
+        text:
+          isStructuredValue(result) && typeof (result as any).text === 'string'
+            ? String((result as any).text).slice(0, 120)
+            : undefined
+      };
+      console.error('[evaluateExecInvocation] result summary', summary);
+      if (
+        commandName === 'needsMeta' ||
+        commandName === 'jsDefault' ||
+        commandName === 'jsKeep' ||
+        commandName === 'agentsContext'
+      ) {
+        try {
+          const fs = require('fs');
+          fs.appendFileSync('/tmp/mlld-debug.log', JSON.stringify(summary) + '\n');
+        } catch {}
+      }
+    } catch {}
   }
 
   // Apply withClause transformations if present

@@ -20,15 +20,16 @@ export interface IVariableManager {
   // Core variable operations
   setVariable(name: string, variable: Variable): void;
   setParameterVariable(name: string, variable: Variable): void;
+  updateVariable(name: string, variable: Variable): void;
   getVariable(name: string): Variable | undefined;
   getVariableValue(name: string): any;
   hasVariable(name: string): boolean;
   getAllVariables(): Map<string, Variable>;
   getCurrentVariables(): Map<string, Variable>;
-  
+
   // Initialization
   initializeReservedVariables(): void;
-  
+
   // Context access
   getVariables(): Map<string, Variable>;
 }
@@ -245,11 +246,23 @@ export class VariableManager implements IVariableManager {
         variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
       );
     }
-    
+
     // Allow shadowing parent scope variables for parameters
     this.variables.set(name, variable);
   }
-  
+
+  /**
+   * Update an existing variable's value in place.
+   * Used for augmented assignment (+=) on local let bindings.
+   * Throws if the variable doesn't exist in this scope.
+   */
+  updateVariable(name: string, variable: Variable): void {
+    if (!this.variables.has(name)) {
+      throw new Error(`Cannot update variable '@${name}': variable not found in current scope`);
+    }
+    this.variables.set(name, variable);
+  }
+
   getVariable(name: string): Variable | undefined {
     // Ambient, read-only @ctx support (calculated on access)
     if (name === 'ctx') {

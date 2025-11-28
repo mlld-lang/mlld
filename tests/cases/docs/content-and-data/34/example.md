@@ -1,18 +1,26 @@
->> .att files (default for 5+ lines)
->> file: templates/deploy.att
-# Deployment: @env
+>> Double-colon (default)
+/var @msg = ::Hello @name!::
+/var @doc = ::Use `npm test` before @env::
+/var @report = ::
 Status: @status
-Config: <@base/config/@env.json>
+Config: <@base/config.json>
+Data: @data|@json
+::
 
->> usage
-/exe @deploy(env, status) = template "./templates/deploy.att"
-/show @deploy("prod", "success")
+>> Backticks (alternative)
+/var @msg = `Hello @name!`
+/var @multi = `
+Line 1: @var
+Line 2: @other
+`
 
->> .mtt files (Discord/social only)
->> file: templates/discord.mtt
-🚨 Alert <@{{adminId}}>!
-Reporter: <@{{reporterId}}>
-Severity: {{severity}}
+>> Double quotes (single-line only)
+/var @path = "@base/files/@filename"
+/run cmd {echo "Processing @file"}
 
->> usage
-/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
+>> Triple-colon (Discord/social only)
+/var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
+/var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
+
+>> Single quotes (literal)
+/var @literal = '@name stays literal'

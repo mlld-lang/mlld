@@ -12,11 +12,18 @@ import type { PipelineStage } from './run';
 import type { DataLabel } from './security';
 
 /**
+ * Data object entry - either a key-value pair or a spread
+ */
+export type DataObjectEntry =
+  | { type: 'pair'; key: string; value: DataValue }
+  | { type: 'spread'; value: VariableNodeArray };
+
+/**
  * Data object value structure for var directive
  */
 export interface DataObjectValue {
   type: 'object';
-  properties: Record<string, DataValue>;
+  entries: DataObjectEntry[];
 }
 
 /**

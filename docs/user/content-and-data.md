@@ -64,6 +64,23 @@ Use `<file.md>.keep` when setting as the value of a variable to preserve the str
 >> Returns a path
 ```
 
+### Object composition with spread
+
+Combine objects with left-to-right overrides using spread entries inside object literals:
+
+```mlld
+/var @base = { "name": "Ada", "role": "user" }
+/var @admin = { ...@base, "role": "admin", "active": true }
+
+/show @admin.role        # admin
+/show @admin.active      # true
+```
+
+Rules:
+- Each `...@var` must resolve to an object (spreading arrays or primitives throws).
+- Later entries override earlier spreads and pairs.
+- Spreads work with field access on the reference, e.g. `{ ...@config.ctx }`.
+
 ## File Loading
 
 Load file contents with angle brackets `<>`:

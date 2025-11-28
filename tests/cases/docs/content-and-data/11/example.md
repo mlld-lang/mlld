@@ -1,6 +1,8 @@
->> Exact symbol names
-/var @user = <src/service.ts { createUser }>
-/var @multiple = <src/api.ts { handleRequest, processData }>
+>> Extract single section
+/var @install = <README.md # Installation>
 
->> Usage patterns - find functions that use a symbol
-/var @callers = <src/**/*.ts { (logger.info) }>
+>> Extract from multiple files  
+/var @apis = <docs/*.md # API Reference>
+
+>> Rename sections with 'as'
+/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"
