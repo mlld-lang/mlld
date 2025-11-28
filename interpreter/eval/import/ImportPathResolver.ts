@@ -144,7 +144,7 @@ export class ImportPathResolver {
       // (not resolver paths like @base or @local, which resolve to file system paths)
       // This supports Postel's Law - "be liberal in what you accept"
       const resolverManager = this.env.getResolverManager();
-      if (varRef.identifier) {
+      if (varRef.isSpecial && varRef.identifier) {
         const potentialName = varRef.identifier;
 
         // If this is a known resolver (e.g., @base, @local), let it go through
