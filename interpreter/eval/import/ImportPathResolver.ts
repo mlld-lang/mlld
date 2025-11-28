@@ -77,9 +77,10 @@ export class ImportPathResolver {
 
   /**
    * Detect special imports (@input, @stdin, resolver imports)
+   * Also handles "liberal" quoted syntax like "@local/module" where @local is a resolver
    */
   private async detectSpecialImports(
-    pathNodes: ContentNodeArray, 
+    pathNodes: ContentNodeArray,
     directive: DirectiveNode
   ): Promise<ImportResolution | null> {
     if (pathNodes.length === 0) {
@@ -110,7 +111,7 @@ export class ImportPathResolver {
     // Handle variable reference special imports
     if (firstNode.type === 'VariableReference') {
       const varRef = firstNode as any;
-      
+
       // Handle @input/@stdin as variable references
       if (varRef.identifier === 'INPUT' || varRef.identifier === 'input') {
         return {
@@ -134,6 +135,35 @@ export class ImportPathResolver {
             type: 'resolver',
             resolvedPath: `@${varRef.identifier}`,
             resolverName: varRef.identifier
+          };
+        }
+      }
+
+      // Liberal syntax: Handle quoted paths like "@local/module" or "@author/module"
+      // This supports Postel's Law - "be liberal in what you accept"
+      if (varRef.identifier) {
+        const potentialName = varRef.identifier;
+
+        // Build the full path from remaining nodes (e.g., "/module" -> "module")
+        const remainingPath = pathNodes.slice(1)
+          .map(node => {
+            if (node.type === 'Text') {
+              return (node as any).content;
+            }
+            return '';
+          })
+          .join('');
+
+        // If we have a path pattern like @something/path, treat it as a module reference
+        // This handles both:
+        // - "@local/module" where @local is a resolver prefix
+        // - "@author/module" where @author is a registry namespace
+        // The module resolution system will handle routing to the appropriate resolver
+        if (remainingPath.startsWith('/')) {
+          const moduleRef = `@${potentialName}${remainingPath}`;
+          return {
+            type: 'module',
+            resolvedPath: moduleRef
           };
         }
       }
