@@ -204,6 +204,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private effectHandler: EffectHandler;
   private sdkEmitter?: ExecutionEmitter;
   private streamBridgeUnsub?: () => void;
+  private directiveTimings: number[] = [];
 
   // Import evaluation guard - prevents directive execution during import
   private isImportingContent: boolean = false;
@@ -931,6 +932,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   setVariable(name: string, variable: Variable): void {
     this.variableManager.setVariable(name, variable);
+    if (this.sdkEmitter) {
+      this.emitSDKEvent({
+        type: 'debug:variable:create',
+        name,
+        variable,
+        timestamp: Date.now()
+      });
+    }
   }
 
   /**
@@ -951,6 +960,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getVariable(name: string): Variable | undefined {
     // Delegate entirely to VariableManager which handles local, captured, and parent lookups
+    if (this.sdkEmitter) {
+      this.emitSDKEvent({
+        type: 'debug:variable:access',
+        name,
+        timestamp: Date.now()
+      });
+    }
     return this.variableManager.getVariable(name);
   }
 
@@ -2280,6 +2296,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     varName?: string,
     location?: SourceLocation
   ): void {
+    const start = Date.now();
+    this.directiveTimings.push(start);
+
+    if (this.sdkEmitter) {
+      this.emitSDKEvent({
+        type: 'debug:directive:start',
+        directive,
+        timestamp: start
+      });
+    }
+
     if (!this.traceEnabled) return;
     
     const fileName = this.currentFilePath ? path.basename(this.currentFilePath) : 'unknown';
@@ -2297,8 +2324,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Pop a directive from the trace stack
    */
   popDirective(): void {
+    const start = this.directiveTimings.pop();
+    const entry = this.traceEnabled ? this.directiveTrace.pop() : undefined;
+    if (this.sdkEmitter && start && entry) {
+      const durationMs = Date.now() - start;
+      this.emitSDKEvent({
+        type: 'debug:directive:complete',
+        directive: entry.directive,
+        durationMs,
+        timestamp: Date.now()
+      });
+    }
     if (!this.traceEnabled) return;
-    this.directiveTrace.pop();
   }
   
   /**

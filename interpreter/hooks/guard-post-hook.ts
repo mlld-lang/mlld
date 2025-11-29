@@ -405,7 +405,19 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
       }
     }
 
-    appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+  appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+  const guardName =
+    guardTrace[0]?.guard?.name ??
+    guardTrace[0]?.guard?.filterKind ??
+    '';
+  const contextLabels = operation.labels ?? [];
+  env.emitSDKEvent({
+    type: 'debug:guard:after',
+    guard: guardName,
+    labels: contextLabels,
+    decision: currentDecision === 'retry' ? 'retry' : currentDecision,
+    timestamp: Date.now()
+  });
 
     if (currentDecision === 'deny') {
       const error = buildGuardError({

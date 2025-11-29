@@ -12,7 +12,8 @@ import type {
   InterpretResult,
   StructuredEffect,
   ExportMap,
-  StreamExecution as StreamExecutionHandle
+  StreamExecution as StreamExecutionHandle,
+  SDKEvent
 } from '@sdk/types';
 import { getExpressionProvenance } from './utils/expression-provenance';
 import { makeSecurityDescriptor } from '@core/types/security';
@@ -139,9 +140,18 @@ export async function interpret(
   }
   
   const mode = options.mode ?? 'document';
-  const streamingDisabled = process.env.MLLD_NO_STREAM === 'true' || (options.streaming && options.streaming.enabled === false);
-  const streamingOptions = options.streaming ?? { enabled: !streamingDisabled };
+  const streamingDisabledEnv = process.env.MLLD_NO_STREAM === 'true';
+  const streamingDisabledOption = options.streaming && options.streaming.enabled === false;
+  const streamingDisabled = streamingDisabledEnv || streamingDisabledOption;
+  const baseStreamingEnabled =
+    mode === 'debug'
+      ? false
+      : options.streaming
+        ? options.streaming.enabled !== false
+        : !streamingDisabled;
+  const streamingOptions = { ...(options.streaming ?? {}), enabled: baseStreamingEnabled };
   const recordEffects = options.recordEffects ?? (mode !== 'document');
+  const provenanceEnabled = options.provenance ?? mode === 'debug';
   
   const ast = parseResult.ast;
   
@@ -345,10 +355,52 @@ export async function interpret(
     return streamExecution as unknown as StreamExecutionHandle;
   }
 
+  const debugTrace: SDKEvent[] = [];
+  let debugEmitter: ExecutionEmitter | undefined;
+  let debugStart = Date.now();
+
+  if (mode === 'debug') {
+    debugEmitter = options.emitter ?? new ExecutionEmitter();
+    const eventTypes: SDKEvent['type'][] = [
+      'effect',
+      'command:start',
+      'command:complete',
+      'stream:chunk',
+      'stream:progress',
+      'execution:complete',
+      'debug:directive:start',
+      'debug:directive:complete',
+      'debug:variable:create',
+      'debug:variable:access',
+      'debug:guard:before',
+      'debug:guard:after',
+      'debug:export:registered'
+    ];
+    for (const type of eventTypes) {
+      debugEmitter.on(type, event => debugTrace.push(event));
+    }
+    env.enableSDKEvents(debugEmitter);
+  }
+
   const output = await runExecution();
 
   if (mode === 'structured') {
     return buildStructuredResult(env, output);
+  }
+
+  if (mode === 'debug') {
+    const structured = buildStructuredResult(env, output);
+    const variables = Object.fromEntries(env.getAllVariables());
+    const durationMs = Date.now() - debugStart;
+    const debugResult = {
+      ...structured,
+      ast: ast as any,
+      variables,
+      trace: debugTrace,
+      directiveTrace: env.getDirectiveTrace(),
+      durationMs
+    };
+    return debugResult;
   }
 
   if (mode !== 'document') {

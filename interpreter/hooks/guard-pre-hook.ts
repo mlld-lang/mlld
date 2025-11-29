@@ -572,15 +572,27 @@ export const guardPreHook: PreHook = async (
       reasons,
       primaryMetadata
     });
-    const aggregateMetadata = buildAggregateMetadata({
-      guardResults: guardTrace,
-      reasons,
-      hints,
-      transformedInputs,
-      primaryMetadata,
-      guardContext: aggregateContext
-    });
+  const aggregateMetadata = buildAggregateMetadata({
+    guardResults: guardTrace,
+    reasons,
+    hints,
+    transformedInputs,
+    primaryMetadata,
+    guardContext: aggregateContext
+  });
     appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+    const guardName =
+      guardTrace[0]?.guard?.name ??
+      guardTrace[0]?.guard?.filterKind ??
+      '';
+    const contextLabels = operation.labels ?? [];
+    env.emitSDKEvent({
+      type: 'debug:guard:before',
+      guard: guardName,
+      labels: contextLabels,
+      decision: currentDecision === 'retry' ? 'retry' : currentDecision,
+      timestamp: Date.now()
+    });
 
     if (process.env.MLLD_DEBUG_GUARDS === '1') {
       try {
