@@ -451,7 +451,12 @@ export class ResolverManager {
       );
 
       // 4. Cache the content if cache is available (but skip local files)
-      if (this.moduleCache && content.content && resolver.name !== 'LOCAL') {
+      if (
+        this.moduleCache &&
+        content.content &&
+        resolver.name !== 'LOCAL' &&
+        resolver.name.toLowerCase() !== 'dynamic'
+      ) {
         try {
           const storeOptions = this.buildModuleCacheOptions(content);
           const cacheEntry = await this.moduleCache.store(

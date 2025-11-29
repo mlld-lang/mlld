@@ -1,65 +1,24 @@
 import { parse } from '@grammar/parser';
 import { Environment } from './env/Environment';
-import type { EffectHandler } from './env/EffectHandler';
+import { DefaultEffectHandler, type EffectHandler } from './env/EffectHandler';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
-import type { IFileSystemService } from '@services/fs/IFileSystemService';
-import type { IPathService } from '@services/fs/IPathService';
-import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import * as path from 'path';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
-
-import type { ResolvedURLConfig } from '@core/config/types';
-import type { StreamingOptions } from './eval/pipeline/streaming-options';
-
-interface CommandExecutionOptions {
-  showProgress?: boolean;
-  maxOutputLines?: number;
-  errorBehavior?: 'halt' | 'continue';
-  collectErrors?: boolean;
-  showCommandContext?: boolean;
-  timeout?: number;
-}
-
-/**
- * Options for the interpreter
- */
-export interface InterpretOptions {
-  basePath?: string; // @deprecated Use filePath or pathContext instead
-  filePath?: string; // Current file being processed (for error reporting)
-  pathContext?: PathContext; // Explicit path context
-  strict?: boolean;
-  format?: 'markdown' | 'xml';
-  fileSystem: IFileSystemService;
-  pathService: IPathService;
-  urlConfig?: ResolvedURLConfig;
-  outputOptions?: CommandExecutionOptions;
-  stdinContent?: string; // Optional stdin content
-  returnEnvironment?: boolean; // Return environment with result
-  approveAllImports?: boolean; // Bypass interactive import approval
-  normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
-  enableTrace?: boolean; // Enable directive trace for debugging (default: true)
-  useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
-  localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
-  // Test injection: provide a resolverManager with fetchURL stub to override global fetch in tests
-  resolverManager?: any;
-  captureEnvironment?: (env: Environment) => void; // Callback to capture environment after execution
-  captureErrors?: boolean; // Capture parse errors for pattern development
-  ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
-  effectHandler?: EffectHandler; // Optional custom effect handler (tests/CI)
-  allowAbsolutePaths?: boolean; // Allow absolute paths outside project root
-  streaming?: StreamingOptions; // Streaming configuration
-}
-
-/**
- * Result from the interpreter when returnEnvironment is true
- */
-export interface InterpretResult {
-  output: string;
-  environment: Environment;
-}
+import type {
+  InterpretOptions,
+  InterpretResult,
+  StructuredEffect,
+  ExportMap,
+  StreamExecution as StreamExecutionHandle,
+  SDKEvent
+} from '@sdk/types';
+import { getExpressionProvenance } from './utils/expression-provenance';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { ExecutionEmitter } from '@sdk/execution-emitter';
+import { StreamExecution } from '@sdk/stream-execution';
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -68,7 +27,7 @@ export interface InterpretResult {
 export async function interpret(
   source: string,
   options: InterpretOptions
-): Promise<string | InterpretResult> {
+): Promise<InterpretResult> {
   // Initialize error patterns on first use
   await initializePatterns();
   
@@ -180,6 +139,20 @@ export async function interpret(
     );
   }
   
+  const mode = options.mode ?? 'document';
+  const streamingDisabledEnv = process.env.MLLD_NO_STREAM === 'true';
+  const streamingDisabledOption = options.streaming && options.streaming.enabled === false;
+  const streamingDisabled = streamingDisabledEnv || streamingDisabledOption;
+  const baseStreamingEnabled =
+    mode === 'debug'
+      ? false
+      : options.streaming
+        ? options.streaming.enabled !== false
+        : !streamingDisabled;
+  const streamingOptions = { ...(options.streaming ?? {}), enabled: baseStreamingEnabled };
+  const recordEffects = options.recordEffects ?? (mode !== 'document');
+  const provenanceEnabled = mode === 'debug' ? true : options.provenance === true;
+  
   const ast = parseResult.ast;
   
   // Build or use provided PathContext
@@ -206,14 +179,26 @@ export async function interpret(
     };
   }
   
+  const effectHandler =
+    options.effectHandler ??
+    new DefaultEffectHandler({
+      streaming: streamingOptions.enabled,
+      recordEffects
+    });
+
   // Create the root environment with PathContext
   const env = new Environment(
     options.fileSystem,
     options.pathService,
     pathContext,
     undefined,
-    options.effectHandler
+    effectHandler
   );
+  env.setProvenanceEnabled(provenanceEnabled);
+
+  if (options.emitter) {
+    env.enableSDKEvents(options.emitter);
+  }
 
   if (options.allowAbsolutePaths !== undefined) {
     env.setAllowAbsolutePaths(options.allowAbsolutePaths);
@@ -240,6 +225,10 @@ export async function interpret(
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();
 
+  if (options.dynamicModules && Object.keys(options.dynamicModules).length > 0) {
+    env.registerDynamicModules(options.dynamicModules);
+  }
+
   // Configure local modules after resolvers are ready
   await env.configureLocalModules();
   
@@ -258,9 +247,6 @@ export async function interpret(
     env.setOutputOptions(options.outputOptions);
   }
 
-  // Configure streaming options (flags override environment defaults)
-  const streamingDisabled = process.env.MLLD_NO_STREAM === 'true' || (options.streaming && options.streaming.enabled === false);
-  const streamingOptions = options.streaming ?? { enabled: !streamingDisabled };
   env.setStreamingOptions(streamingOptions);
   
   // Set stdin content if provided
@@ -302,62 +288,195 @@ export async function interpret(
   }
   
   // Evaluate the AST
-  await evaluate(ast, env);
-  
-  // Display collected errors with rich formatting if enabled
-  if (options.outputOptions?.collectErrors) {
-    await env.displayCollectedErrors();
-  }
-  
-  // Get the document from the effect handler
-  const effectHandler = env.getEffectHandler();
-  let output: string;
-  
-  if (effectHandler && typeof effectHandler.getDocument === 'function') {
-    // Get the accumulated document from the effect handler
-    output = effectHandler.getDocument();
+  const runExecution = async (): Promise<string> => {
+    await evaluate(ast, env);
     
-    // Apply markdown formatting if requested
-    if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
-      const { formatMarkdown } = await import('./utils/markdown-formatter');
-      output = await formatMarkdown(output);
+    // Display collected errors with rich formatting if enabled
+    if (options.outputOptions?.collectErrors) {
+      await env.displayCollectedErrors();
     }
-  } else {
-    // Fallback to old node-based system if effect handler doesn't have getDocument
-    const nodes = env.getNodes();
     
-    if (process.env.DEBUG_WHEN) {
-      console.log('Final nodes count:', nodes.length);
-      nodes.forEach((node, i) => {
-        console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
+    // Get the document from the effect handler
+    const activeEffectHandler = env.getEffectHandler();
+    let output: string;
+    
+    if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
+      // Get the accumulated document from the effect handler
+      output = activeEffectHandler.getDocument();
+      
+      // Apply markdown formatting if requested
+      if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
+        const { formatMarkdown } = await import('./utils/markdown-formatter');
+        output = await formatMarkdown(output);
+      }
+    } else {
+      // Fallback to old node-based system if effect handler doesn't have getDocument
+      const nodes = env.getNodes();
+      
+      if (process.env.DEBUG_WHEN) {
+        console.log('Final nodes count:', nodes.length);
+        nodes.forEach((node, i) => {
+          console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
+        });
+      }
+      
+      // Format the output
+      output = await formatOutput(nodes, {
+        format: options.format || 'markdown',
+        variables: env.getAllVariables(),
+        useMarkdownFormatter: options.useMarkdownFormatter,
+        normalizeBlankLines: options.normalizeBlankLines
       });
     }
     
-    // Format the output
-    output = await formatOutput(nodes, {
-      format: options.format || 'markdown',
-      variables: env.getAllVariables(),
-      useMarkdownFormatter: options.useMarkdownFormatter,
-      normalizeBlankLines: options.normalizeBlankLines
+    // Call captureEnvironment callback if provided
+    if (options.captureEnvironment) {
+      options.captureEnvironment(env);
+    }
+
+    return output;
+  };
+
+  if (mode === 'stream') {
+    const emitter = options.emitter ?? new ExecutionEmitter();
+    const streamExecution = new StreamExecution(emitter, {
+      abort: () => {
+        env.cleanup();
+      }
     });
+    env.enableSDKEvents(emitter);
+
+    void (async () => {
+      try {
+        const output = await runExecution();
+        const structured = buildStructuredResult(env, output, provenanceEnabled);
+        emitter.emit({ type: 'execution:complete', result: structured, timestamp: Date.now() });
+        streamExecution.resolve(structured);
+      } catch (error) {
+        streamExecution.reject(error);
+      }
+    })();
+
+    return streamExecution as unknown as StreamExecutionHandle;
   }
-  
-  // Call captureEnvironment callback if provided
-  if (options.captureEnvironment) {
-    options.captureEnvironment(env);
+
+  const debugTrace: SDKEvent[] = [];
+  let debugEmitter: ExecutionEmitter | undefined;
+  let debugStart = Date.now();
+
+  if (mode === 'debug') {
+    debugEmitter = options.emitter ?? new ExecutionEmitter();
+    const eventTypes: SDKEvent['type'][] = [
+      'effect',
+      'command:start',
+      'command:complete',
+      'stream:chunk',
+      'stream:progress',
+      'execution:complete',
+      'debug:directive:start',
+      'debug:directive:complete',
+      'debug:variable:create',
+      'debug:variable:access',
+      'debug:guard:before',
+      'debug:guard:after',
+      'debug:export:registered',
+      'debug:import:dynamic'
+    ];
+    for (const type of eventTypes) {
+      debugEmitter.on(type, event => debugTrace.push(event));
+    }
+    env.enableSDKEvents(debugEmitter);
   }
-  
-  // Return environment if requested
-  if (options.returnEnvironment) {
-    return {
-      output,
-      environment: env
+
+  const output = await runExecution();
+
+  if (mode === 'structured') {
+    return buildStructuredResult(env, output, provenanceEnabled);
+  }
+
+  if (mode === 'debug') {
+    const structured = buildStructuredResult(env, output, provenanceEnabled);
+    const variables = Object.fromEntries(env.getAllVariables());
+    const durationMs = Date.now() - debugStart;
+    const debugResult = {
+      ...structured,
+      ast: ast as any,
+      variables,
+      trace: debugTrace,
+      directiveTrace: env.getDirectiveTrace(),
+      durationMs
     };
+    return debugResult;
   }
-  
+
+  if (mode !== 'document') {
+    throw new Error(`Interpret mode '${mode}' is not implemented yet.`);
+  }
+
   return output;
 }
 
 // Re-export key types for convenience
 export { Environment } from './env/Environment';
 export type { EvalResult } from './core/interpreter';
+export type { InterpretOptions, InterpretResult } from '@sdk/types';
+
+function buildStructuredResult(env: Environment, output: string) {
+  const provenanceEnabled = env.isProvenanceEnabled();
+  const effects = collectEffects(env.getEffectHandler(), provenanceEnabled);
+  const exports = collectExports(env, provenanceEnabled);
+  return {
+    output,
+    effects,
+    exports,
+    environment: env
+  };
+}
+
+function collectEffects(handler: EffectHandler | undefined, provenanceEnabled: boolean): StructuredEffect[] {
+  if (!handler || typeof handler.getEffects !== 'function') {
+    return [];
+  }
+  return handler.getEffects().map(effect => ({
+    ...effect,
+    security: effect.capability?.security ?? makeSecurityDescriptor(),
+    ...(provenanceEnabled && {
+      provenance: (effect as any).provenance ?? effect.capability?.security ?? makeSecurityDescriptor()
+    })
+  }));
+}
+
+function collectExports(env: Environment, provenanceEnabled: boolean): ExportMap {
+  const manifest = env.getExportManifest();
+  const exports: ExportMap = {};
+  if (!manifest) {
+    return exports;
+  }
+
+  for (const name of manifest.getNames()) {
+    const variableName = name.startsWith('@') ? name.slice(1) : name;
+    const variable = env.getVariable(variableName);
+    if (!variable) continue;
+    const provenance =
+      provenanceEnabled
+        ? getExpressionProvenance(variable.value) ??
+          variable.metadata?.security ??
+          variable.security ??
+          makeSecurityDescriptor()
+        : undefined;
+    exports[name] = {
+      name,
+      value: env.getVariableValue(variableName),
+      metadata: {
+        capability: variable.capability ?? variable.metadata?.capability,
+        security:
+          variable.metadata?.security ??
+          variable.security ??
+          makeSecurityDescriptor(),
+        ...(provenance && { provenance })
+      }
+    };
+  }
+
+  return exports;
+}

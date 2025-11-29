@@ -33,7 +33,9 @@ mlld input.mld
 - `--stdout` - Print to console instead of file
 - `--watch, -w` - Watch for file changes
 - `--verbose, -v` - Show detailed output
-- `--debug` - Enable debug logging
+- `--debug` - Show execution progress to stderr
+- `--debug --json` - Output full debug trace as JSON to stdout
+- `--no-stream` - Disable streaming output
 - `--env <file>` - Load environment variables from specified file
 - `--allow-absolute` - Permit file access outside project root
 
@@ -56,6 +58,15 @@ mlld document.mld --env .env.local
 
 # Allow absolute paths outside project
 mlld script.mld --allow-absolute
+
+# Debug mode: show progress on stderr, output to stdout
+mlld script.mld --debug
+
+# Debug with JSON: full trace as JSON to stdout
+mlld script.mld --debug --json
+
+# Disable streaming (buffer all output)
+mlld script.mld --no-stream
 ```
 
 ## Module Commands

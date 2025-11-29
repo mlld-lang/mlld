@@ -272,18 +272,14 @@ async function runTestFile(file: string): Promise<TestResult> {
     
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();
-    
-    
     let capturedEnv: Environment | null = null;
-    
+
     // Remove console capture entirely to test if that's causing contamination
     let output = '';
     let error: Error | undefined;
-    
-    
-    let interpretEnvironment: any = null;
+
     try {
-      const interpretResult = await interpret(content, {
+      await interpret(content, {
         fileSystem,
         pathService,
         format: 'markdown',
@@ -293,7 +289,6 @@ async function runTestFile(file: string): Promise<TestResult> {
         useMarkdownFormatter: false,
         approveAllImports: true,
         strict: false,
-        returnEnvironment: true,
         normalizeBlankLines: true,
         outputOptions: {
           showProgress: false,
@@ -304,16 +299,13 @@ async function runTestFile(file: string): Promise<TestResult> {
           timeout: undefined
         }
       });
-      
-      // Extract the environment for cleanup
-      interpretEnvironment = typeof interpretResult === 'string' ? null : interpretResult.environment;
     } catch (err) {
       error = err instanceof Error ? err : new Error(String(err));
     } finally {
       // Clean up shadow environment between tests
-      if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
+      if (capturedEnv && 'cleanup' in capturedEnv) {
         try {
-          (interpretEnvironment as any).cleanup();
+          (capturedEnv as any).cleanup();
         } catch (cleanupError) {
           console.error(`Cleanup error for ${file}:`, cleanupError);
         }

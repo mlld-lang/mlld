@@ -50,8 +50,7 @@ const getEsbuildOptions = (format: string) => (options: EsbuildOptions) => {
     '@interpreter': './interpreter',
     '@output': './output',
     '@cli': './cli',
-    '@sdk': './api',
-    '@api': './api',
+    '@sdk': './sdk',
     '@tests': './tests'
   };
   
@@ -84,7 +83,7 @@ export default defineConfig([
   // API build - ESM only with splitting
   {
     entry: {
-      index: 'api/index.ts',
+      index: 'sdk/index.ts',
     },
     format: ['esm'],
     dts: false, // TypeScript definitions disabled due to process global issues
@@ -113,7 +112,6 @@ export default defineConfig([
       '@output/*',
       '@cli/*',
       '@sdk/*',
-      '@api/*',
       '@tests/*'
     ],
     esbuildOptions(options, { format }) {
@@ -123,7 +121,7 @@ export default defineConfig([
   // API build for CommonJS - no splitting
   {
     entry: {
-      index: 'api/index.ts',
+      index: 'sdk/index.ts',
     },
     format: ['cjs'],
     dts: false, // TypeScript definitions disabled due to process global issues
@@ -151,7 +149,6 @@ export default defineConfig([
       '@output/*',
       '@cli/*',
       '@sdk/*',
-      '@api/*',
       '@tests/*'
     ],
     esbuildOptions(options, { format }) {
@@ -189,7 +186,6 @@ export default defineConfig([
       '@output/*',
       '@cli/*',
       '@sdk/*',
-      '@api/*',
       '@tests/*'
     ],
     banner: {

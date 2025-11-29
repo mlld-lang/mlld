@@ -1,8 +1,10 @@
 # Effects & Document Generation Architecture
 
+*Updated: 2025-11-28*
+
 ## Overview
 
-The mlld effects system is responsible for handling output during document execution, providing both real-time streaming for CLI users and complete document generation for API consumers and file output.
+The mlld effects system handles output during document execution, providing real-time streaming for CLI users and complete document generation for API consumers. SDK v2 adds structured effect collection with security metadata for programmatic consumption.
 
 ## Core Concepts
 
@@ -188,21 +190,46 @@ Support streaming control via:
 - Test LLM workflows with progressive output
 - Test file output workflows
 
+## SDK v2 Effect Collection
+
+When `interpret()` uses `mode: 'structured'`, `'stream'`, or `'debug'`, effects are logged with metadata:
+
+```typescript
+interface StructuredEffect extends Effect {
+  capability?: CapabilityContext;  // What the effect can do
+  security?: SecurityDescriptor;   // Labels, taint level, sources
+  provenance?: SecurityDescriptor; // Origin chain (when provenance: true)
+}
+```
+
+Enable via `recordEffects: true` in InterpretOptions (automatically set for non-document modes).
+
+### Effect Events
+
+In stream/debug modes, effects emit SDK events:
+
+```typescript
+handle.on('effect', (event) => {
+  console.log(event.effect.type, event.effect.content);
+  console.log('Security:', event.effect.security?.labels);
+});
+```
+
+Security metadata is always present. Provenance is included when `provenance: true` or in debug mode.
+
 ## Related Files
 
-- `interpreter/env/EffectHandler.ts` - Core effect handling
-- `interpreter/core/interpreter.ts` - Effect emission  
-- `interpreter/index.ts` - Document assembly
-- `cli/index.ts` - CLI output handling
-- Tests in `tests/cases/valid/` - Validation examples
+- `interpreter/env/EffectHandler.ts` - Core effect handling, `recordEffects` flag
+- `sdk/types.ts` - StructuredEffect, SDK event types
+- `sdk/execution-emitter.ts` - Event emission bridge
+- `interpreter/index.ts` - Mode handling, structured result building
+- `cli/execution/FileProcessor.ts` - CLI flag → mode mapping
 
-## Migration Notes
+## SDK v2 Changes
 
-This change improves UX without breaking existing functionality:
-
-- **API users**: No change, continue using `getDocument()`
-- **CLI users**: Better real-time experience  
-- **File output**: No change, uses document buffer
-- **Existing tests**: Should continue to pass
-
-The architecture supports the core mlld use case: progressive LLM scripting where users need immediate feedback as their workflows execute.
+- `DefaultEffectHandler` accepts `recordEffects` option to log effects
+- `getEffects()` returns collected effects with security metadata
+- Effects emit SDK events when emitter attached
+- Structured mode returns `{ output, effects, exports, environment }`
+- Security metadata (labels, taint, sources) always included
+- Provenance chain included when requested

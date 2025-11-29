@@ -50,5 +50,16 @@ export async function evaluateExport(
 
   manifest.add(entries);
 
+  const emitter = env as any;
+  if (typeof emitter.emitSDKEvent === 'function') {
+    for (const entry of entries) {
+      emitter.emitSDKEvent({
+        type: 'debug:export:registered',
+        name: entry.name,
+        timestamp: Date.now()
+      });
+    }
+  }
+
   return { value: undefined, env };
 }

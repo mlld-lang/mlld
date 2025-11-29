@@ -339,6 +339,20 @@ about: Reusable prompts
 /export { @systemPrompt, @userPrompt }
 ```
 
+## Dynamic Modules (SDK)
+
+Inject module sources at runtime without writing files when calling the SDK:
+
+```typescript
+const output = await processMlld(template, {
+  dynamicModules: {
+    '@user/context': `/export\n@userId = "123"\n@userName = "Ada"`
+  }
+});
+```
+
+Keys must match exactly (no extension inference), and dynamic content is treated as untrusted by default. CLI users should keep using filesystem modules.
+
 ## Troubleshooting
 
 **Import not found**:

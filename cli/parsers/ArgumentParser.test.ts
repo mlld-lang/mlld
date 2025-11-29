@@ -9,6 +9,21 @@ describe('ArgumentParser streaming flag', () => {
 
     expect(options.noStream).toBe(true);
   });
+
+  it('parses --json', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--json']);
+
+    expect(options.json).toBe(true);
+  });
+
+  it('parses --show-json', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--show-json']);
+
+    expect(options.json).toBe(true);
+    expect(options.showJson).toBe(true);
+  });
 });
 
 describe('OptionProcessor streaming mapping', () => {

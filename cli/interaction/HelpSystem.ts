@@ -450,7 +450,9 @@ Options:
   --pretty                Format the output with Prettier
     --home-path <path>      Custom home path for ~/ substitution
   -v, --verbose           Enable verbose output (some additional info)
-  -d, --debug             Enable debug output (full verbose logging)
+  -d, --debug             Stream execution with progress logs to stderr
+  --json                  With --debug, emit DebugResult JSON to stdout (no streaming)
+  --no-stream             Disable streaming (document mode only)
   -w, --watch             Watch for changes and reprocess
   -h, --help              Display this help message
   -V, --version           Display version information

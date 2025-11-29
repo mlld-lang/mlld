@@ -363,6 +363,9 @@ export class ImportDirectiveEvaluator {
     for (const candidate of candidates) {
       try {
         const resolverContent = await env.resolveModule(candidate, 'import');
+        if (resolverContent.resolverName) {
+          resolution.resolverName = resolverContent.resolverName;
+        }
 
         const treatAsModule = resolverContent.contentType === 'module'
           || matchesModuleExtension(candidate);
@@ -373,6 +376,20 @@ export class ImportDirectiveEvaluator {
           );
           continue;
         }
+
+        const importDescriptor = deriveImportTaint({
+          importType: resolution.importType ?? 'module',
+          resolverName: resolverContent.resolverName,
+          source: resolverContent.ctx?.source ?? resolution.resolvedPath,
+          taintLevel: resolverContent.ctx?.taintLevel
+        });
+        env.recordSecurityDescriptor(
+          makeSecurityDescriptor({
+            taintLevel: importDescriptor.level,
+            labels: importDescriptor.labels,
+            sources: importDescriptor.sources
+          })
+        );
 
         // Validate version against lock file for registry modules
         await this.validateLockFileVersion(candidate, resolverContent, env);
@@ -458,6 +475,35 @@ export class ImportDirectiveEvaluator {
 
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
+
+      const dynamicSource = resolverContent.ctx?.source;
+      if (dynamicSource && typeof dynamicSource === 'string' && dynamicSource.startsWith('dynamic://')) {
+        const childVariables = processingResult.childEnvironment.getAllVariables?.();
+        const parentVariables = env.getAllVariables?.();
+        const exportedNames =
+          env.getExportManifest()?.getNames?.() ??
+          (Array.isArray(resolverContent.metadata?.exports)
+            ? (resolverContent.metadata.exports as string[])
+            : undefined) ??
+          processingResult.childEnvironment.getExportManifest?.()?.getNames?.() ??
+          (childVariables ? Array.from(childVariables.keys()) : undefined) ??
+          (parentVariables ? Array.from(parentVariables.keys()) : undefined) ??
+          Object.keys(processingResult.moduleObject ?? {});
+        const provenance =
+          env.isProvenanceEnabled?.() === true
+            ? resolverContent.metadata?.provenance ??
+              this.buildDynamicImportProvenance(dynamicSource ?? ref, env)
+            : undefined;
+        env.emitSDKEvent({
+          type: 'debug:import:dynamic',
+          path: ref,
+          source: dynamicSource,
+          tainted: true,
+          variables: exportedNames,
+          timestamp: Date.now(),
+          ...(provenance && { provenance })
+        });
+      }
 
       return { value: undefined, env };
     } finally {
@@ -681,6 +727,21 @@ export class ImportDirectiveEvaluator {
       // Don't fail for legacy entries, but could update the lock entry with the resolved version
       // This provides a migration path for existing lock files
     }
+  }
+
+  private buildDynamicImportProvenance(source: string | undefined, env: Environment) {
+    const snapshot = env.getSecuritySnapshot?.();
+    const normalizedSource = source
+      ? source.startsWith('dynamic://')
+        ? source
+        : `dynamic://${source}`
+      : 'dynamic://';
+    return makeSecurityDescriptor({
+      labels: ['untrusted' as DataLabel],
+      taintLevel: snapshot?.taintLevel ?? 'resolver',
+      sources: snapshot?.sources && snapshot.sources.length > 0 ? snapshot.sources : [normalizedSource],
+      policyContext: snapshot?.policy
+    });
   }
 
   /**

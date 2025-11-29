@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { glob } from 'glob';
-import { interpret, type InterpretResult } from '@interpreter/index';
+import { interpret } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
@@ -172,17 +172,23 @@ class McpCommand {
       invocationDirectory: process.cwd(),
     });
 
-    const result = (await interpret(content, {
+    let environment: Environment | null = null;
+
+    await interpret(content, {
       fileSystem,
       pathService,
       pathContext,
       filePath: configPath,
       format: 'markdown',
-      returnEnvironment: true,
       normalizeBlankLines: true,
-    })) as InterpretResult;
+      captureEnvironment: env => {
+        environment = env;
+      }
+    });
 
-    const environment = result.environment;
+    if (!environment) {
+      throw new Error(`Failed to capture environment for config module: ${configPath}`);
+    }
     const configVariable = environment.getVariable('config');
 
     if (!configVariable) {
@@ -255,17 +261,24 @@ async function loadModule(
     invocationDirectory: process.cwd(),
   });
 
-  const result = (await interpret(content, {
+  let environment: Environment | null = null;
+
+  await interpret(content, {
     fileSystem,
     pathService,
     pathContext,
     filePath: modulePath,
     format: 'markdown',
-    returnEnvironment: true,
     normalizeBlankLines: true,
-  })) as InterpretResult;
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
 
-  const environment = result.environment;
+  if (!environment) {
+    throw new Error(`Failed to capture environment for module: ${modulePath}`);
+  }
+
   const exportedFunctions = extractExportedFunctions(environment, modulePath, content);
 
   return {

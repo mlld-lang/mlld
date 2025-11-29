@@ -365,6 +365,7 @@ hr {
   text-align: left;
   margin-bottom: 20px;
   font-size: 18px;
+  padding: 0 1rem;
 }
 .terminal-content {
   font-family: 'Cousine', monospace;

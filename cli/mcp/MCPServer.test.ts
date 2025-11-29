@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MCPServer } from './MCPServer';
 import type { Environment } from '@interpreter/env/Environment';
-import { interpret, type InterpretResult } from '@interpreter/index';
+import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { ExecutableVariable } from '@core/types/variable';
@@ -25,17 +25,23 @@ async function createEnvironmentWithExports(source: string, names: string[]): Pr
     invocationDirectory: '/',
   } as const;
 
-  const result = (await interpret(source, {
+  let environment: Environment | null = null;
+
+  await interpret(source, {
     fileSystem,
     pathService,
     pathContext,
     filePath,
     format: 'markdown',
-    returnEnvironment: true,
     normalizeBlankLines: true,
-  })) as InterpretResult;
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
 
-  const environment = result.environment;
+  if (!environment) {
+    throw new Error('Failed to capture environment for MCP server test');
+  }
   const exports = new Map<string, ExecutableVariable>();
 
   for (const name of names) {

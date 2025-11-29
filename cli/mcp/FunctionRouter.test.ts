@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FunctionRouter } from './FunctionRouter';
 import type { Environment } from '@interpreter/env/Environment';
-import { interpret, type InterpretResult } from '@interpreter/index';
+import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
@@ -20,17 +20,23 @@ async function createEnvironment(source: string): Promise<Environment> {
     invocationDirectory: '/',
   } as const;
 
-  const result = (await interpret(source, {
+  let environment: Environment | null = null;
+
+  await interpret(source, {
     fileSystem,
     pathService,
     pathContext,
     filePath,
     format: 'markdown',
-    returnEnvironment: true,
     normalizeBlankLines: true,
-  })) as InterpretResult;
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
 
-  const environment = result.environment;
+  if (!environment) {
+    throw new Error('Failed to capture environment for MCP function routing');
+  }
   const moduleEnv = environment.captureModuleEnvironment();
 
   for (const variable of environment.getAllVariables().values()) {

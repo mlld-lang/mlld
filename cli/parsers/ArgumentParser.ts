@@ -188,7 +188,9 @@ export class ArgumentParser {
         case '--no-stream':
           options.noStream = true;
           break;
+        case '--json':
         case '--show-json':
+          options.json = true;
           options.showJson = true;
           break;
         case '--append-json': {

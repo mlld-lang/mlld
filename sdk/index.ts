@@ -21,6 +21,8 @@ export type { FormattedErrorResult, ErrorFormatOptions };
 // Export utilities
 export { DependencyDetector } from '@core/utils/dependency-detector';
 export { PathContextBuilder } from '@core/services/PathContextService';
+export { ExecutionEmitter } from './execution-emitter';
+export { StreamExecution } from './stream-execution';
 
 // Export types
 export type { Location, Position } from '@core/types/index';
@@ -46,6 +48,9 @@ export interface ProcessOptions {
   normalizeBlankLines?: boolean;
   /** Use prettier for markdown formatting (default: true) */
   useMarkdownFormatter?: boolean;
+
+  /** Dynamic (non-filesystem) modules for runtime injection */
+  dynamicModules?: Record<string, string>;
 }
 
 /**
@@ -73,10 +78,11 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     fileSystem,
     pathService,
     normalizeBlankLines: options?.normalizeBlankLines,
-    useMarkdownFormatter: options?.useMarkdownFormatter
+    useMarkdownFormatter: options?.useMarkdownFormatter,
+    dynamicModules: options?.dynamicModules
   });
 
-  // The interpreter returns a string when returnEnvironment is false (default)
+  // Interpret returns string output in document mode; other modes carry output on the object
   return typeof result === 'string' ? result : result.output;
 }
 

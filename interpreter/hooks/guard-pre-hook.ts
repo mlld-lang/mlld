@@ -28,10 +28,11 @@ import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
-import { makeSecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
 import { appendFileSync } from 'fs';
+import { getExpressionProvenance } from '../utils/expression-provenance';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -139,6 +140,19 @@ function sanitizePreviewForLog(preview?: string | null): string | null {
     return preview;
   }
   return `${preview.slice(0, GUARD_DEBUG_PREVIEW_LIMIT)}…`;
+}
+
+function guardSnapshotDescriptor(env: Environment): SecurityDescriptor | undefined {
+  const snapshot = env.getSecuritySnapshot?.();
+  if (!snapshot) {
+    return undefined;
+  }
+  return makeSecurityDescriptor({
+    labels: snapshot.labels,
+    taintLevel: snapshot.taintLevel,
+    sources: snapshot.sources,
+    policyContext: snapshot.policy
+  });
 }
 
 function logGuardEvaluationStart(options: {
@@ -572,15 +586,37 @@ export const guardPreHook: PreHook = async (
       reasons,
       primaryMetadata
     });
-    const aggregateMetadata = buildAggregateMetadata({
-      guardResults: guardTrace,
-      reasons,
-      hints,
-      transformedInputs,
-      primaryMetadata,
-      guardContext: aggregateContext
-    });
+  const aggregateMetadata = buildAggregateMetadata({
+    guardResults: guardTrace,
+    reasons,
+    hints,
+    transformedInputs,
+    primaryMetadata,
+    guardContext: aggregateContext
+  });
     appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+    const guardName =
+      guardTrace[0]?.guard?.name ??
+      guardTrace[0]?.guard?.filterKind ??
+      '';
+    const contextLabels = operation.labels ?? [];
+    const provenance =
+      env.isProvenanceEnabled?.() === true
+        ? getExpressionProvenance(transformedInputs[0] ?? variableInputs[0]) ??
+          guardSnapshotDescriptor(env) ??
+          makeSecurityDescriptor()
+        : undefined;
+    env.emitSDKEvent({
+      type: 'debug:guard:before',
+      guard: guardName,
+      labels: contextLabels,
+      decision: currentDecision === 'retry' ? 'retry' : currentDecision,
+      trace: guardTrace,
+      hints,
+      reasons,
+      timestamp: Date.now(),
+      ...(provenance && { provenance })
+    });
 
     if (process.env.MLLD_DEBUG_GUARDS === '1') {
       try {

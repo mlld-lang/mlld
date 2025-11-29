@@ -18,9 +18,8 @@ describe('Triple-colon template interpolation', () => {
     const result = await interpret(source, {
       fileSystem,
       pathService,
-      basePath: '/',
-      returnEnvironment: false
-    } as any);
+      basePath: '/'
+    });
 
     const output = typeof result === 'string' ? result : result.output;
     expect(output).toContain('<@1417671839676891206>');
@@ -32,9 +31,8 @@ describe('Triple-colon template interpolation', () => {
     const result = await interpret(source, {
       fileSystem,
       pathService,
-      basePath: '/',
-      returnEnvironment: false
-    } as any);
+      basePath: '/'
+    });
 
     const output = typeof result === 'string' ? result : result.output;
     expect(output).toContain('<@1417671839676891206>');
@@ -49,9 +47,8 @@ describe('Triple-colon template interpolation', () => {
     const result = await interpret(source, {
       fileSystem,
       pathService,
-      basePath: '/',
-      returnEnvironment: false
-    } as any);
+      basePath: '/'
+    });
 
     const output = typeof result === 'string' ? result : result.output;
     expect(output).toContain('<@1417671839676891206>');

@@ -25,6 +25,7 @@ export interface EffectHandler {
   handleEffect(effect: Effect): void;
   getDocument?(): string;  // Optional method to get accumulated document
   isStreamingEnabled?(): boolean;  // Optional method to check if streaming is active
+  getEffects?(): Effect[]; // Optional method to retrieve effect log
 }
 
 /**
@@ -34,15 +35,21 @@ export interface EffectHandler {
 export class DefaultEffectHandler implements EffectHandler {
   private documentBuffer: string[] = [];
   private streamingEnabled: boolean;
+  private recordEffects: boolean;
+  private effectLog: Effect[] = [];
 
-  constructor(options: { streaming?: boolean } = {}) {
+  constructor(options: { streaming?: boolean; recordEffects?: boolean } = {}) {
     // Streaming is enabled by default, can be disabled via env var or option
     this.streamingEnabled = options.streaming !== false && 
                            process.env.MLLD_STREAMING !== 'false' &&
                            process.env.MLLD_NO_STREAMING !== 'true';
+    this.recordEffects = options.recordEffects === true;
   }
 
   handleEffect(effect: Effect): void {
+    if (this.recordEffects) {
+      this.effectLog.push({ ...effect });
+    }
     switch (effect.type) {
       case 'doc':
         // Write to stdout if streaming (for real-time display)
@@ -98,6 +105,10 @@ export class DefaultEffectHandler implements EffectHandler {
   isStreamingEnabled(): boolean {
     return this.streamingEnabled;
   }
+
+  getEffects(): Effect[] {
+    return [...this.effectLog];
+  }
 }
 
 /**
@@ -150,6 +161,10 @@ export class TestEffectHandler implements EffectHandler {
   getAll(): Effect[] {
     return this.collected;
   }
+
+  getEffects(): Effect[] {
+    return [...this.collected];
+  }
   
   clear(): void {
     this.collected = [];
@@ -165,5 +180,9 @@ export class TestEffectHandler implements EffectHandler {
 export class NullEffectHandler implements EffectHandler {
   handleEffect(_effect: Effect): void {
     // Intentionally do nothing
+  }
+
+  getEffects(): Effect[] {
+    return [];
   }
 }

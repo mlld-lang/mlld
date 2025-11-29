@@ -1,15 +1,15 @@
 ---
-updated: 2025-11-23
-tags: #arch, #streaming
+updated: 2025-11-28
+tags: #arch, #streaming, #sdk
 related-docs: docs/dev/PIPELINE.md, docs/dev/EFFECTS.md
-related-code: interpreter/eval/pipeline/stream-bus.ts, interpreter/eval/pipeline/stream-sinks/*.ts, interpreter/eval/pipeline/executor.ts, interpreter/env/executors/*.ts
+related-code: interpreter/eval/pipeline/stream-bus.ts, sdk/execution-emitter.ts, sdk/stream-execution.ts, interpreter/env/executors/*.ts
 ---
 
 # STREAMING
 
 ## tldr
 
-Streaming emits chunks during execution instead of buffering. Executors spawn async processes, emit CHUNK events to StreamBus, sinks render progress to stderr. Opt-in via `stream` keyword (desugars to `with { stream: true }`). After-guards incompatible; before-guards work normally.
+Streaming emits chunks during execution instead of buffering. Executors spawn async processes, emit CHUNK events to StreamBus, which bridges to SDK events via ExecutionEmitter. Scripts opt-in via `stream` keyword; SDK consumers choose consumption mode (`document`, `structured`, `stream`, `debug`). After-guards incompatible with streaming; before-guards work normally.
 
 ## Principles
 
@@ -60,6 +60,47 @@ Streaming emits chunks during execution instead of buffering. Executors spawn as
 - Fixtures: `tests/cases/feat/streaming/` validate syntax and final output (not timing)
 - Helper: `stream-recorder.ts` captures events with timestamps for timing assertions
 
+## SDK Execution Modes
+
+SDK v2 introduces execution modes that control how consumers receive output:
+
+| Mode | Returns | Real-time Events | Use Case |
+|------|---------|------------------|----------|
+| `document` | `string` | No | Default CLI behavior |
+| `structured` | `{ output, effects, exports, environment }` | No | Extract data programmatically |
+| `stream` | `StreamExecution` handle | Yes | Real-time UIs, progress |
+| `debug` | `DebugResult` with trace | Yes | Development, debugging |
+
+**Key principle**: Script controls execution (`stream` keyword), SDK controls consumption (mode selection).
+
+### Stream Mode Handle
+
+`StreamExecution` handle returned by `interpret(mode:'stream')`:
+
+- `.on(type, handler)` / `.off(type, handler)` - Event subscription
+- `.once(type, handler)` - One-time handler
+- `.done()` - Promise that resolves on completion
+- `.result()` - Promise that resolves to StructuredResult
+- `.isComplete()` - Check if execution finished
+- `.abort()` - Cancel execution (triggers cleanup)
+
+### ExecutionEmitter Bridge
+
+`ExecutionEmitter` bridges StreamBus events to SDK events:
+- `CHUNK` → `stream:chunk`
+- `PIPELINE_*` / `STAGE_*` → `stream:progress`, `command:start`, `command:complete`
+
+Environment owns the emitter and propagates it to child environments. Effects emit SDK events with security metadata when an emitter is attached.
+
+## CLI Flags
+
+- `mlld script.mld` → mode `document`, streams to stdout
+- `mlld script.mld --debug` → mode `stream`, progress to stderr
+- `mlld script.mld --debug --json` → mode `debug`, JSON to stdout
+- `mlld script.mld --no-stream` → mode `document`, streaming disabled
+
+Single stdout writer enforced: document text OR JSON, never both.
+
 ## Gotchas
 
 - After-guards incompatible with streaming (validation needs complete output)
@@ -67,3 +108,4 @@ Streaming emits chunks during execution instead of buffering. Executors spawn as
 - JavaScriptExecutor in-process (synchronous, can't stream like spawn-based executors)
 - Parallel groups return first result only without the fix in `parallel-exec.ts`
 - StreamBus is singleton (global state, test cleanup required)
+- Stream mode returns handle immediately; execution runs async in background
