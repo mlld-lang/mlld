@@ -45,6 +45,7 @@ export interface CLIOptions {
   stdout?: boolean;
   verbose?: boolean;
   debug?: boolean;
+  json?: boolean;
   strict?: boolean;
   homePath?: string;
   watch?: boolean;

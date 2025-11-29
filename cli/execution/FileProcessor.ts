@@ -9,6 +9,8 @@ import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
 import type { Environment } from '@interpreter/env/Environment';
+import { ExecutionEmitter } from '@sdk/execution-emitter';
+import type { StreamExecution, SDKEvent } from '@sdk/types';
 import type { CLIOptions } from '../index';
 import type { UserInteraction } from '../interaction/UserInteraction';
 import type { OptionProcessor } from '../parsers/OptionProcessor';
@@ -21,6 +23,46 @@ export interface ProcessingEnvironment {
   configLoader: ConfigLoader;
   urlConfig?: ResolvedURLConfig;
   pathContext?: PathContext;
+}
+
+export type InterpretModeConfig = {
+  mode: 'document' | 'stream' | 'debug';
+  streaming?: { enabled: boolean };
+  jsonOutput: boolean;
+  emitter?: ExecutionEmitter;
+};
+
+export function resolveInterpretMode(cliOptions: CLIOptions): InterpretModeConfig {
+  const jsonOutput = Boolean(cliOptions.json || cliOptions.showJson);
+  const debugFlag = Boolean(cliOptions.debug);
+
+  if (debugFlag && jsonOutput) {
+    return {
+      mode: 'debug',
+      streaming: { enabled: false },
+      jsonOutput,
+      emitter: new ExecutionEmitter()
+    };
+  }
+
+  if (debugFlag) {
+    return {
+      mode: 'stream',
+      streaming: { enabled: true },
+      jsonOutput: false,
+      emitter: new ExecutionEmitter()
+    };
+  }
+
+  if (cliOptions.noStream) {
+    return {
+      mode: 'document',
+      streaming: { enabled: false },
+      jsonOutput: false
+    };
+  }
+
+  return { mode: 'document', jsonOutput: false };
 }
 
 export class FileProcessor {
@@ -72,35 +114,55 @@ export class FileProcessor {
     }
     
     let interpretEnvironment: Environment | null = null; // Define outside try block for cleanup access
+    let detachLogging: (() => void) | undefined;
     
     try {
       // Read stdin if available
       const stdinContent = await this.readStdinIfAvailable();
 
-      // Execute interpretation
-      const { result, hasExplicitOutput, interpretEnvironment: env } = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL);
-      interpretEnvironment = env;
+      const interpretation = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL);
+      interpretEnvironment = interpretation.interpretEnvironment ?? null;
+      detachLogging = interpretation.detachLogging;
 
-      // Handle output
-      await this.handleOutput(result, cliOptions, environment, hasExplicitOutput, interpretEnvironment);
-      
-      // Clean up environment to prevent event loop from staying alive
-      if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
-        cliLogger.debug('Calling environment cleanup');
-        (interpretEnvironment as any).cleanup();
+      if (interpretation.kind === 'stream') {
+        await interpretation.handle.done();
+        interpretation.detachLogging?.();
+        if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+          (interpretation.interpretEnvironment as any).cleanup();
+        }
+        process.exit(0);
       }
-      
-      // For stdout mode, ensure clean exit after output
+
+      if (interpretation.kind === 'debug') {
+        const serialized = this.serializeDebugResult(interpretation.debugResult);
+        console.log(serialized);
+        interpretation.detachLogging?.();
+        if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+          (interpretation.interpretEnvironment as any).cleanup();
+        }
+        process.exit(0);
+      }
+
+      await this.handleOutput(
+        interpretation.result,
+        cliOptions,
+        environment,
+        interpretation.hasExplicitOutput,
+        interpretation.interpretEnvironment
+      );
+
+      interpretation.detachLogging?.();
+      if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+        cliLogger.debug('Calling environment cleanup');
+        (interpretation.interpretEnvironment as any).cleanup();
+      }
+
       if (cliOptions.stdout) {
-        // Give a small delay to ensure all output is flushed
         await new Promise(resolve => setTimeout(resolve, 10));
       }
-      
-      // Give a small delay for cleanup to complete, then force exit
+
       cliLogger.debug('Cleanup complete, forcing process exit');
       await new Promise(resolve => setTimeout(resolve, 10));
-      
-      // Force exit to prevent hanging on active event loop handles
       process.exit(0);
     } catch (error: any) {
       // Clean up environment even on error
@@ -109,7 +171,8 @@ export class FileProcessor {
         (interpretEnvironment as any).cleanup();
       }
       
-      // Let error propagate to ErrorHandler instead of exiting early
+      detachLogging?.();
+
       throw error;
     }
   }
@@ -168,7 +231,11 @@ export class FileProcessor {
     environment: ProcessingEnvironment,
     stdinContent?: string,
     isURL?: boolean
-  ): Promise<{ result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null }> {
+  ): Promise<
+    | { kind: 'document'; result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+    | { kind: 'stream'; handle: StreamExecution; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+    | { kind: 'debug'; debugResult: any; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+  > {
     // Get content either from URL or file
     let content: string;
     let effectivePath: string;
@@ -203,6 +270,8 @@ export class FileProcessor {
     
     // Call the interpreter with PathContext
     let resultEnvironment: Environment | null = null;
+    const modeConfig = resolveInterpretMode(cliOptions);
+    const detachLogging = modeConfig.emitter ? attachEmitterLogging(modeConfig.emitter) : undefined;
 
     const interpretResult = await interpret(content, {
       pathContext,
@@ -230,16 +299,40 @@ export class FileProcessor {
       allowAbsolutePaths: cliOptions.allowAbsolute,
       captureEnvironment: env => {
         resultEnvironment = env;
-      }
+      },
+      mode: modeConfig.mode,
+      streaming: modeConfig.streaming ?? (cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined),
+      emitter: modeConfig.emitter
     });
     
-    // Extract result and environment
-    const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;
-    
-    // Check if @output was used in the document
+    if (modeConfig.mode === 'stream') {
+      return {
+        kind: 'stream',
+        handle: interpretResult as StreamExecution,
+        interpretEnvironment: resultEnvironment,
+        detachLogging
+      };
+    }
+
+    if (modeConfig.mode === 'debug') {
+      return {
+        kind: 'debug',
+        debugResult: interpretResult,
+        interpretEnvironment: resultEnvironment,
+        detachLogging
+      };
+    }
+
+    const result = typeof interpretResult === 'string' ? interpretResult : (interpretResult as any).output;
     const hasExplicitOutput = resultEnvironment && (resultEnvironment as any).hasExplicitOutput;
-    
-    return { result, hasExplicitOutput, interpretEnvironment: resultEnvironment };
+
+    return {
+      kind: 'document',
+      result,
+      hasExplicitOutput,
+      interpretEnvironment: resultEnvironment,
+      detachLogging
+    };
   }
 
   private async handleOutput(
@@ -375,4 +468,53 @@ export class FileProcessor {
       throw new Error(`Input file does not exist: ${inputPath}`);
     }
   }
+
+  private serializeDebugResult(result: any): string {
+    const { environment, ...rest } = result ?? {};
+    return JSON.stringify(
+      rest,
+      (_key, value) => {
+        if (typeof value === 'function') {
+          return undefined;
+        }
+        if (value instanceof Map) {
+          return Object.fromEntries(value);
+        }
+        return value;
+      },
+      2
+    );
+  }
+}
+
+function attachEmitterLogging(emitter: ExecutionEmitter): () => void {
+  const listeners: Array<[SDKEvent['type'], (event: SDKEvent) => void]> = [];
+  const log = (message: string) => {
+    console.error(message);
+  };
+
+  const register = (type: SDKEvent['type'], handler: (event: SDKEvent) => void) => {
+    listeners.push([type, handler]);
+    emitter.on(type, handler);
+  };
+
+  register('command:start', event => {
+    log(
+      `[command:start] stage=${(event as any).stageIndex ?? ''} parallel=${(event as any).parallelIndex ?? ''} pipeline=${(event as any).pipelineId ?? ''}`
+    );
+  });
+  register('command:complete', event => {
+    log(
+      `[command:complete] stage=${(event as any).stageIndex ?? ''} parallel=${(event as any).parallelIndex ?? ''} pipeline=${(event as any).pipelineId ?? ''} duration=${(event as any).durationMs ?? ''}`
+    );
+  });
+  register('execution:complete', () => {
+    log('[execution:complete]');
+  });
+
+  return () => {
+    for (const [type, handler] of listeners) {
+      emitter.off(type, handler);
+    }
+  };
 }
