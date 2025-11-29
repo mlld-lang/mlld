@@ -37,6 +37,7 @@ import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import { appendFileSync } from 'fs';
+import { getExpressionProvenance } from '../utils/expression-provenance';
 
 const DEFAULT_GUARD_MAX = 3;
 const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
@@ -61,6 +62,19 @@ const GUARD_HELPER_SOURCE: VariableSource = {
   hasInterpolation: false,
   isMultiLine: false
 };
+
+function guardSnapshotDescriptor(env: Environment): SecurityDescriptor | undefined {
+  const snapshot = env.getSecuritySnapshot?.();
+  if (!snapshot) {
+    return undefined;
+  }
+  return makeSecurityDescriptor({
+    labels: snapshot.labels,
+    taintLevel: snapshot.taintLevel,
+    sources: snapshot.sources,
+    policyContext: snapshot.policy
+  });
+}
 
 type GuardOverrideValue = false | { only?: unknown; except?: unknown } | undefined;
 
@@ -411,12 +425,22 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     guardTrace[0]?.guard?.filterKind ??
     '';
   const contextLabels = operation.labels ?? [];
+  const provenance =
+    env.isProvenanceEnabled?.() === true
+      ? getExpressionProvenance(activeOutputs[0] ?? outputVariables[0]) ??
+        guardSnapshotDescriptor(env) ??
+        makeSecurityDescriptor()
+      : undefined;
   env.emitSDKEvent({
     type: 'debug:guard:after',
     guard: guardName,
     labels: contextLabels,
     decision: currentDecision === 'retry' ? 'retry' : currentDecision,
-    timestamp: Date.now()
+    trace: guardTrace,
+    hints,
+    reasons,
+    timestamp: Date.now(),
+    ...(provenance && { provenance })
   });
 
     if (currentDecision === 'deny') {

@@ -459,6 +459,42 @@ export class ImportDirectiveEvaluator {
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
 
+      if (resolverContent.metadata?.sourceType === 'dynamic') {
+        const childVariables = processingResult.childEnvironment.getAllVariables?.();
+        const parentVariables = env.getAllVariables?.();
+        const exportedNames =
+          env.getExportManifest()?.getNames?.() ??
+          (Array.isArray(resolverContent.metadata?.exports)
+            ? (resolverContent.metadata.exports as string[])
+            : undefined) ??
+          processingResult.childEnvironment.getExportManifest?.()?.getNames?.() ??
+          (childVariables ? Array.from(childVariables.keys()) : undefined) ??
+          (parentVariables ? Array.from(parentVariables.keys()) : undefined) ??
+          Object.keys(processingResult.moduleObject ?? {});
+        const provenance =
+          env.isProvenanceEnabled?.() === true
+            ? resolverContent.metadata?.provenance ??
+              this.buildDynamicImportProvenance(
+                typeof resolverContent.metadata?.source === 'string'
+                  ? resolverContent.metadata.source
+                  : ref,
+                env
+              )
+            : undefined;
+        env.emitSDKEvent({
+          type: 'debug:import:dynamic',
+          path: ref,
+          source:
+            typeof resolverContent.metadata?.source === 'string'
+              ? resolverContent.metadata.source
+              : `dynamic://${ref}`,
+          tainted: true,
+          variables: exportedNames,
+          timestamp: Date.now(),
+          ...(provenance && { provenance })
+        });
+      }
+
       return { value: undefined, env };
     } finally {
       // Import tracking handled by ModuleContentProcessor.processResolverContent
@@ -681,6 +717,21 @@ export class ImportDirectiveEvaluator {
       // Don't fail for legacy entries, but could update the lock entry with the resolved version
       // This provides a migration path for existing lock files
     }
+  }
+
+  private buildDynamicImportProvenance(source: string | undefined, env: Environment) {
+    const snapshot = env.getSecuritySnapshot?.();
+    const normalizedSource = source
+      ? source.startsWith('dynamic://')
+        ? source
+        : `dynamic://${source}`
+      : 'dynamic://';
+    return makeSecurityDescriptor({
+      labels: ['untrusted' as DataLabel],
+      taintLevel: snapshot?.taintLevel ?? 'resolver',
+      sources: snapshot?.sources && snapshot.sources.length > 0 ? snapshot.sources : [normalizedSource],
+      policyContext: snapshot?.policy
+    });
   }
 
   /**

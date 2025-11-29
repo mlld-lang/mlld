@@ -151,7 +151,7 @@ export async function interpret(
         : !streamingDisabled;
   const streamingOptions = { ...(options.streaming ?? {}), enabled: baseStreamingEnabled };
   const recordEffects = options.recordEffects ?? (mode !== 'document');
-  const provenanceEnabled = options.provenance ?? mode === 'debug';
+  const provenanceEnabled = mode === 'debug' ? true : options.provenance === true;
   
   const ast = parseResult.ast;
   
@@ -194,6 +194,7 @@ export async function interpret(
     undefined,
     effectHandler
   );
+  env.setProvenanceEnabled(provenanceEnabled);
 
   if (options.emitter) {
     env.enableSDKEvents(options.emitter);
@@ -344,7 +345,7 @@ export async function interpret(
     void (async () => {
       try {
         const output = await runExecution();
-        const structured = buildStructuredResult(env, output);
+        const structured = buildStructuredResult(env, output, provenanceEnabled);
         emitter.emit({ type: 'execution:complete', result: structured, timestamp: Date.now() });
         streamExecution.resolve(structured);
       } catch (error) {
@@ -374,7 +375,8 @@ export async function interpret(
       'debug:variable:access',
       'debug:guard:before',
       'debug:guard:after',
-      'debug:export:registered'
+      'debug:export:registered',
+      'debug:import:dynamic'
     ];
     for (const type of eventTypes) {
       debugEmitter.on(type, event => debugTrace.push(event));
@@ -385,11 +387,11 @@ export async function interpret(
   const output = await runExecution();
 
   if (mode === 'structured') {
-    return buildStructuredResult(env, output);
+    return buildStructuredResult(env, output, provenanceEnabled);
   }
 
   if (mode === 'debug') {
-    const structured = buildStructuredResult(env, output);
+    const structured = buildStructuredResult(env, output, provenanceEnabled);
     const variables = Object.fromEntries(env.getAllVariables());
     const durationMs = Date.now() - debugStart;
     const debugResult = {
@@ -416,8 +418,9 @@ export type { EvalResult } from './core/interpreter';
 export type { InterpretOptions, InterpretResult } from '@sdk/types';
 
 function buildStructuredResult(env: Environment, output: string) {
-  const effects = collectEffects(env.getEffectHandler());
-  const exports = collectExports(env);
+  const provenanceEnabled = env.isProvenanceEnabled();
+  const effects = collectEffects(env.getEffectHandler(), provenanceEnabled);
+  const exports = collectExports(env, provenanceEnabled);
   return {
     output,
     effects,
@@ -426,18 +429,20 @@ function buildStructuredResult(env: Environment, output: string) {
   };
 }
 
-function collectEffects(handler: EffectHandler | undefined): StructuredEffect[] {
+function collectEffects(handler: EffectHandler | undefined, provenanceEnabled: boolean): StructuredEffect[] {
   if (!handler || typeof handler.getEffects !== 'function') {
     return [];
   }
   return handler.getEffects().map(effect => ({
     ...effect,
     security: effect.capability?.security ?? makeSecurityDescriptor(),
-    provenance: (effect as any).provenance ?? effect.capability?.security
+    ...(provenanceEnabled && {
+      provenance: (effect as any).provenance ?? effect.capability?.security ?? makeSecurityDescriptor()
+    })
   }));
 }
 
-function collectExports(env: Environment): ExportMap {
+function collectExports(env: Environment, provenanceEnabled: boolean): ExportMap {
   const manifest = env.getExportManifest();
   const exports: ExportMap = {};
   if (!manifest) {
@@ -448,6 +453,13 @@ function collectExports(env: Environment): ExportMap {
     const variableName = name.startsWith('@') ? name.slice(1) : name;
     const variable = env.getVariable(variableName);
     if (!variable) continue;
+    const provenance =
+      provenanceEnabled
+        ? getExpressionProvenance(variable.value) ??
+          variable.metadata?.security ??
+          variable.security ??
+          makeSecurityDescriptor()
+        : undefined;
     exports[name] = {
       name,
       value: env.getVariableValue(variableName),
@@ -457,10 +469,7 @@ function collectExports(env: Environment): ExportMap {
           variable.metadata?.security ??
           variable.security ??
           makeSecurityDescriptor(),
-        provenance:
-          getExpressionProvenance(variable.value) ??
-          variable.metadata?.security ??
-          variable.security
+        ...(provenance && { provenance })
       }
     };
   }

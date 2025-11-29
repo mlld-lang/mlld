@@ -12,6 +12,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ExecutionEmitter } from './execution-emitter';
+import type { GuardResult } from '@core/types/guard';
 
 export type InterpretMode = 'document' | 'structured' | 'stream' | 'debug';
 
@@ -134,42 +135,64 @@ export type SDKDebugEvent =
       directive: DirectiveKind | string;
       node?: MlldNode;
       timestamp: number;
+      provenance?: SecurityDescriptor;
     }
   | {
       type: 'debug:directive:complete';
       directive: DirectiveKind | string;
       durationMs?: number;
       timestamp: number;
+      provenance?: SecurityDescriptor;
     }
   | {
       type: 'debug:variable:create';
       name: string;
       variable?: Variable;
       timestamp: number;
+      provenance?: SecurityDescriptor;
     }
   | {
       type: 'debug:variable:access';
       name: string;
       timestamp: number;
+      provenance?: SecurityDescriptor;
     }
   | {
       type: 'debug:guard:before';
       guard: string;
       labels?: readonly DataLabel[];
       decision?: 'allow' | 'deny' | 'retry';
+      trace?: readonly GuardResult[];
+      hints?: readonly unknown[];
+      reasons?: readonly string[];
       timestamp: number;
+      provenance?: SecurityDescriptor;
     }
   | {
       type: 'debug:guard:after';
       guard: string;
       labels?: readonly DataLabel[];
       decision?: 'allow' | 'deny';
+      trace?: readonly GuardResult[];
+      hints?: readonly unknown[];
+      reasons?: readonly string[];
       timestamp: number;
+      provenance?: SecurityDescriptor;
     }
   | {
       type: 'debug:export:registered';
       name: string;
       timestamp: number;
+      provenance?: SecurityDescriptor;
+    }
+  | {
+      type: 'debug:import:dynamic';
+      path: string;
+      source: string;
+      tainted: true;
+      variables: string[];
+      timestamp: number;
+      provenance?: SecurityDescriptor;
     };
 
 export type SDKEvent = SDKEffectEvent | SDKCommandEvent | SDKStreamEvent | SDKExecutionEvent | SDKDebugEvent;

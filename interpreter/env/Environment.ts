@@ -38,6 +38,7 @@ import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPR
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
+import { getExpressionProvenance } from '../utils/expression-provenance';
 import { builtinTransformers, createTransformerVariable } from '../builtin/transformers';
 import { NodeShadowEnvironment } from './NodeShadowEnvironment';
 import { CacheManager } from './CacheManager';
@@ -151,6 +152,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     collectErrors: false
   };
   private streamingOptions: StreamingOptions = defaultStreamingOptions;
+  private provenanceEnabled = false;
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -762,6 +764,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.parent?.getSecuritySnapshot();
   }
 
+  private snapshotToDescriptor(snapshot?: SecuritySnapshot): SecurityDescriptor | undefined {
+    if (!snapshot) {
+      return undefined;
+    }
+    return makeSecurityDescriptor({
+      labels: snapshot.labels,
+      taintLevel: snapshot.taintLevel,
+      sources: snapshot.sources,
+      policyContext: snapshot.policy
+    });
+  }
+
   protected ensureSecurityRuntime(): SecurityRuntimeState {
     if (!this.securityRuntime) {
       this.securityRuntime = {
@@ -933,11 +947,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   setVariable(name: string, variable: Variable): void {
     this.variableManager.setVariable(name, variable);
     if (this.sdkEmitter) {
+      const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
         type: 'debug:variable:create',
         name,
         variable,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(provenance && { provenance })
       });
     }
   }
@@ -960,14 +976,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getVariable(name: string): Variable | undefined {
     // Delegate entirely to VariableManager which handles local, captured, and parent lookups
+    const variable = this.variableManager.getVariable(name);
     if (this.sdkEmitter) {
+      const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
         type: 'debug:variable:access',
         name,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(provenance && { provenance })
       });
     }
-    return this.variableManager.getVariable(name);
+    return variable;
   }
 
   /**
@@ -976,6 +995,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   getVariableValue(name: string): any {
     return this.variableManager.getVariableValue(name);
+  }
+
+  private getVariableProvenance(variable?: Variable): SecurityDescriptor | undefined {
+    if (!this.isProvenanceEnabled()) {
+      return undefined;
+    }
+    return (
+      getExpressionProvenance((variable as any)?.value ?? variable) ??
+      variable?.metadata?.security ??
+      variable?.security ??
+      this.snapshotToDescriptor(this.getSecuritySnapshot()) ??
+      makeSecurityDescriptor()
+    );
   }
   
   /**
@@ -1251,12 +1283,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.effectHandler.handleEffect(effect);
 
     if (this.sdkEmitter) {
+      const provenance = this.isProvenanceEnabled()
+        ? capability?.security ?? makeSecurityDescriptor()
+        : undefined;
       const event: SDKEffectEvent = {
         type: 'effect',
         effect: {
           ...effect,
           security: capability?.security ?? makeSecurityDescriptor(),
-          provenance: capability?.security ?? makeSecurityDescriptor()
+          ...(provenance && { provenance })
         },
         timestamp: Date.now()
       };
@@ -1866,6 +1901,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
     child.streamingOptions = { ...this.streamingOptions };
+    child.provenanceEnabled = this.provenanceEnabled;
 
     // Create child import resolver
     child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);
@@ -1975,6 +2011,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getStreamingOptions(): StreamingOptions {
     return { ...this.streamingOptions };
+  }
+
+  setProvenanceEnabled(enabled: boolean): void {
+    const root = this.getRootEnvironment();
+    root.provenanceEnabled = enabled;
+  }
+
+  isProvenanceEnabled(): boolean {
+    return this.getRootEnvironment().provenanceEnabled;
   }
   
   /**
@@ -2278,6 +2323,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     );
     child.allowAbsolutePaths = this.allowAbsolutePaths;
     child.streamingOptions = { ...this.streamingOptions };
+    child.provenanceEnabled = this.provenanceEnabled;
     // Share import stack with parent via ImportResolver
     child.importResolver = this.importResolver.createChildResolver(undefined, () => child.allowAbsolutePaths);
     // Inherit trace settings
@@ -2300,10 +2346,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.directiveTimings.push(start);
 
     if (this.sdkEmitter) {
+      const provenance = this.isProvenanceEnabled()
+        ? this.snapshotToDescriptor(this.getSecuritySnapshot())
+        : undefined;
       this.emitSDKEvent({
         type: 'debug:directive:start',
         directive,
-        timestamp: start
+        timestamp: start,
+        ...(provenance && { provenance })
       });
     }
 
@@ -2328,11 +2378,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const entry = this.traceEnabled ? this.directiveTrace.pop() : undefined;
     if (this.sdkEmitter && start && entry) {
       const durationMs = Date.now() - start;
+      const provenance = this.isProvenanceEnabled()
+        ? this.snapshotToDescriptor(this.getSecuritySnapshot())
+        : undefined;
       this.emitSDKEvent({
         type: 'debug:directive:complete',
         directive: entry.directive,
         durationMs,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(provenance && { provenance })
       });
     }
     if (!this.traceEnabled) return;
