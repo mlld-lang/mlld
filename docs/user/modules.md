@@ -339,6 +339,43 @@ about: Reusable prompts
 /export { @systemPrompt, @userPrompt }
 ```
 
+## Dynamic Modules (SDK)
+
+Inject modules at runtime without writing files:
+
+```typescript
+import { processMlld } from 'mlld';
+
+const result = await processMlld(template, {
+  dynamicModules: {
+    '@user/context': `/export
+@userId = "123"
+@userName = "Alice"`
+  }
+});
+```
+
+The template imports normally:
+
+```mlld
+/import @user/context
+Hello @userName!
+```
+
+Output:
+```
+Hello Alice!
+```
+
+Dynamic modules:
+- Override filesystem/registry modules with the same path
+- Are automatically marked as tainted (for security)
+- Appear in debug traces with full provenance
+
+Use case: Multi-tenant applications that fetch user/project context from databases.
+
+See [SDK Usage](sdk.md#dynamic-modules) for details.
+
 ## Troubleshooting
 
 **Import not found**:
