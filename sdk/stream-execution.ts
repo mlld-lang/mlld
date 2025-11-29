@@ -58,7 +58,7 @@ export class StreamExecution implements StreamExecutionInterface {
   reject(error: unknown): void {
     if (this.completed) return;
     this.completed = true;
-    this.resultReject(error as any);
+    this.resultReject(error);
     this.doneReject(error);
   }
 

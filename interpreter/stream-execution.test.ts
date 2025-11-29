@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { interpret } from '@interpreter/index';
 import type { StreamExecution as StreamHandle } from '@sdk/types';
 import { ExecutionEmitter } from '@sdk/execution-emitter';

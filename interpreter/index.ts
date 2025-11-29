@@ -362,7 +362,7 @@ export async function interpret(
 
   const debugTrace: SDKEvent[] = [];
   let debugEmitter: ExecutionEmitter | undefined;
-  let debugStart = Date.now();
+  const debugStart = Date.now();
 
   if (mode === 'debug') {
     debugEmitter = options.emitter ?? new ExecutionEmitter();
@@ -421,10 +421,10 @@ export { Environment } from './env/Environment';
 export type { EvalResult } from './core/interpreter';
 export type { InterpretOptions, InterpretResult } from '@sdk/types';
 
-function buildStructuredResult(env: Environment, output: string) {
-  const provenanceEnabled = env.isProvenanceEnabled();
-  const effects = collectEffects(env.getEffectHandler(), provenanceEnabled);
-  const exports = collectExports(env, provenanceEnabled);
+function buildStructuredResult(env: Environment, output: string, provenanceEnabled?: boolean) {
+  const resolvedProvenance = provenanceEnabled ?? env.isProvenanceEnabled();
+  const effects = collectEffects(env.getEffectHandler(), resolvedProvenance);
+  const exports = collectExports(env, resolvedProvenance);
   return {
     output,
     effects,

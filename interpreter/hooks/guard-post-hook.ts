@@ -435,7 +435,7 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
     type: 'debug:guard:after',
     guard: guardName,
     labels: contextLabels,
-    decision: currentDecision === 'retry' ? 'retry' : currentDecision,
+    decision: currentDecision,
     trace: guardTrace,
     hints,
     reasons,
