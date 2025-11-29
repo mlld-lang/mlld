@@ -1,2 +1,2 @@
-/import @user/context
-Hello @userName!
+/import @alice/utils as @alice
+/import @bob/utils as @bob

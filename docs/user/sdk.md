@@ -186,37 +186,22 @@ Debug mode includes provenance by default.
 
 ## Dynamic Modules
 
-Inject modules at runtime without writing files:
+Runtime module injection for multi-tenant applications:
 
 ```typescript
-import { processMlld } from 'mlld';
-
 const result = await processMlld(template, {
   dynamicModules: {
     '@user/context': `/export
 @userId = "123"
-@userName = "Alice"`,
-    '@project/settings': `/export
-@projectId = "456"`
+@userName = "Alice"`
   }
 });
 ```
 
-Use case: Multi-tenant apps that fetch context from databases.
-
-The template imports as usual:
-
-```mlld
-/import @user/context
-/import @project/settings
-
-Hello @userName! Project: @projectId
-```
-
-Dynamic modules:
-- Are checked first (override filesystem/registry)
-- Are automatically marked as tainted
-- Appear in debug traces with full provenance
+Notes:
+- Keys are exact matches (no extension inference).
+- Dynamic modules override filesystem/registry modules with the same key.
+- Content is treated as untrusted; guards can check `@ctx.sources.includes('dynamic-module')`.
 
 ## Error Handling
 
@@ -251,7 +236,7 @@ try {
 | `pathService` | IPathService | PathService | Custom path service |
 | `normalizeBlankLines` | boolean | true | Normalize blank lines |
 | `useMarkdownFormatter` | boolean | true | Use prettier |
-| `dynamicModules` | Record<string, string> | - | Runtime modules |
+| `dynamicModules` | Record<string, string> | - | In-memory modules keyed by import path |
 
 ### InterpretOptions (Advanced)
 

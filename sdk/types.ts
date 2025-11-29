@@ -52,6 +52,7 @@ export interface InterpretOptions {
   provenance?: boolean;
   recordEffects?: boolean;
   emitter?: ExecutionEmitter;
+  dynamicModules?: Record<string, string>;
 }
 
 export interface StructuredEffect extends Effect {

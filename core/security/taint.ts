@@ -148,27 +148,31 @@ export interface ImportTaintOptions {
   resolverName?: string;
   source?: string;
   advisoryLevel?: 'none' | 'warning';
+  taintLevel?: TaintLevel;
 }
 
 export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const resolverName = options.resolverName?.toLowerCase();
 
   let level: TaintLevel;
-  if (resolverName === 'input' || resolverName === 'stdin') {
+  if (resolverName === 'dynamic') {
+    level = options.taintLevel ?? 'resolver';
+  } else if (resolverName === 'input' || resolverName === 'stdin') {
     level = 'userInput';
   } else if (resolverName === 'resolver') {
     level = 'resolver';
   } else {
-    level = deriveTaintFromImportType(options.importType);
+    level = options.taintLevel ?? deriveTaintFromImportType(options.importType);
   }
 
   if (options.advisoryLevel === 'warning' && level === 'module') {
     level = 'resolver';
   }
 
-  const sources = freezeArray<string>(
-    options.source ? [options.source] : resolverName ? [`resolver:${resolverName}`] : []
-  );
+  const sources = freezeArray<string>([
+    ...(resolverName === 'dynamic' ? ['dynamic-module'] : []),
+    ...(options.source ? [options.source] : resolverName ? [`resolver:${resolverName}`] : [])
+  ]);
 
   const labels =
     level === 'module' && options.advisoryLevel === 'none'

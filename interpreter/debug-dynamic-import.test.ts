@@ -22,7 +22,9 @@ describe('debug dynamic import events', () => {
 /export { exported }
       `.trim(),
       contentType: 'module',
-      metadata: { sourceType: 'dynamic', source: '@user/context', exports: ['exported'] }
+      ctx: { source: 'dynamic://@user/context', taintLevel: 'resolver' },
+      metadata: { exports: ['exported'] },
+      resolverName: 'dynamic'
     });
 
     const parseResult = await parse('/import "@user/context"');

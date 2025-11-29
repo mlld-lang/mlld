@@ -341,40 +341,17 @@ about: Reusable prompts
 
 ## Dynamic Modules (SDK)
 
-Inject modules at runtime without writing files:
+Inject module sources at runtime without writing files when calling the SDK:
 
 ```typescript
-import { processMlld } from 'mlld';
-
-const result = await processMlld(template, {
+const output = await processMlld(template, {
   dynamicModules: {
-    '@user/context': `/export
-@userId = "123"
-@userName = "Alice"`
+    '@user/context': `/export\n@userId = "123"\n@userName = "Ada"`
   }
 });
 ```
 
-The template imports normally:
-
-```mlld
-/import @user/context
-Hello @userName!
-```
-
-Output:
-```
-Hello Alice!
-```
-
-Dynamic modules:
-- Override filesystem/registry modules with the same path
-- Are automatically marked as tainted (for security)
-- Appear in debug traces with full provenance
-
-Use case: Multi-tenant applications that fetch user/project context from databases.
-
-See [SDK Usage](sdk.md#dynamic-modules) for details.
+Keys must match exactly (no extension inference), and dynamic content is treated as untrusted by default. CLI users should keep using filesystem modules.
 
 ## Troubleshooting
 

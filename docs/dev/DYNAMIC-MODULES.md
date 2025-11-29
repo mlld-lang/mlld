@@ -1,29 +1,28 @@
 ---
-updated: 2025-11-28
 tags: #arch, #sdk, #resolvers
-related-docs: docs/dev/RESOLVERS.md, docs/dev/STREAMING.md, docs/user/sdk.md
-related-code: core/resolvers/DynamicModuleResolver.ts, interpreter/index.ts, sdk/types.ts
+related-docs: docs/dev/RESOLVERS.md, docs/dev/STREAMING.md
+related-code: core/resolvers/types.ts, interpreter/index.ts, sdk/types.ts
 ---
 
 # DYNAMIC-MODULES
 
 ## tldr
 
-Runtime module injection via `dynamicModules` option. Implemented as highest-priority resolver. All dynamic content auto-tainted. Used for multi-tenant context injection without filesystem I/O.
+Runtime module injection via `dynamicModules` in `interpret`/`processMlld`. `DynamicModuleResolver` sits at highest priority, matches exact keys only, and tags all content as untrusted. Used for multi-tenant context injection without filesystem I/O.
 
 ## Principles
 
 - Simple API: `processMlld(template, { dynamicModules: {...} })`
 - Resolver-based: `DynamicModuleResolver` with priority 1 (checked first)
-- Always tainted: Dynamic content is untrusted by default
+- Always tainted: Dynamic content gets `taintLevel: 'untrusted'`
 - Override semantics: Dynamic modules shadow filesystem/registry with same path
 - Eager resolution: Modules provided upfront, no async fetch
 
-## Details
+## Implementation
 
 **Resolution order:**
 1. DynamicModuleResolver (priority 1)
-2. LocalResolver (priority 5)
+2. LocalResolver (priority 20)
 3. RegistryResolver (priority 10)
 4. HTTPResolver (priority 15)
 
@@ -33,14 +32,14 @@ Runtime module injection via `dynamicModules` option. Implemented as highest-pri
 - `Environment.registerDynamicModules()` - Registration at interpret time
 
 **Taint handling:**
-- `core/security/taint.ts` recognizes `dynamic` resolver name
-- Returns high taint level with `['dynamic-module', 'untrusted']` labels
+- Resolver returns `ctx.taintLevel: 'resolver'`
+- `core/security/taint.ts` maps dynamic resolver name to untrusted taint and adds `dynamic-module` to taint sources
 - Guards can check `@ctx.sources.includes('dynamic-module')`
 
 **SDK integration:**
-- Structured mode: Dynamic imports appear in effects with `source: 'dynamic://...'`
-- Stream mode: Emits `debug:import:dynamic` events
-- Debug mode: Full provenance including exported variable names
+- Structured mode: Effects from dynamic imports carry security metadata
+- Stream mode: Events include taint labels
+- Debug mode: `debug:import:dynamic` events with full provenance
 
 ## Gotchas
 

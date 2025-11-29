@@ -34,7 +34,7 @@ import { TaintTracker } from '@core/security';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
-import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver } from '@core/resolvers';
+import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver, DynamicModuleResolver } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
@@ -494,6 +494,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     
     logger.debug(`Reserved resolver names: ${Array.from(this.reservedNames).join(', ')}`);
+  }
+
+  registerDynamicModules(modules: Record<string, string>): void {
+    if (!this.resolverManager) {
+      throw new Error('ResolverManager not available');
+    }
+
+    const resolver = new DynamicModuleResolver(modules);
+    this.resolverManager.registerResolver(resolver);
+    logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}`);
   }
 
   /**
@@ -1707,7 +1717,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Resolve a module reference using the ResolverManager
    * This handles @prefix/ patterns and registry lookups for @user/module
    */
-  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any }> {
+  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; ctx?: any; resolverName?: string }> {
     return this.importResolver.resolveModule(reference, context);
   }
   

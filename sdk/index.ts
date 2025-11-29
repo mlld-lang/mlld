@@ -48,6 +48,9 @@ export interface ProcessOptions {
   normalizeBlankLines?: boolean;
   /** Use prettier for markdown formatting (default: true) */
   useMarkdownFormatter?: boolean;
+
+  /** Dynamic (non-filesystem) modules for runtime injection */
+  dynamicModules?: Record<string, string>;
 }
 
 /**
@@ -75,7 +78,8 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     fileSystem,
     pathService,
     normalizeBlankLines: options?.normalizeBlankLines,
-    useMarkdownFormatter: options?.useMarkdownFormatter
+    useMarkdownFormatter: options?.useMarkdownFormatter,
+    dynamicModules: options?.dynamicModules
   });
 
   // Interpret returns string output in document mode; other modes carry output on the object
