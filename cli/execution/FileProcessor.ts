@@ -131,6 +131,7 @@ export class FileProcessor {
           (interpretation.interpretEnvironment as any).cleanup();
         }
         process.exit(0);
+        return;
       }
 
       if (interpretation.kind === 'debug') {
@@ -141,6 +142,7 @@ export class FileProcessor {
           (interpretation.interpretEnvironment as any).cleanup();
         }
         process.exit(0);
+        return;
       }
 
       await this.handleOutput(
@@ -164,6 +166,7 @@ export class FileProcessor {
       cliLogger.debug('Cleanup complete, forcing process exit');
       await new Promise(resolve => setTimeout(resolve, 10));
       process.exit(0);
+      return;
     } catch (error: any) {
       // Clean up environment even on error
       if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
