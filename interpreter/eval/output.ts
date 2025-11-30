@@ -186,8 +186,22 @@ export async function evaluateOutput(
     }
     
     if (targetType === 'file') {
-      // File output
-      await outputToFile(target as OutputTargetFile, content, env, directive, resolvedValue, securityDescriptor);
+      const rawTarget =
+        typeof (target as any)?.raw === 'string'
+          ? (target as any).raw.replace(/^["']|["']$/g, '')
+          : '';
+      if (rawTarget.startsWith('state://')) {
+        const statePath = rawTarget.replace(/^state:\/\//, '');
+        env.recordStateWrite({
+          path: statePath,
+          value: content,
+          operation: 'set',
+          security: securityDescriptor ?? makeSecurityDescriptor()
+        });
+      } else {
+        // File output
+        await outputToFile(target as OutputTargetFile, content, env, directive, resolvedValue, securityDescriptor);
+      }
     } else if (targetType === 'stream') {
       // Stream output (stdout/stderr)
       await outputToStream(target as OutputTargetStream, content, env);

@@ -131,12 +131,22 @@ export class ImportPathResolver {
       // But only if there's no path following (e.g., @TIME alone, not @base/path)
       if (varRef.isSpecial && varRef.identifier && pathNodes.length === 1) {
         const resolverManager = this.env.getResolverManager();
-        if (resolverManager && resolverManager.isResolverName(varRef.identifier)) {
-          return {
-            type: 'resolver',
-            resolvedPath: `@${varRef.identifier}`,
-            resolverName: varRef.identifier
-          };
+        if (resolverManager) {
+          if (resolverManager.isResolverName(varRef.identifier)) {
+            return {
+              type: 'resolver',
+              resolvedPath: `@${varRef.identifier}`,
+              resolverName: varRef.identifier
+            };
+          }
+          const dynamicResolver = resolverManager.findResolverForRef?.(`@${varRef.identifier}`);
+          if (dynamicResolver) {
+            return {
+              type: 'resolver',
+              resolvedPath: `@${varRef.identifier}`,
+              resolverName: dynamicResolver.name
+            };
+          }
         }
       }
 
