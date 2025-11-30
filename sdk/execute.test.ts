@@ -70,6 +70,27 @@ describe('executeRoute', () => {
     expect(eventMetrics).toEqual(result.metrics);
   });
 
+  it('allows async iteration over stream events', async () => {
+    await fileSystem.writeFile(routePath, '/show "iterable"');
+
+    const handle = (await executeRoute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      stream: true
+    })) as any;
+
+    const types: string[] = [];
+    for await (const event of handle as AsyncIterable<any>) {
+      types.push(event.type);
+      if (event.type === 'execution:complete') {
+        expect(event.result).toBeDefined();
+      }
+    }
+
+    expect(types).toContain('effect');
+    expect(types).toContain('execution:complete');
+  });
+
   it('injects payload and state dynamic modules', async () => {
     await fileSystem.writeFile(routePath, '/show "ok"');
 

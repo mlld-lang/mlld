@@ -95,6 +95,28 @@ export interface StructuredResult {
   environment?: Environment;
 }
 
+export type ExecuteErrorCode =
+  | 'ROUTE_NOT_FOUND'
+  | 'PARSE_ERROR'
+  | 'TIMEOUT'
+  | 'ABORTED'
+  | 'RUNTIME_ERROR';
+
+export class ExecuteError extends Error {
+  constructor(
+    message: string,
+    public readonly code: ExecuteErrorCode,
+    public readonly filePath?: string,
+    options?: { cause?: unknown }
+  ) {
+    super(message);
+    this.name = 'ExecuteError';
+    if (options?.cause) {
+      (this as any).cause = options.cause;
+    }
+  }
+}
+
 export type DocumentResult = string;
 
 type StreamChunkEvent = Extract<StreamEvent, { type: 'CHUNK' }>;
@@ -213,7 +235,7 @@ export type SDKEvent = SDKEffectEvent | SDKCommandEvent | SDKStreamEvent | SDKEx
 
 export type SDKEventHandler<T extends SDKEvent = SDKEvent> = (event: T) => void;
 
-export interface StreamExecution {
+export interface StreamExecution extends AsyncIterable<SDKEvent> {
   on: (type: SDKEvent['type'], handler: SDKEventHandler) => void;
   off: (type: SDKEvent['type'], handler: SDKEventHandler) => void;
   once?: (type: SDKEvent['type'], handler: SDKEventHandler) => void;

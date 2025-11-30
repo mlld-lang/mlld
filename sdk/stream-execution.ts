@@ -1,5 +1,6 @@
 import type { StreamExecution as StreamExecutionInterface, StructuredResult, SDKEvent, SDKEventHandler } from './types';
 import { ExecutionEmitter } from './execution-emitter';
+import { AsyncEventQueue } from './async-event-queue';
 
 export class StreamExecution implements StreamExecutionInterface {
   private completed = false;
@@ -74,4 +75,42 @@ export class StreamExecution implements StreamExecutionInterface {
     }
     this.reject(new Error('StreamExecution aborted'));
   };
+
+  async *[Symbol.asyncIterator](): AsyncIterator<SDKEvent> {
+    const queue = new AsyncEventQueue<SDKEvent>();
+    const eventTypes: SDKEvent['type'][] = [
+      'effect',
+      'command:start',
+      'command:complete',
+      'stream:chunk',
+      'stream:progress',
+      'execution:complete',
+      'debug:directive:start',
+      'debug:directive:complete',
+      'debug:variable:create',
+      'debug:variable:access',
+      'debug:guard:before',
+      'debug:guard:after',
+      'debug:export:registered',
+      'debug:import:dynamic'
+    ];
+
+    const forward = (event: SDKEvent): void => queue.push(event);
+    for (const type of eventTypes) {
+      this.emitter.on(type, forward);
+    }
+
+    void this.done().then(
+      () => queue.end(),
+      error => queue.end(error)
+    );
+
+    try {
+      yield* queue;
+    } finally {
+      for (const type of eventTypes) {
+        this.emitter.off(type, forward);
+      }
+    }
+  }
 }
