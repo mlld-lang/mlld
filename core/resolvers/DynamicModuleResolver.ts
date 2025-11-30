@@ -59,6 +59,7 @@ export class DynamicModuleResolver implements Resolver {
       ctx: {
         source: `dynamic://${ref}`,
         taintLevel: 'resolver',
+        labels: ['dynamic'],
         timestamp: new Date(),
         size: Buffer.byteLength(content, 'utf8')
       }

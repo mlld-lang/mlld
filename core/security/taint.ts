@@ -149,6 +149,7 @@ export interface ImportTaintOptions {
   source?: string;
   advisoryLevel?: 'none' | 'warning';
   taintLevel?: TaintLevel;
+  labels?: readonly DataLabel[];  // From resolver ctx
 }
 
 export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
@@ -174,10 +175,17 @@ export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
     ...(options.source ? [options.source] : resolverName ? [`resolver:${resolverName}`] : [])
   ]);
 
-  const labels =
-    level === 'module' && options.advisoryLevel === 'none'
-      ? freezeArray<DataLabel>(['trusted'])
-      : freezeArray<DataLabel>(defaultLabelsForLevel(level));
+  // Merge labels from resolver ctx with default labels for taint level
+  const defaultLabels = level === 'module' && options.advisoryLevel === 'none'
+    ? ['trusted']
+    : defaultLabelsForLevel(level);
+
+  const mergedLabels = [
+    ...(options.labels ?? []),  // From resolver ctx (e.g., ['dynamic'])
+    ...defaultLabels
+  ];
+
+  const labels = freezeArray<DataLabel>([...new Set(mergedLabels)]);  // Dedupe
 
   return Object.freeze({
     level,

@@ -62,7 +62,8 @@ export class ImportDirectiveEvaluator {
       const taintSnapshot = deriveImportTaint({
         importType: resolution.importType ?? 'live',
         resolverName: resolution.resolverName,
-        source: resolution.resolvedPath
+        source: resolution.resolvedPath,
+        labels: resolution.ctx?.labels
       });
       const taintDescriptor = makeSecurityDescriptor({
         taintLevel: taintSnapshot.level,
@@ -381,7 +382,8 @@ export class ImportDirectiveEvaluator {
           importType: resolution.importType ?? 'module',
           resolverName: resolverContent.resolverName,
           source: resolverContent.ctx?.source ?? resolution.resolvedPath,
-          taintLevel: resolverContent.ctx?.taintLevel
+          taintLevel: resolverContent.ctx?.taintLevel,
+          labels: resolverContent.ctx?.labels
         });
         env.recordSecurityDescriptor(
           makeSecurityDescriptor({
