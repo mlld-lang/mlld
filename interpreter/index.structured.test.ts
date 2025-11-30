@@ -32,7 +32,7 @@ describe('interpret structured mode', () => {
     expect(effects[0].type).toBe('doc');
     expect(effects[0].security).toBeDefined();
     expect(Array.isArray(effects[0].security?.labels)).toBe(true);
-    expect(effects[0].security?.taintLevel).toBeDefined();
+    expect(Array.isArray(effects[0].security?.taint ?? [])).toBe(true);
     expect(Array.isArray(effects[0].security?.sources)).toBe(true);
 
     const exportKey = exports.apiKey ? 'apiKey' : '@apiKey';

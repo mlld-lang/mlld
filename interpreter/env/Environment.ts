@@ -27,9 +27,9 @@ import {
   type CapabilityContext,
   type CapabilityKind,
   type ImportType,
-  type DataLabel,
-  type TaintLevel
+  type DataLabel
 } from '@core/types/security';
+import type { StateWrite } from '@core/types/state';
 import { TaintTracker } from '@core/security';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
@@ -96,7 +96,7 @@ interface SecurityRuntimeState {
 interface SecuritySnapshot {
   labels: readonly DataLabel[];
   sources: readonly string[];
-  taintLevel: TaintLevel;
+  taint: readonly DataLabel[];
   policy?: Readonly<Record<string, unknown>>;
   operation?: Readonly<Record<string, unknown>>;
 }
@@ -153,6 +153,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   };
   private streamingOptions: StreamingOptions = defaultStreamingOptions;
   private provenanceEnabled = false;
+  private stateWrites: StateWrite[] = [];
+  private stateWriteIndex = 0;
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -496,7 +498,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     logger.debug(`Reserved resolver names: ${Array.from(this.reservedNames).join(', ')}`);
   }
 
-  registerDynamicModules(modules: Record<string, string>): void {
+  registerDynamicModules(modules: Record<string, string | Record<string, unknown>>): void {
     if (!this.resolverManager) {
       throw new Error('ResolverManager not available');
     }
@@ -766,7 +768,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return {
         labels: this.securityRuntime.descriptor.labels,
         sources: this.securityRuntime.descriptor.sources,
-        taintLevel: this.securityRuntime.descriptor.taintLevel,
+        taint: this.securityRuntime.descriptor.taint,
         policy: this.securityRuntime.policy,
         operation: top?.operation
       };
@@ -780,7 +782,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     return makeSecurityDescriptor({
       labels: snapshot.labels,
-      taintLevel: snapshot.taintLevel,
+      taint: snapshot.taint,
       sources: snapshot.sources,
       policyContext: snapshot.policy
     });
@@ -857,6 +859,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     const runtime = this.ensureSecurityRuntime();
     runtime.descriptor = mergeDescriptors(runtime.descriptor, descriptor);
+  }
+
+  recordStateWrite(write: Omit<StateWrite, 'index' | 'timestamp'> & { index?: number; timestamp?: string }): void {
+    const root = this.getRootEnvironment();
+    const entry: StateWrite = {
+      ...write,
+      index: write.index ?? root.stateWriteIndex++,
+      timestamp: write.timestamp ?? new Date().toISOString()
+    };
+    root.stateWrites.push(entry);
+  }
+
+  getStateWrites(): StateWrite[] {
+    return this.getRootEnvironment().stateWrites;
   }
   
   getRegistryManager(): RegistryManager | undefined {
@@ -1260,7 +1276,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (snapshot) {
       const descriptor = makeSecurityDescriptor({
         labels: snapshot.labels,
-        taintLevel: snapshot.taintLevel,
+        taint: snapshot.taint,
         sources: snapshot.sources,
         policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
       });

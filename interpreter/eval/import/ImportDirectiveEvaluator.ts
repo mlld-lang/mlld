@@ -66,10 +66,10 @@ export class ImportDirectiveEvaluator {
         labels: resolution.ctx?.labels
       });
       const taintDescriptor = makeSecurityDescriptor({
-        taintLevel: taintSnapshot.level,
-        labels: taintSnapshot.labels,
-        sources: taintSnapshot.sources
-      });
+      taint: taintSnapshot.taint,
+      labels: taintSnapshot.labels,
+      sources: taintSnapshot.sources
+    });
       const descriptor = mergeDescriptors(baseDescriptor, taintDescriptor);
 
       // 2. Route to appropriate handler based on import type
@@ -382,12 +382,11 @@ export class ImportDirectiveEvaluator {
           importType: resolution.importType ?? 'module',
           resolverName: resolverContent.resolverName,
           source: resolverContent.ctx?.source ?? resolution.resolvedPath,
-          taintLevel: resolverContent.ctx?.taintLevel,
           labels: resolverContent.ctx?.labels
         });
         env.recordSecurityDescriptor(
           makeSecurityDescriptor({
-            taintLevel: importDescriptor.level,
+            taint: importDescriptor.taint,
             labels: importDescriptor.labels,
             sources: importDescriptor.sources
           })
@@ -740,7 +739,7 @@ export class ImportDirectiveEvaluator {
       : 'dynamic://';
     return makeSecurityDescriptor({
       labels: ['untrusted' as DataLabel],
-      taintLevel: snapshot?.taintLevel ?? 'resolver',
+      taint: snapshot?.taint ?? ['src:dynamic'],
       sources: snapshot?.sources && snapshot.sources.length > 0 ? snapshot.sources : [normalizedSource],
       policyContext: snapshot?.policy
     });

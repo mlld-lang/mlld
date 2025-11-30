@@ -50,7 +50,7 @@ export interface ProcessOptions {
   useMarkdownFormatter?: boolean;
 
   /** Dynamic (non-filesystem) modules for runtime injection */
-  dynamicModules?: Record<string, string>;
+  dynamicModules?: Record<string, string | Record<string, unknown>>;
 }
 
 /**

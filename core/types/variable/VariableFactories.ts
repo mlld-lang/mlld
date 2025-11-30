@@ -54,7 +54,7 @@ function finalizeVariable<T extends Variable>(variable: T & { metadata?: Variabl
       ? legacyMetadataToCtx(legacyMetadata)
       : {
           labels: [],
-          taint: 'unknown',
+          taint: [],
           sources: [],
           policy: null
         };
@@ -93,7 +93,7 @@ function normalizeFactoryOptions(
   const ctx = Object.assign(
     metadata ? legacyMetadataToCtx(metadata) : {
       labels: [],
-      taint: 'unknown',
+      taint: [],
       sources: [],
       policy: null
     },

@@ -56,7 +56,7 @@ function collectOperationLabels(
 
   target.push({
     labels: operation.labels,
-    taintLevel: 'unknown',
+    taint: operation.labels,
     sources: []
   });
 }
@@ -142,7 +142,8 @@ function descriptorFromCtx(
   }
   const hasLabels = Array.isArray(ctx.labels) && ctx.labels.length > 0;
   const hasSources = Array.isArray(ctx.sources) && ctx.sources.length > 0;
-  if (!hasLabels && !hasSources && ctx.taint === 'unknown') {
+  const hasTaint = Array.isArray(ctx.taint) && ctx.taint.length > 0;
+  if (!hasLabels && !hasSources && !hasTaint) {
     return undefined;
   }
   return ctxToSecurityDescriptor(ctx);

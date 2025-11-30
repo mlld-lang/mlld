@@ -46,7 +46,7 @@ export class ModuleContentProcessor {
       snapshot
         ? makeSecurityDescriptor({
             labels: snapshot.labels,
-            taintLevel: snapshot.taintLevel,
+            taint: snapshot.taint,
             sources: snapshot.sources,
             policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
           })
@@ -137,7 +137,7 @@ export class ModuleContentProcessor {
       snapshot
         ? makeSecurityDescriptor({
             labels: snapshot.labels,
-            taintLevel: snapshot.taintLevel,
+            taint: snapshot.taint,
             sources: snapshot.sources,
             policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
           })

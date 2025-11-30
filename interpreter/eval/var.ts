@@ -218,12 +218,14 @@ export async function prepareVarAssignment(
     // Check if it's a Variable with .ctx
     if (typeof value === 'object' && 'ctx' in value && value.ctx) {
       const ctx = value.ctx;
-      if (ctx.labels || ctx.taint) {
+      const hasLabels = Array.isArray(ctx.labels) && ctx.labels.length > 0;
+      const hasTaint = Array.isArray(ctx.taint) && ctx.taint.length > 0;
+      if (hasLabels || hasTaint) {
         return {
           labels: ctx.labels,
           taint: ctx.taint,
           sources: ctx.sources,
-          policy: ctx.policy
+          policyContext: ctx.policy ?? undefined
         } as SecurityDescriptor;
       }
     }

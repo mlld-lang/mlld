@@ -429,6 +429,7 @@ function buildStructuredResult(env: Environment, output: string, provenanceEnabl
     output,
     effects,
     exports,
+    stateWrites: env.getStateWrites(),
     environment: env
   };
 }

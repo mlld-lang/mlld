@@ -7,7 +7,5 @@ export {
   type TrackTaintOptions,
   deriveImportTaint,
   deriveCommandTaint,
-  describeTaint,
-  mergeTaintSnapshots,
-  defaultLabelsForLevel
+  mergeTaintSnapshots
 } from './taint';

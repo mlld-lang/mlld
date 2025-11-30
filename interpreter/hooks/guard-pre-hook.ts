@@ -149,7 +149,7 @@ function guardSnapshotDescriptor(env: Environment): SecurityDescriptor | undefin
   }
   return makeSecurityDescriptor({
     labels: snapshot.labels,
-    taintLevel: snapshot.taintLevel,
+    taint: snapshot.taint,
     sources: snapshot.sources,
     policyContext: snapshot.policy
   });

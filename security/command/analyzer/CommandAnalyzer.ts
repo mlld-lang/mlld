@@ -1,5 +1,4 @@
 import { parse as parseShell } from 'shell-quote';
-import type { TaintLevel } from '@core/types/security';
 import { IMMUTABLE_SECURITY_PATTERNS } from '@security/policy/patterns';
 
 export interface CommandAnalysis {
@@ -23,7 +22,7 @@ export class CommandAnalyzer {
   /**
    * Analyze a command for security risks
    */
-  async analyze(command: string, taint?: TaintLevel): Promise<CommandAnalysis> {
+  async analyze(command: string, taint?: readonly string[]): Promise<CommandAnalysis> {
     const risks: CommandRisk[] = [];
     
     // 1. Parse command safely with shell-quote
@@ -55,11 +54,12 @@ export class CommandAnalyzer {
     risks.push(...exfiltrationRisks);
     
     // 5. Extra analysis for tainted data
-    if (taint === 'llmOutput' || taint === 'networkLive' || taint === 'networkCached') {
+    const taintSet = new Set(taint ?? []);
+    if (taintSet.has('src:llm') || taintSet.has('src:network')) {
       risks.push({
         type: 'INJECTION',
         severity: 'CRITICAL',
-        description: `Attempting to execute ${taint} as command - requires explicit approval`
+        description: 'Attempting to execute tainted command content - requires explicit approval'
       });
       
       // Use js-x-ray for deeper analysis

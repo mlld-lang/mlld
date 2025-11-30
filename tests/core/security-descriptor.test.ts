@@ -3,7 +3,6 @@ import {
   makeSecurityDescriptor,
   mergeDescriptors,
   hasLabel,
-  compareTaintLevels,
   serializeSecurityDescriptor,
   deserializeSecurityDescriptor,
   DATA_LABELS
@@ -16,7 +15,7 @@ describe('SecurityDescriptor helpers', () => {
     });
 
     expect(descriptor.labels).toEqual(['secret', 'untrusted']);
-    expect(descriptor.taintLevel).toBe('unknown');
+    expect(descriptor.taint).toEqual(['secret', 'untrusted']);
     expect(Object.isFrozen(descriptor)).toBe(true);
     expect(DATA_LABELS).toContain('secret');
   });
@@ -24,42 +23,36 @@ describe('SecurityDescriptor helpers', () => {
   it('falls back to default descriptor when no labels provided', () => {
     const descriptor = makeSecurityDescriptor();
     expect(descriptor.labels).toEqual([]);
-    expect(descriptor.taintLevel).toBe('unknown');
+    expect(descriptor.taint).toEqual([]);
   });
 
   it('merges descriptors preserving highest taint and labels', () => {
-    const secret = makeSecurityDescriptor({ labels: ['secret'], taintLevel: 'userInput' });
-    const network = makeSecurityDescriptor({ labels: ['network'], taintLevel: 'networkLive' });
+    const secret = makeSecurityDescriptor({ labels: ['secret'] });
+    const network = makeSecurityDescriptor({ labels: ['network'] });
 
     const merged = mergeDescriptors(secret, network);
     expect(merged.labels).toEqual(['secret', 'network']);
-    expect(merged.taintLevel).toBe('networkLive');
+    expect(merged.taint).toEqual(['secret', 'network']);
     expect(hasLabel(merged, 'network')).toBe(true);
   });
 
   it('serialises and deserialises descriptors', () => {
     const descriptor = makeSecurityDescriptor({
       labels: ['pii'],
-      taintLevel: 'resolver',
+      taint: ['pii', 'src:dynamic'],
       sources: ['/tmp/data']
     });
 
     const serialised = serializeSecurityDescriptor(descriptor);
     expect(serialised).toMatchObject({
       labels: ['pii'],
-      taintLevel: 'resolver',
+      taint: ['pii', 'src:dynamic'],
       sources: ['/tmp/data']
     });
 
     const restored = deserializeSecurityDescriptor(serialised);
     expect(restored).toBeDefined();
     expect(restored!.labels).toEqual(['pii']);
-    expect(restored!.taintLevel).toBe('resolver');
-  });
-
-  it('compares taint levels using defined order', () => {
-    expect(compareTaintLevels('userInput', 'literal')).toBe('userInput');
-    expect(compareTaintLevels('unknown', 'literal')).toBe('literal');
-    expect(compareTaintLevels('networkLive', 'networkCached')).toBe('networkLive');
+    expect(restored!.taint).toEqual(['pii', 'src:dynamic']);
   });
 });

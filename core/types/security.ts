@@ -69,22 +69,9 @@ export type CapabilityKind =
   | 'command'
   | 'output';
 
-export type TaintLevel =
-  | 'unknown'
-  | 'literal'
-  | 'module'
-  | 'staticEmbed'
-  | 'localFile'
-  | 'commandOutput'
-  | 'userInput'
-  | 'resolver'
-  | 'networkCached'
-  | 'networkLive'
-  | 'llmOutput';
-
 export interface SecurityDescriptor {
   readonly labels: readonly DataLabel[];
-  readonly taintLevel: TaintLevel;
+  readonly taint: readonly DataLabel[];
   readonly sources: readonly string[];
   readonly capability?: CapabilityKind;
   readonly policyContext?: Readonly<Record<string, unknown>>;
@@ -93,8 +80,8 @@ export interface SecurityDescriptor {
 export interface CapabilityContext {
   readonly kind: CapabilityKind;
   readonly importType?: ImportType;
-  readonly taintLevel: TaintLevel;
   readonly labels: readonly DataLabel[];
+  readonly taint: readonly DataLabel[];
   readonly sources: readonly string[];
   readonly policy?: Readonly<Record<string, unknown>>;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -104,7 +91,7 @@ export interface CapabilityContext {
 
 export type SerializedSecurityDescriptor = {
   labels: DataLabel[];
-  taintLevel: TaintLevel;
+  taint: DataLabel[];
   sources: string[];
   capability?: CapabilityKind;
   policyContext?: Record<string, unknown>;
@@ -113,8 +100,8 @@ export type SerializedSecurityDescriptor = {
 export type SerializedCapabilityContext = {
   kind: CapabilityKind;
   importType?: ImportType;
-  taintLevel: TaintLevel;
   labels: DataLabel[];
+  taint: DataLabel[];
   sources: string[];
   policy?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
@@ -131,20 +118,6 @@ export const DATA_LABELS: readonly DataLabel[] = [
   'destructive',
   'network'
 ] as const;
-
-const TAINT_ORDER: Record<TaintLevel, number> = {
-  llmOutput: 9,
-  networkLive: 8,
-  networkCached: 7,
-  resolver: 6,
-  userInput: 5,
-  commandOutput: 4,
-  localFile: 3,
-  staticEmbed: 2,
-  module: 1,
-  literal: 0,
-  unknown: -1
-};
 
 function freezeArray<T>(values: Iterable<T> | undefined): readonly T[] {
   if (!values) {
@@ -163,14 +136,14 @@ function freezeObject<T extends Record<string, unknown> | undefined>(input: T): 
 
 function createDescriptor(
   labels: readonly DataLabel[],
-  taintLevel: TaintLevel,
+  taint: readonly DataLabel[],
   sources: readonly string[],
   capability?: CapabilityKind,
   policyContext?: Readonly<Record<string, unknown>>
 ): SecurityDescriptor {
   return Object.freeze({
     labels,
-    taintLevel,
+    taint,
     sources,
     capability,
     policyContext
@@ -179,18 +152,18 @@ function createDescriptor(
 
 export function makeSecurityDescriptor(options?: {
   labels?: Iterable<DataLabel>;
-  taintLevel?: TaintLevel;
+  taint?: Iterable<DataLabel>;
   sources?: Iterable<string>;
   capability?: CapabilityKind;
   policyContext?: Record<string, unknown>;
 }): SecurityDescriptor {
   const labels = freezeArray(options?.labels);
-  const taintLevel = options?.taintLevel ?? 'unknown';
+  const taint = freezeArray([...(options?.taint ?? []), ...labels]);
   const sources = freezeArray(options?.sources);
   const policyContext = freezeObject(options?.policyContext);
   return createDescriptor(
     labels,
-    taintLevel,
+    taint,
     sources,
     options?.capability,
     policyContext
@@ -214,16 +187,22 @@ export function normalizeSecurityDescriptor(
   const candidate = input as SecurityDescriptor;
   const labels = (candidate as any).labels;
   const sources = (candidate as any).sources;
+  const taint = (candidate as any).taint;
   const hasIterableLabels = Array.isArray(labels) && typeof labels.forEach === 'function';
   const hasIterableSources = Array.isArray(sources) && typeof sources.forEach === 'function';
+  const hasIterableTaint = Array.isArray(taint) && typeof taint.forEach === 'function';
 
-  if (hasIterableLabels && hasIterableSources) {
+  if (hasIterableLabels && hasIterableSources && hasIterableTaint) {
     return candidate;
   }
 
   const normalizedLabels =
     Array.isArray(labels) ? (labels as DataLabel[]) :
     labels !== undefined && labels !== null ? [labels as DataLabel] :
+    undefined;
+  const normalizedTaint =
+    Array.isArray(taint) ? (taint as DataLabel[]) :
+    taint !== undefined && taint !== null ? [taint as DataLabel] :
     undefined;
   const normalizedSources =
     Array.isArray(sources) ? (sources as string[]) :
@@ -232,7 +211,7 @@ export function normalizeSecurityDescriptor(
 
   return makeSecurityDescriptor({
     labels: normalizedLabels,
-    taintLevel: (candidate as any).taintLevel,
+    taint: normalizedTaint,
     sources: normalizedSources,
     capability: (candidate as any).capability,
     policyContext: (candidate as any).policyContext
@@ -244,8 +223,7 @@ export function mergeDescriptors(
 ): SecurityDescriptor {
   const labelSet = new Set<DataLabel>();
   const sourceSet = new Set<string>();
-
-  let taintLevel: TaintLevel = 'unknown';
+  const taintSet = new Set<DataLabel>();
   let capability: CapabilityKind | undefined;
   let policyContext: Record<string, unknown> | undefined;
 
@@ -253,9 +231,12 @@ export function mergeDescriptors(
     const descriptor = normalizeSecurityDescriptor(incoming);
     if (!descriptor) continue;
 
-    descriptor.labels.forEach(label => labelSet.add(label));
+    descriptor.labels.forEach(label => {
+      labelSet.add(label);
+      taintSet.add(label);
+    });
+    descriptor.taint.forEach(label => taintSet.add(label));
     descriptor.sources.forEach(source => sourceSet.add(source));
-    taintLevel = compareTaintLevels(taintLevel, descriptor.taintLevel);
 
     if (descriptor.capability) {
       capability = descriptor.capability;
@@ -268,7 +249,7 @@ export function mergeDescriptors(
 
   return createDescriptor(
     freezeArray(labelSet),
-    taintLevel,
+    freezeArray(taintSet),
     freezeArray(sourceSet),
     capability,
     freezeObject(policyContext)
@@ -283,20 +264,13 @@ export function hasLabel(
   return descriptor.labels.includes(label);
 }
 
-export function compareTaintLevels(a: TaintLevel, b: TaintLevel): TaintLevel {
-  if (a === b) return a;
-  const rankA = TAINT_ORDER[a];
-  const rankB = TAINT_ORDER[b];
-  return rankA >= rankB ? a : b;
-}
-
 export function serializeSecurityDescriptor(
   descriptor: SecurityDescriptor | undefined
 ): SerializedSecurityDescriptor | undefined {
   if (!descriptor) return undefined;
   return {
     labels: Array.from(descriptor.labels),
-    taintLevel: descriptor.taintLevel,
+    taint: Array.from(descriptor.taint),
     sources: Array.from(descriptor.sources),
     capability: descriptor.capability,
     policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
@@ -309,7 +283,7 @@ export function deserializeSecurityDescriptor(
   if (!serialized) return undefined;
   return makeSecurityDescriptor({
     labels: serialized.labels,
-    taintLevel: serialized.taintLevel,
+    taint: serialized.taint,
     sources: serialized.sources,
     capability: serialized.capability,
     policyContext: serialized.policyContext
@@ -335,8 +309,8 @@ export function createCapabilityContext(
   return Object.freeze({
     kind: options.kind,
     importType: options.importType,
-    taintLevel: options.descriptor.taintLevel,
     labels: options.descriptor.labels,
+    taint: options.descriptor.taint,
     sources: options.descriptor.sources,
     policy: policy ? Object.freeze({ ...policy }) : undefined,
     metadata: options.metadata ? Object.freeze({ ...options.metadata }) : undefined,
@@ -352,8 +326,8 @@ export function serializeCapabilityContext(
   return {
     kind: context.kind,
     importType: context.importType,
-    taintLevel: context.taintLevel,
     labels: Array.from(context.labels),
+    taint: Array.from(context.taint),
     sources: Array.from(context.sources),
     policy: context.policy ? { ...context.policy } : undefined,
     metadata: context.metadata ? { ...context.metadata } : undefined,

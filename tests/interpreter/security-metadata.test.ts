@@ -206,12 +206,12 @@ describe('Security metadata propagation', () => {
     await evaluateDirective(pipelineDirective, env);
     const pipelineVar = env.getVariable('pipelineOutput');
     expect(pipelineVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
-    expect(pipelineVar?.ctx.taint).toBe('unknown');
+    expect(pipelineVar?.ctx.taint).toEqual(expect.arrayContaining(['secret']));
 
     const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
     const result = await evaluateDirective(resultDirective, env);
     const structuredResult = result.value as any;
-    expect(structuredResult?.ctx?.labels).toEqual(expect.arrayContaining(['untrusted']));
-    expect(structuredResult?.ctx?.taint).toBe('commandOutput');
+    expect(structuredResult?.ctx?.labels ?? []).toEqual([]);
+    expect(structuredResult?.ctx?.taint).toEqual(expect.arrayContaining(['src:exec']));
   });
 });

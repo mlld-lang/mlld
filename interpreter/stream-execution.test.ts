@@ -39,7 +39,7 @@ describe('StreamExecution', () => {
     expect(effectEvent).toBeDefined();
     expect(effectEvent.effect.security).toBeDefined();
     expect(Array.isArray(effectEvent.effect.security.labels)).toBe(true);
-    expect(effectEvent.effect.security.taintLevel).toBeDefined();
+    expect(Array.isArray(effectEvent.effect.security.taint)).toBe(true);
     expect(Array.isArray(effectEvent.effect.security.sources)).toBe(true);
     expect(events.some(e => e.type === 'execution:complete')).toBe(true);
   });

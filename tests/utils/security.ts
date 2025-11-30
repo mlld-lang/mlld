@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import type { SecurityDescriptor, DataLabel, TaintLevel } from '@core/types/security';
+import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 
 export function expectSecurityLabels(
   descriptor: SecurityDescriptor | undefined,
@@ -10,9 +10,11 @@ export function expectSecurityLabels(
   expect(actual).toEqual(expected);
 }
 
-export function expectTaintLevel(
+export function expectTaint(
   descriptor: SecurityDescriptor | undefined,
-  taint: TaintLevel
+  taint: DataLabel[]
 ): void {
-  expect(descriptor?.taintLevel ?? 'unknown').toBe(taint);
+  const actual = descriptor ? Array.from(descriptor.taint).sort() : [];
+  const expected = [...taint].sort();
+  expect(actual).toEqual(expected);
 }

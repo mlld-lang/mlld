@@ -1,4 +1,4 @@
-import type { TaintLevel } from '@core/types/security';
+import type { DataLabel } from '@core/types/security';
 export type { FuzzyMatchConfig } from '@core/resolvers/utils/PathMatcher';
 
 /**
@@ -101,7 +101,7 @@ export interface ResolverContentContext {
   timestamp?: Date;
   author?: string;
   hash?: string;
-  taintLevel?: TaintLevel;
+  taint?: readonly DataLabel[];
   mimeType?: string;
   size?: number;
   [key: string]: unknown;
@@ -123,7 +123,7 @@ export interface ResolverContent {
     timestamp: Date;
     author?: string;
     hash?: string;
-    taintLevel?: TaintLevel;
+    taint?: readonly DataLabel[];
     mimeType?: string;
     size?: number;
   };

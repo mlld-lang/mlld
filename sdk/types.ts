@@ -5,6 +5,7 @@ import type { DirectiveKind, MlldNode } from '@core/types';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { CapabilityContext, DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
+import type { StateWrite } from '@core/types/state';
 import type { StreamEvent } from '@interpreter/eval/pipeline/stream-bus';
 import type { StreamingOptions } from '@interpreter/eval/pipeline/streaming-options';
 import type { EffectHandler, Effect } from '@interpreter/env/EffectHandler';
@@ -52,7 +53,7 @@ export interface InterpretOptions {
   provenance?: boolean;
   recordEffects?: boolean;
   emitter?: ExecutionEmitter;
-  dynamicModules?: Record<string, string>;
+  dynamicModules?: Record<string, string | Record<string, unknown>>;
 }
 
 export interface StructuredEffect extends Effect {
@@ -79,6 +80,7 @@ export interface StructuredResult {
   output: string;
   effects: StructuredEffect[];
   exports: ExportMap;
+  stateWrites: StateWrite[];
   environment?: Environment;
 }
 

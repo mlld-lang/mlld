@@ -10,7 +10,7 @@ import type {
   StructuredValue,
   StructuredValueType
 } from '@interpreter/utils/structured-value';
-import type { CapabilityContext, SecurityDescriptor, DataLabel, TaintLevel } from '../security';
+import type { CapabilityContext, SecurityDescriptor, DataLabel } from '../security';
 import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
 import type { ExecutableDefinition } from '../executable';
@@ -104,7 +104,7 @@ export interface VariableContext {
   type?: VariableTypeDiscriminator;
   definedAt?: SourceLocation;
   labels: readonly DataLabel[];
-  taint: TaintLevel;
+  taint: readonly DataLabel[];
   tokens?: number | readonly number[];
   tokest?: number;
   length?: number;
