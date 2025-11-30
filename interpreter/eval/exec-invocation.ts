@@ -716,9 +716,9 @@ async function evaluateExecInvocationInternal(
 
       const quantifierEvaluator = (objectValue as any)?.__mlldQuantifierEvaluator;
       if (quantifierEvaluator && typeof quantifierEvaluator === 'function') {
-      const quantifierResult = quantifierEvaluator(commandName, evaluatedArgs);
-      return createEvalResult(quantifierResult, env);
-    }
+        const quantifierResult = quantifierEvaluator(commandName, evaluatedArgs);
+        return createEvalResult(quantifierResult, env);
+      }
     
     // Apply the builtin method
     let result: any;

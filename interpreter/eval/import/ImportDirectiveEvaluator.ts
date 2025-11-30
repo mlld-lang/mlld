@@ -326,13 +326,42 @@ export class ImportDirectiveEvaluator {
       throw ResolverError.unsupportedCapability(resolver.name, 'imports', 'import');
     }
 
+    const requestedImports = directive.subtype === 'importSelected'
+      ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
+      : undefined;
+
+    const resolverResult = await resolver.resolve(`@${resolverName}`, {
+      context: 'import',
+      requestedImports
+    });
+
+    if (resolverResult.contentType === 'module') {
+      const ref = resolverResult.ctx?.source ?? `@${resolverName}`;
+      const taintDescriptor = deriveImportTaint({
+        importType: 'module',
+        resolverName,
+        source: ref,
+        resolvedPath: ref,
+        sourceType: 'resolver',
+        labels: resolverResult.ctx?.labels
+      });
+      env.recordSecurityDescriptor(
+        makeSecurityDescriptor({
+          taint: taintDescriptor.taint,
+          labels: taintDescriptor.labels,
+          sources: taintDescriptor.sources
+        })
+      );
+      return this.importFromResolverContent(directive, ref, resolverResult, env);
+    }
+
     // Get export data from resolver
     let exportData: Record<string, any> = {};
     
     if ('getExportData' in resolver) {
       exportData = await this.getResolverExportData(resolver as any, directive, resolverName);
     } else {
-      exportData = await this.fallbackResolverData(resolver, directive, resolverName);
+      exportData = await this.fallbackResolverData(resolver, directive, resolverName, resolverResult);
     }
 
     // Import variables based on directive type
@@ -557,16 +586,19 @@ export class ImportDirectiveEvaluator {
   private async fallbackResolverData(
     resolver: any,
     directive: DirectiveNode,
-    resolverName: string
+    resolverName: string,
+    resolvedResult?: { contentType: string; content: any }
   ): Promise<Record<string, any>> {
     const requestedImports = directive.subtype === 'importSelected' 
       ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
       : undefined;
     
-    const result = await resolver.resolve(`@${resolverName}`, {
-      context: 'import',
-      requestedImports
-    });
+    const result =
+      resolvedResult ??
+      (await resolver.resolve(`@${resolverName}`, {
+        context: 'import',
+        requestedImports
+      }));
     
     // If content is JSON string (data type), parse it
     if (result.contentType === 'data' && typeof result.content === 'string') {

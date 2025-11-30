@@ -679,7 +679,7 @@ async function evaluateGuard(options: {
     inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
-    inputVariable = createArrayVariable('input', arrayValue as any[], true, GUARD_INPUT_SOURCE, {
+    inputVariable = createArrayVariable('input', arrayValue as any[], false, GUARD_INPUT_SOURCE, {
       isSystem: true,
       isReserved: true
     });
