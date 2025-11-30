@@ -24,6 +24,7 @@ export { PathContextBuilder } from '@core/services/PathContextService';
 export { ExecutionEmitter } from './execution-emitter';
 export { StreamExecution } from './stream-execution';
 export { executeRoute, TimeoutError, MemoryRouteCache } from './execute';
+export { ExecuteError, type ExecuteErrorCode } from './types';
 
 // Export types
 export type { Location, Position } from '@core/types/index';

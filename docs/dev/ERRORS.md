@@ -69,6 +69,17 @@ Parse Error → enhanceParseError() → Enhanced Error → User
 JS/Node Error → enhanceJSError() → Enhanced Error → User
 ```
 
+## Runtime SDK Errors
+
+`executeRoute` wraps failures with `ExecuteError` codes for API consumers:
+- `ROUTE_NOT_FOUND` - file missing (ENOENT)
+- `PARSE_ERROR` - mlld parse failure
+- `TIMEOUT` - timeoutMs elapsed
+- `ABORTED` - aborted via signal/abort
+- `RUNTIME_ERROR` - any other interpreter failure
+
+Each error carries the `filePath` and the original cause for debugging.
+
 ### System Components
 
 1. **Core Error Classes** (`core/errors/`)

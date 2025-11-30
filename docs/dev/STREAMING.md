@@ -83,6 +83,7 @@ SDK v2 introduces execution modes that control how consumers receive output:
 - `.result()` - Promise that resolves to StructuredResult
 - `.isComplete()` - Check if execution finished
 - `.abort()` - Cancel execution (triggers cleanup)
+- Async iterable: `for await (const event of streamHandle) { ... }` yields the same SDK events as `.on(...)`
 
 ### ExecutionEmitter Bridge
 
