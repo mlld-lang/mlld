@@ -4,6 +4,7 @@ import type { PathContext } from '@core/services/PathContextService';
 import type { DirectiveKind, MlldNode } from '@core/types';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { CapabilityContext, DataLabel, SecurityDescriptor } from '@core/types/security';
+import type { StateWrite } from '@core/types/state';
 import type { Variable } from '@core/types/variable';
 import type { StreamEvent } from '@interpreter/eval/pipeline/stream-bus';
 import type { StreamingOptions } from '@interpreter/eval/pipeline/streaming-options';
@@ -52,7 +53,8 @@ export interface InterpretOptions {
   provenance?: boolean;
   recordEffects?: boolean;
   emitter?: ExecutionEmitter;
-  dynamicModules?: Record<string, string>;
+  dynamicModules?: Record<string, string | Record<string, unknown>>;
+  ast?: any;
 }
 
 export interface StructuredEffect extends Effect {
@@ -79,6 +81,7 @@ export interface StructuredResult {
   output: string;
   effects: StructuredEffect[];
   exports: ExportMap;
+  stateWrites: StateWrite[];
   environment?: Environment;
 }
 

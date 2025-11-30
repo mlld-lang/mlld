@@ -23,6 +23,7 @@ export { DependencyDetector } from '@core/utils/dependency-detector';
 export { PathContextBuilder } from '@core/services/PathContextService';
 export { ExecutionEmitter } from './execution-emitter';
 export { StreamExecution } from './stream-execution';
+export { executeRoute, TimeoutError, MemoryRouteCache } from './execute';
 
 // Export types
 export type { Location, Position } from '@core/types/index';
@@ -50,7 +51,7 @@ export interface ProcessOptions {
   useMarkdownFormatter?: boolean;
 
   /** Dynamic (non-filesystem) modules for runtime injection */
-  dynamicModules?: Record<string, string>;
+  dynamicModules?: Record<string, string | Record<string, unknown>>;
 }
 
 /**

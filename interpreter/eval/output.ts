@@ -15,6 +15,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
@@ -152,6 +153,19 @@ export async function evaluateOutput(
     if (materializedContent.descriptor) {
       env.recordSecurityDescriptor(materializedContent.descriptor);
     }
+
+    const resolvedValue = resolveNestedValue(descriptorSource ?? content, { preserveProvenance: true });
+    const snapshot = env.getSecuritySnapshot();
+    const securityDescriptor =
+      materializedContent.descriptor ||
+      (snapshot
+        ? makeSecurityDescriptor({
+            labels: snapshot.labels,
+            taintLevel: snapshot.taintLevel,
+            sources: snapshot.sources,
+            policyContext: snapshot.policy
+          })
+        : undefined);
     
     // Handle the target
     // Check if this is a simplified structure from @when actions (has values.path instead of values.target)
@@ -176,7 +190,7 @@ export async function evaluateOutput(
     
     if (targetType === 'file') {
       // File output
-      await outputToFile(target as OutputTargetFile, content, env, directive);
+      await outputToFile(target as OutputTargetFile, content, env, directive, resolvedValue, securityDescriptor);
     } else if (targetType === 'stream') {
       // Stream output (stdout/stderr)
       await outputToStream(target as OutputTargetStream, content, env);
@@ -656,13 +670,26 @@ async function outputToFile(
   target: OutputTargetFile,
   content: string,
   env: Environment,
-  directive: DirectiveNode
+  directive: DirectiveNode,
+  resolvedValue?: unknown,
+  securityDescriptor?: SecurityDescriptor
 ): Promise<void> {
   
   
   // Evaluate the file path
   const pathResult = await interpolateAndRecord(target.path, env);
   let targetPath = String(pathResult);
+
+  if (targetPath.startsWith('state://')) {
+    const statePath = targetPath.slice('state://'.length);
+    env.recordStateWrite({
+      path: statePath,
+      value: resolvedValue ?? content,
+      operation: 'set',
+      security: securityDescriptor
+    });
+    return;
+  }
   
   
   // TODO: This is a hack to handle @base in quoted output paths

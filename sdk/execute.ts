@@ -1,0 +1,145 @@
+/// <reference types="node" />
+
+import { interpret } from '@interpreter/index';
+import type { InterpretOptions, StructuredResult, StreamExecution } from './types';
+import { MemoryAstCache } from './cache/memory-ast-cache';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { IPathService } from '@services/fs/IPathService';
+
+export class TimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Execution exceeded timeout of ${timeoutMs}ms`);
+    this.name = 'TimeoutError';
+  }
+}
+
+export interface ExecuteRouteOptions {
+  state?: Record<string, unknown>;
+  dynamicModules?: Record<string, string | Record<string, unknown>>;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  stream?: boolean;
+  fileSystem?: IFileSystemService;
+  pathService?: IPathService;
+  allowAbsolutePaths?: boolean;
+}
+
+const astCache = new MemoryAstCache();
+
+export async function executeRoute(
+  filePath: string,
+  payload: unknown,
+  options: ExecuteRouteOptions = {}
+): Promise<StructuredResult | StreamExecution> {
+  const fileSystem = options.fileSystem ?? new NodeFileSystem();
+  const pathService = options.pathService ?? new PathService();
+
+  const cacheEntry = await astCache.get(filePath, fileSystem);
+
+  const dynamicModules: Record<string, string | Record<string, unknown>> = {
+    ...(options.dynamicModules ?? {}),
+    ...(payload !== undefined ? { '@payload': payload as any } : {}),
+    ...(options.state ? { '@state': options.state } : {})
+  };
+
+  const interpretOptions: InterpretOptions = {
+    mode: options.stream ? 'stream' : 'structured',
+    filePath,
+    fileSystem,
+    pathService,
+    allowAbsolutePaths: options.allowAbsolutePaths,
+    dynamicModules,
+    ast: cacheEntry.ast
+  } as InterpretOptions;
+
+  if (options.stream) {
+    const handle = (await interpret(cacheEntry.source, interpretOptions)) as StreamExecution;
+    attachSignalAndTimeout(handle, options);
+    return handle;
+  }
+
+  const run = async (): Promise<StructuredResult> => {
+    const result = (await interpret(cacheEntry.source, interpretOptions)) as StructuredResult;
+    return result;
+  };
+
+  if (!options.timeoutMs && !options.signal) {
+    return await run();
+  }
+
+  return await runWithGuards(run, options);
+}
+
+function attachSignalAndTimeout(handle: StreamExecution, options: ExecuteRouteOptions): void {
+  let timer: NodeJS.Timeout | undefined;
+
+  if (options.timeoutMs !== undefined) {
+    timer = setTimeout(() => {
+      handle.abort?.();
+    }, options.timeoutMs);
+  }
+
+  if (options.signal) {
+    if (options.signal.aborted) {
+      handle.abort?.();
+    } else {
+      const onAbort = () => handle.abort?.();
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
+  }
+
+  void handle.done().finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  });
+}
+
+async function runWithGuards<T>(
+  fn: () => Promise<T>,
+  options: Pick<ExecuteRouteOptions, 'timeoutMs' | 'signal'>
+): Promise<T> {
+  if (!options.timeoutMs && !options.signal) {
+    return await fn();
+  }
+
+  return await new Promise<T>((resolve, reject) => {
+    let completed = false;
+    let timer: NodeJS.Timeout | undefined;
+
+    const rejectOnce = (error: Error) => {
+      if (completed) return;
+      completed = true;
+      if (timer) clearTimeout(timer);
+      reject(error);
+    };
+
+    const resolveOnce = (value: T) => {
+      if (completed) return;
+      completed = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+
+    if (options.timeoutMs !== undefined) {
+      timer = setTimeout(() => rejectOnce(new TimeoutError(options.timeoutMs!)), options.timeoutMs);
+    }
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        rejectOnce(new Error('Execution aborted'));
+        return;
+      }
+      const onAbort = () => rejectOnce(new Error('Execution aborted'));
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    fn()
+      .then(resolveOnce)
+      .catch(rejectOnce);
+  });
+}
+
+export { astCache as MemoryRouteCache };
