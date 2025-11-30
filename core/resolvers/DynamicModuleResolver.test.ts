@@ -13,7 +13,7 @@ describe('DynamicModuleResolver', () => {
     expect(result.contentType).toBe('module');
     expect(result.ctx?.source).toBe('dynamic://@user/context');
     expect(result.ctx?.taint).toContain('src:dynamic');
-    expect(result.ctx?.labels).toContain('dynamic');
+    expect(result.ctx?.labels).toContain('src:dynamic');
   });
 
   it('serializes object modules deterministically', async () => {
@@ -61,7 +61,7 @@ describe('DynamicModuleResolver', () => {
     expect(() => new DynamicModuleResolver({ '@deep': deep })).toThrow('maximum depth');
 
     const largeArray = Array.from({ length: 10001 }, () => 1);
-    expect(() => new DynamicModuleResolver({ '@tooMany': { items: largeArray } as any })).toThrow(/array exceeds maximum length/i);
+    expect(() => new DynamicModuleResolver({ '@tooMany': { items: largeArray } as any })).toThrow('array exceeds maximum length');
   });
 
   it('enforces size limits', () => {

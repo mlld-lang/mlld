@@ -9,3 +9,4 @@ export {
   deriveCommandTaint,
   mergeTaintSnapshots
 } from './taint';
+export { getAllDirsInPath, labelsForPath } from './paths';

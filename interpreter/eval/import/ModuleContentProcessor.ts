@@ -10,6 +10,7 @@ import { MlldError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
 
 export interface ModuleProcessingResult {
@@ -55,6 +56,18 @@ export class ModuleContentProcessor {
         labels: directive.meta?.securityLabels || directive.values?.securityLabels
       })
     );
+    const fileDescriptor = !isURL
+      ? makeSecurityDescriptor({
+          taint: ['src:file', ...labelsForPath(resolvedPath)],
+          sources: [resolvedPath]
+        })
+      : undefined;
+    const combinedDescriptor = fileDescriptor
+      ? mergeDescriptors(importDescriptor, fileDescriptor)
+      : importDescriptor;
+    if (combinedDescriptor) {
+      this.env.recordSecurityDescriptor(combinedDescriptor);
+    }
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerPath = resolvedPath.toLowerCase();
@@ -146,6 +159,19 @@ export class ModuleContentProcessor {
         labels: directive.meta?.securityLabels || directive.values?.securityLabels
       })
     );
+    const fileDescriptor =
+      ref && !this.isUrlLike(ref) && !ref.startsWith('@')
+        ? makeSecurityDescriptor({
+            taint: ['src:file', ...labelsForPath(ref)],
+            sources: [ref]
+          })
+        : undefined;
+    const combinedDescriptor = fileDescriptor
+      ? mergeDescriptors(importDescriptor, fileDescriptor)
+      : importDescriptor;
+    if (combinedDescriptor) {
+      this.env.recordSecurityDescriptor(combinedDescriptor);
+    }
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerRef = ref.toLowerCase();
@@ -646,5 +672,9 @@ export class ModuleContentProcessor {
       // Always clear the importing flag, even if evaluation fails
       childEnv.setImporting(false);
     }
+  }
+
+  private isUrlLike(candidate: string): boolean {
+    return /^https?:\/\//i.test(candidate);
   }
 }

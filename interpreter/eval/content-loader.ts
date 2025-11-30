@@ -18,7 +18,8 @@ import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
-import type { SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import { labelsForPath } from '@core/security/paths';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -398,7 +399,13 @@ export async function processContentLoader(node: any, env: Environment): Promise
     }
     
     // Single file loading
-    const result = await loadSingleFile(pathOrUrl, options, env, pipes);
+    const resolvedFilePath = await env.resolvePath(pathOrUrl);
+    const fileSecurityDescriptor = makeSecurityDescriptor({
+      taint: ['src:file', ...labelsForPath(resolvedFilePath)],
+      sources: [resolvedFilePath]
+    });
+    const securityMetadata = { security: fileSecurityDescriptor };
+    const result = await loadSingleFile(pathOrUrl, options, env, pipes, resolvedFilePath);
 
     // Handle array results (from section-list patterns)
     if (Array.isArray(result)) {
@@ -408,15 +415,18 @@ export async function processContentLoader(node: any, env: Environment): Promise
           env,
           node: { pipes }
         });
-        return finalizeLoaderResult(piped, { type: 'array' });
+        return finalizeLoaderResult(piped, { type: 'array', metadata: securityMetadata });
       }
-      return finalizeLoaderResult(result, { type: 'array' });
+      return finalizeLoaderResult(result, { type: 'array', metadata: securityMetadata });
     }
 
     // Apply transform if specified (for single file)
     if (hasTransform && options.transform) {
       const transformed = await applyTransformToResults([result], options.transform, env);
-      return finalizeLoaderResult(transformed[0], { type: typeof transformed[0] === 'string' ? 'text' : 'object' });
+      return finalizeLoaderResult(transformed[0], {
+        type: typeof transformed[0] === 'string' ? 'text' : 'object',
+        metadata: securityMetadata
+      });
     }
 
     // Apply pipes if present
@@ -428,7 +438,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
           env,
           node: { pipes }
         });
-        return finalizeLoaderResult(pipedString, { type: 'text' });
+        return finalizeLoaderResult(pipedString, { type: 'text', metadata: securityMetadata });
       } else {
         // For LoadContentResult objects, apply pipes to the content
         const pipedContent = await processPipeline({
@@ -444,13 +454,21 @@ export async function processContentLoader(node: any, env: Environment): Promise
           absolute: result.absolute,
           _rawContent: result._rawContent
         });
-        return finalizeLoaderResult(pipedResult, { type: 'object', text: asText(pipedContent) });
+        return finalizeLoaderResult(pipedResult, {
+          type: 'object',
+          text: asText(pipedContent),
+          metadata: securityMetadata
+        });
       }
     }
 
     // Always return the full LoadContentResult object
     // The smart object will handle string conversion when needed
-    return finalizeLoaderResult(result, { type: typeof result === 'string' ? 'text' : 'object', text: typeof result === 'string' ? result : result.content });
+    return finalizeLoaderResult(result, {
+      type: typeof result === 'string' ? 'text' : 'object',
+      text: typeof result === 'string' ? result : result.content,
+      metadata: securityMetadata
+    });
   } catch (error: any) {
     if (process.env.DEBUG_CONTENT_LOADER) {
       console.log(`ERROR in processContentLoader: ${error.message}`);
@@ -481,11 +499,17 @@ export async function processContentLoader(node: any, env: Environment): Promise
 /**
  * Load a single file and return LoadContentResult or string (if section extracted)
  */
-async function loadSingleFile(filePath: string, options: any, env: Environment, pipes?: any[]): Promise<LoadContentResult | string | string[]> {
+async function loadSingleFile(
+  filePath: string,
+  options: any,
+  env: Environment,
+  pipes?: any[],
+  resolvedPathOverride?: string
+): Promise<LoadContentResult | string | string[]> {
   const hasPipes = pipes && pipes.length > 0;
+  const resolvedPath = resolvedPathOverride ?? (await env.resolvePath(filePath));
   // Let Environment handle path resolution and fuzzy matching
-  const rawContent = await env.readFile(filePath);
-  const resolvedPath = await env.resolvePath(filePath);
+  const rawContent = await env.readFile(resolvedPath);
   
   // Check if this is an HTML file and convert to Markdown
   if (resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')) {
@@ -1318,10 +1342,22 @@ function deriveLoaderText(value: unknown, type: StructuredValueType): string {
 }
 
 function mergeMetadata(base: StructuredValueMetadata | undefined, extra: StructuredValueMetadata | undefined): StructuredValueMetadata | undefined {
+  const baseSecurity = base?.security;
+  const extraSecurity = extra?.security;
+  const mergedSecurity =
+    baseSecurity && extraSecurity
+      ? mergeDescriptors(baseSecurity, extraSecurity)
+      : baseSecurity ?? extraSecurity;
+
   const merged = {
     source: 'load-content' as const,
     ...(base || {}),
     ...(extra || {})
   } as StructuredValueMetadata;
+
+  if (mergedSecurity) {
+    merged.security = mergedSecurity;
+  }
+
   return merged;
 }

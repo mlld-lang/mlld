@@ -63,6 +63,8 @@ export class ImportDirectiveEvaluator {
         importType: resolution.importType ?? 'live',
         resolverName: resolution.resolverName,
         source: resolution.resolvedPath,
+        resolvedPath: resolution.resolvedPath,
+        sourceType: resolution.type,
         labels: resolution.ctx?.labels
       });
       const taintDescriptor = makeSecurityDescriptor({
@@ -382,6 +384,8 @@ export class ImportDirectiveEvaluator {
           importType: resolution.importType ?? 'module',
           resolverName: resolverContent.resolverName,
           source: resolverContent.ctx?.source ?? resolution.resolvedPath,
+          resolvedPath: resolverContent.ctx?.source ?? resolution.resolvedPath,
+          sourceType: 'module',
           labels: resolverContent.ctx?.labels
         });
         env.recordSecurityDescriptor(

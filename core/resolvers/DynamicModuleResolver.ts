@@ -15,7 +15,7 @@ const MAX_ELEMENTS_PER_ARRAY = 1000;
 const MAX_TOTAL_NODES = 10000;
 
 /**
- * Resolver for in-memory dynamic modules. Treats provided string content as
+ * Resolver for in-memory dynamic modules. Treats provided string or object content as
  * module sources and resolves strictly by exact key match.
  */
 export class DynamicModuleResolver implements Resolver {
@@ -59,7 +59,7 @@ export class DynamicModuleResolver implements Resolver {
       ctx: {
         source: `dynamic://${ref}`,
         taint: ['src:dynamic'],
-        labels: ['dynamic'],
+        labels: ['src:dynamic'],
         timestamp: new Date(),
         size: Buffer.byteLength(content, 'utf8')
       }

@@ -853,9 +853,7 @@ export class VariableFactory {
       structuredValue.metadata as any,
       baseMetadata as any
     );
-    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(mergedMetadata, {
-      existingDescriptor: structuredValue.metadata?.security
-    });
+    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(mergedMetadata);
     // Attach metadata/security in place to preserve identity
     structuredValue.metadata = securityAwareMetadata as any;
     if (securityAwareMetadata?.security) {

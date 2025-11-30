@@ -142,27 +142,27 @@ export async function evaluateOutput(
       content = await applyOutputFormat(content, format, env);
     }
 
-  const materializedContent = materializeDisplayValue(
-    descriptorSource ?? content,
-    undefined,
-    descriptorSource ?? content,
-    content
-  );
-  content = materializedContent.text;
-  if (materializedContent.descriptor) {
-    env.recordSecurityDescriptor(materializedContent.descriptor);
-  }
-  const resolvedValue = resolveNestedValue(descriptorSource ?? content, { preserveProvenance: true });
-  const snapshot = env.getSecuritySnapshot();
-  const securityDescriptor = materializedContent.descriptor ??
-    (snapshot
-      ? makeSecurityDescriptor({
-          labels: snapshot.labels,
-          taint: snapshot.taint,
-          sources: snapshot.sources,
-          policyContext: snapshot.policy
-        })
-      : undefined);
+    const materializedContent = materializeDisplayValue(
+      descriptorSource ?? content,
+      undefined,
+      descriptorSource ?? content,
+      content
+    );
+    content = materializedContent.text;
+    if (materializedContent.descriptor) {
+      env.recordSecurityDescriptor(materializedContent.descriptor);
+    }
+    const resolvedValue = resolveNestedValue(descriptorSource ?? content, { preserveProvenance: true });
+    const snapshot = env.getSecuritySnapshot();
+    const securityDescriptor = materializedContent.descriptor ??
+      (snapshot
+        ? makeSecurityDescriptor({
+            labels: snapshot.labels,
+            taint: snapshot.taint,
+            sources: snapshot.sources,
+            policyContext: snapshot.policy
+          })
+        : undefined);
     
     // Handle the target
     // Check if this is a simplified structure from @when actions (has values.path instead of values.target)

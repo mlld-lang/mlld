@@ -1,4 +1,5 @@
 import type { DataLabel, ImportType } from '@core/types/security';
+import { labelsForPath } from './paths';
 
 type ImmutableArray<T> = readonly T[];
 
@@ -116,10 +117,40 @@ export interface ImportTaintOptions {
   resolverName?: string;
   source?: string;
   labels?: readonly DataLabel[];  // From resolver ctx
+  resolvedPath?: string;
+  sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input';
+}
+
+function isUrlLike(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): boolean {
+  if (!resolvedPath) {
+    return false;
+  }
+  if (options.sourceType === 'url' || options.importType === 'cached') {
+    return false;
+  }
+  if (options.sourceType === 'module' || options.sourceType === 'input') {
+    return false;
+  }
+  if (isUrlLike(resolvedPath)) {
+    return false;
+  }
+  if (resolvedPath.startsWith('@')) {
+    return false;
+  }
+  return true;
 }
 
 export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const resolverName = options.resolverName?.toLowerCase();
+  const resolvedPath = options.resolvedPath ?? options.source;
+  const dirLabels =
+    resolvedPath && shouldTreatAsFile(options, resolvedPath)
+      ? labelsForPath(resolvedPath)
+      : [];
 
   const sources = freezeArray<string>([
     ...(resolverName === 'dynamic' ? ['dynamic-module'] : []),
@@ -129,7 +160,8 @@ export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const explicitLabels = freezeArray(options.labels);
   const taint = freezeArray<DataLabel>([
     ...explicitLabels,
-    ...(resolverName === 'dynamic' ? ['src:dynamic'] : [])
+    ...(resolverName === 'dynamic' ? ['src:dynamic'] : []),
+    ...(dirLabels.length > 0 ? ['src:file', ...dirLabels] : [])
   ]);
 
   return Object.freeze({

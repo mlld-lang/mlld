@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { parseSync } from '@grammar/parser';
 import type { DirectiveNode } from '@core/types';
 import { Environment } from '@interpreter/env/Environment';
@@ -18,6 +21,7 @@ import { evaluateOutput } from '@interpreter/eval/output';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { evaluateShow } from '@interpreter/eval/show';
 import { createSimpleTextVariable } from '@core/types/variable';
+import { getAllDirsInPath } from '@core/security/paths';
 
 describe('Security metadata propagation', () => {
   it('attaches descriptors when evaluating /var directives', async () => {
@@ -213,5 +217,27 @@ describe('Security metadata propagation', () => {
     const structuredResult = result.value as any;
     expect(structuredResult?.ctx?.labels ?? []).toEqual([]);
     expect(structuredResult?.ctx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+  });
+
+  it('applies src:file and directory labels to loaded file content', async () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-sec-load-'));
+    const nestedDir = path.join(tmpRoot, 'secrets', 'configs');
+    const filePath = path.join(nestedDir, 'vars.txt');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.writeFileSync(filePath, 'token=abc');
+
+    try {
+      const env = new Environment(new NodeFileSystem(), new PathService(), tmpRoot);
+      const directive = parseSync(`/var @config = <${path.relative(tmpRoot, filePath)}>`)[0] as DirectiveNode;
+
+      await evaluateVar(directive, env);
+
+      const variable = env.getVariable('config');
+      const expectedDirs = getAllDirsInPath(filePath).map(dir => `dir:${dir}`);
+
+      expect(variable?.ctx.taint).toEqual(expect.arrayContaining(['src:file', ...expectedDirs]));
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 });

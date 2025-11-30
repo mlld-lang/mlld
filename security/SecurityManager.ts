@@ -188,7 +188,9 @@ export class SecurityManager {
 
     const snapshot = deriveImportTaint({
       importType,
-      source: resolvedURL
+      source: resolvedURL,
+      resolvedPath: resolvedURL,
+      sourceType: importType === 'module' ? 'module' : 'url'
     });
 
     this.taintTracker.track(importURL, {

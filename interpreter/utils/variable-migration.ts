@@ -5,6 +5,8 @@
 
 import type { Variable, ArrayVariable } from '@core/types/variable/VariableTypes';
 import type { LoadContentResult } from '@core/types/load-content';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { labelsForPath } from '@core/security/paths';
 
 /**
  * Extracts the value from a Variable while preserving special behaviors
@@ -195,6 +197,21 @@ export function createLoadContentResultVariable(
   applyOverride('globPattern', legacySource);
   applyOverride('fileCount', legacySource);
   
+  const aggregatedSecurity = items
+    .map(item => {
+      if (!item.absolute || /^https?:\/\//i.test(item.absolute)) {
+        return undefined;
+      }
+      const dirLabels = labelsForPath(item.absolute);
+      return makeSecurityDescriptor({
+        taint: ['src:file', ...dirLabels],
+        sources: [item.absolute]
+      });
+    })
+    .filter((descriptor): descriptor is ReturnType<typeof makeSecurityDescriptor> => Boolean(descriptor));
+
+  const mergedSecurity = aggregatedSecurity.length > 0 ? mergeDescriptors(...aggregatedSecurity) : undefined;
+
   return {
     type: 'array',
     name: options?.name ?? options?.ctx?.name ?? 'load-content-result',
@@ -208,7 +225,14 @@ export function createLoadContentResultVariable(
     createdAt: Date.now(),
     modifiedAt: Date.now(),
     ctx: {
-      ...options?.ctx
+      ...options?.ctx,
+      ...(mergedSecurity
+        ? {
+            labels: mergedSecurity.labels,
+            taint: mergedSecurity.taint,
+            sources: mergedSecurity.sources
+          }
+        : {})
     },
     internal: {
       arrayType: 'load-content-result',
