@@ -2,14 +2,65 @@ import type { DirectiveKind } from './primitives';
 
 export type ImportType = 'module' | 'static' | 'live' | 'cached' | 'local';
 
-export type DataLabel =
-  | 'secret'
-  | 'pii'
-  | 'untrusted'
-  | 'public'
-  | 'trusted'
-  | 'destructive'
-  | 'network';
+/**
+ * Data labels are user-defined strings describing data properties and operation behaviors.
+ *
+ * Built-in labels (conventions, not restrictions):
+ *
+ * Data labels:
+ * - secret: Sensitive data (passwords, keys, tokens)
+ * - pii: Personally identifiable information
+ * - public: Safe to expose anywhere
+ * - untrusted: From external sources, potential injection risk
+ * - trusted: From verified/safe sources
+ *
+ * Operation labels (for /exe functions):
+ * - Network: net:r, net:w, net:rw, network
+ * - Filesystem: fs:r, fs:w, fs:rw, filesystem
+ * - Risk: safe, moderate, dangerous, destructive, paid
+ *
+ * Source labels:
+ * - dynamic: Injected at runtime via dynamic modules
+ *
+ * Users can define custom labels (e.g., 'confidential', 'audit-required', 'acme-internal').
+ * Guards work with any label - built-ins are just documented conventions.
+ */
+export type DataLabel = string;
+
+/**
+ * Built-in label constants for reference.
+ * Not exhaustive - users can use any string as a label.
+ */
+export const BUILTIN_LABELS = {
+  // Data
+  SECRET: 'secret',
+  PII: 'pii',
+  PUBLIC: 'public',
+  UNTRUSTED: 'untrusted',
+  TRUSTED: 'trusted',
+
+  // Network
+  NET_R: 'net:r',
+  NET_W: 'net:w',
+  NET_RW: 'net:rw',
+  NETWORK: 'network',
+
+  // Filesystem
+  FS_R: 'fs:r',
+  FS_W: 'fs:w',
+  FS_RW: 'fs:rw',
+  FILESYSTEM: 'filesystem',
+
+  // Risk
+  SAFE: 'safe',
+  MODERATE: 'moderate',
+  DANGEROUS: 'dangerous',
+  DESTRUCTIVE: 'destructive',
+  PAID: 'paid',
+
+  // Source
+  DYNAMIC: 'dynamic'
+} as const;
 
 export type CapabilityKind =
   | DirectiveKind
