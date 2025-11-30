@@ -1,7 +1,8 @@
 /// <reference types="node" />
 
+import { performance } from 'node:perf_hooks';
 import { interpret } from '@interpreter/index';
-import type { InterpretOptions, StructuredResult, StreamExecution } from './types';
+import type { InterpretOptions, StructuredResult, StreamExecution, SDKEvent, ExecuteMetrics } from './types';
 import { MemoryAstCache } from './cache/memory-ast-cache';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -33,6 +34,7 @@ export async function executeRoute(
   payload: unknown,
   options: ExecuteRouteOptions = {}
 ): Promise<StructuredResult | StreamExecution> {
+  const overallStart = performance.now();
   const fileSystem = options.fileSystem ?? new NodeFileSystem();
   const pathService = options.pathService ?? new PathService();
 
@@ -54,15 +56,22 @@ export async function executeRoute(
     ast: cacheEntry.ast
   } as InterpretOptions;
 
+  const metricsContext = {
+    startTime: overallStart,
+    evaluateStart: performance.now(),
+    parseMs: cacheEntry.parseDurationMs ?? 0,
+    cacheHit: cacheEntry.cacheHit
+  };
+
   if (options.stream) {
     const handle = (await interpret(cacheEntry.source, interpretOptions)) as StreamExecution;
     attachSignalAndTimeout(handle, options);
-    return handle;
+    return attachStreamMetrics(handle, metricsContext);
   }
 
   const run = async (): Promise<StructuredResult> => {
     const result = (await interpret(cacheEntry.source, interpretOptions)) as StructuredResult;
-    return result;
+    return withMetrics(result, metricsContext);
   };
 
   if (!options.timeoutMs && !options.signal) {
@@ -140,6 +149,55 @@ async function runWithGuards<T>(
       .then(resolveOnce)
       .catch(rejectOnce);
   });
+}
+
+type MetricsContext = {
+  startTime: number;
+  evaluateStart: number;
+  parseMs: number;
+  cacheHit: boolean;
+};
+
+function withMetrics(result: StructuredResult, context: MetricsContext): StructuredResult {
+  if (result.metrics) return result;
+  const metrics = buildMetrics(result, context);
+  return { ...result, metrics };
+}
+
+function attachStreamMetrics(handle: StreamExecution, context: MetricsContext): StreamExecution {
+  let cached: StructuredResult | undefined;
+  const build = (result: StructuredResult): StructuredResult => {
+    if (!cached) {
+      cached = withMetrics(result, { ...context, evaluateStart: context.evaluateStart || performance.now() });
+    }
+    return cached;
+  };
+
+  const patchEvent = (event: SDKEvent): void => {
+    if (event.type === 'execution:complete' && event.result) {
+      event.result = build(event.result);
+    }
+  };
+
+  handle.on('execution:complete', patchEvent);
+  void handle.done().finally(() => handle.off('execution:complete', patchEvent));
+
+  const originalResult = handle.result.bind(handle);
+  handle.result = async () => build(await originalResult());
+  return handle;
+}
+
+function buildMetrics(result: StructuredResult, context: MetricsContext, now = performance.now()): ExecuteMetrics {
+  const totalMs = Math.max(0, now - context.startTime);
+  const evaluateMs = Math.max(0, now - context.evaluateStart);
+  return {
+    totalMs,
+    parseMs: context.parseMs,
+    evaluateMs,
+    cacheHit: context.cacheHit,
+    effectCount: result.effects?.length ?? 0,
+    stateWriteCount: result.stateWrites?.length ?? 0
+  };
 }
 
 export { astCache as MemoryRouteCache };

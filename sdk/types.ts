@@ -17,6 +17,15 @@ import type { GuardResult } from '@core/types/guard';
 
 export type InterpretMode = 'document' | 'structured' | 'stream' | 'debug';
 
+export interface ExecuteMetrics {
+  totalMs: number;
+  parseMs: number;
+  evaluateMs: number;
+  cacheHit: boolean;
+  effectCount: number;
+  stateWriteCount: number;
+}
+
 export interface CommandExecutionOptions {
   showProgress?: boolean;
   maxOutputLines?: number;
@@ -82,6 +91,7 @@ export interface StructuredResult {
   effects: StructuredEffect[];
   exports: ExportMap;
   stateWrites: StateWrite[];
+  metrics?: ExecuteMetrics;
   environment?: Environment;
 }
 

@@ -2,26 +2,32 @@ import { parse } from '@grammar/parser';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import { MlldParseError, ErrorSeverity } from '@core/errors';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import { performance } from 'node:perf_hooks';
 
 interface CacheEntry {
   ast: any;
   source: string;
+  parseDurationMs: number;
 }
 
 export class MemoryAstCache {
   private readonly cache = new Map<string, CacheEntry>();
 
-  async get(filePath: string, fileSystem: IFileSystemService): Promise<CacheEntry> {
+  async get(
+    filePath: string,
+    fileSystem: IFileSystemService
+  ): Promise<CacheEntry & { cacheHit: boolean }> {
     const source = await fileSystem.readFile(filePath);
     const cached = this.cache.get(filePath);
     if (cached && cached.source === source) {
-      return cached;
+      return { ...cached, cacheHit: true, parseDurationMs: 0 };
     }
 
+    const parseStart = performance.now();
     const ast = await this.parseSource(source, filePath);
-    const entry = { ast, source };
+    const entry = { ast, source, parseDurationMs: performance.now() - parseStart };
     this.cache.set(filePath, entry);
-    return entry;
+    return { ...entry, cacheHit: false };
   }
 
   invalidate(filePath: string): void {
