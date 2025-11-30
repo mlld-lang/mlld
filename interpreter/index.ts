@@ -31,12 +31,14 @@ export async function interpret(
   // Initialize error patterns on first use
   await initializePatterns();
   
-  // Parse the source into AST
-  const parseResult = await parse(source);
+  // Parse the source into AST (or use provided AST)
+  const parseResult = options.ast
+    ? { success: true as const, ast: options.ast }
+    : await parse(source);
   
   // Check if parsing was successful
-  if (!parseResult.success || parseResult.error) {
-    const parseError = parseResult.error || new Error('Unknown parse error');
+  if (!parseResult.success || (parseResult as any).error) {
+    const parseError = (parseResult as any).error || new Error('Unknown parse error');
     
     // Import MlldParseError for proper error handling
     const { MlldParseError, ErrorSeverity } = await import('@core/errors');
