@@ -32,9 +32,9 @@ Runtime module injection via `dynamicModules` in `interpret`/`processMlld`. `Dyn
 - `Environment.registerDynamicModules()` - Registration at interpret time
 
 **Taint handling:**
-- Resolver returns `ctx.taintLevel: 'resolver'`
-- `core/security/taint.ts` maps dynamic resolver name to untrusted taint and adds `dynamic-module` to taint sources
-- Guards can check `@ctx.sources.includes('dynamic-module')`
+- Resolver returns `ctx.taint: ['src:dynamic']` and `labels: ['src:dynamic']`
+- Import taint derivation treats dynamic resolver content as untrusted input
+- Guards can check `@ctx.taint.includes('src:dynamic')` or `@ctx.labels.includes('src:dynamic')`
 
 **SDK integration:**
 - Structured mode: Effects from dynamic imports carry security metadata

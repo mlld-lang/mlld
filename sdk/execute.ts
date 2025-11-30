@@ -2,12 +2,21 @@
 
 import { performance } from 'node:perf_hooks';
 import { interpret } from '@interpreter/index';
-import type { InterpretOptions, StructuredResult, StreamExecution, SDKEvent, ExecuteMetrics } from './types';
+import type {
+  InterpretOptions,
+  StructuredResult,
+  StreamExecution,
+  SDKEvent,
+  ExecuteMetrics,
+  ExecuteErrorCode
+} from './types';
 import { MemoryAstCache } from './cache/memory-ast-cache';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
+import { ExecuteError } from './types';
+import { MlldParseError } from '@core/errors';
 
 export class TimeoutError extends Error {
   constructor(public readonly timeoutMs: number) {
@@ -38,7 +47,7 @@ export async function executeRoute(
   const fileSystem = options.fileSystem ?? new NodeFileSystem();
   const pathService = options.pathService ?? new PathService();
 
-  const cacheEntry = await astCache.get(filePath, fileSystem);
+  const cacheEntry = await getCachedAst(filePath, fileSystem);
 
   const dynamicModules: Record<string, string | Record<string, unknown>> = {
     ...(options.dynamicModules ?? {}),
@@ -64,13 +73,13 @@ export async function executeRoute(
   };
 
   if (options.stream) {
-    const handle = (await interpret(cacheEntry.source, interpretOptions)) as StreamExecution;
+    const handle = (await runInterpret(cacheEntry.source, interpretOptions, filePath)) as StreamExecution;
     attachSignalAndTimeout(handle, options);
-    return attachStreamMetrics(handle, metricsContext);
+    return attachStreamMetrics(handle, metricsContext, filePath);
   }
 
   const run = async (): Promise<StructuredResult> => {
-    const result = (await interpret(cacheEntry.source, interpretOptions)) as StructuredResult;
+    const result = (await runInterpret(cacheEntry.source, interpretOptions, filePath)) as StructuredResult;
     return withMetrics(result, metricsContext);
   };
 
@@ -164,7 +173,7 @@ function withMetrics(result: StructuredResult, context: MetricsContext): Structu
   return { ...result, metrics };
 }
 
-function attachStreamMetrics(handle: StreamExecution, context: MetricsContext): StreamExecution {
+function attachStreamMetrics(handle: StreamExecution, context: MetricsContext, filePath: string): StreamExecution {
   let cached: StructuredResult | undefined;
   const build = (result: StructuredResult): StructuredResult => {
     if (!cached) {
@@ -183,7 +192,13 @@ function attachStreamMetrics(handle: StreamExecution, context: MetricsContext): 
   void handle.done().finally(() => handle.off('execution:complete', patchEvent));
 
   const originalResult = handle.result.bind(handle);
-  handle.result = async () => build(await originalResult());
+  handle.result = async () => {
+    try {
+      return build(await originalResult());
+    } catch (error) {
+      throw wrapExecuteError(error, filePath);
+    }
+  };
   return handle;
 }
 
@@ -201,3 +216,38 @@ function buildMetrics(result: StructuredResult, context: MetricsContext, now = p
 }
 
 export { astCache as MemoryRouteCache };
+
+async function getCachedAst(filePath: string, fileSystem: IFileSystemService) {
+  try {
+    return await astCache.get(filePath, fileSystem);
+  } catch (error) {
+    throw wrapExecuteError(error, filePath);
+  }
+}
+
+async function runInterpret(source: string, options: InterpretOptions, filePath: string) {
+  try {
+    return await interpret(source, options);
+  } catch (error) {
+    throw wrapExecuteError(error, filePath);
+  }
+}
+
+function wrapExecuteError(error: unknown, filePath?: string): ExecuteError {
+  if (error instanceof ExecuteError) return error;
+
+  const err = error as any;
+  const code: ExecuteErrorCode =
+    err instanceof TimeoutError
+      ? 'TIMEOUT'
+      : err?.name === 'AbortError' || err?.message === 'Execution aborted'
+        ? 'ABORTED'
+        : err?.code === 'ENOENT'
+          ? 'ROUTE_NOT_FOUND'
+          : err instanceof MlldParseError
+            ? 'PARSE_ERROR'
+            : 'RUNTIME_ERROR';
+
+  const message = err?.message ?? 'Execution failed';
+  return new ExecuteError(message, code, filePath, { cause: error });
+}

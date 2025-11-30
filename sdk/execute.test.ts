@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { executeRoute, MemoryRouteCache } from './execute';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { ExecuteError } from './types';
 
 describe('executeRoute', () => {
   let fileSystem: MemoryFileSystem;
@@ -89,6 +90,21 @@ describe('executeRoute', () => {
 
     expect(types).toContain('effect');
     expect(types).toContain('execution:complete');
+  });
+
+  it('wraps missing files as ExecuteError', async () => {
+    await expect(executeRoute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toBeInstanceOf(ExecuteError);
+    await expect(executeRoute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toMatchObject({
+      code: 'ROUTE_NOT_FOUND'
+    });
+  });
+
+  it('wraps parse errors as ExecuteError', async () => {
+    await fileSystem.writeFile(routePath, '/var @oops = {');
+
+    await expect(executeRoute(routePath, undefined, { fileSystem, pathService })).rejects.toMatchObject({
+      code: 'PARSE_ERROR'
+    });
   });
 
   it('injects payload and state dynamic modules', async () => {
