@@ -1,0 +1,13 @@
+# First policy
+
+/var @config = {
+  allow: {
+    cmd: ["echo", "jq"]
+  },
+  deny: {
+    cmd: ["rm"]
+  },
+  limits: {
+    timeout: 1000
+  }
+}

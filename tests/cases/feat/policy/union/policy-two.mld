@@ -1,0 +1,13 @@
+# Second policy
+
+/var @config = {
+  allow: {
+    cmd: ["echo"]
+  },
+  deny: {
+    cmd: ["mv"]
+  },
+  limits: {
+    timeout: 500
+  }
+}
