@@ -45,6 +45,7 @@ export interface ImportValues {
   cachedDuration?: TimeDurationNode;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  namespace?: TextNode[];
 }
 
 export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;

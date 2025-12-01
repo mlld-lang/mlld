@@ -213,11 +213,12 @@ export type DirectiveKind =
   | 'guard'
   | 'stream'
   | 'needs'
-  | 'wants';
+  | 'wants'
+  | 'policy';
 
 export type DirectiveSubtype =
   // Import subtypes
-  | 'importAll' | 'importSelected' | 'importNamespace'
+  | 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy'
   // Export subtype
   | 'exportSelected'
   // Unified var subtype
@@ -240,7 +241,9 @@ export type DirectiveSubtype =
   | 'guard'
   // Needs/Wants subtypes
   | 'needs'
-  | 'wants';
+  | 'wants'
+  // Policy subtype
+  | 'policy';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

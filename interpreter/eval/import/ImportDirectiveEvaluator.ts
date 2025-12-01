@@ -12,6 +12,7 @@ import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError, ErrorSeverity } from '@core/errors';
 // createVariableFromValue is now part of VariableImporter
 import { interpolate } from '../../core/interpreter';
+import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 
 const MODULE_SOURCE_EXTENSIONS = ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md'] as const;
 
@@ -75,8 +76,11 @@ export class ImportDirectiveEvaluator {
       const descriptor = mergeDescriptors(baseDescriptor, taintDescriptor);
 
       // 2. Route to appropriate handler based on import type
-      const result = await this.routeImportRequest(resolution, directive, env);
-      return result;
+      return await this.withPolicyOverride(
+        directive,
+        env,
+        async () => await this.routeImportRequest(resolution, directive, env)
+      );
 
     } catch (error) {
       return this.handleImportError(error, directive, env);
@@ -498,7 +502,7 @@ export class ImportDirectiveEvaluator {
         directive,
         resolverContent.contentType
       );
-      
+
 
       if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ImportDirectiveEvaluator] Processing result for ${ref}:`, {
@@ -789,6 +793,35 @@ export class ImportDirectiveEvaluator {
   private handleImportError(error: any, directive: DirectiveNode, env: Environment): EvalResult {
     // Enhanced error context could be added here
     throw error;
+  }
+
+  private async withPolicyOverride<T>(
+    directive: DirectiveNode,
+    env: Environment,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const overrideConfig = (directive.values as any)?.withClause?.policy as PolicyConfig | undefined;
+    if (!overrideConfig) {
+      return await operation();
+    }
+
+    const previousContext = env.getPolicyContext();
+    const mergedConfig = mergePolicyConfigs(
+      previousContext?.configs as PolicyConfig | undefined,
+      normalizePolicyConfig(overrideConfig)
+    );
+    const nextContext = {
+      tier: previousContext?.tier ?? null,
+      configs: mergedConfig ?? {},
+      activePolicies: previousContext?.activePolicies ?? []
+    };
+
+    env.setPolicyContext(nextContext);
+    try {
+      return await operation();
+    } finally {
+      env.setPolicyContext(previousContext ?? null);
+    }
   }
 
   private applyPolicyImportContext(

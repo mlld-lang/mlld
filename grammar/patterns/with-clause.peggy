@@ -47,6 +47,9 @@ WithProperty
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
     }
+  / "policy" _ ":" _ policy:DataObjectLiteral {
+      return ["policy", policy];
+    }
   / "parallel" _ ":" _ cap:NumberLiteral {
       return ["parallel", Number(cap)];
     }

@@ -212,6 +212,7 @@ Directive
     / SlashAppend   // Append directives (incremental file writing)
     / SlashWhen     // When directives (conditional execution)
     / SlashGuard    // Guard directives (security policies)
+    / SlashPolicy   // Policy composition directives
     / SlashNeeds    // Needs directives (capability declarations)
     / SlashWants    // Wants directives (capability tiers)
     / SlashStream   // Stream directives

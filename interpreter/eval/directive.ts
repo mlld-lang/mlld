@@ -3,6 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { getTextContent } from '../utils/type-guard-helpers';
 import type { OperationContext, PipelineContextSnapshot } from '../env/ContextManager';
+import type { PolicyDirectiveNode } from '@core/types/policy';
 import { extractDirectiveInputs } from './directive-inputs';
 import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
 import type { Variable } from '@core/types/variable';
@@ -26,6 +27,7 @@ import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
 import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { evaluatePolicy } from './policy';
 
 /**
  * Extract trace information from a directive
@@ -98,6 +100,14 @@ function extractTraceInfo(directive: DirectiveNode): {
       const firstExport = directive.values?.exports?.[0];
       if (firstExport && typeof firstExport.identifier === 'string') {
         info.varName = firstExport.identifier;
+      }
+      break;
+
+    case 'policy':
+      const policyNameNode = (directive.values as any)?.name?.[0];
+      const policyName = getTextContent(policyNameNode);
+      if (policyName) {
+        info.varName = policyName;
       }
       break;
   }
@@ -352,6 +362,9 @@ async function dispatchDirective(
 
     case 'wants':
       return await evaluateWants(directive, env);
+
+    case 'policy':
+      return await evaluatePolicy(directive as PolicyDirectiveNode, env);
 
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

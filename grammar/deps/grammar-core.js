@@ -41,7 +41,8 @@ export const DirectiveKind = {
     guard: 'guard',
     // NO deprecated entries - clean break!
     needs: 'needs',
-    wants: 'wants'
+    wants: 'wants',
+    policy: 'policy'
 };
 let warningCollector = null;
 export const helpers = {
