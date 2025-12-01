@@ -811,10 +811,11 @@ export class ImportDirectiveEvaluator {
     const alias =
       (directive.values as any)?.namespace?.[0]?.content ||
       (directive.values as any)?.imports?.[0]?.alias ||
-      (directive.values as any)?.imports?.[0]?.identifier;
-    const policyId = alias || source || 'policy';
-    if (!activePolicies.includes(policyId)) {
-      activePolicies.push(policyId);
+      (directive.values as any)?.imports?.[0]?.identifier ||
+      source ||
+      'policy';
+    if (!activePolicies.includes(alias)) {
+      activePolicies.push(alias);
     }
 
     const nextContext = {

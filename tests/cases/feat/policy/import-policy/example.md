@@ -4,3 +4,4 @@
 
 /var @first = @ctx.policy.activePolicies[0]
 /show @first
+/show @ctx.policy.configs.allow.cmd

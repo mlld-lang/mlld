@@ -786,6 +786,9 @@ export class VariableImporter {
       if (guardDefinitions && guardDefinitions.length > 0) {
         targetEnv.registerSerializedGuards(guardDefinitions);
       }
+      if (directive.subtype === 'importPolicy') {
+        targetEnv.recordPolicyConfig(alias, namespaceObject);
+      }
       return;
     }
 
@@ -802,6 +805,10 @@ export class VariableImporter {
     this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
     if (guardDefinitions && guardDefinitions.length > 0) {
       targetEnv.registerSerializedGuards(guardDefinitions);
+    }
+    if (directive.subtype === 'importPolicy') {
+      const policyConfig = (namespaceObject as any)?.config ?? namespaceObject;
+      targetEnv.recordPolicyConfig(alias, policyConfig);
     }
   }
 

@@ -32,6 +32,7 @@ import {
 import type { StateWrite } from '@core/types/state';
 import { TaintTracker } from '@core/security';
 import { ALLOW_ALL_POLICY, mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type WantsTier } from '@core/policy/needs';
+import { mergePolicyConfigs, type PolicyConfig, normalizePolicyConfig } from '@core/policy/union';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -119,6 +120,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private moduleNeeds?: NeedsDeclaration;
   private moduleWants?: WantsTier[];
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
+  private policySummary?: PolicyConfig;
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
@@ -811,6 +813,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return this.securityRuntime.policy;
     }
     return this.parent?.getPolicyContext();
+  }
+
+  recordPolicyConfig(alias: string, config: any): void {
+    const normalizedConfig = normalizePolicyConfig(config);
+    this.policySummary = mergePolicyConfigs(this.policySummary, normalizedConfig);
+
+    const existing = (this.getPolicyContext() as any) || {};
+    const activePolicies = Array.isArray(existing.activePolicies) ? [...existing.activePolicies] : [];
+    if (!activePolicies.includes(alias)) {
+      activePolicies.push(alias);
+    }
+
+    const nextContext = {
+      tier: existing.tier ?? null,
+      configs: this.policySummary ?? {},
+      activePolicies
+    };
+    this.setPolicyContext(nextContext);
   }
 
   getSecuritySnapshot(): SecuritySnapshot | undefined {
