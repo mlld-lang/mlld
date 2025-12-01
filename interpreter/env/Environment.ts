@@ -808,11 +808,29 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     runtime.policy = policy ?? undefined;
   }
 
+  setPolicyEnvironment(environment?: string | null): void {
+    const existing = (this.getPolicyContext() as any) || {};
+    const nextContext = {
+      tier: existing.tier ?? null,
+      configs: existing.configs ?? {},
+      activePolicies: existing.activePolicies ?? [],
+      environment: environment ?? null
+    };
+    this.setPolicyContext(nextContext);
+  }
+
   getPolicyContext(): Record<string, unknown> | undefined {
     if (this.securityRuntime?.policy) {
       return this.securityRuntime.policy;
     }
     return this.parent?.getPolicyContext();
+  }
+
+  getProjectConfig(): ProjectConfig | undefined {
+    if (this.projectConfig) {
+      return this.projectConfig;
+    }
+    return this.parent?.getProjectConfig();
   }
 
   recordPolicyConfig(alias: string, config: any): void {
@@ -828,7 +846,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const nextContext = {
       tier: existing.tier ?? null,
       configs: this.policySummary ?? {},
-      activePolicies
+      activePolicies,
+      ...(existing.environment ? { environment: existing.environment } : {})
     };
     this.setPolicyContext(nextContext);
   }

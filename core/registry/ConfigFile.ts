@@ -217,6 +217,20 @@ export class ConfigFile {
     return this.data!.dev?.localModulesPath || 'llm/modules';
   }
 
+  getPolicyImports(): string[] {
+    this.ensureLoaded();
+    return this.data!.policy?.import ? [...this.data!.policy.import] : [];
+  }
+
+  getPolicyEnvironment(): string | undefined {
+    this.ensureLoaded();
+    return this.data!.policy?.environment;
+  }
+
+  getFilePath(): string {
+    return this.filePath;
+  }
+
   async setDevMode(enabled: boolean): Promise<void> {
     this.ensureLoaded();
     if (!this.data!.dev) {

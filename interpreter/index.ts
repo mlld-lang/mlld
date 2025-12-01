@@ -1,4 +1,4 @@
-import { parse } from '@grammar/parser';
+import { parse, parseSync } from '@grammar/parser';
 import { Environment } from './env/Environment';
 import { DefaultEffectHandler, type EffectHandler } from './env/EffectHandler';
 import { evaluate } from './core/interpreter';
@@ -19,6 +19,8 @@ import { getExpressionProvenance } from './utils/expression-provenance';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { StreamExecution } from '@sdk/stream-execution';
+import { evaluateDirective } from './eval/directive';
+import type { DirectiveNode } from '@core/types';
 
 /**
  * Main entry point for the Mlld interpreter.
@@ -281,6 +283,8 @@ export async function interpret(
   if (options.ephemeral) {
     await env.setEphemeralMode(options.ephemeral);
   }
+
+  await applyConfigPolicyImports(env);
   
   // Cache the source content for error reporting
   if (options.filePath) {
@@ -482,4 +486,63 @@ function collectExports(env: Environment, provenanceEnabled: boolean): ExportMap
   }
 
   return exports;
+}
+
+function derivePolicyAlias(reference: string, index: number, used: Set<string>): string {
+  const strippedRegistry = reference.replace(/^registry:@/, '').replace(/^@/, '');
+  const parts = strippedRegistry.split(/[\\/]/);
+  const lastPart = parts[parts.length - 1] || '';
+  const baseName = lastPart.replace(/\.[^.]+$/, '') || `policy${index + 1}`;
+  let alias = baseName.replace(/[^A-Za-z0-9_]/g, '_');
+  if (!/^[A-Za-z_]/.test(alias)) {
+    alias = `policy_${alias}`;
+  }
+  if (!alias) {
+    alias = `policy${index + 1}`;
+  }
+
+  let candidate = alias;
+  let counter = 1;
+  while (used.has(candidate)) {
+    candidate = `${alias}_${counter++}`;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+async function applyConfigPolicyImports(env: Environment): Promise<void> {
+  const projectConfig = env.getProjectConfig?.();
+  if (!projectConfig) {
+    return;
+  }
+
+  const policyImports = projectConfig.getPolicyImports?.() ?? [];
+  const policyEnvironment = projectConfig.getPolicyEnvironment?.();
+  if (policyImports.length === 0 && !policyEnvironment) {
+    return;
+  }
+
+  const configPath = projectConfig.getConfigFilePath?.();
+  const previousFilePath = env.getCurrentFilePath();
+  if (configPath) {
+    env.setCurrentFilePath(configPath);
+  }
+
+  const usedAliases = new Set<string>();
+  for (let i = 0; i < policyImports.length; i++) {
+    const reference = policyImports[i];
+    const alias = derivePolicyAlias(reference, i, usedAliases);
+    const directiveSource = `/import policy @${alias} from "${reference}"`;
+    const nodes = parseSync(directiveSource);
+    const directive = nodes[0] as DirectiveNode;
+    await evaluateDirective(directive, env);
+  }
+
+  if (policyEnvironment) {
+    env.setPolicyEnvironment(policyEnvironment);
+  }
+
+  if (configPath) {
+    env.setCurrentFilePath(previousFilePath);
+  }
 }

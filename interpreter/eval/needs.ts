@@ -37,10 +37,12 @@ export async function evaluateWants(
   const policy = env.getPolicyCapabilities();
   const match = selectWantsTier(wants, policy);
 
+  const existingContext = env.getPolicyContext();
   const policyContext = {
     tier: match?.tier ?? null,
-    configs: {},
-    activePolicies: []
+    configs: existingContext?.configs ?? {},
+    activePolicies: existingContext?.activePolicies ?? [],
+    ...(existingContext?.environment ? { environment: existingContext.environment } : {})
   };
   env.setPolicyContext(policyContext);
 

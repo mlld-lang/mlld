@@ -113,6 +113,18 @@ export class ProjectConfig {
     return this.configFile.getLocalModulesPath();
   }
 
+  getPolicyImports(): string[] {
+    return this.configFile.getPolicyImports();
+  }
+
+  getPolicyEnvironment(): string | undefined {
+    return this.configFile.getPolicyEnvironment();
+  }
+
+  getConfigFilePath(): string {
+    return this.configFile.getFilePath();
+  }
+
   // === Lock File Methods (Auto-generated) ===
 
   getLockedModule(moduleName: string) {
