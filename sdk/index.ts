@@ -26,6 +26,20 @@ export { StreamExecution } from './stream-execution';
 export { executeRoute, TimeoutError, MemoryRouteCache } from './execute';
 export { ExecuteError, type ExecuteErrorCode } from './types';
 
+// Export static analysis
+export { analyzeModule } from './analyze';
+export type {
+  ModuleAnalysis,
+  ExecutableInfo,
+  GuardInfo,
+  ImportInfo,
+  VariableInfo,
+  WantsTier,
+  ModuleStats,
+  AnalysisError,
+  AnalysisWarning
+} from './analyze';
+
 // Export types
 export type { Location, Position } from '@core/types/index';
 export type { PathContext, PathContextOptions } from '@core/services/PathContextService';
