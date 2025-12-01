@@ -704,7 +704,16 @@ export class VariableImporter {
     metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
     guardDefinitions?: SerializedGuardDefinition[]
   ): Promise<void> {
-    if (directive.subtype === 'importAll') {
+    if (directive.subtype === 'importPolicy') {
+      await this.handleNamespaceImport(
+        directive,
+        moduleObject,
+        targetEnv,
+        childEnv,
+        metadataMap,
+        guardDefinitions
+      );
+    } else if (directive.subtype === 'importAll') {
       throw new MlldImportError(
         'Wildcard imports \'/import { * }\' are no longer supported. ' +
         'Use namespace imports instead: \'/import "file"\' or \'/import "file" as @name\'',

@@ -458,6 +458,7 @@ export class ImportDirectiveEvaluator {
 
     // Import variables into environment
     await this.variableImporter.importVariables(processingResult, directive, env);
+    this.applyPolicyImportContext(directive, env, resolution.resolvedPath);
 
     return { value: undefined, env };
   }
@@ -509,6 +510,7 @@ export class ImportDirectiveEvaluator {
 
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
+      this.applyPolicyImportContext(directive, env, processingRef);
 
       const dynamicSource = resolverContent.ctx?.source;
       if (dynamicSource && typeof dynamicSource === 'string' && dynamicSource.startsWith('dynamic://')) {
@@ -787,5 +789,39 @@ export class ImportDirectiveEvaluator {
   private handleImportError(error: any, directive: DirectiveNode, env: Environment): EvalResult {
     // Enhanced error context could be added here
     throw error;
+  }
+
+  private applyPolicyImportContext(
+    directive: DirectiveNode,
+    env: Environment,
+    source?: string
+  ): void {
+    const isPolicyImport =
+      directive.subtype === 'importPolicy' ||
+      (directive.meta as any)?.importType === 'policy' ||
+      (directive.values as any)?.importType === 'policy';
+    if (!isPolicyImport) {
+      return;
+    }
+
+    const existing = (env.getPolicyContext() as any) || {};
+    const activePolicies = Array.isArray(existing.activePolicies)
+      ? [...existing.activePolicies]
+      : [];
+    const alias =
+      (directive.values as any)?.namespace?.[0]?.content ||
+      (directive.values as any)?.imports?.[0]?.alias ||
+      (directive.values as any)?.imports?.[0]?.identifier;
+    const policyId = alias || source || 'policy';
+    if (!activePolicies.includes(policyId)) {
+      activePolicies.push(policyId);
+    }
+
+    const nextContext = {
+      tier: existing.tier ?? null,
+      configs: existing.configs ?? {},
+      activePolicies
+    };
+    env.setPolicyContext(nextContext);
   }
 }
