@@ -31,6 +31,7 @@ import {
 } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
 import { TaintTracker } from '@core/security';
+import { ALLOW_ALL_POLICY, mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type WantsTier } from '@core/policy/needs';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -115,6 +116,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
   private securityRuntime?: SecurityRuntimeState;
+  private moduleNeeds?: NeedsDeclaration;
+  private moduleWants?: WantsTier[];
+  private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
@@ -760,6 +764,53 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Get from this environment or parent
     if (this.securityManager) return this.securityManager;
     return this.parent?.getSecurityManager();
+  }
+
+  getModuleNeeds(): NeedsDeclaration | undefined {
+    if (this.moduleNeeds) return this.moduleNeeds;
+    return this.parent?.getModuleNeeds();
+  }
+
+  recordModuleNeeds(needs: NeedsDeclaration): void {
+    this.moduleNeeds = mergeNeedsDeclarations(this.moduleNeeds, needs);
+  }
+
+  getModuleWants(): WantsTier[] | undefined {
+    if (this.moduleWants) return this.moduleWants;
+    return this.parent?.getModuleWants();
+  }
+
+  recordModuleWants(wants: WantsTier[]): void {
+    if (!wants || wants.length === 0) {
+      return;
+    }
+    if (!this.moduleWants) {
+      this.moduleWants = [...wants];
+      return;
+    }
+    this.moduleWants = [...this.moduleWants, ...wants];
+  }
+
+  getPolicyCapabilities(): PolicyCapabilities {
+    if (this.policyCapabilities) return this.policyCapabilities;
+    if (this.parent) return this.parent.getPolicyCapabilities();
+    return ALLOW_ALL_POLICY;
+  }
+
+  setPolicyCapabilities(policy: PolicyCapabilities): void {
+    this.policyCapabilities = policy;
+  }
+
+  setPolicyContext(policy?: Record<string, unknown> | null): void {
+    const runtime = this.ensureSecurityRuntime();
+    runtime.policy = policy ?? undefined;
+  }
+
+  getPolicyContext(): Record<string, unknown> | undefined {
+    if (this.securityRuntime?.policy) {
+      return this.securityRuntime.policy;
+    }
+    return this.parent?.getPolicyContext();
   }
 
   getSecuritySnapshot(): SecuritySnapshot | undefined {
@@ -1931,6 +1982,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
     // Create child import resolver
     child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);
+    child.policyCapabilities = this.policyCapabilities;
+    const policyContext = this.getPolicyContext();
+    if (policyContext) {
+      child.setPolicyContext({ ...policyContext });
+    }
     
     // Track child environment for cleanup
     this.childEnvironments.add(child);

@@ -211,7 +211,9 @@ export type DirectiveKind =
   | 'append'
   | 'when'
   | 'guard'
-  | 'stream';
+  | 'stream'
+  | 'needs'
+  | 'wants';
 
 export type DirectiveSubtype =
   // Import subtypes
@@ -235,7 +237,10 @@ export type DirectiveSubtype =
   // When subtypes
   | 'whenSimple' | 'whenBlock' | 'whenMatch'
   // Guard subtype
-  | 'guard';
+  | 'guard'
+  // Needs/Wants subtypes
+  | 'needs'
+  | 'wants';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

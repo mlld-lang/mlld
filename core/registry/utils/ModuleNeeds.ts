@@ -7,6 +7,7 @@ import type {
   ToolRequirement,
   VersionSpecifier
 } from '../types';
+import type { NeedsDeclaration } from '@core/policy/needs';
 
 type LegacyRuntimeDetail = {
   node?: string;
@@ -27,6 +28,50 @@ export function normalizeModuleNeeds(
   rawNeeds: unknown,
   legacyDetails?: LegacyNeedsDetails
 ): ModuleNeedsNormalized {
+  if (rawNeeds && typeof rawNeeds === 'object' && !Array.isArray(rawNeeds)) {
+    const candidate = rawNeeds as Record<string, unknown>;
+    const packagesField = candidate.packages as unknown;
+  const hasPackageObjects =
+      packagesField &&
+      typeof packagesField === 'object' &&
+      Object.values(packagesField as Record<string, unknown>).some(
+        entry => Array.isArray(entry) && entry.some(item => typeof item === 'object' && item !== null)
+      );
+  const hasCapabilityFields =
+      'capabilities' in candidate ||
+      'cmd' in candidate ||
+      'network' in candidate ||
+      'sh' in candidate ||
+      'filesystem' in candidate;
+  if (hasCapabilityFields || hasPackageObjects) {
+    const needs = rawNeeds as NeedsDeclaration;
+    const packages: PackageRequirementMap = {};
+    for (const [ecosystem, pkgList] of Object.entries(needs.packages || {})) {
+      packages[ecosystem] = (pkgList || []).map(pkg => {
+          if (typeof pkg === 'string') {
+            return parseVersionSpecifier(pkg);
+          }
+          if (pkg && typeof pkg === 'object') {
+            const candidatePkg = pkg as PackageRequirement;
+            return {
+              name: candidatePkg.name,
+              specifier: candidatePkg.specifier,
+              raw: candidatePkg.raw ?? formatVersionSpecifier(candidatePkg.name, candidatePkg.specifier)
+            };
+          }
+          return { name: '', raw: '' };
+        }).filter(pkg => pkg.name);
+      }
+
+      return {
+        runtimes: [],
+        tools: [],
+        packages,
+        capabilities: needs
+      };
+    }
+  }
+
   const normalized: ModuleNeedsNormalized = {
     runtimes: [],
     tools: [],
@@ -194,6 +239,16 @@ export function parseVersionSpecifier(raw: string): VersionSpecifier {
     return { name: '', raw: '' };
   }
 
+  const comparatorMatch = trimmed.match(/^(@?[^@<>=!~\s]+)\s*(==|>=|<=|>|<|!=|~=)\s*(.+)$/);
+  if (comparatorMatch) {
+    const [, name, operator, spec] = comparatorMatch;
+    return {
+      name,
+      specifier: `${operator}${spec}`,
+      raw: trimmed
+    };
+  }
+
   if (trimmed.startsWith('@')) {
     const parts = trimmed.split('@');
     if (parts.length > 2) {
@@ -260,6 +315,10 @@ export function moduleNeedsToSerializable(needs: ModuleNeedsNormalized): ModuleN
       }));
       return acc;
     }, {});
+  }
+
+  if (needs.capabilities) {
+    result.capabilities = needs.capabilities;
   }
 
   return result;

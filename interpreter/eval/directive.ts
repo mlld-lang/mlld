@@ -21,6 +21,7 @@ import { evaluateExe } from './exe';
 import { evaluateForDirective } from './for';
 import { evaluateExport } from './export';
 import { evaluateGuard } from './guard';
+import { evaluateNeeds, evaluateWants } from './needs';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
@@ -345,6 +346,12 @@ async function dispatchDirective(
 
     case 'guard':
       return await evaluateGuard(directive, env);
+
+    case 'needs':
+      return await evaluateNeeds(directive, env);
+
+    case 'wants':
+      return await evaluateWants(directive, env);
 
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

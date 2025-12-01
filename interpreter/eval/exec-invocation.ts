@@ -12,7 +12,6 @@ import {
 } from '@core/types/variable';
 import type { Variable, VariableContext } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
-import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { MlldInterpreterError, MlldCommandExecutionError, CircularReferenceError } from '@core/errors';
 import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
@@ -1887,15 +1886,6 @@ async function evaluateExecInvocationInternal(
     }
 
     if (definition.withClause) {
-      if (definition.withClause.needs) {
-        const checker = new DefaultDependencyChecker();
-        await checkDependencies(
-          definition.withClause.needs,
-          checker,
-          variable.ctx?.definedAt || node.location
-        );
-      }
-
       if (definition.withClause.pipeline && definition.withClause.pipeline.length > 0) {
         const { processPipeline } = await import('./pipeline/unified-processor');
         const pipelineInput = typeof result === 'string'

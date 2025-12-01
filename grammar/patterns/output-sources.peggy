@@ -41,7 +41,7 @@ OutputExecInvocation
 
 // Variable reference with optional arguments (includes templates and commands)
 OutputVariable
-  = ref:UnifiedReferenceNoTail !("|" / "with" / "trust" / "needs") {
+  = ref:UnifiedReferenceNoTail !("|" / "with" / "trust") {
       // Handle both ExecInvocation and VariableReference types from unified patterns
       let values, raw, subtype;
       

@@ -212,6 +212,8 @@ Directive
     / SlashAppend   // Append directives (incremental file writing)
     / SlashWhen     // When directives (conditional execution)
     / SlashGuard    // Guard directives (security policies)
+    / SlashNeeds    // Needs directives (capability declarations)
+    / SlashWants    // Wants directives (capability tiers)
     / SlashStream   // Stream directives
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }

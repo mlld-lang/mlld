@@ -12,12 +12,16 @@ import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
+import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
   frontmatter: Record<string, any> | null;
   childEnvironment: Environment;
   guardDefinitions: SerializedGuardDefinition[];
+  moduleNeeds?: NeedsDeclaration;
+  moduleWants?: WantsTier[];
+  policyContext?: Record<string, unknown> | null;
 }
 
 /**
@@ -492,11 +496,17 @@ export class ModuleContentProcessor {
       // Only wrap as template if the file has substantive content (not just comments/whitespace)
       const hasSubstantive = this.hasSubstantiveContent(sourceContent);
       if (!hasSubstantive) {
+        const moduleNeeds = childEnv.getModuleNeeds();
+        const moduleWants = childEnv.getModuleWants();
+        const policyContext = childEnv.getPolicyContext() ?? null;
         return {
           moduleObject,
           frontmatter,
           childEnvironment: childEnv,
-          guardDefinitions: guards
+          guardDefinitions: guards,
+          moduleNeeds,
+          moduleWants,
+          policyContext
         };
       }
       let templateSyntax: 'doubleColon' | 'tripleColon' = 'doubleColon';
@@ -518,11 +528,18 @@ export class ModuleContentProcessor {
       };
     }
 
+    const moduleNeeds = childEnv.getModuleNeeds();
+    const moduleWants = childEnv.getModuleWants();
+    const policyContext = childEnv.getPolicyContext() ?? null;
+
     return {
       moduleObject,
       frontmatter,
       childEnvironment: childEnv,
-      guardDefinitions: guards
+      guardDefinitions: guards,
+      moduleNeeds,
+      moduleWants,
+      policyContext
     };
   }
 

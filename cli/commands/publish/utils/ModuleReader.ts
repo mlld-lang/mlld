@@ -12,7 +12,7 @@ import { parseSync } from '@grammar/parser';
 import type { MlldNode } from '@core/types';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { ModuleMetadata, ModuleData, GitInfo } from '../types/PublishingTypes';
-import { normalizeModuleNeeds, moduleNeedsToRuntimeNames, stringifyPackageMap, stringifyRequirementList } from '@core/registry';
+import { parseModuleMetadata } from '@core/registry/utils/ModuleMetadata';
 
 export class ModuleReader {
   private authService: GitHubAuthService;
@@ -135,8 +135,10 @@ export class ModuleReader {
       author: '',
       about: '',
       license: 'CC0', // Default to CC0
+      wants: [],
       needs: [],
-      moduleNeeds: normalizeModuleNeeds(undefined),
+      moduleNeeds: undefined,
+      moduleWants: undefined,
     };
     
     // Module name comes from frontmatter 'name' field, NOT from filename
@@ -161,22 +163,6 @@ export class ModuleReader {
         metadata.bugs = parsed.bugs;
         metadata.repo = parsed.repo || parsed.repository;
         metadata.mlldVersion = parsed.mlldVersion || parsed['mlld-version'] || parsed.mlld_version;
-
-        const legacyNeedsValue = parsed.needs;
-
-        metadata.needsJs = parsed['needs-js'] || parsed.needsJs;
-        metadata.needsNode = parsed['needs-node'] || parsed.needsNode;
-        metadata.needsPy = parsed['needs-py'] || parsed.needsPy;
-        metadata.needsSh = parsed['needs-sh'] || parsed.needsSh;
-
-        const normalizedNeeds = normalizeModuleNeeds(legacyNeedsValue, {
-          js: metadata.needsJs,
-          node: metadata.needsNode,
-          py: metadata.needsPy,
-          sh: metadata.needsSh,
-        });
-        metadata.moduleNeeds = normalizedNeeds;
-        metadata.needs = moduleNeedsToRuntimeNames(normalizedNeeds);
 
         const dependencies = parsed.dependencies ?? parsed['dependencies'];
         if (dependencies && typeof dependencies === 'object') {
@@ -205,12 +191,16 @@ export class ModuleReader {
       }
     }
     
-    if (!metadata.moduleNeeds) {
-      metadata.moduleNeeds = normalizeModuleNeeds(undefined);
-    }
-    if (!Array.isArray(metadata.needs)) {
-      metadata.needs = moduleNeedsToRuntimeNames(metadata.moduleNeeds);
-    }
+    const parsedNeeds = parseModuleMetadata(content);
+    metadata.moduleNeeds = parsedNeeds.needs;
+    metadata.moduleWants = parsedNeeds.wants;
+    metadata.wants = parsedNeeds.wants.map(tier => tier.tier);
+    metadata.needs = [];
+    metadata.dependencies = parsedNeeds.dependencies;
+    metadata.devDependencies = parsedNeeds.devDependencies;
+    metadata.name = metadata.name || parsedNeeds.name || '';
+    metadata.author = metadata.author || parsedNeeds.author || '';
+    metadata.version = metadata.version || parsedNeeds.version;
 
     return metadata as ModuleMetadata;
   }
@@ -263,17 +253,6 @@ export class ModuleReader {
       if (authorInput && authorInput !== githubUser) {
         console.log(chalk.gray(`Note: Publishing as '${authorInput}' - this will be validated during publishing`));
       }
-
-      // Runtime dependencies (required)
-      console.log('\nRuntime dependencies (required):');
-      console.log('  - Provide runtime identifiers (node, python, sh, etc.)');
-      console.log('  - Leave blank for pure mlld modules');
-      const needsInput = await rl.question('Runtimes []: ');
-      const runtimeList = needsInput
-        ? needsInput.split(',').map(n => n.trim()).filter(Boolean)
-        : [];
-      metadata.needs = runtimeList;
-      metadata.moduleNeeds = normalizeModuleNeeds(runtimeList);
 
       // Optional fields
       const addOptional = await rl.question('\nAdd optional fields? (y/n): ');
@@ -331,31 +310,6 @@ export class ModuleReader {
     lines.push(`author: ${metadata.author}`);
     if (metadata.version) lines.push(`version: ${metadata.version}`);
     lines.push(`about: ${metadata.about}`);
-    
-    const moduleNeeds = metadata.moduleNeeds ?? normalizeModuleNeeds(metadata.needs ?? []);
-    const runtimeStrings = stringifyRequirementList(moduleNeeds.runtimes);
-    const toolStrings = stringifyRequirementList(moduleNeeds.tools);
-    const packageStrings = stringifyPackageMap(moduleNeeds.packages);
-    const hasNeedsData = runtimeStrings.length > 0 || toolStrings.length > 0 || Object.keys(packageStrings).length > 0;
-
-    if (hasNeedsData) {
-      lines.push('needs:');
-      if (runtimeStrings.length > 0) {
-        lines.push(`  runtimes: [${runtimeStrings.map(value => `"${value}"`).join(', ')}]`);
-      }
-      if (toolStrings.length > 0) {
-        lines.push(`  tools: [${toolStrings.map(value => `"${value}"`).join(', ')}]`);
-      }
-      if (Object.keys(packageStrings).length > 0) {
-        lines.push('  packages:');
-        for (const ecosystem of Object.keys(packageStrings).sort()) {
-          const values = packageStrings[ecosystem];
-          lines.push(`    ${ecosystem}: [${values.map(value => `"${value}"`).join(', ')}]`);
-        }
-      }
-    } else {
-      lines.push('needs: {}');
-    }
 
     if (metadata.dependencies && Object.keys(metadata.dependencies).length > 0) {
       lines.push('dependencies:');

@@ -36,6 +36,6 @@ DataLabelToken
 
 DataLabelIdentifier
   = label:BaseIdentifier &{
-      const reserved = ['module', 'static', 'live', 'cached', 'local', 'foreach', 'pipeline', 'with', 'needs', 'from', 'as'];
+      const reserved = ['module', 'static', 'live', 'cached', 'local', 'foreach', 'pipeline', 'with', 'from', 'as'];
       return !reserved.includes(label.toLowerCase());
     } { return label; }

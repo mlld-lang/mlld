@@ -15,7 +15,6 @@ import { isExecutableVariable, createSimpleTextVariable } from '@core/types/vari
 import type { Variable } from '@core/types/variable';
 import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
-import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
@@ -800,12 +799,6 @@ export async function evaluateRun(
         console.error('[mlld] withClause', withClause);
       }
     }
-    // Check dependencies first if specified
-    if (withClause.needs) {
-      const checker = new DefaultDependencyChecker();
-      await checkDependencies(withClause.needs, checker, directive.location);
-    }
-    
     // Apply pipeline transformations if specified
     if (withClause.pipeline && withClause.pipeline.length > 0) {
       // Use unified pipeline processor

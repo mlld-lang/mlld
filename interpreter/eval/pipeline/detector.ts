@@ -153,7 +153,6 @@ export function extractPipelineMetadata(
 ): {
   pipeline?: PipelineStage[];
   format?: string;
-  needs?: any;
   asSection?: string;
 } | null {
   // Check all withClause sources
@@ -166,7 +165,6 @@ export function extractPipelineMetadata(
     return {
       pipeline: withClause.pipeline,
       format: withClause.format,
-      needs: withClause.needs,
       asSection: withClause.asSection
     };
   }
