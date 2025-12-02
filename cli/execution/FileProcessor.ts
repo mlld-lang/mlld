@@ -186,6 +186,9 @@ export class FileProcessor {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
 
+      // Force exit after cleanup to ensure process terminates
+      // Node.js VM contexts (used by NodeShadowEnvironment) can prevent natural exit
+      // even after cleanup() clears timers/intervals. This ensures the CLI exits cleanly.
       cliLogger.debug('Cleanup complete, forcing process exit');
       await new Promise(resolve => setTimeout(resolve, 10));
       process.exit(0);

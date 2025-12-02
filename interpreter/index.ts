@@ -306,10 +306,10 @@ export async function interpret(
       // Get the accumulated document from the effect handler
       output = activeEffectHandler.getDocument();
       
-      // Apply markdown formatting if requested
+      // Apply output normalization if requested
       if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
-        const { formatMarkdown } = await import('./utils/markdown-formatter');
-        output = await formatMarkdown(output);
+        const { normalizeOutput } = await import('./output/normalizer');
+        output = normalizeOutput(output);
       }
     } else {
       // Fallback to old node-based system if effect handler doesn't have getDocument

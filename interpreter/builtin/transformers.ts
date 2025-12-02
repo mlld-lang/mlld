@@ -5,7 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 
 // Import existing utilities
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { formatMarkdown } from '../utils/markdown-formatter';
+import { normalizeOutput } from '../output/normalizer';
 import { jsonToXml } from '../utils/json-to-xml';
 
 export interface TransformerDefinition {
@@ -215,9 +215,9 @@ export const builtinTransformers: TransformerDefinition[] = [
   {
     name: 'md',
     uppercase: 'MD',
-    description: 'Format markdown with prettier',
+    description: 'Normalize markdown output',
     implementation: async (input: string) => {
-      return await formatMarkdown(input);
+      return normalizeOutput(input);
     }
   }
 ];
