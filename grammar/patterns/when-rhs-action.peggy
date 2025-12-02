@@ -7,8 +7,7 @@
 // Main pattern - try error recovery first, then side-effect actions, then pure values
 WhenRHSAction "when RHS action"
   = WhenRHSExeDefinitionError  // Error recovery FIRST - before ExecInvocationPattern can match
-  / WhenRHSShowAction
-  / WhenRHSOutputAction  
+  / EffectAction               // Unified effects: show, log, output, append
   / WhenRHSVarAssignment
   / WhenRHSCommandAction
   / WhenRHSFunctionCall
@@ -91,125 +90,6 @@ WhenRHSVariableReference
       return varRef;
     }
 
-// Show action - creates regular show directive node
-WhenRHSShowAction
-  = "show" _ content:WhenRHSShowContent {
-      helpers.debug('WhenRHSShowAction matched', { content });
-      
-      // Handle different content types and create appropriate show directive
-      if (content && typeof content === 'object' && content.wrapperType) {
-        // Template content (quotes, backticks, etc.)
-        return helpers.createNode(NodeType.Directive, {
-          kind: 'show',
-          subtype: 'showTemplate',
-          values: { content: content.content },
-          raw: { content: content.raw || text() },
-          meta: { wrapperType: content.wrapperType },
-          location: location()
-        });
-      } else if (content && content.type === 'VariableReference') {
-        // Variable reference
-        return helpers.createNode(NodeType.Directive, {
-          kind: 'show',
-          subtype: 'showVariable',
-          values: { variable: [content] },
-          raw: { variable: '@' + content.identifier },
-          meta: {},
-          location: location()
-        });
-      } else if (content && content.type === 'ExecInvocation') {
-        // Function call
-        return helpers.createNode(NodeType.Directive, {
-          kind: 'show',
-          subtype: 'showExecInvocation',
-          values: { execInvocation: content },
-          raw: { execInvocation: content.commandRef.name },
-          meta: {},
-          location: location()
-        });
-      } else {
-        // Primitive value or other content
-        return helpers.createNode(NodeType.Directive, {
-          kind: 'show',
-          subtype: 'showLiteral',
-          values: { content: [helpers.createNode(NodeType.Text, { content: String(content), location: location() })] },
-          raw: { content: String(content) },
-          meta: {},
-          location: location()
-        });
-      }
-    }
-
-// Output action - creates regular output directive node
-WhenRHSOutputAction
-  = "output" _ source:WhenRHSOutputSource _ "to" _ target:WhenRHSOutputTarget format:(_ "as" _ f:OutputFormat { return f; })? {
-      helpers.debug('WhenRHSOutputAction matched', { source, target, format });
-      
-      // Build base directive structure
-      const values = { target };
-      const raw = { target: target.raw || String(target) };
-      let subtype = 'outputDocument';
-      const meta = { 
-        hasSource: false,
-        targetType: target.type || 'file',
-        enhanced: true
-      };
-      
-      if (source) {
-        meta.hasSource = true;
-        
-        // Case 1: Template/quoted content (UnifiedQuoteOrTemplate)
-        if (source && typeof source === 'object' && source.content && source.wrapperType) {
-          values.source = source.content;
-          raw.source = source.raw || text();
-          meta.sourceType = 'literal'; // Treat templates/quotes as literal content to be interpolated
-          meta.wrapperType = source.wrapperType;
-          subtype = 'outputText';
-        }
-        // Case 2: Variable reference
-        else if (source && source.type === 'VariableReference') {
-          // Canonical: use structured source with identifier/args
-          values.source = {
-            identifier: [source],
-            args: []
-          };
-          raw.source = '@' + source.identifier;
-          meta.sourceType = 'variable';
-          subtype = 'outputVariable';
-        }
-        // Case 3: Exec invocation (function call)
-        else if (source && source.type === 'ExecInvocation') {
-          values.source = {
-            identifier: source.commandRef.identifier,
-            args: source.commandRef.args || []
-          };
-          raw.source = source.commandRef.name;
-          meta.sourceType = 'execInvocation';
-          subtype = 'outputInvocation';
-        }
-        // Case 4: Primitive values (numbers, booleans, null) or plain strings
-        else {
-          values.source = [helpers.createNode(NodeType.Text, { content: String(source), location: location() })];
-          raw.source = String(source);
-          meta.sourceType = 'literal';
-          subtype = 'outputText';
-        }
-      }
-      
-      if (format) {
-        meta.format = format;
-      }
-      
-      return helpers.createNode(NodeType.Directive, {
-        kind: 'output',
-        subtype,
-        values,
-        raw,
-        meta,
-        location: location()
-      });
-    }
-
 // Variable assignment - creates regular var directive node
 WhenRHSVarAssignment  
   = "@" name:BaseIdentifier _ "=" _ value:VarRHSContent {
@@ -272,34 +152,17 @@ WhenRHSVarAssignment
 
 // Function call - just return the invocation directly (it gets evaluated normally)
 WhenRHSFunctionCall
-  = ref:UnifiedReference &{ 
+  = ref:UnifiedReference &{
       // Check if this is actually an executable reference
-      return ref.type === 'ExecInvocation' || 
+      return ref.type === 'ExecInvocation' ||
              ref.type === 'FieldAccessExec' ||
              (ref.arguments && ref.arguments.length >= 0);
     } {
       helpers.debug('WhenRHSFunctionCall matched', { ref });
-      
+
       // Just return the reference directly - it will be evaluated normally
       return ref;
     }
-
-// Show content for RHS context - use same patterns as VarRHSContent
-WhenRHSShowContent
-  = UnifiedQuoteOrTemplate  // Use unified pattern instead of TemplateStyleInterpolation
-  / UnifiedReference             // Variable or exec reference
-  / DataObjectLiteral
-  / PrimitiveValue              // Includes string literals and other primitives
-
-// Output source for RHS context - use same patterns as VarRHSContent  
-WhenRHSOutputSource
-  = UnifiedQuoteOrTemplate  // Use unified pattern instead of TemplateStyleInterpolation
-  / UnifiedReference             // Variable or exec reference
-  / PrimitiveValue              // Includes string literals and other primitives
-
-// Output target for RHS context
-WhenRHSOutputTarget
-  = OutputTarget  // Reuse existing output target patterns
 
 // Error recovery - catch exe definitions and provide helpful error
 WhenRHSExeDefinitionError

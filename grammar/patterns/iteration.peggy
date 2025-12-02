@@ -51,12 +51,12 @@ ForParallelSpec
       return { parallel: true, cap: Number(cap) };
     }
 
-// Single action for for loops - simpler than WhenAction
+// Single action for for loops - uses unified effect actions
 ForSingleAction "for action"
   // Support nested for directive (without slash) - creates a nested ForDirective
   = "for" _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction {
       helpers.debug('Nested for directive matched', { pattern, action });
-      
+
       // Create a nested ForDirective node (not ForExpression)
       const nestedFor = helpers.createStructuredDirective(
         'for',
@@ -78,125 +78,21 @@ ForSingleAction "for action"
         },
         location()
       );
-      
+
       // Return as array for consistency with other actions
       return [nestedFor];
     }
-  // Special handling for /output directive with full source support via shared patterns
-  / "output" _ source:OutputSource? _ "to" _ target:OutputTarget {
-      const values = {
-        target: target
-      };
-      
-      const raw = {
-        target: target.raw
-      };
-      
-      let subtype = 'outputDocument';
-      const meta = { 
-        hasSource: false,
-        targetType: target.type
-      };
-      
-      if (source) {
-        values.source = source.values;
-        raw.source = source.raw;
-        meta.hasSource = true;
-        meta.sourceType = source.type;
-        subtype = 'outputFile';
-      }
-      
-      return [helpers.createNode(NodeType.Directive, {
-        kind: 'output',
-        subtype: subtype,
-        values: values,
-        raw: raw,
-        meta: meta,
-        location: location()
-      })];
+  // Unified effect actions: show, log, output, append
+  / effect:EffectAction {
+      return Array.isArray(effect) ? effect : [effect];
     }
-  // Support for /append directive inside /for actions
-  / "append" _ source:OutputSource _ "to" _ target:OutputTargetFile format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
-      const values = {
-        source: source.values,
-        target
-      };
-
-      const raw = {
-        source: source.raw,
-        target: target.raw
-      };
-
-      const meta = {
-        sourceType: source.type,
-        targetType: 'file',
-        hasSource: true,
-        ...(format ? { format, explicitFormat: true } : {})
-      };
-
-      helpers.processPipelineEnding(values, raw, meta, ending);
-
-      return [helpers.createStructuredDirective(
-        'append',
-        'appendFile',
-        values,
-        raw,
-        meta,
-        location()
-      )];
-    }
-  // Special handling for /log directive - syntactic sugar for output to stderr
-  / "log" _ source:OutputSource? {
-      // Create stdout target automatically (same as /log directive)
-      const stdoutTarget = {
-        type: 'stream',
-        stream: 'stderr',
-        raw: 'stderr'
-      };
-      
-      const values = {
-        target: stdoutTarget
-      };
-      
-      const raw = {
-        target: 'stderr'
-      };
-      
-      let subtype = 'outputStream';
-      const meta = { 
-        hasSource: false,
-        targetType: 'stream',
-        isLogSugar: true  // Mark for debugging/tracing
-      };
-      
-      if (source) {
-        values.source = source.values;
-        raw.source = source.raw;
-        meta.hasSource = true;
-        meta.sourceType = source.type;
-      }
-      
-      return [helpers.createNode(NodeType.Directive, {
-        kind: 'output',  // CRITICAL: Use 'output' kind, not 'log'
-        subtype: subtype,
-        values: values,
-        raw: raw,
-        meta: meta,
-        location: location()
-      })];
-    }
-  // Generic handling for other directives (with optional /)
-  / "show" _ content:WhenRHSShowContent ending:StandardDirectiveEnding {
-      // Support both template/quote content and unified references for show actions
-      // Pass along any tail pipeline from the standard directive ending
-      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
-    }
+  // Variable assignment
   / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
       // Create the action node; pass ending.tail so pipelines are embedded immutably
       return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null);
     }
+  // Other when-style actions (including directives) directly in for loop bodies
   / whenAction:WhenRHSAction {
-      // Allow when-style actions (including directives) directly in for loop bodies
       return Array.isArray(whenAction) ? whenAction : [whenAction];
     }
   / invocation:UnifiedReferenceWithTail {

@@ -1106,21 +1106,28 @@ export async function evaluateShow(
   } else if (directive.subtype === 'show' && directive.values?.content) {
     // Handle simple show directive with content (used in for loops)
     let templateNodes = directive.values.content;
-    
+
     // Handle wrapped content structure from for loop actions
-    if (Array.isArray(templateNodes) && templateNodes.length === 1 && 
+    if (Array.isArray(templateNodes) && templateNodes.length === 1 &&
         templateNodes[0].content && templateNodes[0].wrapperType) {
       // Unwrap the content
       templateNodes = templateNodes[0].content;
     }
-    
-    
+
     // Process the content using the standard interpolation
     content = await interpolate(templateNodes, env, undefined, {
       collectSecurityDescriptor: collectInterpolatedDescriptor
     });
-    
-    
+
+  } else if (directive.subtype === 'showLiteral' && directive.values?.content) {
+    // Handle literal show directive (from unified effects pattern)
+    const templateNodes = directive.values.content;
+
+    // Process the content using the standard interpolation
+    content = await interpolate(templateNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
+
   } else {
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }
