@@ -196,6 +196,27 @@ export class ArgumentParser {
         case '--structured':
           options.structured = true;
           break;
+        // Streaming visibility options
+        case '--show-thinking':
+          options.showThinking = true;
+          break;
+        case '--show-tools':
+          options.showTools = true;
+          break;
+        case '--show-metadata':
+          options.showMetadata = true;
+          break;
+        case '--show-all-streaming':
+          options.showAllStreaming = true;
+          break;
+        case '--stream-format': {
+          const format = args[++i];
+          if (format !== 'text' && format !== 'ansi' && format !== 'json') {
+            throw new Error('--stream-format must be "text", "ansi", or "json"');
+          }
+          options.streamOutputFormat = format;
+          break;
+        }
         case '--inject': {
           // Multiple --inject flags allowed: --inject @config={"key":"val"} --inject @data=@file.json
           const injectValue = args[++i];

@@ -44,6 +44,49 @@ export type {
 export type { Location, Position } from '@core/types/index';
 export type { PathContext, PathContextOptions } from '@core/services/PathContextService';
 
+// Export SDK streaming types
+export type {
+  SDKEvent,
+  SDKEffectEvent,
+  SDKCommandEvent,
+  SDKStreamEvent,
+  SDKExecutionEvent,
+  SDKDebugEvent,
+  SDKStreamingEvent,
+  SDKStreamingThinkingEvent,
+  SDKStreamingMessageEvent,
+  SDKStreamingToolUseEvent,
+  SDKStreamingToolResultEvent,
+  SDKStreamingErrorEvent,
+  SDKStreamingMetadataEvent,
+  StreamingFormattedText,
+  StreamingToolCall,
+  StreamingUsageMetadata,
+  StreamingResult,
+  StructuredResult,
+  DebugResult,
+  InterpretMode
+} from './types';
+
+// Export streaming options
+export type {
+  StreamingOptions,
+  StreamingVisibility,
+  StreamingOutputFormat
+} from '@interpreter/eval/pipeline/streaming-options';
+
+// Export ANSI processing utilities
+export {
+  expandAnsiCodes,
+  stripAnsiMarkers,
+  stripAnsiEscapes,
+  processAnsi,
+  getFormattedText,
+  getAvailableCodes,
+  shouldProcessAnsi
+} from '@core/utils/ansi-processor';
+export type { AnsiProcessingOptions } from '@core/utils/ansi-processor';
+
 /**
  * Options for processing Mlld documents
  */

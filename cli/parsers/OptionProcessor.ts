@@ -45,8 +45,38 @@ export class OptionProcessor {
       // Absolute path override
       allowAbsolutePaths: cliOptions.allowAbsolute,
       // Streaming options
-      streaming: cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined
+      streaming: this.buildStreamingOptions(cliOptions)
     };
+  }
+
+  /**
+   * Build streaming options from CLI flags
+   */
+  private buildStreamingOptions(cliOptions: CLIOptions): any {
+    const streaming: any = {};
+
+    // Basic streaming control
+    if (cliOptions.noStream !== undefined) {
+      streaming.enabled = !cliOptions.noStream;
+    }
+
+    // Visibility control
+    const visibility: any = {};
+    if (cliOptions.showThinking) visibility.showThinking = true;
+    if (cliOptions.showTools) visibility.showTools = true;
+    if (cliOptions.showMetadata) visibility.showMetadata = true;
+    if (cliOptions.showAllStreaming) visibility.showAll = true;
+
+    if (Object.keys(visibility).length > 0) {
+      streaming.visibility = visibility;
+    }
+
+    // Output format
+    if (cliOptions.streamOutputFormat) {
+      streaming.format = cliOptions.streamOutputFormat;
+    }
+
+    return Object.keys(streaming).length > 0 ? streaming : undefined;
   }
 
   /**
@@ -180,7 +210,8 @@ export class OptionProcessor {
       '--viz-type',
       '--root-state-id',
       '--variable-name',
-      '--output-format'
+      '--output-format',
+      '--stream-format'
     ];
     
     return optionsWithValues.includes(option);

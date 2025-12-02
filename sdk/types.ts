@@ -94,6 +94,7 @@ export interface StructuredResult {
   stateWrites: StateWrite[];
   metrics?: ExecuteMetrics;
   environment?: Environment;
+  streaming?: StreamingResult;
 }
 
 export type ExecuteErrorCode =
@@ -232,7 +233,106 @@ export type SDKDebugEvent =
       provenance?: SecurityDescriptor;
     };
 
-export type SDKEvent = SDKEffectEvent | SDKCommandEvent | SDKStreamEvent | SDKExecutionEvent | SDKDebugEvent;
+// Streaming Format Adapter Events
+export interface StreamingFormattedText {
+  plain: string;
+  ansi?: string;
+}
+
+export type SDKStreamingThinkingEvent = {
+  type: 'streaming:thinking';
+  text: string;
+  depth?: number;
+  formatted?: StreamingFormattedText;
+  displayed: boolean;
+  timestamp: number;
+};
+
+export type SDKStreamingMessageEvent = {
+  type: 'streaming:message';
+  chunk: string;
+  role?: string;
+  formatted?: StreamingFormattedText;
+  displayed: boolean;
+  timestamp: number;
+};
+
+export type SDKStreamingToolUseEvent = {
+  type: 'streaming:tool-use';
+  name: string;
+  input: unknown;
+  id?: string;
+  formatted?: StreamingFormattedText;
+  displayed: boolean;
+  timestamp: number;
+};
+
+export type SDKStreamingToolResultEvent = {
+  type: 'streaming:tool-result';
+  toolUseId?: string;
+  result: unknown;
+  success?: boolean;
+  formatted?: StreamingFormattedText;
+  displayed: boolean;
+  timestamp: number;
+};
+
+export type SDKStreamingErrorEvent = {
+  type: 'streaming:error';
+  message: string;
+  code?: string;
+  formatted?: StreamingFormattedText;
+  displayed: boolean;
+  timestamp: number;
+};
+
+export type SDKStreamingMetadataEvent = {
+  type: 'streaming:metadata';
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+  };
+  timing?: {
+    durationMs?: number;
+  };
+  model?: string;
+  formatted?: StreamingFormattedText;
+  timestamp: number;
+};
+
+export type SDKStreamingEvent =
+  | SDKStreamingThinkingEvent
+  | SDKStreamingMessageEvent
+  | SDKStreamingToolUseEvent
+  | SDKStreamingToolResultEvent
+  | SDKStreamingErrorEvent
+  | SDKStreamingMetadataEvent;
+
+// Streaming Result (accumulated data)
+export interface StreamingToolCall {
+  name: string;
+  input: unknown;
+  id?: string;
+  result?: unknown;
+  success?: boolean;
+}
+
+export interface StreamingUsageMetadata {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+export interface StreamingResult {
+  text?: string;
+  thinking?: string;
+  toolCalls?: StreamingToolCall[];
+  usage?: StreamingUsageMetadata;
+  errors?: SDKStreamingErrorEvent[];
+  events?: SDKStreamingEvent[];
+}
+
+export type SDKEvent = SDKEffectEvent | SDKCommandEvent | SDKStreamEvent | SDKExecutionEvent | SDKDebugEvent | SDKStreamingEvent;
 
 export type SDKEventHandler<T extends SDKEvent = SDKEvent> = (event: T) => void;
 

@@ -106,6 +106,12 @@ export interface CLIOptions {
   noStream?: boolean;
   showJson?: boolean;
   appendJson?: string;
+  // Streaming visibility options
+  showThinking?: boolean;
+  showTools?: boolean;
+  showMetadata?: boolean;
+  showAllStreaming?: boolean;
+  streamOutputFormat?: 'text' | 'ansi' | 'json';
   // Structured output mode
   structured?: boolean;
   // Dynamic module injection
