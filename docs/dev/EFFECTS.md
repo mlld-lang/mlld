@@ -22,6 +22,12 @@ The system defines 5 effect types in `interpreter/env/EffectHandler.ts`:
 
 After-guards require non-streaming execution because streaming emits effects immediately and cannot retract them. `guard-post-hook` blocks any directive or executable that has after-timed guards when streaming is enabled; disable streaming in `with { stream: false }` or move validation to before-guards when streaming is required.
 
+### Guard Integration for Effects
+
+- Inline pipeline effects (`output`, `show`, `append`, `log`) build an `OperationContext` with `type` matching the effect name and `subtype: "effect"` and run through guard pre/post hooks before executing.
+- Guard filters `op:output`/`op:show`/`op:append`/`op:log` apply uniformly to directives and effects; per-input guards see the effect payload (explicit source or stage output).
+- `allow @value` transformations from guards feed the transformed payload into the effect; guard retries on effects are denied with an explicit error because effect replay is unsupported.
+
 ### Architecture Components
 
 ```

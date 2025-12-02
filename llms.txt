@@ -743,6 +743,7 @@ Context object (@ctx): `try` (attempt #), `tries` (array), `stage`, `input`, `hi
 Pipeline array (@p): `@p[0]` (input), `@p[-1]` (previous output), `@p.retries.all` (full history)
 
 Inline effects: `@data | @transform | log` (stderr), `@data | output to "file.txt"` (inline write)
+Inline effects run through guard hooks; use `op:output`/`op:show`/`op:append`/`op:log` filters to cover directives and inline forms.
 
 Formats (`with { format: "json|csv|xml|text" }`): guide parsing for pipeline stages.
 

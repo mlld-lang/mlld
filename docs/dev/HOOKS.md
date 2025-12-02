@@ -161,6 +161,7 @@ Hooks run only for user-defined `/exe` functions. Built-in helpers and guard hel
 - Guard non-reentrancy: while a guard evaluates, all guards are suppressed for nested directive/exe operations. Helper executables invoked from guard actions run unguarded to prevent recursion loops; treat them as trusted.
 - Retry shared budget: guard retries reuse the pipeline retry machinery; `@ctx.guard.try` increments per attempt across the guard chain, and history is visible in `@p.guards` entries for each attempt. A retry on any guard in the chain causes the whole operation to be retried once; subsequent attempts see updated `@ctx.guard.try` values.
 - Streaming compatibility: guard-post-hook denies when streaming is enabled and after-timed guards are registered. After-guards require non-streaming execution so the hook can validate a stable output; streamed effects are not retractable.
+- Effects: `runBuiltinEffect()` builds an `OperationContext` with the effect identifier as `type` (`output`/`show`/`append`/`log`) and `subtype: "effect"`, materializes the effect payload for guard inputs, and routes through guard pre/post hooks. `op:output`/`op:show`/`op:append`/`op:log` guard filters apply to both directives and inline effects. Guard retries on effects convert to a deny with a clear error because effect replay is not supported.
 
 ### OperationContext
 

@@ -25,7 +25,7 @@ import { combineValues } from '../utils/value-combine';
 import { MlldWhenExpressionError } from '@core/errors';
 import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
-import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
+import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
@@ -219,7 +219,13 @@ function logGuardDecisionEvent(options: {
 }
 
 function describeHookTarget(node: HookableNode): string {
-  return isDirectiveHookTarget(node) ? node.kind : 'exe';
+  if (isDirectiveHookTarget(node)) {
+    return node.kind;
+  }
+  if (isEffectHookTarget(node)) {
+    return `effect:${(node as any).rawIdentifier ?? 'unknown'}`;
+  }
+  return 'exe';
 }
 
 function getRootEnvironment(env: Environment): Environment {
@@ -322,6 +328,9 @@ function extractGuardOverride(node: HookableNode): GuardOverrideValue {
 function resolveWithClause(node: HookableNode): unknown {
   if (isExecHookTarget(node)) {
     return (node as any).withClause;
+  }
+  if (isEffectHookTarget(node)) {
+    return (node as any).meta?.withClause;
   }
   if ((node as any).withClause) {
     return (node as any).withClause;

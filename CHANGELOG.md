@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Array slicing now supports variable interpolation in slice indices ([#457](https://github.com/mlld-lang/mlld/issues/457)). Previously `@arr[0:@limit]` would fail to parse; now `@arr[@start:@end]`, `@arr[0:@limit]`, and `@arr[@offset:]` all work as expected.
 - Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern 
+- Pipeline effects (`output`, `show`, `append`, `log`) run through guard pre/post hooks. `op:output`/`op:show`/`op:append`/`op:log` guards block both directives and inline effects; guard retries on effects deny with a clear message.
 
 ## [2.0.0-rc76]
 

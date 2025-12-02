@@ -3,7 +3,16 @@ import type { PipelineCommand } from '@core/types';
 import { appendContentToFile } from '../append';
 import type { SecurityDescriptor } from '@core/types/security';
 import { materializeDisplayValue } from '../../utils/display-materialization';
-import { asText, isStructuredValue } from '../../utils/structured-value';
+import { asText } from '../../utils/structured-value';
+import type { OperationContext } from '../../env/ContextManager';
+import { materializeGuardInputs } from '../../utils/guard-inputs';
+import { getGuardTransformedInputs, handleGuardDecision } from '../../hooks/hook-decision-handler';
+import type { EffectHookNode } from '@core/types/hooks';
+import type { Variable } from '@core/types/variable';
+import { extractVariableValue, isVariable } from '../../utils/variable-resolution';
+import { GuardError, type GuardErrorDetails } from '@core/errors/GuardError';
+import { isGuardRetrySignal } from '@core/errors/GuardRetrySignal';
+import type { EvalResult } from '../../core/interpreter';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -61,98 +70,226 @@ async function evaluateEffectArg(arg: any, env: Environment): Promise<string> {
   return String(value);
 }
 
+function buildEffectOperationContext(effect: PipelineCommand): OperationContext {
+  const type = typeof effect.rawIdentifier === 'string' ? effect.rawIdentifier.toLowerCase() : 'effect';
+  const hasExplicitSource = Boolean(effect.meta?.hasExplicitSource);
+  const labels = Array.isArray((effect.meta as any)?.securityLabels)
+    ? ((effect.meta as any).securityLabels as string[])
+    : undefined;
+
+  return {
+    type,
+    subtype: 'effect',
+    name: effect.rawIdentifier,
+    labels,
+    location: (effect as any)?.location ?? (effect.meta as any)?.location ?? null,
+    metadata: {
+      trace: `effect:${effect.rawIdentifier ?? type}`,
+      isEffect: true,
+      hasExplicitSource
+    }
+  };
+}
+
+function createEffectHookNode(effect: PipelineCommand): EffectHookNode {
+  return {
+    ...effect,
+    type: 'Effect',
+    location: (effect as any)?.location ?? (effect.meta as any)?.location ?? null
+  };
+}
+
+async function resolveEffectPayload(
+  effect: PipelineCommand,
+  stageOutput: unknown,
+  env: Environment
+): Promise<unknown> {
+  const name = typeof effect.rawIdentifier === 'string' ? effect.rawIdentifier.toLowerCase() : '';
+  const args = effect.args ?? [];
+  const hasExplicitSource = Boolean(effect.meta?.hasExplicitSource);
+  const usesExplicitSource = args.length >= 2;
+  const stageValue = stageOutput ?? '';
+  const stageText = typeof stageValue === 'string' ? stageValue : asText(stageValue);
+
+  switch (name) {
+    case 'log':
+    case 'show': {
+      if (args.length > 0) {
+        const parts: string[] = [];
+        for (const a of args) {
+          parts.push(await evaluateEffectArg(a, env));
+        }
+        return parts.join(' ');
+      }
+      return stageValue ?? stageText;
+    }
+    case 'output': {
+      if (usesExplicitSource && args.length >= 1) {
+        try {
+          return await evaluateEffectArg(args[0], env);
+        } catch {
+          return stageValue ?? stageText;
+        }
+      }
+      return stageValue ?? stageText;
+    }
+    case 'append': {
+      if (hasExplicitSource && args.length > 0) {
+        return await evaluateEffectArg(args[0], env);
+      }
+      return stageValue ?? stageText;
+    }
+    default:
+      return stageValue ?? stageText;
+  }
+}
+
+async function extractEffectGuardInputs(
+  effect: PipelineCommand,
+  stageOutput: unknown,
+  env: Environment
+): Promise<{ guardInputs: Variable[]; payload: unknown }> {
+  const payload = await resolveEffectPayload(effect, stageOutput, env);
+  const guardInputs = materializeGuardInputs([payload], { nameHint: '__effect_input__' });
+  return { guardInputs, payload };
+}
+
+function convertEffectRetryToDeny(
+  error: GuardError,
+  operationContext: OperationContext,
+  env: Environment
+): GuardError {
+  const details = (error as GuardError).details as GuardErrorDetails | undefined;
+  const retryHint =
+    (details?.retryHint ?? null) ?? ((error as any).retryHint === undefined ? null : (error as any).retryHint);
+  const reason =
+    retryHint && typeof retryHint === 'string'
+      ? `Guard retry not supported for effects: ${retryHint}`
+      : 'Guard retry not supported for effects';
+
+  return new GuardError({
+    decision: 'deny',
+    guardName: details?.guardName ?? null,
+    guardFilter: details?.guardFilter,
+    scope: details?.scope,
+    operation: details?.operation ?? operationContext,
+    inputPreview: details?.inputPreview,
+    retryHint,
+    reason,
+    guardContext: details?.guardContext,
+    guardInput: (details as any)?.guardInput ?? null,
+    reasons: details?.reasons,
+    guardResults: details?.guardResults,
+    hints: details?.hints,
+    timing: (details as any)?.timing,
+    sourceLocation: error.sourceLocation ?? operationContext.location ?? undefined,
+    env
+  });
+}
+
 // Execute a builtin effect. Returns void; throws on error to abort the pipeline.
 export async function runBuiltinEffect(
   effect: PipelineCommand,
   stageOutput: unknown,
   env: Environment
 ): Promise<void> {
+  const hookManager = env.getHookManager();
+  const operationContext = buildEffectOperationContext(effect);
+  const hookNode = createEffectHookNode(effect);
+
+  const { guardInputs, payload } = await extractEffectGuardInputs(effect, stageOutput, env);
+  const inputs =
+    guardInputs.length > 0
+      ? guardInputs
+      : materializeGuardInputs([stageOutput ?? ''], { nameHint: '__effect_input__' });
+
+  await env.withOpContext(operationContext, async () => {
+    const preDecision = await hookManager.runPre(hookNode, inputs, env, operationContext);
+    const transformedInputs = getGuardTransformedInputs(preDecision, inputs);
+    const resolvedInputs = transformedInputs ?? inputs;
+
+    try {
+      await handleGuardDecision(preDecision, hookNode, env, operationContext);
+    } catch (error) {
+      if (isGuardRetrySignal(error)) {
+        throw convertEffectRetryToDeny(error as GuardError, operationContext, env);
+      }
+      throw error;
+    }
+
+    const primaryInput = resolvedInputs[0] ?? inputs[0];
+    const payloadVariable = isVariable(primaryInput) ? primaryInput : undefined;
+    const payloadValue =
+      payloadVariable !== undefined ? await extractVariableValue(payloadVariable, env) : payload;
+
+    const effectResult = await executeEffect(effect, payloadValue, payloadVariable, env);
+
+    try {
+      await hookManager.runPost(hookNode, effectResult, resolvedInputs, env, operationContext);
+    } catch (error) {
+      if (isGuardRetrySignal(error)) {
+        throw convertEffectRetryToDeny(error as GuardError, operationContext, env);
+      }
+      throw error;
+    }
+  });
+}
+
+async function executeEffect(
+  effect: PipelineCommand,
+  payloadValue: unknown,
+  payloadVariable: Variable | undefined,
+  env: Environment
+): Promise<EvalResult> {
   const name = effect.rawIdentifier;
-  const stageOutputRaw = stageOutput;
-  const stageOutputText = typeof stageOutput === 'string' ? stageOutput : asText(stageOutput);
+  const normalizedPayload = payloadValue ?? '';
+  const payloadText = typeof normalizedPayload === 'string' ? normalizedPayload : asText(normalizedPayload);
+  const descriptorSource = payloadVariable ?? normalizedPayload;
+
   switch (name) {
     case 'log':
     case 'LOG': {
-      let content: string;
-      let descriptorSource: unknown = undefined;
-      if (effect.args && effect.args.length > 0) {
-        const parts: string[] = [];
-        for (const a of effect.args) {
-          parts.push(await evaluateEffectArg(a, env));
-        }
-        content = parts.join(' ');
-      } else {
-        // Default to logging the stage output
-        content = stageOutputText;
-        descriptorSource = stageOutputRaw;
-      }
       const materialized = materializeDisplayValue(
-        descriptorSource ?? content,
+        descriptorSource ?? payloadText,
         undefined,
-        descriptorSource ?? content,
-        content
+        descriptorSource ?? payloadText,
+        payloadText
       );
       let output = materialized.text;
       if (!output.endsWith('\n')) output += '\n';
       if (materialized.descriptor) {
         env.recordSecurityDescriptor(materialized.descriptor);
       }
-      // Prefer stderr for logs per policy
       env.emitEffect('stderr', output);
-      return;
+      return { value: payloadVariable ?? normalizedPayload, env };
     }
 
     case 'show':
     case 'SHOW': {
-      let content: string;
-      let descriptorSource: unknown = undefined;
-      if (effect.args && effect.args.length > 0) {
-        const parts: string[] = [];
-        for (const a of effect.args) {
-          parts.push(await evaluateEffectArg(a, env));
-        }
-        content = parts.join(' ');
-      } else {
-        content = stageOutputText;
-        descriptorSource = stageOutputRaw;
-      }
       const materialized = materializeDisplayValue(
-        descriptorSource ?? content,
+        descriptorSource ?? payloadText,
         undefined,
-        descriptorSource ?? content,
-        content
+        descriptorSource ?? payloadText,
+        payloadText
       );
       let output = materialized.text;
       if (!output.endsWith('\n')) output += '\n';
       if (materialized.descriptor) {
         env.recordSecurityDescriptor(materialized.descriptor);
       }
-      // Show writes to stdout (if streaming) and appends to document
       env.emitEffect('both', output);
-      return;
+      return { value: payloadVariable ?? normalizedPayload, env };
     }
 
     case 'output':
     case 'OUTPUT': {
-      // args[0] = optional source; args[1] = required target object
-      // Determine content: if two or more args, first is source; with one or zero args, use stage output
-      let content = stageOutputText;
-      let descriptorSource: unknown = stageOutputRaw;
-      if (effect.args && effect.args.length >= 2) {
-        try {
-          content = await evaluateEffectArg(effect.args[0], env);
-          descriptorSource = undefined;
-        } catch {
-          content = stageOutputText;
-          descriptorSource = stageOutputRaw;
-        }
-      }
+      const args = effect.args ?? [];
+      let content = payloadText;
       let target: any = null;
-      if (effect.args && effect.args.length > 1) {
-        target = effect.args[1];
-      } else if (effect.args && effect.args.length === 1) {
-        // No explicit source; single arg is the target
-        target = effect.args[0];
+      if (args.length > 1) {
+        target = args[1];
+      } else if (args.length === 1) {
+        target = args[0];
       }
       if (!target || typeof target !== 'object' || !target.type) {
         throw new Error('output requires a valid target (file|stream|env|resolver)');
@@ -171,7 +308,6 @@ export async function runBuiltinEffect(
 
       switch (String(target.type)) {
         case 'file': {
-          // Interpolate path nodes; target.path may be node array or primitive
           const { interpolate } = await import('../../core/interpreter');
           const path = await import('path');
           let resolvedPath = '';
@@ -202,19 +338,16 @@ export async function runBuiltinEffect(
             throw new Error('output file target requires a non-empty path');
           }
 
-          // Handle @base prefix used in resolver-style paths
           if (resolvedPath.startsWith('@base/')) {
             const projectRoot = (env as any).getProjectRoot ? (env as any).getProjectRoot() : '/';
             resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
           }
 
-          // Resolve relative paths against project root for consistency with /output
           if (!path.isAbsolute(resolvedPath)) {
             const base = (env as any).getBasePath ? (env as any).getBasePath() : '/';
             resolvedPath = path.resolve(base, resolvedPath);
           }
 
-          // Write via the environment's file system (single target), matching /output behavior
           if (process.env.MLLD_DEBUG === 'true') {
             // eslint-disable-next-line no-console
             console.error('[builtin-effects] output:file →', resolvedPath);
@@ -231,24 +364,20 @@ export async function runBuiltinEffect(
           }
           await fileSystem.writeFile(resolvedPath, content);
 
-          // Emit a file effect for handlers/observers
           env.emitEffect('file', content, { path: resolvedPath });
-          return;
+          return { value: payloadVariable ?? materializedContent.text, env };
         }
         case 'stream': {
           const stream = target.stream === 'stderr' ? 'stderr' : 'stdout';
-          // Normalize newline like /output
           const payload = content.endsWith('\n') ? content : content + '\n';
           env.emitEffect(stream, payload);
-          return;
+          return { value: payloadVariable ?? materializedContent.text, env };
         }
         case 'env': {
-          // Name selection similar to evaluateOutput: default MLLD_OUTPUT
           let varName = 'MLLD_OUTPUT';
           if (target.varname) {
             varName = target.varname;
           } else {
-            // Try to derive from source variable identifier
             const src = effect.args && effect.args.length > 0 ? effect.args[0] : null;
             const id = (src && typeof src === 'object' && Array.isArray((src as any).identifier) && (src as any).identifier[0]?.identifier)
               ? (src as any).identifier[0].identifier
@@ -256,7 +385,7 @@ export async function runBuiltinEffect(
             if (id) varName = `MLLD_${String(id).toUpperCase()}`;
           }
           process.env[varName] = content;
-          return;
+          return { value: payloadVariable ?? materializedContent.text, env };
         }
         case 'resolver': {
           throw new Error('resolver targets not supported yet in pipeline output');
@@ -277,18 +406,11 @@ export async function runBuiltinEffect(
         throw new Error('append requires a file target');
       }
 
-      let payload = stageOutputText;
-      let descriptorSource: unknown = stageOutputRaw;
-      if (hasExplicitSource && args.length > 0) {
-        payload = await evaluateEffectArg(args[0], env);
-        descriptorSource = undefined;
-      }
-
       const materializedPayload = materializeDisplayValue(
-        descriptorSource ?? payload,
+        descriptorSource ?? payloadText,
         undefined,
-        descriptorSource ?? payload,
-        payload
+        descriptorSource ?? payloadText,
+        payloadText
       );
       const finalPayload = materializedPayload.text;
       if (materializedPayload.descriptor) {
@@ -296,10 +418,9 @@ export async function runBuiltinEffect(
       }
 
       await appendContentToFile(target, finalPayload, env, { directiveKind: 'append' });
-      return;
+      return { value: payloadVariable ?? finalPayload, env };
     }
 
-    // Placeholder for future effects like 'output' once grammar supports `to ...`
     default:
       throw new Error(`Unsupported builtin effect in pipeline: @${name}`);
   }

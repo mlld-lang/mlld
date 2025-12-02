@@ -15,6 +15,8 @@ Guards protect data and operations. Label sensitive data, define guards to contr
 /run cmd { echo @apiKey }  # Blocked by guard
 ```
 
+Inline effects (`| output`, `| show`, `| append`, `| log`) use the same guard path as directives. Guard filters `op:output`/`op:show`/`op:append`/`op:log` cover both inline effects and directives.
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:

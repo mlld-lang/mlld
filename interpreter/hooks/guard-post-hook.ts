@@ -26,7 +26,7 @@ import type { Environment } from '../env/Environment';
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
-import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
+import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import {
   applySecurityDescriptorToStructuredValue,
@@ -1011,6 +1011,9 @@ function extractGuardOverride(node: HookableNode): GuardOverrideValue {
 function resolveWithClause(node: HookableNode): unknown {
   if (isExecHookTarget(node)) {
     return (node as any).withClause;
+  }
+  if (isEffectHookTarget(node)) {
+    return (node as any).meta?.withClause;
   }
   if ((node as any).withClause) {
     return (node as any).withClause;

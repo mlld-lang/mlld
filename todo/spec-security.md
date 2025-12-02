@@ -700,11 +700,15 @@ All guards must have a filter specifying when they trigger. Guards cannot be ove
 Guards can filter by built-in operation types using the `op:` prefix:
 
 **Directive types:**
-- `op:run`, `op:show`, `op:import`, `op:output`, `op:var`
+- `op:run`, `op:show`, `op:import`, `op:output`, `op:append`, `op:log`, `op:var`
 
 **Within guards, check execution subtype via @ctx.op.subtype:**
 - For `/run` directives: `@ctx.op.subtype` is `"cmd"`, `"sh"`, `"bash"`, `"js"`, `"node"`, `"py"`
 - Example: `@ctx.op.type == "run" && @ctx.op.subtype == "node"`
+
+**Effects:**
+- Inline pipeline effects (`| output`, `| show`, `| append`, `| log`) use the same operation types as their directive equivalents, so `op:output`/`op:show`/`op:append`/`op:log` guards fire for both directives and effects.
+- Effect guard retries deny with a clear error because effect replay is not supported.
 
 **User-Defined Labels (NO op: prefix):**
 
