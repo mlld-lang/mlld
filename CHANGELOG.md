@@ -30,8 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mlld run` now uses `executeRoute()`**: Run command leverages AST caching, metrics, and timeout support from SDK's `executeRoute()`. New `--timeout` and `--debug` flags available.
 
 ### Fixed
+- **Whitespace normalization** ([#396](https://github.com/mlld-lang/mlld/issues/396)): Introduced OutputIntent abstraction with collapsible breaks to eliminate extra blank lines. Newlines from document structure now collapse automatically, producing consistent output spacing.
+- **Prettier dependency removed** ([#281](https://github.com/mlld-lang/mlld/issues/281)): Replaced Prettier with simple line-based normalizer. Eliminates hanging bug, removes JSON protection hacks, and improves performance (~0ms vs ~50ms). The `@md` transformer now normalizes output (strips trailing whitespace, collapses blank lines) rather than reformatting.
 - Array slicing now supports variable interpolation in slice indices ([#457](https://github.com/mlld-lang/mlld/issues/457)). Previously `@arr[0:@limit]` would fail to parse; now `@arr[@start:@end]`, `@arr[0:@limit]`, and `@arr[@offset:]` all work as expected.
-- Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern 
+- Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern
 - Pipeline effects (`output`, `show`, `append`, `log`) run through guard pre/post hooks. `op:output`/`op:show`/`op:append`/`op:log` guards block both directives and inline effects; guard retries on effects deny with a clear message.
 
 ## [2.0.0-rc76]
