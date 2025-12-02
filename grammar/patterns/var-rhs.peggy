@@ -404,6 +404,16 @@ CodeExecution "code execution"
         hasRunKeyword: false
       };
     }
+  / content:CmdCommandBrackets {
+      // Shorthand: cmd {...} without 'run' keyword
+      return {
+        type: 'command',
+        command: content.values.command,
+        commandBases: content.values.commandBases,
+        hasRunKeyword: false,
+        meta: content.meta
+      };
+    }
 
 // Language keywords for var code execution
 VarCodeLanguage "code language"

@@ -30,7 +30,7 @@ interface LoadResultWithExtras extends Partial<LoadContentResult> {
 export function ctxToSecurityDescriptor(ctx: VariableContext): SecurityDescriptor {
   return makeSecurityDescriptor({
     labels: ctx.labels ? [...ctx.labels] : [],
-    taintLevel: ctx.taint,
+    taint: ctx.taint ? [...ctx.taint] : [],
     sources: ctx.sources ? [...ctx.sources] : [],
     policyContext: ctx.policy ?? undefined
   });
@@ -45,7 +45,7 @@ export function legacyMetadataToCtx(metadata?: VariableMetadata): VariableContex
 
   const ctx: VariableContext = {
     labels: descriptor.labels ? cloneArray(descriptor.labels) : EMPTY_LABELS,
-    taint: descriptor.taintLevel ?? 'unknown',
+    taint: descriptor.taint ? cloneArray(descriptor.taint) : [],
     sources: descriptor.sources ? cloneArray(descriptor.sources) : EMPTY_SOURCES,
     policy: descriptor.policyContext ?? null,
     source: metadata?.source,
@@ -108,26 +108,26 @@ export function updateCtxFromDescriptor(
 ): void {
   const normalized = normalizeSecurityDescriptor(descriptor) ?? makeSecurityDescriptor();
   ctx.labels = normalized.labels ? [...normalized.labels] : [];
-  ctx.taint = normalized.taintLevel ?? 'unknown';
+  ctx.taint = normalized.taint ? [...normalized.taint] : [];
   ctx.sources = normalized.sources ? [...normalized.sources] : [];
   ctx.policy = normalized.policyContext ?? null;
 }
 
 export function hasSecurityContext(ctx: VariableContext): boolean {
-  return (ctx.labels?.length ?? 0) > 0 || ctx.taint !== 'unknown';
+  return (ctx.labels?.length ?? 0) > 0 || (ctx.taint?.length ?? 0) > 0;
 }
 
 export function serializeSecurityContext(
   ctx: VariableContext
 ): {
   labels: readonly DataLabel[];
-  taint: string;
+  taint: readonly DataLabel[];
   sources: readonly string[];
   policy: Readonly<Record<string, unknown>> | null;
 } {
   return {
     labels: ctx.labels ?? EMPTY_LABELS,
-    taint: ctx.taint ?? 'unknown',
+    taint: ctx.taint ?? [],
     sources: ctx.sources ?? EMPTY_SOURCES,
     policy: ctx.policy ?? null
   };

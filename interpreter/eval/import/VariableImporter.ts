@@ -289,7 +289,7 @@ export class VariableImporter {
     const envDescriptor = envSnapshot
       ? makeSecurityDescriptor({
           labels: envSnapshot.labels,
-          taintLevel: envSnapshot.taintLevel,
+          taint: envSnapshot.taint,
           sources: envSnapshot.sources,
           policyContext: envSnapshot.policy ? { ...envSnapshot.policy } : undefined
         })
@@ -417,7 +417,7 @@ export class VariableImporter {
     let snapshotDescriptor = snapshot
       ? makeSecurityDescriptor({
           labels: snapshot.labels,
-          taintLevel: snapshot.taintLevel,
+          taint: snapshot.taint,
           sources: snapshot.sources,
           policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
         })
@@ -646,7 +646,7 @@ export class VariableImporter {
     let snapshotDescriptor = snapshot
       ? makeSecurityDescriptor({
           labels: snapshot.labels,
-          taintLevel: snapshot.taintLevel,
+          taint: snapshot.taint,
           sources: snapshot.sources,
           policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
         })

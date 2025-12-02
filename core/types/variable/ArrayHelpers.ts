@@ -21,6 +21,7 @@ export interface QuantifierTokensHelper {
 
 export interface QuantifierContextHelper {
   labels: QuantifierLabelsHelper;
+  taint: QuantifierLabelsHelper;
   tokens: QuantifierTokensHelper;
 }
 
@@ -31,6 +32,7 @@ export interface QuantifierHelper {
 export interface ArrayAggregateSnapshot {
   readonly contexts: VariableContextSnapshot[];
   readonly labels: readonly DataLabel[];
+  readonly taint: readonly DataLabel[];
   readonly sources: readonly string[];
   readonly tokens: readonly number[];
   totalTokens(): number;
@@ -41,6 +43,7 @@ export interface GuardInputHelper {
   raw: readonly Variable[];
   ctx: {
     labels: readonly DataLabel[];
+    taint: readonly DataLabel[];
     tokens: readonly number[];
     sources: readonly string[];
     totalTokens(): number;
@@ -64,6 +67,7 @@ export function createGuardInputHelper(inputs: readonly Variable[]): GuardInputH
     raw: inputs,
     ctx: {
       labels: aggregate.labels,
+      taint: aggregate.taint,
       tokens: aggregate.tokens,
       sources: aggregate.sources,
       totalTokens: aggregate.totalTokens,
@@ -119,10 +123,12 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
 
   if (hasAggregateContexts) {
     ctx.labels = aggregate.labels;
+    ctx.taint = aggregate.taint;
     ctx.sources = aggregate.sources;
     ctx.tokens = aggregate.tokens;
   } else if (!ctx.tokens) {
     ctx.tokens = aggregate.tokens;
+    ctx.taint = aggregate.taint;
   }
 
   ctx.totalTokens = aggregate.totalTokens;
@@ -154,6 +160,9 @@ export function buildArrayAggregate(
   const labels = freezeArray(
     contexts.flatMap(ctx => ctx.labels ?? [])
   );
+  const taint = freezeArray(
+    contexts.flatMap(ctx => ctx.taint ?? ctx.labels ?? [])
+  );
   const sources = freezeArray(
     contexts.flatMap(ctx => ctx.sources ?? [])
   );
@@ -166,6 +175,7 @@ export function buildArrayAggregate(
   return {
     contexts,
     labels,
+    taint,
     sources,
     tokens,
     totalTokens,
@@ -223,6 +233,20 @@ function createQuantifierHelper(
     }
   };
 
+  const taintHelper: QuantifierLabelsHelper = {
+    includes(label: DataLabel): boolean {
+      return evaluate(ctx => (ctx.taint ?? ctx.labels ?? []).includes(label));
+    }
+  };
+
+  attachQuantifierEvaluator(taintHelper, (method, args) => {
+    if (method === 'includes') {
+      const label = args[0] as DataLabel;
+      return taintHelper.includes(label);
+    }
+    return false;
+  });
+
   attachQuantifierEvaluator(tokensHelper, (method, args) => {
     switch (method) {
       case 'some': {
@@ -241,6 +265,7 @@ function createQuantifierHelper(
   return {
     ctx: {
       labels: labelsHelper,
+      taint: taintHelper,
       tokens: tokensHelper
     }
   };

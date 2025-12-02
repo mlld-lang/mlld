@@ -9,7 +9,6 @@ import type {
   CapabilityContext,
   SecurityDescriptor,
   DataLabel,
-  TaintLevel,
   CapabilityKind
 } from '../security';
 import {
@@ -190,7 +189,7 @@ export class VariableMetadataUtils {
       labels?: DataLabel[];
       existingDescriptor?: SecurityDescriptor;
       capability?: CapabilityContext;
-      taintLevel?: TaintLevel;
+      taint?: DataLabel[];
       sources?: string[];
       policyContext?: Record<string, unknown>;
       capabilityKind?: CapabilityKind;
@@ -204,7 +203,7 @@ export class VariableMetadataUtils {
 
     const overrideProvided =
       options?.labels ||
-      options?.taintLevel ||
+      options?.taint ||
       options?.sources ||
       options?.policyContext ||
       options?.capabilityKind;
@@ -212,7 +211,7 @@ export class VariableMetadataUtils {
     const descriptor = overrideProvided
       ? makeSecurityDescriptor({
           labels: options?.labels ?? baseDescriptor.labels,
-          taintLevel: options?.taintLevel ?? baseDescriptor.taintLevel,
+          taint: options?.taint ?? baseDescriptor.taint,
           sources: options?.sources ?? baseDescriptor.sources,
           capability: options?.capabilityKind ?? baseDescriptor.capability,
           policyContext: {

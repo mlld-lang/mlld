@@ -1,8 +1,10 @@
 # Effects & Document Generation Architecture
 
+*Updated: 2025-11-28*
+
 ## Overview
 
-The mlld effects system is responsible for handling output during document execution, providing both real-time streaming for CLI users and complete document generation for API consumers and file output.
+The mlld effects system handles output during document execution, providing real-time streaming for CLI users and complete document generation for API consumers. SDK v2 adds structured effect collection with security metadata for programmatic consumption.
 
 ## Core Concepts
 
@@ -19,6 +21,12 @@ The system defines 5 effect types in `interpreter/env/EffectHandler.ts`:
 ### Guard Compatibility
 
 After-guards require non-streaming execution because streaming emits effects immediately and cannot retract them. `guard-post-hook` blocks any directive or executable that has after-timed guards when streaming is enabled; disable streaming in `with { stream: false }` or move validation to before-guards when streaming is required.
+
+### Guard Integration for Effects
+
+- Inline pipeline effects (`output`, `show`, `append`, `log`) build an `OperationContext` with `type` matching the effect name and `subtype: "effect"` and run through guard pre/post hooks before executing.
+- Guard filters `op:output`/`op:show`/`op:append`/`op:log` apply uniformly to directives and effects; per-input guards see the effect payload (explicit source or stage output).
+- `allow @value` transformations from guards feed the transformed payload into the effect; guard retries on effects are denied with an explicit error because effect replay is unsupported.
 
 ### Architecture Components
 
@@ -142,6 +150,59 @@ The system should support both:
 - Both the directive and the pipeline `| append` operator append through `IFileSystemService.appendFile()` and emit a `'file'` effect with `mode: 'append'` so handlers can observe writes without duplicating them.
 - `IFileSystemService` implementations must provide `appendFile()` in addition to `writeFile()` so evaluators and builtin pipeline effects can perform the actual writes; the effect handler is notification-only for append operations.
 
+### State Write Protocol
+
+State writes via `state://` protocol don't write to filesystem; instead captured as structured data.
+
+**Evaluation** (`interpreter/eval/output.ts`):
+```typescript
+if (target.startsWith('state://')) {
+  const path = target.slice('state://'.length);
+  env.emit('state_write', {
+    path,
+    value: await evaluateExpression(directive.value, env),
+    operation: 'set',
+    timestamp: new Date().toISOString(),
+    index: env.getEffectIndex()
+  });
+  return; // Don't write to filesystem
+}
+```
+
+**Collection**:
+- Environment emits `'state_write'` events
+- SDK captures in `StructuredResult.stateWrites`
+- Application handles persistence
+
+**Security metadata**: StateWrite includes `security` field matching StructuredEffect pattern (labels, taint, sources).
+
+### Security Metadata
+
+All effects in structured/stream/debug modes include security metadata:
+
+```typescript
+interface StructuredEffect {
+  type: 'doc' | 'both' | 'stdout' | 'stderr' | 'file';
+  content: string;
+  timestamp: string;
+  index: number;
+  security?: {
+    labels: DataLabel[];    // Explicit labels ('secret', 'pii', 'net:r')
+    taint: DataLabel[];     // Accumulated labels (explicit + automatic)
+    sources: string[];      // Origin chain ('file://...', 'resolver:registry')
+  };
+  provenance?: ExpressionProvenance;  // When provenance: true
+}
+```
+
+**Automatic labels added**:
+- `src:exec` - Command/function output
+- `src:file` - File content
+- `src:dynamic` - Runtime injection
+- `dir:/path` - File directories (all parents)
+
+**Default mode behavior**: `mode: 'document'` skips effect recording for performance (no security metadata collected).
+
 ## Implementation Plan
 
 ### 1. Fix Effect Handler
@@ -188,21 +249,46 @@ Support streaming control via:
 - Test LLM workflows with progressive output
 - Test file output workflows
 
+## SDK v2 Effect Collection
+
+When `interpret()` uses `mode: 'structured'`, `'stream'`, or `'debug'`, effects are logged with metadata:
+
+```typescript
+interface StructuredEffect extends Effect {
+  capability?: CapabilityContext;  // What the effect can do
+  security?: SecurityDescriptor;   // Labels, taint level, sources
+  provenance?: SecurityDescriptor; // Origin chain (when provenance: true)
+}
+```
+
+Enable via `recordEffects: true` in InterpretOptions (automatically set for non-document modes).
+
+### Effect Events
+
+In stream/debug modes, effects emit SDK events:
+
+```typescript
+handle.on('effect', (event) => {
+  console.log(event.effect.type, event.effect.content);
+  console.log('Security:', event.effect.security?.labels);
+});
+```
+
+Security metadata is always present. Provenance is included when `provenance: true` or in debug mode.
+
 ## Related Files
 
-- `interpreter/env/EffectHandler.ts` - Core effect handling
-- `interpreter/core/interpreter.ts` - Effect emission  
-- `interpreter/index.ts` - Document assembly
-- `cli/index.ts` - CLI output handling
-- Tests in `tests/cases/valid/` - Validation examples
+- `interpreter/env/EffectHandler.ts` - Core effect handling, `recordEffects` flag
+- `sdk/types.ts` - StructuredEffect, SDK event types
+- `sdk/execution-emitter.ts` - Event emission bridge
+- `interpreter/index.ts` - Mode handling, structured result building
+- `cli/execution/FileProcessor.ts` - CLI flag → mode mapping
 
-## Migration Notes
+## SDK v2 Changes
 
-This change improves UX without breaking existing functionality:
-
-- **API users**: No change, continue using `getDocument()`
-- **CLI users**: Better real-time experience  
-- **File output**: No change, uses document buffer
-- **Existing tests**: Should continue to pass
-
-The architecture supports the core mlld use case: progressive LLM scripting where users need immediate feedback as their workflows execute.
+- `DefaultEffectHandler` accepts `recordEffects` option to log effects
+- `getEffects()` returns collected effects with security metadata
+- Effects emit SDK events when emitter attached
+- Structured mode returns `{ output, effects, exports, environment }`
+- Security metadata (labels, taint, sources) always included
+- Provenance chain included when requested

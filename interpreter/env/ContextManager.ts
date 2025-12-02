@@ -70,7 +70,7 @@ export interface DeniedContextSnapshot {
 export interface SecuritySnapshotLike {
   labels: readonly string[];
   sources: readonly string[];
-  taintLevel: string;
+  taint: readonly string[];
   policy?: Readonly<Record<string, unknown>>;
   operation?: Readonly<Record<string, unknown>>;
 }
@@ -232,7 +232,7 @@ export class ContextManager {
         : security
           ? Array.from(security.sources)
           : [],
-      taintLevel: security?.taintLevel ?? 'unknown',
+      taint: security?.taint ? Array.from(security.taint) : [],
       policy: security?.policy ?? null,
       operation: currentOperation ?? null,
       op: currentOperation ?? null,

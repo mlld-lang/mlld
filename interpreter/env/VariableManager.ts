@@ -12,7 +12,7 @@ import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
-import type { DataLabel, TaintLevel, SecurityDescriptor } from '@core/types/security';
+import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 
@@ -53,7 +53,7 @@ export interface VariableManagerDependencies {
   getSecuritySnapshot?(): {
     labels: readonly DataLabel[];
     sources: readonly string[];
-    taintLevel: TaintLevel;
+    taint: readonly DataLabel[];
     policy?: Readonly<Record<string, unknown>>;
     operation?: Readonly<Record<string, unknown>>;
   } | undefined;
@@ -81,7 +81,7 @@ export class VariableManager implements IVariableManager {
     securitySnapshot?: {
       labels: readonly DataLabel[];
       sources: readonly string[];
-      taintLevel: TaintLevel;
+      taint: readonly DataLabel[];
       policy?: Readonly<Record<string, unknown>>;
       operation?: Readonly<Record<string, unknown>>;
     }
@@ -97,7 +97,7 @@ export class VariableManager implements IVariableManager {
         input: null,
         labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
         sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
-        taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
+        taint: securitySnapshot ? Array.from(securitySnapshot.taint) : [],
         policy: securitySnapshot?.policy ?? null,
         operation: securitySnapshot?.operation ?? null,
         op: securitySnapshot?.operation ?? null
@@ -148,7 +148,7 @@ export class VariableManager implements IVariableManager {
       input: normalizeInput(pipelineContext.input),
       labels: securitySnapshot ? Array.from(securitySnapshot.labels) : [],
       sources: securitySnapshot ? Array.from(securitySnapshot.sources) : [],
-      taintLevel: securitySnapshot?.taintLevel ?? 'unknown',
+      taint: securitySnapshot ? Array.from(securitySnapshot.taint) : [],
       policy: securitySnapshot?.policy ?? null,
       operation: securitySnapshot?.operation ?? null,
       op: securitySnapshot?.operation ?? null

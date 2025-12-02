@@ -61,10 +61,18 @@ SliceOperation
       };
     }
 
-// Support negative indices (only used in slice operations)
+// Support negative indices and variable references in slice operations
 SliceIndex
   = sign:"-"? num:NumberLiteral {
       return sign ? -num : num;
+    }
+  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      // Variable reference as slice index
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
     }
 
 // Filter operations - '?' is required

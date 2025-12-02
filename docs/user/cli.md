@@ -33,7 +33,10 @@ mlld input.mld
 - `--stdout` - Print to console instead of file
 - `--watch, -w` - Watch for file changes
 - `--verbose, -v` - Show detailed output
-- `--debug` - Enable debug logging
+- `--debug` - Show execution progress to stderr
+- `--debug --json` - Output full debug trace as JSON to stdout
+- `--structured` - Output JSON with effects, exports, and security metadata
+- `--no-stream` - Disable streaming output
 - `--env <file>` - Load environment variables from specified file
 - `--allow-absolute` - Permit file access outside project root
 
@@ -56,6 +59,53 @@ mlld document.mld --env .env.local
 
 # Allow absolute paths outside project
 mlld script.mld --allow-absolute
+
+# Debug mode: show progress on stderr, output to stdout
+mlld script.mld --debug
+
+# Debug with JSON: full trace as JSON to stdout
+mlld script.mld --debug --json
+
+# Structured output: effects and security metadata
+mlld script.mld --structured
+
+# Disable streaming (buffer all output)
+mlld script.mld --no-stream
+```
+
+### Structured Output Mode
+
+The `--structured` flag outputs JSON with effects, exports, state writes, and full security metadata:
+
+```bash
+mlld script.mld --structured
+```
+
+**Output format:**
+```json
+{
+  "output": "Hello World\n",
+  "effects": [
+    {
+      "type": "both",
+      "content": "Hello World\n",
+      "security": {
+        "labels": [],
+        "taint": [],
+        "sources": []
+      }
+    }
+  ],
+  "exports": ["greeting"],
+  "stateWrites": []
+}
+```
+
+**Use cases:**
+- Auditing: See what files were read/written
+- Security analysis: Check taint labels on outputs
+- Programmatic consumption: Parse effects in scripts
+- CI/CD: Verify no unauthorized file access
 ```
 
 ## Module Commands
@@ -219,6 +269,43 @@ mlld add-needs --verbose
 - `--force` - Add frontmatter even if missing
 
 ## Development Commands
+
+### `mlld run [script-name]`
+
+Execute mlld scripts from a configured directory with AST caching and performance metrics.
+
+```bash
+# List available scripts
+mlld run
+
+# Run a script
+mlld run my-script
+
+# Run with timeout
+mlld run long-task --timeout 60000
+
+# Show execution metrics
+mlld run my-script --debug
+```
+
+**Options:**
+- `--timeout <ms>` - Script timeout in milliseconds (default: 300000 / 5 minutes)
+- `--debug` - Show execution metrics (timing, cache hits, effects, state writes)
+- `-h, --help` - Show help message
+
+**Script Directory:**
+Scripts are loaded from the directory configured in `mlld-config.json` (default: `llm/run/`). Configure with `mlld setup`.
+
+**Features:**
+- AST caching: Scripts are cached after first parse (mtime-based invalidation)
+- Timeout support: Automatically aborts long-running scripts
+- Metrics: Debug mode shows parse time, evaluation time, cache hits, effect counts
+
+**Example script** (`llm/run/hello.mld`):
+```mlld
+/var @greeting = "Hello from mlld script!"
+/show @greeting
+```
 
 ### `mlld test [patterns...]`
 

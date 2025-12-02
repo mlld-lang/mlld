@@ -11,13 +11,14 @@ import { MlldError, ErrorSeverity } from '@core/errors/index';
 import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { interpret } from '@interpreter/index';
+import { executeRoute, TimeoutError } from '@sdk/execute';
+import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
-import { PathContextBuilder } from '@core/services/PathContextService';
 
 export interface RunOptions {
-  // Future options like --watch, --env, etc
+  timeoutMs?: number;
+  debug?: boolean;
 }
 
 export class RunCommand {
@@ -83,10 +84,10 @@ export class RunCommand {
 
   async run(scriptName: string, options: RunOptions = {}): Promise<void> {
     const scriptPath = await this.findScript(scriptName);
-    
+
     if (!scriptPath) {
       const availableScripts = await this.listScripts();
-      
+
       if (availableScripts.length === 0) {
         const scriptDir = await this.getScriptDirectory();
         throw new MlldError(
@@ -97,7 +98,7 @@ export class RunCommand {
           }
         );
       }
-      
+
       throw new MlldError(
         `Script "${scriptName}" not found.\n\nAvailable scripts:\n  ${availableScripts.join('\n  ')}`,
         {
@@ -106,63 +107,66 @@ export class RunCommand {
         }
       );
     }
-    
+
     console.log(chalk.gray(`Running ${path.relative(process.cwd(), scriptPath)}...\n`));
-    
-    let environment: any = null; // Define outside try block for cleanup access
-    
+
     try {
-      // Read the script file
-      const content = await fs.readFile(scriptPath, 'utf8');
-      
-      // Create services for the interpreter
-      const fileSystem = new NodeFileSystem();
-      const pathService = new PathService();
-      
-      // Build PathContext for the script
-      const pathContext = await PathContextBuilder.fromFile(
-        scriptPath,
-        fileSystem
-      );
-      
-      // Run the script
-      const result = await interpret(content, {
-        pathContext,
-        filePath: scriptPath,
-        format: 'markdown',
-        fileSystem,
-        pathService,
-        returnEnvironment: true,
-        enableTrace: true,
-        useMarkdownFormatter: false // Scripts should output raw results
-      });
-      
-      // Extract output and environment
-      const output = typeof result === 'string' ? result : result.output;
-      environment = typeof result === 'string' ? null : result.environment;
-      
+      // Use executeRoute for AST caching and metrics
+      const result = await executeRoute(scriptPath, undefined, {
+        fileSystem: this.fileSystem,
+        pathService: new PathService(),
+        timeoutMs: options.timeoutMs ?? 300000, // 5 minute default
+      }) as StructuredResult;
+
       // Output the result
-      console.log(output);
-      
-      // Clean up environment to prevent Node shadow env timers from keeping process alive
-      if (environment && 'cleanup' in environment) {
-        environment.cleanup();
+      console.log(result.output);
+
+      // Show metrics in debug mode
+      if (options.debug && result.metrics) {
+        console.error(chalk.gray('\nMetrics:'));
+        console.error(chalk.gray(`  Total: ${result.metrics.totalMs.toFixed(1)}ms`));
+        console.error(chalk.gray(`  Parse: ${result.metrics.parseMs.toFixed(1)}ms${result.metrics.cacheHit ? ' (cached)' : ''}`));
+        console.error(chalk.gray(`  Evaluate: ${result.metrics.evaluateMs.toFixed(1)}ms`));
+        console.error(chalk.gray(`  Effects: ${result.metrics.effectCount}`));
+        console.error(chalk.gray(`  State writes: ${result.metrics.stateWriteCount}`));
       }
-      
+
+      // Clean up environment to prevent Node shadow env timers from keeping process alive
+      if (result.environment && 'cleanup' in result.environment) {
+        result.environment.cleanup();
+      }
+
       // For run command, ensure clean exit after script completes
-      // This prevents timers in JS shadow environments from keeping the process alive
       await new Promise(resolve => setTimeout(resolve, 10));
       process.exit(0);
-      
+
     } catch (error) {
-      // Clean up environment even on error
-      if (environment && 'cleanup' in environment) {
-        environment.cleanup();
+      if (error instanceof TimeoutError) {
+        throw new MlldError(
+          `Script timed out after ${error.timeoutMs}ms`,
+          {
+            code: 'SCRIPT_TIMEOUT',
+            severity: ErrorSeverity.Fatal,
+            cause: error
+          }
+        );
       }
-      
+
+      if (error instanceof ExecuteError) {
+        throw new MlldError(
+          `Failed to run script: ${error.message}`,
+          {
+            code: error.code === 'PARSE_ERROR' ? 'SCRIPT_PARSE_ERROR' : 'SCRIPT_EXECUTION_ERROR',
+            severity: ErrorSeverity.Fatal,
+            cause: error
+          }
+        );
+      }
+
       if (error instanceof MlldError) {
         throw error;
       }
+
       throw new MlldError(
         `Failed to run script: ${error instanceof Error ? error.message : String(error)}`,
         {
@@ -212,7 +216,7 @@ export function createRunCommand() {
   return {
     name: 'run',
     description: 'Run mlld scripts from the configured script directory',
-    
+
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       // Check for help flag first
       if (flags.help || flags.h) {
@@ -225,7 +229,9 @@ Arguments:
   script-name    Name of the script to run (without .mld extension)
 
 Options:
-  -h, --help     Show this help message
+  -h, --help       Show this help message
+  --timeout <ms>   Script timeout in milliseconds (default: 300000 / 5 minutes)
+  --debug          Show execution metrics (timing, cache hits, effects)
 
 Script Directory:
   Scripts are loaded from the directory configured in mlld-config.json.
@@ -234,9 +240,10 @@ Script Directory:
   Configure with: mlld setup
 
 Examples:
-  mlld run                    # List available scripts
-  mlld run hello              # Run llm/run/hello.mld
-  mlld run data-processor     # Run llm/run/data-processor.mld
+  mlld run                        # List available scripts
+  mlld run hello                  # Run llm/run/hello.mld
+  mlld run slow-script --timeout 60000  # 60 second timeout
+  mlld run hello --debug          # Show execution metrics
 
 Creating Scripts:
   1. Create a .mld file in your script directory
@@ -249,11 +256,22 @@ Example script (llm/run/hello.mld):
         `);
         return;
       }
-      
+
+      // Parse timeout flag
+      let timeoutMs: number | undefined;
+      if (flags.timeout !== undefined) {
+        timeoutMs = parseInt(String(flags.timeout), 10);
+        if (isNaN(timeoutMs) || timeoutMs <= 0) {
+          console.error(chalk.red('Error: --timeout must be a positive number'));
+          process.exit(1);
+        }
+      }
+
       const options: RunOptions = {
-        // Future: parse additional flags here
+        timeoutMs,
+        debug: Boolean(flags.debug || flags.d)
       };
-      
+
       try {
         await runCommand(args, options);
       } catch (error) {

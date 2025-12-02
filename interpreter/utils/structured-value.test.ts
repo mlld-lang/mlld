@@ -19,7 +19,7 @@ const SOURCE: VariableSource = {
 function createVariable(name: string, descriptor?: ReturnType<typeof makeSecurityDescriptor>): Variable {
   const ctx = {
     labels: descriptor?.labels ?? [],
-    taint: descriptor?.taintLevel ?? 'unknown',
+    taint: descriptor?.taint ?? [],
     sources: descriptor?.sources ?? [],
     policy: descriptor?.policyContext ?? null
   };

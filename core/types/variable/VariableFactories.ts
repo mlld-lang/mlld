@@ -54,7 +54,7 @@ function finalizeVariable<T extends Variable>(variable: T & { metadata?: Variabl
       ? legacyMetadataToCtx(legacyMetadata)
       : {
           labels: [],
-          taint: 'unknown',
+          taint: [],
           sources: [],
           policy: null
         };
@@ -93,7 +93,7 @@ function normalizeFactoryOptions(
   const ctx = Object.assign(
     metadata ? legacyMetadataToCtx(metadata) : {
       labels: [],
-      taint: 'unknown',
+      taint: [],
       sources: [],
       policy: null
     },
@@ -853,9 +853,7 @@ export class VariableFactory {
       structuredValue.metadata as any,
       baseMetadata as any
     );
-    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(mergedMetadata, {
-      existingDescriptor: structuredValue.metadata?.security
-    });
+    const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(mergedMetadata);
     // Attach metadata/security in place to preserve identity
     structuredValue.metadata = securityAwareMetadata as any;
     if (securityAwareMetadata?.security) {

@@ -1,5 +1,5 @@
-Pipeline taint: unknown
+Pipeline taint: ["secret"]
 Pipeline labels: ["secret"]
 
-Result taint: commandOutput
+Result taint: ["secret","src:exec"]
 Result labels: ["secret"]

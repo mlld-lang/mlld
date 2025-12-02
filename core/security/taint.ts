@@ -1,43 +1,7 @@
-import type { DataLabel, ImportType, TaintLevel } from '@core/types/security';
-import { compareTaintLevels, DATA_LABELS } from '@core/types/security';
+import type { DataLabel, ImportType } from '@core/types/security';
+import { labelsForPath } from './paths';
 
 type ImmutableArray<T> = readonly T[];
-
-const TAINT_DESCRIPTIONS: Record<TaintLevel, string> = {
-  llmOutput: 'LLM generated content',
-  networkLive: 'Live network content',
-  networkCached: 'Cached network content',
-  resolver: 'Resolver provided content',
-  userInput: 'User supplied input',
-  commandOutput: 'Command output',
-  localFile: 'Local file content',
-  staticEmbed: 'Static embedded content',
-  module: 'Registry module content',
-  literal: 'Literal source value',
-  unknown: 'Unknown provenance'
-};
-
-const LLM_COMMAND_PATTERNS: RegExp[] = [
-  /^(?:claude|anthropic|ai)/i,
-  /^(?:gpt|openai|chatgpt)/i,
-  /^(?:bard|gemini|palm)/i,
-  /^(?:mistral|llama|alpaca)/i,
-  /^(?:llm|ai-|ml-)/i
-];
-
-const DEFAULT_LABELS_BY_TAINT: Partial<Record<TaintLevel, DataLabel[]>> = {
-  llmOutput: ['untrusted'],
-  networkLive: ['network', 'untrusted'],
-  networkCached: ['network'],
-  resolver: ['untrusted'],
-  userInput: ['untrusted'],
-  commandOutput: ['untrusted'],
-  localFile: ['trusted'],
-  staticEmbed: ['trusted'],
-  module: ['trusted'],
-  literal: ['public'],
-  unknown: []
-};
 
 function dedupe<T>(values: Iterable<T>): T[] {
   const seen = new Set<T>();
@@ -55,22 +19,22 @@ function freezeArray<T>(values: Iterable<T> | undefined): ImmutableArray<T> {
 }
 
 export interface TaintSnapshot {
-  readonly level: TaintLevel;
   readonly sources: ImmutableArray<string>;
+  readonly taint: ImmutableArray<DataLabel>;
   readonly labels: ImmutableArray<DataLabel>;
 }
 
 export interface TrackTaintOptions {
   sources?: Iterable<string>;
   labels?: Iterable<DataLabel>;
+  taint?: Iterable<DataLabel>;
 }
 
 export class TaintTracker {
   private readonly entries = new Map<string, TaintSnapshot>();
 
-  track(id: string, level: TaintLevel, options?: TrackTaintOptions): TaintSnapshot {
+  track(id: string, options?: TrackTaintOptions): TaintSnapshot {
     const existing = this.entries.get(id);
-    const mergedLevel = existing ? compareTaintLevels(existing.level, level) : level;
     const mergedSources = freezeArray<string>([
       ...(existing?.sources ?? []),
       ...(options?.sources ?? [])
@@ -78,13 +42,19 @@ export class TaintTracker {
 
     const mergedLabels = freezeArray<DataLabel>([
       ...(existing?.labels ?? []),
-      ...(options?.labels ?? defaultLabelsForLevel(level))
+      ...(options?.labels ?? [])
+    ]);
+
+    const mergedTaint = freezeArray<DataLabel>([
+      ...(existing?.taint ?? []),
+      ...mergedLabels,
+      ...(options?.taint ?? [])
     ]);
 
     const snapshot: TaintSnapshot = Object.freeze({
-      level: mergedLevel,
       sources: mergedSources,
-      labels: mergedLabels
+      labels: mergedLabels,
+      taint: mergedTaint
     });
 
     this.entries.set(id, snapshot);
@@ -103,20 +73,13 @@ export class TaintTracker {
     const existing = this.entries.get(id);
     if (!existing && incoming.length === 0) {
       const defaultSnapshot = Object.freeze({
-        level: 'unknown' as TaintLevel,
         sources: Object.freeze([]) as ImmutableArray<string>,
-        labels: Object.freeze([]) as ImmutableArray<DataLabel>
+        labels: Object.freeze([]) as ImmutableArray<DataLabel>,
+        taint: Object.freeze([]) as ImmutableArray<DataLabel>
       });
       this.entries.set(id, defaultSnapshot);
       return defaultSnapshot;
     }
-
-    const level = incoming
-      .map(snapshot => snapshot.level)
-      .reduce<TaintLevel>(
-        (current, next) => compareTaintLevels(current, next),
-        existing?.level ?? 'unknown'
-      );
 
     const sources = freezeArray<string>([
       ...(existing?.sources ?? []),
@@ -128,10 +91,16 @@ export class TaintTracker {
       ...incoming.flatMap(snapshot => snapshot.labels)
     ]);
 
+    const taint = freezeArray<DataLabel>([
+      ...(existing?.taint ?? []),
+      ...incoming.flatMap(snapshot => snapshot.taint),
+      ...labels
+    ]);
+
     const snapshot: TaintSnapshot = Object.freeze({
-      level,
       sources,
-      labels
+      labels,
+      taint
     });
 
     this.entries.set(id, snapshot);
@@ -147,56 +116,59 @@ export interface ImportTaintOptions {
   importType: ImportType;
   resolverName?: string;
   source?: string;
-  advisoryLevel?: 'none' | 'warning';
+  labels?: readonly DataLabel[];  // From resolver ctx
+  resolvedPath?: string;
+  sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input';
+}
+
+function isUrlLike(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): boolean {
+  if (!resolvedPath) {
+    return false;
+  }
+  if (options.sourceType === 'url' || options.importType === 'cached') {
+    return false;
+  }
+  if (options.sourceType === 'module' || options.sourceType === 'input') {
+    return false;
+  }
+  if (isUrlLike(resolvedPath)) {
+    return false;
+  }
+  if (resolvedPath.startsWith('@')) {
+    return false;
+  }
+  return true;
 }
 
 export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const resolverName = options.resolverName?.toLowerCase();
+  const resolvedPath = options.resolvedPath ?? options.source;
+  const dirLabels =
+    resolvedPath && shouldTreatAsFile(options, resolvedPath)
+      ? labelsForPath(resolvedPath)
+      : [];
 
-  let level: TaintLevel;
-  if (resolverName === 'input' || resolverName === 'stdin') {
-    level = 'userInput';
-  } else if (resolverName === 'resolver') {
-    level = 'resolver';
-  } else {
-    level = deriveTaintFromImportType(options.importType);
-  }
+  const sources = freezeArray<string>([
+    ...(resolverName === 'dynamic' ? ['dynamic-module'] : []),
+    ...(options.source ? [options.source] : resolverName ? [`resolver:${resolverName}`] : [])
+  ]);
 
-  if (options.advisoryLevel === 'warning' && level === 'module') {
-    level = 'resolver';
-  }
-
-  const sources = freezeArray<string>(
-    options.source ? [options.source] : resolverName ? [`resolver:${resolverName}`] : []
-  );
-
-  const labels =
-    level === 'module' && options.advisoryLevel === 'none'
-      ? freezeArray<DataLabel>(['trusted'])
-      : freezeArray<DataLabel>(defaultLabelsForLevel(level));
+  const explicitLabels = freezeArray(options.labels);
+  const taint = freezeArray<DataLabel>([
+    ...explicitLabels,
+    ...(resolverName === 'dynamic' ? ['src:dynamic'] : []),
+    ...(dirLabels.length > 0 ? ['src:file', ...dirLabels] : [])
+  ]);
 
   return Object.freeze({
-    level,
     sources,
-    labels
+    labels: explicitLabels,
+    taint
   });
-}
-
-function deriveTaintFromImportType(importType: ImportType): TaintLevel {
-  switch (importType) {
-    case 'module':
-      return 'module';
-    case 'static':
-      return 'staticEmbed';
-    case 'local':
-      return 'localFile';
-    case 'cached':
-      return 'networkCached';
-    case 'live':
-      return 'networkLive';
-    default:
-      return 'unknown';
-  }
 }
 
 export interface CommandTaintOptions {
@@ -206,29 +178,16 @@ export interface CommandTaintOptions {
 
 export function deriveCommandTaint(options: CommandTaintOptions): TaintSnapshot {
   const baseCommand = options.command.trim().split(/\s+/)[0] ?? '';
-  const level = isLLMCommand(baseCommand) ? 'llmOutput' : 'commandOutput';
   const sources = freezeArray<string>([
     options.source ? options.source : `command:${baseCommand}`
   ]);
-  const labels = freezeArray<DataLabel>(defaultLabelsForLevel(level));
+  const taint = freezeArray<DataLabel>(['src:exec']);
 
   return Object.freeze({
-    level,
     sources,
-    labels
+    labels: Object.freeze([]) as ImmutableArray<DataLabel>,
+    taint
   });
-}
-
-export function describeTaint(level: TaintLevel): string {
-  return TAINT_DESCRIPTIONS[level];
-}
-
-export function defaultLabelsForLevel(level: TaintLevel): DataLabel[] {
-  const labels = DEFAULT_LABELS_BY_TAINT[level];
-  if (!labels) {
-    return [];
-  }
-  return labels.filter(label => (DATA_LABELS as readonly DataLabel[]).includes(label));
 }
 
 export function mergeTaintSnapshots(
@@ -241,24 +200,17 @@ export function mergeTaintSnapshots(
     return undefined;
   }
 
-  const level = defined
-    .map(snapshot => snapshot.level)
-    .reduce<TaintLevel>((current, next) => compareTaintLevels(current, next));
-
   const sources = freezeArray<string>(
     defined.flatMap(snapshot => snapshot.sources)
   );
-  const labels = freezeArray<DataLabel>(
-    defined.flatMap(snapshot => snapshot.labels)
+  const labels = freezeArray<DataLabel>(defined.flatMap(snapshot => snapshot.labels));
+  const taint = freezeArray<DataLabel>(
+    defined.flatMap(snapshot => snapshot.taint).concat(labels)
   );
 
   return Object.freeze({
-    level,
     sources,
-    labels
+    labels,
+    taint
   });
-}
-
-function isLLMCommand(command: string): boolean {
-  return LLM_COMMAND_PATTERNS.some(pattern => pattern.test(command));
 }

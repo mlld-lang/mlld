@@ -5,6 +5,35 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc77]
+
+### Added
+- **CLI `--structured` mode**: New `--structured` flag outputs JSON with effects, exports, stateWrites, and full security metadata for auditing and programmatic consumption
+- **CLI `--inject` flag**: Runtime module injection via `--inject @module=value` or `--inject @module=@file.json`. Enables testing with mock data and dynamic context without temp files. Multiple `--inject` flags supported.
+- **MCP static analysis**: `mlld mcp` now uses `analyzeModule()` for tool discovery instead of code execution, improving security by discovering tools without running arbitrary code
+- **SDK execution modes**: `interpret(mode)` with four modes for different consumption patterns
+  - `document` (default): Returns plain string output
+  - `structured`: Returns `{ output, effects, exports, environment }` with security metadata on all effects
+  - `stream`: Returns `StreamExecution` handle with real-time event delivery (`.on()`, `.off()`, `.done()`, `.result()`, `.abort()`)
+  - `debug`: Returns `DebugResult` with AST, variables, ordered trace, and timing
+- **Dynamic module injection**: `processMlld(script, { dynamicModules: {...} })` enables runtime context injection without filesystem I/O. All dynamic imports automatically labeled `src:dynamic` for guard enforcement. Enables multi-tenant applications (inject per-user/project context from database). Optional `dynamicModuleSource` parameter adds custom source labels (e.g., `src:user-upload`, `src:database`) for fine-grained guard policies distinguishing between trusted and untrusted dynamic data.
+- **State write protocol**: `/output @value to "state://path"` captures state updates as structured data instead of writing to filesystem. State writes included in `StructuredResult.stateWrites` with security metadata.
+- **SDK runtime execution**: `executeRoute(filepath, payload, options)` provides file-based route execution with in-memory AST caching, state hydration (`@state`, `@payload`), timeout/cancellation, and full effects logging.
+- **SDK analysis tools**: `analyzeModule(filepath)` extracts capabilities, imports, exports, guards, and security metadata without execution. Enables static analysis, capability checking, and module introspection.
+- **Effect security metadata**: All effects in structured/stream/debug modes include `security` field with labels, taint tracking, and provenance for auditing and policy enforcement.
+- **Execution events**: `ExecutionEmitter` bridges streaming infrastructure to SDK events (`stream:chunk`, `command:start/complete`, `effect`, `execution:complete`) for real-time monitoring.
+- **Directory-based taint tracking**: File loads now include `dir:*` labels for all parent directories, enabling guards like `@input.ctx.taint.includes('dir:/tmp/uploads')` to prevent executing uploaded files.
+
+### Changed
+- **Security model streamlined**: `SecurityDescriptor` now uses `taint: DataLabel[]` (accumulated labels) instead of single `taintLevel` enum. Automatic labels added: `src:exec` (commands), `src:file` (file loads), `src:dynamic` (runtime injection), `dir:/path` (file directories).
+- Effect handler now records effects when `mode: 'structured' | 'stream' | 'debug'`; default `document` mode skips recording for performance.
+- **`mlld run` now uses `executeRoute()`**: Run command leverages AST caching, metrics, and timeout support from SDK's `executeRoute()`. New `--timeout` and `--debug` flags available.
+
+### Fixed
+- Array slicing now supports variable interpolation in slice indices ([#457](https://github.com/mlld-lang/mlld/issues/457)). Previously `@arr[0:@limit]` would fail to parse; now `@arr[@start:@end]`, `@arr[0:@limit]`, and `@arr[@offset:]` all work as expected.
+- Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern 
+- Pipeline effects (`output`, `show`, `append`, `log`) run through guard pre/post hooks. `op:output`/`op:show`/`op:append`/`op:log` guards block both directives and inline effects; guard retries on effects deny with a clear message.
+
 ## [2.0.0-rc76]
 
 ### Fixed

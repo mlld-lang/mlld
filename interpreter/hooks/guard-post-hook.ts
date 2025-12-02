@@ -23,10 +23,11 @@ import { materializeGuardInputs } from '../utils/guard-inputs';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import type { PostHook } from './HookManager';
 import type { Environment } from '../env/Environment';
+import { guardSnapshotDescriptor } from './guard-utils';
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
-import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
+import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import {
   applySecurityDescriptorToStructuredValue,
@@ -37,6 +38,7 @@ import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import { appendFileSync } from 'fs';
+import { getExpressionProvenance } from '../utils/expression-provenance';
 
 const DEFAULT_GUARD_MAX = 3;
 const afterRetryDebugEnabled = process.env.DEBUG_AFTER_RETRY === '1';
@@ -405,7 +407,29 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
       }
     }
 
-    appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+  appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+  const guardName =
+    guardTrace[0]?.guard?.name ??
+    guardTrace[0]?.guard?.filterKind ??
+    '';
+  const contextLabels = operation.labels ?? [];
+  const provenance =
+    env.isProvenanceEnabled?.() === true
+      ? getExpressionProvenance(activeOutputs[0] ?? outputVariables[0]) ??
+        guardSnapshotDescriptor(env) ??
+        makeSecurityDescriptor()
+      : undefined;
+  env.emitSDKEvent({
+    type: 'debug:guard:after',
+    guard: guardName,
+    labels: contextLabels,
+    decision: currentDecision,
+    trace: guardTrace,
+    hints,
+    reasons,
+    timestamp: Date.now(),
+    ...(provenance && { provenance })
+  });
 
     if (currentDecision === 'deny') {
       const error = buildGuardError({
@@ -643,7 +667,7 @@ async function evaluateGuard(options: {
     inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
-    inputVariable = createArrayVariable('input', arrayValue as any[], true, GUARD_INPUT_SOURCE, {
+    inputVariable = createArrayVariable('input', arrayValue as any[], false, GUARD_INPUT_SOURCE, {
       isSystem: true,
       isReserved: true
     });
@@ -975,6 +999,9 @@ function extractGuardOverride(node: HookableNode): GuardOverrideValue {
 function resolveWithClause(node: HookableNode): unknown {
   if (isExecHookTarget(node)) {
     return (node as any).withClause;
+  }
+  if (isEffectHookTarget(node)) {
+    return (node as any).meta?.withClause;
   }
   if ((node as any).withClause) {
     return (node as any).withClause;

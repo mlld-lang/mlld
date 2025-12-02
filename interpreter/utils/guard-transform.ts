@@ -19,7 +19,7 @@ export function materializeGuardTransform(
 ): Variable {
   const descriptor = makeSecurityDescriptor({
     labels: originalDescriptor.labels,
-    taintLevel: originalDescriptor.taintLevel,
+    taint: originalDescriptor.taint,
     sources: [...originalDescriptor.sources, `guard:${guardName}`],
     policyContext: originalDescriptor.policyContext ?? undefined
   });
@@ -38,7 +38,7 @@ export function materializeGuardTransform(
   const ctx = (materialized.ctx ??
     {
       labels: [],
-      taint: 'unknown',
+      taint: [],
       sources: [],
       policy: null
     }) as any;

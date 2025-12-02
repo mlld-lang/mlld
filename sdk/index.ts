@@ -21,6 +21,24 @@ export type { FormattedErrorResult, ErrorFormatOptions };
 // Export utilities
 export { DependencyDetector } from '@core/utils/dependency-detector';
 export { PathContextBuilder } from '@core/services/PathContextService';
+export { ExecutionEmitter } from './execution-emitter';
+export { StreamExecution } from './stream-execution';
+export { executeRoute, TimeoutError, MemoryRouteCache } from './execute';
+export { ExecuteError, type ExecuteErrorCode } from './types';
+
+// Export static analysis
+export { analyzeModule } from './analyze';
+export type {
+  ModuleAnalysis,
+  ExecutableInfo,
+  GuardInfo,
+  ImportInfo,
+  VariableInfo,
+  WantsTier,
+  ModuleStats,
+  AnalysisError,
+  AnalysisWarning
+} from './analyze';
 
 // Export types
 export type { Location, Position } from '@core/types/index';
@@ -46,6 +64,38 @@ export interface ProcessOptions {
   normalizeBlankLines?: boolean;
   /** Use prettier for markdown formatting (default: true) */
   useMarkdownFormatter?: boolean;
+
+  /**
+   * Dynamic (non-filesystem) modules for runtime injection.
+   * All modules are labeled with 'src:dynamic' by default.
+   *
+   * @example
+   * ```typescript
+   * // Inject data from your database
+   * processMlld(script, {
+   *   dynamicModules: { '@user': userData }
+   * });
+   * ```
+   */
+  dynamicModules?: Record<string, string | Record<string, unknown>>;
+
+  /**
+   * Optional source label for dynamic modules. Adds 'src:{source}' label in addition to 'src:dynamic'.
+   * Useful for distinguishing between different types of injected data in guards.
+   *
+   * @example
+   * ```typescript
+   * // Distinguish user uploads from trusted database content
+   * processMlld(script, {
+   *   dynamicModules: { '@upload': userUpload },
+   *   dynamicModuleSource: 'user-upload'
+   * });
+   *
+   * // In your script, guards can check:
+   * // @guard(not(@input.ctx.labels.includes("src:user-upload"))) { ... }
+   * ```
+   */
+  dynamicModuleSource?: string;
 }
 
 /**
@@ -73,10 +123,12 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     fileSystem,
     pathService,
     normalizeBlankLines: options?.normalizeBlankLines,
-    useMarkdownFormatter: options?.useMarkdownFormatter
+    useMarkdownFormatter: options?.useMarkdownFormatter,
+    dynamicModules: options?.dynamicModules,
+    dynamicModuleSource: options?.dynamicModuleSource
   });
 
-  // The interpreter returns a string when returnEnvironment is false (default)
+  // Interpret returns string output in document mode; other modes carry output on the object
   return typeof result === 'string' ? result : result.output;
 }
 

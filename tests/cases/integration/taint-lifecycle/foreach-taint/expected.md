@@ -1,2 +1,2 @@
-Foreach taint: commandOutput
+Foreach taint: ["src:exec","secret"]
 Foreach labels: ["secret"]

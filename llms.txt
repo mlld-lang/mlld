@@ -1,4 +1,4 @@
-<MLLD_GUIDE version="2.0.0-rc63">
+<MLLD_GUIDE version="2.0.0-rc77">
 <TOC>
 <OVERVIEW> ......................... Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.
 <CORE_RULES>
@@ -14,6 +14,7 @@
   <RULE_10_WHEN_OVERVIEW> .......... When forms (bare, first, simple) – full detail in CONTROL_FLOW.
   <RULE_11_ITERATION_OVERVIEW> ..... foreach and /for – full detail in CONTROL_FLOW.
   <RULE_12_OPERATORS> .............. Logical, comparison, ternary operators for expressions.
+  <RULE_13_STATE_MANAGEMENT> ....... State writes via state:// protocol; hydration via dynamic modules.
 </CORE_RULES>
 <SYNTAX>
   <VARIABLES> ...................... Types, primitives, command results, code execution.
@@ -47,10 +48,15 @@
   <RESOLVERS> ...................... Prefixes, resolution priority, import type modifiers, custom config.
   <REGISTRY> ....................... Publishing workflow, version management, required frontmatter, commands.
   <PUBLISHING_PRIVATE_MODULES> ..... Auth, repo layout, commands.
+  <SDK_EXECUTION_MODES> ............ document/structured/stream/debug modes for SDK consumption.
+  <DYNAMIC_MODULE_INJECTION> ....... Runtime context injection without filesystem I/O.
+  <EXECUTE_ROUTE> .................. File-based execution with state management and caching.
+  <ANALYZE_MODULE> ................. Static analysis for tool discovery and validation.
 </CONFIGURATION>
 <COMMON_MISTAKES>
   <MISTAKE_MISSING_AT> ............. Create variables with @; directives use /.
   <MISTAKE_USING_AT_FOR> ........... @run is invalid; use /run on LHS and run / implicit RHS.
+  <MISTAKE_JS_TEMPLATE_SYNTAX> ..... Use @var not ${var}; mlld ≠ JS/shell templates.
   <MISTAKE_INTERPOLATION> .......... Interpolation only in directive/template contexts.
   <MISTAKE_NOT_TEMPLATE_LANG> ...... mlld ≠ template engine; use /show or /exe.
   <MISTAKE_FILE_VS_STRING> ......... Angle brackets load content; quotes hold literal filenames.
@@ -121,19 +127,20 @@ Create with `/var @name = "Alice"`. Reference with `@name` in templates/commands
 </RULE_2_VARIABLE_SYNTAX>
 
 <RULE_3_COMMANDS_NEED_BRACES>
-Every command needs braces. Use language specifiers when needed. Define executables with `/exe`.
+Every command needs braces. Use language specifiers: `cmd {}` for simple commands, `sh {}` for shell scripts, `js {}` for code.
 
 ```mlld
 ❌ /run cmd echo "hello"
 ✅ /run cmd {echo "hello"}
 
-# Language specifiers.
-/run js {console.log("hi")}
+# Language specifiers
+/run cmd {echo "hello"}       # simple commands (pipes only)
+/run sh {npm test && build}   # shell scripts (&&, ||, multi-line)
+/run js {console.log("hi")}   # JavaScript code
+
 # Executables
-/exe @hi() = run {echo hi}
-/exe @block() = run sh {
-  echo "multi"; ls -la
-}
+/exe @hi() = cmd {echo hi}
+/exe @script() = sh { echo "multi"; ls -la }
 /exe @calc(x) = js { return @x * 2 }
 ```
 
@@ -311,7 +318,7 @@ Objects/arrays use dot+index in directives and `{{ }}` in ::: templates only. Ar
 Use `/exe` for parameterized templates or commands.
 
 ```mlld
-/exe @greet(name) = run {echo "Hello @name"}
+/exe @greet(name) = cmd {echo "Hello @name"}
 /run @greet("Bob")
 
 /exe @welcome(name, role) = ::Welcome @name, our new @role!::
@@ -442,6 +449,29 @@ Ternary: `condition ? trueVal : falseVal`
 Type coercion: `"true" == true`, `"false" == false`, `null == undefined`
 Precedence: `!` → comparison → `&&` → `||` → `?:`
 </RULE_12_OPERATORS>
+
+<RULE_13_STATE_MANAGEMENT>
+State updates via state:// protocol instead of filesystem writes.
+
+```mlld
+/output @value to "state://path"  # Captured as StateWrite, not file
+```
+
+State hydration via dynamic modules:
+```mlld
+/var @count = @state.count + 1
+/output @count to "state://count"
+```
+
+Runtime provides state:
+```typescript
+executeRoute(file, payload, { state: { count: 0 } });
+// Returns: { stateWrites: [{ path: 'count', value: 1, ... }] }
+```
+
+Application handles persistence. SDK captures writes without filesystem I/O.
+
+</RULE_13_STATE_MANAGEMENT>
 </CORE_RULES>
 
 <SYNTAX>
@@ -459,7 +489,7 @@ Create primitives, arrays, objects, or assign from command/code results. Primiti
 /exe @add(a,b) = js { return a + b }
 /var @sum = @add(@n, 8)         # 50 (number)
 
-/var @date = run "date"         # result of command
+/var @date = cmd {date}         # result of command
 /var @readme = <README.md>      # file contents
 ```
 
@@ -674,9 +704,9 @@ Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted).
 JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments), `@json.llm` (extract JSON from LLM responses with code fences/prose, returns false if none found).
 
 ```mlld
-/var @users = run {cat users.json} | @json | @csv
+/var @users = cmd {cat users.json} | @json | @csv
 /exe @double(n) = js {(@n*2)}
-/var @x = run {echo "5"} | @double
+/var @x = cmd {echo "5"} | @double
 
 # JSON parsing variants
 /var @relaxed = @input | @json.loose   # JSON5: single quotes, trailing commas, comments
@@ -713,6 +743,7 @@ Context object (@ctx): `try` (attempt #), `tries` (array), `stage`, `input`, `hi
 Pipeline array (@p): `@p[0]` (input), `@p[-1]` (previous output), `@p.retries.all` (full history)
 
 Inline effects: `@data | @transform | log` (stderr), `@data | output to "file.txt"` (inline write)
+Inline effects run through guard hooks; use `op:output`/`op:show`/`op:append`/`op:log` filters to cover directives and inline forms.
 
 Formats (`with { format: "json|csv|xml|text" }`): guide parsing for pipeline stages.
 
@@ -782,49 +813,60 @@ Use `>>` or `<<` for comments at start or end of lines.
 <RUN_VS_RUN_SH>
 Decision tree:
 
-* Single line + pipes only (`|`) → `run { … }`
-* Needs `&&`, `||`, control flow, or multi-line → `run sh { … }`
-* JavaScript (no shell) → `js { … }` (or `/exe … = js { … }`)
+* Single line + pipes only (`|`) → `cmd { … }` (safe, recommended)
+* Needs `&&`, `||`, control flow, or multi-line → `sh { … }` (permissive)
+* JavaScript/Python code → `js { … }` / `python { … }`
 
-Parameter syntax:
-
-* `run` / commands: interpolate with `@param`
-* `run sh`: shell variables as `$param`
+Language specifiers work consistently across `/run`, `/var`, and `/exe`:
 
 ```mlld
-# run (pipes only)
+# cmd (pipes only, safe)
 /run cmd {echo Hello | tr '[:lower:]' '[:upper:]'}
+/var @date = cmd {date}
+/exe @list(dir) = cmd {ls -la @dir | head -5}
 
-# run with stdin (avoids shell escaping)
+# sh (shell scripts with &&, ||, multi-line)
+/run sh {
+  npm test && npm run build || echo "Build failed"
+}
+/var @output = sh {echo "test" && ls}
+/exe @deploy(env) = sh {
+  npm test && npm run deploy:$env
+}
+
+# js/python (code execution)
+/run js {console.log("hello")}
+/var @result = js {return 42}
+/exe @calc(x) = js { return @x * 2 }
+
+# stdin support (all forms)
 /var @data = '[{"name":"Alice"},{"name":"Bob"}]'
 /run cmd { cat | jq '.[] | select(.name == "Alice")' } with { stdin: @data }
 >> OR pipe sugar:
 /run @data | { cat | jq '.[] | select(.name == "Alice")' }
-
-# run sh (multi-line/conditionals)
-/run sh {
-  npm test && npm run build || echo "Build failed"
-}
-
-# Executable wrappers (with stdin support)
-/exe @safeDeploy(env) = run sh {
-  npm test && npm run deploy:$env
-}
 /exe @processJson(data) = run @data | { cat | jq '.[]' }
 ```
 
-Security: `run` forbids `&&`/`||` to reduce injection risk; escalate to `run sh` when necessary.
+Parameter syntax:
 
-Large variables: For bash/sh executables, variables >128KB are automatically handled via heredocs (when `MLLD_BASH_HEREDOC=1`). For `/run` commands exceeding limits, use `/exe` with bash/sh instead.
+* `cmd`: interpolate with `@param`
+* `sh`: use shell variables as `$param`
+* `js/python`: parameters passed as variables
+
+Security: `cmd` forbids `&&`/`||` to reduce injection risk; use `sh` when necessary.
+
+Backward compatibility: `run {…}` still works (equivalent to `cmd {…}`).
+
+Large variables: For bash/sh executables, variables >128KB are automatically handled via heredocs (when `MLLD_BASH_HEREDOC=1`).
 </RUN_VS_RUN_SH>
 
 <EXE_EXECUTABLES>
 Define reusable commands/code/templates/sections.
 
 ```mlld
-# Shell (single vs multi)
-/exe @list(dir) = run {ls -la @dir | head -5}
-/exe @script() = run sh {
+# Commands (simple vs shell scripts)
+/exe @list(dir) = cmd {ls -la @dir | head -5}
+/exe @script() = sh {
   echo "Start"; ls -la
 }
 
@@ -838,9 +880,9 @@ Define reusable commands/code/templates/sections.
 /exe @intro(file) = <@file # Introduction>
 
 # With stdin (explicit with clause)
-/exe @processJson(data) = run { cat | jq '.[]' } with { stdin: @data }
+/exe @processJson(data) = cmd { cat | jq '.[]' } with { stdin: @data }
 
-# With stdin (pipe sugar - requires 'run' keyword)
+# With stdin (pipe sugar)
 /exe @filterActive(data) = run @data | { cat } | @transformFilter
 ```
 
@@ -1218,7 +1260,7 @@ Tool orchestration:
   {"name":"auth","files":["auth/*.ts"],"tests":["test/auth/*"]},
   {"name":"api","files":["api/*.ts"],"tests":["test/api/*"]}
 ]
-/exe @runQA(area) = run {echo "Testing @area.name" | cat}
+/exe @runQA(area) = cmd {echo "Testing @area.name" | cat}
 /var @results = foreach @runQA(@areas)
 ```
 
@@ -1453,7 +1495,125 @@ mlld auth status
 mlld publish my-module.mld.md --private --path lib/modules --pr
 ```
 
-</PUBLISHING_PRIVATE_MODULES> </CONFIGURATION>
+</PUBLISHING_PRIVATE_MODULES>
+
+<SDK_EXECUTION_MODES>
+Four modes control how SDK consumers receive output:
+
+**document** (default): Returns string
+```typescript
+const output = await processMlld(script);
+```
+
+**structured**: Returns `{ output, effects, exports, environment, stateWrites, metrics }`
+```typescript
+const result = await interpret(script, { mode: 'structured' });
+console.log(result.effects);  // All effects with security metadata
+console.log(result.stateWrites);  // State updates
+```
+
+**stream**: Returns `StreamExecution` handle with real-time events
+```typescript
+const handle = interpret(script, { mode: 'stream' });
+handle.on('stream:chunk', event => process.stdout.write(event.text));
+handle.on('effect', event => console.log(event.effect));
+await handle.done();
+```
+
+**debug**: Returns `{ ast, variables, trace, durationMs, ...structured }`
+```typescript
+const result = await interpret(script, { mode: 'debug' });
+console.log(result.trace);  // All events with timestamps
+```
+
+Events: `stream:chunk`, `stream:progress`, `command:start`, `command:complete`, `effect`, `execution:complete`
+
+</SDK_EXECUTION_MODES>
+
+<DYNAMIC_MODULE_INJECTION>
+Runtime context injection without filesystem I/O:
+
+```typescript
+processMlld(template, {
+  dynamicModules: {
+    '@state': { count: 0, messages: [...] },
+    '@payload': { text: 'user input', userId: '123' }
+  }
+});
+```
+
+In script:
+```mlld
+/var @count = @state.count + 1
+/var @input = @payload.text
+```
+
+Security: All dynamic imports labeled `src:dynamic`, marked untrusted. Guards can check:
+```mlld
+/guard before secret = when [
+  @input.ctx.taint.includes('src:dynamic') =>
+    deny "Cannot use dynamic data as secrets"
+  * => allow
+]
+```
+
+DynamicModuleResolver has priority 1 (checked before filesystem/registry).
+
+</DYNAMIC_MODULE_INJECTION>
+
+<EXECUTE_ROUTE>
+File-based execution with state management:
+
+```typescript
+const result = await executeRoute('./agent.mld', payload, {
+  state: { conversationId: '123', messages: [...] },
+  timeout: 30000
+});
+
+// Apply state updates
+for (const write of result.stateWrites) {
+  await updateState(write.path, write.value);
+}
+```
+
+Features:
+- In-memory AST caching (mtime-based invalidation)
+- State hydration via `@state` module
+- Payload injection via `@payload`
+- State writes via `state://` protocol
+- Full effects and metrics
+- Timeout and cancellation
+
+</EXECUTE_ROUTE>
+
+<ANALYZE_MODULE>
+Static analysis without execution:
+
+```typescript
+const analysis = await analyzeModule('./tools.mld');
+
+if (!analysis.valid) {
+  console.error('Errors:', analysis.errors);
+}
+
+// Discover exports
+const tools = analysis.executables
+  .filter(e => analysis.exports.includes(e.name));
+
+// Check security
+const networkFns = analysis.executables
+  .filter(e => e.labels.some(l => l.startsWith('net:')));
+
+// Get capabilities
+console.log(analysis.needs);  // Required
+console.log(analysis.wants);  // Tiered preferences
+```
+
+Use cases: MCP proxy tool discovery, module registry validation, IDE/LSP features, security auditing.
+
+</ANALYZE_MODULE>
+
+</CONFIGURATION>
 
 <COMMON_MISTAKES>
 <MISTAKE_MISSING_AT>
@@ -1469,10 +1629,22 @@ mlld publish my-module.mld.md --private --path lib/modules --pr
 
 ```mlld
 ❌ /var @result = @run {echo "hello"}
-✅ /var @result = run {echo "hello"}
+✅ /var @result = cmd {echo "hello"}
 ```
 
 </MISTAKE_USING_AT>
+
+<MISTAKE_JS_TEMPLATE_SYNTAX>
+
+```mlld
+❌ /var @msg = "Hello ${name}"     # JS/shell syntax doesn't work
+❌ /show `Result: ${count}`
+✅ /var @msg = "Hello @name"       # Use @ not ${}
+✅ /show `Result: @count`
+```
+
+mlld uses `@var` not `${var}`. Don't mix JavaScript/shell template syntax.
+</MISTAKE_JS_TEMPLATE_SYNTAX>
 
 <MISTAKE_INTERPOLATION>
 
@@ -1596,6 +1768,27 @@ Denied handlers:
 ]
 
 Labels track through: methods (@secret.trim()), templates, field access, iterators, pipelines.
+
+**Automatic labels**:
+- `src:exec` - Added to /run and /exe results
+- `src:file` - Added to file loads
+- `src:dynamic` - Added to dynamic module imports
+- `dir:/path` - Added for file directories (all parents)
+
+Example directory guards:
+```mlld
+/guard before op:run = when [
+  @input.any.ctx.taint.includes('dir:/tmp/uploads') =>
+    deny "Cannot execute uploaded files"
+  * => allow
+]
+
+/guard before secret = when [
+  @input.ctx.taint.some(t => t.startsWith('dir:/app/config')) =>
+    deny "Config directory may contain secrets"
+  * => allow
+]
+```
 
 Guards are: non-reentrant, ordered (file top-to-bottom), composable (all run, deny > retry > allow @value > allow).
 

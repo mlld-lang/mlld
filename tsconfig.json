@@ -29,9 +29,7 @@
       "@interpreter/*": ["interpreter/*"],
       "@output/*": ["output/*"],
       "@cli/*": ["cli/*"],
-      "@sdk/*": ["api/*"],
-      "@api/*": ["api/*"],
-      "@api": ["api/index.ts", "api/index.js"],
+      "@sdk/*": ["sdk/*"],
       "@tests/*": ["tests/*"],
       "@grammar/*": ["grammar/*"]
     }
@@ -44,7 +42,7 @@
     "interpreter/**/*",
     "output/**/*",
     "cli/**/*",
-    "api/**/*",
+    "sdk/**/*",
     "tests/**/*",
     "grammar/**/*",
     "grammar/core/**/*.ts",

@@ -27,6 +27,7 @@ import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
+import type { Environment } from '@interpreter/env/Environment';
 import { ErrorHandler } from './error/ErrorHandler';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { UserInteraction } from './interaction/UserInteraction';
@@ -44,6 +45,7 @@ export interface CLIOptions {
   stdout?: boolean;
   verbose?: boolean;
   debug?: boolean;
+  json?: boolean;
   strict?: boolean;
   homePath?: string;
   watch?: boolean;
@@ -104,6 +106,10 @@ export interface CLIOptions {
   noStream?: boolean;
   showJson?: boolean;
   appendJson?: string;
+  // Structured output mode
+  structured?: boolean;
+  // Dynamic module injection
+  inject?: string[];  // ['@module=value', '@data=@file.json']
   _?: string[]; // Remaining args after command
 }
 const globalErrorHandler = new ErrorHandler();
@@ -188,7 +194,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   const { input, output, format, stdout, debug } = cliOptions;
   let outputPath = output;
   const normalizedFormat = normalizeFormat(format); // Use normalized format
-  let environment: any = null; // Define outside try block for cleanup access
+  let environment: Environment | null = null; // Define outside try block for cleanup access
 
 
   if (!stdout && !outputPath) {
@@ -280,17 +286,18 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         timeout: cliOptions.commandTimeout
       },
       streaming: streamingOptions,
-      returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
       enableTrace: true, // Enable directive trace for better error debugging
       useMarkdownFormatter: !cliOptions.noFormat,
-      captureErrors: cliOptions.captureErrors
+      captureErrors: cliOptions.captureErrors,
+      captureEnvironment: env => {
+        environment = env;
+      }
     });
 
     // Extract result and environment
     const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;
-    environment = typeof interpretResult === 'string' ? null : interpretResult.environment;
     
     // Check if @output was used in the document
     const hasExplicitOutput = environment && (environment as any).hasExplicitOutput;

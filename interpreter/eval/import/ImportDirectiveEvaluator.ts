@@ -62,13 +62,16 @@ export class ImportDirectiveEvaluator {
       const taintSnapshot = deriveImportTaint({
         importType: resolution.importType ?? 'live',
         resolverName: resolution.resolverName,
-        source: resolution.resolvedPath
+        source: resolution.resolvedPath,
+        resolvedPath: resolution.resolvedPath,
+        sourceType: resolution.type,
+        labels: resolution.ctx?.labels
       });
       const taintDescriptor = makeSecurityDescriptor({
-        taintLevel: taintSnapshot.level,
-        labels: taintSnapshot.labels,
-        sources: taintSnapshot.sources
-      });
+      taint: taintSnapshot.taint,
+      labels: taintSnapshot.labels,
+      sources: taintSnapshot.sources
+    });
       const descriptor = mergeDescriptors(baseDescriptor, taintDescriptor);
 
       // 2. Route to appropriate handler based on import type
@@ -323,13 +326,42 @@ export class ImportDirectiveEvaluator {
       throw ResolverError.unsupportedCapability(resolver.name, 'imports', 'import');
     }
 
+    const requestedImports = directive.subtype === 'importSelected'
+      ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
+      : undefined;
+
+    const resolverResult = await resolver.resolve(`@${resolverName}`, {
+      context: 'import',
+      requestedImports
+    });
+
+    if (resolverResult.contentType === 'module') {
+      const ref = resolverResult.ctx?.source ?? `@${resolverName}`;
+      const taintDescriptor = deriveImportTaint({
+        importType: 'module',
+        resolverName,
+        source: ref,
+        resolvedPath: ref,
+        sourceType: 'resolver',
+        labels: resolverResult.ctx?.labels
+      });
+      env.recordSecurityDescriptor(
+        makeSecurityDescriptor({
+          taint: taintDescriptor.taint,
+          labels: taintDescriptor.labels,
+          sources: taintDescriptor.sources
+        })
+      );
+      return this.importFromResolverContent(directive, ref, resolverResult, env);
+    }
+
     // Get export data from resolver
     let exportData: Record<string, any> = {};
     
     if ('getExportData' in resolver) {
       exportData = await this.getResolverExportData(resolver as any, directive, resolverName);
     } else {
-      exportData = await this.fallbackResolverData(resolver, directive, resolverName);
+      exportData = await this.fallbackResolverData(resolver, directive, resolverName, resolverResult);
     }
 
     // Import variables based on directive type
@@ -363,6 +395,9 @@ export class ImportDirectiveEvaluator {
     for (const candidate of candidates) {
       try {
         const resolverContent = await env.resolveModule(candidate, 'import');
+        if (resolverContent.resolverName) {
+          resolution.resolverName = resolverContent.resolverName;
+        }
 
         const treatAsModule = resolverContent.contentType === 'module'
           || matchesModuleExtension(candidate);
@@ -373,6 +408,22 @@ export class ImportDirectiveEvaluator {
           );
           continue;
         }
+
+        const importDescriptor = deriveImportTaint({
+          importType: resolution.importType ?? 'module',
+          resolverName: resolverContent.resolverName,
+          source: resolverContent.ctx?.source ?? resolution.resolvedPath,
+          resolvedPath: resolverContent.ctx?.source ?? resolution.resolvedPath,
+          sourceType: 'module',
+          labels: resolverContent.ctx?.labels
+        });
+        env.recordSecurityDescriptor(
+          makeSecurityDescriptor({
+            taint: importDescriptor.taint,
+            labels: importDescriptor.labels,
+            sources: importDescriptor.sources
+          })
+        );
 
         // Validate version against lock file for registry modules
         await this.validateLockFileVersion(candidate, resolverContent, env);
@@ -459,6 +510,35 @@ export class ImportDirectiveEvaluator {
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
 
+      const dynamicSource = resolverContent.ctx?.source;
+      if (dynamicSource && typeof dynamicSource === 'string' && dynamicSource.startsWith('dynamic://')) {
+        const childVariables = processingResult.childEnvironment.getAllVariables?.();
+        const parentVariables = env.getAllVariables?.();
+        const exportedNames =
+          env.getExportManifest()?.getNames?.() ??
+          (Array.isArray(resolverContent.metadata?.exports)
+            ? (resolverContent.metadata.exports as string[])
+            : undefined) ??
+          processingResult.childEnvironment.getExportManifest?.()?.getNames?.() ??
+          (childVariables ? Array.from(childVariables.keys()) : undefined) ??
+          (parentVariables ? Array.from(parentVariables.keys()) : undefined) ??
+          Object.keys(processingResult.moduleObject ?? {});
+        const provenance =
+          env.isProvenanceEnabled?.() === true
+            ? resolverContent.metadata?.provenance ??
+              this.buildDynamicImportProvenance(dynamicSource ?? ref, env)
+            : undefined;
+        env.emitSDKEvent({
+          type: 'debug:import:dynamic',
+          path: ref,
+          source: dynamicSource,
+          tainted: true,
+          variables: exportedNames,
+          timestamp: Date.now(),
+          ...(provenance && { provenance })
+        });
+      }
+
       return { value: undefined, env };
     } finally {
       // Import tracking handled by ModuleContentProcessor.processResolverContent
@@ -506,16 +586,19 @@ export class ImportDirectiveEvaluator {
   private async fallbackResolverData(
     resolver: any,
     directive: DirectiveNode,
-    resolverName: string
+    resolverName: string,
+    resolvedResult?: { contentType: string; content: any }
   ): Promise<Record<string, any>> {
     const requestedImports = directive.subtype === 'importSelected' 
       ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
       : undefined;
     
-    const result = await resolver.resolve(`@${resolverName}`, {
-      context: 'import',
-      requestedImports
-    });
+    const result =
+      resolvedResult ??
+      (await resolver.resolve(`@${resolverName}`, {
+        context: 'import',
+        requestedImports
+      }));
     
     // If content is JSON string (data type), parse it
     if (result.contentType === 'data' && typeof result.content === 'string') {
@@ -681,6 +764,21 @@ export class ImportDirectiveEvaluator {
       // Don't fail for legacy entries, but could update the lock entry with the resolved version
       // This provides a migration path for existing lock files
     }
+  }
+
+  private buildDynamicImportProvenance(source: string | undefined, env: Environment) {
+    const snapshot = env.getSecuritySnapshot?.();
+    const normalizedSource = source
+      ? source.startsWith('dynamic://')
+        ? source
+        : `dynamic://${source}`
+      : 'dynamic://';
+    return makeSecurityDescriptor({
+      labels: ['untrusted' as DataLabel],
+      taint: snapshot?.taint ?? ['src:dynamic'],
+      sources: snapshot?.sources && snapshot.sources.length > 0 ? snapshot.sources : [normalizedSource],
+      policyContext: snapshot?.policy
+    });
   }
 
   /**

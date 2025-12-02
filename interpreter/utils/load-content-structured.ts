@@ -6,6 +6,8 @@ import {
   type LoadContentResultURL
 } from '@core/types/load-content';
 import { MlldError } from '@core/errors';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { labelsForPath } from '@core/security/paths';
 import {
   getVariableMetadata,
   hasVariableMetadata
@@ -73,6 +75,21 @@ function parseJsonLines(text: string, sourceLabel: string): unknown[] {
   return results;
 }
 
+function isProbablyURL(input: string): boolean {
+  return /^https?:\/\//i.test(input);
+}
+
+function buildLoadSecurityDescriptor(result: LoadContentResult) {
+  if (!result.absolute || isProbablyURL(result.absolute)) {
+    return undefined;
+  }
+  const dirLabels = labelsForPath(result.absolute);
+  return makeSecurityDescriptor({
+    taint: ['src:file', ...dirLabels],
+    sources: [result.absolute]
+  });
+}
+
 function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMetadata): StructuredValueMetadata | undefined {
   if (!base && !extra) {
     return undefined;
@@ -115,6 +132,13 @@ function extractLoadContentMetadata(result: LoadContentResult): StructuredValueM
     metadata.html = htmlResult.html;
     if (htmlResult.title) metadata.title = htmlResult.title;
     if (htmlResult.description) metadata.description = htmlResult.description;
+  }
+
+  const security = buildLoadSecurityDescriptor(result);
+  if (security) {
+    metadata.security = metadata.security
+      ? mergeDescriptors(metadata.security, security)
+      : security;
   }
 
   return metadata;
@@ -179,26 +203,27 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
     // Preserve original variable metadata if tagged
     const variableMetadata = hasVariableMetadata(value) ? getVariableMetadata(value) : undefined;
+    const aggregatedSecurity = isLoadContentResultArray(value)
+      ? value
+          .map(item => buildLoadSecurityDescriptor(item))
+          .filter((descriptor): descriptor is NonNullable<ReturnType<typeof buildLoadSecurityDescriptor>> =>
+            Boolean(descriptor)
+          )
+      : [];
+    const mergedSecurity =
+      aggregatedSecurity.length > 0 ? mergeDescriptors(...aggregatedSecurity) : undefined;
+
     const metadata = buildMetadata(
       baseMetadata,
       variableMetadata?.ctx
         ? { variableMetadata: variableMetadata.ctx }
         : undefined
     );
+    const finalMetadata = mergedSecurity
+      ? buildMetadata(metadata, { security: mergedSecurity })
+      : metadata;
 
-    return wrapStructured(value, 'array', deriveArrayText(value), metadata);
-  }
-
-  if (isLoadContentResultArray(value)) {
-    const text = value.map(item => item.content).join('\n\n');
-    const metadata: StructuredValueMetadata = {
-      source: 'load-content',
-      length: value.length,
-      metrics: {
-        length: value.length
-      }
-    };
-    return wrapStructured(value, 'array', text, metadata);
+    return wrapStructured(value, 'array', deriveArrayText(value), finalMetadata);
   }
 
   const fallbackText =

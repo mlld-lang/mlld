@@ -8,7 +8,7 @@ import { MlldError } from '@core/errors/index';
 // Mock modules
 vi.mock('fs/promises');
 vi.mock('fs');
-vi.mock('@interpreter/index');
+vi.mock('@sdk/execute');
 
 // Create a shared mock function that can be controlled in tests
 const mockGetScriptDir = vi.fn().mockReturnValue(undefined);
@@ -144,38 +144,124 @@ describe('RunCommand', () => {
     });
     
     it('should successfully run a script', async () => {
-      // Mock the interpret function before importing
-      const { interpret } = await import('@interpreter/index');
-      vi.mocked(interpret).mockResolvedValue('Script output');
-      
+      // Mock executeRoute from the SDK
+      const { executeRoute } = await import('@sdk/execute');
+      vi.mocked(executeRoute).mockResolvedValue({
+        output: 'Script output',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: {
+          totalMs: 10,
+          parseMs: 2,
+          evaluateMs: 8,
+          cacheHit: false,
+          effectCount: 0,
+          stateWriteCount: 0
+        }
+      } as any);
+
       vi.mocked(existsSync).mockImplementation((p) => {
         return p.toString().endsWith('hello.mld');
       });
-      
-      vi.mocked(fs.readFile).mockResolvedValue('/show "Hello World"');
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Mock process.exit to prevent it from actually exiting
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
         throw new Error(`process.exit unexpectedly called with "${code}"`);
       });
-      
+
       try {
         await runCommand.run('hello');
-      } catch (error) {
+      } catch (error: any) {
         // Expected to throw due to process.exit mock
         if (!error.message.includes('process.exit unexpectedly called with "0"')) {
           throw error;
         }
       }
-      
+
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Running'));
-      expect(interpret).toHaveBeenCalled();
+      expect(executeRoute).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Script output');
       expect(exitSpy).toHaveBeenCalledWith(0);
-      
+
       consoleSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('should pass timeout option to executeRoute', async () => {
+      const { executeRoute } = await import('@sdk/execute');
+      vi.mocked(executeRoute).mockResolvedValue({
+        output: 'Done',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: { totalMs: 5, parseMs: 1, evaluateMs: 4, cacheHit: false, effectCount: 0, stateWriteCount: 0 }
+      } as any);
+
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('script.mld'));
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await runCommand.run('script', { timeoutMs: 5000 });
+      } catch (error: any) {
+        if (!error.message.includes('exit:0')) throw error;
+      }
+
+      expect(executeRoute).toHaveBeenCalledWith(
+        expect.any(String),
+        undefined,
+        expect.objectContaining({ timeoutMs: 5000 })
+      );
+
+      consoleSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('should show metrics in debug mode', async () => {
+      const { executeRoute } = await import('@sdk/execute');
+      vi.mocked(executeRoute).mockResolvedValue({
+        output: 'Output',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: {
+          totalMs: 100.5,
+          parseMs: 10.2,
+          evaluateMs: 90.3,
+          cacheHit: true,
+          effectCount: 5,
+          stateWriteCount: 2
+        }
+      } as any);
+
+      vi.mocked(existsSync).mockImplementation((p) => p.toString().endsWith('script.mld'));
+
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      try {
+        await runCommand.run('script', { debug: true });
+      } catch (error: any) {
+        if (!error.message.includes('exit:0')) throw error;
+      }
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Metrics:'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Total: 100.5ms'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('cached'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Effects: 5'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('State writes: 2'));
+
+      consoleLogSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
       exitSpy.mockRestore();
     });
   });

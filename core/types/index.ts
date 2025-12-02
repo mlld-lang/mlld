@@ -17,6 +17,7 @@ export * from './values';
 export * from './raw';
 export * from './guards';
 export * from './security';
+export * from './state';
 export * from './errors';
 
 // Re-export directive types
@@ -73,8 +74,8 @@ import { ForExpression } from './for';
  * that allows TypeScript to narrow types during processing.
  */
 export type MlldNode =
-  | TextNode 
-  | DirectiveNode 
+  | TextNode
+  | DirectiveNode
   | CodeFenceNode
   | MlldRunBlockNode
   | CommentNode
@@ -164,7 +165,7 @@ export function astLocationToSourceLocation(
   filePath?: string
 ): SourceLocation | undefined {
   if (!astLocation) return undefined;
-  
+
   return {
     line: astLocation.start.line,
     column: astLocation.start.column,
@@ -251,10 +252,10 @@ export function isPreciseLocation(location: SourceLocation): location is Require
 // =========================================================================
 
 // Export any additional utilities from sub-modules
-export { 
+export {
   isDirectiveNode as isDirective,
-  isTextNode as isText, 
-  isCommentNode as isComment, 
+  isTextNode as isText,
+  isCommentNode as isComment,
   isCodeFenceNode as isCodeFence,
   isTextNode,
   isDirectiveNode,

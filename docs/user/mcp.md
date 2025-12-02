@@ -36,6 +36,9 @@ Output:
    If `llm/mcp/` exists, `mlld mcp` with no arguments serves every module in that directory.
 3. Point your MCP client (Claude Desktop, custom agent, etc.) at the same command and pass any required environment variables.
 
+**Security Note:**
+The MCP server uses static analysis (`analyzeModule()`) to discover tools without executing code. Tools are only executed when explicitly called by the MCP client.
+
 Tips:
 - Serve a directory or glob: `mlld mcp llm/mcp/` or `mlld mcp "llm/mcp/*.mld.md"`.
 - JSON-RPC responses always print to stdout. Logs and warnings stay on stderr, so piping works cleanly.

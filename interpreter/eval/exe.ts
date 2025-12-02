@@ -658,7 +658,7 @@ export async function evaluateExe(
 
   let executableDescriptor = descriptor;
   if (executableDef.type === 'command') {
-    const commandTaintDescriptor = makeSecurityDescriptor({ taintLevel: 'commandOutput' });
+    const commandTaintDescriptor = makeSecurityDescriptor({ taint: ['src:exec'] });
     executableDescriptor = executableDescriptor
       ? env.mergeSecurityDescriptors(executableDescriptor, commandTaintDescriptor)
       : commandTaintDescriptor;

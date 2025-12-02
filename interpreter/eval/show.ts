@@ -1219,7 +1219,7 @@ export async function evaluateShow(
     snapshot
       ? makeSecurityDescriptor({
           labels: snapshot.labels,
-          taintLevel: snapshot.taintLevel,
+          taint: snapshot.taint,
           sources: snapshot.sources,
           policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
         })

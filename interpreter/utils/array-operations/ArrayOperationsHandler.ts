@@ -1,10 +1,11 @@
 import { Environment } from '@interpreter/env/Environment';
-import { FieldAccessNode, ArraySliceNode, ArrayFilterNode } from '@core/types/primitives';
+import { FieldAccessNode, ArraySliceNode, ArrayFilterNode, SliceIndex } from '@core/types/primitives';
+import { isVariableReferenceNode } from '@core/types/guards';
 import { SliceHandler } from './slice/SliceHandler';
 import { FilterHandler } from './filter/FilterHandler';
 import { MetadataPreserver } from './metadata/MetadataPreserver';
 import { isLoadContentResultArray } from '@core/types/load-content';
-import { isVariable } from '@interpreter/utils/variable-resolution';
+import { isVariable, resolveValue, ResolutionContext } from '@interpreter/utils/variable-resolution';
 import { asData, isStructuredValue } from '../structured-value';
 
 export class ArrayOperationsHandler {
@@ -26,7 +27,7 @@ export class ArrayOperationsHandler {
 
     switch (field.type) {
       case 'arraySlice':
-        return this.handleSlice(arrayData, field as ArraySliceNode);
+        return await this.handleSlice(arrayData, field as ArraySliceNode, env);
 
       case 'arrayFilter':
         return await this.handleFilter(arrayData, field as ArrayFilterNode, env);
@@ -36,9 +37,43 @@ export class ArrayOperationsHandler {
     }
   }
 
-  private handleSlice(arrayData: ArrayData, node: ArraySliceNode): any {
-    const sliced = this.slice.perform(arrayData.items, node.start, node.end);
+  private async handleSlice(arrayData: ArrayData, node: ArraySliceNode, env: Environment): Promise<any> {
+    // Resolve variable references in slice indices
+    const start = await this.resolveSliceIndex(node.start, env);
+    const end = await this.resolveSliceIndex(node.end, env);
+
+    const sliced = this.slice.perform(arrayData.items, start, end);
     return this.preserver.preserveType(arrayData, sliced);
+  }
+
+  private async resolveSliceIndex(index: SliceIndex | null, env: Environment): Promise<number | null> {
+    if (index === null || index === undefined) {
+      return null;
+    }
+
+    if (typeof index === 'number') {
+      return index;
+    }
+
+    // Handle variable reference
+    if (isVariableReferenceNode(index)) {
+      const variable = env.getVariable(index.identifier);
+      if (!variable) {
+        throw new Error(`Variable not found for slice index: @${index.identifier}`);
+      }
+
+      const resolved = await resolveValue(variable, env, ResolutionContext.StringInterpolation);
+      const value = isVariable(resolved) ? resolved.value : resolved;
+
+      if (typeof value !== 'number') {
+        throw new Error(`Slice index must resolve to a number, got ${typeof value} from @${index.identifier}`);
+      }
+
+      return value;
+    }
+
+    // Unknown index type
+    throw new Error(`Invalid slice index type: ${typeof index}`);
   }
 
   private async handleFilter(

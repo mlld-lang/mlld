@@ -262,4 +262,32 @@ describe('mcp command', () => {
     consoleSpy.mockRestore();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
+
+  it('handles modules with parse errors gracefully during discovery', async () => {
+    const command = createMcpCommand();
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-parse-'));
+    const goodModule = path.join(tmpDir, 'good.mld.md');
+    const badModule = path.join(tmpDir, 'bad.mld.md');
+
+    await fs.writeFile(goodModule, [
+      '/exe @working() = js { return "ok"; }',
+      '/export { @working }',
+    ].join('\n'));
+
+    await fs.writeFile(badModule, [
+      'invalid syntax here @#$%',
+      '/exe @broken() = {{{',
+    ].join('\n'));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await command.execute([tmpDir], {});
+
+    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(Array.from(lastOptions.exportedFunctions.keys())).toEqual(['working']);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Parse errors'));
+
+    consoleSpy.mockRestore();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
 });

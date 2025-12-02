@@ -6,7 +6,6 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
-import type { TaintLevel } from '@core/types/security';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { logger } from '@core/utils/logger';
 import * as fs from 'fs';
@@ -153,7 +152,7 @@ export class GitHubResolver implements Resolver {
       const metadata = {
         source: `github://${config.repository}/${path}`,
         timestamp: new Date(),
-        taintLevel: 'networkCached' as TaintLevel,
+        taint: [],
         author: owner
       };
       return {
@@ -182,7 +181,7 @@ export class GitHubResolver implements Resolver {
       const metadata = {
         source: `github://${config.repository}/${path}`,
         timestamp: new Date(),
-        taintLevel: 'networkLive' as TaintLevel,
+        taint: [],
         author: owner,
         mimeType: this.getMimeType(path)
       };

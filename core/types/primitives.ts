@@ -45,8 +45,8 @@ export interface FieldAccessNode {
   // 'arrayFilter': [?condition] (see condition field)
   
   // Operation-specific fields for slice operations
-  start?: number | null;  // null means from beginning
-  end?: number | null;    // null means to end
+  start?: SliceIndex | null;  // null means from beginning
+  end?: SliceIndex | null;    // null means to end
   
   // Operation-specific fields for filter operations
   condition?: FilterCondition;
@@ -54,11 +54,14 @@ export interface FieldAccessNode {
   location?: SourceLocation;
 }
 
+// Slice index can be a number or a variable reference
+export type SliceIndex = number | VariableReferenceNode;
+
 // Array slice node - specific type for array slicing
 export interface ArraySliceNode extends FieldAccessNode {
   type: 'arraySlice';
-  start: number | null;
-  end: number | null;
+  start: SliceIndex | null;
+  end: SliceIndex | null;
 }
 
 // Array filter node - specific type for array filtering

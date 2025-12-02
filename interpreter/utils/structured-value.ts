@@ -1,4 +1,4 @@
-import type { SecurityDescriptor, DataLabel, TaintLevel } from '@core/types/security';
+import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
@@ -70,7 +70,7 @@ export interface StructuredValue<T = unknown> {
 
 export interface StructuredValueContext {
   labels: readonly DataLabel[];
-  taint: TaintLevel;
+  taint: readonly DataLabel[];
   sources: readonly string[];
   policy: Readonly<Record<string, unknown>> | null;
   filename?: string;
@@ -102,7 +102,7 @@ const SHOULD_ASSERT_STRUCTURED =
 function ctxToSecurityDescriptor(ctx: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null }): SecurityDescriptor {
   return makeSecurityDescriptor({
     labels: ctx.labels ? [...ctx.labels] : [],
-    taintLevel: ctx.taint as TaintLevel | undefined,
+    taint: Array.isArray(ctx.taint) ? [...ctx.taint] : [],
     sources: ctx.sources ? [...ctx.sources] : [],
     policyContext: ctx.policy ?? undefined
   });
@@ -365,7 +365,7 @@ export function applySecurityDescriptorToStructuredValue(
     security: normalized
   };
   value.ctx.labels = normalized.labels ? [...normalized.labels] : [];
-  value.ctx.taint = normalized.taintLevel ?? 'unknown';
+  value.ctx.taint = normalized.taint ? [...normalized.taint] : [];
   value.ctx.sources = normalized.sources ? [...normalized.sources] : [];
   value.ctx.policy = normalized.policyContext ?? null;
 }
@@ -485,11 +485,12 @@ function buildCtxFromMetadata(
     (metadata?.length as number | undefined) ?? metrics?.length ?? loadResult?.content?.length;
   const flattenedHtml = metadata?.html as string | undefined;
   const labels = normalizeLabelArray(normalizedDescriptor.labels);
+  const taint = normalizeLabelArray(normalizedDescriptor.taint);
   const sources = normalizedDescriptor.sources ?? EMPTY_SOURCES;
 
   return {
     labels,
-    taint: normalizedDescriptor.taintLevel ?? 'unknown',
+    taint,
     sources,
     policy: normalizedDescriptor.policyContext ?? null,
     filename: flattenedFilename ?? loadResult?.filename,

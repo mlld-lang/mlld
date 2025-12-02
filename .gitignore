@@ -139,3 +139,6 @@ parseperf-results.json
 .aider*
 .crush
 .last-build
+
+todo
+scripts/mlld

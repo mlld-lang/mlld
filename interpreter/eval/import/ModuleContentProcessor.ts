@@ -10,7 +10,9 @@ import { MlldError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
+import type { ContentType } from '@core/resolvers/types';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -46,7 +48,7 @@ export class ModuleContentProcessor {
       snapshot
         ? makeSecurityDescriptor({
             labels: snapshot.labels,
-            taintLevel: snapshot.taintLevel,
+            taint: snapshot.taint,
             sources: snapshot.sources,
             policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
           })
@@ -55,6 +57,18 @@ export class ModuleContentProcessor {
         labels: directive.meta?.securityLabels || directive.values?.securityLabels
       })
     );
+    const fileDescriptor = !isURL
+      ? makeSecurityDescriptor({
+          taint: ['src:file', ...labelsForPath(resolvedPath)],
+          sources: [resolvedPath]
+        })
+      : undefined;
+    const combinedDescriptor = fileDescriptor
+      ? mergeDescriptors(importDescriptor, fileDescriptor)
+      : importDescriptor;
+    if (combinedDescriptor) {
+      this.env.recordSecurityDescriptor(combinedDescriptor);
+    }
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerPath = resolvedPath.toLowerCase();
@@ -128,7 +142,8 @@ export class ModuleContentProcessor {
   async processResolverContent(
     content: string,
     ref: string,
-    directive: DirectiveNode
+    directive: DirectiveNode,
+    contentType?: ContentType
   ): Promise<ModuleProcessingResult> {
     // Begin import tracking for security
     this.securityValidator.beginImport(ref);
@@ -137,7 +152,7 @@ export class ModuleContentProcessor {
       snapshot
         ? makeSecurityDescriptor({
             labels: snapshot.labels,
-            taintLevel: snapshot.taintLevel,
+            taint: snapshot.taint,
             sources: snapshot.sources,
             policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
           })
@@ -146,6 +161,19 @@ export class ModuleContentProcessor {
         labels: directive.meta?.securityLabels || directive.values?.securityLabels
       })
     );
+    const fileDescriptor =
+      ref && !this.isUrlLike(ref) && !ref.startsWith('@')
+        ? makeSecurityDescriptor({
+            taint: ['src:file', ...labelsForPath(ref)],
+            sources: [ref]
+          })
+        : undefined;
+    const combinedDescriptor = fileDescriptor
+      ? mergeDescriptors(importDescriptor, fileDescriptor)
+      : importDescriptor;
+    if (combinedDescriptor) {
+      this.env.recordSecurityDescriptor(combinedDescriptor);
+    }
     try {
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerRef = ref.toLowerCase();
@@ -186,7 +214,8 @@ export class ModuleContentProcessor {
       const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
         content,
         ref,
-        directive
+        directive,
+        contentType
       );
 
       // Check if this is a JSON file (special handling)
@@ -246,10 +275,19 @@ export class ModuleContentProcessor {
   private async parseContentByType(
     content: string,
     resolvedPath: string,
-    directive: DirectiveNode
+    directive: DirectiveNode,
+    contentTypeHint?: ContentType
   ): Promise<{ parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' }> {
+    const forceModule = contentTypeHint === 'module';
+    const forcePlainText = contentTypeHint === 'text';
+    const treatAsData = contentTypeHint === 'data';
+
+    if (forcePlainText) {
+      return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
+    }
+
     // Check if this is a JSON file
-    if (resolvedPath.endsWith('.json')) {
+    if (resolvedPath.endsWith('.json') || treatAsData) {
       try {
         return { parsed: JSON.parse(content), processedContent: content, isPlainText: false };
       } catch (error) {
@@ -269,7 +307,8 @@ export class ModuleContentProcessor {
 
     // Only parse .mld and .md files as mlld content
     // All other files (like .txt) should be treated as plain text
-    if (!resolvedPath.endsWith('.mld') && !resolvedPath.endsWith('.md')) {
+    const isModuleLike = forceModule || resolvedPath.endsWith('.mld') || resolvedPath.endsWith('.md');
+    if (!isModuleLike) {
       // Return a marker indicating this is plain text content
       return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
     }
@@ -448,6 +487,12 @@ export class ModuleContentProcessor {
       });
     }
     const exportManifest = childEnv.getExportManifest();
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log(`[processMLLDContent] Export manifest:`, {
+        hasManifest: !!exportManifest,
+        manifestNames: exportManifest?.getNames?.() ?? 'null'
+      });
+    }
     const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,
       { frontmatter: frontmatterData },
@@ -455,6 +500,9 @@ export class ModuleContentProcessor {
       exportManifest,
       childEnv
     );
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log(`[processMLLDContent] Module object keys:`, Object.keys(moduleObject));
+    }
 
     // Add __meta__ property with frontmatter if available
     if (frontmatter) {
@@ -646,5 +694,9 @@ export class ModuleContentProcessor {
       // Always clear the importing flag, even if evaluation fails
       childEnv.setImporting(false);
     }
+  }
+
+  private isUrlLike(candidate: string): boolean {
+    return /^https?:\/\//i.test(candidate);
   }
 }

@@ -8,11 +8,15 @@ import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
+import type { Environment } from '@interpreter/env/Environment';
+import { ExecutionEmitter } from '@sdk/execution-emitter';
+import type { StreamExecution, SDKEvent } from '@sdk/types';
 import type { CLIOptions } from '../index';
 import type { UserInteraction } from '../interaction/UserInteraction';
 import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { URLLoader } from '../utils/url-loader';
+import { parseInjectOptions } from '../utils/inject-parser';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -20,6 +24,57 @@ export interface ProcessingEnvironment {
   configLoader: ConfigLoader;
   urlConfig?: ResolvedURLConfig;
   pathContext?: PathContext;
+}
+
+export type InterpretModeConfig = {
+  mode: 'document' | 'stream' | 'debug' | 'structured';
+  streaming?: { enabled: boolean };
+  jsonOutput: boolean;
+  emitter?: ExecutionEmitter;
+};
+
+export function resolveInterpretMode(cliOptions: CLIOptions): InterpretModeConfig {
+  const jsonOutput = Boolean(cliOptions.json || cliOptions.showJson);
+  const debugFlag = Boolean(cliOptions.debug);
+  const structuredFlag = Boolean(cliOptions.structured);
+
+  // Structured mode takes precedence (outputs JSON with effects, exports, etc.)
+  if (structuredFlag) {
+    return {
+      mode: 'structured',
+      streaming: { enabled: false },
+      jsonOutput: true,
+      emitter: new ExecutionEmitter()
+    };
+  }
+
+  if (debugFlag && jsonOutput) {
+    return {
+      mode: 'debug',
+      streaming: { enabled: false },
+      jsonOutput,
+      emitter: new ExecutionEmitter()
+    };
+  }
+
+  if (debugFlag) {
+    return {
+      mode: 'stream',
+      streaming: { enabled: true },
+      jsonOutput: false,
+      emitter: new ExecutionEmitter()
+    };
+  }
+
+  if (cliOptions.noStream) {
+    return {
+      mode: 'document',
+      streaming: { enabled: false },
+      jsonOutput: false
+    };
+  }
+
+  return { mode: 'document', jsonOutput: false };
 }
 
 export class FileProcessor {
@@ -70,37 +125,71 @@ export class FileProcessor {
       environment = await this.setupEnvironment(cliOptions);
     }
     
-    let interpretEnvironment: any = null; // Define outside try block for cleanup access
+    let interpretEnvironment: Environment | null = null; // Define outside try block for cleanup access
+    let detachLogging: (() => void) | undefined;
     
     try {
       // Read stdin if available
       const stdinContent = await this.readStdinIfAvailable();
 
-      // Execute interpretation
-      const { result, hasExplicitOutput, interpretEnvironment: env } = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL);
-      interpretEnvironment = env;
+      const interpretation = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL);
+      interpretEnvironment = interpretation.interpretEnvironment ?? null;
+      detachLogging = interpretation.detachLogging;
 
-      // Handle output
-      await this.handleOutput(result, cliOptions, environment, hasExplicitOutput, interpretEnvironment);
-      
-      // Clean up environment to prevent event loop from staying alive
-      if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
-        cliLogger.debug('Calling environment cleanup');
-        (interpretEnvironment as any).cleanup();
+      if (interpretation.kind === 'stream') {
+        await interpretation.handle.done();
+        interpretation.detachLogging?.();
+        if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+          (interpretation.interpretEnvironment as any).cleanup();
+        }
+        process.exit(0);
+        return;
       }
-      
-      // For stdout mode, ensure clean exit after output
+
+      if (interpretation.kind === 'debug') {
+        const serialized = this.serializeDebugResult(interpretation.debugResult);
+        console.log(serialized);
+        interpretation.detachLogging?.();
+        if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+          (interpretation.interpretEnvironment as any).cleanup();
+        }
+        process.exit(0);
+        return;
+      }
+
+      if (interpretation.kind === 'structured') {
+        const serialized = this.serializeStructuredResult(interpretation.structuredResult);
+        console.log(serialized);
+        interpretation.detachLogging?.();
+        if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+          (interpretation.interpretEnvironment as any).cleanup();
+        }
+        process.exit(0);
+        return;
+      }
+
+      await this.handleOutput(
+        interpretation.result,
+        cliOptions,
+        environment,
+        interpretation.hasExplicitOutput,
+        interpretation.interpretEnvironment
+      );
+
+      interpretation.detachLogging?.();
+      if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+        cliLogger.debug('Calling environment cleanup');
+        (interpretation.interpretEnvironment as any).cleanup();
+      }
+
       if (cliOptions.stdout) {
-        // Give a small delay to ensure all output is flushed
         await new Promise(resolve => setTimeout(resolve, 10));
       }
-      
-      // Give a small delay for cleanup to complete, then force exit
+
       cliLogger.debug('Cleanup complete, forcing process exit');
       await new Promise(resolve => setTimeout(resolve, 10));
-      
-      // Force exit to prevent hanging on active event loop handles
       process.exit(0);
+      return;
     } catch (error: any) {
       // Clean up environment even on error
       if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
@@ -108,7 +197,8 @@ export class FileProcessor {
         (interpretEnvironment as any).cleanup();
       }
       
-      // Let error propagate to ErrorHandler instead of exiting early
+      detachLogging?.();
+
       throw error;
     }
   }
@@ -162,12 +252,17 @@ export class FileProcessor {
   }
 
   private async executeInterpretation(
-    cliOptions: CLIOptions, 
-    apiOptions: any, 
+    cliOptions: CLIOptions,
+    apiOptions: any,
     environment: ProcessingEnvironment,
     stdinContent?: string,
     isURL?: boolean
-  ): Promise<{ result: string; hasExplicitOutput: boolean; interpretEnvironment?: any }> {
+  ): Promise<
+    | { kind: 'document'; result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+    | { kind: 'stream'; handle: StreamExecution; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+    | { kind: 'debug'; debugResult: any; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+    | { kind: 'structured'; structuredResult: any; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+  > {
     // Get content either from URL or file
     let content: string;
     let effectivePath: string;
@@ -201,6 +296,15 @@ export class FileProcessor {
     );
     
     // Call the interpreter with PathContext
+    let resultEnvironment: Environment | null = null;
+    const modeConfig = resolveInterpretMode(cliOptions);
+    const detachLogging = modeConfig.emitter ? attachEmitterLogging(modeConfig.emitter) : undefined;
+
+    // Parse dynamic modules from --inject flags
+    const dynamicModules = cliOptions.inject
+      ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
+      : undefined;
+
     const interpretResult = await interpret(content, {
       pathContext,
       filePath: effectivePath, // Use effective path for error reporting
@@ -210,6 +314,7 @@ export class FileProcessor {
       strict: cliOptions.strict,
       urlConfig: finalUrlConfig,
       stdinContent: stdinContent,
+      dynamicModules,
       outputOptions: {
         showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
         maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
@@ -218,24 +323,58 @@ export class FileProcessor {
         showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext,
         timeout: cliOptions.commandTimeout
       },
-      returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
       enableTrace: true,
       useMarkdownFormatter: !cliOptions.noFormat,
       captureErrors: cliOptions.captureErrors,
       ephemeral: cliOptions.ephemeral,
-      allowAbsolutePaths: cliOptions.allowAbsolute
+      allowAbsolutePaths: cliOptions.allowAbsolute,
+      captureEnvironment: env => {
+        resultEnvironment = env;
+      },
+      mode: modeConfig.mode,
+      streaming: modeConfig.streaming ?? (cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined),
+      emitter: modeConfig.emitter
     });
     
-    // Extract result and environment
-    const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;
-    const resultEnvironment = typeof interpretResult === 'string' ? null : interpretResult.environment;
-    
-    // Check if @output was used in the document
+    if (modeConfig.mode === 'stream') {
+      return {
+        kind: 'stream',
+        handle: interpretResult as StreamExecution,
+        interpretEnvironment: resultEnvironment,
+        detachLogging
+      };
+    }
+
+    if (modeConfig.mode === 'debug') {
+      return {
+        kind: 'debug',
+        debugResult: interpretResult,
+        interpretEnvironment: resultEnvironment,
+        detachLogging
+      };
+    }
+
+    if (modeConfig.mode === 'structured') {
+      return {
+        kind: 'structured',
+        structuredResult: interpretResult,
+        interpretEnvironment: resultEnvironment,
+        detachLogging
+      };
+    }
+
+    const result = typeof interpretResult === 'string' ? interpretResult : (interpretResult as any).output;
     const hasExplicitOutput = resultEnvironment && (resultEnvironment as any).hasExplicitOutput;
-    
-    return { result, hasExplicitOutput, interpretEnvironment: resultEnvironment };
+
+    return {
+      kind: 'document',
+      result,
+      hasExplicitOutput,
+      interpretEnvironment: resultEnvironment,
+      detachLogging
+    };
   }
 
   private async handleOutput(
@@ -243,7 +382,7 @@ export class FileProcessor {
     options: CLIOptions, 
     environment: ProcessingEnvironment,
     hasExplicitOutput: boolean,
-    interpretEnvironment?: any
+    interpretEnvironment?: Environment | null
   ): Promise<void> {
     const stdout = options.stdout || (!options.output);
     
@@ -371,4 +510,83 @@ export class FileProcessor {
       throw new Error(`Input file does not exist: ${inputPath}`);
     }
   }
+
+  private serializeDebugResult(result: any): string {
+    const { environment, ...rest } = result ?? {};
+    return JSON.stringify(
+      rest,
+      (_key, value) => {
+        if (typeof value === 'function') {
+          return undefined;
+        }
+        if (value instanceof Map) {
+          return Object.fromEntries(value);
+        }
+        return value;
+      },
+      2
+    );
+  }
+
+  private serializeStructuredResult(result: any): string {
+    const { environment, ...rest } = result ?? {};
+
+    // Build a clean structured output with effects and security metadata
+    const structured = {
+      output: rest.output,
+      effects: (rest.effects ?? []).map((effect: any) => ({
+        type: effect.type,
+        content: effect.content?.slice?.(0, 200), // Truncate for readability
+        path: effect.path,
+        security: effect.security ? {
+          labels: effect.security.labels,
+          taint: effect.security.taint,
+          sources: effect.security.sources
+        } : undefined
+      })),
+      exports: Object.keys(rest.exports ?? {}),
+      stateWrites: rest.stateWrites ?? []
+    };
+
+    return JSON.stringify(structured, null, 2);
+  }
+}
+
+function attachEmitterLogging(emitter: ExecutionEmitter): () => void {
+  const listeners: Array<[SDKEvent['type'], (event: SDKEvent) => void]> = [];
+  const log = (message: string) => {
+    console.error(message);
+  };
+
+  const register = (type: SDKEvent['type'], handler: (event: SDKEvent) => void) => {
+    listeners.push([type, handler]);
+    emitter.on(type, handler);
+  };
+
+  register('command:start', event => {
+    log(
+      `[command:start] stage=${(event as any).stageIndex ?? ''} parallel=${(event as any).parallelIndex ?? ''} pipeline=${(event as any).pipelineId ?? ''}`
+    );
+  });
+  register('command:complete', event => {
+    log(
+      `[command:complete] stage=${(event as any).stageIndex ?? ''} parallel=${(event as any).parallelIndex ?? ''} pipeline=${(event as any).pipelineId ?? ''} duration=${(event as any).durationMs ?? ''}`
+    );
+  });
+  register('effect', event => {
+    const e = (event as any).effect;
+    const security = e?.security;
+    const taint = security?.taint?.length ? ` taint=[${security.taint.join(',')}]` : '';
+    const labels = security?.labels?.length ? ` labels=[${security.labels.join(',')}]` : '';
+    log(`[effect] ${e?.type}${taint}${labels}`);
+  });
+  register('execution:complete', () => {
+    log('[execution:complete]');
+  });
+
+  return () => {
+    for (const [type, handler] of listeners) {
+      emitter.off(type, handler);
+    }
+  };
 }

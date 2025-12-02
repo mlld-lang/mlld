@@ -69,6 +69,134 @@ Parse Error → enhanceParseError() → Enhanced Error → User
 JS/Node Error → enhanceJSError() → Enhanced Error → User
 ```
 
+## Runtime SDK Errors
+
+### ExecuteError
+
+`executeRoute` wraps failures with `ExecuteError` codes for API consumers:
+
+```typescript
+class ExecuteError extends Error {
+  constructor(
+    message: string,
+    public readonly code: ExecuteErrorCode,
+    public readonly filepath: string,
+    public readonly details?: Record<string, unknown>
+  )
+}
+
+type ExecuteErrorCode =
+  | 'ROUTE_NOT_FOUND'  // File missing (ENOENT)
+  | 'PARSE_ERROR'      // mlld parse failure
+  | 'GUARD_DENIED'     // Guard blocked execution
+  | 'TIMEOUT'          // timeoutMs elapsed
+  | 'ABORTED'          // Aborted via signal/abort
+  | 'RUNTIME_ERROR';   // Any other interpreter failure
+```
+
+Each error carries the `filepath` and original `cause` for debugging:
+
+```typescript
+try {
+  await executeRoute('./agent.mld', payload, { timeout: 30000 });
+} catch (error) {
+  if (error instanceof ExecuteError) {
+    console.error(`Route error: ${error.code}`);
+    console.error(`File: ${error.filepath}`);
+    console.error(`Cause:`, error.cause);
+  }
+}
+```
+
+### TimeoutError
+
+Specialized error for timeout scenarios:
+
+```typescript
+class TimeoutError extends Error {
+  constructor(public readonly timeoutMs: number)
+}
+```
+
+Thrown when `executeRoute` exceeds timeout. Partial results not available (execution is aborted immediately).
+
+### Analysis Errors
+
+`analyzeModule` returns errors in structured form (doesn't throw):
+
+```typescript
+interface AnalysisError {
+  code: string;         // Error code (e.g., 'PARSE_ERROR')
+  message: string;      // Human-readable message
+  location?: Location;  // Position in source
+  severity: 'error';    // Always 'error' for this type
+}
+
+interface AnalysisWarning {
+  code: string;         // Warning code (e.g., 'UNUSED_EXPORT')
+  message: string;      // Human-readable message
+  location?: Location;  // Position in source
+  severity: 'warning';  // Always 'warning'
+}
+```
+
+Usage:
+
+```typescript
+const analysis = await analyzeModule('./module.mld');
+
+if (!analysis.valid) {
+  analysis.errors.forEach(err => {
+    console.error(`${err.code}: ${err.message}`);
+    if (err.location) {
+      console.error(`  at line ${err.location.start.line}`);
+    }
+  });
+}
+
+analysis.warnings.forEach(warn => {
+  console.warn(`${warn.code}: ${warn.message}`);
+});
+```
+
+### Error Handling Patterns
+
+**executeRoute with recovery**:
+```typescript
+async function executeWithFallback(filepath: string, payload: unknown) {
+  try {
+    return await executeRoute(filepath, payload, { timeout: 30000 });
+  } catch (error) {
+    if (error instanceof TimeoutError) {
+      // Retry with longer timeout
+      return await executeRoute(filepath, payload, { timeout: 60000 });
+    }
+    if (error instanceof ExecuteError && error.code === 'GUARD_DENIED') {
+      // Log security violation
+      await logSecurityEvent(error);
+      throw error;
+    }
+    throw error;
+  }
+}
+```
+
+**Stream mode error handling**:
+```typescript
+const handle = interpret(script, { mode: 'stream' });
+
+handle.on('execution:error', (event) => {
+  console.error('Execution failed:', event.error);
+});
+
+try {
+  const result = await handle.result();
+} catch (error) {
+  // Also caught here
+  console.error('Final error:', error);
+}
+```
+
 ### System Components
 
 1. **Core Error Classes** (`core/errors/`)

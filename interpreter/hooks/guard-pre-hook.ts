@@ -18,6 +18,7 @@ import type { ArrayAggregateSnapshot, GuardInputHelper } from '@core/types/varia
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
+import { guardSnapshotDescriptor } from './guard-utils';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluate } from '../core/interpreter';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
@@ -25,13 +26,14 @@ import { combineValues } from '../utils/value-combine';
 import { MlldWhenExpressionError } from '@core/errors';
 import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
-import { isDirectiveHookTarget, isExecHookTarget } from '@core/types/hooks';
+import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
-import { makeSecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
 import { appendFileSync } from 'fs';
+import { getExpressionProvenance } from '../utils/expression-provenance';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -205,7 +207,13 @@ function logGuardDecisionEvent(options: {
 }
 
 function describeHookTarget(node: HookableNode): string {
-  return isDirectiveHookTarget(node) ? node.kind : 'exe';
+  if (isDirectiveHookTarget(node)) {
+    return node.kind;
+  }
+  if (isEffectHookTarget(node)) {
+    return `effect:${(node as any).rawIdentifier ?? 'unknown'}`;
+  }
+  return 'exe';
 }
 
 function getRootEnvironment(env: Environment): Environment {
@@ -308,6 +316,9 @@ function extractGuardOverride(node: HookableNode): GuardOverrideValue {
 function resolveWithClause(node: HookableNode): unknown {
   if (isExecHookTarget(node)) {
     return (node as any).withClause;
+  }
+  if (isEffectHookTarget(node)) {
+    return (node as any).meta?.withClause;
   }
   if ((node as any).withClause) {
     return (node as any).withClause;
@@ -572,15 +583,37 @@ export const guardPreHook: PreHook = async (
       reasons,
       primaryMetadata
     });
-    const aggregateMetadata = buildAggregateMetadata({
-      guardResults: guardTrace,
-      reasons,
-      hints,
-      transformedInputs,
-      primaryMetadata,
-      guardContext: aggregateContext
-    });
+  const aggregateMetadata = buildAggregateMetadata({
+    guardResults: guardTrace,
+    reasons,
+    hints,
+    transformedInputs,
+    primaryMetadata,
+    guardContext: aggregateContext
+  });
     appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
+    const guardName =
+      guardTrace[0]?.guard?.name ??
+      guardTrace[0]?.guard?.filterKind ??
+      '';
+    const contextLabels = operation.labels ?? [];
+    const provenance =
+      env.isProvenanceEnabled?.() === true
+        ? getExpressionProvenance(transformedInputs[0] ?? variableInputs[0]) ??
+          guardSnapshotDescriptor(env) ??
+          makeSecurityDescriptor()
+        : undefined;
+    env.emitSDKEvent({
+      type: 'debug:guard:before',
+      guard: guardName,
+      labels: contextLabels,
+      decision: currentDecision,
+      trace: guardTrace,
+      hints,
+      reasons,
+      timestamp: Date.now(),
+      ...(provenance && { provenance })
+    });
 
     if (process.env.MLLD_DEBUG_GUARDS === '1') {
       try {
@@ -792,7 +825,7 @@ async function evaluateGuard(options: {
     outputValue = resolveGuardValue(options.perInput.variable, inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
-    inputVariable = createArrayVariable('input', arrayValue as any[], true, GUARD_INPUT_SOURCE, {
+    inputVariable = createArrayVariable('input', arrayValue as any[], false, GUARD_INPUT_SOURCE, {
       isSystem: true,
       isReserved: true
     });
