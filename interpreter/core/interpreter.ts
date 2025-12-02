@@ -250,18 +250,36 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
-          // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
+          // Emit intents for non-directive nodes (preserves document structure with break collapsing)
           if (isText(n)) {
             const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
+            env.emitIntent({
+              type: 'content',
+              value: materialized.text,
+              source: 'text',
+              visibility: 'always',
+              collapsible: false
+            });
             if (materialized.descriptor) {
               env.recordSecurityDescriptor(materialized.descriptor);
             }
           } else if (isNewline(n)) {
-            env.emitEffect('doc', '\n');
+            env.emitIntent({
+              type: 'break',
+              value: '\n',
+              source: 'newline',
+              visibility: 'always',
+              collapsible: true
+            });
           } else if (isCodeFence(n)) {
             const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
+            env.emitIntent({
+              type: 'content',
+              value: materialized.text,
+              source: 'text',
+              visibility: 'always',
+              collapsible: false
+            });
             if (materialized.descriptor) {
               env.recordSecurityDescriptor(materialized.descriptor);
             }
@@ -311,18 +329,36 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
-          // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
+          // Emit intents for non-directive nodes (preserves document structure with break collapsing)
           if (isText(n)) {
             const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
+            env.emitIntent({
+              type: 'content',
+              value: materialized.text,
+              source: 'text',
+              visibility: 'always',
+              collapsible: false
+            });
             if (materialized.descriptor) {
               env.recordSecurityDescriptor(materialized.descriptor);
             }
           } else if (isNewline(n)) {
-            env.emitEffect('doc', '\n');
+            env.emitIntent({
+              type: 'break',
+              value: '\n',
+              source: 'newline',
+              visibility: 'always',
+              collapsible: true
+            });
           } else if (isCodeFence(n)) {
             const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
+            env.emitIntent({
+              type: 'content',
+              value: materialized.text,
+              source: 'text',
+              visibility: 'always',
+              collapsible: false
+            });
             if (materialized.descriptor) {
               env.recordSecurityDescriptor(materialized.descriptor);
             }
@@ -409,8 +445,14 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
   
   if (isCodeFence(node)) {
-    // Emit code fence content as 'doc' effect
-    env.emitEffect('doc', node.content);
+    // Emit code fence content as content intent
+    env.emitIntent({
+      type: 'content',
+      value: node.content,
+      source: 'text',
+      visibility: 'always',
+      collapsible: false
+    });
     return { value: node.content, env };
   }
   
@@ -418,8 +460,14 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     // Handle mlld-run blocks by evaluating their content
     if (node.error) {
       // If there was a parse error, output it as text
-      // Emit error as a 'doc' effect
-      env.emitEffect('doc', `Error in mlld-run block: ${node.error}`);
+      // Emit error as error intent
+      env.emitIntent({
+        type: 'error',
+        value: `Error in mlld-run block: ${node.error}`,
+        source: 'directive',
+        visibility: 'always',
+        collapsible: false
+      });
       return { value: node.error, env };
     }
     
@@ -773,9 +821,15 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
     const result = await evaluate(child, env, context);
     lastValue = result.value;
     
-    // Emit text nodes as 'doc' effects
+    // Emit text nodes as content intents
     if (isText(child)) {
-      env.emitEffect('doc', child.content);
+      env.emitIntent({
+        type: 'content',
+        value: child.content,
+        source: 'text',
+        visibility: 'always',
+        collapsible: false
+      });
     }
     // VariableReference nodes are handled consistently through interpolate()
   }

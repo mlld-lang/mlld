@@ -52,6 +52,9 @@ import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
+import { OutputRenderer } from '@interpreter/output/renderer';
+import type { OutputIntent } from '@interpreter/output/intent';
+import { contentIntent, breakIntent, progressIntent, errorIntent } from '@interpreter/output/intent';
 import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
 import { getStreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
 import { ExportManifest } from '../eval/import/ExportManifest';
@@ -206,6 +209,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Effect handler for immediate output
   private effectHandler: EffectHandler;
+  // Output renderer for intent-based output with break collapsing
+  private outputRenderer: OutputRenderer;
   private sdkEmitter?: ExecutionEmitter;
   private streamBridgeUnsub?: () => void;
   private directiveTimings: number[] = [];
@@ -259,6 +264,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Initialize effect handler: use provided, inherit from parent, or create default
     this.effectHandler = effectHandler || parent?.effectHandler || new DefaultEffectHandler();
+
+    // Initialize output renderer with callback that emits to effect handler
+    this.outputRenderer = new OutputRenderer((intent) => {
+      this.intentToEffect(intent);
+    });
 
     if (parent) {
       this.contextManager = parent.contextManager;
@@ -1324,7 +1334,67 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.emitSDKEvent(event);
     }
   }
-  
+
+  /**
+   * Convert an OutputIntent to an Effect and emit it
+   *
+   * Internal method used by OutputRenderer callback to route
+   * intents through the effect system.
+   */
+  private intentToEffect(intent: OutputIntent): void {
+    // Map intent type to effect type
+    let effectType: 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
+
+    switch (intent.type) {
+      case 'content':
+        // Content from directives/text → 'doc' (document only)
+        effectType = 'doc';
+        break;
+      case 'break':
+        // Breaks (newlines) → 'doc'
+        effectType = 'doc';
+        break;
+      case 'progress':
+        // Progress messages → 'stdout' (CLI only, not in document)
+        effectType = 'stdout';
+        break;
+      case 'error':
+        // Errors → 'stderr'
+        effectType = 'stderr';
+        break;
+      default:
+        effectType = 'doc';
+    }
+
+    // Emit through existing effect system
+    this.emitEffect(effectType, intent.value);
+  }
+
+  /**
+   * Emit an output intent
+   *
+   * New intent-based output system that supports:
+   * - Collapsible break normalization
+   * - Smart buffering for streaming
+   * - Visibility control
+   *
+   * This is the preferred method for new code.
+   */
+  emitIntent(intent: OutputIntent): void {
+    // Route through output renderer for break collapsing
+    this.outputRenderer.emit(intent);
+  }
+
+  /**
+   * Render final output (flushes pending breaks)
+   *
+   * Call this at the end of document execution to ensure
+   * all pending intents are flushed.
+   */
+  renderOutput(): void {
+    this.outputRenderer.render();
+  }
+
   /**
    * Get the current effect handler (mainly for testing).
    */
