@@ -106,6 +106,10 @@ export interface CLIOptions {
   noStream?: boolean;
   showJson?: boolean;
   appendJson?: string;
+  // Structured output mode
+  structured?: boolean;
+  // Dynamic module injection
+  inject?: string[];  // ['@module=value', '@data=@file.json']
   _?: string[]; // Remaining args after command
 }
 const globalErrorHandler = new ErrorHandler();

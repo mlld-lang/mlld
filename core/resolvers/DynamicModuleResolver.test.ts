@@ -23,7 +23,7 @@ describe('DynamicModuleResolver', () => {
 
     const result = await resolver.resolve('@state');
 
-    expect(result.content).toBe('/export\n@a = {"c":2}\n@arr = ["x","y"]\n@b = 1');
+    expect(result.content).toBe('/var @a = {"c":2}\n/var @arr = ["x","y"]\n/var @b = 1\n/export { @a, @arr, @b }');
   });
 
   it('throws when module is missing', async () => {

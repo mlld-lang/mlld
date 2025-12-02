@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc77]
 
 ### Added
+- **CLI `--structured` mode**: New `--structured` flag outputs JSON with effects, exports, stateWrites, and full security metadata for auditing and programmatic consumption
+- **MCP static analysis**: `mlld mcp` now uses `analyzeModule()` for tool discovery instead of code execution, improving security by discovering tools without running arbitrary code
 - **SDK execution modes**: `interpret(mode)` with four modes for different consumption patterns
   - `document` (default): Returns plain string output
   - `structured`: Returns `{ output, effects, exports, environment }` with security metadata on all effects
@@ -24,8 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Security model streamlined**: `SecurityDescriptor` now uses `taint: DataLabel[]` (accumulated labels) instead of single `taintLevel` enum. Automatic labels added: `src:exec` (commands), `src:file` (file loads), `src:dynamic` (runtime injection), `dir:/path` (file directories).
 - Effect handler now records effects when `mode: 'structured' | 'stream' | 'debug'`; default `document` mode skips recording for performance.
+- **`mlld run` now uses `executeRoute()`**: Run command leverages AST caching, metrics, and timeout support from SDK's `executeRoute()`. New `--timeout` and `--debug` flags available.
 
 ### Fixed
+- **DynamicModuleResolver syntax generation**: Fixed object serialization to generate valid mlld syntax with `/var` directives and proper `/export { @name }` lists. Previous version generated invalid `/export` directive without export list. Note: Dynamic module imports still fail due to a deeper bug in export processing (see issue #527).
 - Array slicing now supports variable interpolation in slice indices ([#457](https://github.com/mlld-lang/mlld/issues/457)). Previously `@arr[0:@limit]` would fail to parse; now `@arr[@start:@end]`, `@arr[0:@limit]`, and `@arr[@offset:]` all work as expected.
 - Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern 
 

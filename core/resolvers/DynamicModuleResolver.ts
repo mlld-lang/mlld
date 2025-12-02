@@ -98,11 +98,16 @@ export class DynamicModuleResolver implements Resolver {
     const stats = { nodes: 0 };
     this.validateStructuredData(path, data, 1, stats);
 
-    const entries = Object.keys(data)
-      .sort()
-      .map(key => `@${key} = ${this.serializeValue(path, (data as Record<string, unknown>)[key], 2, stats)}`);
+    const keys = Object.keys(data).sort();
+    // Export list uses @ prefix (mlld syntax), but AST extracts identifiers without @
+    const exports = keys.map(key => `@${key}`).join(', ');
+    const entries = keys.map(key => `/var @${key} = ${this.serializeValue(path, (data as Record<string, unknown>)[key], 2, stats)}`);
 
-    const moduleSource = `/export\n${entries.join('\n')}`;
+    const moduleSource = `${entries.join('\n')}\n/export { ${exports} }`;
+    if (process.env.MLLD_DEBUG_DYNAMIC) {
+      console.error(`[DynamicModuleResolver] Generated module for ${path}:`);
+      console.error(moduleSource);
+    }
     this.ensureSizeWithinLimit(path, moduleSource);
     return moduleSource;
   }

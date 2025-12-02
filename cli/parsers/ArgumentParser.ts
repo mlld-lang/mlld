@@ -193,6 +193,16 @@ export class ArgumentParser {
           options.json = true;
           options.showJson = true;
           break;
+        case '--structured':
+          options.structured = true;
+          break;
+        case '--inject': {
+          // Multiple --inject flags allowed: --inject @config={"key":"val"} --inject @data=@file.json
+          const injectValue = args[++i];
+          if (!options.inject) options.inject = [];
+          options.inject.push(injectValue);
+          break;
+        }
         case '--append-json': {
           const candidate = args[i + 1];
           if (candidate && !candidate.startsWith('-')) {

@@ -8,7 +8,7 @@ import { MlldError } from '@core/errors/index';
 // Mock modules
 vi.mock('fs/promises');
 vi.mock('fs');
-vi.mock('@interpreter/index');
+vi.mock('@sdk/execute');
 
 // Create a shared mock function that can be controlled in tests
 const mockGetScriptDir = vi.fn().mockReturnValue(undefined);
@@ -144,37 +144,48 @@ describe('RunCommand', () => {
     });
     
     it('should successfully run a script', async () => {
-      // Mock the interpret function before importing
-      const { interpret } = await import('@interpreter/index');
-      vi.mocked(interpret).mockResolvedValue('Script output');
-      
+      // Mock executeRoute from the SDK
+      const { executeRoute } = await import('@sdk/execute');
+      vi.mocked(executeRoute).mockResolvedValue({
+        output: 'Script output',
+        effects: [],
+        exports: {},
+        stateWrites: [],
+        metrics: {
+          totalMs: 10,
+          parseMs: 2,
+          evaluateMs: 8,
+          cacheHit: false,
+          effectCount: 0,
+          stateWriteCount: 0
+        }
+      } as any);
+
       vi.mocked(existsSync).mockImplementation((p) => {
         return p.toString().endsWith('hello.mld');
       });
-      
-      vi.mocked(fs.readFile).mockResolvedValue('/show "Hello World"');
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Mock process.exit to prevent it from actually exiting
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
         throw new Error(`process.exit unexpectedly called with "${code}"`);
       });
-      
+
       try {
         await runCommand.run('hello');
-      } catch (error) {
+      } catch (error: any) {
         // Expected to throw due to process.exit mock
         if (!error.message.includes('process.exit unexpectedly called with "0"')) {
           throw error;
         }
       }
-      
+
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Running'));
-      expect(interpret).toHaveBeenCalled();
+      expect(executeRoute).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Script output');
       expect(exitSpy).toHaveBeenCalledWith(0);
-      
+
       consoleSpy.mockRestore();
       exitSpy.mockRestore();
     });

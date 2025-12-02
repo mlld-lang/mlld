@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { glob } from 'glob';
 import { interpret } from '@interpreter/index';
+import { analyzeModule, type ExecutableInfo } from '@sdk/analyze';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
@@ -32,6 +33,19 @@ interface LoadedModule {
   path: string;
   environment: Environment;
   exports: Map<string, ExecutableVariable>;
+}
+
+interface DiscoveredTool {
+  name: string;
+  modulePath: string;
+  info: ExecutableInfo;
+}
+
+interface AnalyzedModule {
+  path: string;
+  tools: DiscoveredTool[];
+  valid: boolean;
+  errors: string[];
 }
 
 class McpCommand {
@@ -70,42 +84,70 @@ class McpCommand {
       }
     }
 
-    console.error(`Loading ${modulePaths.length} module(s)...`);
+    // Phase 1: Analyze modules for tool discovery (no code execution)
+    console.error(`Analyzing ${modulePaths.length} module(s) for tools...`);
 
-    const loadedModules: LoadedModule[] = [];
+    const analyzedModules: AnalyzedModule[] = [];
+    const allTools: DiscoveredTool[] = [];
 
     for (const moduleFile of modulePaths) {
-      console.error(`  Loading: ${moduleFile}`);
-      const loaded = await loadModule(moduleFile, fileSystem, pathService);
-      loadedModules.push(loaded);
+      console.error(`  Analyzing: ${moduleFile}`);
+      const analyzed = await discoverTools(moduleFile);
+      analyzedModules.push(analyzed);
 
-      const exportedNames = Array.from(loaded.exports.keys());
-      if (exportedNames.length > 0) {
-        console.error(`    Exported: ${exportedNames.join(', ')}`);
+      if (!analyzed.valid) {
+        console.error(`    Parse errors: ${analyzed.errors.join(', ')}`);
+        continue;
+      }
+
+      if (analyzed.tools.length > 0) {
+        console.error(`    Discovered: ${analyzed.tools.map(t => t.name).join(', ')}`);
+        allTools.push(...analyzed.tools);
       } else {
-        console.error('    Exported: (none)');
+        console.error('    Discovered: (none)');
       }
     }
 
-    const { environment, exportedFunctions } = mergeModules(loadedModules);
+    // Apply tool filtering
+    let filteredTools = [...allTools];
 
-    // Apply config-based tool filtering
     if (
       configResult?.tools &&
       configResult.tools.length > 0 &&
       !(serveOptions.toolsOverride && serveOptions.toolsOverride.length > 0)
     ) {
-      filterExportedFunctions(exportedFunctions, configResult.tools, `config ${serveOptions.configPath}`);
+      filteredTools = filterDiscoveredTools(filteredTools, configResult.tools, `config ${serveOptions.configPath}`);
     }
 
-    // Apply CLI --tools override (takes precedence)
     if (serveOptions.toolsOverride && serveOptions.toolsOverride.length > 0) {
-      filterExportedFunctions(exportedFunctions, serveOptions.toolsOverride, '--tools');
+      filteredTools = filterDiscoveredTools(filteredTools, serveOptions.toolsOverride, '--tools');
     }
 
-    if (exportedFunctions.size === 0) {
+    if (filteredTools.length === 0) {
       console.error('No tools available to serve after applying filters.');
       process.exit(1);
+    }
+
+    console.error(`Discovered ${filteredTools.length} tool(s)`);
+
+    // Phase 2: Load modules that have tools we need (for execution)
+    const modulesToLoad = [...new Set(filteredTools.map(t => t.modulePath))];
+    console.error(`Loading ${modulesToLoad.length} module(s) for execution...`);
+
+    const loadedModules: LoadedModule[] = [];
+    for (const moduleFile of modulesToLoad) {
+      const loaded = await loadModule(moduleFile, fileSystem, pathService);
+      loadedModules.push(loaded);
+    }
+
+    const { environment, exportedFunctions } = mergeModules(loadedModules);
+
+    // Filter exportedFunctions to only include discovered tools
+    const toolNames = new Set(filteredTools.map(t => normalizeExportName(t.name)));
+    for (const [name] of Array.from(exportedFunctions.entries())) {
+      if (!toolNames.has(name)) {
+        exportedFunctions.delete(name);
+      }
     }
 
     console.error(`Loaded ${exportedFunctions.size} exported function(s)`);
@@ -249,6 +291,103 @@ export async function resolveModulePaths(modulePath: string): Promise<string[]> 
 
   const files = await glob(modulePath, { absolute: true });
   return Array.from(new Set(files)).sort();
+}
+
+/**
+ * Discover tools in a module using static analysis (no code execution).
+ * Returns exported executable functions with their metadata.
+ */
+async function discoverTools(modulePath: string): Promise<AnalyzedModule> {
+  const analysis = await analyzeModule(modulePath);
+
+  if (!analysis.valid) {
+    return {
+      path: modulePath,
+      tools: [],
+      valid: false,
+      errors: analysis.errors.map(e => e.message)
+    };
+  }
+
+  // Get exported executables only
+  const exportSet = new Set(analysis.exports.map(e => normalizeExportName(e)));
+  const tools: DiscoveredTool[] = [];
+
+  for (const exec of analysis.executables) {
+    const normalizedName = normalizeExportName(exec.name);
+
+    // If there are exports, only include exported executables
+    // If no exports, include all executables (legacy behavior)
+    if (exportSet.size > 0 && !exportSet.has(normalizedName)) {
+      continue;
+    }
+
+    tools.push({
+      name: exec.name,
+      modulePath,
+      info: exec
+    });
+  }
+
+  // If no exports were declared, warn and include all executables
+  if (exportSet.size === 0 && analysis.executables.length > 0) {
+    console.error(`    Warning: No /export directive in ${modulePath}, discovering all executables`);
+  }
+
+  return {
+    path: modulePath,
+    tools,
+    valid: true,
+    errors: []
+  };
+}
+
+/**
+ * Filter discovered tools by allowed names.
+ */
+function filterDiscoveredTools(
+  tools: DiscoveredTool[],
+  allowedNames: string[],
+  sourceLabel: string
+): DiscoveredTool[] {
+  if (!allowedNames || allowedNames.length === 0) {
+    return [];
+  }
+
+  const entries = allowedNames.map((name) => ({
+    raw: name,
+    lower: name.toLowerCase(),
+    lowerUnderscore: name.toLowerCase().replace(/-/g, '_'),
+    matched: false,
+  }));
+
+  const filtered: DiscoveredTool[] = [];
+
+  for (const tool of tools) {
+    const normalizedName = normalizeExportName(tool.name);
+    const snake = mlldNameToMCPName(normalizedName);
+    const candidates = [
+      normalizedName.toLowerCase(),
+      snake.toLowerCase(),
+      snake.toLowerCase().replace(/_/g, '-'),
+    ];
+
+    const entry = entries.find((item) =>
+      candidates.includes(item.lower) || candidates.includes(item.lowerUnderscore)
+    );
+
+    if (entry) {
+      entry.matched = true;
+      filtered.push(tool);
+    }
+  }
+
+  const unmatched = entries.filter((entry) => !entry.matched);
+  if (unmatched.length > 0) {
+    console.error(`Ignoring unknown tool(s) from ${sourceLabel}: ${unmatched.map((entry) => entry.raw).join(', ')}`);
+  }
+
+  return filtered;
 }
 
 async function loadModule(

@@ -474,6 +474,12 @@ export class ModuleContentProcessor {
       });
     }
     const exportManifest = childEnv.getExportManifest();
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log(`[processMLLDContent] Export manifest:`, {
+        hasManifest: !!exportManifest,
+        manifestNames: exportManifest?.getNames?.() ?? 'null'
+      });
+    }
     const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,
       { frontmatter: frontmatterData },
@@ -481,6 +487,9 @@ export class ModuleContentProcessor {
       exportManifest,
       childEnv
     );
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log(`[processMLLDContent] Module object keys:`, Object.keys(moduleObject));
+    }
 
     // Add __meta__ property with frontmatter if available
     if (frontmatter) {

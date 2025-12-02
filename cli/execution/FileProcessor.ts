@@ -16,6 +16,7 @@ import type { UserInteraction } from '../interaction/UserInteraction';
 import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { URLLoader } from '../utils/url-loader';
+import { parseInjectOptions } from '../utils/inject-parser';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -26,7 +27,7 @@ export interface ProcessingEnvironment {
 }
 
 export type InterpretModeConfig = {
-  mode: 'document' | 'stream' | 'debug';
+  mode: 'document' | 'stream' | 'debug' | 'structured';
   streaming?: { enabled: boolean };
   jsonOutput: boolean;
   emitter?: ExecutionEmitter;
@@ -35,6 +36,17 @@ export type InterpretModeConfig = {
 export function resolveInterpretMode(cliOptions: CLIOptions): InterpretModeConfig {
   const jsonOutput = Boolean(cliOptions.json || cliOptions.showJson);
   const debugFlag = Boolean(cliOptions.debug);
+  const structuredFlag = Boolean(cliOptions.structured);
+
+  // Structured mode takes precedence (outputs JSON with effects, exports, etc.)
+  if (structuredFlag) {
+    return {
+      mode: 'structured',
+      streaming: { enabled: false },
+      jsonOutput: true,
+      emitter: new ExecutionEmitter()
+    };
+  }
 
   if (debugFlag && jsonOutput) {
     return {
@@ -145,6 +157,17 @@ export class FileProcessor {
         return;
       }
 
+      if (interpretation.kind === 'structured') {
+        const serialized = this.serializeStructuredResult(interpretation.structuredResult);
+        console.log(serialized);
+        interpretation.detachLogging?.();
+        if (interpretation.interpretEnvironment && 'cleanup' in interpretation.interpretEnvironment) {
+          (interpretation.interpretEnvironment as any).cleanup();
+        }
+        process.exit(0);
+        return;
+      }
+
       await this.handleOutput(
         interpretation.result,
         cliOptions,
@@ -229,8 +252,8 @@ export class FileProcessor {
   }
 
   private async executeInterpretation(
-    cliOptions: CLIOptions, 
-    apiOptions: any, 
+    cliOptions: CLIOptions,
+    apiOptions: any,
     environment: ProcessingEnvironment,
     stdinContent?: string,
     isURL?: boolean
@@ -238,6 +261,7 @@ export class FileProcessor {
     | { kind: 'document'; result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null; detachLogging?: () => void }
     | { kind: 'stream'; handle: StreamExecution; interpretEnvironment?: Environment | null; detachLogging?: () => void }
     | { kind: 'debug'; debugResult: any; interpretEnvironment?: Environment | null; detachLogging?: () => void }
+    | { kind: 'structured'; structuredResult: any; interpretEnvironment?: Environment | null; detachLogging?: () => void }
   > {
     // Get content either from URL or file
     let content: string;
@@ -276,6 +300,11 @@ export class FileProcessor {
     const modeConfig = resolveInterpretMode(cliOptions);
     const detachLogging = modeConfig.emitter ? attachEmitterLogging(modeConfig.emitter) : undefined;
 
+    // Parse dynamic modules from --inject flags
+    const dynamicModules = cliOptions.inject
+      ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
+      : undefined;
+
     const interpretResult = await interpret(content, {
       pathContext,
       filePath: effectivePath, // Use effective path for error reporting
@@ -285,6 +314,7 @@ export class FileProcessor {
       strict: cliOptions.strict,
       urlConfig: finalUrlConfig,
       stdinContent: stdinContent,
+      dynamicModules,
       outputOptions: {
         showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
         maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
@@ -321,6 +351,15 @@ export class FileProcessor {
       return {
         kind: 'debug',
         debugResult: interpretResult,
+        interpretEnvironment: resultEnvironment,
+        detachLogging
+      };
+    }
+
+    if (modeConfig.mode === 'structured') {
+      return {
+        kind: 'structured',
+        structuredResult: interpretResult,
         interpretEnvironment: resultEnvironment,
         detachLogging
       };
@@ -488,6 +527,29 @@ export class FileProcessor {
       2
     );
   }
+
+  private serializeStructuredResult(result: any): string {
+    const { environment, ...rest } = result ?? {};
+
+    // Build a clean structured output with effects and security metadata
+    const structured = {
+      output: rest.output,
+      effects: (rest.effects ?? []).map((effect: any) => ({
+        type: effect.type,
+        content: effect.content?.slice?.(0, 200), // Truncate for readability
+        path: effect.path,
+        security: effect.security ? {
+          labels: effect.security.labels,
+          taint: effect.security.taint,
+          sources: effect.security.sources
+        } : undefined
+      })),
+      exports: Object.keys(rest.exports ?? {}),
+      stateWrites: rest.stateWrites ?? []
+    };
+
+    return JSON.stringify(structured, null, 2);
+  }
 }
 
 function attachEmitterLogging(emitter: ExecutionEmitter): () => void {
@@ -510,6 +572,13 @@ function attachEmitterLogging(emitter: ExecutionEmitter): () => void {
     log(
       `[command:complete] stage=${(event as any).stageIndex ?? ''} parallel=${(event as any).parallelIndex ?? ''} pipeline=${(event as any).pipelineId ?? ''} duration=${(event as any).durationMs ?? ''}`
     );
+  });
+  register('effect', event => {
+    const e = (event as any).effect;
+    const security = e?.security;
+    const taint = security?.taint?.length ? ` taint=[${security.taint.join(',')}]` : '';
+    const labels = security?.labels?.length ? ` labels=[${security.labels.join(',')}]` : '';
+    log(`[effect] ${e?.type}${taint}${labels}`);
   });
   register('execution:complete', () => {
     log('[execution:complete]');
