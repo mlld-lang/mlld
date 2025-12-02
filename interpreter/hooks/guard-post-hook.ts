@@ -23,6 +23,7 @@ import { materializeGuardInputs } from '../utils/guard-inputs';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import type { PostHook } from './HookManager';
 import type { Environment } from '../env/Environment';
+import { guardSnapshotDescriptor } from './guard-utils';
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
@@ -62,19 +63,6 @@ const GUARD_HELPER_SOURCE: VariableSource = {
   hasInterpolation: false,
   isMultiLine: false
 };
-
-function guardSnapshotDescriptor(env: Environment): SecurityDescriptor | undefined {
-  const snapshot = env.getSecuritySnapshot?.();
-  if (!snapshot) {
-    return undefined;
-  }
-  return makeSecurityDescriptor({
-    labels: snapshot.labels,
-    taint: snapshot.taint,
-    sources: snapshot.sources,
-    policyContext: snapshot.policy
-  });
-}
 
 type GuardOverrideValue = false | { only?: unknown; except?: unknown } | undefined;
 

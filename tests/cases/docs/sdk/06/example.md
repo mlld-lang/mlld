@@ -1,4 +1,6 @@
-/var @count = @state.count + 1
-/var @history = @state.messages
-/var @input = @payload.text
-/var @userId = @payload.userId
+/guard before op:output = when [
+  @ctx.op.target.startsWith('state://') &&
+  @input.ctx.labels.includes('secret') =>
+    deny "Secrets cannot be persisted to state"
+  * => allow
+]

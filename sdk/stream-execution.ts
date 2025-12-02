@@ -69,8 +69,11 @@ export class StreamExecution implements StreamExecutionInterface {
     if (this.abortFn) {
       try {
         this.abortFn();
-      } catch {
-        // Swallow abort errors; handle will reject below.
+      } catch (err) {
+        // Swallow abort errors; handler will reject below.
+        if (process.env.MLLD_DEBUG) {
+          console.error('[StreamExecution] Abort function error:', err);
+        }
       }
     }
     this.reject(new Error('StreamExecution aborted'));

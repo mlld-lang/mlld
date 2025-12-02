@@ -249,6 +249,48 @@ Guards can enforce policies on dynamic data:
 ]
 ```
 
+#### Custom Source Labels
+
+Add an additional source label to distinguish between different types of dynamic modules:
+
+```typescript
+const result = await processMlld(template, {
+  dynamicModules: {
+    '@upload': userUploadedFile
+  },
+  dynamicModuleSource: 'user-upload'
+});
+
+// Modules now have both labels: ['src:dynamic', 'src:user-upload']
+```
+
+This enables fine-grained guard policies:
+
+```mlld
+// Block user-uploaded data from dangerous operations
+/guard before fileWrite = when [
+  @input.ctx.labels.includes('src:user-upload') =>
+    deny "User uploads cannot be written to filesystem"
+  * => allow
+]
+
+// Allow trusted database content through
+/guard before apiCall = when [
+  @input.ctx.labels.includes('src:user-upload') =>
+    deny "User data cannot call external APIs"
+  @input.ctx.labels.includes('src:dynamic') =>
+    allow
+  * => allow
+]
+```
+
+Common source labels:
+- `'user-upload'` - Data from user file uploads
+- `'user-input'` - Data from form submissions
+- `'database'` - Data from your database
+- `'external-api'` - Data from third-party APIs
+- `'cache'` - Data from cache layer
+
 ### Notes
 
 - Keys are exact matches (no extension inference or fuzzy matching)
@@ -430,6 +472,40 @@ async function handleUserMessage(userId: string, message: string) {
 
   return result.value;
 }
+```
+
+### Dynamic Module Injection
+
+Inject additional runtime data beyond `@state` and `@payload`:
+
+```typescript
+const result = await executeRoute('./process.mld',
+  { text: 'user input' },
+  {
+    state: { count: 0 },
+    dynamicModules: {
+      '@config': appConfig,
+      '@features': featureFlags
+    }
+  }
+);
+```
+
+With custom source labels for security policies:
+
+```typescript
+const result = await executeRoute('./upload-handler.mld',
+  userUploadedFile,
+  {
+    dynamicModules: {
+      '@upload': userUploadedFile
+    },
+    dynamicModuleSource: 'user-upload'
+  }
+);
+
+// Module will have labels: ['src:dynamic', 'src:user-upload']
+// Guards can enforce policies based on the source
 ```
 
 ## Static Analysis

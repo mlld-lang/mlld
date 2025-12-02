@@ -65,8 +65,37 @@ export interface ProcessOptions {
   /** Use prettier for markdown formatting (default: true) */
   useMarkdownFormatter?: boolean;
 
-  /** Dynamic (non-filesystem) modules for runtime injection */
+  /**
+   * Dynamic (non-filesystem) modules for runtime injection.
+   * All modules are labeled with 'src:dynamic' by default.
+   *
+   * @example
+   * ```typescript
+   * // Inject data from your database
+   * processMlld(script, {
+   *   dynamicModules: { '@user': userData }
+   * });
+   * ```
+   */
   dynamicModules?: Record<string, string | Record<string, unknown>>;
+
+  /**
+   * Optional source label for dynamic modules. Adds 'src:{source}' label in addition to 'src:dynamic'.
+   * Useful for distinguishing between different types of injected data in guards.
+   *
+   * @example
+   * ```typescript
+   * // Distinguish user uploads from trusted database content
+   * processMlld(script, {
+   *   dynamicModules: { '@upload': userUpload },
+   *   dynamicModuleSource: 'user-upload'
+   * });
+   *
+   * // In your script, guards can check:
+   * // @guard(not(@input.ctx.labels.includes("src:user-upload"))) { ... }
+   * ```
+   */
+  dynamicModuleSource?: string;
 }
 
 /**
@@ -95,7 +124,8 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     pathService,
     normalizeBlankLines: options?.normalizeBlankLines,
     useMarkdownFormatter: options?.useMarkdownFormatter,
-    dynamicModules: options?.dynamicModules
+    dynamicModules: options?.dynamicModules,
+    dynamicModuleSource: options?.dynamicModuleSource
   });
 
   // Interpret returns string output in document mode; other modes carry output on the object

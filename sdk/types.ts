@@ -63,6 +63,7 @@ export interface InterpretOptions {
   recordEffects?: boolean;
   emitter?: ExecutionEmitter;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
+  dynamicModuleSource?: string;
   ast?: any;
 }
 

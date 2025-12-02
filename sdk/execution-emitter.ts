@@ -34,8 +34,11 @@ export class ExecutionEmitter {
     for (const handler of [...bucket]) {
       try {
         handler(event);
-      } catch {
+      } catch (err) {
         // Swallow handler errors to avoid breaking execution; debug handlers should be resilient.
+        if (process.env.MLLD_DEBUG) {
+          console.error('[ExecutionEmitter] Handler error for event type:', event.type, err);
+        }
       }
     }
   }

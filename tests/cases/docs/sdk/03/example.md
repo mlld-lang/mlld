@@ -1,5 +1,15 @@
-/var @count = @state.count + 1
-/output @count to "state://count"
+// Block user-uploaded data from dangerous operations
+/guard before fileWrite = when [
+  @input.ctx.labels.includes('src:user-upload') =>
+    deny "User uploads cannot be written to filesystem"
+  * => allow
+]
 
-/var @prefs = { theme: "dark", lang: "en" }
-/output @prefs to "state://preferences"
+// Allow trusted database content through
+/guard before apiCall = when [
+  @input.ctx.labels.includes('src:user-upload') =>
+    deny "User data cannot call external APIs"
+  @input.ctx.labels.includes('src:dynamic') =>
+    allow
+  * => allow
+]

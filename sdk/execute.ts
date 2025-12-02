@@ -28,6 +28,7 @@ export class TimeoutError extends Error {
 export interface ExecuteRouteOptions {
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
+  dynamicModuleSource?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
   stream?: boolean;
@@ -62,6 +63,7 @@ export async function executeRoute(
     pathService,
     allowAbsolutePaths: options.allowAbsolutePaths,
     dynamicModules,
+    dynamicModuleSource: options.dynamicModuleSource,
     ast: cacheEntry.ast
   } as InterpretOptions;
 
@@ -236,18 +238,26 @@ async function runInterpret(source: string, options: InterpretOptions, filePath:
 function wrapExecuteError(error: unknown, filePath?: string): ExecuteError {
   if (error instanceof ExecuteError) return error;
 
-  const err = error as any;
-  const code: ExecuteErrorCode =
-    err instanceof TimeoutError
-      ? 'TIMEOUT'
-      : err?.name === 'AbortError' || err?.message === 'Execution aborted'
-        ? 'ABORTED'
-        : err?.code === 'ENOENT'
-          ? 'ROUTE_NOT_FOUND'
-          : err instanceof MlldParseError
-            ? 'PARSE_ERROR'
-            : 'RUNTIME_ERROR';
+  if (error instanceof TimeoutError) {
+    return new ExecuteError(error.message, 'TIMEOUT', filePath, { cause: error });
+  }
 
-  const message = err?.message ?? 'Execution failed';
-  return new ExecuteError(message, code, filePath, { cause: error });
+  if (error instanceof MlldParseError) {
+    return new ExecuteError(error.message, 'PARSE_ERROR', filePath, { cause: error });
+  }
+
+  if (error instanceof Error) {
+    if (error.name === 'AbortError') {
+      return new ExecuteError(error.message, 'ABORTED', filePath, { cause: error });
+    }
+
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'ENOENT') {
+      return new ExecuteError(error.message, 'ROUTE_NOT_FOUND', filePath, { cause: error });
+    }
+
+    return new ExecuteError(error.message, 'RUNTIME_ERROR', filePath, { cause: error });
+  }
+
+  return new ExecuteError('Execution failed', 'RUNTIME_ERROR', filePath, { cause: error });
 }

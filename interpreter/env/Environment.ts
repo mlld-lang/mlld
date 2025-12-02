@@ -498,14 +498,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     logger.debug(`Reserved resolver names: ${Array.from(this.reservedNames).join(', ')}`);
   }
 
-  registerDynamicModules(modules: Record<string, string | Record<string, unknown>>): void {
+  registerDynamicModules(modules: Record<string, string | Record<string, unknown>>, source?: string): void {
     if (!this.resolverManager) {
       throw new Error('ResolverManager not available');
     }
 
-    const resolver = new DynamicModuleResolver(modules);
+    const resolver = new DynamicModuleResolver(modules, { source });
     this.resolverManager.registerResolver(resolver);
-    logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}`);
+    logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
   }
 
   /**

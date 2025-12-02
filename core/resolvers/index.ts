@@ -5,5 +5,5 @@ export { LocalResolver, type LocalResolverConfig } from './LocalResolver';
 export { GitHubResolver, type GitHubResolverConfig } from './GitHubResolver';
 export { HTTPResolver, type HTTPResolverConfig } from './HTTPResolver';
 export { ProjectPathResolver, type ProjectPathResolverConfig } from './ProjectPathResolver';
-export { DynamicModuleResolver } from './DynamicModuleResolver';
+export { DynamicModuleResolver, type DynamicModuleOptions } from './DynamicModuleResolver';
 export * from './utils';

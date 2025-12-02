@@ -228,7 +228,7 @@ export async function interpret(
   await env.registerBuiltinResolvers();
 
   if (options.dynamicModules && Object.keys(options.dynamicModules).length > 0) {
-    env.registerDynamicModules(options.dynamicModules);
+    env.registerDynamicModules(options.dynamicModules, options.dynamicModuleSource);
   }
 
   // Configure local modules after resolvers are ready

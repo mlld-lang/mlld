@@ -18,6 +18,7 @@ import type { ArrayAggregateSnapshot, GuardInputHelper } from '@core/types/varia
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
+import { guardSnapshotDescriptor } from './guard-utils';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluate } from '../core/interpreter';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
@@ -140,19 +141,6 @@ function sanitizePreviewForLog(preview?: string | null): string | null {
     return preview;
   }
   return `${preview.slice(0, GUARD_DEBUG_PREVIEW_LIMIT)}…`;
-}
-
-function guardSnapshotDescriptor(env: Environment): SecurityDescriptor | undefined {
-  const snapshot = env.getSecuritySnapshot?.();
-  if (!snapshot) {
-    return undefined;
-  }
-  return makeSecurityDescriptor({
-    labels: snapshot.labels,
-    taint: snapshot.taint,
-    sources: snapshot.sources,
-    policyContext: snapshot.policy
-  });
 }
 
 function logGuardEvaluationStart(options: {
@@ -619,7 +607,7 @@ export const guardPreHook: PreHook = async (
       type: 'debug:guard:before',
       guard: guardName,
       labels: contextLabels,
-      decision: currentDecision === 'retry' ? 'retry' : currentDecision,
+      decision: currentDecision,
       trace: guardTrace,
       hints,
       reasons,

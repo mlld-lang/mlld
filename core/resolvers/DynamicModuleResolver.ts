@@ -14,6 +14,15 @@ const MAX_KEYS_PER_OBJECT = 1000;
 const MAX_ELEMENTS_PER_ARRAY = 1000;
 const MAX_TOTAL_NODES = 10000;
 
+export interface DynamicModuleOptions {
+  /**
+   * Optional source identifier for labeling.
+   * Creates labels: ['src:dynamic'] and optionally ['src:{source}']
+   * Example: { source: 'user-upload' } → ['src:dynamic', 'src:user-upload']
+   */
+  source?: string;
+}
+
 /**
  * Resolver for in-memory dynamic modules. Treats provided string or object content as
  * module sources and resolves strictly by exact key match.
@@ -33,9 +42,11 @@ export class DynamicModuleResolver implements Resolver {
   };
 
   private modules: Map<string, string>;
+  private source?: string;
 
-  constructor(modules: Record<string, DynamicModuleValue>) {
+  constructor(modules: Record<string, DynamicModuleValue>, options?: DynamicModuleOptions) {
     this.modules = this.normalizeModules(modules);
+    this.source = options?.source;
   }
 
   canResolve(ref: string): boolean {
@@ -53,13 +64,18 @@ export class DynamicModuleResolver implements Resolver {
       });
     }
 
+    const labels = ['src:dynamic'];
+    if (this.source) {
+      labels.push(`src:${this.source}`);
+    }
+
     return {
       content,
       contentType: 'module',
       ctx: {
         source: `dynamic://${ref}`,
-        taint: ['src:dynamic'],
-        labels: ['src:dynamic'],
+        taint: labels,
+        labels: labels,
         timestamp: new Date(),
         size: Buffer.byteLength(content, 'utf8')
       }

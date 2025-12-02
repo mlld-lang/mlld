@@ -98,4 +98,29 @@ describe('DynamicModuleResolver', () => {
     expect(resolver.canResolve('@user/context')).toBe(true);
     expect(resolver.canResolve('@user/context.mld')).toBe(false);
   });
+
+  it('applies custom source label when provided', async () => {
+    const resolver = new DynamicModuleResolver(
+      { '@user/data': '/export\n@name = "Ada"' },
+      { source: 'user-upload' }
+    );
+
+    const result = await resolver.resolve('@user/data');
+
+    expect(result.ctx?.labels).toContain('src:dynamic');
+    expect(result.ctx?.labels).toContain('src:user-upload');
+    expect(result.ctx?.taint).toContain('src:dynamic');
+    expect(result.ctx?.taint).toContain('src:user-upload');
+  });
+
+  it('uses only src:dynamic label when no source provided', async () => {
+    const resolver = new DynamicModuleResolver({
+      '@user/data': '/export\n@name = "Ada"'
+    });
+
+    const result = await resolver.resolve('@user/data');
+
+    expect(result.ctx?.labels).toEqual(['src:dynamic']);
+    expect(result.ctx?.taint).toEqual(['src:dynamic']);
+  });
 });
