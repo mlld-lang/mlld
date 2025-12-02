@@ -341,17 +341,67 @@ about: Reusable prompts
 
 ## Dynamic Modules (SDK)
 
-Inject module sources at runtime without writing files when calling the SDK:
+Runtime module injection without filesystem I/O. Enables multi-tenant applications to inject per-user/project context from database.
+
+### String Modules
+
+Inject mlld source as strings:
 
 ```typescript
 const output = await processMlld(template, {
   dynamicModules: {
-    '@user/context': `/export\n@userId = "123"\n@userName = "Ada"`
+    '@user/context': `/export { @userId, @userName }\n/var @userId = "123"\n/var @userName = "Ada"`
   }
 });
 ```
 
-Keys must match exactly (no extension inference), and dynamic content is treated as untrusted by default. CLI users should keep using filesystem modules.
+### Object Modules
+
+Inject structured data directly (recommended):
+
+```typescript
+const output = await processMlld(template, {
+  dynamicModules: {
+    '@state': {
+      count: 0,
+      messages: ['Hello', 'World'],
+      preferences: { theme: 'dark' }
+    },
+    '@payload': {
+      text: userInput,
+      userId: session.userId
+    }
+  }
+});
+```
+
+Access in your script:
+
+```mlld
+/var @count = @state.count + 1
+/var @theme = @state.preferences.theme
+/var @input = @payload.text
+```
+
+### Security
+
+Dynamic modules are automatically labeled `src:dynamic` for guard enforcement:
+
+```mlld
+/guard before secret = when [
+  @input.ctx.taint.includes('src:dynamic') =>
+    deny "Cannot use dynamic data as secrets"
+  * => allow
+]
+```
+
+### Priority
+
+Dynamic modules override filesystem and registry modules with the same path (highest priority).
+
+**Use cases**: Multi-tenant SaaS, per-request context injection, testing with mock data.
+
+**Not for CLI**: CLI users should use filesystem modules. Dynamic modules are SDK-only.
 
 ## Troubleshooting
 

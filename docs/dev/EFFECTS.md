@@ -144,6 +144,59 @@ The system should support both:
 - Both the directive and the pipeline `| append` operator append through `IFileSystemService.appendFile()` and emit a `'file'` effect with `mode: 'append'` so handlers can observe writes without duplicating them.
 - `IFileSystemService` implementations must provide `appendFile()` in addition to `writeFile()` so evaluators and builtin pipeline effects can perform the actual writes; the effect handler is notification-only for append operations.
 
+### State Write Protocol
+
+State writes via `state://` protocol don't write to filesystem; instead captured as structured data.
+
+**Evaluation** (`interpreter/eval/output.ts`):
+```typescript
+if (target.startsWith('state://')) {
+  const path = target.slice('state://'.length);
+  env.emit('state_write', {
+    path,
+    value: await evaluateExpression(directive.value, env),
+    operation: 'set',
+    timestamp: new Date().toISOString(),
+    index: env.getEffectIndex()
+  });
+  return; // Don't write to filesystem
+}
+```
+
+**Collection**:
+- Environment emits `'state_write'` events
+- SDK captures in `StructuredResult.stateWrites`
+- Application handles persistence
+
+**Security metadata**: StateWrite includes `security` field matching StructuredEffect pattern (labels, taint, sources).
+
+### Security Metadata
+
+All effects in structured/stream/debug modes include security metadata:
+
+```typescript
+interface StructuredEffect {
+  type: 'doc' | 'both' | 'stdout' | 'stderr' | 'file';
+  content: string;
+  timestamp: string;
+  index: number;
+  security?: {
+    labels: DataLabel[];    // Explicit labels ('secret', 'pii', 'net:r')
+    taint: DataLabel[];     // Accumulated labels (explicit + automatic)
+    sources: string[];      // Origin chain ('file://...', 'resolver:registry')
+  };
+  provenance?: ExpressionProvenance;  // When provenance: true
+}
+```
+
+**Automatic labels added**:
+- `src:exec` - Command/function output
+- `src:file` - File content
+- `src:dynamic` - Runtime injection
+- `dir:/path` - File directories (all parents)
+
+**Default mode behavior**: `mode: 'document'` skips effect recording for performance (no security metadata collected).
+
 ## Implementation Plan
 
 ### 1. Fix Effect Handler

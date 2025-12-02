@@ -1,4 +1,4 @@
-<MLLD_GUIDE version="2.0.0-rc63">
+<MLLD_GUIDE version="2.0.0-rc77">
 <TOC>
 <OVERVIEW> ......................... Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.
 <CORE_RULES>
@@ -14,6 +14,7 @@
   <RULE_10_WHEN_OVERVIEW> .......... When forms (bare, first, simple) – full detail in CONTROL_FLOW.
   <RULE_11_ITERATION_OVERVIEW> ..... foreach and /for – full detail in CONTROL_FLOW.
   <RULE_12_OPERATORS> .............. Logical, comparison, ternary operators for expressions.
+  <RULE_13_STATE_MANAGEMENT> ....... State writes via state:// protocol; hydration via dynamic modules.
 </CORE_RULES>
 <SYNTAX>
   <VARIABLES> ...................... Types, primitives, command results, code execution.
@@ -47,6 +48,10 @@
   <RESOLVERS> ...................... Prefixes, resolution priority, import type modifiers, custom config.
   <REGISTRY> ....................... Publishing workflow, version management, required frontmatter, commands.
   <PUBLISHING_PRIVATE_MODULES> ..... Auth, repo layout, commands.
+  <SDK_EXECUTION_MODES> ............ document/structured/stream/debug modes for SDK consumption.
+  <DYNAMIC_MODULE_INJECTION> ....... Runtime context injection without filesystem I/O.
+  <EXECUTE_ROUTE> .................. File-based execution with state management and caching.
+  <ANALYZE_MODULE> ................. Static analysis for tool discovery and validation.
 </CONFIGURATION>
 <COMMON_MISTAKES>
   <MISTAKE_MISSING_AT> ............. Create variables with @; directives use /.
@@ -444,6 +449,29 @@ Ternary: `condition ? trueVal : falseVal`
 Type coercion: `"true" == true`, `"false" == false`, `null == undefined`
 Precedence: `!` → comparison → `&&` → `||` → `?:`
 </RULE_12_OPERATORS>
+
+<RULE_13_STATE_MANAGEMENT>
+State updates via state:// protocol instead of filesystem writes.
+
+```mlld
+/output @value to "state://path"  # Captured as StateWrite, not file
+```
+
+State hydration via dynamic modules:
+```mlld
+/var @count = @state.count + 1
+/output @count to "state://count"
+```
+
+Runtime provides state:
+```typescript
+executeRoute(file, payload, { state: { count: 0 } });
+// Returns: { stateWrites: [{ path: 'count', value: 1, ... }] }
+```
+
+Application handles persistence. SDK captures writes without filesystem I/O.
+
+</RULE_13_STATE_MANAGEMENT>
 </CORE_RULES>
 
 <SYNTAX>
@@ -1466,7 +1494,125 @@ mlld auth status
 mlld publish my-module.mld.md --private --path lib/modules --pr
 ```
 
-</PUBLISHING_PRIVATE_MODULES> </CONFIGURATION>
+</PUBLISHING_PRIVATE_MODULES>
+
+<SDK_EXECUTION_MODES>
+Four modes control how SDK consumers receive output:
+
+**document** (default): Returns string
+```typescript
+const output = await processMlld(script);
+```
+
+**structured**: Returns `{ output, effects, exports, environment, stateWrites, metrics }`
+```typescript
+const result = await interpret(script, { mode: 'structured' });
+console.log(result.effects);  // All effects with security metadata
+console.log(result.stateWrites);  // State updates
+```
+
+**stream**: Returns `StreamExecution` handle with real-time events
+```typescript
+const handle = interpret(script, { mode: 'stream' });
+handle.on('stream:chunk', event => process.stdout.write(event.text));
+handle.on('effect', event => console.log(event.effect));
+await handle.done();
+```
+
+**debug**: Returns `{ ast, variables, trace, durationMs, ...structured }`
+```typescript
+const result = await interpret(script, { mode: 'debug' });
+console.log(result.trace);  // All events with timestamps
+```
+
+Events: `stream:chunk`, `stream:progress`, `command:start`, `command:complete`, `effect`, `execution:complete`
+
+</SDK_EXECUTION_MODES>
+
+<DYNAMIC_MODULE_INJECTION>
+Runtime context injection without filesystem I/O:
+
+```typescript
+processMlld(template, {
+  dynamicModules: {
+    '@state': { count: 0, messages: [...] },
+    '@payload': { text: 'user input', userId: '123' }
+  }
+});
+```
+
+In script:
+```mlld
+/var @count = @state.count + 1
+/var @input = @payload.text
+```
+
+Security: All dynamic imports labeled `src:dynamic`, marked untrusted. Guards can check:
+```mlld
+/guard before secret = when [
+  @input.ctx.taint.includes('src:dynamic') =>
+    deny "Cannot use dynamic data as secrets"
+  * => allow
+]
+```
+
+DynamicModuleResolver has priority 1 (checked before filesystem/registry).
+
+</DYNAMIC_MODULE_INJECTION>
+
+<EXECUTE_ROUTE>
+File-based execution with state management:
+
+```typescript
+const result = await executeRoute('./agent.mld', payload, {
+  state: { conversationId: '123', messages: [...] },
+  timeout: 30000
+});
+
+// Apply state updates
+for (const write of result.stateWrites) {
+  await updateState(write.path, write.value);
+}
+```
+
+Features:
+- In-memory AST caching (mtime-based invalidation)
+- State hydration via `@state` module
+- Payload injection via `@payload`
+- State writes via `state://` protocol
+- Full effects and metrics
+- Timeout and cancellation
+
+</EXECUTE_ROUTE>
+
+<ANALYZE_MODULE>
+Static analysis without execution:
+
+```typescript
+const analysis = await analyzeModule('./tools.mld');
+
+if (!analysis.valid) {
+  console.error('Errors:', analysis.errors);
+}
+
+// Discover exports
+const tools = analysis.executables
+  .filter(e => analysis.exports.includes(e.name));
+
+// Check security
+const networkFns = analysis.executables
+  .filter(e => e.labels.some(l => l.startsWith('net:')));
+
+// Get capabilities
+console.log(analysis.needs);  // Required
+console.log(analysis.wants);  // Tiered preferences
+```
+
+Use cases: MCP proxy tool discovery, module registry validation, IDE/LSP features, security auditing.
+
+</ANALYZE_MODULE>
+
+</CONFIGURATION>
 
 <COMMON_MISTAKES>
 <MISTAKE_MISSING_AT>
@@ -1621,6 +1767,27 @@ Denied handlers:
 ]
 
 Labels track through: methods (@secret.trim()), templates, field access, iterators, pipelines.
+
+**Automatic labels**:
+- `src:exec` - Added to /run and /exe results
+- `src:file` - Added to file loads
+- `src:dynamic` - Added to dynamic module imports
+- `dir:/path` - Added for file directories (all parents)
+
+Example directory guards:
+```mlld
+/guard before op:run = when [
+  @input.any.ctx.taint.includes('dir:/tmp/uploads') =>
+    deny "Cannot execute uploaded files"
+  * => allow
+]
+
+/guard before secret = when [
+  @input.ctx.taint.some(t => t.startsWith('dir:/app/config')) =>
+    deny "Config directory may contain secrets"
+  * => allow
+]
+```
 
 Guards are: non-reentrant, ordered (file top-to-bottom), composable (all run, deny > retry > allow @value > allow).
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc77]
 
+### Added
+- **SDK execution modes**: `interpret(mode)` with four modes for different consumption patterns
+  - `document` (default): Returns plain string output
+  - `structured`: Returns `{ output, effects, exports, environment }` with security metadata on all effects
+  - `stream`: Returns `StreamExecution` handle with real-time event delivery (`.on()`, `.off()`, `.done()`, `.result()`, `.abort()`)
+  - `debug`: Returns `DebugResult` with AST, variables, ordered trace, and timing
+- **Dynamic module injection**: `processMlld(script, { dynamicModules: {...} })` enables runtime context injection without filesystem I/O. All dynamic imports automatically labeled `src:dynamic` for guard enforcement. Enables multi-tenant applications (inject per-user/project context from database).
+- **State write protocol**: `/output @value to "state://path"` captures state updates as structured data instead of writing to filesystem. State writes included in `StructuredResult.stateWrites` with security metadata.
+- **SDK runtime execution**: `executeRoute(filepath, payload, options)` provides file-based route execution with in-memory AST caching, state hydration (`@state`, `@payload`), timeout/cancellation, and full effects logging.
+- **SDK analysis tools**: `analyzeModule(filepath)` extracts capabilities, imports, exports, guards, and security metadata without execution. Enables static analysis, capability checking, and module introspection.
+- **Effect security metadata**: All effects in structured/stream/debug modes include `security` field with labels, taint tracking, and provenance for auditing and policy enforcement.
+- **Execution events**: `ExecutionEmitter` bridges streaming infrastructure to SDK events (`stream:chunk`, `command:start/complete`, `effect`, `execution:complete`) for real-time monitoring.
+- **Directory-based taint tracking**: File loads now include `dir:*` labels for all parent directories, enabling guards like `@input.ctx.taint.includes('dir:/tmp/uploads')` to prevent executing uploaded files.
+
+### Changed
+- **Security model streamlined**: `SecurityDescriptor` now uses `taint: DataLabel[]` (accumulated labels) instead of single `taintLevel` enum. Automatic labels added: `src:exec` (commands), `src:file` (file loads), `src:dynamic` (runtime injection), `dir:/path` (file directories).
+- Effect handler now records effects when `mode: 'structured' | 'stream' | 'debug'`; default `document` mode skips recording for performance.
+
 ### Fixed
 - Array slicing now supports variable interpolation in slice indices ([#457](https://github.com/mlld-lang/mlld/issues/457)). Previously `@arr[0:@limit]` would fail to parse; now `@arr[@start:@end]`, `@arr[0:@limit]`, and `@arr[@offset:]` all work as expected.
 - Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern 

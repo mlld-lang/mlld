@@ -70,8 +70,9 @@ Each effect includes security metadata:
 ```typescript
 result.effects.forEach(effect => {
   console.log(effect.type);              // 'doc', 'both', 'file'
-  console.log(effect.security?.labels);  // ['secret', 'pii']
-  console.log(effect.security?.taintLevel);
+  console.log(effect.security?.labels);  // Explicit labels: ['secret', 'pii']
+  console.log(effect.security?.taint);   // Accumulated: ['secret', 'pii', 'src:exec', 'src:file']
+  console.log(effect.security?.sources); // Origin chain: ['file://...', 'resolver:registry']
 });
 ```
 
@@ -186,22 +187,327 @@ Debug mode includes provenance by default.
 
 ## Dynamic Modules
 
-Runtime module injection for multi-tenant applications:
+Runtime module injection without filesystem I/O. Enables multi-tenant applications to inject per-user/project context from database.
+
+### String Modules
+
+Inject mlld source as strings:
 
 ```typescript
 const result = await processMlld(template, {
   dynamicModules: {
-    '@user/context': `/export
-@userId = "123"
-@userName = "Alice"`
+    '@user/context': `/export { @userId, @userName }\n/var @userId = "123"\n/var @userName = "Alice"`
   }
 });
 ```
 
-Notes:
-- Keys are exact matches (no extension inference).
-- Dynamic modules override filesystem/registry modules with the same key.
-- Content is treated as untrusted; guards can check `@ctx.sources.includes('dynamic-module')`.
+### Object Modules
+
+Inject structured data directly (recommended):
+
+```typescript
+const result = await processMlld(template, {
+  dynamicModules: {
+    '@state': {
+      count: 0,
+      messages: ['Hello', 'World'],
+      preferences: { theme: 'dark' }
+    },
+    '@payload': {
+      text: userInput,
+      userId: session.userId
+    }
+  }
+});
+```
+
+In your script:
+
+```mlld
+/var @count = @state.count + 1
+/var @theme = @state.preferences.theme
+/var @input = @payload.text
+```
+
+### Security
+
+All dynamic modules are automatically labeled `src:dynamic`:
+
+```typescript
+result.effects.forEach(effect => {
+  console.log(effect.security?.taint);  // ['src:dynamic', ...]
+});
+```
+
+Guards can enforce policies on dynamic data:
+
+```mlld
+/guard before secret = when [
+  @input.ctx.taint.includes('src:dynamic') =>
+    deny "Cannot use dynamic data as secrets"
+  * => allow
+]
+```
+
+### Notes
+
+- Keys are exact matches (no extension inference or fuzzy matching)
+- Dynamic modules override filesystem/registry modules (highest priority)
+- Object modules serialize to per-key exports internally
+- Content parsed at injection time (errors surface immediately)
+
+## State Management
+
+Track state changes via the `state://` protocol instead of filesystem writes.
+
+### State Write Protocol
+
+```mlld
+/var @count = @state.count + 1
+/output @count to "state://count"
+
+/var @prefs = { theme: "dark", lang: "en" }
+/output @prefs to "state://preferences"
+```
+
+State writes are captured in the result:
+
+```typescript
+const result = await interpret(script, {
+  mode: 'structured',
+  dynamicModules: {
+    '@state': { count: 0 }
+  }
+});
+
+console.log(result.stateWrites);
+// [
+//   {
+//     path: 'count',
+//     value: 1,
+//     timestamp: '2025-01-27T...',
+//     security: { labels: [], taint: ['src:dynamic'], ... }
+//   }
+// ]
+```
+
+### Persisting State
+
+Your application handles persistence:
+
+```typescript
+for (const write of result.stateWrites) {
+  await database.setState(write.path, write.value);
+}
+```
+
+### Nested Paths
+
+```mlld
+/output "dark" to "state://prefs.theme"
+```
+
+Captured as `{ path: 'prefs.theme', value: 'dark' }`.
+
+### Security
+
+State writes include security metadata:
+
+```typescript
+write.security?.labels;  // Explicit labels like 'secret', 'pii'
+write.security?.taint;   // Accumulated labels including automatic ones
+```
+
+Use guards to prevent sensitive data in state:
+
+```mlld
+/guard before op:output = when [
+  @ctx.op.target.startsWith('state://') &&
+  @input.ctx.labels.includes('secret') =>
+    deny "Secrets cannot be persisted to state"
+  * => allow
+]
+```
+
+## File-Based Execution
+
+Execute mlld files with in-memory caching and state management.
+
+### Basic Usage
+
+```typescript
+import { executeRoute } from 'mlld';
+
+const result = await executeRoute('./agent.mld',
+  { text: 'user input', userId: '123' },
+  {
+    state: { count: 0, messages: [] },
+    timeout: 30000
+  }
+);
+
+console.log(result.value);        // Final output
+console.log(result.stateWrites);  // State updates
+console.log(result.effects);      // All effects
+console.log(result.metrics);      // Performance data
+```
+
+### State Hydration
+
+State injected via `@state` module, payload via `@payload`:
+
+```mlld
+/var @count = @state.count + 1
+/var @history = @state.messages
+/var @input = @payload.text
+/var @userId = @payload.userId
+```
+
+### AST Caching
+
+In-memory cache with mtime-based invalidation:
+
+```typescript
+// First call parses the file
+await executeRoute('./agent.mld', payload);
+
+// Second call uses cached AST (unless file changed)
+await executeRoute('./agent.mld', payload);
+```
+
+Cache invalidates automatically when file is modified.
+
+### Timeout and Cancellation
+
+```typescript
+const controller = new AbortController();
+
+const promise = executeRoute('./agent.mld', payload, {
+  timeout: 30000,  // 30 second timeout
+  signal: controller.signal
+});
+
+// Cancel if needed
+controller.abort();
+```
+
+Timeout throws `TimeoutError` with partial results available.
+
+### Metrics
+
+```typescript
+console.log(result.metrics);
+// {
+//   totalMs: 1234,
+//   parseMs: 5,
+//   evaluateMs: 1229,
+//   cacheHit: true,
+//   effectCount: 10,
+//   llmCallCount: 2,
+//   llmTokensIn: 500,
+//   llmTokensOut: 200,
+//   guardEvaluations: 5
+// }
+```
+
+### Multi-Tenant Pattern
+
+```typescript
+async function handleUserMessage(userId: string, message: string) {
+  // Load per-user state from database
+  const state = await loadUserState(userId);
+
+  // Execute with user context
+  const result = await executeRoute('./agents/chat.mld',
+    { text: message, userId },
+    { state, timeout: 30000 }
+  );
+
+  // Persist state updates
+  for (const write of result.stateWrites) {
+    await saveUserState(userId, write.path, write.value);
+  }
+
+  return result.value;
+}
+```
+
+## Static Analysis
+
+Extract metadata without execution using `analyzeModule`:
+
+```typescript
+import { analyzeModule } from 'mlld';
+
+const analysis = await analyzeModule('./tools/github.mld');
+
+// Check validity
+if (!analysis.valid) {
+  console.error('Parse errors:', analysis.errors);
+  return;
+}
+
+// Discover exported functions
+const exportedTools = analysis.executables
+  .filter(e => analysis.exports.includes(e.name));
+
+console.log('Tools:', exportedTools.map(e => e.name));
+// ['createIssue', 'listPRs', 'mergePR']
+
+// Check security labels
+const networkFunctions = analysis.executables
+  .filter(e => e.labels.some(l => l.startsWith('net:')));
+
+console.log('Network functions:', networkFunctions.map(e => e.name));
+
+// Get capabilities
+console.log('Needs:', analysis.needs);
+// { cmd: ['git', 'gh'], node: ['@octokit/rest'] }
+
+console.log('Wants:', analysis.wants);
+// [{ tier: 'full', ... }, { tier: 'minimal', ... }]
+
+// Get guards
+console.log('Guards:', analysis.guards);
+// [{ name: 'preventSecretsInLogs', timing: 'before', label: 'secret' }]
+```
+
+### Use Cases
+
+- **MCP proxy**: Discover tools from modules for tool registration
+- **Module registry**: Validate exports, check capability requirements
+- **IDE/LSP**: Autocomplete, go-to-definition, hover information
+- **Security auditing**: Find network functions without guards, check label coverage
+- **Documentation**: Generate API docs from executable signatures
+
+### Analysis Result
+
+```typescript
+interface ModuleAnalysis {
+  filepath: string;
+  valid: boolean;
+  errors: AnalysisError[];
+  warnings: AnalysisWarning[];
+
+  // Metadata
+  frontmatter?: Record<string, unknown>;
+  needs?: ModuleNeeds;
+  wants?: WantsTier[];
+
+  // Definitions
+  executables: ExecutableInfo[];
+  guards: GuardInfo[];
+  variables: VariableInfo[];
+  imports: ImportInfo[];
+  exports: string[];
+
+  // Stats
+  stats: ModuleStats;
+
+  // AST (lazy-loaded)
+  ast?: () => AST;
+}
+```
 
 ## Error Handling
 
@@ -236,7 +542,7 @@ try {
 | `pathService` | IPathService | PathService | Custom path service |
 | `normalizeBlankLines` | boolean | true | Normalize blank lines |
 | `useMarkdownFormatter` | boolean | true | Use prettier |
-| `dynamicModules` | Record<string, string> | - | In-memory modules keyed by import path |
+| `dynamicModules` | Record<string, string \| object> | - | Runtime module injection (strings or structured objects) |
 
 ### InterpretOptions (Advanced)
 
