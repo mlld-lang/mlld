@@ -27,4 +27,18 @@ describe('resolveInterpretMode', () => {
     expect(config.streaming).toEqual({ enabled: false });
     expect(config.jsonOutput).toBe(true);
   });
+
+  it('enables structured mode when --structured is set', () => {
+    const config = resolveInterpretMode({ input: 'script.mld', structured: true } as any);
+    expect(config.mode).toBe('structured');
+    expect(config.streaming).toEqual({ enabled: false });
+    expect(config.jsonOutput).toBe(true);
+    expect(config.emitter).toBeDefined();
+  });
+
+  it('structured mode takes precedence over debug', () => {
+    const config = resolveInterpretMode({ input: 'script.mld', structured: true, debug: true } as any);
+    expect(config.mode).toBe('structured');
+    expect(config.jsonOutput).toBe(true);
+  });
 });

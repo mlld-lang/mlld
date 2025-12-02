@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **CLI `--structured` mode**: New `--structured` flag outputs JSON with effects, exports, stateWrites, and full security metadata for auditing and programmatic consumption
+- **CLI `--inject` flag**: Runtime module injection via `--inject @module=value` or `--inject @module=@file.json`. Enables testing with mock data and dynamic context without temp files. Multiple `--inject` flags supported.
 - **MCP static analysis**: `mlld mcp` now uses `analyzeModule()` for tool discovery instead of code execution, improving security by discovering tools without running arbitrary code
 - **SDK execution modes**: `interpret(mode)` with four modes for different consumption patterns
   - `document` (default): Returns plain string output
@@ -29,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mlld run` now uses `executeRoute()`**: Run command leverages AST caching, metrics, and timeout support from SDK's `executeRoute()`. New `--timeout` and `--debug` flags available.
 
 ### Fixed
-- **DynamicModuleResolver syntax generation**: Fixed object serialization to generate valid mlld syntax with `/var` directives and proper `/export { @name }` lists. Previous version generated invalid `/export` directive without export list. Note: Dynamic module imports still fail due to a deeper bug in export processing (see issue #527).
 - Array slicing now supports variable interpolation in slice indices ([#457](https://github.com/mlld-lang/mlld/issues/457)). Previously `@arr[0:@limit]` would fail to parse; now `@arr[@start:@end]`, `@arr[0:@limit]`, and `@arr[@offset:]` all work as expected.
 - Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern 
 

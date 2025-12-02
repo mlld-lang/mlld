@@ -1,1 +1,1 @@
-/import { MY_API_KEY } from @input
+/import { GITHUB_TOKEN, NODE_ENV } from @input

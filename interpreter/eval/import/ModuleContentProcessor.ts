@@ -12,6 +12,7 @@ import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
+import type { ContentType } from '@core/resolvers/types';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -141,7 +142,8 @@ export class ModuleContentProcessor {
   async processResolverContent(
     content: string,
     ref: string,
-    directive: DirectiveNode
+    directive: DirectiveNode,
+    contentType?: ContentType
   ): Promise<ModuleProcessingResult> {
     // Begin import tracking for security
     this.securityValidator.beginImport(ref);
@@ -212,7 +214,8 @@ export class ModuleContentProcessor {
       const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
         content,
         ref,
-        directive
+        directive,
+        contentType
       );
 
       // Check if this is a JSON file (special handling)
@@ -272,10 +275,19 @@ export class ModuleContentProcessor {
   private async parseContentByType(
     content: string,
     resolvedPath: string,
-    directive: DirectiveNode
+    directive: DirectiveNode,
+    contentTypeHint?: ContentType
   ): Promise<{ parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' }> {
+    const forceModule = contentTypeHint === 'module';
+    const forcePlainText = contentTypeHint === 'text';
+    const treatAsData = contentTypeHint === 'data';
+
+    if (forcePlainText) {
+      return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
+    }
+
     // Check if this is a JSON file
-    if (resolvedPath.endsWith('.json')) {
+    if (resolvedPath.endsWith('.json') || treatAsData) {
       try {
         return { parsed: JSON.parse(content), processedContent: content, isPlainText: false };
       } catch (error) {
@@ -295,7 +307,8 @@ export class ModuleContentProcessor {
 
     // Only parse .mld and .md files as mlld content
     // All other files (like .txt) should be treated as plain text
-    if (!resolvedPath.endsWith('.mld') && !resolvedPath.endsWith('.md')) {
+    const isModuleLike = forceModule || resolvedPath.endsWith('.mld') || resolvedPath.endsWith('.md');
+    if (!isModuleLike) {
       // Return a marker indicating this is plain text content
       return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
     }
