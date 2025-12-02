@@ -28,6 +28,7 @@ export interface CommandExecutionContext {
   streamId?: string;
   emitEffect?: (chunk: string, source: 'stdout' | 'stderr') => void;
   ndjsonParser?: any;
+   suppressTerminal?: boolean;
 }
 
 /**

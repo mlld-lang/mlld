@@ -50,6 +50,8 @@ import {
 import { createParameterVariable } from '../utils/parameter-factory';
 import { getStreamBus } from './pipeline/stream-bus';
 import { TerminalSink } from './pipeline/stream-sinks/terminal';
+import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
+import { getAdapter } from '../streaming/adapter-registry';
 import { NDJSONParser } from '../streaming/ndjson-parser';
 import { extractTextFromEvent } from '../streaming/ndjson-extract';
 
@@ -415,7 +417,7 @@ async function evaluateExecInvocationInternal(
     'isDefined'
   ];
 
-  const streamingOptions = env.getStreamingOptions();
+  let streamingOptions = env.getStreamingOptions();
   let streamingRequested =
     node.stream === true ||
     node.withClause?.stream === true ||
@@ -425,18 +427,36 @@ async function evaluateExecInvocationInternal(
   const hasStreamFormat =
     node.withClause?.streamFormat !== undefined ||
     node.meta?.withClause?.streamFormat !== undefined;
+  const streamFormatValue = node.withClause?.streamFormat || node.meta?.withClause?.streamFormat;
   const useNdjsonParsing = streamingEnabled && !hasStreamFormat;
   const ndjsonParser = useNdjsonParsing ? new NDJSONParser() : null;
   const pipelineId = `exec-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
   let lastEmittedChunk: string | undefined;
+  if (hasStreamFormat) {
+    env.setStreamingOptions({
+      ...streamingOptions,
+      streamFormat: streamFormatValue as any,
+      skipDefaultSinks: true,
+      suppressTerminal: true
+    });
+    streamingOptions = env.getStreamingOptions();
+  }
+  const activeStreamingOptions = streamingOptions;
   const chunkEffect = (chunk: string, source: 'stdout' | 'stderr') => {
     if (!streamingEnabled) return;
+    // Skip chunk effect if using FormatAdapterSink (it handles output via events)
+    if (hasStreamFormat) return;
+
     const trimmed = chunk.trim();
     if (trimmed && trimmed === lastEmittedChunk) {
       return;
     }
     lastEmittedChunk = trimmed || chunk;
     const withSpacing = chunk.endsWith('\n') ? `${chunk}\n` : `${chunk}\n\n`;
+    // Only emit via effects when default sinks are suppressed (avoids double-writing with TerminalSink)
+    if (!streamingOptions.skipDefaultSinks) {
+      return;
+    }
     // Route stdout chunks to doc to display progressively; stderr stays stderr.
     if (source === 'stdout') {
       env.emitEffect('doc', withSpacing);
@@ -445,15 +465,63 @@ async function evaluateExecInvocationInternal(
     }
   };
 
-  const ensureStreamingSinks = (): void => {
+  const ensureStreamingSinks = async (): Promise<void> => {
     // NDJSON parsing uses direct chunk writing from executor; still allow sinks
     if (!streamingEnabled || detachStreaming.length > 0) {
+      if (process.env.MLLD_DEBUG) {
+        console.error('[FormatAdapter] Skipping sinks - streamingEnabled:', streamingEnabled, 'detachStreaming:', detachStreaming.length);
+      }
       return;
     }
     const bus = getStreamBus();
-    const terminalSink = new TerminalSink();
-    const terminalUnsub = bus.subscribe(event => terminalSink.handle(event));
-    detachStreaming.push(terminalUnsub);
+
+    // Create FormatAdapterSink if streamFormat is specified
+    if (hasStreamFormat && streamFormatValue) {
+      const formatName = typeof streamFormatValue === 'string' ? streamFormatValue : 'claude-code';
+      if (process.env.MLLD_DEBUG) {
+        console.error('[FormatAdapter] Creating sink for format:', formatName);
+      }
+      const adapter = await getAdapter(formatName);
+
+      if (adapter) {
+        if (process.env.MLLD_DEBUG) {
+          console.error('[FormatAdapter] Adapter loaded:', adapter.name);
+        }
+        const formatSink = new FormatAdapterSink({
+          adapter,
+          visibility: activeStreamingOptions.visibility,
+          accumulate: activeStreamingOptions.accumulate,
+          env,
+          emitToOutput: true
+        });
+        const formatUnsub = bus.subscribe(event => {
+          if (process.env.MLLD_DEBUG) {
+            console.error('[FormatAdapter] Bus event:', event.type, event.chunk?.substring(0, 50));
+          }
+          formatSink.handle(event);
+        });
+        detachStreaming.push(formatUnsub);
+        detachStreaming.push(() => {
+          formatSink.stop();
+        });
+
+        // Set skipDefaultSinks to prevent PipelineExecutor from creating TerminalSink
+        const originalOptions = env.getStreamingOptions();
+        env.setStreamingOptions({ ...originalOptions, skipDefaultSinks: true });
+        detachStreaming.push(() => {
+          env.setStreamingOptions(originalOptions);
+        });
+      } else if (process.env.MLLD_DEBUG) {
+        console.error('[FormatAdapter] No adapter found for:', formatName);
+      }
+    }
+
+    // Add TerminalSink only if not using FormatAdapterSink
+    if (!hasStreamFormat) {
+      const terminalSink = new TerminalSink();
+      const terminalUnsub = bus.subscribe(event => terminalSink.handle(event));
+      detachStreaming.push(terminalUnsub);
+    }
   };
 
   try {
@@ -1165,7 +1233,7 @@ async function evaluateExecInvocationInternal(
     (definition.meta as any)?.isStream === true;
   const ndjsonActive = streamingRequested && !definitionHasStreamFormat && !hasStreamFormat;
   streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
-  ensureStreamingSinks();
+  await ensureStreamingSinks();
 
   let whenExprNode: WhenExpressionNode | null = null;
   if (definition.language === 'mlld-when') {
@@ -1873,7 +1941,8 @@ async function evaluateExecInvocationInternal(
           stageIndex: 0,
           sourceLocation: node.location,
           emitEffect: chunkEffect,
-          ndjsonParser: ndjsonActive ? new NDJSONParser() : undefined
+          ndjsonParser: ndjsonActive ? new NDJSONParser() : undefined,
+          suppressTerminal: hasStreamFormat || streamingOptions.suppressTerminal === true
         }
       );
       

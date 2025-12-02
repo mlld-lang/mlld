@@ -194,5 +194,27 @@ export const COMMON_SCHEMAS = {
       outputTokens: 'usage.output_tokens'
     },
     visibility: 'optional' as const
+  },
+
+  // Claude CLI with --include-partial-messages wraps Anthropic API events
+  streamEventTextDelta: {
+    kind: 'message' as const,
+    matchPath: 'event.type',
+    matchValue: 'content_block_delta',
+    extract: {
+      chunk: ['event.delta.text', 'event.delta.partial_json']
+    },
+    visibility: 'always' as const
+  },
+
+  streamEventMessageDelta: {
+    kind: 'metadata' as const,
+    matchPath: 'event.type',
+    matchValue: 'message_delta',
+    extract: {
+      inputTokens: 'event.usage.input_tokens',
+      outputTokens: 'event.usage.output_tokens'
+    },
+    visibility: 'optional' as const
   }
 } satisfies Record<string, EventSchema>;

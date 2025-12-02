@@ -365,11 +365,6 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         timestamp: Date.now(),
         parsed
       });
-      // When streaming, forward chunks to terminal if not suppressed by caller
-      if (context?.streamingEnabled && !context?.suppressTerminal) {
-        const dest = source === 'stderr' ? process.stderr : process.stdout;
-        dest.write(chunk);
-      }
     };
 
     return await new Promise<CommandExecutionResult>((resolve, reject) => {

@@ -22,6 +22,7 @@ import type {
 } from '@sdk/types';
 import { getFormattedText } from '@core/utils/ansi-processor';
 import { applyTemplates, DEFAULT_TEMPLATES, type FormattedOutput } from '@interpreter/streaming/template-interpolator';
+import type { Environment } from '@interpreter/env/Environment';
 
 export interface FormatAdapterSinkOptions {
   adapter: StreamAdapter;
@@ -29,6 +30,8 @@ export interface FormatAdapterSinkOptions {
   onEvent?: (event: SDKStreamingEvent) => void;
   accumulate?: boolean;
   keepRawEvents?: boolean;
+  env?: Environment;  // For emitting output effects
+  emitToOutput?: boolean;  // Whether to emit formatted text to output
 }
 
 export class FormatAdapterSink implements StreamSink {
@@ -37,6 +40,8 @@ export class FormatAdapterSink implements StreamSink {
   private onEvent?: (event: SDKStreamingEvent) => void;
   private accumulate: boolean;
   private keepRawEvents: boolean;
+  private env?: Environment;
+  private emitToOutput: boolean;
 
   // Accumulation state
   private accumulatedText: string[] = [];
@@ -53,6 +58,8 @@ export class FormatAdapterSink implements StreamSink {
     this.onEvent = options.onEvent;
     this.accumulate = options.accumulate !== false;
     this.keepRawEvents = options.keepRawEvents === true;
+    this.env = options.env;
+    this.emitToOutput = options.emitToOutput !== false;
   }
 
   handle(event: StreamEvent): void {
@@ -110,6 +117,11 @@ export class FormatAdapterSink implements StreamSink {
     const sdkEvent = this.toSDKEvent(parsed);
     if (!sdkEvent) return;
 
+    // Emit to output if configured
+    if (this.emitToOutput && this.env && sdkEvent.displayed) {
+      this.emitEventToOutput(sdkEvent);
+    }
+
     // Accumulate
     if (this.accumulate) {
       this.accumulateEvent(sdkEvent);
@@ -123,6 +135,47 @@ export class FormatAdapterSink implements StreamSink {
     // Emit event
     if (this.onEvent) {
       this.onEvent(sdkEvent);
+    }
+  }
+
+  private emitEventToOutput(event: SDKStreamingEvent): void {
+    if (!this.env) return;
+
+    switch (event.type) {
+      case 'streaming:thinking':
+        if (event.formatted?.plain) {
+          this.env.emitEffect('doc', event.formatted.plain + '\n\n');
+        }
+        break;
+
+      case 'streaming:message':
+        // Emit chunks directly for streaming feel
+        this.env.emitEffect('doc', event.chunk);
+        break;
+
+      case 'streaming:tool-use':
+        if (event.formatted?.plain) {
+          this.env.emitEffect('doc', '\n' + event.formatted.plain + '\n');
+        }
+        break;
+
+      case 'streaming:tool-result':
+        if (event.formatted?.plain) {
+          this.env.emitEffect('doc', event.formatted.plain + '\n');
+        }
+        break;
+
+      case 'streaming:error':
+        if (event.formatted?.plain) {
+          this.env.emitEffect('stderr', event.formatted.plain + '\n');
+        } else {
+          this.env.emitEffect('stderr', `Error: ${event.message}\n`);
+        }
+        break;
+
+      case 'streaming:metadata':
+        // Metadata usually not emitted to output
+        break;
     }
   }
 

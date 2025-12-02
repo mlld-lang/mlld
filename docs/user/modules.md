@@ -168,7 +168,7 @@ mkdir -p llm/modules/@alice
 
 Generate module template:
 ```bash
-mlld init-module @alice/my-tool
+mlld init @alice/my-tool
 ```
 
 This creates a complete module structure with frontmatter and examples.

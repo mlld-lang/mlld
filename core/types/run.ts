@@ -26,6 +26,7 @@ export interface WithClause {
   stdin?: Expression;
   guards?: GuardOverrideOptions | false;
   stream?: boolean;
+  streamFormat?: any;
   [key: string]: any; // For other with clause properties
 }
 

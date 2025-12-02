@@ -146,6 +146,14 @@ export class PipelineExecutor {
   }
 
   private attachStreamingSinks(): void {
+    // Skip if streaming sinks are managed externally (e.g., by /run with streamFormat)
+    if (this.streamingOptions.skipDefaultSinks) {
+      if (process.env.MLLD_DEBUG) {
+        console.error('[PipelineExecutor] Skipping default sinks (managed externally)');
+      }
+      return;
+    }
+
     const bus = getStreamBus();
     const unsubscribes: Array<() => void> = [];
 

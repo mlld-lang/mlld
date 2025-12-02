@@ -17,6 +17,9 @@ import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
+import { getStreamBus } from './pipeline/stream-bus';
+import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
+import { getAdapter } from '../streaming/adapter-registry';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
 import {
@@ -181,6 +184,68 @@ export async function evaluateRun(
   const streamingRequested = Boolean(withClause && (withClause as any).stream);
   const streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
   const pipelineId = `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+
+  // Check for streamFormat in withClause
+  const hasStreamFormat = withClause && (withClause as any).streamFormat !== undefined;
+  const streamFormatValue = hasStreamFormat ? (withClause as any).streamFormat : undefined;
+  const detachStreaming: Array<() => void> = [];
+
+  // Persist streamFormat/sink preferences in env so downstream executors see them
+  if (hasStreamFormat) {
+    env.setStreamingOptions({
+      ...streamingOptions,
+      streamFormat: streamFormatValue as any,
+      skipDefaultSinks: true,
+      suppressTerminal: true
+    });
+  }
+  const activeStreamingOptions = env.getStreamingOptions();
+
+  if (process.env.MLLD_DEBUG) {
+    console.error('[FormatAdapter /run] streamingEnabled:', streamingEnabled);
+    console.error('[FormatAdapter /run] hasStreamFormat:', hasStreamFormat);
+    console.error('[FormatAdapter /run] streamFormatValue:', streamFormatValue);
+    console.error('[FormatAdapter /run] withClause:', JSON.stringify(withClause));
+  }
+
+  // Setup streaming sinks if format adapter is requested
+  if (streamingEnabled && hasStreamFormat && streamFormatValue) {
+    const formatName = typeof streamFormatValue === 'string' ? streamFormatValue : 'claude-code';
+    if (process.env.MLLD_DEBUG) {
+      console.error('[FormatAdapter /run] Creating sink for format:', formatName);
+    }
+    const adapter = await getAdapter(formatName);
+
+    if (adapter) {
+      if (process.env.MLLD_DEBUG) {
+        console.error('[FormatAdapter /run] Adapter loaded:', adapter.name);
+      }
+      const bus = getStreamBus();
+      const formatSink = new FormatAdapterSink({
+        adapter,
+        visibility: activeStreamingOptions.visibility,
+        accumulate: activeStreamingOptions.accumulate,
+        env,
+        emitToOutput: true
+      });
+      const formatUnsub = bus.subscribe(event => {
+        if (process.env.MLLD_DEBUG) {
+          console.error('[FormatAdapter /run] Bus event:', event.type, event.chunk?.substring(0, 50));
+        }
+        formatSink.handle(event);
+      });
+      detachStreaming.push(formatUnsub);
+      detachStreaming.push(() => formatSink.stop());
+
+      // Temporarily set skipDefaultSinks to prevent PipelineExecutor from creating TerminalSink
+      const originalOptions = env.getStreamingOptions();
+      env.setStreamingOptions({ ...originalOptions, skipDefaultSinks: true });
+      detachStreaming.push(() => {
+        env.setStreamingOptions(originalOptions);
+      });
+    }
+  }
+
   if (streamingEnabled) {
     const registry = env.getGuardRegistry?.();
     const subtypeKey =
@@ -350,7 +415,8 @@ export async function evaluateRun(
     setOutput(await env.executeCommand(command, commandOptions, {
       ...executionContext,
       streamingEnabled,
-      pipelineId
+      pipelineId,
+      suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true
     }));
     
   } else if (directive.subtype === 'runCode') {
@@ -881,6 +947,17 @@ export async function evaluateRun(
   };
   } catch (error) {
     throw error;
+  } finally {
+    // Cleanup streaming sinks
+    for (const detach of detachStreaming) {
+      try {
+        detach();
+      } catch (e) {
+        if (process.env.MLLD_DEBUG) {
+          console.error('[FormatAdapter /run] Cleanup error:', e);
+        }
+      }
+    }
   }
 }
 

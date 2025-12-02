@@ -16,6 +16,14 @@ export interface StreamingOptions {
   keepRawEvents?: boolean;
   streamFormat?: string;
   ansiEnabled?: boolean;
+  /**
+   * Internal flag to disable default sinks (used when a format adapter manages output).
+   */
+  skipDefaultSinks?: boolean;
+  /**
+   * Internal flag to suppress executor direct terminal writes.
+   */
+  suppressTerminal?: boolean;
 }
 
 export const defaultStreamingOptions: StreamingOptions = {

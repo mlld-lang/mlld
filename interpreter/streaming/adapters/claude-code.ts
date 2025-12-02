@@ -13,6 +13,16 @@ import { DEFAULT_TEMPLATES } from '../template-interpolator';
  * Event schemas for Claude Code SDK streaming format.
  */
 export const CLAUDE_CODE_SCHEMAS: EventSchema[] = [
+  // Claude CLI with --include-partial-messages (Anthropic API wrapped format)
+  {
+    ...COMMON_SCHEMAS.streamEventTextDelta,
+    templates: DEFAULT_TEMPLATES.message
+  },
+  {
+    ...COMMON_SCHEMAS.streamEventMessageDelta,
+    templates: DEFAULT_TEMPLATES.metadata
+  },
+  // Direct streaming format (if ever used)
   {
     ...COMMON_SCHEMAS.claudeCodeThinking,
     templates: DEFAULT_TEMPLATES.thinking
@@ -35,6 +45,15 @@ export const CLAUDE_CODE_SCHEMAS: EventSchema[] = [
   },
   {
     ...COMMON_SCHEMAS.claudeCodeUsage,
+    templates: DEFAULT_TEMPLATES.metadata
+  },
+  // Anthropic API direct (fallback)
+  {
+    ...COMMON_SCHEMAS.contentBlockDelta,
+    templates: DEFAULT_TEMPLATES.message
+  },
+  {
+    ...COMMON_SCHEMAS.messageDelta,
     templates: DEFAULT_TEMPLATES.metadata
   }
 ];

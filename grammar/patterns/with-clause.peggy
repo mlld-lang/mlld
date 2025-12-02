@@ -60,6 +60,9 @@ WithProperty
   / "stream" _ ":" _ stream:BooleanLiteral {
       return ["stream", stream === 'true' || stream === true];
     }
+  / "streamFormat" _ ":" _ format:DataString {
+      return ["streamFormat", format];
+    }
 
 // -------------------------------------------------------------
 // PIPELINE SUPPORT
