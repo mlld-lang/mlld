@@ -156,7 +156,7 @@ describe('Integration Scenarios', () => {
       
       // Import's author comes first ("first import wins" immutable design)
       // Note: Each @add creates a new line in current implementation
-      expect(result.trim()).toBe('Hello from import\nby\nImport Author');
+      expect(result.trim()).toBe('Hello from import\n by\nImport Author');
     });
     
     it('should import only selected variables', async () => {

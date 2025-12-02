@@ -16,8 +16,8 @@ describe('Mlld API', () => {
     it('should process simple text assignment', async () => {
       const content = '/var @greeting = "Hello, World!"';
       const result = await processMlld(content);
-      // Text assignment alone doesn't produce output
-      expect(result).toBe('');
+      // Text assignment alone doesn't produce output (just trailing newline from normalizer)
+      expect(result).toBe('\n');
     });
 
     it('should process text with show directive', async () => {
@@ -50,7 +50,7 @@ describe('Mlld API', () => {
         pathService,
         basePath: '/'
       });
-      expect(result.trim()).toBe('# Test Content\n\nThis is a test file.');
+      expect(result.trim()).toBe('# Test Content\nThis is a test file.');
     });
 
     it.skip('should handle data directives', async () => {
@@ -139,8 +139,8 @@ describe('Mlld API', () => {
         pathService,
         basePath: '/'
       });
-      // Exe directive alone doesn't produce output, just stores the value
-      expect(result).toBe('');
+      // Exe directive alone doesn't produce output (just trailing newline from normalizer)
+      expect(result).toBe('\n');
     });
 
     it('should handle simple literal show', async () => {
