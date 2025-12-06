@@ -65,6 +65,7 @@ export interface InterpretOptions {
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
   ast?: any;
+  streamingManager?: any;
 }
 
 export interface StructuredEffect extends Effect {

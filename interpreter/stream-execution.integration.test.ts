@@ -1,17 +1,22 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { interpret } from '@interpreter/index';
 import type { StreamExecution as StreamHandle } from '@sdk/types';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 describe('StreamExecution integration (chunk ordering)', () => {
   const fileSystem = new MemoryFileSystem();
   const pathService = new PathService();
+  let manager: StreamingManager;
+
+  beforeEach(() => {
+    manager = new StreamingManager();
+  });
 
   afterEach(() => {
-    getStreamBus().clear();
+    manager.getBus().clear();
   });
 
   it('delivers pipeline CHUNK events during execution and before completion', async () => {
@@ -34,7 +39,8 @@ describe('StreamExecution integration (chunk ordering)', () => {
         basePath: '/',
         mode: 'stream',
         emitter,
-        streaming: { enabled: true }
+        streaming: { enabled: true },
+        streamingManager: manager
       }
     )) as StreamHandle;
 

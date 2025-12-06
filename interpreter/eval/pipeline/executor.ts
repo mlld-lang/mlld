@@ -33,10 +33,9 @@ import { inheritExpressionProvenance, setExpressionProvenance } from '../../util
 import type { CommandExecutionHookOptions } from './command-execution';
 import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import { InterpolationContext } from '../../core/interpolation-context';
-import { getStreamBus, type StreamEvent } from './stream-bus';
-import { ProgressOnlySink } from './stream-sinks/progress';
-import { TerminalSink } from './stream-sinks/terminal';
+import { StreamBus, type StreamEvent } from './stream-bus';
 import type { StreamingOptions } from './streaming-options';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 interface StageExecutionResult {
   result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
@@ -85,7 +84,8 @@ export class PipelineExecutor {
   private stageHookNodeCounter = 0;
   private streamingOptions: StreamingOptions;
   private pipelineId: string = createPipelineId();
-  private detachStreaming: Array<() => void> = [];
+  private bus: StreamBus;
+  private streamingManager: StreamingManager;
   private streamingEnabled: boolean;
   private buildCommandExecutionContext(
     stageIndex: number,
@@ -112,7 +112,8 @@ export class PipelineExecutor {
     sourceFunction?: () => Promise<string | StructuredValue>,
     hasSyntheticSource: boolean = false,
     parallelCap?: number,
-    delayMs?: number
+    delayMs?: number,
+    streamingManager?: StreamingManager
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor:', {
@@ -140,60 +141,22 @@ export class PipelineExecutor {
     this.delayMs = delayMs;
     this.streamingOptions = env.getStreamingOptions();
     this.streamingEnabled = this.streamingOptions.enabled !== false && this.pipelineHasStreamingStage(pipeline);
-    if (this.streamingEnabled) {
-      this.attachStreamingSinks();
+    this.streamingManager = streamingManager ?? env.getStreamingManager();
+    this.bus = this.streamingManager.getBus();
+    if (this.streamingEnabled && !this.streamingOptions.skipDefaultSinks) {
+      this.streamingManager.configure({
+        env: this.env,
+        streamingEnabled: true,
+        streamingOptions: this.streamingOptions
+      });
     }
-  }
-
-  private attachStreamingSinks(): void {
-    // Skip if streaming sinks are managed externally (e.g., by /run with streamFormat)
-    if (this.streamingOptions.skipDefaultSinks) {
-      if (process.env.MLLD_DEBUG) {
-        console.error('[PipelineExecutor] Skipping default sinks (managed externally)');
-      }
-      return;
-    }
-
-    const bus = getStreamBus();
-    const unsubscribes: Array<() => void> = [];
-
-    const sink = new ProgressOnlySink({
-      useTTY: process.stderr.isTTY,
-      writer: process.stderr
-    });
-    const progressUnsub = bus.subscribe(event => sink.handle(event));
-    unsubscribes.push(() => {
-      progressUnsub();
-      sink.stop?.();
-    });
-
-    // Terminal sink to emit chunks to stdout/stderr
-    const terminalSink = new TerminalSink();
-    const terminalUnsub = bus.subscribe(event => terminalSink.handle(event));
-    unsubscribes.push(terminalUnsub);
-
-    this.detachStreaming = unsubscribes;
-  }
-
-  private teardownStreaming(): void {
-    for (const unsub of this.detachStreaming) {
-      try {
-        unsub();
-      } catch (error) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[PipelineExecutor] Failed to detach streaming sink', error);
-        }
-      }
-    }
-    this.detachStreaming = [];
   }
 
   private emitStream(event: Omit<StreamEvent, 'timestamp' | 'pipelineId'> & { timestamp?: number; pipelineId?: string }): void {
     if (!this.streamingEnabled) {
       return;
     }
-    const bus = getStreamBus();
-    bus.emit({
+    this.bus.emit({
       ...event,
       pipelineId: event.pipelineId || this.pipelineId,
       timestamp: event.timestamp ?? Date.now()
@@ -212,7 +175,7 @@ export class PipelineExecutor {
     );
   }
 
-  private pipelineHasStreamingStage(pipeline: PipelineStageEntry[]): boolean {
+  private pipelineHasStreamingStage(pipeline: PipelineStage[]): boolean {
     return pipeline.some(stage => this.isStageStreaming(stage));
   }
 
@@ -373,8 +336,12 @@ export class PipelineExecutor {
           throw new Error('Pipeline ended in unexpected state');
       }
     } finally {
-      if (this.streamingEnabled) {
-        this.teardownStreaming();
+      if (this.streamingEnabled && !this.streamingOptions.skipDefaultSinks) {
+        try {
+          this.streamingManager.teardown();
+        } catch {
+          // ignore teardown errors
+        }
       }
     }
   }
@@ -400,7 +367,7 @@ export class PipelineExecutor {
 
     try {
       const structuredInput = this.getStageOutput(stageIndex - 1, input);
-    this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
+      this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
       if (process.env.MLLD_DEBUG === 'true') {
         try {
           const prevOut = this.structuredOutputs.get(stageIndex - 1);
@@ -517,7 +484,7 @@ export class PipelineExecutor {
           return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
         }
 
-    let normalized = this.normalizeOutput(output);
+        let normalized = this.normalizeOutput(output);
         if (this.debugStructured) {
           console.error('[PipelineExecutor][pre-output]', {
             stage: command.rawIdentifier,
@@ -531,22 +498,13 @@ export class PipelineExecutor {
             stageIndex
           });
         }
-    normalized = this.finalizeStageOutput(
-      normalized,
-      structuredInput,
-      output,
-      stageDescriptor,
-      stageExecution?.labelDescriptor
-    );
-    if (process.env.MLLD_DEBUG === 'true') {
-      try {
-        console.error('[PipelineExecutor] Stage output snapshot', {
-          stageIndex,
-          command: command.rawIdentifier,
-          normalized: this.debugNormalize(normalized)
-        });
-      } catch {}
-    }
+        normalized = this.finalizeStageOutput(
+          normalized,
+          structuredInput,
+          output,
+          stageDescriptor,
+          stageExecution?.labelDescriptor
+        );
         if (process.env.MLLD_DEBUG === 'true') {
           try {
             console.error('[PipelineExecutor] Stage output snapshot', {
@@ -566,7 +524,7 @@ export class PipelineExecutor {
             });
           } catch {}
         }
-    this.structuredOutputs.set(stageIndex, normalized);
+        this.structuredOutputs.set(stageIndex, normalized);
         this.finalOutput = normalized;
         this.lastStageIndex = stageIndex;
 

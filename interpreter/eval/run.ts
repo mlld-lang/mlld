@@ -17,7 +17,6 @@ import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
-import { getStreamBus } from './pipeline/stream-bus';
 import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
 import { getAdapter } from '../streaming/adapter-registry';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
@@ -188,7 +187,6 @@ export async function evaluateRun(
   // Check for streamFormat in withClause
   const hasStreamFormat = withClause && (withClause as any).streamFormat !== undefined;
   const streamFormatValue = hasStreamFormat ? (withClause as any).streamFormat : undefined;
-  const detachStreaming: Array<() => void> = [];
 
   // Persist streamFormat/sink preferences in env so downstream executors see them
   if (hasStreamFormat) {
@@ -208,42 +206,22 @@ export async function evaluateRun(
     console.error('[FormatAdapter /run] withClause:', JSON.stringify(withClause));
   }
 
-  // Setup streaming sinks if format adapter is requested
-  if (streamingEnabled && hasStreamFormat && streamFormatValue) {
-    const formatName = typeof streamFormatValue === 'string' ? streamFormatValue : 'claude-code';
-    if (process.env.MLLD_DEBUG) {
-      console.error('[FormatAdapter /run] Creating sink for format:', formatName);
+  // Setup streaming via manager
+  const streamingManager = env.getStreamingManager();
+  if (streamingEnabled) {
+    let adapter;
+    if (hasStreamFormat && streamFormatValue) {
+      const formatName = typeof streamFormatValue === 'string' ? streamFormatValue : 'claude-code';
+      adapter = await getAdapter(formatName);
+    } else {
+      adapter = await getAdapter('ndjson');
     }
-    const adapter = await getAdapter(formatName);
-
-    if (adapter) {
-      if (process.env.MLLD_DEBUG) {
-        console.error('[FormatAdapter /run] Adapter loaded:', adapter.name);
-      }
-      const bus = getStreamBus();
-      const formatSink = new FormatAdapterSink({
-        adapter,
-        visibility: activeStreamingOptions.visibility,
-        accumulate: activeStreamingOptions.accumulate,
-        env,
-        emitToOutput: true
-      });
-      const formatUnsub = bus.subscribe(event => {
-        if (process.env.MLLD_DEBUG) {
-          console.error('[FormatAdapter /run] Bus event:', event.type, event.chunk?.substring(0, 50));
-        }
-        formatSink.handle(event);
-      });
-      detachStreaming.push(formatUnsub);
-      detachStreaming.push(() => formatSink.stop());
-
-      // Temporarily set skipDefaultSinks to prevent PipelineExecutor from creating TerminalSink
-      const originalOptions = env.getStreamingOptions();
-      env.setStreamingOptions({ ...originalOptions, skipDefaultSinks: true });
-      detachStreaming.push(() => {
-        env.setStreamingOptions(originalOptions);
-      });
-    }
+    streamingManager.configure({
+      env,
+      streamingEnabled: true,
+      streamingOptions: activeStreamingOptions,
+      adapter: adapter as any
+    });
   }
 
   if (streamingEnabled) {
@@ -948,16 +926,9 @@ export async function evaluateRun(
   } catch (error) {
     throw error;
   } finally {
-    // Cleanup streaming sinks
-    for (const detach of detachStreaming) {
-      try {
-        detach();
-      } catch (e) {
-        if (process.env.MLLD_DEBUG) {
-          console.error('[FormatAdapter /run] Cleanup error:', e);
-        }
-      }
-    }
+    // Cleanup streaming sinks and capture adapter output
+    const finalizedStreaming = streamingManager.finalizeResults();
+    env.setStreamingResult(finalizedStreaming.streaming);
   }
 }
 

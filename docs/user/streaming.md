@@ -72,14 +72,7 @@ stream /exe @build() = run { npm run build }
 
 ## NDJSON Auto-Parsing
 
-Streaming executables that output NDJSON are automatically parsed.
-
-Recognized paths:
-- `message.content[].text`
-- `message.content[].result`
-- `delta.text`
-- `completion`
-- `error.message`
+Streaming executables that output NDJSON are automatically parsed using format adapters.
 
 ```mlld
 stream /exe @llm(prompt) = run {
@@ -88,6 +81,45 @@ stream /exe @llm(prompt) = run {
 
 /show @llm("Write a haiku")
 # Parses NDJSON, shows message text as it streams
+```
+
+By default, a generic NDJSON adapter extracts text from common paths like `text`, `content`, `delta.text`, and `message`.
+
+## Stream Format Adapters
+
+For better parsing of specific LLM output formats, use `streamFormat`:
+
+```mlld
+stream /exe @llm(prompt) = run { claude "@prompt" --output-format stream-json }
+
+/run stream @llm("Hello") with { streamFormat: "claude-code" }
+# Uses Claude-specific adapter for optimal parsing
+```
+
+**Available Adapters**:
+
+| Name | Aliases | Use Case |
+|------|---------|----------|
+| `ndjson` | - | Generic NDJSON (default) |
+| `claude-code` | `claude-agent-sdk`, `@mlld/claude-agent-sdk` | Claude CLI/SDK output |
+
+The `claude-code` adapter understands Claude's NDJSON format including:
+- Text message chunks
+- Thinking/reasoning blocks
+- Tool use events
+- Tool results
+- Usage metadata
+
+**Example with explicit adapter**:
+
+```mlld
+stream /exe @chat(prompt) = run { claude "@prompt" --output-format stream-json }
+
+# Default parsing (generic NDJSON)
+/show @chat("Hello")
+
+# Claude-specific parsing (better for thinking blocks, tool use)
+/run stream @chat("Use a tool") with { streamFormat: "claude-code" }
 ```
 
 ## Live Output Formatting
@@ -233,12 +265,17 @@ stream /exe @llm(p) = run { claude "@p" }
 
 ## Technical Details
 
-**NDJSON Paths Checked** (in order):
-1. `message.content[N].text`
-2. `message.content[N].result`
-3. `delta.text`
-4. `completion`
-5. `error.message`
+**Format Adapter System**: All streaming uses format adapters to parse NDJSON:
+- Default `ndjson` adapter handles generic JSON formats
+- `claude-code` adapter handles Claude SDK-specific events
+- Adapters extract structured data (text, tool calls, thinking) from raw chunks
+
+**Adapter Schema Matching**: Each adapter defines schemas that match JSON events by type:
+- `type: "text"` → message content
+- `type: "thinking"` → reasoning blocks
+- `type: "tool_use"` → tool invocations
+- `type: "tool_result"` → tool outputs
+- `type: "error"` → error messages
 
 **Formatting Rules:**
 - Message text: stdout with spacing/dedup
@@ -250,3 +287,10 @@ stream /exe @llm(p) = run { claude "@p" }
 - `--append-json` writes to JSONL format
 - Default filename: `YYYY-MM-DD-HH-MM-SS-stream.jsonl`
 - Compatible with NDJSON parsing tools
+
+**SDK Access**: When using mlld programmatically, streaming results are available via `StructuredResult.streaming`:
+```typescript
+const result = await interpret(script, { mode: 'structured' });
+console.log(result.streaming?.accumulated?.text);  // Accumulated text
+console.log(result.streaming?.events);              // All parsed events
+```

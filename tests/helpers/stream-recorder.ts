@@ -1,5 +1,5 @@
 import { performance } from 'perf_hooks';
-import { getStreamBus, type StreamEvent } from '@interpreter/eval/pipeline/stream-bus';
+import type { StreamBus, StreamEvent } from '@interpreter/eval/pipeline/stream-bus';
 
 type ChunkEvent = Extract<StreamEvent, { type: 'CHUNK' }>;
 
@@ -14,8 +14,7 @@ export interface StreamRecorder {
   getChunkTimes(): number[];
 }
 
-export function startStreamRecorder(): StreamRecorder {
-  const bus = getStreamBus();
+export function startStreamRecorder(bus: StreamBus): StreamRecorder {
   const events: RecordedEvent[] = [];
   const start = performance.now();
   const unsubscribe = bus.subscribe(event => {

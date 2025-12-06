@@ -27,8 +27,8 @@ export interface CommandExecutionContext {
   parallelIndex?: number;
   streamId?: string;
   emitEffect?: (chunk: string, source: 'stdout' | 'stderr') => void;
-  ndjsonParser?: any;
-   suppressTerminal?: boolean;
+  suppressTerminal?: boolean;
+  bus?: import('../eval/pipeline/stream-bus').StreamBus;
 }
 
 /**

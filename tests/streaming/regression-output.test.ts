@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { interpret } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 function captureWrites(stream: NodeJS.WriteStream) {
   const writes: string[] = [];
@@ -23,12 +23,10 @@ function captureWrites(stream: NodeJS.WriteStream) {
 }
 
 describe('streaming output regression', () => {
-  beforeEach(() => {
-    getStreamBus().clear();
-  });
+  let manager: StreamingManager;
 
-  afterEach(() => {
-    getStreamBus().clear();
+  beforeEach(() => {
+    manager = new StreamingManager();
   });
 
   it('emits adapter-formatted output only once (no raw chunk or duplicate)', async () => {
@@ -48,6 +46,7 @@ describe('streaming output regression', () => {
       await interpret(script, {
         fileSystem: new NodeFileSystem(),
         pathService: new PathService(),
+        streamingManager: manager,
         streaming: { enabled: true }
       });
     } finally {
@@ -87,6 +86,7 @@ describe('streaming output regression', () => {
       await interpret(script, {
         fileSystem: new NodeFileSystem(),
         pathService: new PathService(),
+        streamingManager: manager,
         streaming: { enabled: true }
       });
     } finally {

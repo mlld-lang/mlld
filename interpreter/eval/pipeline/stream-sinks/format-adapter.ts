@@ -132,10 +132,8 @@ export class FormatAdapterSink implements StreamSink {
       this.allEvents.push(sdkEvent);
     }
 
-    // Emit event
-    if (this.onEvent) {
-      this.onEvent(sdkEvent);
-    }
+    // Emit event to SDK listeners
+    this.onEvent?.(sdkEvent);
   }
 
   private emitEventToOutput(event: SDKStreamingEvent): void {

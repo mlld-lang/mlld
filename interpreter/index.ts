@@ -4,6 +4,7 @@ import { DefaultEffectHandler, type EffectHandler } from './env/EffectHandler';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import * as path from 'path';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
@@ -196,6 +197,7 @@ export async function interpret(
     undefined,
     effectHandler
   );
+  env.setStreamingManager(options.streamingManager ?? new StreamingManager());
   env.setProvenanceEnabled(provenanceEnabled);
 
   if (options.emitter) {
@@ -427,12 +429,14 @@ function buildStructuredResult(env: Environment, output: string, provenanceEnabl
   const resolvedProvenance = provenanceEnabled ?? env.isProvenanceEnabled();
   const effects = collectEffects(env.getEffectHandler(), resolvedProvenance);
   const exports = collectExports(env, resolvedProvenance);
+  const streaming = env.getStreamingResult?.();
   return {
     output,
     effects,
     exports,
     stateWrites: env.getStateWrites(),
-    environment: env
+    environment: env,
+    ...(streaming ? { streaming } : {})
   };
 }
 

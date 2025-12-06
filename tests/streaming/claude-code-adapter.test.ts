@@ -233,6 +233,11 @@ describe('global registry functions', () => {
     expect(adapter).toBeDefined();
   });
 
+  it('getAdapter supports claude-agent-sdk alias', async () => {
+    const adapter = await getAdapter('claude-agent-sdk');
+    expect(adapter).toBeDefined();
+  });
+
   it('hasAdapter should work', () => {
     expect(hasAdapter('claude-code')).toBe(true);
     expect(hasAdapter('nonexistent')).toBe(false);

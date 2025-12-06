@@ -10,7 +10,6 @@ import type { NodeShadowEnvironment } from '../NodeShadowEnvironment';
 import { prepareParamsForShadow, createMlldHelpers } from '../variable-proxy';
 import { enhanceJSError } from '@core/errors/patterns/init';
 import { addImplicitReturn } from './implicit-return';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { randomUUID } from 'crypto';
 
 export interface NodeShadowEnvironmentProvider {
@@ -37,7 +36,8 @@ export class NodeExecutor extends BaseCommandExecutor {
   constructor(
     errorUtils: ErrorUtils,
     workingDirectory: string,
-    private nodeShadowProvider: NodeShadowEnvironmentProvider
+    private nodeShadowProvider: NodeShadowEnvironmentProvider,
+    private getBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus
   ) {
     super(errorUtils, workingDirectory);
   }
@@ -192,7 +192,7 @@ export class NodeExecutor extends BaseCommandExecutor {
     startTime: number,
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
-    const bus = getStreamBus();
+    const bus = context?.bus ?? this.getBus();
     const pipelineId = context?.pipelineId || 'pipeline';
     const stageIndex = context?.stageIndex ?? 0;
     const parallelIndex = context?.parallelIndex;

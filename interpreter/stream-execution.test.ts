@@ -1,18 +1,23 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { interpret } from '@interpreter/index';
 import type { StreamExecution as StreamHandle } from '@sdk/types';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { Environment } from '@interpreter/env/Environment';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 describe('StreamExecution', () => {
   const fileSystem = new MemoryFileSystem();
   const pathService = new PathService();
+  let manager: StreamingManager;
+
+  beforeEach(() => {
+    manager = new StreamingManager();
+  });
 
   afterEach(() => {
-    getStreamBus().clear();
+    manager.getBus().clear();
   });
 
   it('resolves handle result and emits effect + execution events', async () => {
@@ -27,7 +32,8 @@ describe('StreamExecution', () => {
       basePath: '/',
       mode: 'stream',
       emitter,
-      streaming: { enabled: false }
+      streaming: { enabled: false },
+      streamingManager: manager
     })) as StreamHandle;
 
     await handle.done();
@@ -56,16 +62,53 @@ describe('StreamExecution', () => {
       basePath: '/',
       mode: 'stream',
       emitter,
-      streaming: { enabled: true }
+      streaming: { enabled: true },
+      streamingManager: manager
     });
 
-    const bus = getStreamBus();
+    const bus = manager.getBus();
     const ts = Date.now();
     bus.emit({ type: 'STAGE_START', pipelineId: 'p', stageIndex: 0, timestamp: ts });
     bus.emit({ type: 'STAGE_SUCCESS', pipelineId: 'p', stageIndex: 0, durationMs: 1, timestamp: ts + 1 });
 
     expect(events.some(e => e.type === 'command:start')).toBe(true);
     expect(events.some(e => e.type === 'command:complete')).toBe(true);
+  });
+
+  it('emits streaming events from format adapter to SDK emitter', async () => {
+    const emitter = new ExecutionEmitter();
+    const events: any[] = [];
+    emitter.on('streaming:message', e => events.push(e));
+
+    const env = new Environment(fileSystem, pathService, {
+      projectRoot: '/',
+      fileDirectory: '/',
+      executionDirectory: '/',
+      invocationDirectory: '/'
+    });
+    env.enableSDKEvents(emitter);
+
+    const manager = env.getStreamingManager();
+    const adapter = await (await import('@interpreter/streaming/adapter-registry')).getAdapter('claude-code');
+    manager.configure({
+      env,
+      streamingEnabled: true,
+      streamingOptions: env.getStreamingOptions(),
+      adapter: adapter as any
+    });
+
+    const bus = manager.getBus();
+    bus.emit({
+      type: 'CHUNK',
+      pipelineId: 'p',
+      stageIndex: 0,
+      chunk: '{"type":"text","text":"Hello"}\n',
+      source: 'stdout',
+      timestamp: Date.now()
+    });
+    manager.finalizeResults();
+
+    expect(events.some(e => e.chunk === 'Hello')).toBe(true);
   });
 
   it('inherits emitter in child environments', () => {
@@ -94,7 +137,7 @@ describe('StreamExecution', () => {
     const received: any[] = [];
     emitter.on('stream:chunk', e => received.push(e));
 
-    const bus = getStreamBus();
+    const bus = manager.getBus();
 
     const handle = (await interpret('/show \"hi\"', {
       fileSystem,
@@ -102,7 +145,8 @@ describe('StreamExecution', () => {
       basePath: '/',
       mode: 'stream',
       emitter,
-      streaming: { enabled: true }
+      streaming: { enabled: true },
+      streamingManager: manager
     })) as StreamHandle;
 
     // Emit a chunk immediately after getting the handle to simulate in-flight streaming.
@@ -118,7 +162,7 @@ describe('StreamExecution', () => {
     const received: any[] = [];
     emitter.on('stream:chunk', e => received.push(e));
 
-    const bus = getStreamBus();
+    const bus = manager.getBus();
 
     const handle = (await interpret('/show \"hi\"', {
       fileSystem,
@@ -126,7 +170,8 @@ describe('StreamExecution', () => {
       basePath: '/',
       mode: 'stream',
       emitter,
-      streaming: { enabled: false }
+      streaming: { enabled: false },
+      streamingManager: manager
     })) as StreamHandle;
 
     bus.emit({ type: 'CHUNK', pipelineId: 'p', stageIndex: 0, chunk: 'early', source: 'stdout', timestamp: Date.now() });

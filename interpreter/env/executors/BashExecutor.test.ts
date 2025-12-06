@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BashExecutor } from './BashExecutor';
 import type { ErrorUtils } from '../ErrorUtils';
 import type { VariableProvider } from './BashExecutor';
+import { StreamBus } from '@interpreter/eval/pipeline/stream-bus';
 
 describe('BashExecutor - Heredoc Support', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -28,7 +29,7 @@ describe('BashExecutor - Heredoc Support', () => {
       process.env.MLLD_BASH_HEREDOC = '1';
       process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '100'; // Very small for testing
       
-      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       const largeContent = 'x'.repeat(200); // Exceeds 100 bytes
       
       // Spy on spawnSync to capture the actual script
@@ -68,7 +69,7 @@ describe('BashExecutor - Heredoc Support', () => {
       process.env.MLLD_BASH_HEREDOC = 'false';
       process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '100';
       
-      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       const largeContent = 'x'.repeat(200);
       
       const spawnSyncSpy = vi.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
@@ -104,7 +105,7 @@ describe('BashExecutor - Heredoc Support', () => {
       process.env.MLLD_BASH_HEREDOC = '1';
       process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '100';
       
-      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       const largeContent = 'x'.repeat(200);
       
       const spawnSyncSpy = vi.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
@@ -139,7 +140,7 @@ describe('BashExecutor - Heredoc Support', () => {
       process.env.MLLD_BASH_HEREDOC = '1';
       process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '100';
       
-      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       
       // Content that could collide with a marker
       const largeContent = 'x'.repeat(100) + '\nMLLD_EOF_test\n' + 'y'.repeat(100);
@@ -179,7 +180,7 @@ describe('BashExecutor - Heredoc Support', () => {
       process.env.MLLD_BASH_HEREDOC = '1';
       process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '100';
       
-      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       
       const spawnSyncSpy = vi.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
         stdout: 'test output',
@@ -225,7 +226,7 @@ describe('BashExecutor - Heredoc Support', () => {
     process.env.MLLD_BASH_HEREDOC = '1';
     process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '8';
 
-    const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+    const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
     const tricky = "literal $(echo hacked) $HOME `uname`";
 
     const out = await executor.execute('printf "%s" "$x"', {}, undefined, { x: tricky });
@@ -239,7 +240,7 @@ describe('BashExecutor - Heredoc Support', () => {
       process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '100';
       
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+      const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider, () => new StreamBus());
       
       const spawnSyncSpy = vi.spyOn(require('child_process'), 'spawnSync').mockReturnValue({
         stdout: 'test output',

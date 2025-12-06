@@ -8,7 +8,12 @@
 import type { StreamAdapter, AdapterConfig } from './adapters/base';
 import { createNDJSONAdapter } from './adapters/ndjson';
 
-export type BuiltinAdapterName = 'claude-code' | 'anthropic' | 'ndjson';
+export type BuiltinAdapterName =
+  | 'claude-code'
+  | 'anthropic'
+  | 'ndjson'
+  | 'claude-agent-sdk'
+  | '@mlld/claude-agent-sdk';
 
 export interface AdapterRegistryEntry {
   name: string;
@@ -22,6 +27,14 @@ export interface AdapterRegistryEntry {
  */
 const BUILTIN_ADAPTERS: Record<BuiltinAdapterName, () => Promise<StreamAdapter>> = {
   'claude-code': async () => {
+    const { createClaudeCodeAdapter } = await import('./adapters/claude-code');
+    return createClaudeCodeAdapter();
+  },
+  'claude-agent-sdk': async () => {
+    const { createClaudeCodeAdapter } = await import('./adapters/claude-code');
+    return createClaudeCodeAdapter();
+  },
+  '@mlld/claude-agent-sdk': async () => {
     const { createClaudeCodeAdapter } = await import('./adapters/claude-code');
     return createClaudeCodeAdapter();
   },

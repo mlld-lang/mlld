@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc78]
 
+### Added
+- **Streaming format adapters**: NDJSON streaming output is now parsed via configurable adapters instead of hardcoded heuristics
+  - `with { streamFormat: "claude-code" }` selects Claude SDK-specific parsing
+  - Default `ndjson` adapter handles generic JSON streaming
+  - Adapters extract structured data: text, thinking blocks, tool use, tool results
+  - SDK consumers receive typed events: `streaming:message`, `streaming:tool_use`, etc.
+  - `StructuredResult.streaming` contains accumulated text and parsed events
+- **StreamingManager**: Centralized sink management replaces fragmented sink creation
+  - Single owner for StreamBus lifecycle
+  - FormatAdapterSink and TerminalSink are mutually exclusive
+
 ### Fixed
 - All effect actions (`show`, `log`, `output`, `append`) now work uniformly in all RHS contexts including `/exe ... = for ... => when [...]`
+- Streaming no longer produces duplicate output when using format adapters
 
 ## [2.0.0-rc77]
 

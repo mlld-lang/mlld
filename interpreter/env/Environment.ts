@@ -56,7 +56,7 @@ import { OutputRenderer } from '@interpreter/output/renderer';
 import type { OutputIntent } from '@interpreter/output/intent';
 import { contentIntent, breakIntent, progressIntent, errorIntent } from '@interpreter/output/intent';
 import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
-import { getStreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
+import { StreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
 import { ExportManifest } from '../eval/import/ExportManifest';
 import {
   ContextManager,
@@ -73,7 +73,8 @@ import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
-import type { SDKEffectEvent, SDKEvent, SDKStreamEvent, SDKCommandEvent } from '@sdk/types';
+import type { SDKEffectEvent, SDKEvent, SDKStreamEvent, SDKCommandEvent, StreamingResult } from '@sdk/types';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 interface ImportBindingInfo {
   source: string;
@@ -155,6 +156,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     collectErrors: false
   };
   private streamingOptions: StreamingOptions = defaultStreamingOptions;
+  private streamingManager?: StreamingManager;
+  private streamingResult?: StreamingResult;
   private provenanceEnabled = false;
   private stateWrites: StateWrite[] = [];
   private stateWriteIndex = 0;
@@ -473,7 +476,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       },
       variableProvider: {
         getVariables: () => this.variableManager.getVariables()
-      }
+      },
+      getStreamingBus: () => this.getStreamingBus()
     };
     this.commandExecutorFactory = new CommandExecutorFactory(executorDependencies);
   }
@@ -1554,7 +1558,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       root.streamBridgeUnsub = undefined;
     }
 
-    const bus = getStreamBus();
+    const bus = this.getStreamingBus();
     const unsubscribe = bus.subscribe(event => {
       const sdkEvent = this.mapStreamEvent(event);
       const commandEvent = this.mapCommandEvent(event);
@@ -1904,7 +1908,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   ): Promise<string> {
     // Merge with instance defaults and delegate to command executor factory
     const finalOptions = { ...this.outputOptions, ...options };
-    return this.commandExecutorFactory.executeCommand(command, finalOptions, context);
+    const bus = this.getStreamingBus();
+    const ctxWithBus = { ...context, bus };
+    return this.commandExecutorFactory.executeCommand(command, finalOptions, ctxWithBus);
   }
   
   async executeCode(
@@ -1944,7 +1950,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     // Delegate to command executor factory
-    return this.commandExecutorFactory.executeCode(code, language, finalParams, metadata as Record<string, any> | undefined, this.outputOptions, context);
+    const bus = this.getStreamingBus();
+    const ctxWithBus = { ...context, bus };
+    return this.commandExecutorFactory.executeCode(code, language, finalParams, metadata as Record<string, any> | undefined, this.outputOptions, ctxWithBus);
   }
 
   
@@ -2107,6 +2115,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   getStreamingOptions(): StreamingOptions {
     return { ...this.streamingOptions };
+  }
+
+  setStreamingManager(manager: StreamingManager): void {
+    const root = this.getRootEnvironment();
+    root.streamingManager = manager;
+  }
+
+  getStreamingManager(): StreamingManager {
+    const root = this.getRootEnvironment();
+    if (!root.streamingManager) {
+      root.streamingManager = new StreamingManager();
+    }
+    return root.streamingManager;
+  }
+
+  getStreamingBus(): StreamBus {
+    return this.getStreamingManager().getBus();
+  }
+
+  setStreamingResult(result: StreamingResult | undefined): void {
+    const root = this.getRootEnvironment();
+    root.streamingResult = result;
+  }
+
+  getStreamingResult(): StreamingResult | undefined {
+    return this.getRootEnvironment().streamingResult;
   }
 
   setProvenanceEnabled(enabled: boolean): void {
@@ -2579,6 +2613,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         }
       }
       this.streamBridgeUnsub = undefined;
+    }
+    if (!this.parent) {
+      this.streamingResult = undefined;
     }
 
     // Clean up NodeShadowEnvironment if it exists

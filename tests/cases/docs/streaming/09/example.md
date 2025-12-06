@@ -1,5 +1,7 @@
-stream /exe @task1() = run { sleep 2 && echo "Task 1 done" }
-stream /exe @task2() = run { sleep 1 && echo "Task 2 done" }
+stream /exe @chat(prompt) = run { claude "@prompt" --output-format stream-json }
 
-/for parallel(2) @i in [1, 2] => @task@i()
-# Both tasks stream output as they complete
+# Default parsing (generic NDJSON)
+/show @chat("Hello")
+
+# Claude-specific parsing (better for thinking blocks, tool use)
+/run stream @chat("Use a tool") with { streamFormat: "claude-code" }

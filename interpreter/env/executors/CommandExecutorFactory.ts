@@ -12,6 +12,7 @@ export interface ExecutorDependencies {
   shadowEnvironment: ShadowEnvironment;
   nodeShadowProvider: NodeShadowEnvironmentProvider;
   variableProvider: VariableProvider;
+  getStreamingBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus;
 }
 
 /**
@@ -25,14 +26,14 @@ export class CommandExecutorFactory {
   private bashExecutor: BashExecutor;
 
   constructor(dependencies: ExecutorDependencies) {
-    const { errorUtils, workingDirectory, shadowEnvironment, nodeShadowProvider, variableProvider } = dependencies;
+    const { errorUtils, workingDirectory, shadowEnvironment, nodeShadowProvider, variableProvider, getStreamingBus } = dependencies;
 
     // Create all executor instances
-    this.shellExecutor = new ShellCommandExecutor(errorUtils, workingDirectory);
+    this.shellExecutor = new ShellCommandExecutor(errorUtils, workingDirectory, getStreamingBus);
     this.jsExecutor = new JavaScriptExecutor(errorUtils, workingDirectory, shadowEnvironment);
-    this.nodeExecutor = new NodeExecutor(errorUtils, workingDirectory, nodeShadowProvider);
+    this.nodeExecutor = new NodeExecutor(errorUtils, workingDirectory, nodeShadowProvider, getStreamingBus);
     this.pythonExecutor = new PythonExecutor(errorUtils, workingDirectory, this.shellExecutor);
-    this.bashExecutor = new BashExecutor(errorUtils, workingDirectory, variableProvider);
+    this.bashExecutor = new BashExecutor(errorUtils, workingDirectory, variableProvider, getStreamingBus);
   }
 
   /**

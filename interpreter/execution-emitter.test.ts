@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { interpret, Environment } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 describe('ExecutionEmitter', () => {
   it('supports on/off/emit', () => {
@@ -24,6 +24,7 @@ describe('ExecutionEmitter', () => {
     const received: any[] = [];
     emitter.on('stream:progress', event => received.push(event));
     emitter.on('stream:chunk', event => received.push(event));
+    const manager = new StreamingManager();
 
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
@@ -33,10 +34,11 @@ describe('ExecutionEmitter', () => {
       basePath: '/',
       mode: 'structured',
       emitter,
-      streaming: { enabled: true }
+      streaming: { enabled: true },
+      streamingManager: manager
     });
 
-    const bus = getStreamBus();
+    const bus = manager.getBus();
     bus.emit({ type: 'PIPELINE_START', pipelineId: 'p', timestamp: Date.now(), source: 'pipeline' });
     bus.emit({ type: 'CHUNK', pipelineId: 'p', stageIndex: 0, chunk: 'hello', source: 'stdout', timestamp: Date.now() });
 
@@ -48,6 +50,7 @@ describe('ExecutionEmitter', () => {
     const emitter = new ExecutionEmitter();
     let fired = 0;
     emitter.on('stream:progress', () => fired++);
+    const manager = new StreamingManager();
 
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
@@ -57,13 +60,14 @@ describe('ExecutionEmitter', () => {
       basePath: '/',
       mode: 'structured',
       emitter,
-      streaming: { enabled: true }
+      streaming: { enabled: true },
+      streamingManager: manager
     });
 
     const env = (interpretResult as any).environment as Environment;
     env.cleanup();
 
-    const bus = getStreamBus();
+    const bus = manager.getBus();
     bus.emit({ type: 'PIPELINE_START', pipelineId: 'p', timestamp: Date.now(), source: 'pipeline' });
 
     expect(fired).toBe(0);

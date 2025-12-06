@@ -9,7 +9,6 @@ import { MlldCommandExecutionError } from '@core/errors';
 import { isTextLike, type Variable } from '@core/types/variable';
 import { adaptVariablesForBash } from '../bash-variable-adapter';
 import { StringDecoder } from 'string_decoder';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { randomUUID } from 'crypto';
 
 export interface VariableProvider {
@@ -27,7 +26,8 @@ export class BashExecutor extends BaseCommandExecutor {
   constructor(
     errorUtils: ErrorUtils,
     workingDirectory: string,
-    private variableProvider: VariableProvider
+    private variableProvider: VariableProvider,
+    private getBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus
   ) {
     super(errorUtils, workingDirectory);
     this.bashPath = this.resolveBashPath();
@@ -312,7 +312,7 @@ export class BashExecutor extends BaseCommandExecutor {
         };
       }
 
-      const bus = getStreamBus();
+      const bus = context?.bus ?? this.getBus();
       const pipelineId = context?.pipelineId || 'pipeline';
       const stageIndex = context?.stageIndex ?? 0;
       const parallelIndex = context?.parallelIndex;

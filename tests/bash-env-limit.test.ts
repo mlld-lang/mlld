@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import { adaptVariablesForBash } from '@interpreter/env/bash-variable-adapter';
 import { BashExecutor } from '@interpreter/env/executors/BashExecutor';
+import { StreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { ErrorUtils } from '@interpreter/env/ErrorUtils';
 
 const variableProvider = {
@@ -21,7 +22,7 @@ describe('Bash oversized env var handling', () => {
 
   it('allows executing commands with oversized params', async () => {
     const large = 'a'.repeat(150000);
-    const executor = new BashExecutor(new ErrorUtils(), process.cwd(), variableProvider);
+    const executor = new BashExecutor(new ErrorUtils(), process.cwd(), variableProvider, () => new StreamBus());
     const output = await executor.execute('echo "ok"', undefined, undefined, { big: large });
     expect(output.trim()).toBe('ok');
   });
@@ -32,7 +33,7 @@ describe('Bash oversized env var handling', () => {
     // Create ~1.2MB of data
     const size = 1_200_000;
     const large = 'a'.repeat(size);
-    const executor = new BashExecutor(new ErrorUtils(), process.cwd(), variableProvider);
+    const executor = new BashExecutor(new ErrorUtils(), process.cwd(), variableProvider, () => new StreamBus());
     // Use printf to avoid adding a trailing newline and count bytes precisely
     const out = await executor.execute('printf "%s" "$big" | wc -c', undefined, undefined, { big: large });
     expect(Number(out.trim())).toBe(size);

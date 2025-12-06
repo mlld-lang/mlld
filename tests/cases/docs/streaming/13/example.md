@@ -1,4 +1,3 @@
-/exe @llm(prompt) = run { claude "@prompt" }
+stream /exe @build() = run { npm run build }
 
-/when @isInteractive => show @llm("Hello") with { stream: true }
-/when !@isInteractive => show @llm("Hello") with { stream: false }
+/show @build()                             # See build output live
