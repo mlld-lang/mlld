@@ -89,7 +89,7 @@ SlashImport
       const nextChar = input[peg$currPos];
       // Check if it's not a valid special import or module reference
       const rest = input.substring(peg$currPos);
-      const validStarts = ['INPUT', 'TIME', 'stdin'];
+      const validStarts = ['INPUT', 'TIME', 'stdin', 'payload', 'state'];
       const isValidSpecial = validStarts.some(s => rest.toUpperCase().startsWith(s.toUpperCase()));
       const isValidModule = /^[a-zA-Z_][a-zA-Z0-9_-]*\//.test(rest);
       return !isValidSpecial && !isValidModule;
@@ -346,16 +346,52 @@ CachedImportType
 
 // Import path - handles special @input source, module references, and regular paths
 ImportPath
-  = "@INPUT"i {
+  = "@payload"i {
+      helpers.debug('ImportPath matched @payload');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'payloadPath',
+        values: {
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        },
+        raw: {
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'payload'
+        }
+      };
+    }
+  / "@state"i {
+      helpers.debug('ImportPath matched @state');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'statePath',
+        values: {
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        },
+        raw: {
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'state'
+        }
+      };
+    }
+  / "@INPUT"i {
       helpers.debug('ImportPath matched @INPUT');
       const matched = text();
       return {
         type: 'path',
         subtype: 'inputPath',
-        values: { 
+        values: {
           path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
         },
-        raw: { 
+        raw: {
           path: matched
         },
         meta: {
