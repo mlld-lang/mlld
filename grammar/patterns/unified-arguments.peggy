@@ -65,6 +65,7 @@ UnifiedArgument "unified argument"
   / DataObjectLiteral           // Object literals: {"key": "value"}
   / ArrayLiteral                // Arrays: [1, 2, 3]
   / AlligatorExpression         // File loading: <file.md>
+  / regex:RegexLiteral { return regex; }
   / str:DataString {
       // Create a Text node directly - handle both simple strings and interpolated content
       if (typeof str === 'string') {
@@ -83,6 +84,25 @@ UnifiedArgument "unified argument"
   / PrimitiveValue       // Direct primitives: 42, true, false, null
   / EscapedArgument      // Escaped characters in unquoted arguments
   / RawArgument          // Fallback for unquoted arguments
+
+// Regex literal for arguments: /body/flags
+RegexLiteral "regex literal"
+  = "/" body:RegexBody "/" flags:RegexFlags? {
+      return helpers.createNode('RegexLiteral', {
+        pattern: body,
+        flags: flags || '',
+        raw: `/${body}/${flags || ''}`,
+        location: location()
+      });
+    }
+
+RegexBody = chars:RegexBodyChar* { return chars.join(''); }
+
+RegexBodyChar
+  = "\\\\" char:. { return '\\\\' + char; }  // Escaped character, including escaped slash
+  / !("/" / "\n" / "\r") char:. { return char; }  // Any char except unescaped slash or newline
+
+RegexFlags = flags:$[a-zA-Z]* { return flags; }
 
 // -------------------------------------------------------------
 // UNIFIED ARGUMENT PATTERNS - From command-reference.peggy

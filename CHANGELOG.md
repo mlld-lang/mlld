@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - All effect actions (`show`, `log`, `output`, `append`) now work uniformly in all RHS contexts including `/exe ... = for ... => when [...]`
 - Streaming no longer produces duplicate output when using format adapters
+- Regex arguments are parsed as RegExp values, so `.match(/.../)` conditions (including grouped patterns) work in when-expressions and other exec calls without falling back to strings
 
 ## [2.0.0-rc77]
 

@@ -183,6 +183,7 @@ type StringBuiltinMethod =
   | 'repeat';
 type ArrayBuiltinMethod = 'slice' | 'concat' | 'reverse' | 'sort';
 type SearchBuiltinMethod = 'includes' | 'startsWith' | 'endsWith' | 'indexOf';
+type MatchBuiltinMethod = 'match';
 type TypeCheckingMethod = 'isArray' | 'isObject' | 'isString' | 'isNumber' | 'isBoolean' | 'isNull' | 'isDefined';
 
 function ensureStringTarget(method: string, target: unknown): string {
@@ -344,6 +345,12 @@ function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: 
   throw new MlldInterpreterError(`Unsupported search builtin: ${method}`);
 }
 
+function handleMatchBuiltin(target: unknown, arg: unknown): RegExpMatchArray | null {
+  const value = ensureStringTarget('match', target);
+  const pattern = arg instanceof RegExp ? arg : new RegExp(String(arg ?? ''));
+  return value.match(pattern);
+}
+
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -383,6 +390,7 @@ async function evaluateExecInvocationInternal(
   // Define builtin methods list at function scope for use in circular reference checks
   const builtinMethods = [
     'includes',
+    'match',
     'length',
     'indexOf',
     'join',
@@ -793,6 +801,10 @@ async function evaluateExecInvocationInternal(
       case 'endsWith':
           result = handleSearchBuiltin(commandName as SearchBuiltinMethod, objectValue, evaluatedArgs[0]);
           break;
+      case 'match':
+        result = handleMatchBuiltin(objectValue, evaluatedArgs[0]);
+        propagateResult(result);
+        break;
       case 'isArray':
       case 'isObject':
       case 'isString':
@@ -1222,6 +1234,12 @@ async function evaluateExecInvocationInternal(
       }
       argValueAny = arg;
       argValue = asText(arg);
+    } else if (arg && typeof arg === 'object' && (arg as any).type === 'RegexLiteral') {
+      const pattern = (arg as any).pattern || '';
+      const flags = (arg as any).flags || '';
+      const regex = new RegExp(pattern, flags);
+      argValueAny = regex;
+      argValue = regex.toString();
     } else if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
       // Primitives: pass through directly
       argValue = String(arg);

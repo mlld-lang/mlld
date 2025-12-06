@@ -52,6 +52,10 @@ export class PrimitiveEvaluator {
     if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {
       return true;
     }
+
+    if (value && typeof value === 'object' && value.type === 'RegexLiteral') {
+      return true;
+    }
     
     // Handle wrapped string values (with content array and wrapperType)
     if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
@@ -83,6 +87,13 @@ export class PrimitiveEvaluator {
     // Handle Text nodes
     if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {
       return value.content;
+    }
+
+    // Handle regex literals
+    if (value && typeof value === 'object' && value.type === 'RegexLiteral') {
+      const pattern = (value as any).pattern || '';
+      const flags = (value as any).flags || '';
+      return new RegExp(pattern, flags);
     }
     
     // Handle wrapped string values (quotes, backticks, or brackets)

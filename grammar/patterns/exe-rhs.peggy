@@ -500,19 +500,10 @@ WhenExpression "when expression"
 WhenExprModifier = mod:("first") { return mod; }
 
 // Value-oriented condition list for when expressions
+// Reuses WhenConditionSeparator from when.peggy (shared abstraction)
 WhenExpressionConditionList
-  = first:WhenExpressionEntry rest:(_ (
-      "," {
-        helpers.mlldError(
-          "Unexpected ',' in when condition list. Separate conditions with whitespace or newlines (no commas).",
-          ",",
-          location()
-        );
-      }
-    / entry:WhenExpressionEntry { return entry; }
-    ))* {
-      const restEntries = rest.map(entry => entry && entry[1]).filter(Boolean);
-      return [first, ...restEntries];
+  = first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* {
+      return [first, ...rest];
     }
 
 // Single entry in a when expression - let assignment, augmented assignment, or condition pair
