@@ -254,7 +254,10 @@ Streaming is disabled when:
 - Solution: Use `with { stream: false }` or change guards to `before`
 
 ```mlld
-/guard @validate after op:exe = when [...]  # After guard
+/guard @validate after op:exe = when [
+  @output.includes("ERROR") => deny "Blocked by after-guard"
+  * => allow
+]
 
 stream /exe @llm(p) = run { claude "@p" }
 /show @llm("test")                         # Error: streaming + after-guards conflict
