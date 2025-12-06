@@ -73,7 +73,7 @@ JS/Node Error → enhanceJSError() → Enhanced Error → User
 
 ### ExecuteError
 
-`executeRoute` wraps failures with `ExecuteError` codes for API consumers:
+`execute` wraps failures with `ExecuteError` codes for API consumers:
 
 ```typescript
 class ExecuteError extends Error {
@@ -86,7 +86,7 @@ class ExecuteError extends Error {
 }
 
 type ExecuteErrorCode =
-  | 'ROUTE_NOT_FOUND'  // File missing (ENOENT)
+  | 'FILE_NOT_FOUND'   // File missing (ENOENT)
   | 'PARSE_ERROR'      // mlld parse failure
   | 'GUARD_DENIED'     // Guard blocked execution
   | 'TIMEOUT'          // timeoutMs elapsed
@@ -98,7 +98,7 @@ Each error carries the `filepath` and original `cause` for debugging:
 
 ```typescript
 try {
-  await executeRoute('./agent.mld', payload, { timeout: 30000 });
+  await execute('./agent.mld', payload, { timeout: 30000 });
 } catch (error) {
   if (error instanceof ExecuteError) {
     console.error(`Route error: ${error.code}`);
@@ -118,7 +118,7 @@ class TimeoutError extends Error {
 }
 ```
 
-Thrown when `executeRoute` exceeds timeout. Partial results not available (execution is aborted immediately).
+Thrown when `execute` exceeds timeout. Partial results not available (execution is aborted immediately).
 
 ### Analysis Errors
 
@@ -161,15 +161,15 @@ analysis.warnings.forEach(warn => {
 
 ### Error Handling Patterns
 
-**executeRoute with recovery**:
+**execute with recovery**:
 ```typescript
 async function executeWithFallback(filepath: string, payload: unknown) {
   try {
-    return await executeRoute(filepath, payload, { timeout: 30000 });
+    return await execute(filepath, payload, { timeout: 30000 });
   } catch (error) {
     if (error instanceof TimeoutError) {
       // Retry with longer timeout
-      return await executeRoute(filepath, payload, { timeout: 60000 });
+      return await execute(filepath, payload, { timeout: 60000 });
     }
     if (error instanceof ExecuteError && error.code === 'GUARD_DENIED') {
       // Log security violation

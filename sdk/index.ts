@@ -23,7 +23,7 @@ export { DependencyDetector } from '@core/utils/dependency-detector';
 export { PathContextBuilder } from '@core/services/PathContextService';
 export { ExecutionEmitter } from './execution-emitter';
 export { StreamExecution } from './stream-execution';
-export { executeRoute, TimeoutError, MemoryRouteCache } from './execute';
+export { execute, TimeoutError, MemoryAstCache } from './execute';
 export { ExecuteError, type ExecuteErrorCode } from './types';
 
 // Export static analysis

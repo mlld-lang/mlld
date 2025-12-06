@@ -378,9 +378,9 @@ Execute mlld files with in-memory caching and state management.
 ### Basic Usage
 
 ```typescript
-import { executeRoute } from 'mlld';
+import { execute } from 'mlld';
 
-const result = await executeRoute('./agent.mld',
+const result = await execute('./agent.mld',
   { text: 'user input', userId: '123' },
   {
     state: { count: 0, messages: [] },
@@ -411,10 +411,10 @@ In-memory cache with mtime-based invalidation:
 
 ```typescript
 // First call parses the file
-await executeRoute('./agent.mld', payload);
+await execute('./agent.mld', payload);
 
 // Second call uses cached AST (unless file changed)
-await executeRoute('./agent.mld', payload);
+await execute('./agent.mld', payload);
 ```
 
 Cache invalidates automatically when file is modified.
@@ -424,7 +424,7 @@ Cache invalidates automatically when file is modified.
 ```typescript
 const controller = new AbortController();
 
-const promise = executeRoute('./agent.mld', payload, {
+const promise = execute('./agent.mld', payload, {
   timeout: 30000,  // 30 second timeout
   signal: controller.signal
 });
@@ -460,7 +460,7 @@ async function handleUserMessage(userId: string, message: string) {
   const state = await loadUserState(userId);
 
   // Execute with user context
-  const result = await executeRoute('./agents/chat.mld',
+  const result = await execute('./agents/chat.mld',
     { text: message, userId },
     { state, timeout: 30000 }
   );
@@ -479,7 +479,7 @@ async function handleUserMessage(userId: string, message: string) {
 Inject additional runtime data beyond `@state` and `@payload`:
 
 ```typescript
-const result = await executeRoute('./process.mld',
+const result = await execute('./process.mld',
   { text: 'user input' },
   {
     state: { count: 0 },
@@ -494,7 +494,7 @@ const result = await executeRoute('./process.mld',
 With custom source labels for security policies:
 
 ```typescript
-const result = await executeRoute('./upload-handler.mld',
+const result = await execute('./upload-handler.mld',
   userUploadedFile,
   {
     dynamicModules: {

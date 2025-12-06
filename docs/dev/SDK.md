@@ -9,7 +9,7 @@ related-code: sdk/types.ts, sdk/execute.ts, interpreter/index.ts
 
 ## tldr
 
-SDK provides execution modes (document/structured/stream/debug), runtime module injection (dynamicModules), state management (state:// protocol), and programmatic execution (executeRoute, analyzeModule). Built on ExecutionEmitter event bridge and StructuredResult format.
+SDK provides execution modes (document/structured/stream/debug), runtime module injection (dynamicModules), state management (state:// protocol), and programmatic execution (execute, analyzeModule). Built on ExecutionEmitter event bridge and StructuredResult format.
 
 ## Principles
 
@@ -24,7 +24,7 @@ SDK provides execution modes (document/structured/stream/debug), runtime module 
 **Entry points**:
 - `processMlld(script, options)` - Simple API, returns string
 - `interpret(script, options)` - Full control, mode selection
-- `executeRoute(filepath, payload, options)` - File-based execution
+- `execute(filepath, payload, options)` - File-based execution
 - `analyzeModule(filepath, options)` - Static analysis
 
 **Core types**: InterpretMode, StructuredResult, DebugResult, StreamExecution, SDKEvent, StateWrite
@@ -141,10 +141,10 @@ Executor (shell/node/bash)
                 StreamExecution.on() handlers
 ```
 
-### executeRoute Flow
+### execute Flow
 
 ```
-executeRoute(filepath, payload, options)
+execute(filepath, payload, options)
         │
         ├─ Check MemoryASTCache (mtime-based)
         │   ├─ Hit: use cached AST
@@ -195,7 +195,7 @@ analyzeModule(filepath)
 - Debug mode disables streaming (captures full trace instead)
 - Effects include security metadata only in structured/stream/debug modes
 - Object modules have size limits (1MB, 10 depth, 1000 keys/arrays)
-- executeRoute caches ASTs in-memory (process lifetime, not persistent)
+- execute caches ASTs in-memory (process lifetime, not persistent)
 
 ## Debugging
 

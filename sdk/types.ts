@@ -99,7 +99,7 @@ export interface StructuredResult {
 }
 
 export type ExecuteErrorCode =
-  | 'ROUTE_NOT_FOUND'
+  | 'FILE_NOT_FOUND'
   | 'PARSE_ERROR'
   | 'TIMEOUT'
   | 'ABORTED'

@@ -50,7 +50,7 @@
   <PUBLISHING_PRIVATE_MODULES> ..... Auth, repo layout, commands.
   <SDK_EXECUTION_MODES> ............ document/structured/stream/debug modes for SDK consumption.
   <DYNAMIC_MODULE_INJECTION> ....... Runtime context injection without filesystem I/O.
-  <EXECUTE_ROUTE> .................. File-based execution with state management and caching.
+  <EXECUTE> ........................ File-based execution with state management and caching.
   <ANALYZE_MODULE> ................. Static analysis for tool discovery and validation.
 </CONFIGURATION>
 <COMMON_MISTAKES>
@@ -465,7 +465,7 @@ State hydration via dynamic modules:
 
 Runtime provides state:
 ```typescript
-executeRoute(file, payload, { state: { count: 0 } });
+execute(file, payload, { state: { count: 0 } });
 // Returns: { stateWrites: [{ path: 'count', value: 1, ... }] }
 ```
 
@@ -1561,11 +1561,11 @@ DynamicModuleResolver has priority 1 (checked before filesystem/registry).
 
 </DYNAMIC_MODULE_INJECTION>
 
-<EXECUTE_ROUTE>
+<EXECUTE>
 File-based execution with state management:
 
 ```typescript
-const result = await executeRoute('./agent.mld', payload, {
+const result = await execute('./agent.mld', payload, {
   state: { conversationId: '123', messages: [...] },
   timeout: 30000
 });
@@ -1584,7 +1584,7 @@ Features:
 - Full effects and metrics
 - Timeout and cancellation
 
-</EXECUTE_ROUTE>
+</EXECUTE>
 
 <ANALYZE_MODULE>
 Static analysis without execution:

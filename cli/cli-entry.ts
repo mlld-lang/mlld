@@ -13,10 +13,19 @@ export { main };
 const isMainModule = true; // Always run when this file is executed
 
 if (isMainModule) {
-  // Parse arguments
   const args = process.argv.slice(2);
+  const hasWatchFlag = args.includes('--watch') || args.includes('-w');
 
-  // Call the main function from index.ts, passing only customArgs
-  // The main function handles its own errors through CLIOrchestrator -> ErrorHandler
-  main(args);
+  (async () => {
+    try {
+      await main(args);
+      if (!hasWatchFlag) {
+        // Avoid hanging processes caused by formatter dependencies; skip in watch mode
+        process.exit(0);
+      }
+    } catch (error) {
+      console.error(error);
+      process.exit(1);
+    }
+  })();
 } 

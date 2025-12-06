@@ -27,6 +27,17 @@ console.error = function(...args: any[]) {
 };
 
 // Run CLI
-main().catch((error: Error) => {
-  process.exit(1);
-}); 
+const args = process.argv.slice(2);
+const hasWatchFlag = args.includes('--watch') || args.includes('-w');
+
+main(args)
+  .then(async () => {
+    if (!hasWatchFlag) {
+      // Prevent lingering handles (formatters, shadow env timers) from keeping the process alive
+      await new Promise(resolve => setTimeout(resolve, 10));
+      process.exit(0);
+    }
+  })
+  .catch((error: Error) => {
+    process.exit(1);
+  }); 

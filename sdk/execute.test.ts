@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { executeRoute, MemoryRouteCache } from './execute';
+import { execute, MemoryAstCache } from './execute';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ExecuteError } from './types';
 
-describe('executeRoute', () => {
+describe('execute', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
   const routePath = '/routes/route.mlld';
@@ -12,7 +12,7 @@ describe('executeRoute', () => {
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
-    MemoryRouteCache.clear();
+    MemoryAstCache.clear();
   });
 
   it('returns structured result with metrics and state writes', async () => {
@@ -24,7 +24,7 @@ describe('executeRoute', () => {
       `.trim()
     );
 
-    const result = await executeRoute(routePath, undefined, { fileSystem, pathService });
+    const result = await execute(routePath, undefined, { fileSystem, pathService });
 
     expect(result).toHaveProperty('output');
     expect((result as any).output.trim()).toBe('hello');
@@ -42,8 +42,8 @@ describe('executeRoute', () => {
   it('marks cache hits on subsequent executions', async () => {
     await fileSystem.writeFile(routePath, '/show "cached"');
 
-    await executeRoute(routePath, undefined, { fileSystem, pathService });
-    const second = await executeRoute(routePath, undefined, { fileSystem, pathService });
+    await execute(routePath, undefined, { fileSystem, pathService });
+    const second = await execute(routePath, undefined, { fileSystem, pathService });
 
     const metrics = (second as any).metrics;
     expect(metrics.cacheHit).toBe(true);
@@ -53,7 +53,7 @@ describe('executeRoute', () => {
   it('propagates metrics in stream mode', async () => {
     await fileSystem.writeFile(routePath, '/show "stream"');
 
-    const handle = (await executeRoute(routePath, undefined, {
+    const handle = (await execute(routePath, undefined, {
       fileSystem,
       pathService,
       stream: true
@@ -74,7 +74,7 @@ describe('executeRoute', () => {
   it('allows async iteration over stream events', async () => {
     await fileSystem.writeFile(routePath, '/show "iterable"');
 
-    const handle = (await executeRoute(routePath, undefined, {
+    const handle = (await execute(routePath, undefined, {
       fileSystem,
       pathService,
       stream: true
@@ -93,16 +93,16 @@ describe('executeRoute', () => {
   });
 
   it('wraps missing files as ExecuteError', async () => {
-    await expect(executeRoute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toBeInstanceOf(ExecuteError);
-    await expect(executeRoute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toMatchObject({
-      code: 'ROUTE_NOT_FOUND'
+    await expect(execute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toBeInstanceOf(ExecuteError);
+    await expect(execute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toMatchObject({
+      code: 'FILE_NOT_FOUND'
     });
   });
 
   it('wraps parse errors as ExecuteError', async () => {
     await fileSystem.writeFile(routePath, '/var @oops = {');
 
-    await expect(executeRoute(routePath, undefined, { fileSystem, pathService })).rejects.toMatchObject({
+    await expect(execute(routePath, undefined, { fileSystem, pathService })).rejects.toMatchObject({
       code: 'PARSE_ERROR'
     });
   });
@@ -110,7 +110,7 @@ describe('executeRoute', () => {
   it('injects payload and state dynamic modules', async () => {
     await fileSystem.writeFile(routePath, '/show "ok"');
 
-    const result = await executeRoute(
+    const result = await execute(
       routePath,
       { text: 'hello' },
       { state: { greeting: 'hi' }, fileSystem, pathService }
