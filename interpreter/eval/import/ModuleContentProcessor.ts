@@ -498,7 +498,8 @@ export class ModuleContentProcessor {
       { frontmatter: frontmatterData },
       undefined,
       exportManifest,
-      childEnv
+      childEnv,
+      { resolveStrings: !this.isUserDataModule(resolvedPath) }
     );
     if (process.env.MLLD_DEBUG === 'true') {
       console.log(`[processMLLDContent] Module object keys:`, Object.keys(moduleObject));
@@ -546,6 +547,17 @@ export class ModuleContentProcessor {
       childEnvironment: childEnv,
       guardDefinitions: guards
     };
+  }
+
+  private isUserDataModule(ref: string): boolean {
+    if (!ref || typeof ref !== 'string') {
+      return false;
+    }
+    const withoutPrefix = ref.startsWith('dynamic://')
+      ? ref.slice('dynamic://'.length)
+      : ref;
+    const normalized = withoutPrefix.trim().toLowerCase();
+    return normalized === '@payload' || normalized === '@state';
   }
 
   /**

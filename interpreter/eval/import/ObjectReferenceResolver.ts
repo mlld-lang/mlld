@@ -11,15 +11,18 @@ export class ObjectReferenceResolver {
    */
   resolveObjectReferences(
     value: any,
-    variableMap: Map<string, Variable>
+    variableMap: Map<string, Variable>,
+    options?: { resolveStrings?: boolean }
   ): any {
+    const resolveStrings = options?.resolveStrings !== false;
+    const stringRefPattern = /^@[A-Za-z0-9_.-]+$/;
     
     if (value === null || value === undefined) {
       return value;
     }
     
     if (Array.isArray(value)) {
-      return value.map(item => this.resolveObjectReferences(item, variableMap));
+      return value.map(item => this.resolveObjectReferences(item, variableMap, options));
     }
     
     // Check if this is a VariableReference AST node
@@ -30,21 +33,21 @@ export class ObjectReferenceResolver {
     if (typeof value === 'object') {
       // Handle AST object nodes with type and properties/entries
       if (value.type === 'object' && (value as any).properties) {
-        return this.resolveASTObjectNode(value, variableMap);
+        return this.resolveASTObjectNode(value, variableMap, options);
       }
       if (value.type === 'object' && Array.isArray((value as any).entries)) {
-        return this.resolveASTObjectNode(value, variableMap);
+        return this.resolveASTObjectNode(value, variableMap, options);
       }
       
       // Handle regular objects
-      return this.resolveNestedStructures(value, variableMap);
+      return this.resolveNestedStructures(value, variableMap, options);
     }
     
     // Check if this is a variable reference string (starts with @)
-    if (typeof value === 'string' && value.startsWith('@')) {
+    if (typeof value === 'string' && resolveStrings && stringRefPattern.test(value)) {
       const varName = value.substring(1); // Remove @ prefix
       const referencedVar = variableMap.get(varName);
-      
+
       if (process.env.DEBUG_EXEC) {
         logger.debug('resolveObjectReferences looking for variable:', {
           originalValue: value,
@@ -54,17 +57,13 @@ export class ObjectReferenceResolver {
           availableVars: Array.from(variableMap.keys())
         });
       }
-      
+
       if (referencedVar) {
         return this.resolveExecutableReference(referencedVar);
-      } else {
-        if (process.env.DEBUG_EXEC) {
-          logger.debug('Variable not found during import resolution:', varName);
-        }
-        // Don't silently return the string - this causes the bug where
-        // variable references like "@pr_view" become literal strings
-        throw new Error(`Variable reference @${varName} not found during import`);
       }
+
+      // String looked like a variable but no binding exists; treat as literal
+      return value;
     }
     
     return value;
@@ -207,17 +206,17 @@ export class ObjectReferenceResolver {
   /**
    * Handle AST object nodes with type and properties
    */
-  private resolveASTObjectNode(value: any, variableMap: Map<string, Variable>): any {
+  private resolveASTObjectNode(value: any, variableMap: Map<string, Variable>, options?: { resolveStrings?: boolean }): any {
     const resolved: Record<string, any> = {};
 
     // New entries format (supports spreads)
     if (Array.isArray(value.entries) && value.entries.length > 0) {
       for (const entry of value.entries) {
         if (entry.type === 'pair') {
-          resolved[entry.key] = this.resolveObjectReferences(entry.value, variableMap);
+          resolved[entry.key] = this.resolveObjectReferences(entry.value, variableMap, options);
         } else if (entry.type === 'spread') {
           for (const spreadNode of entry.value || []) {
-            const spreadValue = this.resolveObjectReferences(spreadNode, variableMap);
+            const spreadValue = this.resolveObjectReferences(spreadNode, variableMap, options);
             if (spreadValue && typeof spreadValue === 'object' && !Array.isArray(spreadValue)) {
               Object.assign(resolved, spreadValue);
             } else {
@@ -249,7 +248,7 @@ export class ObjectReferenceResolver {
     // Legacy properties format
     if (value.properties) {
       for (const [key, val] of Object.entries(value.properties)) {
-        resolved[key] = this.resolveObjectReferences(val, variableMap);
+        resolved[key] = this.resolveObjectReferences(val, variableMap, options);
       }
       if (process.env.MLLD_DEBUG_FIX === 'true') {
         console.error('[ObjectReferenceResolver] resolved properties object', {
@@ -278,10 +277,10 @@ export class ObjectReferenceResolver {
   /**
    * Recursively resolve references in nested objects and arrays
    */
-  private resolveNestedStructures(value: any, variableMap: Map<string, Variable>): any {
+  private resolveNestedStructures(value: any, variableMap: Map<string, Variable>, options?: { resolveStrings?: boolean }): any {
     const resolved: Record<string, any> = {};
     for (const [key, val] of Object.entries(value)) {
-      resolved[key] = this.resolveObjectReferences(val, variableMap);
+      resolved[key] = this.resolveObjectReferences(val, variableMap, options);
     }
     return resolved;
   }

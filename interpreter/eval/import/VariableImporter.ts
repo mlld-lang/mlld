@@ -208,7 +208,8 @@ export class VariableImporter {
     parseResult: any,
     skipModuleEnvSerialization?: boolean,
     manifest?: ExportManifest | null,
-    childEnv?: Environment
+    childEnv?: Environment,
+    options?: { resolveStrings?: boolean }
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
@@ -352,7 +353,11 @@ export class VariableImporter {
         };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
-        const resolvedObject = this.objectResolver.resolveObjectReferences(variable.value, childVars);
+        const resolvedObject = this.objectResolver.resolveObjectReferences(
+          variable.value,
+          childVars,
+          { resolveStrings: options?.resolveStrings }
+        );
         moduleObject[name] = resolvedObject;
       } else {
         // For other variables, export the value directly
