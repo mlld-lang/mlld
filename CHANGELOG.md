@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/import { @conversationId } from @state` imports state fields
   - Enables explicit, auditable access to runtime-injected data
   - Similar pattern to `/import { USER } from @input` for environment variables
+- **Live @state and literal payload strings**: `@state` reads stay fresh after state writes, and `@payload/@state` dynamic modules emit literal strings so @mentions and user data do not interpolate.
 
 ### Fixed
 - All effect actions (`show`, `log`, `output`, `append`) now work uniformly in all RHS contexts including `/exe ... = for ... => when [...]`

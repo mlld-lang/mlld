@@ -65,6 +65,21 @@ describe('ModuleValidator integration', () => {
     expect(result.exports?.map(binding => binding.name)).toEqual(['value']);
   });
 
+  test('accepts exports declared inside mlld-run blocks', async () => {
+    const content = [
+      '```mlld-run',
+      '/var @value = "demo"',
+      '/export { @value }',
+      '```'
+    ].join('\n');
+    const moduleData = buildModule(content);
+
+    const result = await validator.validate(moduleData, DEFAULT_CONTEXT);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.exports?.map(binding => binding.name)).toEqual(['value']);
+  });
+
   test('fails on unauthorized registry import', async () => {
     const content = `/export { value }\n/var @value = "demo"\n/import module { tool } from @other/module`;
     const moduleData = buildModule(content);

@@ -58,11 +58,12 @@ export class MetadataEnhancer implements ValidationStep {
     }
 
     // Validate license
-    if (module.metadata.license && module.metadata.license !== 'CC0') {
+    const allowedLicenses = ['CC0', 'MIT'];
+    if (module.metadata.license && !allowedLicenses.includes(module.metadata.license)) {
       errors.push({
         field: 'license',
-        message: `Invalid license '${module.metadata.license}'. All modules must be CC0 licensed.\n` +
-                `Please update your frontmatter to: license: CC0`
+        message: `Invalid license '${module.metadata.license}'. Allowed licenses: ${allowedLicenses.join(', ')}.\n` +
+                `Please update your frontmatter to: license: CC0 or license: MIT`
       });
     } else if (!module.metadata.license) {
       // Auto-add CC0 if missing
