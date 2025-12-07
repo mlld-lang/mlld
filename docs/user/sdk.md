@@ -388,22 +388,30 @@ const result = await execute('./agent.mld',
   }
 );
 
-console.log(result.value);        // Final output
+console.log(result.output);       // Execution output (NOT result.value)
 console.log(result.stateWrites);  // State updates
 console.log(result.effects);      // All effects
 console.log(result.metrics);      // Performance data
 ```
 
-### State Hydration
+### State and Payload Access
 
-State injected via `@state` module, payload via `@payload`:
+Import fields from `@payload` and `@state` using destructuring syntax:
 
 ```mlld
-/var @count = @state.count + 1
-/var @history = @state.messages
-/var @input = @payload.text
-/var @userId = @payload.userId
+# Import specific fields from payload
+/import { @text, @userId } from @payload
+
+# Import specific fields from state
+/import { @count, @messages } from @state
+
+# Use the imported variables
+/var @newCount = @count + 1
+/var @history = @messages
+/show "User @userId said: @text"
 ```
+
+The SDK automatically provides `@payload` and `@state` as importable modules when you call `execute()` with payload and state arguments.
 
 ### AST Caching
 

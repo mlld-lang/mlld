@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **StreamingManager**: Centralized sink management replaces fragmented sink creation
   - Single owner for StreamBus lifecycle
   - FormatAdapterSink and TerminalSink are mutually exclusive
+- **Import from @payload and @state**: Route files can now import fields from execute() payload and state
+  - `/import { @message, @userId } from @payload` imports specific fields
+  - `/import { @conversationId } from @state` imports state fields
+  - Enables explicit, auditable access to runtime-injected data
+  - Similar pattern to `/import { USER } from @input` for environment variables
 
 ### Fixed
 - All effect actions (`show`, `log`, `output`, `append`) now work uniformly in all RHS contexts including `/exe ... = for ... => when [...]`

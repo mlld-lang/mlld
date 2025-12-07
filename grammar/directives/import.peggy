@@ -94,7 +94,7 @@ SlashImport
       const isValidModule = /^[a-zA-Z_][a-zA-Z0-9_-]*\//.test(rest);
       return !isValidSpecial && !isValidModule;
     } {
-      helpers.mlldError("Invalid import source. Expected @INPUT, @TIME, module reference (@author/module), or configured resolver path", "INPUT", location());
+      helpers.mlldError("Invalid import source. Expected @input, @time, @payload, @state, module reference (@author/module), or configured resolver path", "INPUT", location());
     }
     
   // Error: Unclosed shorthand path bracket
@@ -383,7 +383,7 @@ ImportPath
       };
     }
   / "@INPUT"i {
-      helpers.debug('ImportPath matched @INPUT');
+      helpers.debug('ImportPath matched @input (case-insensitive)');
       const matched = text();
       return {
         type: 'path',
@@ -419,7 +419,7 @@ ImportPath
       };
     }
   / "@TIME"i {
-      helpers.debug('ImportPath matched @TIME');
+      helpers.debug('ImportPath matched @time (case-insensitive)');
       const matched = text();
       return {
         type: 'path',

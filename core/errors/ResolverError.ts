@@ -203,7 +203,7 @@ export class ResolverError extends MlldError {
       suggestions.push('Verify the reference syntax is correct');
       if (this.details.reference?.startsWith('@')) {
         suggestions.push('For modules, use: @author/module');
-        suggestions.push('For built-in resolvers, use: @TIME, @DEBUG, @INPUT, or @PROJECTPATH');
+        suggestions.push('For built-in resolvers, use: @time, @input, @payload, @state');
       }
     }
     

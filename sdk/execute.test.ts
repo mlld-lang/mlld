@@ -108,7 +108,10 @@ describe('execute', () => {
   });
 
   it('injects payload and state dynamic modules', async () => {
-    await fileSystem.writeFile(routePath, '/show "ok"');
+    await fileSystem.writeFile(
+      routePath,
+      '/import { @text } from @payload\n/import { @greeting } from @state\n/show "@greeting @text"'
+    );
 
     const result = await execute(
       routePath,
@@ -116,6 +119,9 @@ describe('execute', () => {
       { state: { greeting: 'hi' }, fileSystem, pathService }
     );
 
+    expect(result.output).toContain('hi hello');
+
+    // Also verify the resolver can resolve the modules
     const resolverManager = (result as any).environment?.getResolverManager();
     const dynamicResolver = resolverManager
       ?.getResolversForContext('import')
