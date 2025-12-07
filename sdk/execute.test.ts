@@ -133,7 +133,7 @@ describe('execute', () => {
     const payloadModule = await dynamicResolver?.resolve('@payload');
     const stateModule = await dynamicResolver?.resolve('@state');
 
-    expect(payloadModule?.content).toContain('@text = "hello"');
-    expect(stateModule?.content).toContain('@greeting = "hi"');
+    expect(payloadModule?.content).toContain("@text = 'hello'");
+    expect(stateModule?.content).toContain("@greeting = 'hi'");
   });
 });

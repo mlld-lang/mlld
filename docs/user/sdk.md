@@ -229,6 +229,10 @@ In your script:
 /var @input = @payload.text
 ```
 
+Notes:
+- `@payload` and `@state` object modules treat strings as literals (no interpolation).
+- `@state` is a live snapshot during a single run: `/output ... to "state://path"` updates the in-run `@state` so later reads/imports see the new value. Persist changes yourself via `stateWrites` between runs.
+
 ### Security
 
 All dynamic modules are automatically labeled `src:dynamic`:
@@ -301,6 +305,9 @@ Common source labels:
 ## State Management
 
 Track state changes via the `state://` protocol instead of filesystem writes.
+
+- `@payload` and `@state` object modules treat strings as literals (no interpolation).
+- `@state` is a live snapshot during a single run: `/output ... to "state://path"` updates the in-run `@state` so later reads/imports see the new value. Persist changes yourself via `stateWrites` between runs.
 
 ### State Write Protocol
 

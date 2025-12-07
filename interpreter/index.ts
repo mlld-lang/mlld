@@ -230,7 +230,25 @@ export async function interpret(
   await env.registerBuiltinResolvers();
 
   if (options.dynamicModules && Object.keys(options.dynamicModules).length > 0) {
-    env.registerDynamicModules(options.dynamicModules, options.dynamicModuleSource);
+    const userDataModules: Record<string, string | Record<string, unknown>> = {};
+    const otherModules: Record<string, string | Record<string, unknown>> = {};
+
+    for (const [key, value] of Object.entries(options.dynamicModules)) {
+      const normalized = key.toLowerCase();
+      if (normalized === '@payload' || normalized === '@state') {
+        userDataModules[key] = value;
+      } else {
+        otherModules[key] = value;
+      }
+    }
+
+    if (Object.keys(userDataModules).length > 0) {
+      env.registerDynamicModules(userDataModules, options.dynamicModuleSource, { literalStrings: true });
+    }
+
+    if (Object.keys(otherModules).length > 0) {
+      env.registerDynamicModules(otherModules, options.dynamicModuleSource);
+    }
   }
 
   // Configure local modules after resolvers are ready

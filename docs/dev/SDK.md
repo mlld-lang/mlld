@@ -33,7 +33,7 @@ SDK provides execution modes (document/structured/stream/debug), runtime module 
 
 **Effect collection**: DefaultEffectHandler.recordEffects flag enables structured collection
 
-**State management**: state:// protocol captures updates without filesystem writes
+**State management**: state:// protocol captures updates without filesystem writes; @state is a live snapshot during a run (writes mutate the in-run snapshot) and stateWrites describe what to persist
 
 ## Architecture
 
@@ -113,10 +113,22 @@ Script:                 Runtime:
                        ┌────────────────────┐
                        │ StructuredResult   │
                        │  .stateWrites      │
+                       └────────┬───────────┘
+                                │
+                                ▼
+                       ┌────────────────────┐
+                       │ Live @state        │
+                       │  (snapshot updates │
+                       │   during run)      │
                        └────────────────────┘
 ```
 
 Application persists state; runtime only captures writes.
+
+**Live snapshot rules**:
+- `@state` is injected as a dynamic module (literal strings, no interpolation).
+- `/output ... to state://path` mutates the in-run `@state` snapshot so subsequent `@state` reads/imports see the new value.
+- Persistence is out-of-band via `stateWrites`; pass the saved state back on the next `execute()` call.
 
 ### Event System
 

@@ -161,6 +161,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private provenanceEnabled = false;
   private stateWrites: StateWrite[] = [];
   private stateWriteIndex = 0;
+  private stateSnapshot?: Record<string, any>;
+  private stateResolver?: DynamicModuleResolver;
+  private stateLabels: DataLabel[] = [];
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -512,14 +515,34 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     logger.debug(`Reserved resolver names: ${Array.from(this.reservedNames).join(', ')}`);
   }
 
-  registerDynamicModules(modules: Record<string, string | Record<string, unknown>>, source?: string): void {
+  registerDynamicModules(
+    modules: Record<string, string | Record<string, unknown>>,
+    source?: string,
+    options?: { literalStrings?: boolean }
+  ): void {
     if (!this.resolverManager) {
       throw new Error('ResolverManager not available');
     }
 
-    const resolver = new DynamicModuleResolver(modules, { source });
+    const resolver = new DynamicModuleResolver(modules, { source, literalStrings: options?.literalStrings });
     this.resolverManager.registerResolver(resolver);
     logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
+
+    // Track @state snapshot for live reads/updates
+    if (Object.prototype.hasOwnProperty.call(modules, '@state')) {
+      const stateValue = modules['@state'];
+      if (stateValue && typeof stateValue === 'object' && !Array.isArray(stateValue)) {
+        const root = this.getRootEnvironment();
+        root.stateSnapshot = stateValue as Record<string, any>;
+        root.stateResolver = resolver;
+        const labels: DataLabel[] = ['src:dynamic'];
+        if (source) {
+          labels.push(`src:${source}` as DataLabel);
+        }
+        root.stateLabels = labels;
+        root.refreshStateVariable();
+      }
+    }
   }
 
   /**
@@ -883,10 +906,74 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       timestamp: write.timestamp ?? new Date().toISOString()
     };
     root.stateWrites.push(entry);
+    root.applyStateWriteToSnapshot(entry);
   }
 
   getStateWrites(): StateWrite[] {
     return this.getRootEnvironment().stateWrites;
+  }
+
+  private applyStateWriteToSnapshot(write: StateWrite): void {
+    const root = this.getRootEnvironment();
+    if (!root.stateSnapshot) {
+      return;
+    }
+    const pathParts = (write.path || '').split('.').filter(Boolean);
+    if (pathParts.length === 0) {
+      return;
+    }
+    let target: any = root.stateSnapshot;
+    for (let i = 0; i < pathParts.length - 1; i += 1) {
+      const key = pathParts[i];
+      if (typeof target[key] !== 'object' || target[key] === null) {
+        target[key] = {};
+      }
+      target = target[key];
+    }
+    const lastKey = pathParts[pathParts.length - 1];
+    target[lastKey] = write.value;
+    root.refreshStateVariable();
+  }
+
+  private refreshStateVariable(): void {
+    const root = this.getRootEnvironment();
+    if (!root.stateSnapshot) {
+      return;
+    }
+    const stateVar = createObjectVariable(
+      'state',
+      root.stateSnapshot,
+      true,
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      }
+    );
+    if (root.stateLabels.length > 0) {
+      stateVar.ctx.labels = [...root.stateLabels];
+      stateVar.ctx.taint = [...root.stateLabels];
+      stateVar.ctx.sources = [...root.stateLabels];
+    }
+    stateVar.internal = {
+      ...(stateVar.internal ?? {}),
+      isReserved: true,
+      isSystem: true
+    };
+    if (root.hasVariable('state')) {
+      root.updateVariable('state', stateVar);
+    } else {
+      root.setVariable('state', stateVar);
+    }
+
+    if (root.stateResolver) {
+      try {
+        root.stateResolver.updateModule('@state', root.stateSnapshot);
+      } catch (error) {
+        logger.warn('Failed to update dynamic @state module after state write', { error });
+      }
+    }
   }
   
   getRegistryManager(): RegistryManager | undefined {

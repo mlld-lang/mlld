@@ -177,6 +177,12 @@ export class VariableManager implements IVariableManager {
     if (this.variables.has(name)) {
       const existing = this.variables.get(name)!;
       const existingIsLegitimate = this.isLegitimateVariableType(existing);
+
+      // Allow system-reserved state placeholder to be overwritten (keeps @state usable)
+      if (name === 'state' && existing.internal?.isReserved === true) {
+        this.variables.set(name, variable);
+        return;
+      }
       
       // Only throw collision errors if both variables are legitimate mlld types
       if (isLegitimateVariable && existingIsLegitimate) {
