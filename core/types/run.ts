@@ -19,7 +19,6 @@ export interface GuardOverrideOptions {
 
 export interface WithClause {
   pipeline?: PipelineStage[];
-  needs?: DependencyMap;
   trust?: TrustLevel;
   parallel?: number;
   delayMs?: number;
@@ -67,15 +66,6 @@ export interface InlineValueStage {
   rawIdentifier: string;
   meta?: Record<string, unknown>;
   location?: any;
-}
-
-/**
- * Dependency map by language
- */
-export interface DependencyMap {
-  [language: string]: {
-    [packageName: string]: string; // version constraint
-  };
 }
 
 /**

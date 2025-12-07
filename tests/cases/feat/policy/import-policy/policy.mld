@@ -1,0 +1,7 @@
+# Sample policy module
+
+/var @config = {
+  allow: {
+    cmd: ["echo"]
+  }
+}

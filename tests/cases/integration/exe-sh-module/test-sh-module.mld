@@ -3,10 +3,11 @@ name: test-sh-executables
 author: test
 version: 1.0.0
 about: Test sh executables in modules
-needs: ["sh"]
 ---
 
 # Test module with sh executables
+
+/needs { sh }
 
 /exe @simple_sh() = sh { echo "Simple sh output" }
 

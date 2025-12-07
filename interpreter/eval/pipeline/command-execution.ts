@@ -915,12 +915,6 @@ export async function executeCommandVariable(
 
     const withClause = execDef.withClause;
     if (withClause) {
-      if (withClause.needs) {
-        const { checkDependencies, DefaultDependencyChecker } = await import('../dependencies');
-        const checker = new DefaultDependencyChecker();
-        await checkDependencies(withClause.needs, checker, commandVar.ctx?.definedAt);
-      }
-
       if (withClause.pipeline && withClause.pipeline.length > 0) {
         const { processPipeline } = await import('./unified-processor');
         const processed = await processPipeline({

@@ -34,6 +34,11 @@ export interface ConfigFileData {
     localModulesPath?: string;  // defaults to "llm/modules"
     enabled?: boolean;
   };
+
+  policy?: {
+    import?: string[];
+    environment?: string;
+  };
 }
 
 export class ConfigFile {
@@ -56,6 +61,7 @@ export class ConfigFile {
         // Initialize with empty config
         this.data = {};
       }
+      this.validatePolicyConfig();
     } catch (error) {
       console.warn(`Failed to load config file: ${error.message}`);
       // Initialize with empty config on error
@@ -211,6 +217,20 @@ export class ConfigFile {
     return this.data!.dev?.localModulesPath || 'llm/modules';
   }
 
+  getPolicyImports(): string[] {
+    this.ensureLoaded();
+    return this.data!.policy?.import ? [...this.data!.policy.import] : [];
+  }
+
+  getPolicyEnvironment(): string | undefined {
+    this.ensureLoaded();
+    return this.data!.policy?.environment;
+  }
+
+  getFilePath(): string {
+    return this.filePath;
+  }
+
   async setDevMode(enabled: boolean): Promise<void> {
     this.ensureLoaded();
     if (!this.data!.dev) {
@@ -231,5 +251,41 @@ export class ConfigFile {
   updatePath(newPath: string): void {
     this.filePath = newPath;
     this.loaded = false; // Force reload on next access
+  }
+
+  private validatePolicyConfig(): void {
+    if (!this.data?.policy) {
+      return;
+    }
+
+    const policy = this.data.policy;
+    if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
+      throw new MlldError('Invalid policy configuration in mlld-config.json. Define policy.import with module references.', {
+        code: 'INVALID_POLICY_CONFIG'
+      });
+    }
+
+    const allowedKeys = new Set(['import', 'environment']);
+    for (const key of Object.keys(policy)) {
+      if (!allowedKeys.has(key)) {
+        throw new MlldError('Inline policy configuration is not supported. Use policy.import to reference policy modules.', {
+          code: 'INVALID_POLICY_CONFIG'
+        });
+      }
+    }
+
+    if (policy.import !== undefined) {
+      if (!Array.isArray(policy.import) || policy.import.some(entry => typeof entry !== 'string' || entry.trim().length === 0)) {
+        throw new MlldError('policy.import must be an array of module references', {
+          code: 'INVALID_POLICY_CONFIG'
+        });
+      }
+    }
+
+    if (policy.environment !== undefined && (typeof policy.environment !== 'string' || policy.environment.trim().length === 0)) {
+      throw new MlldError('policy.environment must be a non-empty string when provided', {
+        code: 'INVALID_POLICY_CONFIG'
+      });
+    }
   }
 }

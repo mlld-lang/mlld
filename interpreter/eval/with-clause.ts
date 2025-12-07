@@ -1,7 +1,6 @@
 import type { WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import { MlldInterpreterError } from '@core/errors';
 import { asText } from '../utils/structured-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 
@@ -31,11 +30,6 @@ export async function applyWithClause(
     result = wrapPipelineResult(pipelineResult);
   }
   
-  // Check dependencies if specified
-  if (withClause.needs) {
-    await checkDependencies(withClause.needs, env);
-  }
-  
   return {
     value: result,
     env,
@@ -43,21 +37,4 @@ export async function applyWithClause(
     stderr: '',
     exitCode: 0
   };
-}
-
-/**
- * Check dependencies
- */
-async function checkDependencies(
-  needs: Record<string, any>,
-  env: Environment
-): Promise<void> {
-  // TODO: Implement dependency checking
-  // For now, just validate that files exist if specified
-  if (needs.file) {
-    const exists = await env.fileSystem.exists(needs.file);
-    if (!exists) {
-      throw new MlldInterpreterError(`Required file not found: ${needs.file}`);
-    }
-  }
 }

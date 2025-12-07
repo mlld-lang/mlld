@@ -10,12 +10,16 @@ import type {
   ModuleNeedsNormalized,
   PackageRequirement
 } from '../types';
+import { parseSync } from '@grammar/parser';
+import { normalizeNeedsDeclaration, normalizeWantsDeclaration } from '@core/policy/needs';
+import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
 
 export interface ParsedFrontmatterMetadata {
   name?: string;
   author?: string;
   version?: string;
   needs: ModuleNeedsNormalized;
+  wants: WantsTier[];
   dependencies: ModuleDependencyMap;
   devDependencies: ModuleDependencyMap;
   raw: Record<string, unknown>;
@@ -47,28 +51,78 @@ export function extractFrontmatter(content: string): Record<string, unknown> {
 
 export function parseModuleMetadata(content: string): ParsedFrontmatterMetadata {
   const frontmatter = extractFrontmatter(content);
-  const needs = parseNeeds(frontmatter);
+  assertNoLegacyNeeds(frontmatter);
+
+  const needsDeclaration = extractNeedsFromContent(content);
+  const wants = extractWantsFromContent(content);
+  const needs = normalizeModuleNeeds(needsDeclaration);
   return {
     name: typeof frontmatter.name === 'string' ? frontmatter.name : undefined,
     author: typeof frontmatter.author === 'string' ? frontmatter.author : undefined,
     version: typeof frontmatter.version === 'string' ? frontmatter.version : undefined,
     needs,
+    wants: wants ?? [],
     dependencies: parseDependencyMap(frontmatter.dependencies),
     devDependencies: parseDependencyMap(frontmatter.devDependencies ?? frontmatter.devdependencies),
     raw: frontmatter
   };
 }
 
-function parseNeeds(frontmatter: Record<string, unknown>): ModuleNeedsNormalized {
-  const baseNeeds = frontmatter.needs as ModuleNeeds | unknown;
-  const legacyDetails = {
-    js: frontmatter['needs-js'] || frontmatter.needsJs,
-    node: frontmatter['needs-node'] || frontmatter.needsNode,
-    py: frontmatter['needs-py'] || frontmatter.needsPy,
-    sh: frontmatter['needs-sh'] || frontmatter.needsSh
-  } as Record<string, unknown>;
+function assertNoLegacyNeeds(frontmatter: Record<string, unknown>): void {
+  const legacyKeys = [
+    'needs',
+    'needs-js',
+    'needsJs',
+    'needs-node',
+    'needsNode',
+    'needs-py',
+    'needsPy',
+    'needs-sh',
+    'needsSh'
+  ];
+  const hasLegacyNeeds = legacyKeys.some(key => frontmatter[key] !== undefined);
+  if (hasLegacyNeeds) {
+    throw new MlldError('Legacy frontmatter needs are not supported. Use /needs instead.', {
+      code: 'LEGACY_NEEDS_NOT_SUPPORTED',
+      severity: ErrorSeverity.Fatal
+    });
+  }
+}
 
-  return normalizeModuleNeeds(baseNeeds, legacyDetails);
+function extractNeedsFromContent(content: string): NeedsDeclaration | undefined {
+  try {
+    const ast = parseSync(content);
+    const needsNode = ast.find((node: any) => node?.kind === 'needs');
+    if (!needsNode) {
+      return undefined;
+    }
+    return normalizeNeedsDeclaration((needsNode as any).values?.needs ?? {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new MlldError(`Failed to parse module for /needs: ${message}`, {
+      code: 'NEEDS_PARSE_FAILED',
+      severity: ErrorSeverity.Fatal,
+      cause: error
+    });
+  }
+}
+
+function extractWantsFromContent(content: string): WantsTier[] | undefined {
+  try {
+    const ast = parseSync(content);
+    const wantsNode = ast.find((node: any) => node?.kind === 'wants');
+    if (!wantsNode) {
+      return undefined;
+    }
+    return normalizeWantsDeclaration((wantsNode as any).values?.wants ?? []);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new MlldError(`Failed to parse module for /wants: ${message}`, {
+      code: 'WANTS_PARSE_FAILED',
+      severity: ErrorSeverity.Fatal,
+      cause: error
+    });
+  }
 }
 
 function parseDependencyMap(value: unknown): ModuleDependencyMap {

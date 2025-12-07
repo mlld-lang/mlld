@@ -214,11 +214,14 @@ export type DirectiveKind =
   | 'append'
   | 'when'
   | 'guard'
-  | 'stream';
+  | 'stream'
+  | 'needs'
+  | 'wants'
+  | 'policy';
 
 export type DirectiveSubtype =
   // Import subtypes
-  | 'importAll' | 'importSelected' | 'importNamespace'
+  | 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy'
   // Export subtype
   | 'exportSelected'
   // Unified var subtype
@@ -238,7 +241,12 @@ export type DirectiveSubtype =
   // When subtypes
   | 'whenSimple' | 'whenBlock' | 'whenMatch'
   // Guard subtype
-  | 'guard';
+  | 'guard'
+  // Needs/Wants subtypes
+  | 'needs'
+  | 'wants'
+  // Policy subtype
+  | 'policy';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

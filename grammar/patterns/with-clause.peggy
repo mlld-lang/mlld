@@ -1,5 +1,5 @@
 // WITH CLAUSE PATTERN
-// Pattern for the 'with' clause that supports pipeline and needs options
+// Pattern for the 'with' clause that supports pipeline and related options
 
 // -------------------------------------------------------------
 // MAIN WITH CLAUSE
@@ -12,7 +12,7 @@ WithClause
       return object;
     }
 
-// Object containing pipeline and/or needs
+// Object containing pipeline and related options
 WithObject
   = "{" _ props:WithProperties? _ "}" {
       const result = {};
@@ -30,13 +30,10 @@ WithProperties
       return [first, ...rest];
     }
 
-// Individual property (pipeline or needs)
+// Individual property (pipeline or metadata)
 WithProperty
   = "pipeline" _ ":" _ pipeline:PipelineArray {
       return ["pipeline", pipeline];
-    }
-  / "needs" _ ":" _ needs:NeedsObject {
-      return ["needs", needs];
     }
   / "guards" _ ":" _ guards:GuardOverrides {
       return ["guards", guards];
@@ -49,6 +46,9 @@ WithProperty
     }
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
+    }
+  / "policy" _ ":" _ policy:DataObjectLiteral {
+      return ["policy", policy];
     }
   / "parallel" _ ":" _ cap:NumberLiteral {
       return ["parallel", Number(cap)];
@@ -411,56 +411,4 @@ PipelineBuiltinAppend
           hasExplicitSource: false
         }
       };
-    }
-
-// -------------------------------------------------------------
-// NEEDS SUPPORT
-// -------------------------------------------------------------
-
-// Object containing language-specific dependencies
-NeedsObject
-  = "{" _ langs:NeedsLanguageList? _ "}" {
-      const result = {};
-      if (langs) {
-        for (const [lang, packages] of langs) {
-          result[lang] = packages;
-        }
-      }
-      return result;
-    }
-
-// List of language entries
-NeedsLanguageList
-  = first:NeedsLanguageEntry rest:(CommaSpace entry:NeedsLanguageEntry { return entry; })* {
-      return [first, ...rest];
-    }
-
-// Single language entry (e.g., "node": { ... })
-NeedsLanguageEntry
-  = lang:DataString _ ":" _ packages:PackagesObject {
-      return [lang, packages];
-    }
-
-// Object containing package dependencies
-PackagesObject
-  = "{" _ packages:PackagesList? _ "}" {
-      const result = {};
-      if (packages) {
-        for (const [pkg, version] of packages) {
-          result[pkg] = version;
-        }
-      }
-      return result;
-    }
-
-// List of package entries
-PackagesList
-  = first:PackageEntry rest:(CommaSpace entry:PackageEntry { return entry; })* {
-      return [first, ...rest];
-    }
-
-// Single package entry (e.g., "lodash": "^4.17.0")
-PackageEntry
-  = pkg:DataString _ ":" _ version:DataString {
-      return [pkg, version];
     }

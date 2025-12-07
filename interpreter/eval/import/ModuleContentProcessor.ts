@@ -12,13 +12,16 @@ import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
-import type { ContentType } from '@core/resolvers/types';
+import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
   frontmatter: Record<string, any> | null;
   childEnvironment: Environment;
   guardDefinitions: SerializedGuardDefinition[];
+  moduleNeeds?: NeedsDeclaration;
+  moduleWants?: WantsTier[];
+  policyContext?: Record<string, unknown> | null;
 }
 
 /**
@@ -143,7 +146,7 @@ export class ModuleContentProcessor {
     content: string,
     ref: string,
     directive: DirectiveNode,
-    contentType?: ContentType
+    contentType?: 'module' | 'data' | 'text'
   ): Promise<ModuleProcessingResult> {
     // Begin import tracking for security
     this.securityValidator.beginImport(ref);
@@ -276,18 +279,10 @@ export class ModuleContentProcessor {
     content: string,
     resolvedPath: string,
     directive: DirectiveNode,
-    contentTypeHint?: ContentType
+    contentType?: 'module' | 'data' | 'text'
   ): Promise<{ parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' }> {
-    const forceModule = contentTypeHint === 'module';
-    const forcePlainText = contentTypeHint === 'text';
-    const treatAsData = contentTypeHint === 'data';
-
-    if (forcePlainText) {
-      return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
-    }
-
     // Check if this is a JSON file
-    if (resolvedPath.endsWith('.json') || treatAsData) {
+    if (resolvedPath.endsWith('.json')) {
       try {
         return { parsed: JSON.parse(content), processedContent: content, isPlainText: false };
       } catch (error) {
@@ -305,10 +300,16 @@ export class ModuleContentProcessor {
       return { parsed: null, processedContent: content, isPlainText: false, templateSyntax: 'tripleColon' };
     }
 
-    // Only parse .mld and .md files as mlld content
-    // All other files (like .txt) should be treated as plain text
-    const isModuleLike = forceModule || resolvedPath.endsWith('.mld') || resolvedPath.endsWith('.md');
-    if (!isModuleLike) {
+    const hasModuleExtension =
+      resolvedPath.endsWith('.mld') ||
+      resolvedPath.endsWith('.mlld') ||
+      resolvedPath.endsWith('.mld.md') ||
+      resolvedPath.endsWith('.mlld.md') ||
+      resolvedPath.endsWith('.md');
+    const forceModuleParse = contentType === 'module' || resolvedPath.startsWith('@');
+
+    // Only parse as mlld when it is a module (by hint or extension)
+    if (!forceModuleParse && !hasModuleExtension) {
       // Return a marker indicating this is plain text content
       return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
     }
@@ -487,23 +488,13 @@ export class ModuleContentProcessor {
       });
     }
     const exportManifest = childEnv.getExportManifest();
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] Export manifest:`, {
-        hasManifest: !!exportManifest,
-        manifestNames: exportManifest?.getNames?.() ?? 'null'
-      });
-    }
     const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,
       { frontmatter: frontmatterData },
       undefined,
       exportManifest,
-      childEnv,
-      { resolveStrings: !this.isUserDataModule(resolvedPath) }
+      childEnv
     );
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] Module object keys:`, Object.keys(moduleObject));
-    }
 
     // Add __meta__ property with frontmatter if available
     if (frontmatter) {
@@ -515,11 +506,17 @@ export class ModuleContentProcessor {
       // Only wrap as template if the file has substantive content (not just comments/whitespace)
       const hasSubstantive = this.hasSubstantiveContent(sourceContent);
       if (!hasSubstantive) {
+        const moduleNeeds = childEnv.getModuleNeeds();
+        const moduleWants = childEnv.getModuleWants();
+        const policyContext = childEnv.getPolicyContext() ?? null;
         return {
           moduleObject,
           frontmatter,
           childEnvironment: childEnv,
-          guardDefinitions: guards
+          guardDefinitions: guards,
+          moduleNeeds,
+          moduleWants,
+          policyContext
         };
       }
       let templateSyntax: 'doubleColon' | 'tripleColon' = 'doubleColon';
@@ -541,23 +538,19 @@ export class ModuleContentProcessor {
       };
     }
 
+    const moduleNeeds = childEnv.getModuleNeeds();
+    const moduleWants = childEnv.getModuleWants();
+    const policyContext = childEnv.getPolicyContext() ?? null;
+
     return {
       moduleObject,
       frontmatter,
       childEnvironment: childEnv,
-      guardDefinitions: guards
+      guardDefinitions: guards,
+      moduleNeeds,
+      moduleWants,
+      policyContext
     };
-  }
-
-  private isUserDataModule(ref: string): boolean {
-    if (!ref || typeof ref !== 'string') {
-      return false;
-    }
-    const withoutPrefix = ref.startsWith('dynamic://')
-      ? ref.slice('dynamic://'.length)
-      : ref;
-    const normalized = withoutPrefix.trim().toLowerCase();
-    return normalized === '@payload' || normalized === '@state';
   }
 
   /**

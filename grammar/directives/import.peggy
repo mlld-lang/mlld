@@ -19,7 +19,8 @@ It can be used in these forms:
 
 // Primary /import directive
 SlashImport
-  = SlashImportShorthand
+  = SlashImportPolicy
+  / SlashImportShorthand
   / SlashImportFull
   
   // Error Recovery Rules for /import directive
@@ -195,8 +196,53 @@ SlashImportShorthand
         location(),
         'path'
       );
-    }
+  }
 
+
+// Policy import: /import policy @alias from "path"
+SlashImportPolicy
+  = DirectiveContext "/import" _ "policy" _ alias:ImportAliasIdentifier _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportPolicy matched', { alias, path, tail });
+
+      const namespace = [helpers.createNode(NodeType.Text, { content: alias, location: location() })];
+      const values = {
+        namespace,
+        path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path),
+        imports: [
+          helpers.createVariableReferenceNode('import', { identifier: '*', alias }, location())
+        ],
+        importType: 'policy'
+      };
+
+      if (tail) {
+        values.withClause = tail;
+      }
+
+      const raw = {
+        imports: `* as @${alias}`,
+        path: path.raw?.path || path.raw?.module || path.raw?.url || path,
+        importType: 'policy'
+      };
+
+      const meta = {
+        path: path.meta || { isSpecial: typeof path === 'string', pathSubtype: path.subtype },
+        importType: 'policy'
+      };
+
+      if (comment) {
+        meta.comment = comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'import',
+        'importPolicy',
+        values,
+        raw,
+        meta,
+        location(),
+        'path'
+      );
+    }
 
 // Full import with explicit imports list
 SlashImportFull
