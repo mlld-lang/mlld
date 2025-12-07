@@ -1,8 +1,13 @@
-/guard @validateInput before op:exe = when [
-  @input.length > 1000 => deny "Input too large"
-  @input.includes("<script") => deny "Potentially malicious input"
+/guard @secretBlock before secret = when [
+  @ctx.op.type == "show" => deny "Cannot display secrets"
   * => allow
 ]
 
-/exe @process(data) = run { echo "@data" }
-/show @process("<script>alert('xss')</script>")  # Blocked
+/var secret @key = "sk-12345"
+
+/exe @display(value) = when [
+  denied => `[REDACTED] - @ctx.guard.reason`
+  * => `Value: @value`
+]
+
+/show @display(@key)                       # Shows: [REDACTED] - Cannot display secrets

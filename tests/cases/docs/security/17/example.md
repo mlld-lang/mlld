@@ -1,13 +1,11 @@
-/guard @first before secret = when [
-  * => allow @input.trim()
+/guard @checkInput before secret = when [
+  * => allow
 ]
 
-/guard @second before secret = when [
-  * => allow `safe:@input`
+/guard @checkOutput after secret = when [
+  * => allow
 ]
 
-/var secret @data = "  hello  "
-/exe @deliver(v) = `Result: @v`
-
->> Result: safe:hello
-/show @deliver(@data)
+/guard @checkBoth always op:exe = when [
+  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+]

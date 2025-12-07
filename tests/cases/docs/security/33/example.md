@@ -1,9 +1,9 @@
-/guard @fileWritePolicy before secret = when [
-  @ctx.op.type == "output" => deny "Cannot write secrets to files"
+/guard @noNetwork before op:run = when [
+  @ctx.op.subtype == "sh" => deny "Shell access blocked"
   * => allow
 ]
 
-/guard @displayPolicy before secret = when [
-  @ctx.op.type == "show" => allow @redact(@input)
+/guard @noExecNetwork before op:exe = when [
+  @input.any.ctx.labels.includes("network") => deny "Network calls blocked"
   * => allow
 ]

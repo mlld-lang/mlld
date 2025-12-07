@@ -1,1 +1,6 @@
-/show @data with { guards: { only: ["@specific"] } }
+/guard @block before secret = when [
+  * => deny "blocked"
+]
+
+/var secret @data = "test"
+/show @data with { guards: false }         # Guards disabled (warning emitted)

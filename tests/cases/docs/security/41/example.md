@@ -1,3 +1,4 @@
-/guard @tag always op:exe = when [
-  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+/guard @redactSecrets before secret = when [
+  @ctx.op.type == "show" => allow @redact(@input)
+  * => allow
 ]

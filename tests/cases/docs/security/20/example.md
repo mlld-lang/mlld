@@ -1,10 +1,9 @@
-/guard @trim before secret = when [
-  * => allow @input.trim()
+/guard @retryGuard before secret = when [
+  * => retry "need retry"
 ]
 
-/guard @wrap before secret = when [
-  * => allow `[REDACTED: @input]`
+/guard @denyGuard before secret = when [
+  * => deny "hard stop"
 ]
 
-/var secret @key = "  sk-12345  "
-/show @key                                 # Output: [REDACTED: sk-12345]
+# deny wins, but retry hint preserved in @ctx.guard.hints

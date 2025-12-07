@@ -1,7 +1,6 @@
-/guard @sanitize before untrusted = when [
-  * => allow @input.trim().slice(0, 100)
+/exe @handler(value) = when [
+  denied => show "Blocked: @ctx.guard.reason"
+  denied => show "Guard: @ctx.guard.name"
+  denied => show "Labels: @ctx.labels.join(', ')"
+  * => show @value
 ]
-
-/var untrusted @userInput = "  very long input...  "
-/exe @process(data) = `Processed: @data`
-/show @process(@userInput)                 # Input trimmed and truncated

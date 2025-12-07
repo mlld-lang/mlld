@@ -1,10 +1,13 @@
-/guard before secret = when [
-  @ctx.op.type == "pipeline-stage" && @ctx.guard.try == 1 => retry "Try again"
-  * => allow
+/exe @sanitize(text) = js {
+  return text
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/javascript:/gi, '')
+    .trim();
+}
+
+/guard @sanitizeUntrusted before untrusted = when [
+  * => allow @sanitize(@input)
 ]
 
-/exe @mask(v) = js { return v.replace(/.(?=.{4})/g, '*'); }
-
-/var secret @key = "sk-12345"
-/var @safe = @key with { pipeline: [@mask] }
-/show @safe                                # Retries once, then succeeds
+/var untrusted @userInput = "<script>alert('xss')</script>Hello"
+/show @userInput                           # Output: Hello (sanitized)

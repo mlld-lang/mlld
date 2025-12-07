@@ -1,7 +1,10 @@
-/exe @process(value) = when [
-  denied => show "Blocked by: @ctx.guard.name"
-  denied => show "Reason: @ctx.guard.reason"
-  denied => show "Decision: @ctx.guard.decision"
-  denied => show "All reasons: @ctx.guard.reasons.join(', ')"
-  * => show @value
+/guard @trim before secret = when [
+  * => allow @input.trim()
 ]
+
+/guard @wrap before secret = when [
+  * => allow `[REDACTED: @input]`
+]
+
+/var secret @key = "  sk-12345  "
+/show @key                                 # Output: [REDACTED: sk-12345]

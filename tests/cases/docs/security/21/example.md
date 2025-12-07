@@ -1,5 +1,9 @@
-/guard @retryOnce before op:exe = when [
-  @ctx.guard.try == 1 => retry "first attempt failed"
-  @ctx.guard.try == 2 => retry "second attempt failed"
+/exe @redact(text) = js { return text.replace(/./g, '*'); }
+
+/guard @redactSecrets before secret = when [
+  @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
+
+/var secret @key = "sk-12345"
+/show @key                                 # Output: *********

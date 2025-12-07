@@ -1,9 +1,9 @@
-/guard @noNetwork before op:run = when [
-  @ctx.op.subtype == "sh" => deny "Shell access blocked"
+/exe @redact(text) = js { return text.slice(0, 4) + '****'; }
+
+/guard @redactSecrets before secret = when [
+  @ctx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
 
-/guard @noExecNetwork before op:exe = when [
-  @input.any.ctx.labels.includes("network") => deny "Network calls blocked"
-  * => allow
-]
+/var secret @key = "sk-12345678"
+/show @key                                 # Output: sk-1****

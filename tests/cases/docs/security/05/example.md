@@ -1,7 +1,3 @@
-/guard @noShellSecrets before secret = when [
-  @ctx.op.type == "run" => deny "Secrets cannot appear in shell"
-  * => allow
-]
-
-/var secret @key = "sk-12345"
-/run cmd { echo @key }                         # Blocked
+/var secret @token = "sk-123"
+/var @header = `Bearer @token`
+/show @header.ctx.taint                    # ["secret"]

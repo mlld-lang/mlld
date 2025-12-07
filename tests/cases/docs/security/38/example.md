@@ -1,5 +1,3 @@
-/exe @handler(value) = when [
-  denied => show "Operation blocked: @ctx.guard.reason"
-  denied => "fallback-value"
-  * => @value
+/guard @noShell before op:run = when [
+  * => deny "Shell disabled in production"
 ]

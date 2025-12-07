@@ -1,6 +1,7 @@
-/guard @validateJson after op:exe = when [
-  @isValidJson(@output) => allow
-  * => deny "LLM did not return valid JSON"
+/guard @validateOutput after op:exe = when [
+  @output.includes("ERROR") => deny "Operation failed"
+  * => allow
 ]
 
-/exe @isValidJson(text) = js { try { JSON.parse(text); return true; } catch { return false; } }
+/exe @query() = run { curl api.example.com/status }
+/show @query()                             # Blocked if output contains ERROR

@@ -1,13 +1,5 @@
-/guard @secretBlock before secret = when [
-  @ctx.op.type == "show" => deny "Cannot display secrets"
-  * => allow
+/guard @noShell before op:run = when [
+  * => deny "Shell access disabled"
 ]
 
-/var secret @key = "sk-12345"
-
-/exe @display(value) = when [
-  denied => `[REDACTED] - @ctx.guard.reason`
-  * => `Value: @value`
-]
-
-/show @display(@key)                       # Shows: [REDACTED] - Cannot display secrets
+/run cmd { ls }                                # Blocked

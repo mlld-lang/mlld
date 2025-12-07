@@ -232,25 +232,29 @@ Check LLM output:
 Guards can run before, after, or both:
 
 ```mlld
-/guard @checkInput before secret = when [...]    # Before operation
-/guard @checkOutput after secret = when [...]    # After operation
-/guard @checkBoth always secret = when [...]     # Both before and after
+/guard @checkInput before secret = when [
+  * => allow
+]
+
+/guard @checkOutput after secret = when [
+  * => allow
+]
+
+/guard @checkBoth always op:exe = when [
+  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+]
 ```
 
 Use `@ctx.guard.timing` to differentiate:
 
 ```mlld
-/guard @tag always op:exe = when [
-  * => allow @tagValue(@ctx.guard.timing, @output, @input)
-]
-
-/exe @tagValue(timing, out, in) = js {
-  const val = out ?? in ?? '';
+/exe @tagValue(timing, out, inp) = js {
+  const val = out ?? inp ?? '';
   return `${timing}:${val}`;
 }
 
 /exe @emit(v) = js { return v; }
-/show @emit("test")                        # Output: after:before:test
+/show @emit("test")
 ```
 
 ## Guard Composition

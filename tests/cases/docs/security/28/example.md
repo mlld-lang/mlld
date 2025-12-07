@@ -1,12 +1,7 @@
-/guard @secretBlock before secret = when [
-  @ctx.op.type == "show" => deny "No secrets"
+# guards/secrets.mld
+/guard @secretProtection before secret = when [
+  @ctx.op.type == "run" => deny "Secrets blocked from shell"
   * => allow
 ]
 
-/var secret @key = "  sk-12345  "
-
-# All of these preserve 'secret' label:
-/show @key.trim()                          # Blocked
-/show @key.slice(0, 5)                     # Blocked
-/show @key.toUpperCase()                   # Blocked
-/show @key.trim().slice(0, 3).toUpperCase()  # Blocked
+/export { @secretProtection }

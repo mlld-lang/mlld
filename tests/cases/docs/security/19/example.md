@@ -1,9 +1,13 @@
-/exe @redact(text) = js { return text.replace(/./g, '*'); }
-
-/guard @redactSecrets before secret = when [
-  @ctx.op.type == "show" => allow @redact(@input)
-  * => allow
+/guard @first before secret = when [
+  * => allow @input.trim()
 ]
 
-/var secret @key = "sk-12345"
-/show @key                                 # Output: *********
+/guard @second before secret = when [
+  * => allow `safe:@input`
+]
+
+/var secret @data = "  hello  "
+/exe @deliver(v) = `Result: @v`
+
+>> Result: safe:hello
+/show @deliver(@data)

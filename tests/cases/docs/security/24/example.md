@@ -1,10 +1,7 @@
-/guard @blocker before secret = when [
-  * => deny "should skip"
+/exe @process(value) = when [
+  denied => show "Blocked by: @ctx.guard.name"
+  denied => show "Reason: @ctx.guard.reason"
+  denied => show "Decision: @ctx.guard.decision"
+  denied => show "All reasons: @ctx.guard.reasons.join(', ')"
+  * => show @value
 ]
-
-/guard @allowed before secret = when [
-  * => allow
-]
-
-/var secret @data = "visible"
-/show @data with { guards: { except: ["@blocker"] } }  # Only @allowed runs

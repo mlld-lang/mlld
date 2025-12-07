@@ -1,9 +1,7 @@
-/guard @retryGuard before secret = when [
-  * => retry "need retry"
-]
+/exe @tagValue(timing, out, inp) = js {
+  const val = out ?? inp ?? '';
+  return `${timing}:${val}`;
+}
 
-/guard @denyGuard before secret = when [
-  * => deny "hard stop"
-]
-
-# deny wins, but retry hint preserved in @ctx.guard.hints
+/exe @emit(v) = js { return v; }
+/show @emit("test")

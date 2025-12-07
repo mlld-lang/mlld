@@ -1,11 +1,6 @@
-/guard @tag always op:exe = when [
-  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+/guard @validateJson after op:exe = when [
+  @isValidJson(@output) => allow
+  * => deny "LLM did not return valid JSON"
 ]
 
-/exe @tagValue(timing, out, in) = js {
-  const val = out ?? in ?? '';
-  return `${timing}:${val}`;
-}
-
-/exe @emit(v) = js { return v; }
-/show @emit("test")                        # Output: after:before:test
+/exe @isValidJson(text) = js { try { JSON.parse(text); return true; } catch { return false; } }

@@ -1,1 +1,1 @@
-From security.md line 283: Guard Transforms
+From security.md line 282: deny wins, but retry hint preserved in @ctx.guard.hints

@@ -1,6 +1,5 @@
-/guard @block before secret = when [
-  * => deny "blocked"
+/guard @retryOnce before op:exe = when [
+  @ctx.guard.try == 1 => retry "first attempt failed"
+  @ctx.guard.try == 2 => retry "second attempt failed"
+  * => allow
 ]
-
-/var secret @data = "test"
-/show @data with { guards: false }         # Guards disabled (warning emitted)

@@ -1,7 +1,10 @@
-# guards/secrets.mld
-/guard @secretProtection before secret = when [
-  @ctx.op.type == "run" => deny "Secrets blocked from shell"
+/guard @blocker before secret = when [
+  * => deny "should skip"
+]
+
+/guard @allowed before secret = when [
   * => allow
 ]
 
-/export { @secretProtection }
+/var secret @data = "visible"
+/show @data with { guards: { except: ["@blocker"] } }  # Only @allowed runs
