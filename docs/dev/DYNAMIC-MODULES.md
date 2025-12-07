@@ -14,7 +14,7 @@ Runtime module injection via `dynamicModules` in `interpret`/`processMlld`. `Dyn
 
 - Simple API: `processMlld(template, { dynamicModules: {...} })`
 - Resolver-based: `DynamicModuleResolver` with priority 1 (checked first)
-- Always tainted: Dynamic content gets `taintLevel: 'untrusted'`
+- Always tainted: Dynamic content carries `taint: ['src:dynamic']` (plus optional `src:<source>`)
 - Override semantics: Dynamic modules shadow filesystem/registry with same path
 - Eager resolution: Modules provided upfront, no async fetch
 

@@ -43,6 +43,31 @@ Check labels with `.ctx.labels`:
 /show @data.ctx.labels                     # ["secret"]
 ```
 
+## Taint Tracking
+
+Taint is the accumulated label set on a value. It includes explicit labels plus automatic source labels. Check it with `.ctx.taint`:
+
+```mlld
+/var secret @token = "sk-123"
+/var @header = `Bearer @token`
+/show @header.ctx.taint                    # ["secret"]
+```
+
+Automatic taint labels:
+- `src:exec` — outputs from `/run` or `/exe`
+- `src:file` — loaded file content, plus `dir:/...` entries for every parent directory
+- `src:dynamic` — dynamic modules injected via `dynamicModules`
+
+Use taint in guards to block risky sources:
+
+```mlld
+/guard @noUploads before op:run = when [
+  @input.any.ctx.taint.includes("dir:/tmp/uploads") => deny "Cannot execute uploads"
+  @input.any.ctx.taint.includes("src:exec") => deny "No nesting command output"
+  * => allow
+]
+```
+
 ## Guards
 
 Guards enforce policies on labeled data or operations.

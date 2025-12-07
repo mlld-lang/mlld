@@ -34,7 +34,7 @@ interface StructuredValue<T = unknown> {
   data: T;                // structured view (parsed)
   ctx: {                  // user-facing runtime context (mirrors Variable.ctx)
     labels: DataLabel[];
-    taint: TaintLevel;
+    taint: DataLabel[];
     sources: string[];
     policy: PolicyContext | null;
     filename?: string;
@@ -160,7 +160,7 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 
 ### Context Snapshots (`.ctx`) and `.internal`
 
-- `StructuredValue.ctx` is a real property populated when the wrapper is created (see `interpreter/utils/structured-value.ts`). The snapshot includes security labels, taint level, policy context, provenance (filename, relative, absolute, url, domain, title, description), execution metadata (`source`, `retries`), metrics (`tokens`, `tokest`, `length`), plus helper fields such as `fm` and `json`. Consumers mutate `.ctx` directly when they need to update provenance or retry counts.
+- `StructuredValue.ctx` is a real property populated when the wrapper is created (see `interpreter/utils/structured-value.ts`). The snapshot includes security labels, taint arrays, policy context, provenance (filename, relative, absolute, url, domain, title, description), execution metadata (`source`, `retries`), metrics (`tokens`, `tokest`, `length`), plus helper fields such as `fm` and `json`. Consumers mutate `.ctx` directly when they need to update provenance or retry counts.
 - `StructuredValue.internal` holds mlld-specific details (custom serialization hooks, transformer information, lazy loaders). Treat it as implementation detail; surface only what the interpreter needs.
 - `Variable.ctx` comes from `VariableMetadataUtils.attachContext()` (`core/types/variable/VariableMetadata.ts`). The snapshot includes `name`, `type`, `definedAt`, security labels, taint, token metrics, array size, export status, sources, and policy context. Use `.ctx` instead of manually reading `variable.metadata` to avoid cache invalidation bugs.
 
