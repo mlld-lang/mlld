@@ -60,7 +60,7 @@ WithProperty
   / "stream" _ ":" _ stream:BooleanLiteral {
       return ["stream", stream === 'true' || stream === true];
     }
-  / "streamFormat" _ ":" _ format:DataString {
+  / "streamFormat" _ ":" _ format:Expression {
       return ["streamFormat", format];
     }
 

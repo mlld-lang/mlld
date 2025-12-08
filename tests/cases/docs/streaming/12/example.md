@@ -1,3 +1,5 @@
-stream /exe @llm(prompt) = run { claude "@prompt" }
+stream /exe @task1() = run { sleep 2 && echo "Task 1 done" }
+stream /exe @task2() = run { sleep 1 && echo "Task 2 done" }
 
-/show @llm("Hello")                        # Content streams once (not duplicated)
+/for parallel(2) @i in [1, 2] => @task@i()
+# Both tasks stream output as they complete

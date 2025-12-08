@@ -79,6 +79,7 @@ CHUNK events → FormatAdapterSink → Adapter.processChunk() → ParsedEvent[]
 - `FormatAdapterSink` (`interpreter/eval/pipeline/stream-sinks/format-adapter.ts`): Subscribes to bus, delegates to adapter
 - `adapter-registry.ts`: Lazy-loads adapters by name (`claude-code`, `ndjson`, `@mlld/claude-agent-sdk`)
 - Adapters (`interpreter/streaming/adapters/*.ts`): Define schemas for parsing specific NDJSON formats
+- `stream-format.ts`: Resolves `streamFormat` values (names or AdapterConfig objects) into adapters
 
 **Adapter Interface**:
 ```typescript
@@ -116,9 +117,16 @@ interface ParsedEvent {
 ```
 
 **Usage**:
-```mlld
-/run stream @cmd() with { streamFormat: "claude-code" }
-```
+- Name lookup:
+  ```mlld
+  /run stream @cmd() with { streamFormat: "claude-code" }
+  ```
+- Adapter config object (AdapterConfig shape: `{ name, format: 'ndjson', schemas, defaultSchema? }`):
+  ```mlld
+  /import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
+  /run stream @cmd() with { streamFormat: @claudeAgentSdkAdapter }
+  ```
+  `@claudeAgentSdkAdapter` matches the built-in `claude-code` schema but ships via module install.
 
 **SDK Events from Adapters**: FormatAdapterSink emits SDK events for each parsed event:
 - `streaming:message` - Text content chunks

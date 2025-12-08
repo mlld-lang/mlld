@@ -1,3 +1,5 @@
+import type { AdapterConfig } from '@interpreter/streaming/adapters/base';
+
 export type StreamingOutputFormat = 'text' | 'json' | 'ansi';
 
 export interface StreamingVisibility {
@@ -14,7 +16,7 @@ export interface StreamingOptions {
   visibility?: StreamingVisibility;
   accumulate?: boolean;
   keepRawEvents?: boolean;
-  streamFormat?: string;
+  streamFormat?: string | AdapterConfig;
   ansiEnabled?: boolean;
   /**
    * Internal flag to disable default sinks (used when a format adapter manages output).

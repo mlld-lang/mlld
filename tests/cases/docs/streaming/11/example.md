@@ -1,5 +1,6 @@
-stream /exe @task1() = run { sleep 2 && echo "Task 1 done" }
-stream /exe @task2() = run { sleep 1 && echo "Task 2 done" }
+stream /exe @analyze(text) = run { claude "Analyze: @text" }
+stream /exe @summarize(analysis) = run { claude "Summarize: @analysis" }
 
-/for parallel(2) @i in [1, 2] => @task@i()
-# Both tasks stream output as they complete
+/var @input = <large-file.md>
+/var @result = @input | @analyze | @summarize
+/show @result                              # Both stages stream

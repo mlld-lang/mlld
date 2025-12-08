@@ -109,4 +109,58 @@ describe('streaming output regression', () => {
     expect(hiCount).toBe(1);
     expect(output).not.toContain('hihi');
   });
+
+  it('creates adapters from streamFormat config objects', async () => {
+    const prevNoStream = process.env.MLLD_NO_STREAMING;
+    const prevStream = process.env.MLLD_STREAMING;
+    delete process.env.MLLD_NO_STREAMING;
+    process.env.MLLD_STREAMING = 'true';
+
+    const script = `
+/var @inlineAdapter = {
+  name: "inline-adapter",
+  format: "ndjson",
+  schemas: [
+    {
+      kind: "message",
+      matchPath: "type",
+      matchValue: "text",
+      extract: { chunk: "text" },
+      visibility: "always"
+    }
+  ]
+}
+
+/exe @test() = stream sh { printf '{\"type\":\"text\",\"text\":\"Hello\"}\\n' }
+/run stream @test() with { streamFormat: @inlineAdapter }
+`.trim();
+
+    const stdout = captureWrites(process.stdout);
+    const stderr = captureWrites(process.stderr);
+    try {
+      await interpret(script, {
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        streamingManager: manager,
+        streaming: { enabled: true }
+      });
+    } finally {
+      if (prevNoStream === undefined) {
+        delete process.env.MLLD_NO_STREAMING;
+      } else {
+        process.env.MLLD_NO_STREAMING = prevNoStream;
+      }
+      if (prevStream === undefined) {
+        delete process.env.MLLD_STREAMING;
+      } else {
+        process.env.MLLD_STREAMING = prevStream;
+      }
+      stdout.restore();
+      stderr.restore();
+    }
+
+    const output = stdout.writes.join('');
+    const helloCount = (output.match(/Hello/g) ?? []).length;
+    expect(helloCount).toBe(1);
+  });
 });

@@ -48,6 +48,7 @@ import {
 } from '../utils/guard-inputs';
 import { createParameterVariable } from '../utils/parameter-factory';
 import { getAdapter } from '../streaming/adapter-registry';
+import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream-format';
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -428,7 +429,10 @@ async function evaluateExecInvocationInternal(
   const hasStreamFormat =
     node.withClause?.streamFormat !== undefined ||
     node.meta?.withClause?.streamFormat !== undefined;
-  const streamFormatValue = node.withClause?.streamFormat || node.meta?.withClause?.streamFormat;
+  const rawStreamFormat = node.withClause?.streamFormat || node.meta?.withClause?.streamFormat;
+  const streamFormatValue = hasStreamFormat
+    ? await resolveStreamFormatValue(rawStreamFormat, env)
+    : undefined;
   const pipelineId = `exec-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
   let lastEmittedChunk: string | undefined;
   if (hasStreamFormat) {
@@ -445,9 +449,9 @@ async function evaluateExecInvocationInternal(
   if (streamingEnabled) {
     let adapter;
     if (hasStreamFormat && streamFormatValue) {
-      const formatName = typeof streamFormatValue === 'string' ? streamFormatValue : 'claude-code';
-      adapter = await getAdapter(formatName);
-    } else {
+      adapter = await loadStreamAdapter(streamFormatValue);
+    }
+    if (!adapter) {
       adapter = await getAdapter('ndjson');
     }
     streamingManager.configure({

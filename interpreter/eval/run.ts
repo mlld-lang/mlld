@@ -18,6 +18,7 @@ import { executePipeline } from './pipeline';
 import { logger } from '@core/utils/logger';
 import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
 import { getAdapter } from '../streaming/adapter-registry';
+import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream-format';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
 import {
@@ -185,7 +186,10 @@ export async function evaluateRun(
 
   // Check for streamFormat in withClause
   const hasStreamFormat = withClause && (withClause as any).streamFormat !== undefined;
-  const streamFormatValue = hasStreamFormat ? (withClause as any).streamFormat : undefined;
+  const rawStreamFormat = hasStreamFormat ? (withClause as any).streamFormat : undefined;
+  const streamFormatValue = hasStreamFormat
+    ? await resolveStreamFormatValue(rawStreamFormat, env)
+    : undefined;
 
   // Persist streamFormat/sink preferences in env so downstream executors see them
   if (hasStreamFormat) {
@@ -210,9 +214,9 @@ export async function evaluateRun(
   if (streamingEnabled) {
     let adapter;
     if (hasStreamFormat && streamFormatValue) {
-      const formatName = typeof streamFormatValue === 'string' ? streamFormatValue : 'claude-code';
-      adapter = await getAdapter(formatName);
-    } else {
+      adapter = await loadStreamAdapter(streamFormatValue);
+    }
+    if (!adapter) {
       adapter = await getAdapter('ndjson');
     }
     streamingManager.configure({

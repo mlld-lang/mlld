@@ -1,4 +1,4 @@
-/exe @llm(prompt) = run { claude "@prompt" }
+stream /exe @chat(prompt) = run { claude "@prompt" }
 
-/when @isInteractive => show @llm("Hello") with { stream: true }
-/when !@isInteractive => show @llm("Hello") with { stream: false }
+/for @question in @questions => @chat(@question)
+# Each question streams as it's answered

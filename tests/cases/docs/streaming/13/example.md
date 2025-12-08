@@ -1,3 +1,3 @@
-stream /exe @build() = run { npm run build }
+stream /exe @llm(prompt) = run { claude "@prompt" }
 
-/show @build()                             # See build output live
+/show @llm("Hello")                        # Content streams once (not duplicated)

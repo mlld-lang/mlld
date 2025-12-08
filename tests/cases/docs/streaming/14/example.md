@@ -1,4 +1,3 @@
-stream /exe @chat(prompt) = run { claude "@prompt" }
+stream /exe @build() = run { npm run build }
 
-/for @question in @questions => @chat(@question)
-# Each question streams as it's answered
+/show @build()                             # See build output live

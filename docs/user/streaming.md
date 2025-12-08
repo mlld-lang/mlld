@@ -87,13 +87,26 @@ By default, a generic NDJSON adapter extracts text from common paths like `text`
 
 ## Stream Format Adapters
 
-For better parsing of specific LLM output formats, use `streamFormat`:
+For better parsing of specific LLM output formats, use `streamFormat` with an adapter name or config object.
+
+**Built-in shorthand:**
 
 ```mlld
 stream /exe @llm(prompt) = run { claude "@prompt" --output-format stream-json }
 
 /run stream @llm("Hello") with { streamFormat: "claude-code" }
-# Uses Claude-specific adapter for optimal parsing
+```
+
+**Installable adapter config:**
+
+```bash
+mlld install @mlld/stream-claude-agent-sdk
+```
+
+```mlld
+/import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
+
+/run stream @chat("Use a tool") with { streamFormat: @claudeAgentSdkAdapter }
 ```
 
 **Available Adapters**:
@@ -102,6 +115,8 @@ stream /exe @llm(prompt) = run { claude "@prompt" --output-format stream-json }
 |------|---------|----------|
 | `ndjson` | - | Generic NDJSON (default) |
 | `claude-code` | `claude-agent-sdk`, `@mlld/claude-agent-sdk` | Claude CLI/SDK output |
+
+The `@mlld/stream-claude-agent-sdk` module exports `@claudeAgentSdkAdapter`, which matches the `claude-code` schema.
 
 The `claude-code` adapter understands Claude's NDJSON format including:
 - Text message chunks
@@ -113,13 +128,17 @@ The `claude-code` adapter understands Claude's NDJSON format including:
 **Example with explicit adapter**:
 
 ```mlld
+/import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
 stream /exe @chat(prompt) = run { claude "@prompt" --output-format stream-json }
 
 # Default parsing (generic NDJSON)
 /show @chat("Hello")
 
-# Claude-specific parsing (better for thinking blocks, tool use)
+# Claude-specific parsing (string shortcut)
 /run stream @chat("Use a tool") with { streamFormat: "claude-code" }
+
+# Claude-specific parsing (imported config)
+/run stream @chat("Use a tool") with { streamFormat: @claudeAgentSdkAdapter }
 ```
 
 ## Live Output Formatting

@@ -1,7 +1,3 @@
-stream /exe @chat(prompt) = run { claude "@prompt" --output-format stream-json }
+/import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
 
-# Default parsing (generic NDJSON)
-/show @chat("Hello")
-
-# Claude-specific parsing (better for thinking blocks, tool use)
-/run stream @chat("Use a tool") with { streamFormat: "claude-code" }
+/run stream @chat("Use a tool") with { streamFormat: @claudeAgentSdkAdapter }

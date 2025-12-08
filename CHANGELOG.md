@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Adapters extract structured data: text, thinking blocks, tool use, tool results
   - SDK consumers receive typed events: `streaming:message`, `streaming:tool_use`, etc.
   - `StructuredResult.streaming` contains accumulated text and parsed events
+  - `with { streamFormat: @adapterConfig }` accepts AdapterConfig objects (for example `@claudeAgentSdkAdapter` from `@mlld/stream-claude-agent-sdk`)
 - **StreamingManager**: Centralized sink management replaces fragmented sink creation
   - Single owner for StreamBus lifecycle
   - FormatAdapterSink and TerminalSink are mutually exclusive
