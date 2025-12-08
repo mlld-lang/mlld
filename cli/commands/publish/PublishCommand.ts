@@ -135,7 +135,7 @@ export class PublishCommand {
 
       // 13. Submit to registry if we have a registry entry
       if (result.registryEntry && !options.dryRun) {
-        await this.submitToRegistry(result.registryEntry, user, octokit, registryModule);
+        await this.submitToRegistry(result.registryEntry, user, octokit, options, registryModule);
       }
       
       console.log(chalk.green(`\n✔ ${result.message}`));
@@ -834,7 +834,13 @@ export class PublishCommand {
     };
   }
 
-  private async submitToRegistry(registryEntry: any, user: any, octokit: any, existingModule?: any): Promise<void> {
+  private async submitToRegistry(
+    registryEntry: any,
+    user: any,
+    octokit: any,
+    options: PublishOptions,
+    existingModule?: any
+  ): Promise<void> {
     const REGISTRY_OWNER = 'mlld-lang';
     const REGISTRY_REPO = 'registry';
     const BASE_BRANCH = 'main';
