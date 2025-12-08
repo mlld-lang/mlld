@@ -220,7 +220,30 @@ export class ModuleInstaller {
       };
     }
 
-    const lockEntry = this.workspace.lockFile.getModule(moduleName);
+    const requestedVersion = spec.version?.toString();
+    let lockEntry = this.workspace.lockFile.getModule(moduleName);
+    const lockVersion = lockEntry ? (lockEntry.registryVersion || lockEntry.version) : undefined;
+    const versionMismatch = Boolean(
+      requestedVersion &&
+      lockVersion &&
+      requestedVersion !== lockVersion
+    );
+
+    // If a different version is requested, purge cache and lock entry to force refetch
+    if (versionMismatch && lockEntry?.resolved) {
+      try {
+        await this.workspace.moduleCache.remove(lockEntry.resolved);
+      } catch (error) {
+        console.warn(`Failed to purge cache for ${moduleName}: ${(error as Error).message}`);
+      }
+      try {
+        await this.workspace.lockFile.removeModule(moduleName);
+        lockEntry = undefined;
+      } catch (error) {
+        console.warn(`Failed to remove lock entry for ${moduleName}: ${(error as Error).message}`);
+      }
+    }
+
     if (!options.force && !options.noCache && lockEntry?.resolved) {
       try {
         const cached = await this.workspace.moduleCache.has(lockEntry.resolved);
