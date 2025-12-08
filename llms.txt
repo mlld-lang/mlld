@@ -1192,9 +1192,12 @@ name: text-utils
 author: alice
 version: 1.0.0
 about: String helpers
-needs: [js]
 license: CC0
 ---
+
+/needs {
+  js: []
+}
 
 /exe @upper(s) = js { return s.toUpperCase() }
 /exe @trim(s) = js { return s.trim() }
@@ -1445,11 +1448,13 @@ name: my-tool
 author: alice          # must match GitHub username
 version: 1.0.0
 about: Brief description
-needs: [js, sh]        # runtime dependencies
-needs-js: lodash       # package deps (legacy format)
-needs-sh: git, curl    # command deps (legacy format)
 license: CC0           # required
 ---
+
+/needs {
+  js: []
+  sh
+}
 ```
 
 **Version management:**

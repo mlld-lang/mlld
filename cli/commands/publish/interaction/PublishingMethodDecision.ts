@@ -46,7 +46,7 @@ export class PublishingMethodDecision implements DecisionPoint<PublishingMethodC
     try {
       const gitInfo = context.module.gitInfo;
       
-      console.log(chalk.blue(`\n📤 Publishing @${context.module.ctx?.author}/${context.module.ctx?.name}`));
+      console.log(chalk.blue(`\n📤 Publishing @${context.module.metadata.author}/${context.module.metadata.name}`));
       console.log(chalk.gray(`   Repository: ${gitInfo.owner}/${gitInfo.repo}`));
       console.log(chalk.gray(`   File: ${gitInfo.relPath}`));
       

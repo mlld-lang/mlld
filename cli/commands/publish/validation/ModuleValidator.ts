@@ -19,7 +19,6 @@ import { MetadataEnhancer } from './MetadataEnhancer';
 import { ImportValidator } from './ImportValidator';
 import { DependencyValidator } from './DependencyValidator';
 
-import { normalizeModuleNeeds, stringifyPackageMap, stringifyRequirementList } from '@core/registry';
 
 export class ModuleValidator {
   private readonly steps: ValidationStep[];
@@ -138,8 +137,6 @@ export class ModuleValidator {
       'bugs',
       'homepage',
       'mlldVersion',
-      'needs',
-      'moduleNeeds',
       'dependencies',
       'devDependencies'
     ];
@@ -171,31 +168,6 @@ export class ModuleValidator {
     lines.push(`author: ${metadata.author}`);
     if (metadata.version) lines.push(`version: ${metadata.version}`);
     lines.push(`about: ${metadata.about}`);
-
-    const moduleNeeds = metadata.moduleNeeds ?? normalizeModuleNeeds(metadata.needs ?? []);
-    const runtimeStrings = stringifyRequirementList(moduleNeeds.runtimes);
-    const toolStrings = stringifyRequirementList(moduleNeeds.tools);
-    const packageStrings = stringifyPackageMap(moduleNeeds.packages);
-    const hasNeedsData = runtimeStrings.length > 0 || toolStrings.length > 0 || Object.keys(packageStrings).length > 0;
-
-    if (hasNeedsData) {
-      lines.push('needs:');
-      if (runtimeStrings.length > 0) {
-        lines.push(`  runtimes: [${runtimeStrings.map(value => `"${value}"`).join(', ')}]`);
-      }
-      if (toolStrings.length > 0) {
-        lines.push(`  tools: [${toolStrings.map(value => `"${value}"`).join(', ')}]`);
-      }
-      if (Object.keys(packageStrings).length > 0) {
-        lines.push('  packages:');
-        for (const ecosystem of Object.keys(packageStrings).sort()) {
-          const values = packageStrings[ecosystem];
-          lines.push(`    ${ecosystem}: [${values.map(value => `"${value}"`).join(', ')}]`);
-        }
-      }
-    } else {
-      lines.push('needs: {}');
-    }
 
     if (metadata.dependencies && Object.keys(metadata.dependencies).length > 0) {
       lines.push('dependencies:');

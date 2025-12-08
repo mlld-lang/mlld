@@ -1,1 +1,5 @@
-/export { @publicAPI }
+/needs {
+  node: [],
+  py: [],
+  sh: true
+}

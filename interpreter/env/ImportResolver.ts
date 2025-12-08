@@ -246,7 +246,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       
       // If no match found with fuzzy matching, check with extensions
       if (!path.extname(inputPath)) {
-        const extensions = ['.mlld.md', '.mld', '.md'];
+        const extensions = ['.mld.md', '.mld', '.md', '.mlld.md'];
         const allSuggestions: string[] = [];
         
         for (const ext of extensions) {

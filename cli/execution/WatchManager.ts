@@ -16,8 +16,8 @@ export class WatchManager {
       const watcher = watch(watchDir, { recursive: true });
 
       for await (const event of watcher) {
-        // Only process .mlld files or the specific input file
-        if (event.filename?.endsWith('.mlld') || event.filename === path.basename(inputPath)) {
+        // Only process module files or the specific input file
+        if (this.isModuleFile(event.filename, inputPath)) {
           console.log(`Change detected in ${event.filename}, reprocessing...`);
           await processFunction(options);
         }
@@ -36,11 +36,18 @@ export class WatchManager {
 
   handleFileChange(filename: string, options: CLIOptions): boolean {
     // Determine if we should process this file change
-    return filename.endsWith('.mlld') || filename === path.basename(options.input);
+    return this.isModuleFile(filename, options.input);
   }
 
   filterWatchEvents(event: any): boolean {
     // Future enhancement: more sophisticated event filtering
     return true;
+  }
+
+  private isModuleFile(filename: string | undefined, inputPath: string): boolean {
+    if (!filename) return false;
+    const inputName = path.basename(inputPath);
+    const moduleExtensions = ['.mld', '.mld.md', '.mlld', '.mlld.md'];
+    return filename === inputName || moduleExtensions.some(ext => filename.endsWith(ext));
   }
 }

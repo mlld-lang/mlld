@@ -206,8 +206,8 @@ export class ResolverManager {
       const files = await fs.readdir(basePath);
 
       for (const file of files) {
-        // Check for all valid mlld extensions
-        if (file.endsWith('.mlld.md') || file.endsWith('.mld.md') ||
+        // Check for all valid module extensions
+        if (file.endsWith('.mld.md') || file.endsWith('.mlld.md') ||
             file.endsWith('.mld') || file.endsWith('.md')) {
           try {
             const filePath = path.join(basePath, file);
@@ -312,7 +312,7 @@ export class ResolverManager {
   }
 
   private stripModuleExtension(module: string): string {
-    const extensions = ['.mlld.md', '.mld.md', '.mlld', '.mld', '.md'];
+    const extensions = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'];
     for (const ext of extensions) {
       if (module.endsWith(ext)) {
         return module.slice(0, -ext.length);
@@ -515,10 +515,10 @@ export class ResolverManager {
 
       // Check for dirty state if not using LOCAL resolver
       if (resolver.name !== 'LOCAL' && prefixConfig?.config?.basePath) {
-        // Add .mlld.md extension if not present
+        // Add .mld.md extension if not present
         let fileName = resolverRef;
         if (!fileName.includes('.')) {
-          fileName += '.mlld.md';
+          fileName += '.mld.md';
         }
         const localPath = path.join(process.cwd(), prefixConfig.config.basePath, fileName);
         

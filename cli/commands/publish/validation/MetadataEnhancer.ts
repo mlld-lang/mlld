@@ -37,12 +37,10 @@ export class MetadataEnhancer implements ValidationStep {
       });
     }
 
-    if (!module.metadata.needs || !Array.isArray(module.metadata.needs)) {
+    if (!Array.isArray(module.metadata.needs)) {
       errors.push({
         field: 'needs',
-        message: 'Missing required field: needs\n' +
-                'Add to your frontmatter: needs: [] for pure mlld modules\n' +
-                'Or specify runtime dependencies: needs: ["js", "node", "py", "sh"]'
+        message: 'Missing runtime metadata. Declare runtimes with /needs { ... } (js, node, py, sh).'
       });
     } else {
       // Validate needs values

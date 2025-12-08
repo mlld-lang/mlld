@@ -1,1 +1,4 @@
-/import { @helper } from @alice/my-tool@beta
+/needs {
+  node: [],
+  sh: true
+}

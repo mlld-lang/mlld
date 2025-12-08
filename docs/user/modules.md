@@ -14,9 +14,10 @@ name: greetings
 author: alice
 version: 1.0.0
 about: Simple greeting utilities
-needs: []
 license: CC0
 ---
+
+/needs {}
 
 /exe @sayHello(name) = `Hello, @name!`
 /exe @sayGoodbye(name) = `Goodbye, @name!`
@@ -41,22 +42,17 @@ Only `@publicHelper` is accessible to importers. Without `/export`, all variable
 
 ### Module Dependencies
 
-Declare what your module needs:
+Declare what your module needs with `/needs`:
 
 ```mlld
----
-needs: [js, sh]
-needs-js:
-  packages: [lodash]
-needs-sh:
-  commands: [git, curl]
----
+/needs {
+  js: [lodash],
+  sh: true,
+  cmd: [git, curl]
+}
 ```
 
-Auto-detect dependencies:
-```bash
-mlld add-needs greetings.mld
-```
+`js`/`node`/`py` entries declare runtime packages. `sh` requests shell access; `cmd` lists required commands.
 
 ## Importing Modules
 

@@ -17,7 +17,7 @@ import type { NeedsDeclaration, CommandNeeds } from '@core/policy/needs';
 import { spawnSync } from 'child_process';
 import * as path from 'path';
 
-const MODULE_SOURCE_EXTENSIONS = ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md'] as const;
+const MODULE_SOURCE_EXTENSIONS = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'] as const;
 
 function matchesModuleExtension(candidate: string): boolean {
   return MODULE_SOURCE_EXTENSIONS.some(ext => candidate.endsWith(ext));

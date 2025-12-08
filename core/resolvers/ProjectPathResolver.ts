@@ -249,8 +249,8 @@ export class ProjectPathResolver implements Resolver {
    */
   private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
     // Check file extension - support all mlld module extensions
-    if (filePath.endsWith('.mld') || filePath.endsWith('.mlld') ||
-        filePath.endsWith('.mld.md') || filePath.endsWith('.mlld.md')) {
+    if (filePath.endsWith('.mld.md') || filePath.endsWith('.mld') ||
+        filePath.endsWith('.mlld.md') || filePath.endsWith('.mlld')) {
       return 'module';
     }
     if (filePath.endsWith('.json')) {

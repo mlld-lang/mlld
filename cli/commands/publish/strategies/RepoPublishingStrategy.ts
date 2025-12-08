@@ -118,7 +118,13 @@ export class RepoPublishingStrategy implements PublishingStrategy {
       console.log(chalk.green(`   ✓ URL is accessible (${content.length} bytes)`));
     } catch (error) {
       console.error(chalk.red(`   ✗ URL verification failed: ${error instanceof Error ? error.message : String(error)}`));
-      throw new Error(`Cannot publish: Module content is not accessible at ${sourceUrl}`);
+      const pushHint = gitInfo.remoteUrl
+        ? `Push commit ${gitInfo.sha} to ${gitInfo.remoteUrl} (branch ${gitInfo.branch}) so the URL is reachable.`
+        : 'Push the current commit to your GitHub remote so the URL is reachable.';
+      throw new MlldError(
+        `Cannot publish: Module content is not accessible at ${sourceUrl}. ${pushHint}`,
+        { code: 'REPO_URL_UNAVAILABLE', severity: ErrorSeverity.Fatal }
+      );
     }
 
     const registryEntry = this.createPublicRepoRegistryEntry(context, sourceUrl);
