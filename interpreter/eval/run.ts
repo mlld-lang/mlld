@@ -879,14 +879,26 @@ export async function evaluateRun(
       setOutput(pipelineResult);
     }
   }
- 
+
+  // Cleanup streaming sinks and capture adapter output
+  const finalizedStreaming = streamingManager.finalizeResults();
+  env.setStreamingResult(finalizedStreaming.streaming);
+
+  // When using format adapter, use the accumulated formatted text from the adapter
+  // instead of the raw command output
+  if (hasStreamFormat && finalizedStreaming.streaming?.text) {
+    outputText = finalizedStreaming.streaming.text;
+    // Update outputValue to match the formatted text
+    setOutput(outputText);
+  }
+
   // Output directives always end with a newline for display
   let displayText = outputText;
   if (!displayText.endsWith('\n')) {
     displayText += '\n';
   }
   outputText = displayText;
-  
+
   // Only add output nodes for non-embedded directives
   if (!directive.meta?.isDataValue && !directive.meta?.isEmbedded) {
     // Create replacement text node with the output
@@ -895,13 +907,15 @@ export async function evaluateRun(
       nodeId: `${directive.nodeId}-output`,
       content: displayText
     };
-    
+
     // Add the replacement node to environment
     env.addNode(replacementNode);
   }
-  
+
   // Emit effect only for top-level run directives (not data/RHS contexts)
-  if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef) {
+  // Skip emission when using format adapter (adapter already emitted during streaming)
+  const shouldEmitFinalOutput = !hasStreamFormat || !streamingEnabled;
+  if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef && shouldEmitFinalOutput) {
     const materializedEffect = materializeDisplayValue(
       outputValue,
       undefined,
@@ -914,7 +928,7 @@ export async function evaluateRun(
     }
     env.emitEffect('both', effectText);
   }
-  
+
   // Return the output value
   return {
     value: outputValue,
@@ -923,9 +937,7 @@ export async function evaluateRun(
   } catch (error) {
     throw error;
   } finally {
-    // Cleanup streaming sinks and capture adapter output
-    const finalizedStreaming = streamingManager.finalizeResults();
-    env.setStreamingResult(finalizedStreaming.streaming);
+    // Streaming cleanup already done above (moved out of finally to use results)
   }
 }
 

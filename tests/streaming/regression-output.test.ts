@@ -36,19 +36,29 @@ describe('streaming output regression', () => {
     process.env.MLLD_STREAMING = 'true';
 
     const script = `
-/exe @test() = stream sh { printf '{\"type\":\"text\",\"text\":\"Hello\"}\\n' }
+/exe @test() = stream cmd { echo '{\"type\":\"text\",\"text\":\"Hello\"}' }
 /run stream @test() with { streamFormat: "claude-code" }
 `.trim();
 
     const stdout = captureWrites(process.stdout);
     const stderr = captureWrites(process.stderr);
     try {
-      await interpret(script, {
+      const result = await interpret(script, {
         fileSystem: new NodeFileSystem(),
         pathService: new PathService(),
         streamingManager: manager,
-        streaming: { enabled: true }
-      });
+        streaming: { enabled: true },
+        mode: 'structured'
+      }) as any;
+
+      // Check streaming result
+      expect(result.streaming?.text).toBe('Hello');
+
+      // Check stdout got single emission (from streaming)
+      const output = stdout.writes.join('');
+      const helloCount = (output.match(/Hello/g) ?? []).length;
+      expect(helloCount).toBe(1);
+      expect(output).not.toContain('HelloHello');
     } finally {
       if (prevNoStream === undefined) {
         delete process.env.MLLD_NO_STREAMING;
@@ -63,11 +73,6 @@ describe('streaming output regression', () => {
       stdout.restore();
       stderr.restore();
     }
-
-    const output = stdout.writes.join('');
-    const helloCount = (output.match(/Hello/g) ?? []).length;
-    expect(helloCount).toBe(1);
-    expect(output).not.toContain('HelloHello');
   });
 
   it('emits streamed command output once without streamFormat', async () => {
@@ -131,19 +136,28 @@ describe('streaming output regression', () => {
   ]
 }
 
-/exe @test() = stream sh { printf '{\"type\":\"text\",\"text\":\"Hello\"}\\n' }
+/exe @test() = stream cmd { echo '{\"type\":\"text\",\"text\":\"Hello\"}' }
 /run stream @test() with { streamFormat: @inlineAdapter }
 `.trim();
 
     const stdout = captureWrites(process.stdout);
     const stderr = captureWrites(process.stderr);
     try {
-      await interpret(script, {
+      const result = await interpret(script, {
         fileSystem: new NodeFileSystem(),
         pathService: new PathService(),
         streamingManager: manager,
-        streaming: { enabled: true }
-      });
+        streaming: { enabled: true },
+        mode: 'structured'
+      }) as any;
+
+      // Check streaming result accumulated text
+      expect(result.streaming?.text).toBe('Hello');
+
+      // Check stdout got single emission (from streaming)
+      const output = stdout.writes.join('');
+      const helloCount = (output.match(/Hello/g) ?? []).length;
+      expect(helloCount).toBe(1);
     } finally {
       if (prevNoStream === undefined) {
         delete process.env.MLLD_NO_STREAMING;
@@ -158,9 +172,5 @@ describe('streaming output regression', () => {
       stdout.restore();
       stderr.restore();
     }
-
-    const output = stdout.writes.join('');
-    const helloCount = (output.match(/Hello/g) ?? []).length;
-    expect(helloCount).toBe(1);
   });
 });

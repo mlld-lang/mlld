@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import { PublishingStrategy } from '../types/PublishingStrategy';
 import { PublishContext, PublishResult, GitInfo } from '../types/PublishingTypes';
 import { MlldError, ErrorSeverity } from '@core/errors';
+import { execSync } from 'child_process';
 
 export class RepoPublishingStrategy implements PublishingStrategy {
   name = 'repository';
@@ -118,11 +119,15 @@ export class RepoPublishingStrategy implements PublishingStrategy {
       console.log(chalk.green(`   ✓ URL is accessible (${content.length} bytes)`));
     } catch (error) {
       console.error(chalk.red(`   ✗ URL verification failed: ${error instanceof Error ? error.message : String(error)}`));
+      const remoteHasCommit = this.remoteContainsCommit(gitInfo);
       const pushHint = gitInfo.remoteUrl
         ? `Push commit ${gitInfo.sha} to ${gitInfo.remoteUrl} (branch ${gitInfo.branch}) so the URL is reachable.`
         : 'Push the current commit to your GitHub remote so the URL is reachable.';
+      const commitHint = remoteHasCommit
+        ? `The commit exists on the remote, but the path ${gitInfo.relPath} was not found at that SHA. Confirm the file path matches the remote repository layout.`
+        : pushHint;
       throw new MlldError(
-        `Cannot publish: Module content is not accessible at ${sourceUrl}. ${pushHint}`,
+        `Cannot publish: Module content is not accessible at ${sourceUrl}. ${commitHint}`,
         { code: 'REPO_URL_UNAVAILABLE', severity: ErrorSeverity.Fatal }
       );
     }
@@ -136,6 +141,23 @@ export class RepoPublishingStrategy implements PublishingStrategy {
       message: `Published from public repository: ${gitInfo.owner}/${gitInfo.repo}`,
       registryEntry
     };
+  }
+
+  private remoteContainsCommit(gitInfo: GitInfo): boolean {
+    if (!gitInfo.gitRoot) {
+      return false;
+    }
+
+    try {
+      const output = execSync(`git ls-remote origin ${gitInfo.sha}`, {
+        cwd: gitInfo.gitRoot,
+        encoding: 'utf8',
+        stdio: 'pipe'
+      }).trim();
+      return output.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   private async publishFromPrivateRepo(context: PublishContext): Promise<PublishResult> {
