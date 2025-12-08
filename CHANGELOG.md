@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Registry PRs use a minimal body (module payload only) with update vs add titles aligned to module existence
 - Raw URL verification errors now instruct users to push commits or check paths, improving clarity for repository publishes
 - Module installer honors explicitly requested versions by purging mismatched lock/cache entries instead of reusing stale versions
+- Lock file normalization strips version suffixes, preventing duplicate entries like `@module` and `@module@version` from coexisting
+- Registry publish updates `tags.json` for existing modules so `latest`/`stable` advance with new versions
 
 ## [2.0.0-rc77]
 

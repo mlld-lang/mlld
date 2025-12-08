@@ -2,12 +2,13 @@
   "lockfileVersion": 1,
   "modules": {
     "@mlld/env": {
-      "version": "latest",
-      "resolved": "registry://@mlld/env",
-      "source": "registry://@mlld/env",
+      "version": "1.0.0",
+      "resolved": "2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
+      "source": "registry://@mlld/env@1.0.0",
       "integrity": "sha256:2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
-      "fetchedAt": "2025-07-20T03:33:03.718Z",
-      "sourceUrl": "registry://@mlld/env"
+      "fetchedAt": "2025-12-08T05:41:55.602Z",
+      "registryVersion": "1.0.0",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/8a6d6b5d40fc25d7a7a309e100bdd6580e76d0b4/llm/modules/env.mld.md"
     },
     "@mlld/github": {
       "version": "latest",
@@ -18,12 +19,13 @@
       "sourceUrl": "registry://@mlld/github"
     },
     "@mlld/ai-cli": {
-      "version": "latest",
-      "resolved": "registry://@mlld/ai-cli",
-      "source": "registry://@mlld/ai-cli",
+      "version": "1.0.0",
+      "resolved": "1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
+      "source": "registry://@mlld/ai-cli@1.0.0",
       "integrity": "sha256:1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
-      "fetchedAt": "2025-07-20T03:33:04.018Z",
-      "sourceUrl": "registry://@mlld/ai-cli"
+      "fetchedAt": "2025-12-08T05:41:55.743Z",
+      "registryVersion": "1.0.0",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/8a6d6b5d40fc25d7a7a309e100bdd6580e76d0b4/llm/modules/ai-cli.mld.md"
     },
     "@base/llm/modules/array.mld.md": {
       "version": "latest",
@@ -32,25 +34,18 @@
       "integrity": "sha256:63e154500c74693ecffcecfdbd40d7863a489ab5a7c34ec171680e09ea209f1c",
       "fetchedAt": "2025-11-28T07:53:30.184Z"
     },
-    "@mlld/stream-claude-agent-sdk@1.0.1": {
-      "version": "latest",
-      "resolved": "ce6fb59647818f59e69d72a0864769006491a5a57ca06926101aaa0a4a7dd27b",
-      "source": "registry://@mlld/stream-claude-agent-sdk@1.0.1",
-      "integrity": "sha256:ce6fb59647818f59e69d72a0864769006491a5a57ca06926101aaa0a4a7dd27b",
-      "fetchedAt": "2025-12-08T05:33:41.201Z"
-    },
     "@mlld/stream-claude-agent-sdk": {
       "version": "1.0.1",
       "resolved": "ce6fb59647818f59e69d72a0864769006491a5a57ca06926101aaa0a4a7dd27b",
       "source": "registry://@mlld/stream-claude-agent-sdk@1.0.1",
       "integrity": "sha256:ce6fb59647818f59e69d72a0864769006491a5a57ca06926101aaa0a4a7dd27b",
-      "fetchedAt": "2025-12-08T05:33:41.202Z",
+      "fetchedAt": "2025-12-08T10:51:00.681Z",
       "registryVersion": "1.0.1",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/2d13775192a13e8ad01313d6635cb9cdd67563cc/llm/modules/stream-claude-agent-sdk.mld.md"
     }
   },
   "metadata": {
     "createdAt": "2025-09-27T19:54:02.369Z",
-    "updatedAt": "2025-12-08T05:33:41.202Z"
+    "updatedAt": "2025-12-08T10:51:00.681Z"
   }
 }

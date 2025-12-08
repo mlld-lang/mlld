@@ -20,6 +20,7 @@ import type {
   RuntimeRequirement,
   ToolRequirement
 } from './types';
+import { normalizeModuleName as normalizeModuleNameUtil, splitModuleNameVersion } from './utils/moduleNames';
 
 export interface DependencyResolverOptions {
   includeDevDependencies?: boolean;
@@ -342,27 +343,23 @@ export class DependencyResolver {
 
   private normalizeSpecifier(spec: string | ModuleSpecifierInput): ModuleSpecifierInput {
     if (typeof spec === 'string') {
-      return { name: this.normalizeModuleName(spec) };
+      const parsed = splitModuleNameVersion(spec);
+      return {
+        name: this.normalizeModuleName(parsed.name),
+        version: parsed.version
+      };
     }
 
+    const parsed = splitModuleNameVersion(spec.name);
     return {
-      name: this.normalizeModuleName(spec.name),
-      version: spec.version,
+      name: this.normalizeModuleName(parsed.name),
+      version: spec.version ?? parsed.version,
       hash: spec.hash
     };
   }
 
   private normalizeModuleName(name: string): string {
-    if (!name) {
-      return name;
-    }
-    if (name.startsWith('mlld://')) {
-      return name.replace('mlld://', '@');
-    }
-    if (!name.startsWith('@')) {
-      return `@${name}`;
-    }
-    return name;
+    return normalizeModuleNameUtil(name);
   }
 
   private buildReference(spec: ModuleSpecifierInput): string {

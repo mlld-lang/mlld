@@ -13,6 +13,7 @@ import type {
 import { parseSync } from '@grammar/parser';
 import { normalizeNeedsDeclaration, normalizeWantsDeclaration } from '@core/policy/needs';
 import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
+import { normalizeModuleName, splitModuleNameVersion } from './moduleNames';
 
 export interface ParsedFrontmatterMetadata {
   name?: string;
@@ -132,48 +133,40 @@ function parseDependencyMap(value: unknown): ModuleDependencyMap {
   }
 
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    const name = normalizeModuleName(key);
+    const parsed = splitModuleNameVersion(key);
+    const name = normalizeModuleName(parsed.name);
     if (!name) {
       continue;
     }
 
+    let version: string | undefined;
     if (typeof raw === 'string' && raw.trim().length > 0) {
-      result[name] = raw.trim();
+      version = raw.trim();
     } else if (typeof raw === 'number') {
-      result[name] = String(raw);
+      version = String(raw);
     } else if (raw === null || raw === undefined) {
-      result[name] = 'latest';
+      version = 'latest';
     } else if (typeof raw === 'object' && raw && 'version' in (raw as Record<string, unknown>)) {
-      const version = (raw as Record<string, unknown>).version;
-      if (typeof version === 'string' && version.length > 0) {
-        result[name] = version;
+      const rawVersion = (raw as Record<string, unknown>).version;
+      if (typeof rawVersion === 'string' && rawVersion.length > 0) {
+        version = rawVersion;
       }
+    }
+
+    const finalVersion = version ?? parsed.version;
+    if (finalVersion) {
+      result[name] = finalVersion;
     }
   }
 
   return result;
 }
 
-function normalizeModuleName(name: string): string {
-  if (!name) {
-    return '';
-  }
-
-  if (name.startsWith('mlld://')) {
-    return name.replace('mlld://', '@');
-  }
-
-  if (name.startsWith('@')) {
-    return name;
-  }
-
-  return `@${name}`;
-}
-
 export function formatDependencyMap(map: ModuleDependencyMap): Record<string, string> {
   const entries = Object.entries(map).map(([module, version]) => {
-    const normalized = normalizeModuleName(module);
-    const value = version && version.length > 0 ? version : 'latest';
+    const parsed = splitModuleNameVersion(module);
+    const normalized = normalizeModuleName(parsed.name);
+    const value = version && version.length > 0 ? version : parsed.version ?? 'latest';
     return [normalized, value];
   });
   return Object.fromEntries(entries);

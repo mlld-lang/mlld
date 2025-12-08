@@ -1008,10 +1008,38 @@ export class PublishCommand {
       };
       
       // Tags (only for new modules or when custom tag specified)
-      const tags: Record<string, string> = {
+      let tags: Record<string, string> = {
         latest: registryEntry.version,
         stable: registryEntry.version
       };
+
+      if (!isLegacyUpdate && isExistingModule) {
+        try {
+          const existingTagsFile = await octokit.repos.getContent({
+            owner: REGISTRY_OWNER,
+            repo: REGISTRY_REPO,
+            path: tagsPath,
+            ref: upstreamMainRef.data.object.sha
+          });
+
+          if (!Array.isArray(existingTagsFile.data) && 'content' in existingTagsFile.data) {
+            const raw = Buffer.from(existingTagsFile.data.content, 'base64').toString('utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              const previousLatest = (parsed as Record<string, string>).latest;
+              tags = {
+                ...parsed,
+                latest: registryEntry.version
+              };
+              if (!tags.stable || tags.stable === previousLatest) {
+                tags.stable = registryEntry.version;
+              }
+            }
+          }
+        } catch {
+          // No existing tags, fall back to default
+        }
+      }
 
       // Add custom tag if specified
       if (options.tag) {
@@ -1071,8 +1099,8 @@ export class PublishCommand {
             path: tagsPath,
             content: JSON.stringify(tags, null, 2) + '\n'
           });
-        } else if (options.tag) {
-          // Existing module with custom tag: update tags.json
+        } else {
+          // Existing module (versioned): update tags with new latest/stable and add version file
           files.push({
             path: tagsPath,
             content: JSON.stringify(tags, null, 2) + '\n'

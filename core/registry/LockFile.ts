@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MlldError } from '@core/errors';
+import { normalizeModuleName as normalizeModuleNameUtil } from './utils/moduleNames';
 
 export interface ModuleLockEntry {
   version: string;
@@ -99,16 +100,16 @@ export class LockFile {
     if (raw?.modules && typeof raw.modules === 'object') {
       for (const [name, entry] of Object.entries(raw.modules as Record<string, any>)) {
         const normalizedName = this.normalizeModuleName(name);
-        modules[normalizedName] = this.normalizeLockEntry(entry, normalizedName);
+        const normalizedEntry = this.normalizeLockEntry(entry, normalizedName);
+        modules[normalizedName] = this.preferLockEntry(modules[normalizedName], normalizedEntry);
       }
     }
 
     if (raw?.imports && typeof raw.imports === 'object') {
       for (const [name, entry] of Object.entries(raw.imports as Record<string, any>)) {
         const normalizedName = this.normalizeModuleName(name);
-        if (!modules[normalizedName]) {
-          modules[normalizedName] = this.normalizeLegacyImport(entry);
-        }
+        const normalizedEntry = this.normalizeLegacyImport(entry);
+        modules[normalizedName] = this.preferLockEntry(modules[normalizedName], normalizedEntry);
       }
     }
 
@@ -138,14 +139,7 @@ export class LockFile {
   }
 
   private normalizeModuleName(name: string): string {
-    if (!name) return name;
-    if (name.startsWith('mlld://')) {
-      name = name.slice('mlld://'.length);
-    }
-    if (!name.startsWith('@')) {
-      return `@${name}`;
-    }
-    return name;
+    return normalizeModuleNameUtil(name);
   }
 
   private normalizeLockEntry(entry: any, moduleName: string): ModuleLockEntry {
@@ -194,6 +188,37 @@ export class LockFile {
       registryVersion: undefined,
       sourceUrl: typeof entry.resolved === 'string' ? entry.resolved : undefined
     };
+  }
+
+  private preferLockEntry(current: ModuleLockEntry | undefined, incoming: ModuleLockEntry): ModuleLockEntry {
+    if (!current) {
+      return incoming;
+    }
+
+    const currentVersion = current.registryVersion || current.version;
+    const incomingVersion = incoming.registryVersion || incoming.version;
+
+    if (currentVersion === 'latest' && incomingVersion && incomingVersion !== 'latest') {
+      return incoming;
+    }
+
+    if (incomingVersion === 'latest' && currentVersion && currentVersion !== 'latest') {
+      return current;
+    }
+
+    if (!current.registryVersion && incoming.registryVersion) {
+      return incoming;
+    }
+
+    if (!current.sourceUrl && incoming.sourceUrl) {
+      return incoming;
+    }
+
+    if (!current.resolved && incoming.resolved) {
+      return incoming;
+    }
+
+    return current;
   }
 
   private ensureData(): LockFileData {
