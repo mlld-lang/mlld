@@ -23,34 +23,78 @@ directly using PathCore, URLPathCore, etc.
 PathExpression "Any path expression"
   = QuotedStringPath  // "path/to/file.md" - for import/path directives
 
-// Simple quoted string path
+// Quoted string path WITH variable interpolation support
+// Double quotes: supports @var interpolation with boundary escaping (@var\.ext)
+// Single quotes: literal only (no interpolation) - escape hatch for literal paths
 QuotedStringPath "quoted string path"
-  = '"' content:$([^"]*) '"' {
+  = '"' parts:QuotedStringPathPart* '"' {
+      const pathString = helpers.reconstructRawString(parts);
       return {
         type: 'path',
         subtype: 'filePath',
-        values: { 
-          path: [helpers.createNode(NodeType.Text, { content, location: location() })]
+        values: {
+          path: parts.length > 0 ? parts : [helpers.createNode(NodeType.Text, { content: '', location: location() })]
         },
-        raw: { 
-          path: content
+        raw: {
+          path: pathString
         },
-        meta: helpers.createPathMetadata(content, [helpers.createNode(NodeType.Text, { content, location: location() })])
+        meta: helpers.createPathMetadata(pathString, parts)
       };
     }
   / "'" content:$([^']*) "'" {
       return {
         type: 'path',
         subtype: 'filePath',
-        values: { 
+        values: {
           path: [helpers.createNode(NodeType.Text, { content, location: location() })]
         },
-        raw: { 
+        raw: {
           path: content
         },
         meta: helpers.createPathMetadata(content, [helpers.createNode(NodeType.Text, { content, location: location() })])
       };
     }
+
+// Parts inside quoted paths - supports @var interpolation with boundary escaping
+QuotedStringPathPart "quoted path part"
+  = QuotedStringPathVariable
+  / QuotedStringPathEscapedAt
+  / QuotedStringPathTextSegment
+
+// Variable reference inside quoted paths - uses boundary-aware pattern
+// Supports: @var, @var.field, @var\.ext (boundary escaping)
+QuotedStringPathVariable "quoted path variable"
+  = "@" id:BaseIdentifier fields:BoundaryAwareFieldAccess* boundary:VariableBoundary? {
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {}),
+        ...(boundary ? { boundary: boundary } : {})
+      }, location());
+    }
+
+// Escaped @ in quoted paths - @@ or \@ becomes literal @
+QuotedStringPathEscapedAt "escaped @ in quoted path"
+  = ("@@" / "\\@") {
+      return helpers.createNode(NodeType.Text, {
+        content: '@',
+        location: location()
+      });
+    }
+
+// Text segment in quoted paths (everything except @ and closing quote)
+QuotedStringPathTextSegment "quoted path text segment"
+  = chars:QuotedStringPathChar+ {
+      return helpers.createNode(NodeType.Text, {
+        content: chars.join(''),
+        location: location()
+      });
+    }
+
+// Characters allowed in quoted path text (exclude @, \@, and ")
+QuotedStringPathChar "quoted path character"
+  = "\\\\" { return '\\'; }  // Escaped backslash -> literal backslash
+  / "\\\"" { return '"'; }   // Escaped quote -> literal quote
+  / !("\\@" / "@" / '"') char:. { return char; }
 
 // -------------------------------------------------------------
 // UNIFIED PATHS - Removed: bracket syntax no longer supported
@@ -91,12 +135,12 @@ URLEscapedBackslash "Escaped backslash in URL"
       });
     }
 
-// Escaped @ symbol in URL
+// Escaped @ symbol in URL - supports both \@ and @@
 URLEscapedAt "Escaped @ in URL"
-  = "\\@" {
-      return helpers.createNode(NodeType.Text, { 
-        content: '@', 
-        location: location() 
+  = ("@@" / "\\@") {
+      return helpers.createNode(NodeType.Text, {
+        content: '@',
+        location: location()
       });
     }
 

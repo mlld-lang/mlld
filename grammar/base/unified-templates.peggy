@@ -146,7 +146,13 @@ UnifiedAtInterpolation "At-sign interpolation"
   / UnifiedAngleBracketContent   // <file.md> or literal <xml> - USE UNIFIED PATTERN
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
-  / "@" !BaseIdentifier char:. { // @ followed by non-identifier
+  / "@@" {                       // @@ -> literal @ (mlld-75e)
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {                      // \@ -> literal @
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "@" !BaseIdentifier char:. { // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
   / UnifiedDoubleColonTextSegment  // Plain text
@@ -176,10 +182,10 @@ UnifiedTemplateChar
   / EscapeSequence
   / !((":::" / "{{" / "}}")) char:. { return char; }
 
-// Text for double colon templates (excludes ::, @, and < only when it's a valid file ref or literal tag)
+// Text for double colon templates (excludes ::, @, \@, and < only when it's a valid file ref or literal tag)
 // Only excludes /for and /end when they appear at line start
 UnifiedDoubleColonTextSegment "Double colon text segment"
-  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
+  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 

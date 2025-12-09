@@ -39,7 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Module installer honors explicitly requested versions by purging mismatched lock/cache entries instead of reusing stale versions
 - Lock file normalization strips version suffixes, preventing duplicate entries like `@module` and `@module@version` from coexisting
 - Registry publish updates `tags.json` for existing modules so `latest`/`stable` advance with new versions
-- Ensure escaping works properly for variable disambiguation from methods and `.` for eg filenames
+- Variable boundary escaping (`@var\.ext`) now works in all interpolation contexts: backticks, double-colon templates, template paths, and angle brackets
+- `@@` and `\@` both escape to literal `@` in all interpolation contexts
+- Template paths (`template "path"`) now support `@var` interpolation in double-quoted strings; single-quoted paths remain literal
+- CLI `--payload` alias for `--inject` for SDK consistency
 
 ## [2.0.0-rc77]
 

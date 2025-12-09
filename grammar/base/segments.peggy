@@ -14,8 +14,10 @@ escape sequences based on its intended usage.
 // -------------------------------------------------------------
 
 // Universal escape sequence - returns the literal character
+// Supports both \@ and @@ for escaping @ (mlld-75e)
 EscapeSequence "Escape sequence"
-  = "\\" char:("@" / "\\" / "[" / "]" / "{" / "}" / '"' / "'" / "`" / "$") {
+  = "@@" { return '@'; }  // @@ -> literal @
+  / "\\" char:("@" / "\\" / "[" / "]" / "{" / "}" / '"' / "'" / "`" / "$") {
       return char === "\\" ? "\\" : char;
     }
 

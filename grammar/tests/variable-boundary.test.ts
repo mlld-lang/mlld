@@ -1,6 +1,126 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@grammar/parser';
 
+describe('At-sign escape (@@)', () => {
+  describe('Backtick templates', () => {
+    it('should escape @@ to literal @ in backtick', async () => {
+      const input = '/var @email = `test@@example.com`';
+      const { ast } = await parse(input);
+
+      const value = ast[0].values.value;
+      expect(value).toHaveLength(1);
+      expect(value[0]).toMatchObject({
+        type: 'Literal',
+        value: 'test@example.com'
+      });
+    });
+
+    it('should escape \\@ to literal @ in backtick', async () => {
+      const input = '/var @email = `test\\@example.com`';
+      const { ast } = await parse(input);
+
+      const value = ast[0].values.value;
+      expect(value).toHaveLength(1);
+      expect(value[0]).toMatchObject({
+        type: 'Literal',
+        value: 'test@example.com'
+      });
+    });
+  });
+
+  describe('Double-colon templates', () => {
+    it('should escape @@ to literal @ in double-colon', async () => {
+      const input = '/var @email = ::test@@example.com::';
+      const { ast } = await parse(input);
+
+      const value = ast[0].values.value;
+      // Should have 3 text nodes: 'test', '@', 'example.com'
+      expect(value.length).toBe(3);
+      expect(value[0].content).toBe('test');
+      expect(value[1].content).toBe('@');
+      expect(value[2].content).toBe('example.com');
+    });
+
+    it('should escape \\@ to literal @ in double-colon', async () => {
+      const input = '/var @email = ::test\\@example.com::';
+      const { ast } = await parse(input);
+
+      const value = ast[0].values.value;
+      expect(value.length).toBe(3);
+      expect(value[1].content).toBe('@');
+    });
+  });
+
+  describe('Template paths', () => {
+    it('should escape @@ to literal @ in template path', async () => {
+      const input = '/exe @test() = template "email@@domain.com"';
+      const { ast } = await parse(input);
+
+      const path = ast[0].values.path;
+      // Should have: 'email', '@', 'domain.com'
+      expect(path.length).toBe(3);
+      expect(path[0].content).toBe('email');
+      expect(path[1].content).toBe('@');
+      expect(path[2].content).toBe('domain.com');
+    });
+
+    it('should escape \\@ to literal @ in template path', async () => {
+      const input = '/exe @test() = template "email\\@domain.com"';
+      const { ast } = await parse(input);
+
+      const path = ast[0].values.path;
+      expect(path.length).toBe(3);
+      expect(path[1].content).toBe('@');
+    });
+  });
+});
+
+describe('Template path variable interpolation', () => {
+  it('should interpolate @var in template path', async () => {
+    const input = '/exe @buildPrompt(msg) = template "../agents/@agent.att"';
+    const { ast } = await parse(input);
+
+    const path = ast[0].values.path;
+    expect(path.length).toBe(2);
+    expect(path[0]).toMatchObject({ type: 'Text', content: '../agents/' });
+    expect(path[1]).toMatchObject({
+      type: 'VariableReference',
+      identifier: 'agent',
+      fields: [{ type: 'field', value: 'att' }]
+    });
+    expect(ast[0].meta.pathMeta.hasVariables).toBe(true);
+  });
+
+  it('should support boundary escape in template path', async () => {
+    const input = '/exe @buildPrompt(msg) = template "../agents/@agent\\.att"';
+    const { ast } = await parse(input);
+
+    const path = ast[0].values.path;
+    expect(path.length).toBe(3);
+    expect(path[0]).toMatchObject({ type: 'Text', content: '../agents/' });
+    expect(path[1]).toMatchObject({
+      type: 'VariableReference',
+      identifier: 'agent',
+      boundary: { type: 'consumed' }
+    });
+    expect(path[1].fields).toBeUndefined();
+    expect(path[2]).toMatchObject({ type: 'Text', content: '.att' });
+  });
+
+  it('should keep single-quoted paths as literal', async () => {
+    const input = "/exe @test() = template '../agents/@agent.att'";
+    const { ast } = await parse(input);
+
+    const path = ast[0].values.path;
+    expect(path.length).toBe(1);
+    expect(path[0]).toMatchObject({
+      type: 'Text',
+      content: '../agents/@agent.att'
+    });
+    expect(ast[0].meta.pathMeta.hasVariables).toBe(false);
+  });
+});
+
 describe('Variable Boundary Escape', () => {
   describe('Backtick templates', () => {
     it('should parse @var\\.ext with backslash as boundary', async () => {
