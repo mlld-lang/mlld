@@ -128,4 +128,44 @@ describe('evaluateExecInvocation (structured)', () => {
     const result = await evaluateExecInvocation(invocation, env);
     expect(asText(result.value)).toBe('false');
   });
+
+  it('pipes RHS variable through inline command pipeline', async () => {
+    const src = '/exe @pipe(value) = @value | cmd { cat }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'pipe',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'pipe-ref',
+        identifier: 'pipe',
+        args: [{ type: 'Text', content: 'hello' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('hello');
+  });
+
+  it('supports legacy run-pipe sugar in exe RHS', async () => {
+    const src = '/exe @pipeRun(value) = run @value | cmd { cat }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'pipe-run',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'pipe-run-ref',
+        identifier: 'pipeRun',
+        args: [{ type: 'Text', content: 'world' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('world');
+  });
 });

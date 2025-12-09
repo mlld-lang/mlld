@@ -160,7 +160,7 @@ ExeRunCommandWithStdin "exe run command with stdin"
 // Run command pipe stdin pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+  = "run" _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
       if (tail) {
         Object.assign(withClause, tail);
@@ -405,6 +405,12 @@ ExeEnvironmentDeclaration "exe environment declaration"
 // Must contain at least one slash to distinguish from simple identifiers like "run"
 ResolverPathPattern
   = chars:$([a-zA-Z0-9_@-]+ "/" [a-zA-Z0-9_/@-]*) { return chars; }
+
+// Stdin expressions for pipe sugar allow variables even when followed by tail modifiers
+PipeStdinExpression
+  = "(" _ expr:Expression _ ")" { return expr; }
+  / VariableForPipeline
+  / Expression
 
 // ExecResolverPayload - optional payload syntax: { @variable }
 ExecResolverPayload

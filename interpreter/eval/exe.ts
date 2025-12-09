@@ -254,11 +254,12 @@ export async function evaluateExe(
          */
         let refName: string | undefined;
         try {
-          if (commandRef && typeof commandRef === 'object') {
-            if ('type' in commandRef && (commandRef as any).type === 'VariableReference' && 'identifier' in (commandRef as any)) {
-              refName = (commandRef as any).identifier as string;
-            } else if ('name' in commandRef && typeof (commandRef as any).name === 'string') {
-              refName = (commandRef as any).name as string;
+          const refCandidate = Array.isArray(commandRef) ? commandRef[0] : commandRef;
+          if (refCandidate && typeof refCandidate === 'object') {
+            if ('type' in refCandidate && (refCandidate as any).type === 'VariableReference' && 'identifier' in (refCandidate as any)) {
+              refName = (refCandidate as any).identifier as string;
+            } else if ('name' in refCandidate && typeof (refCandidate as any).name === 'string') {
+              refName = (refCandidate as any).name as string;
             }
           }
         } catch {}
@@ -268,7 +269,12 @@ export async function evaluateExe(
         }
 
         const args = directive.values?.args || [];
-        const isIdentity = paramNames.length >= 1 && args.length === 0 && typeof refName === 'string' && refName.length > 0 && refName === paramNames[0];
+        const isIdentity =
+          paramNames.length >= 1 &&
+          args.length === 0 &&
+          typeof refName === 'string' &&
+          refName.length > 0 &&
+          refName === paramNames[0];
 
         if (isIdentity) {
           executableDef = {
@@ -279,6 +285,9 @@ export async function evaluateExe(
             paramNames,
             sourceDirective: 'exec'
           } satisfies TemplateExecutable;
+          if (withClause) {
+            (executableDef as any).withClause = withClause;
+          }
         } else {
           executableDef = {
             type: 'commandRef',

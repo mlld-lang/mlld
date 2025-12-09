@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Single owner for StreamBus lifecycle
 
 ### Changed
+- `/exe` RHS pipe sugar accepts direct `@value | cmd { ... }` pipelines (legacy `run` form still works); identity definitions keep with-clause pipelines when evaluating parameters
 - **Mode-aware parsing and test defaults**: Parser and CLI/SDK support `mode: 'strict' | 'markdown'`, with `.mld` files and raw strings defaulting to strict when `MLLD_STRICT=1`. Setting `MLLD_STRICT=0` forces markdown parsing (used by broad test runs) while strict coverage is added incrementally. Optional leading slashes on directives are accepted in strict mode.
   - FormatAdapterSink and TerminalSink are mutually exclusive
 - **Import from @payload and @state**: Route files can now import fields from execute() payload and state
@@ -30,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live @state and literal payload strings**: `@state` reads stay fresh after state writes, and `@payload/@state` dynamic modules emit literal strings so @mentions and user data do not interpolate.
 
 ### Fixed
-- **Primitive value handling standardized**: Grammar now consistently returns AST Literal nodes for all primitives (numbers, booleans, null), and the interpreter extracts native values at evaluation boundaries. Fixes issues where when-expressions returning numbers produced empty output, and object serialization stringified numeric values. Primitives are never wrapped in StructuredValue - only Variables provide the metadata layer.
+- **Universal StructuredValue model**: All runtime values (including primitives) now flow as StructuredValues with `.text`, `.data`, and `.ctx`. Grammar consistently returns AST Literal nodes, interpreter wraps in StructuredValues, and boundaries use `asData()`/`asText()` for extraction. Fixes when-expressions returning numbers (empty output), object serialization (stringified values), and when-directive comparisons with numeric StructuredValues (NaN comparison bug).
 - **Standalone @ in double-quoted strings**: Grammar now treats `@` not followed by an identifier as a literal character, so method calls like `.startsWith("@")` work correctly in when-expressions and other contexts
 - All effect actions (`show`, `log`, `output`, `append`) now work uniformly in all RHS contexts including `/exe ... = for ... => when [...]`
 - Streaming no longer produces duplicate output when using format adapters

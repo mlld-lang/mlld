@@ -1187,6 +1187,10 @@ async function evaluateExecInvocationInternal(
   if (!definition) {
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
   }
+  if (process.env.DEBUG_EXEC === 'true' && commandName === 'pipe') {
+    // Debug aid for pipeline identity scenarios
+    console.error('[debug-exec] definition for @pipe:', JSON.stringify(definition, null, 2));
+  }
   const definitionHasStreamFormat =
     definition.withClause?.streamFormat !== undefined ||
     (definition.meta as any)?.withClause?.streamFormat !== undefined;
@@ -1689,6 +1693,28 @@ async function evaluateExecInvocationInternal(
     const metadata = resultSecurityDescriptor ? { security: resultSecurityDescriptor } : undefined;
     result = wrapStructured(result as Record<string, unknown>, templateType, undefined, metadata);
   }
+
+  const templateWithClause = (definition as any).withClause;
+  if (templateWithClause) {
+    if (templateWithClause.pipeline && templateWithClause.pipeline.length > 0) {
+      const { processPipeline } = await import('./pipeline/unified-processor');
+      const pipelineInputValue = toPipelineInput(result);
+      const pipelineResult = await processPipeline({
+        value: pipelineInputValue,
+        env: execEnv,
+        pipeline: templateWithClause.pipeline,
+        format: templateWithClause.format as string | undefined,
+        isRetryable: false,
+        identifier: commandName,
+        location: node.location,
+        descriptorHint: resultSecurityDescriptor
+      });
+      result = pipelineResult;
+    } else {
+      const withClauseResult = await applyWithClause(result, templateWithClause, execEnv);
+      result = withClauseResult.value ?? withClauseResult;
+    }
+  }
 }
 // Handle data executables
   else if (isDataExecutable(definition)) {
@@ -1713,8 +1739,12 @@ async function evaluateExecInvocationInternal(
   // Handle pipeline executables
   else if (isPipelineExecutable(definition)) {
     const { processPipeline } = await import('./pipeline/unified-processor');
+    const pipelineInputValue =
+      evaluatedArgs.length > 0
+        ? toPipelineInput(evaluatedArgs[0])
+        : '';
     const pipelineResult = await processPipeline({
-      value: '',
+      value: pipelineInputValue,
       env: execEnv,
       pipeline: definition.pipeline,
       format: definition.format,

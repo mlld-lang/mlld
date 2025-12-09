@@ -14,16 +14,16 @@ mlld treats structured data (arrays, objects, JSON) as first-class values via `S
 
 ## Principles
 
-- **Primitives are native values**: Numbers, booleans, and null are NOT StructuredValues - they're just JavaScript primitives (42, true, null). StructuredValue is ONLY for things with dual representations.
-- **Grammar returns AST nodes**: Parser always produces AST Literal nodes for primitives: `{type: 'Literal', value: 42}`. The interpreter extracts the native value during evaluation.
-- **Variables wrap everything**: All values (primitives, objects, arrays) go into Variables which provide metadata/context. PrimitiveVariable holds raw primitives directly.
-- Structured values flow end-to-end through pipelines, contexts, and variables
-- Display boundaries (templates, CLI, `/show`) coerce to `.text` automatically
+- **Everything at runtime is StructuredValue**: All evaluated values (primitives, strings, arrays, objects, loaded content) flow as StructuredValues with `.text`, `.data`, and `.ctx`
+- **Grammar returns AST nodes**: Parser always produces AST Literal nodes for primitives: `{type: 'Literal', value: 42}`. The interpreter wraps in StructuredValue during evaluation.
+- **Variables wrap StructuredValues**: Variables provide an additional metadata/context layer on top of StructuredValues
+- **Dual representation is universal**: Even primitives benefit from `.text` (for display) and `.data` (for computation)
+- Display boundaries (templates, CLI, `/show`) use `.text` automatically
 - Computation boundaries (foreach, JS stages, comparisons) access `.data`
-- Runtime metadata (filenames, retries, loader info) flows via `.ctx`
+- Runtime metadata (filenames, retries, loader info, security labels) flows via `.ctx`
 - String coercion is safe and predictable: `toString()` returns `.text`
 - JSON/JSONL auto-parse: `<path>.json` and `<path>.jsonl` load as StructuredValues with parsed `.data` (object/array), raw `.text`, and preserved `.ctx`; `.text` is the raw string if callers need it.
-- JS/Node invocations receive `.data` by default (text → string, JSON/JSONL → object/array). Use `.keep`/`.keepStructured` when metadata needs to cross the boundary.
+- JS/Node invocations receive `.data` by default (text → string, JSON/JSONL → object/array, primitives → number/boolean). Use `.keep`/`.keepStructured` when metadata needs to cross the boundary.
 - Structured access helper: `keepStructured()` and `.keepStructured` let you retain wrappers/metadata when you need ctx/provenance instead of the content-only sugar.
 
 ## Details
@@ -71,32 +71,45 @@ interface StructuredValue<T = unknown> {
 }
 ```
 
-### What Gets Wrapped vs Raw
+### Universal StructuredValue Model
 
-**Primitives (numbers, booleans, null) are NEVER StructuredValues:**
+**Everything at runtime is StructuredValue** - primitives, strings, arrays, objects, loaded content:
+
 ```typescript
-// ✅ Correct
-const num = 42;                           // Just a number
-const variable = PrimitiveVariable{       // Variable wraps it
-  type: 'primitive',
-  value: 42,
-  ctx: {...}                              // Metadata at Variable level
-};
+// Number from when-expression
+{type: 'number', text: '42', data: 42, ctx: {labels: [...], ...}}
 
-// ❌ Wrong - don't wrap primitives in StructuredValue
-const wrapped = {type: 'number', text: "42", data: 42, ctx: {...}};
+// String from template
+{type: 'text', text: 'hello', data: 'hello', ctx: {labels: [...], ...}}
+
+// Array from for-expression
+{type: 'array', text: '[1,2,3]', data: [1,2,3], ctx: {labels: [...], ...}}
+
+// Object literal
+{type: 'object', text: '{"a":1}', data: {a: 1}, ctx: {labels: [...], ...}}
 ```
 
-**StructuredValue is ONLY for dual representations:**
-- **Loaded content**: `<file.md>` needs both raw text and parsed data
-- **Pipeline results**: Need both `.text` for display and `.data` for computation
-- **Arrays/Objects with metadata**: When provenance/labels matter
+**Why primitives ARE StructuredValues:**
+1. **Dual representation is useful**: `.text = "42"` for templates, `.data = 42` for comparisons
+2. **Metadata consistency**: All values carry `.ctx` for security labels, provenance, tokens
+3. **Simpler model**: No special cases - `asData()`/`asText()` work uniformly on everything
+4. **Variables wrap StructuredValues**: Consistent layering (AST → StructuredValue → Variable)
 
-**Why primitives don't need StructuredValue:**
-1. No dual representation: `42` is just `42`, not "42 as text" vs "42 as number"
-2. No provenance: Literals in code don't come from files/pipelines
-3. Variables already provide metadata: PrimitiveVariable has `.ctx` for labels/taint
-4. Performance: Wrapping every number is wasteful
+**Grammar → Interpreter → Variable flow:**
+```typescript
+// 1. Grammar produces AST Literal node
+{type: 'Literal', value: 42, location: {...}}
+
+// 2. Interpreter wraps in StructuredValue
+{type: 'number', text: '42', data: 42, ctx: {labels: [], ...}}
+
+// 3. Variable wraps StructuredValue
+StructuredValueVariable {
+  type: 'structured',
+  value: StructuredValue,
+  ctx: {...}  // Additional variable-level metadata
+}
+```
 
 ### Helper Functions
 

@@ -90,7 +90,7 @@ Define reusable functions and templates:
 ```mlld
 # Shell commands
 /exe @greet(name) = run {echo "Hello @name"}
-/exe @processJson(data) = run @data | { cat | jq '.[]' }  << stdin support
+/exe @processJson(data) = @data | cmd { cat | jq '.[]' }  << stdin support
 /exe @deploy() = sh {
   npm test && npm run build
   ./deploy.sh
