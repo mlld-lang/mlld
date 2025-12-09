@@ -454,7 +454,8 @@ Options:
   -d, --debug             Stream execution with progress logs to stderr
   --json                  With --debug, emit DebugResult JSON to stdout (no streaming)
   --structured            Output JSON with effects, exports, and security metadata
-  --inject KEY=VALUE      Inject dynamic module (can use multiple times)
+  --inject, --payload KEY=VALUE
+                          Inject dynamic module (can use multiple times)
                           VALUE formats: JSON object, @file.json, or mlld source
   --no-stream             Disable streaming (document mode only)
   -w, --watch             Watch for changes and reprocess

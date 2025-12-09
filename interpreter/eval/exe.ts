@@ -430,9 +430,9 @@ export async function evaluateExe(
     if (!pathNodes || !Array.isArray(pathNodes) || pathNodes.length === 0) {
       throw new Error('Exec template-file directive missing path');
     }
-    // Path is parsed as Text nodes; join raw content
-    const rawPath = directive.raw?.path || (Array.isArray(pathNodes) ? pathNodes.map((n: any) => n.content || '').join('') : '');
-    const filePath = String(rawPath);
+    // Evaluate path nodes to resolve any variable references
+    const evaluatedPath = await interpolate(pathNodes, env);
+    const filePath = String(evaluatedPath);
     
     // Determine template style by extension
     const ext = path.extname(filePath).toLowerCase();
