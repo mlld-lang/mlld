@@ -258,12 +258,30 @@ ExecInvocationPattern "exec invocation pattern"
 // Note: BracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading
 
 
-// Primitive values for arrays and when expressions
+// Primitive values for when expressions and var assignments (returns Literal nodes)
 PrimitiveValue
   = ExpressionString        // Returns Literal node for both single and double quotes
-  / NumberLiteral
-  / BooleanLiteral
-  / NullLiteral
+  / value:NumberLiteral {
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'number',
+        location: location()
+      });
+    }
+  / value:BooleanLiteral {
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'boolean',
+        location: location()
+      });
+    }
+  / value:NullLiteral {
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'null',
+        location: location()
+      });
+    }
   / RetryLiteral           // retry keyword for pipeline control
 
 // Object property values - use data context patterns for proper typing and unwrapping

@@ -265,7 +265,7 @@ SlashExe
   // Error recovery: Generic catch-all
   / DirectiveContext ExeKeyword {
       helpers.mlldError("Invalid /exe syntax. Examples:\n" +
-            "  /exe @cmd(param) = {echo @param}\n" +
+            "  /exe @echo(msg) = cmd {echo @msg}\n" +
             "  /exe @greet(name) = `Hello @name!`\n" +
             "  /exe @calc(x) = js {return @x * 2}\n" +
             "  /exe @alias() = @otherCommand\n" +

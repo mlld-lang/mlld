@@ -1467,6 +1467,11 @@ async function evaluateArrayItem(
     return item.content;
   }
 
+  // Handle Literal nodes from grammar (numbers, booleans, null)
+  if (item.type === 'Literal' && 'value' in item) {
+    return item.value;
+  }
+
   // Handle objects without explicit type property (plain objects from parser)
   if (!item.type && typeof item === 'object' && item.constructor === Object) {
     const nestedObj: Record<string, any> = {};

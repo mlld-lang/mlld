@@ -53,6 +53,11 @@ export class PrimitiveEvaluator {
       return true;
     }
 
+    // Handle Literal nodes (from grammar)
+    if (value && typeof value === 'object' && value.type === 'Literal' && 'value' in value) {
+      return true;
+    }
+
     if (value && typeof value === 'object' && value.type === 'RegexLiteral') {
       return true;
     }
@@ -87,6 +92,11 @@ export class PrimitiveEvaluator {
     // Handle Text nodes
     if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {
       return value.content;
+    }
+
+    // Handle Literal nodes (from grammar) - extract the value
+    if (value && typeof value === 'object' && value.type === 'Literal' && 'value' in value) {
+      return (value as { value: unknown }).value;
     }
 
     // Handle regex literals

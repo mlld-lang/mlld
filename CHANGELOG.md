@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live @state and literal payload strings**: `@state` reads stay fresh after state writes, and `@payload/@state` dynamic modules emit literal strings so @mentions and user data do not interpolate.
 
 ### Fixed
+- **Primitive value handling standardized**: Grammar now consistently returns AST Literal nodes for all primitives (numbers, booleans, null), and the interpreter extracts native values at evaluation boundaries. Fixes issues where when-expressions returning numbers produced empty output, and object serialization stringified numeric values. Primitives are never wrapped in StructuredValue - only Variables provide the metadata layer.
+- **Standalone @ in double-quoted strings**: Grammar now treats `@` not followed by an identifier as a literal character, so method calls like `.startsWith("@")` work correctly in when-expressions and other contexts
 - All effect actions (`show`, `log`, `output`, `append`) now work uniformly in all RHS contexts including `/exe ... = for ... => when [...]`
 - Streaming no longer produces duplicate output when using format adapters
 - Regex arguments are parsed as RegExp values, so `.match(/.../)` conditions (including grouped patterns) work in when-expressions and other exec calls without falling back to strings

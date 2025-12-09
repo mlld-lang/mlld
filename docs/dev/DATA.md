@@ -14,6 +14,9 @@ mlld treats structured data (arrays, objects, JSON) as first-class values via `S
 
 ## Principles
 
+- **Primitives are native values**: Numbers, booleans, and null are NOT StructuredValues - they're just JavaScript primitives (42, true, null). StructuredValue is ONLY for things with dual representations.
+- **Grammar returns AST nodes**: Parser always produces AST Literal nodes for primitives: `{type: 'Literal', value: 42}`. The interpreter extracts the native value during evaluation.
+- **Variables wrap everything**: All values (primitives, objects, arrays) go into Variables which provide metadata/context. PrimitiveVariable holds raw primitives directly.
 - Structured values flow end-to-end through pipelines, contexts, and variables
 - Display boundaries (templates, CLI, `/show`) coerce to `.text` automatically
 - Computation boundaries (foreach, JS stages, comparisons) access `.data`
@@ -67,6 +70,33 @@ interface StructuredValue<T = unknown> {
   [Symbol.toPrimitive](hint?: string): string;
 }
 ```
+
+### What Gets Wrapped vs Raw
+
+**Primitives (numbers, booleans, null) are NEVER StructuredValues:**
+```typescript
+// ✅ Correct
+const num = 42;                           // Just a number
+const variable = PrimitiveVariable{       // Variable wraps it
+  type: 'primitive',
+  value: 42,
+  ctx: {...}                              // Metadata at Variable level
+};
+
+// ❌ Wrong - don't wrap primitives in StructuredValue
+const wrapped = {type: 'number', text: "42", data: 42, ctx: {...}};
+```
+
+**StructuredValue is ONLY for dual representations:**
+- **Loaded content**: `<file.md>` needs both raw text and parsed data
+- **Pipeline results**: Need both `.text` for display and `.data` for computation
+- **Arrays/Objects with metadata**: When provenance/labels matter
+
+**Why primitives don't need StructuredValue:**
+1. No dual representation: `42` is just `42`, not "42 as text" vs "42 as number"
+2. No provenance: Literals in code don't come from files/pipelines
+3. Variables already provide metadata: PrimitiveVariable has `.ctx` for labels/taint
+4. Performance: Wrapping every number is wasteful
 
 ### Helper Functions
 

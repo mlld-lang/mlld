@@ -25,7 +25,7 @@ UnifiedQuote "Unified quote pattern"
 
 // Double quotes with @var and @func() interpolation
 UnifiedDoubleQuote "Double quoted string with interpolation"
-  = '"' parts:(SpecialVariable / UnifiedInterpolationContent / UnifiedDoubleQuotedText)* '"' {
+  = '"' parts:(SpecialVariable / UnifiedInterpolationContent / UnifiedAtLiteral / UnifiedDoubleQuotedText)* '"' {
       helpers.debug('UnifiedQuote: DoubleQuote matched', { parts });
       
       // If it's a plain string (no interpolation), create a Literal node for directive contexts
@@ -165,6 +165,12 @@ UnifiedBacktickChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
   / !("`" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
+
+// Literal @ when not followed by an identifier (e.g., "@" at end of string or "@:")
+UnifiedAtLiteral "literal @ character"
+  = "@" !BaseIdentifier {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
 
 // Text inside double quotes (supports newlines)
 UnifiedDoubleQuotedText

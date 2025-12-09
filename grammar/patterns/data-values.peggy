@@ -73,7 +73,7 @@ DataPropertyValue "data context property value"
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks (not quotes)
   / DataStringValue              // Plain strings (unwrapped)
-  / PrimitiveValue               // Numbers, booleans, null - preserve as-is
+  / PrimitiveValue               // Numbers, booleans, null - AST Literal nodes
 
 // DATA TEMPLATE VALUE - Only real templates (brackets and backticks)
 // Excludes quoted strings which should be unwrapped in data context
@@ -120,6 +120,6 @@ DataArrayValue
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks
   / DataStringValue              // Plain strings (unwrapped)
-  / PrimitiveValue               // Numbers, booleans, null - preserve as-is
+  / PrimitiveValue               // Numbers, booleans, null - AST Literal nodes
 
 // Note: DataBracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading

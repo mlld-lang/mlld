@@ -64,11 +64,19 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
   }
 
   if (normalized && typeof normalized === 'object' && 'type' in (normalized as Record<string, unknown>)) {
-    const { extractVariableValue } = await import('../utils/variable-resolution');
-    try {
-      normalized = await extractVariableValue(normalized as any, actionEnv);
-    } catch (error) {
-      logger.debug('Could not extract variable value in when expression:', error);
+    const nodeType = (normalized as Record<string, unknown>).type;
+
+    // Handle Literal nodes directly - extract the value
+    if (nodeType === 'Literal' && 'value' in (normalized as Record<string, unknown>)) {
+      normalized = (normalized as { value: unknown }).value;
+    } else {
+      // Try to extract variable value for other node types
+      const { extractVariableValue } = await import('../utils/variable-resolution');
+      try {
+        normalized = await extractVariableValue(normalized as any, actionEnv);
+      } catch (error) {
+        logger.debug('Could not extract variable value in when expression:', error);
+      }
     }
   }
 
