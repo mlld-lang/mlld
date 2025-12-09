@@ -52,7 +52,7 @@ For the given TypeScript file, analyze how PathContext, PathContextBuilder, or r
 Return ONLY JSON.
 `
 
-/var @results = for 40 parallel @file in @files => @claude(@analysisPrompt(@file)) | @json.llm | log
+/var @results = for parallel 40 @file in @files => @claude(@analysisPrompt(@file)) | @json.llm | log
 
 /output @results to "@base/tmp/audit-pathcontext-flow.json"
 /show "PathContext audit written to tmp/audit-pathcontext-flow.json"

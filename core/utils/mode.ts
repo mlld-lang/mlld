@@ -20,10 +20,17 @@ export function resolveMlldMode(
 ): MlldMode {
   if (explicitMode) return explicitMode;
 
-  const looseFlag = process.env.LOOSE_TESTMODE;
-  const looseEnabled = looseFlag === '1' || looseFlag === 'true';
-  const looseDefault = looseFlag === undefined ? process.env.NODE_ENV === 'test' : looseEnabled;
-  if (looseDefault) return 'markdown';
+  const strictEnv = process.env.MLLD_STRICT;
+  if (strictEnv !== undefined) {
+    const normalized = strictEnv.toLowerCase();
+    if (normalized === '1' || normalized === 'true' || normalized === 'strict') {
+      return inferMlldMode(filePath, 'strict');
+    }
 
-  return inferMlldMode(filePath, fallback);
+    if (normalized === '0' || normalized === 'false' || normalized === 'markdown' || normalized === 'md' || normalized === 'loose') {
+      return 'markdown';
+    }
+  }
+
+  return fallback;
 }

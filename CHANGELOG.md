@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Single owner for StreamBus lifecycle
 
 ### Changed
-- **Mode-aware parsing and test defaults**: Parser and CLI/SDK support `mode: 'strict' | 'markdown'`, with `.mld` files and raw strings defaulting to strict; markdown mode preserves prose semantics. Tests honor `LOOSE_TESTMODE` (default `1`) to force markdown parsing during broad runs while strict coverage is added incrementally. Optional leading slashes on directives are accepted in strict mode.
+- **Mode-aware parsing and test defaults**: Parser and CLI/SDK support `mode: 'strict' | 'markdown'`, with `.mld` files and raw strings defaulting to strict when `MLLD_STRICT=1`. Setting `MLLD_STRICT=0` forces markdown parsing (used by broad test runs) while strict coverage is added incrementally. Optional leading slashes on directives are accepted in strict mode.
   - FormatAdapterSink and TerminalSink are mutually exclusive
 - **Import from @payload and @state**: Route files can now import fields from execute() payload and state
   - `/import { @message, @userId } from @payload` imports specific fields

@@ -6,16 +6,16 @@ import { PathService } from '@services/fs/PathService';
 describe('Mlld API', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
-  const originalLoose = process.env.LOOSE_TESTMODE;
+  const originalStrict = process.env.MLLD_STRICT;
 
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
-    process.env.LOOSE_TESTMODE = '0';
+    process.env.MLLD_STRICT = '1';
   });
 
   afterAll(() => {
-    process.env.LOOSE_TESTMODE = originalLoose;
+    process.env.MLLD_STRICT = originalStrict;
   });
 
   describe('processMlld', () => {
