@@ -25,12 +25,15 @@ For AND/OR logic, use && and || operators in conditions instead of deprecated an
 // TOP-LEVEL WHEN DIRECTIVE
 // -------------------------------------------------------------
 
+WhenKeyword
+  = "/"? "when"
+
 // Primary /when directive
 SlashWhen
   = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
   // Error recovery: deprecated 'any' modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'any' modifier has been removed from mlld. Use the || operator instead.\n\n" +
         "Old syntax: /when any [@cond1 @cond2] => action\n" +
@@ -42,7 +45,7 @@ SlashWhen
     }
   / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
   // Bare block form with modifier: /when <modifier>: [...] => <action>
-  / DirectiveContext "/when" _ modifier:WhenModifier _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
+  / DirectiveContext WhenKeyword _ modifier:WhenModifier _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
       helpers.debug('WhenBareBlockWithModifierForm matched', { modifier, conditions, action });
@@ -84,15 +87,15 @@ SlashWhen
     }
   / WhenBlockForm
   // Error recovery: Missing => in simple form
-  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ !"=>" {
+  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !"=>" {
       helpers.mlldError("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action", "=>", location());
     }
   // Error recovery: Missing action after =>
-  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ !. {
+  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
       helpers.mlldError("Missing action in /when directive. Expected a directive after '=>'.", "directive", location());
     }
   // Error recovery: deprecated 'all' modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'all' modifier has been removed from mlld. Use the && operator instead.\n\n" +
         "Old syntax: /when all [@cond1 @cond2] => action\n" +
@@ -103,7 +106,7 @@ SlashWhen
       );
     }
   // Error recovery: Unclosed brackets in block form
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":"? _ "[" _ &{
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":"? _ "[" _ &{
       // Check if we hit newline or EOF before closing bracket
       let i = peg$currPos;
       let depth = 1;
@@ -125,7 +128,7 @@ SlashWhen
       helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
     }
   // Error recovery: Invalid modifier - check it's not a valid modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _
     modifier:BaseIdentifier &{ return modifier !== "first"; } _ ":"? _ "[" {
       helpers.mlldError("Invalid /when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
             "For AND/OR logic, use && and || operators instead.\n\n" +
@@ -135,7 +138,7 @@ SlashWhen
             "  /when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
     }
   // Error recovery: Generic catch-all
-  / DirectiveContext "/when" {
+  / DirectiveContext WhenKeyword {
       helpers.mlldError("Invalid /when syntax. Valid forms:\\n" +
             "  /when @condition => action          (simple form)\\n" +
             "  /when @variable [...]              (switch form)\\n" +
@@ -148,7 +151,7 @@ SlashWhen
 // -------------------------------------------------------------
 
 WhenSimpleForm
-  = DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction {
+  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction {
       helpers.debug('WhenSimpleForm matched', { condition, action });
       
       return helpers.createStructuredDirective(
@@ -174,7 +177,7 @@ WhenSimpleForm
 // -------------------------------------------------------------
 
 WhenMatchForm
-  = DirectiveContext "/when" _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
+  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
       helpers.debug('WhenMatchForm matched', { expression, conditions });
       
       return helpers.createStructuredDirective(
@@ -203,7 +206,7 @@ WhenMatchForm
 // -------------------------------------------------------------
 
 WhenBlockForm
-  = DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { 
+  = DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { 
       return helpers.createVariableReferenceNode('identifier', {
         identifier: id
       }, location()); 
@@ -266,7 +269,7 @@ WhenBlockForm
 // -------------------------------------------------------------
 
 WhenBareBlockForm
-  = DirectiveContext "/when" _ "[" _ conditions:WhenConditionList _ "]" {
+  = DirectiveContext WhenKeyword _ "[" _ conditions:WhenConditionList _ "]" {
       
       helpers.debug('WhenBareBlockForm matched', { conditions });
       

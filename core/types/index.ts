@@ -35,6 +35,9 @@ export * from './guard'; // Guard directives
 export * from './policy'; // Policy directives
 export * from './load-content'; // Load content types and utilities including URL metadata
 
+// Parser modes
+export * from './mode';
+
 // Import node types for the MlldNode union
 import {
   TextNode,

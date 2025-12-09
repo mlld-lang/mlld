@@ -17,6 +17,8 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { ExecuteError } from './types';
 import { MlldParseError } from '@core/errors';
+import { resolveMlldMode } from '@core/utils/mode';
+import type { MlldMode } from '@core/types/mode';
 
 export class TimeoutError extends Error {
   constructor(public readonly timeoutMs: number) {
@@ -35,6 +37,7 @@ export interface ExecuteOptions {
   fileSystem?: IFileSystemService;
   pathService?: IPathService;
   allowAbsolutePaths?: boolean;
+  mode?: MlldMode;
 }
 
 const astCache = new MemoryAstCache();
@@ -49,6 +52,7 @@ export async function execute(
   const pathService = options.pathService ?? new PathService();
 
   const cacheEntry = await getCachedAst(filePath, fileSystem);
+  const languageMode = resolveMlldMode(options.mode, filePath);
 
   const dynamicModules: Record<string, string | Record<string, unknown>> = {
     ...(options.dynamicModules ?? {}),
@@ -59,6 +63,7 @@ export async function execute(
   const interpretOptions: InterpretOptions = {
     mode: options.stream ? 'stream' : 'structured',
     filePath,
+    mlldMode: languageMode,
     fileSystem,
     pathService,
     allowAbsolutePaths: options.allowAbsolutePaths,

@@ -12,6 +12,8 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ErrorFormatSelector, type FormattedErrorResult, type ErrorFormatOptions } from '@core/utils/errorFormatSelector';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
+import { resolveMlldMode } from '@core/utils/mode';
+import type { MlldMode } from '@core/types/mode';
 
 // Export core types/errors
 export { MlldError };
@@ -43,6 +45,7 @@ export type {
 // Export types
 export type { Location, Position } from '@core/types/index';
 export type { PathContext, PathContextOptions } from '@core/services/PathContextService';
+export type { MlldMode } from '@core/types/mode';
 
 // Export SDK streaming types
 export type {
@@ -99,6 +102,8 @@ export interface ProcessOptions {
   filePath?: string;
   /** Explicit path context (advanced usage) */
   pathContext?: PathContext;
+  /** Parsing mode (strict vs markdown); defaults based on filePath or strict for raw strings */
+  mode?: MlldMode;
   /** Custom file system implementation */
   fileSystem?: IFileSystemService;
   /** Custom path service implementation */
@@ -148,6 +153,7 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
   // Create default services if not provided
   const fileSystem = options?.fileSystem || new NodeFileSystem();
   const pathService = options?.pathService || new PathService();
+  const languageMode = resolveMlldMode(options?.mode, options?.filePath, options?.filePath ? 'markdown' : 'strict');
   
   // Build or use PathContext
   let pathContext: PathContext | undefined;
@@ -168,7 +174,8 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     normalizeBlankLines: options?.normalizeBlankLines,
     useMarkdownFormatter: options?.useMarkdownFormatter,
     dynamicModules: options?.dynamicModules,
-    dynamicModuleSource: options?.dynamicModuleSource
+    dynamicModuleSource: options?.dynamicModuleSource,
+    mlldMode: languageMode
   });
 
   // Interpret returns string output in document mode; other modes carry output on the object

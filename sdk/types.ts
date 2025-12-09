@@ -2,6 +2,7 @@ import type { ResolvedURLConfig } from '@core/config/types';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { PathContext } from '@core/services/PathContextService';
 import type { DirectiveKind, MlldNode } from '@core/types';
+import type { MlldMode } from '@core/types/mode';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { CapabilityContext, DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
@@ -41,6 +42,7 @@ export interface InterpretOptions {
   filePath?: string;
   pathContext?: PathContext;
   strict?: boolean;
+  mlldMode?: MlldMode;
   format?: 'markdown' | 'xml';
   fileSystem: IFileSystemService;
   pathService: IPathService;

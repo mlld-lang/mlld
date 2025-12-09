@@ -199,7 +199,7 @@ npm run ast -- '<your syntax>'
 
 ### Key Algorithms
 
-**Context Detection**: `helpers.isSlashDirectiveContext()` determines directive vs content
+**Context Detection**: `helpers.isDirectiveContext()` determines directive vs content (slash optional; strict mode gates bare directives)
 **Semantic Commitment**: Once directive identified, parser commits to that branch
 **Location Tracking**: Peggy's `location()` includes lookahead (see issue #340)
 

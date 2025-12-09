@@ -2,8 +2,11 @@
 // Replaces: /text and /data directives - DELETED with no backward compatibility
 // Purpose: Single directive for all variable types with type inference from syntax
 
+VarKeyword
+  = "/"? "var"
+
 SlashVar "var directive"
-  = DirectiveContext "/var" labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+  = DirectiveContext VarKeyword labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       helpers.debug('AtVar matched', { id, value, ending });
       
       // Extract ending components
@@ -178,7 +181,7 @@ SlashVar "var directive"
     }
     
   // Error: Unclosed array literal
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "[" &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "[" &{
       // peg$currPos is now after the '[', but isUnclosedArray expects to start from after '['
       // So we pass the current position which is correct
       return helpers.isUnclosedArray(input, peg$currPos);
@@ -187,40 +190,40 @@ SlashVar "var directive"
     }
     
   // Error: Unclosed object literal
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "{" &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "{" &{
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed object in /var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
     }
     
   // Error: Unclosed string (double quotes)
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ '"' &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ '"' &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
       helpers.mlldError("Unclosed string in /var directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed string (single quotes)
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "'" &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
       helpers.mlldError("Unclosed string in /var directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed template
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "::" &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed template in /var directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing value after =
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ &(LineTerminator / EOF) {
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing value in /var directive. Expected a value after '=' for variable '@" + id + "'.", "value", location());
     }
     
   // Error: Missing = after variable name
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ &{
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ &{
       // Look ahead to see if there's content but no =
       const rest = input.substring(peg$currPos).trim();
       return rest.length > 0 && rest[0] !== '=';
@@ -229,13 +232,13 @@ SlashVar "var directive"
     }
     
   // Error: Missing @ before variable name
-  / DirectiveContext "/var" _ id:BaseIdentifier _ "=" {
+  / DirectiveContext VarKeyword _ id:BaseIdentifier _ "=" {
       const varLoc = location(); // Use built-in location() function
       helpers.mlldError("Missing '@' before variable name in /var directive. Use: /var @" + id + " = value", "@", varLoc);
     }
     
   // Error: Missing variable name after @
-  / DirectiveContext "/var" _ "@" _ &{
+  / DirectiveContext VarKeyword _ "@" _ &{
       // Check if next character is not a valid identifier start
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
@@ -245,6 +248,6 @@ SlashVar "var directive"
     }
     
   // Error: Generic /var syntax error
-  / DirectiveContext "/var" {
+  / DirectiveContext VarKeyword {
       helpers.mlldError("Invalid /var syntax. Expected: /var @name = value", "@", location());
     }

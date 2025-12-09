@@ -75,12 +75,18 @@ Start
     / MlldRunFence               /* <— Special mlld-run blocks that are interpreted */
     / CodeFence                  /* <— Regular code blocks that are NOT interpreted */
     / Directive                  /* <— Directives come after comments */
+    / StrictBlankLine            /* <— Ignore blank lines in strict mode */
+    / StrictModeTextError        /* <— Surface errors for prose in strict mode */
     / TextBlock                  /* <— Finally, plain text */
     )* {
     helpers.debug('Start: Entered');
     const result = [];
     if (frontmatter) result.push(frontmatter);
-    result.push(...nodes);
+    for (const node of nodes) {
+      if (node !== null && node !== undefined) {
+        result.push(node);
+      }
+    }
     return result;
   }
 
@@ -94,7 +100,10 @@ InterDirectiveNewline
         i++;
       }
       /* success only if the next real char starts a directive line */
-      return i < input.length && input[i] === '/' && helpers.isLogicalLineStart(input, i);
+      const isStrictMode = options?.mode === 'strict';
+      const isDirectiveLine = i < input.length && helpers.isDirectiveContext(input, i);
+      const hasSlash = i < input.length && input[i] === '/';
+      return isDirectiveLine && (isStrictMode || hasSlash);
     } {
       return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
@@ -170,8 +179,12 @@ TextPart
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       
       // Check for directive start
-      if (isAtLineStart && input[pos] === '/') {
-        return helpers.isSlashDirectiveContext(input, pos);
+      if (isAtLineStart && helpers.isDirectiveContext(input, pos)) {
+        const hasSlash = input[pos] === '/';
+        const isStrictMode = options?.mode === 'strict';
+        if (isStrictMode || hasSlash) {
+          return true; // Stop parsing text - directive ahead
+        }
       }
       
       // Check for comment start
@@ -196,7 +209,14 @@ TextPart
 // -------------------------------------------------------------------------
 
 Directive
-  = &{ return helpers.isLogicalLineStart(input, offset()); }
+  = &{ 
+      const pos = offset();
+      if (!helpers.isLogicalLineStart(input, pos)) return false;
+      if (!helpers.isDirectiveContext(input, pos)) return false;
+      const hasSlash = input[pos] === '/';
+      const isStrictMode = options?.mode === 'strict';
+      return isStrictMode || hasSlash;
+    }
     [ \t]*                        // allow leading tabs/spaces
     dir:(
       SlashVar      // NEW: Var directives (unified variable assignment)
@@ -218,6 +238,23 @@ Directive
     / SlashStream   // Stream directives
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
+
+// -------------------------------------------------------------------------
+// STRICT MODE LINE HANDLING
+// -------------------------------------------------------------------------
+
+StrictBlankLine
+  = &{ return options?.mode === 'strict'; }
+    [ \t\r]* LineTerminator { return null; }
+  / &{ return options?.mode === 'strict'; }
+    [ \t\r]+ &EOF { return null; }
+
+StrictModeTextError
+  = &{ return options?.mode === 'strict'; }
+    &{ return !helpers.isDirectiveContext(input, offset()); }
+    (!LineTerminator .)+ LineTerminator? {
+      error("Text content not allowed in strict mode (.mld). Use .mld.md for prose.");
+    }
 
 // -------------------------------------------------------------------------
 // CODE FENCES

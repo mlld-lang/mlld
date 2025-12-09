@@ -171,11 +171,13 @@ AlligatorPathParts "alligator path parts"
     }
 
 // Variable reference inside alligator (no context check needed)
+// Uses BoundaryAwareFieldAccess to support @var\.ext escaping
 AlligatorVariable "alligator variable"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+  = "@" id:BaseIdentifier fields:BoundaryAwareFieldAccess* boundary:VariableBoundary? {
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
+        ...(fields.length > 0 ? { fields: fields } : {}),
+        ...(boundary ? { boundary: boundary } : {})
       }, location());
     }
 
@@ -292,18 +294,19 @@ RenameStringPart
 // Parts inside rename backtick template - supports <> placeholder and @variables
 RenameBacktickPart
   = FileReferenceInterpolation  // Handles <> and <file> with field access
-  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      // Regular variable reference
+  / "@" id:BaseIdentifier fields:BoundaryAwareFieldAccess* boundary:VariableBoundary? {
+      // Regular variable reference with boundary support
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
+        ...(fields.length > 0 ? { fields: fields } : {}),
+        ...(boundary ? { boundary: boundary } : {})
       }, location());
     }
   / chars:(![`<@] char:. { return char; })+ {
       // Plain text
-      return helpers.createNode(NodeType.Text, { 
-        content: chars.join(''), 
-        location: location() 
+      return helpers.createNode(NodeType.Text, {
+        content: chars.join(''),
+        location: location()
       });
     }
 
@@ -337,18 +340,19 @@ BacktickTransformPart
         fields: fields
       };
     }
-  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      // Regular variable reference
+  / "@" id:BaseIdentifier fields:BoundaryAwareFieldAccess* boundary:VariableBoundary? {
+      // Regular variable reference with boundary support
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
+        ...(fields.length > 0 ? { fields: fields } : {}),
+        ...(boundary ? { boundary: boundary } : {})
       }, location());
     }
   / chars:(![`<@] char:. { return char; })+ {
       // Plain text
-      return helpers.createNode(NodeType.Text, { 
-        content: chars.join(''), 
-        location: location() 
+      return helpers.createNode(NodeType.Text, {
+        content: chars.join(''),
+        location: location()
       });
     }
 
@@ -359,10 +363,11 @@ DoubleColonTemplatePart
         fields: fields
       };
     }
-  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+  / "@" id:BaseIdentifier fields:BoundaryAwareFieldAccess* boundary:VariableBoundary? {
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
+        ...(fields.length > 0 ? { fields: fields } : {}),
+        ...(boundary ? { boundary: boundary } : {})
       }, location());
     }
   / segment:UnifiedDoubleColonTextSegment {

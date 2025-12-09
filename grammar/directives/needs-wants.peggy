@@ -1,8 +1,14 @@
 // NEEDS AND WANTS DIRECTIVES
 // Implements /needs and /wants parsing with structured capability objects
 
+NeedsKeyword
+  = "/"? "needs"
+
+WantsKeyword
+  = "/"? "wants"
+
 SlashNeeds
-  = DirectiveContext "/needs" _ object:NeedsObject ending:StandardDirectiveEnding? {
+  = DirectiveContext NeedsKeyword _ object:NeedsObject ending:StandardDirectiveEnding? {
       const packageKeys = ['node', 'js', 'python', 'py', 'ruby', 'rb', 'go', 'rust'];
       const meta = {
         hasCmd: Boolean(object.cmd),
@@ -25,7 +31,7 @@ SlashNeeds
     }
 
 SlashWants
-  = DirectiveContext "/wants" _ tiers:WantsArray ending:StandardDirectiveEnding? {
+  = DirectiveContext WantsKeyword _ tiers:WantsArray ending:StandardDirectiveEnding? {
       const meta = {
         tierCount: tiers.length,
         ...(ending?.comment ? { comment: ending.comment } : {})

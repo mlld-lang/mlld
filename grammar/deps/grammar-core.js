@@ -121,41 +121,40 @@ export const helpers = {
     // Context Detection System - Core Helper Methods
     // ---------------------------------------------
     /**
-     * Determines if the current position represents a slash directive context
-     * A slash directive context requires:
-     * 1. / symbol at logical line start
-     * 2. Followed by a valid directive keyword
+     * Determines if the current position represents a directive context.
+     * A directive context requires:
+     * 1. Logical line start
+     * 2. Optional leading slash
+     * 3. Followed by a directive keyword
+     */
+    isDirectiveContext(input, pos) {
+        if (!this.isLogicalLineStart(input, pos))
+            return false;
+        let cursor = pos;
+        if (input[cursor] === '/')
+            cursor++;
+        const directiveKeywords = [...Object.keys(DirectiveKind), 'log'];
+        for (const keyword of directiveKeywords) {
+            const end = cursor + keyword.length;
+            if (end > input.length)
+                continue;
+            const potentialKeyword = input.substring(cursor, end);
+            if (potentialKeyword !== keyword)
+                continue;
+            if (end === input.length)
+                return true;
+            const nextChar = input[end];
+            if (' \t\r\n'.includes(nextChar))
+                return true;
+        }
+        return false;
+    },
+    /**
+     * Legacy helper retained for compatibility.
+     * Delegates to isDirectiveContext but requires the slash prefix.
      */
     isSlashDirectiveContext(input, pos) {
-        // First check if we're at a / symbol
-        if (input[pos] !== '/')
-            return false;
-        // Determine if this / symbol is at a logical line start
-        const isAtLineStart = this.isLogicalLineStart(input, pos);
-        if (!isAtLineStart)
-            return false;
-        // Check if it's followed by a valid directive keyword
-        // Include 'log' as a special case since it's syntactic sugar for 'output'
-        const directiveKeywords = [...Object.keys(DirectiveKind), 'log'];
-        const afterSlashPos = pos + 1;
-        // Look ahead to see if a directive keyword follows
-        for (const keyword of directiveKeywords) {
-            // Check if there's enough text after / for this keyword
-            if (afterSlashPos + keyword.length > input.length)
-                continue;
-            const potentialKeyword = input.substring(afterSlashPos, afterSlashPos + keyword.length);
-            // Check if the text matches the keyword and is followed by whitespace or EOL
-            if (potentialKeyword === keyword) {
-                // If we're at the end of input or the next char is whitespace, it's a directive
-                if (afterSlashPos + keyword.length === input.length)
-                    return true;
-                const nextChar = input[afterSlashPos + keyword.length];
-                if (' \t\r\n'.includes(nextChar))
-                    return true;
-            }
-        }
-        // Not a directive context
-        return false;
+        return input[pos] === '/' && this.isDirectiveContext(input, pos);
     },
     /**
      * Determines if the current position represents a variable reference context
@@ -168,7 +167,7 @@ export const helpers = {
         if (input[pos] !== '@')
             return false;
         // If we're at a slash directive context, this can't be a variable context
-        if (this.isSlashDirectiveContext(input, pos))
+        if (this.isDirectiveContext(input, pos))
             return false;
         // If not a directive, but we have an @ symbol, it's a variable reference
         // This assumes that @ is either:
@@ -191,7 +190,7 @@ export const helpers = {
      */
     isPlainTextContext(input, pos) {
         // If it's not any of the special contexts, it's plain text
-        return !this.isSlashDirectiveContext(input, pos) &&
+        return !this.isDirectiveContext(input, pos) &&
             !this.isAtVariableContext(input, pos);
     },
     /**

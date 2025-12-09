@@ -1,8 +1,11 @@
 // EXPORT DIRECTIVE
 // Parses `/export { ... }` declarations for module manifests
 
+ExportKeyword
+  = "/"? "export"
+
 SlashExport
-  = DirectiveContext "/export" _ "{" _ members:ExportMemberList _ "}" comment:InlineComment? {
+  = DirectiveContext ExportKeyword _ "{" _ members:ExportMemberList _ "}" comment:InlineComment? {
 const exports = members.map((member) => {
         const nodeLocation = member.identifier.location || location();
         return helpers.createVariableReferenceNode(
@@ -34,10 +37,10 @@ const exports = members.map((member) => {
         location()
       );
     }
-  / DirectiveContext "/export" _ &(LineTerminator / EOF) {
+  / DirectiveContext ExportKeyword _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing export list in /export directive. Expected: /export { name, other }", String.fromCharCode(123), location());
     }
-  / DirectiveContext "/export" {
+  / DirectiveContext ExportKeyword {
       helpers.mlldError("Invalid /export syntax. Expected: /export { name, other }", String.fromCharCode(123), location());
     }
 

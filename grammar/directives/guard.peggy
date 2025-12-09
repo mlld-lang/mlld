@@ -1,8 +1,11 @@
 // GUARD DIRECTIVE
 // Implements /guard parsing for security policy hooks.
 
+GuardKeyword
+  = "/"? "guard"
+
 SlashGuard
-  = DirectiveContext "/guard" _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+  = DirectiveContext GuardKeyword _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (new syntax - timing required)', { name: nameTiming?.name, timing, filter, guardBody });
       const guardTiming = timing;
 
@@ -49,7 +52,7 @@ SlashGuard
         'guard'
       );
     }
-  / DirectiveContext "/guard" _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+  / DirectiveContext GuardKeyword _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (old syntax with for)', { timing, name, filter, guardBody });
       const guardTiming = timing ?? 'before';
 
@@ -96,7 +99,7 @@ SlashGuard
         'guard'
       );
     }
-  / DirectiveContext "/guard" {
+  / DirectiveContext GuardKeyword {
       return peg$FAILED;
     }
 

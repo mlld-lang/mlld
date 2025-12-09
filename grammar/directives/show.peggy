@@ -20,18 +20,21 @@ It can be used in these forms:
 // TOP-LEVEL SHOW DIRECTIVE
 // -------------------------------------------------------------
 
+ShowKeyword
+  = "/"? "show"
+
 // Primary /show directive with all variants
 SlashShow
   // Error: Multiple arguments - must come FIRST to catch before successful parse
-  = DirectiveContext "/show" (_ DataLabelList)? _ "@" id:BaseIdentifier fields:("." BaseIdentifier)* _ "@" {
+  = DirectiveContext ShowKeyword (_ DataLabelList)? _ "@" id:BaseIdentifier fields:("." BaseIdentifier)* _ "@" {
       helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
     }
   // Error: Multiple quoted strings
-  / DirectiveContext "/show" (_ DataLabelList)? _ ("\"" [^"]* "\"" / "'" [^']* "'") _ ("\"" / "'" / "@") {
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ ("\"" [^"]* "\"" / "'" [^']* "'") _ ("\"" / "'" / "@") {
       helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
     }
   // Command execution syntax: /show {echo "test"}
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
       // Command syntax for display: /show {command}
       helpers.debug('SlashShow matched command for display', { content, tail });
 
@@ -74,7 +77,7 @@ SlashShow
       );
     }
   // Code execution syntax: /show js {console.log("test")}
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ lang:RunCodeLanguage _ content:UnifiedCodeBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ lang:RunCodeLanguage _ content:UnifiedCodeBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
       // Code syntax for display: /show language {code}
       helpers.debug('SlashShow matched code for display', { lang, content });
 
@@ -137,7 +140,7 @@ SlashShow
   // REMOVED: Foreach section expression - superseded by file reference interpolation
   // Migration: Use /show <*.md # section> as "template" instead
   // Foreach command expression: /show foreach @command(@arrays)
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ expr:ForeachCommandExpression ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ expr:ForeachCommandExpression ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched foreach expression', { expr, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -202,7 +205,7 @@ SlashShow
       );
     }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched double-bracketed path section', { content, rename, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -262,7 +265,7 @@ SlashShow
       );
     }
   // Load content expression: <path/to/file.md> or <path # Section>
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ content:AlligatorExpression rename:AsNewTitle? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ content:AlligatorExpression rename:AsNewTitle? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched load content expression', { content, rename, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -316,7 +319,7 @@ SlashShow
         'load-content'
       );
     }
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched template content', { template, headerLevel, underHeader, ending });
       
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -398,7 +401,7 @@ SlashShow
       );
     }
   // Variable reference MUST come before exec invocation to match simple @varname first
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched variable reference', { varRef, headerLevel, underHeader, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -482,7 +485,7 @@ SlashShow
       );
     }
   // Unified reference (exec invocation or variable) with tail modifiers - /show @obj.method() | @modifiers
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ invocation:UnifiedReferenceWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ invocation:UnifiedReferenceWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched unified reference with tail modifiers', { invocation, headerLevel, underHeader, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -586,7 +589,7 @@ SlashShow
         'invocation'
       );
     }
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched quoted string', { content, headerLevel, underHeader, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -681,7 +684,7 @@ SlashShow
         'path'
       );
     }
-  / DirectiveContext "/show" labelsSegment:(_ DataLabelList)? _ path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+  / DirectiveContext ShowKeyword labelsSegment:(_ DataLabelList)? _ path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, ending });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -771,7 +774,7 @@ SlashShow
   // -----------------------------------------
   
   // Error: Unclosed double brackets [[ (for path section expressions)
-  / DirectiveContext "/show" (_ DataLabelList)? _ "[[" &{
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ "[[" &{
       // Check if we have unclosed double brackets
       let i = peg$currPos;
       let depth = 1;
@@ -792,7 +795,7 @@ SlashShow
     }
     
   // Error: Unclosed alligator bracket <
-  / DirectiveContext "/show" (_ DataLabelList)? _ "<" &{
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ "<" &{
       // Check if we have an unclosed alligator bracket
       let i = peg$currPos;
       while (i < input.length) {
@@ -807,7 +810,7 @@ SlashShow
     
     
   // Error: Invalid @ usage (not followed by valid identifier)
-  / DirectiveContext "/show" (_ DataLabelList)? _ "@" &{
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ "@" &{
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
@@ -815,7 +818,7 @@ SlashShow
     }
     
   // Error: Unclosed backtick template
-  / DirectiveContext "/show" (_ DataLabelList)? _ "`" &{
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ "`" &{
       let i = peg$currPos;
       while (i < input.length) {
         if (input[i] === '`' && input[i-1] !== '\\') return false;
@@ -828,19 +831,19 @@ SlashShow
     }
     
   // Error: Unclosed double-colon template
-  / DirectiveContext "/show" (_ DataLabelList)? _ "::" &{
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed double-colon template in /show directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing content after /show
-  / DirectiveContext "/show" (_ DataLabelList)? _ &(LineTerminator / EOF) {
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing content in /show directive. Expected template, variable, or path to show.", "@", location());
     }
     
   // Error: Invalid foreach syntax
-  / DirectiveContext "/show" (_ DataLabelList)? _ "foreach" _ &{
+  / DirectiveContext ShowKeyword (_ DataLabelList)? _ "foreach" _ &{
       // Check if we have incomplete foreach syntax
       const rest = input.substring(peg$currPos).trim();
       return !rest.startsWith('@') && !rest.startsWith('<');
@@ -849,7 +852,7 @@ SlashShow
     }
 
   // Error: Generic /show syntax error (catch-all)
-  / DirectiveContext "/show" {
+  / DirectiveContext ShowKeyword {
       helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show <path # section>", "`", location());
     }
 

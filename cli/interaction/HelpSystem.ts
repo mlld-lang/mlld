@@ -443,6 +443,7 @@ Commands:
 
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
+  --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin strict)
   -o, --output <path>     Output file path
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)

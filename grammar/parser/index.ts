@@ -12,7 +12,7 @@ import { helpers as generatedHelpers } from '../generated/parser/grammar-core.js
 import type { GrammarWarning } from '../deps/grammar-core.js';
 
 // Import types
-import type { MlldNode } from '@core/types';
+import type { MlldMode, MlldNode } from '@core/types';
 
 /**
  * Parser options
@@ -20,6 +20,8 @@ import type { MlldNode } from '@core/types';
 export interface ParserOptions {
   /** Starting rule (default: 'Start') */
   startRule?: string;
+  /** Parsing mode for strict vs markdown semantics */
+  mode?: MlldMode;
   /** Additional options passed to PEG parser */
   [key: string]: any;
 }
@@ -53,6 +55,7 @@ export async function parse(source: string, options?: ParserOptions): Promise<Pa
   try {
     const ast = parser.parse(source, {
       startRule: 'Start',
+      mode: 'markdown',
       ...options
     });
     
@@ -82,6 +85,7 @@ export function parseSync(source: string, options?: ParserOptions): MlldNode[] {
   try {
     return parser.parse(source, {
       startRule: 'Start',
+      mode: 'markdown',
       ...options
     });
   } finally {

@@ -13,6 +13,7 @@ export class OptionProcessor {
   cliToApiOptions(cliOptions: CLIOptions): any {
     return {
       format: cliOptions.format,
+      mode: cliOptions.mode,
       strict: cliOptions.strict,
       homePath: cliOptions.homePath,
       debug: cliOptions.debug,
@@ -198,6 +199,7 @@ export class OptionProcessor {
     const optionsWithValues = [
       '--output', '-o',
       '--format', '-f',
+      '--mode',
       '--home-path',
       '--directive',
       '--url-timeout',

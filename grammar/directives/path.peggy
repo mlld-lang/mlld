@@ -17,10 +17,13 @@ It is used in the form:
 // TOP-LEVEL PATH DIRECTIVE
 // -------------------------------------------------------------
 
+PathKeyword
+  = "/"? "path"
+
 // Primary /path directive - handles bracketed paths using proper abstraction
 SlashPath
   // Double quoted string path with @var interpolation
-  = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ quote:UnifiedDoubleQuote tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext PathKeyword _ "@" id:BaseIdentifier _ "=" _ quote:UnifiedDoubleQuote tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashPath matched double quoted string with interpolation', { id, quote });
       
       // Extract content from unified quote
@@ -58,7 +61,7 @@ SlashPath
       );
     }
   // Single quoted string path (literal, no interpolation)
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "'" content:$([^']*) "'" tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext PathKeyword _ "@" id:BaseIdentifier _ "=" _ "'" content:$([^']*) "'" tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashPath matched single quoted string (literal)', { id, content, tail });
       
       // Create variable reference node for identifier
@@ -91,7 +94,7 @@ SlashPath
       );
     }
   // REMOVED: Bracketed path syntax - use quoted strings instead
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext PathKeyword _ "@" id:BaseIdentifier _ "=" _ path:PathExpression tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashPath matched normal path', { id, path, tail });
       
       // Process special path variables

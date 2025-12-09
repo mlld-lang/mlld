@@ -27,6 +27,7 @@ import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
+import type { MlldMode } from '@core/types/mode';
 import type { Environment } from '@interpreter/env/Environment';
 import { ErrorHandler } from './error/ErrorHandler';
 import { PathContextBuilder } from '@core/services/PathContextService';
@@ -42,6 +43,7 @@ export interface CLIOptions {
   input: string;
   output?: string;
   format?: 'markdown' | 'md' | 'xml';
+  mode?: MlldMode;
   stdout?: boolean;
   verbose?: boolean;
   debug?: boolean;
@@ -278,6 +280,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       pathContext: pathContext,
       filePath: path.resolve(input), // Pass the current file path for error reporting
       format: normalizedFormat,
+      mlldMode: cliOptions.mode,
       fileSystem: fileSystem,
       pathService: pathService,
       strict: cliOptions.strict,

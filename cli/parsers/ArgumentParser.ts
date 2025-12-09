@@ -59,6 +59,9 @@ export class ArgumentParser {
         case '-f':
           options.format = this.normalizeFormat(args[++i]);
           break;
+        case '--mode':
+          options.mode = this.normalizeMode(args[++i]);
+          break;
         case '--stdout':
           options.stdout = true;
           break;
@@ -217,8 +220,9 @@ export class ArgumentParser {
           options.streamOutputFormat = format;
           break;
         }
-        case '--inject': {
-          // Multiple --inject flags allowed: --inject @config={"key":"val"} --inject @data=@file.json
+        case '--inject':
+        case '--payload': {
+          // Multiple flags allowed: --inject @config={"key":"val"} --payload @data=@file.json
           const injectValue = args[++i];
           if (!options.inject) options.inject = [];
           options.inject.push(injectValue);
@@ -364,6 +368,15 @@ export class ArgumentParser {
         console.warn(`Warning: Unknown format '${format}', defaulting to markdown`);
         return 'markdown';
     }
+  }
+
+  normalizeMode(mode?: string): 'strict' | 'markdown' | undefined {
+    if (!mode) return undefined;
+    const normalized = mode.toLowerCase();
+    if (normalized === 'strict' || normalized === 'markdown') {
+      return normalized as 'strict' | 'markdown';
+    }
+    throw new Error("Invalid mode. Use 'strict' or 'markdown'.");
   }
 
   detectSpecialCommands(args: string[]): string[] {

@@ -1,8 +1,11 @@
 // FOR DIRECTIVE
 // Implementation of the /for directive for iteration
 
+ForKeyword
+  = "/"? "for"
+
 SlashFor "for directive"
-  = DirectiveContext "/for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction ending:StandardDirectiveEnding {
+  = DirectiveContext ForKeyword opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction ending:StandardDirectiveEnding {
       helpers.debug('SlashFor matched', { pattern, action, ending });
       
       const meta = {
@@ -35,12 +38,12 @@ SlashFor "for directive"
     }
 
   // Error recovery patterns
-  / DirectiveContext "/for" _ pattern:ForIterationPattern _ !"=>" {
+  / DirectiveContext ForKeyword _ pattern:ForIterationPattern _ !"=>" {
       helpers.mlldError("Missing '=>' in /for directive. Expected: /for @var in @collection => action", "=>", location());
     }
-  / DirectiveContext "/for" _ "@" id:BaseIdentifier _ !"in" {
+  / DirectiveContext ForKeyword _ "@" id:BaseIdentifier _ !"in" {
       helpers.mlldError("Missing 'in' in /for directive. Expected: /for @var in @collection => action", "in", location());
     }
-  / DirectiveContext "/for" _ !"@" {
+  / DirectiveContext ForKeyword _ !"@" {
       helpers.mlldError("Invalid /for syntax. Expected: /for @var in @collection => action", "@", location());
     }

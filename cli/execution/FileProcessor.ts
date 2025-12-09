@@ -312,6 +312,7 @@ export class FileProcessor {
       pathContext,
       filePath: effectivePath, // Use effective path for error reporting
       format: this.normalizeFormat(cliOptions.format),
+      mlldMode: cliOptions.mode,
       fileSystem: environment.fileSystem,
       pathService: environment.pathService,
       strict: cliOptions.strict,

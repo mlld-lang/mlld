@@ -4,6 +4,7 @@ import { DefaultEffectHandler, type EffectHandler } from './env/EffectHandler';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { resolveMlldMode } from '@core/utils/mode';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import * as path from 'path';
@@ -33,11 +34,17 @@ export async function interpret(
 ): Promise<InterpretResult> {
   // Initialize error patterns on first use
   await initializePatterns();
+
+  const languageMode = resolveMlldMode(
+    options.mlldMode,
+    options.filePath,
+    options.filePath ? 'markdown' : 'strict'
+  );
   
   // Parse the source into AST (or use provided AST)
   const parseResult = options.ast
     ? { success: true as const, ast: options.ast }
-    : await parse(source);
+    : await parse(source, { mode: languageMode });
   
   // Check if parsing was successful
   if (!parseResult.success || (parseResult as any).error) {

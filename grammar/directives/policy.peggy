@@ -1,8 +1,11 @@
 // POLICY DIRECTIVE
 // /policy @name = union(@a, @b)
 
+PolicyKeyword
+  = "/"? "policy"
+
 SlashPolicy
-  = DirectiveContext "/policy" _ name:PolicyIdentifier _ "=" _ expr:PolicyExpression {
+  = DirectiveContext PolicyKeyword _ name:PolicyIdentifier _ "=" _ expr:PolicyExpression {
       const nameNode = helpers.createNode(NodeType.Text, { content: name, location: location() });
       const values = {
         name: [nameNode],

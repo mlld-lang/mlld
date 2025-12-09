@@ -18,9 +18,12 @@ by the /run directive. It uses a unified LHS/RHS pattern where:
 // TOP-LEVEL EXEC DIRECTIVE
 // -------------------------------------------------------------
 
+ExeKeyword
+  = "/"? "exe"
+
 // Primary /exe directive - unified LHS parsing with RHS delegation
 SlashExe
-  = DirectiveContext "/exe" labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
+  = DirectiveContext ExeKeyword labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
       helpers.debug('SlashExe matched with ExeRHSContent', { id, params, content });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -189,7 +192,7 @@ SlashExe
       );
     }
   // Special case: environment declaration without @ prefix
-  / DirectiveContext "/exe" _ id:BaseIdentifier _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
+  / DirectiveContext ExeKeyword _ id:BaseIdentifier _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
       // Only allow environment declarations without @
       if (content.subtype !== 'environment') {
         helpers.mlldError("Invalid /exe syntax. Variable names must start with '@'. Use: /exe @" + id + " = ...", "@", location());
@@ -233,15 +236,15 @@ SlashExe
       );
     }
   // Error recovery: Missing @ before identifier (non-environment)
-  / DirectiveContext "/exe" _ id:BaseIdentifier _ "=" _ !"{" {
+  / DirectiveContext ExeKeyword _ id:BaseIdentifier _ "=" _ !"{" {
       helpers.mlldError("Invalid /exe syntax. Variable names must start with '@'. Use: /exe @" + id + " = ...", "@", location());
     }
   // Error recovery: Missing = after identifier with parameters
-  / DirectiveContext "/exe" _ "@" id:BaseIdentifier _ "(" [^)]* ")" _ !"=" {
+  / DirectiveContext ExeKeyword _ "@" id:BaseIdentifier _ "(" [^)]* ")" _ !"=" {
       helpers.mlldError("Invalid /exe syntax. Expected '=' after parameters. Use: /exe @" + id + "(params) = ...", "=", location());
     }
   // Error recovery: Unclosed parameters
-  / DirectiveContext "/exe" _ "@" id:BaseIdentifier _ "(" &{
+  / DirectiveContext ExeKeyword _ "@" id:BaseIdentifier _ "(" &{
       // Check if we hit newline or EOF before closing paren
       let i = peg$currPos;
       let parenDepth = 1;
@@ -256,11 +259,11 @@ SlashExe
       helpers.mlldError("Unclosed parameters in /exe directive. Expected ')' to close the parameter list.", ")", location());
     }
   // Error recovery: Missing value after =
-  / DirectiveContext "/exe" _ "@" id:BaseIdentifier params:ExecParameters? _ "=" _ !. {
+  / DirectiveContext ExeKeyword _ "@" id:BaseIdentifier params:ExecParameters? _ "=" _ !. {
       helpers.mlldError("Missing value in /exe directive. Expected command, code, template, or reference after '='.", "value", location());
     }
   // Error recovery: Generic catch-all
-  / DirectiveContext "/exe" {
+  / DirectiveContext ExeKeyword {
       helpers.mlldError("Invalid /exe syntax. Examples:\n" +
             "  /exe @cmd(param) = {echo @param}\n" +
             "  /exe @greet(name) = `Hello @name!`\n" +

@@ -70,8 +70,8 @@ const testFast = shouldRunFastTests();
 // Kept: imports/shadow-environments (4s), imports/complex-scenarios (3.5s), cleanup tests (2.5s)
 // Kept: feat/with/combined (4.5s), feat/with/needs-node (4s), slash/run/command-bases-npm-run (0.6s)
 const command = testFast
-  ? 'NODE_ENV=test MLLD_NO_STREAMING=true vitest run --reporter=dot --silent --exclude="**/integration/imports/basic-patterns.test.ts" --exclude="**/integration/imports/edge-cases.test.ts" --exclude="**/integration/cli/absolute-paths.test.ts" --exclude="**/integration/imports/local-resolver-bugs.test.ts" --exclude="**/integration/shadow-env-basic-import.test.ts" --exclude="**/integration/heredoc-large-variable.test.ts" --exclude="**/*.e2e.test.ts"'
-  : 'NODE_ENV=test MLLD_NO_STREAMING=true vitest run --reporter=dot --silent';
+  ? 'NODE_ENV=test MLLD_NO_STREAMING=true LOOSE_TESTMODE=${LOOSE_TESTMODE:-1} vitest run --reporter=dot --silent --exclude="**/integration/imports/basic-patterns.test.ts" --exclude="**/integration/imports/edge-cases.test.ts" --exclude="**/integration/cli/absolute-paths.test.ts" --exclude="**/integration/imports/local-resolver-bugs.test.ts" --exclude="**/integration/shadow-env-basic-import.test.ts" --exclude="**/integration/heredoc-large-variable.test.ts" --exclude="**/*.e2e.test.ts"'
+  : 'NODE_ENV=test MLLD_NO_STREAMING=true LOOSE_TESTMODE=${LOOSE_TESTMODE:-1} vitest run --reporter=dot --silent';
 
 // Show what we're doing
 if (testFast) {
@@ -84,7 +84,7 @@ if (testFast) {
 }
 
 try {
-  execSync(command, { stdio: 'inherit' });
+  execSync(command, { stdio: 'inherit', env: { ...process.env, LOOSE_TESTMODE: process.env.LOOSE_TESTMODE ?? '1' } });
 } catch (error) {
   process.exit(error.status || 1);
 }

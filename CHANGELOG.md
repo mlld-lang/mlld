@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Command working directories**: `cmd:/abs/path`, `sh:/abs/path`, `bash:/abs/path`, `js:/abs/path`, `node:/abs/path`, and `python:/abs/path` set the execution directory for `/run`, inline pipelines, and `/exe` definitions; execution fails on relative, missing, or non-Unix paths
 - **StreamingManager**: Centralized sink management replaces fragmented sink creation
   - Single owner for StreamBus lifecycle
+
+### Changed
+- **Mode-aware parsing and test defaults**: Parser and CLI/SDK support `mode: 'strict' | 'markdown'`, with `.mld` files and raw strings defaulting to strict; markdown mode preserves prose semantics. Tests honor `LOOSE_TESTMODE` (default `1`) to force markdown parsing during broad runs while strict coverage is added incrementally. Optional leading slashes on directives are accepted in strict mode.
   - FormatAdapterSink and TerminalSink are mutually exclusive
 - **Import from @payload and @state**: Route files can now import fields from execute() payload and state
   - `/import { @message, @userId } from @payload` imports specific fields
@@ -36,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Module installer honors explicitly requested versions by purging mismatched lock/cache entries instead of reusing stale versions
 - Lock file normalization strips version suffixes, preventing duplicate entries like `@module` and `@module@version` from coexisting
 - Registry publish updates `tags.json` for existing modules so `latest`/`stable` advance with new versions
+- Ensure escaping works properly for variable disambiguation from methods and `.` for eg filenames
 
 ## [2.0.0-rc77]
 

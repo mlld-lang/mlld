@@ -2,6 +2,37 @@ import { describe, expect, it } from 'vitest';
 import { ArgumentParser } from './ArgumentParser';
 import { OptionProcessor } from './OptionProcessor';
 
+describe('ArgumentParser --payload alias', () => {
+  it('parses --payload as alias for --inject', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--payload', '@data={"name":"test"}']);
+
+    expect(options.inject).toEqual(['@data={"name":"test"}']);
+  });
+
+  it('allows mixing --inject and --payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--inject', '@config={"a":1}',
+      '--payload', '@data={"b":2}'
+    ]);
+
+    expect(options.inject).toEqual(['@config={"a":1}', '@data={"b":2}']);
+  });
+
+  it('supports multiple --payload flags', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--payload', '@a=1',
+      '--payload', '@b=2'
+    ]);
+
+    expect(options.inject).toEqual(['@a=1', '@b=2']);
+  });
+});
+
 describe('ArgumentParser streaming flag', () => {
   it('parses --no-stream', () => {
     const parser = new ArgumentParser();
