@@ -1,11 +1,3 @@
-/var @config = {
-  "database": {
-    "host": "localhost",
-    "ports": [5432, 5433]
-  },
-  "features": ["auth", "api", "cache"]
-}
-
-/show @config.database.host           # "localhost"
-/show @config.database.ports[0]        # 5432
-/show @config.features[1]              # "api"
+>> Start-of-line comment
+/var @name = "Alice"    >> end-of-line comment
+/show @greeting         << also end-of-line

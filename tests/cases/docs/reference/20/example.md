@@ -1,7 +1,5 @@
-/var @items = ["A","B"]
-/var @msg = ::
-/for @x in @items
-- @x
-/end
-::
-/show @msg
+/var @xs = [1, null, 2, null, 3]
+/var @filtered = for @x in @xs => when [
+  @x != null => @x
+  none => skip
+]

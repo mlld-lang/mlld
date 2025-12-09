@@ -1,3 +1,6 @@
-/var @readme = <README.md>
-/var @config = <package.json>
-/show <documentation.md>
+/var @tpl = `
+/for @v in ["x","y"]
+- @v
+/end
+`
+/show @tpl

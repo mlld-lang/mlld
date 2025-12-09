@@ -39,6 +39,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
+    const workingDirectory = options?.workingDirectory || this.workingDirectory;
 
     // Check for test mocks first
     const mockResult = this.handleTestMocks(command, options);
@@ -93,7 +94,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
             exitCode: 1,
             duration: 0,
             stderr: message,
-            workingDirectory: this.workingDirectory,
+            workingDirectory: workingDirectory,
             directiveType: context?.directiveType || 'run'
           }
         );
@@ -131,7 +132,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
             exitCode: 1,
             duration: 0,
             stderr: message,
-            workingDirectory: this.workingDirectory,
+            workingDirectory: workingDirectory,
             directiveType: context?.directiveType || 'run'
           }
         );
@@ -168,7 +169,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
             exitCode: 1,
             duration: 0,
             stderr: message,
-            workingDirectory: this.workingDirectory,
+            workingDirectory: workingDirectory,
             directiveType: context?.directiveType || 'run'
           }
         );
@@ -200,7 +201,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
             exitCode: 1,
             duration: 0,
             stderr: message,
-            workingDirectory: this.workingDirectory,
+            workingDirectory: workingDirectory,
             directiveType: context?.directiveType || 'run'
           }
         );
@@ -249,7 +250,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
           exitCode: 1,
           duration: 0,
           stderr: message,
-          workingDirectory: this.workingDirectory,
+          workingDirectory: workingDirectory,
           directiveType: context?.directiveType || 'run'
         }
       );
@@ -279,6 +280,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     const { exec } = await import('child_process');
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
+    const workingDirectory = options?.workingDirectory || this.workingDirectory;
 
     // In test environments with MLLD_NO_STREAMING, suppress stderr to keep output clean
     const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
@@ -294,7 +296,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
 
     const { stdout, stderr } = await execAsync(finalCommand, {
       encoding: 'utf8',
-      cwd: this.workingDirectory,
+      cwd: workingDirectory,
       env: { ...process.env, ...(options?.env || {}) },
       maxBuffer: 10 * 1024 * 1024 // 10MB limit
     });
@@ -313,6 +315,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     context: CommandExecutionContext | undefined,
     startTime: number
   ): Promise<CommandExecutionResult> {
+    const workingDirectory = options?.workingDirectory || this.workingDirectory;
     const showRawStream =
       (Array.isArray(process.argv) && process.argv.includes('--show-json')) ||
       process.env.MLLD_SHOW_JSON === 'true';
@@ -337,7 +340,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     const env = { ...process.env, ...(options?.env || {}) };
 
     const child = spawn(safeCommand, {
-      cwd: this.workingDirectory,
+      cwd: workingDirectory,
       env,
       shell: true,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -400,7 +403,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
               exitCode: 1,
               stderr: err.message,
               duration,
-              workingDirectory: this.workingDirectory,
+              workingDirectory: workingDirectory,
               directiveType: context?.directiveType || 'run'
             }
           )
@@ -444,7 +447,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
                 stderr: stderrBuffer,
                 stdout: stdoutBuffer,
                 duration,
-                workingDirectory: this.workingDirectory,
+                workingDirectory: workingDirectory,
                 directiveType: context?.directiveType || 'run',
                 streamId
               }

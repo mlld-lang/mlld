@@ -143,13 +143,11 @@ ExeRunCommandWithStdin "exe run command with stdin"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases,
+          ...content.values,
           withClause: withClause
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases,
+          ...content.raw,
           withClause: withClause
         },
         meta: {
@@ -171,13 +169,11 @@ ExeRunCommandPipeStdin "exe run command pipe stdin"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases,
+          ...content.values,
           withClause
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases,
+          ...content.raw,
           stdinExpr: stdinExpr.type === 'VariableReference' ? '@' + stdinExpr.identifier : 'expression',
           ...(tail ? { tailModifiers: tail } : {})
         },
@@ -201,13 +197,11 @@ ExeStreamCommandPattern "exe stream command pattern"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases,
+          ...content.values,
           withClause
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases,
+          ...content.raw,
           ...(tail ? { tailModifiers: tail } : {}),
           stream: true
         },
@@ -227,12 +221,10 @@ ExeRunCommandPattern "exe run command pattern"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases
+          ...content.values
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases
+          ...content.raw
         },
         meta: content.meta
       };
@@ -245,14 +237,10 @@ ExeCodePattern "exe code pattern"
         subtype: 'exeCode',
         source: 'code',
         values: {
-          lang: codeCore.values.lang,
-          args: codeCore.values.args,
-          code: codeCore.values.code
+          ...codeCore.values
         },
         raw: {
-          lang: codeCore.raw.lang,
-          args: codeCore.raw.args,
-          code: codeCore.raw.code
+          ...codeCore.raw
         },
         meta: codeCore.meta
       };
@@ -265,12 +253,10 @@ ExeCommandPattern "exe command pattern"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases
+          ...content.values
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases
+          ...content.raw
         },
         meta: content.meta
       };

@@ -1,2 +1,5 @@
-/when @score >= 80 && @submitted => show "Passed"
-/when (@role == "admin" || @role == "mod") && @active => show "Privileged"
+/when [
+  @score > 90 => show "Excellent!"
+  @bonus => show "Bonus applied!"
+  none => show "No conditions matched"
+]

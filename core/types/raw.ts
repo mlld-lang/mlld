@@ -55,6 +55,7 @@ export interface RunRaw {
   parameters?: string;
   options?: string;
   securityLabels?: string;
+  workingDir?: string;
 }
 
 /**

@@ -10,6 +10,7 @@ export interface CommandExecutionOptions {
   collectErrors?: boolean;
   input?: string;
   env?: Record<string, string>;
+  workingDirectory?: string;
 }
 
 export interface CommandExecutionResult {
@@ -74,6 +75,7 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
     const { showProgress, maxOutputLines, errorBehavior } = finalOptions;
     
     const startTime = Date.now();
+    const effectiveWorkingDirectory = options?.workingDirectory || this.workingDirectory;
     
     // Show progress if enabled
     if (showProgress) {
@@ -112,7 +114,8 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
           error,
           command,
           duration,
-          context
+          context,
+          effectiveWorkingDirectory
         );
       }
       
@@ -139,8 +142,10 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
     error: unknown,
     command: string,
     duration: number,
-    context?: CommandExecutionContext
+    context?: CommandExecutionContext,
+    workingDirectory?: string
   ): MlldCommandExecutionError {
+    const cwd = workingDirectory || this.workingDirectory;
     const errorDetails = {
       stdout: '',
       stderr: '',
@@ -181,7 +186,7 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
       {
         stdout: errorDetails.stdout,
         stderr: errorDetails.stderr,
-        workingDirectory: this.workingDirectory,
+        workingDirectory: cwd,
         directiveType: context?.directiveType || 'run'
       }
     );

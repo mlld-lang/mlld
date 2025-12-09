@@ -51,7 +51,7 @@ export class BashExecutor extends BaseCommandExecutor {
       `bash: ${code.substring(0, 50)}...`,
       options,
       context,
-      () => this.executeBashCode(code, params, metadata, context)
+      () => this.executeBashCode(code, params, metadata, context, options)
     );
   }
 
@@ -95,7 +95,8 @@ export class BashExecutor extends BaseCommandExecutor {
    */
   private runBashSync(
     enhancedCode: string,
-    envVars: Record<string, string>
+    envVars: Record<string, string>,
+    workingDirectory: string
   ): { execResult: any; usedPath: string } {
     const candidates = this.getCandidateBashPaths();
     let lastError: unknown;
@@ -106,7 +107,7 @@ export class BashExecutor extends BaseCommandExecutor {
           input: enhancedCode,
           encoding: 'utf8',
           env: { ...process.env, ...envVars },
-          cwd: this.workingDirectory,
+          cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe']
         });
 
@@ -137,9 +138,11 @@ export class BashExecutor extends BaseCommandExecutor {
     code: string,
     params?: Record<string, any>,
     metadata?: Record<string, any>,
-    context?: CommandExecutionContext
+    context?: CommandExecutionContext,
+    options?: CommandExecutionOptions
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
+    const workingDirectory = options?.workingDirectory || this.workingDirectory;
     let envVars: Record<string, string> = {};
     let tempFiles: string[] = [];
 
@@ -266,7 +269,7 @@ export class BashExecutor extends BaseCommandExecutor {
 
       // Non-streaming path: preserve legacy sync behavior for fixtures/tests
       if (!context?.streamingEnabled) {
-        const { execResult, usedPath } = this.runBashSync(enhancedCode, envVars);
+        const { execResult, usedPath } = this.runBashSync(enhancedCode, envVars, workingDirectory);
 
         if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
           try {
@@ -322,7 +325,7 @@ export class BashExecutor extends BaseCommandExecutor {
 
       const child = child_process.spawn(this.bashPath, [], {
         env: { ...process.env, ...envVars },
-        cwd: this.workingDirectory,
+        cwd: workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
@@ -393,7 +396,7 @@ export class BashExecutor extends BaseCommandExecutor {
                 duration,
                 stderr: stderrText,
                 stdout: stdoutText,
-                workingDirectory: this.workingDirectory,
+                workingDirectory,
                 directiveType: context?.directiveType || 'run',
                 streamId
               }
@@ -434,7 +437,7 @@ export class BashExecutor extends BaseCommandExecutor {
             duration: Date.now() - startTime,
             stderr: stderr,
             stdout: stdout,
-            workingDirectory: this.workingDirectory,
+            workingDirectory,
             directiveType: context.directiveType || 'run'
           }
         );

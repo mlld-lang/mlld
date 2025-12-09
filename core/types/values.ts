@@ -6,6 +6,8 @@ import {
   DataLabel
 } from './security';
 
+import type { PathMeta } from './meta';
+
 import {
   TextNode,
   VariableReferenceNode,
@@ -113,6 +115,8 @@ export interface RunValues {
   parameters?: ContentNodeArray;
   options?: BaseMlldNode[];
   securityLabels?: DataLabel[];
+  workingDir?: ContentNodeArray;
+  workingDirMeta?: PathMeta;
 }
 
 /**

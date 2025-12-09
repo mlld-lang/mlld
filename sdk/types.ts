@@ -33,6 +33,7 @@ export interface CommandExecutionOptions {
   collectErrors?: boolean;
   showCommandContext?: boolean;
   timeout?: number;
+  workingDirectory?: string;
 }
 
 export interface InterpretOptions {

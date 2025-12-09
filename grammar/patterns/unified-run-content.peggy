@@ -82,8 +82,27 @@ UnifiedCommandBrackets "Command brackets {...}"
 
 // CMD PREFIXED COMMAND BRACKETS - Explicit command wrapper
 CmdCommandBrackets "cmd command brackets"
-  = "cmd" _ content:UnifiedCommandBrackets {
-      return content;
+  = "cmd" workingDir:WorkingDirPath? _ content:UnifiedCommandBrackets {
+      if (!workingDir) {
+        return content;
+      }
+
+      return {
+        ...content,
+        values: {
+          ...content.values,
+          workingDir: workingDir.parts
+        },
+        raw: {
+          ...content.raw,
+          workingDir: workingDir.raw
+        },
+        meta: {
+          ...content.meta,
+          workingDirMeta: workingDir.meta,
+          hasWorkingDir: true
+        }
+      };
     }
 
 // Bare command brackets are no longer allowed without cmd prefix

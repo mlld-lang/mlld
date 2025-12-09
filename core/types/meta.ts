@@ -78,6 +78,8 @@ export interface PathDirectiveMeta extends DirectiveMeta {
  */
 export interface RunMeta extends DirectiveMeta {
   riskLevel?: 'low' | 'medium' | 'high';
+  workingDirMeta?: PathMeta;
+  hasWorkingDir?: boolean;
   // Command execution metadata
 }
 

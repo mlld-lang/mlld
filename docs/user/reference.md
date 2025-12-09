@@ -63,6 +63,26 @@ Multi-line commands with `run sh`:
 }
 ```
 
+### Working directory (`:path`)
+
+```mlld
+/run cmd:/ {pwd}
+```
+
+Output:
+```
+/
+```
+
+Paths must be absolute (for example `/tmp`, `/var/log`, `/`). Relative paths, `~`, or Windows-style paths fail. Executables accept the same suffix when you need to parameterize it:
+
+```mlld
+/exe @list(dir) = cmd:@dir {pwd}
+/run @list("/")
+```
+
+`sh`, `bash`, `js`, `node`, and `python` accept the same `:/abs/path` suffix. JavaScript and Node switch `process.cwd()` to the provided directory before running code.
+
 ### Executables (`/exe`)
 
 Define reusable functions and templates:

@@ -1,2 +1,2 @@
-/var @config = {"host": "localhost", "port": 3000}
-/for @value in @config => show `@value_key: @value`
+/var @names = ["Alice", "Bob", "Charlie"]
+/for @name in @names => show `Hello @name`

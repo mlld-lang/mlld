@@ -1,8 +1,5 @@
-/exe @getAccess(user) = when first [
-  @user.role == "admin" => "full"
-  @user.verified && @user.premium => "premium"
-  @user.verified => "standard"
-  * => "limited"
+/when first [
+  @role == "admin" => show "Admin access"
+  @role == "user" => show "User access"
+  * => show "Guest access"
 ]
-
-/var @access = @getAccess(@currentUser)

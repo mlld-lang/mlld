@@ -745,6 +745,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Fallback in legacy mode
     return this.basePath;
   }
+
+  getFileSystemService(): IFileSystemService {
+    return this.fileSystem;
+  }
   
   /**
    * Legacy method - returns project root for backward compatibility
@@ -2095,11 +2099,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     language: string, 
     params?: Record<string, any>,
     metadata?: Record<string, any> | CommandExecutionContext,
+    options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
     // Handle overloaded signatures for backward compatibility
-    if (metadata && !context && 'sourceLocation' in metadata) {
+    if (metadata && !context && !options && 'sourceLocation' in metadata) {
       // Old signature: executeCode(code, language, params, context)
+      context = metadata as CommandExecutionContext;
+      metadata = undefined;
+    }
+    if (metadata && !context && !options && 'directiveType' in (metadata as any)) {
       context = metadata as CommandExecutionContext;
       metadata = undefined;
     }
@@ -2129,7 +2138,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Delegate to command executor factory
     const bus = this.getStreamingBus();
     const ctxWithBus = { ...context, bus };
-    return this.commandExecutorFactory.executeCode(code, language, finalParams, metadata as Record<string, any> | undefined, this.outputOptions, ctxWithBus);
+    const mergedOptions = { ...this.outputOptions, ...options };
+    return this.commandExecutorFactory.executeCode(
+      code,
+      language,
+      finalParams,
+      metadata as Record<string, any> | undefined,
+      mergedOptions,
+      ctxWithBus
+    );
   }
 
   

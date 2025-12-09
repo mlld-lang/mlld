@@ -1,5 +1,1 @@
-/var @xs = [1, null, 2, null, 3]
-/var @filtered = for @x in @xs => when [
-  @x != null => @x
-  none => skip
-]
+/for @x in ["A", "B"] => for @y in [1, 2] => show `@x-@y`

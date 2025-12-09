@@ -1,2 +1,8 @@
-/var @numbers = [1, 2, 3]
-/var @doubled = for @x in @numbers => js { return @x * 2 }
+/exe @getAccess(user) = when first [
+  @user.role == "admin" => "full"
+  @user.verified && @user.premium => "premium"
+  @user.verified => "standard"
+  * => "limited"
+]
+
+/var @access = @getAccess(@currentUser)

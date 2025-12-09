@@ -39,16 +39,24 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       `js: ${code.substring(0, 50)}...`,
       jsOptions,
       context,
-      () => this.executeJavaScript(code, params, metadata)
+      () => this.executeJavaScript(code, params, metadata, jsOptions?.workingDirectory)
     );
   }
 
   private async executeJavaScript(
     code: string,
     params?: Record<string, any>,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    workingDirectory?: string
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
+    const targetCwd = workingDirectory || process.cwd();
+    const previousCwd = process.cwd();
+    const shouldRestoreCwd = targetCwd !== previousCwd;
+
+    if (shouldRestoreCwd) {
+      process.chdir(targetCwd);
+    }
 
     try {
       // Create a function that captures console.log output
@@ -196,10 +204,14 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
           duration,
           stdout: '',
           stderr: error instanceof Error ? error.stack || error.message : String(error),
-          workingDirectory: this.workingDirectory
+          workingDirectory: targetCwd
         }
       );
       throw codeError;
+    } finally {
+      if (shouldRestoreCwd) {
+        process.chdir(previousCwd);
+      }
     }
   }
 }

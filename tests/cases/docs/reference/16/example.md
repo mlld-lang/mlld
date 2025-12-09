@@ -1,1 +1,2 @@
-/for @x in ["A", "B"] => for @y in [1, 2] => show `@x-@y`
+/var @numbers = [1, 2, 3]
+/var @doubled = for @x in @numbers => js { return @x * 2 }

@@ -1,4 +1,2 @@
-/exe @greet(name) = ::Hi {{name}}!::
-/var @greetings = foreach @greet(@names)
-
-`/show foreach` with formatting options:
+/var @config = {"host": "localhost", "port": 3000}
+/for @value in @config => show `@value_key: @value`

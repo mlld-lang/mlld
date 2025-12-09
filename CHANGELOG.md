@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SDK consumers receive typed events: `streaming:message`, `streaming:tool_use`, etc.
   - `StructuredResult.streaming` contains accumulated text and parsed events
   - `with { streamFormat: @adapterConfig }` accepts AdapterConfig objects (for example `@claudeAgentSdkAdapter` from `@mlld/stream-claude-agent-sdk`)
+- **Command working directories**: `cmd:/abs/path`, `sh:/abs/path`, `bash:/abs/path`, `js:/abs/path`, `node:/abs/path`, and `python:/abs/path` set the execution directory for `/run`, inline pipelines, and `/exe` definitions; execution fails on relative, missing, or non-Unix paths
 - **StreamingManager**: Centralized sink management replaces fragmented sink creation
   - Single owner for StreamBus lifecycle
   - FormatAdapterSink and TerminalSink are mutually exclusive

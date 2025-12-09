@@ -1,3 +1,7 @@
-/var @filename = <package.json>.ctx.filename
-/var @tokens = <large-file.md>.ctx.tokens
-/var @frontmatter = <doc.md>.ctx.fm.title
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg

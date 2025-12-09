@@ -31,6 +31,7 @@ import { materializeDisplayValue } from '../utils/display-materialization';
 import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
+import { resolveWorkingDirectory } from '../utils/working-directory';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -284,6 +285,13 @@ export async function evaluateRun(
     const command =
       preExtractedCommand ??
       (await interpolateWithPendingDescriptor(commandNodes, InterpolationContext.ShellCommand));
+
+    const workingDirectory = await resolveWorkingDirectory(
+      (directive.values as any)?.workingDir,
+      env,
+      { sourceLocation: directive.location, directiveType: 'run' }
+    );
+    const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
     const commandTaint = deriveCommandTaint({ command });
     mergePendingDescriptor(
       makeSecurityDescriptor({
@@ -326,7 +334,7 @@ export async function evaluateRun(
             exitCode: 1,
             duration: 0,
             stderr: message,
-            workingDirectory: env.getBasePath(),
+            workingDirectory: effectiveWorkingDirectory,
             directiveType: 'run'
           },
           env
@@ -359,19 +367,19 @@ export async function evaluateRun(
         // Block immediately dangerous commands
         if (analysis.blocked) {
           const reason = analysis.risks[0]?.description || 'Security policy violation';
-          throw new MlldCommandExecutionError(
-            `Security: Command blocked - ${reason}`,
-            directive.location,
-            {
-              command,
-              exitCode: 1,
-              duration: 0,
-              stderr: `This command is blocked by security policy: ${reason}`,
-              workingDirectory: env.getBasePath(),
-              directiveType: 'run'
-            },
-            env
-          );
+        throw new MlldCommandExecutionError(
+          `Security: Command blocked - ${reason}`,
+          directive.location,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: `This command is blocked by security policy: ${reason}`,
+            workingDirectory: effectiveWorkingDirectory,
+            directiveType: 'run'
+          },
+          env
+        );
         }
         // TODO: Add approval prompts for suspicious commands
         // Temporarily disable security warnings for cleaner output
@@ -392,12 +400,19 @@ export async function evaluateRun(
       stdinInput = await resolveStdinInput(withClause.stdin, env);
     }
 
-    const commandOptions = stdinInput !== undefined ? { input: stdinInput } : undefined;
+    const commandOptions =
+      stdinInput !== undefined || workingDirectory
+        ? {
+            ...(stdinInput !== undefined ? { input: stdinInput } : {}),
+            ...(workingDirectory ? { workingDirectory } : {})
+          }
+        : undefined;
     setOutput(await env.executeCommand(command, commandOptions, {
       ...executionContext,
       streamingEnabled,
       pipelineId,
-      suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true
+      suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true,
+      workingDirectory
     }));
     
   } else if (directive.subtype === 'runCode') {
@@ -409,6 +424,11 @@ export async function evaluateRun(
     
     // Verbatim code (no interpolation) with dedent to avoid top-level indent issues
     const code = dedentCommonIndent(extractRawTextContent(codeNodes));
+    const workingDirectory = await resolveWorkingDirectory(
+      (directive.values as any)?.workingDir,
+      env,
+      { sourceLocation: directive.location, directiveType: 'run' }
+    );
     
     // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
     const args = directive.values?.args || [];
@@ -449,11 +469,19 @@ export async function evaluateRun(
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
     setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await env.executeCode(code, language, argValues, {
-        ...executionContext,
-        streamingEnabled,
-        pipelineId
-      });
+      return await env.executeCode(
+        code,
+        language,
+        argValues,
+        undefined,
+        workingDirectory ? { workingDirectory } : undefined,
+        {
+          ...executionContext,
+          streamingEnabled,
+          pipelineId,
+          workingDirectory
+        }
+      );
     }));
     
   } else if (directive.subtype === 'runExec') {
@@ -647,6 +675,13 @@ export async function evaluateRun(
       for (const [key, value] of Object.entries(argValues)) {
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
+
+      const workingDirectory = await resolveWorkingDirectory(
+        (definition as any)?.workingDir,
+        tempEnv,
+        { sourceLocation: directive.location, directiveType: 'run' }
+      );
+      const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
       
       // TODO: Remove this workaround when issue #51 is fixed
       // Strip leading '[' from first command segment if present
@@ -676,25 +711,26 @@ export async function evaluateRun(
             throw new MlldCommandExecutionError(
               `Security: Exec command blocked - ${reason}`,
               directive.location,
-              {
-                command,
-                exitCode: 1,
-                duration: 0,
-                stderr: `This exec command is blocked by security policy: ${reason}`,
-                workingDirectory: env.getBasePath(),
-                directiveType: 'run'
-              },
-              env
-            );
-          }
+            {
+              command,
+              exitCode: 1,
+              duration: 0,
+              stderr: `This exec command is blocked by security policy: ${reason}`,
+              workingDirectory: effectiveWorkingDirectory,
+              directiveType: 'run'
+            },
+            env
+          );
+        }
         }
       }
       
       // Pass context for exec command errors too
-      setOutput(await env.executeCommand(command, undefined, {
+      setOutput(await env.executeCommand(command, workingDirectory ? { workingDirectory } : undefined, {
         ...executionContext,
         streamingEnabled,
-        pipelineId
+        pipelineId,
+        workingDirectory
       }));
       
     } else if (definition.type === 'commandRef') {
@@ -732,6 +768,11 @@ export async function evaluateRun(
       for (const [key, value] of Object.entries(argValues)) {
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
+      const workingDirectory = await resolveWorkingDirectory(
+        (definition as any)?.workingDir,
+        tempEnv,
+        { sourceLocation: directive.location, directiveType: 'run' }
+      );
       
       // Interpolate executable code templates with parameters (canonical behavior)
       const code = await interpolateWithPendingDescriptor(
@@ -785,7 +826,17 @@ export async function evaluateRun(
         });
       } else {
         setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
-          return await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);
+          return await env.executeCode(
+            code,
+            definition.language || 'javascript',
+            codeParams,
+            undefined,
+            workingDirectory ? { workingDirectory } : undefined,
+            {
+              ...executionContext,
+              workingDirectory
+            }
+          );
         }));
       }
     } else if (definition.type === 'template') {

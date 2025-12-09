@@ -157,3 +157,9 @@ This keeps `@ctx.hint` tightly scoped to the location where it is meaningful, wh
 - Expressions: `interpreter/eval/expression.ts` — binary/unary/ternary
 - Pipelines: `interpreter/eval/pipeline/unified-processor.ts` — condensed + structured
 - Interpolation: `interpreter/core/interpreter.ts#interpolate` — templates, pipes, file refs
+
+### Working Directory Resolution
+
+- Grammar attaches `workingDir` metadata for `cmd:/abs`, `sh:/abs`, `bash:/abs`, `js:/abs`, `node:/abs`, and `python:/abs` in `/run`, inline pipelines, and `/exe` definitions.
+- `resolveWorkingDirectory()` (`interpreter/utils/working-directory.ts`) uses the FilePath interpolation context, requires absolute existing directories, and rejects tilde or Windows paths.
+- Executors accept per-call `workingDirectory` overrides; if absent, they fall back to the environment execution directory instead of guessing.

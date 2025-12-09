@@ -295,12 +295,16 @@ export async function evaluateExe(
           throw new Error('Exec command directive missing command');
         }
 
+        const workingDir = (directive.values as any)?.workingDir;
+        const workingDirMeta = (directive.meta as any)?.workingDirMeta || (directive.values as any)?.workingDirMeta;
         executableDef = {
           type: 'command',
           commandTemplate: commandNodes,
           withClause,
           paramNames,
-          sourceDirective: 'exec'
+          sourceDirective: 'exec',
+          ...(workingDir ? { workingDir } : {}),
+          ...(workingDirMeta ? { workingDirMeta } : {})
         } satisfies CommandExecutable;
       }
     }
@@ -342,12 +346,16 @@ export async function evaluateExe(
     const language = directive.meta?.language || 'javascript';
     
     // Store the code template (not interpolated yet)
+    const workingDir = (directive.values as any)?.workingDir;
+    const workingDirMeta = (directive.meta as any)?.workingDirMeta || (directive.values as any)?.workingDirMeta;
     executableDef = {
       type: 'code',
       codeTemplate: codeNodes,
       language,
       paramNames,
-      sourceDirective: 'exec'
+      sourceDirective: 'exec',
+      ...(workingDir ? { workingDir } : {}),
+      ...(workingDirMeta ? { workingDirMeta } : {})
     } satisfies CodeExecutable;
     
   } else if (directive.subtype === 'exeResolver') {

@@ -36,6 +36,7 @@ import { InterpolationContext } from '../../core/interpolation-context';
 import { StreamBus, type StreamEvent } from './stream-bus';
 import type { StreamingOptions } from './streaming-options';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
+import { resolveWorkingDirectory } from '../../utils/working-directory';
 
 interface StageExecutionResult {
   result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
@@ -91,7 +92,8 @@ export class PipelineExecutor {
     stageIndex: number,
     stageContext: StageContext,
     parallelIndex?: number,
-    directiveType?: string
+    directiveType?: string,
+    workingDirectory?: string
   ): CommandExecutionContext {
     const stageStreaming = this.isStageStreaming(this.pipeline[stageIndex]);
     return {
@@ -100,7 +102,8 @@ export class PipelineExecutor {
       pipelineId: this.pipelineId,
       stageIndex,
       parallelIndex,
-      streamId: stageContext.contextId ?? createPipelineId()
+      streamId: stageContext.contextId ?? createPipelineId(),
+      workingDirectory
     };
   }
 
@@ -315,7 +318,7 @@ export class PipelineExecutor {
               command: this.pipeline[nextStep.stage]?.rawIdentifier || 'unknown',
               exitCode: 1,
               duration: 0,
-              workingDirectory: process.cwd()
+              workingDirectory: this.env.getExecutionDirectory()
             }
           );
         
@@ -328,7 +331,7 @@ export class PipelineExecutor {
               command: 'pipeline',
               exitCode: 1,
               duration: 0,
-              workingDirectory: process.cwd()
+              workingDirectory: this.env.getExecutionDirectory()
             }
           );
         
@@ -679,6 +682,10 @@ export class PipelineExecutor {
     const runInline = async (): Promise<StageExecutionResult> => {
       const { interpolate } = await import('../../core/interpreter');
       const descriptors: SecurityDescriptor[] = [];
+      const workingDirectory = await resolveWorkingDirectory(stage.workingDir as any, stageEnv, {
+        sourceLocation: stage.location,
+        directiveType: 'run'
+      });
       const commandText = await interpolate(stage.command, stageEnv, InterpolationContext.ShellCommand, {
         collectSecurityDescriptor: d => {
           if (d) descriptors.push(d);
@@ -687,8 +694,8 @@ export class PipelineExecutor {
       const stdinInput = structuredInput?.text ?? '';
       const result = await stageEnv.executeCommand(
         commandText,
-        { input: stdinInput },
-        this.buildCommandExecutionContext(stageIndex, stageContext, parallelIndex)
+        { input: stdinInput, ...(workingDirectory ? { workingDirectory } : {}) },
+        this.buildCommandExecutionContext(stageIndex, stageContext, parallelIndex, undefined, workingDirectory)
       );
       const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
       const normalizedResult = processCommandOutput(result);
@@ -1257,7 +1264,7 @@ export class PipelineExecutor {
               command: effectCmd.rawIdentifier,
               exitCode: 1,
               duration: 0,
-              workingDirectory: process.cwd()
+              workingDirectory: this.env.getExecutionDirectory()
             }
           );
         }

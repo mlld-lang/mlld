@@ -1,2 +1,3 @@
-/import { @parallel, @retry } from @mlld/core
-/import @company/utils as @utils
+/var @filename = <package.json>.ctx.filename
+/var @tokens = <large-file.md>.ctx.tokens
+/var @frontmatter = <doc.md>.ctx.fm.title

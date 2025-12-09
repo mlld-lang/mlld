@@ -1,6 +1,4 @@
-/var @tpl = `
-/for @v in ["x","y"]
-- @v
-/end
-`
-/show @tpl
+/exe @greet(name) = ::Hi {{name}}!::
+/var @greetings = foreach @greet(@names)
+
+`/show foreach` with formatting options:

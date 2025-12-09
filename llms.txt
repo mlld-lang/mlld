@@ -839,6 +839,12 @@ Language specifiers work consistently across `/run`, `/var`, and `/exe`:
 /var @result = js {return 42}
 /exe @calc(x) = js { return @x * 2 }
 
+# Working directory override (absolute Unix paths only; "/" is valid; "~", Windows drives, or missing paths fail)
+/run cmd:/ {pwd}                    # runs in /
+/run sh:/tmp {pwd}                  # runs in /tmp
+/run js:/tmp {console.log(process.cwd())}   # js/node/python accept the same suffix
+/exe @list(dir) = cmd:@dir {pwd}    # executables share the syntax
+
 # stdin support (all forms)
 /var @data = '[{"name":"Alice"},{"name":"Bob"}]'
 /run cmd { cat | jq '.[] | select(.name == "Alice")' } with { stdin: @data }

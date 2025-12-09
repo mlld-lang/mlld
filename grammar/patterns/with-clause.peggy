@@ -215,11 +215,14 @@ PipelineCommand
 
 // Inline command stage using cmd { ... }
 PipelineInlineCommandStage
-  = "cmd" _ content:UnifiedCommandBrackets {
+  = content:CmdCommandBrackets {
       return {
         type: 'inlineCommand',
         command: content.values.command,
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
+        rawWorkingDir: content.raw.workingDir,
         rawCommand: content.raw.command,
         rawIdentifier: content.raw.commandBases && content.raw.commandBases.length > 0 ? content.raw.commandBases[0] : 'cmd-stage',
         meta: content.meta,

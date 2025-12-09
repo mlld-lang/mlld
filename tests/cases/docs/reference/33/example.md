@@ -1,5 +1,4 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/show @fruits.includes("banana")        # true
-/show @fruits.indexOf("cherry")         # 2
-/show @fruits.length()                  # 3
-/show @fruits.join(", ")               # "apple, banana, cherry"
+/exe @left() = sh { echo "L" }
+/exe @right() = sh { echo "R" }
+/var @results = stream @left() || stream @right()
+/show @results   # => ["L","R"]

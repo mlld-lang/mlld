@@ -39,6 +39,7 @@ import { normalizeTransformerResult } from '../utils/transformer-result';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
+import { resolveWorkingDirectory } from '../utils/working-directory';
 import type { OperationContext } from '../env/ContextManager';
 import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
@@ -1655,6 +1656,17 @@ async function evaluateExecInvocationInternal(
       }
   
   let result: unknown;
+  let workingDirectory: string | undefined;
+  if ('workingDir' in definition && (definition as any).workingDir) {
+    workingDirectory = await resolveWorkingDirectory(
+      (definition as any).workingDir as any,
+      execEnv,
+      {
+        sourceLocation: node.location ?? undefined,
+        directiveType: 'exec'
+      }
+    );
+  }
   
   // Handle template executables
   if (isTemplateExecutable(definition)) {
@@ -1880,7 +1892,18 @@ async function evaluateExecInvocationInternal(
           paramCount: Object.keys(codeParams).length
         });
       }
-      const commandOutput = await execEnv.executeCode(fallbackCommand, 'sh', codeParams);
+      const commandOutput = await execEnv.executeCode(
+        fallbackCommand,
+        'sh',
+        codeParams,
+        undefined,
+        workingDirectory ? { workingDirectory } : undefined,
+        {
+          directiveType: 'exec',
+          sourceLocation: node.location,
+          workingDirectory
+        }
+      );
       // Normalize structured output when possible
       if (typeof commandOutput === 'string') {
         const parsed = parseAndWrapJson(commandOutput);
@@ -1897,7 +1920,12 @@ async function evaluateExecInvocationInternal(
       }
 
       // Execute the command with environment variables and optional stdin
-      const commandOptions = stdinInput !== undefined ? { env: envVars, input: stdinInput } : { env: envVars };
+      const commandOptions = stdinInput !== undefined
+        ? { env: envVars, input: stdinInput }
+        : { env: envVars };
+      if (workingDirectory) {
+        (commandOptions as any).workingDirectory = workingDirectory;
+      }
       const commandOutput = await execEnv.executeCommand(
         command,
         commandOptions,
@@ -1908,6 +1936,7 @@ async function evaluateExecInvocationInternal(
           stageIndex: 0,
           sourceLocation: node.location,
           emitEffect: chunkEffect,
+          workingDirectory,
           suppressTerminal: hasStreamFormat || streamingOptions.suppressTerminal === true
         }
       );
@@ -2196,7 +2225,11 @@ async function evaluateExecInvocationInternal(
       code,
       definition.language || 'javascript',
       codeParams,
-      Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined
+      Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined,
+      workingDirectory ? { workingDirectory } : undefined,
+      workingDirectory
+        ? { directiveType: 'exec', sourceLocation: node.location, workingDirectory }
+        : { directiveType: 'exec', sourceLocation: node.location }
     );
     
     // Process the result

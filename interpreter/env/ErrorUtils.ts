@@ -21,6 +21,7 @@ export interface CommandExecutionContext {
   directiveNode?: any; // MlldNode
   filePath?: string;
   directiveType?: string;
+  workingDirectory?: string;
   streamingEnabled?: boolean;
   pipelineId?: string;
   stageIndex?: number;

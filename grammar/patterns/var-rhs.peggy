@@ -311,6 +311,8 @@ RunCommandValue
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
         hasRunKeyword: true,
         meta: content.meta
       };
@@ -391,6 +393,8 @@ CodeExecution "code execution"
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
         hasRunKeyword: true,
         meta: content.meta
       };
@@ -410,6 +414,8 @@ CodeExecution "code execution"
         type: 'command',
         command: content.values.command,
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
         hasRunKeyword: false,
         meta: content.meta
       };

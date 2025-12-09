@@ -1,2 +1,3 @@
-/var @allDocs = <docs/*.md>
-/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
+/var @readme = <README.md>
+/var @config = <package.json>
+/show <documentation.md>

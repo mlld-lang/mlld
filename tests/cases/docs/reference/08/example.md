@@ -1,1 +1,2 @@
-/when @active => show "User is active"
+/exe @list(dir) = cmd:@dir {pwd}
+/run @list("/")
