@@ -25,8 +25,9 @@ TemplateString "Template Context String"
   / quote:UnifiedDoubleQuote { return quote.content; }  // Extract content from unified quote
 
 // Literal @ when not followed by an identifier (e.g., "@" at end of string or "@:")
+// BUT not @@ which is an escape sequence
 DataStringAtLiteral "literal @ character in data string"
-  = "@" !BaseIdentifier {
+  = "@" !"@" !BaseIdentifier {
       return helpers.createNode(NodeType.Text, { content: '@', location: location() });
     }
 

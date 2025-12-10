@@ -71,6 +71,7 @@
     "test:coverage": "vitest run --coverage",
     "test:perf": "vitest run --config vitest.config.perf.mts",
     "test:perf:verbose": "vitest run --config vitest.config.perf.mts --reporter=verbose",
+    "test:claude": "MLLD_RUN_CLAUDE_TESTS=1 vitest run tests/claude --config vitest.config.ts",
     "perf": "node scripts/measure-performance.js",
     "perf:watch": "nodemon --watch dist --watch scripts/measure-performance.js --exec 'node scripts/measure-performance.js'",
     "test:tokens": "vitest run --config vitest.config.tokens.mts",

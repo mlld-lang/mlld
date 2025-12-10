@@ -167,8 +167,9 @@ UnifiedBacktickChar
   / !("`" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
 
 // Literal @ when not followed by an identifier (e.g., "@" at end of string or "@:")
+// BUT not @@ which is an escape sequence
 UnifiedAtLiteral "literal @ character"
-  = "@" !BaseIdentifier {
+  = "@" !"@" !BaseIdentifier {
       return helpers.createNode(NodeType.Text, { content: '@', location: location() });
     }
 
