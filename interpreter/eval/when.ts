@@ -28,7 +28,7 @@ const DENIED_KEYWORD = 'denied';
 /**
  * Helper to evaluate a let assignment and return updated environment
  */
-async function evaluateLetAssignment(
+export async function evaluateLetAssignment(
   entry: LetAssignmentNode,
   env: Environment
 ): Promise<Environment> {
@@ -63,7 +63,7 @@ async function evaluateLetAssignment(
 /**
  * Helper to evaluate an augmented assignment and return updated environment
  */
-async function evaluateAugmentedAssignment(
+export async function evaluateAugmentedAssignment(
   entry: AugmentedAssignmentNode,
   env: Environment
 ): Promise<Environment> {
@@ -107,7 +107,13 @@ async function evaluateAugmentedAssignment(
     undefined,
     { env }
   );
-  env.updateVariable(entry.identifier, updatedVar);
+
+  // Update the variable in the owning environment (current scope or ancestor)
+  let targetEnv: Environment | undefined = env;
+  while (targetEnv && !targetEnv.getCurrentVariables().has(entry.identifier)) {
+    targetEnv = targetEnv.getParent();
+  }
+  (targetEnv ?? env).updateVariable(entry.identifier, updatedVar);
   return env;
 }
 

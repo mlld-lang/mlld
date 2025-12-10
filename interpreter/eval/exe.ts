@@ -1,8 +1,8 @@
-import type { DirectiveNode, TextNode } from '@core/types';
+import type { BaseMlldNode, DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable } from '@core/types/executable';
-import { interpolate } from '../core/interpreter';
+import { interpolate, evaluate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import {
   createExecutableVariable,
@@ -15,6 +15,9 @@ import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadow
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
+import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
+import { VariableImporter } from './import/VariableImporter';
 import * as path from 'path';
 import {
   createCapabilityContext,
@@ -25,6 +28,78 @@ import {
 } from '@core/types/security';
 import { asData, asText, isStructuredValue } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
+
+export interface ExeReturnNode {
+  type?: 'ExeReturn';
+  values?: BaseMlldNode[];
+  meta?: {
+    hasValue?: boolean;
+  };
+}
+
+export interface ExeBlockNode {
+  type?: 'ExeBlock';
+  values: {
+    statements: BaseMlldNode[];
+    return?: ExeReturnNode;
+  };
+  meta?: {
+    statementCount?: number;
+    hasReturn?: boolean;
+  };
+  location?: any;
+}
+
+/**
+ * Evaluate an exe block sequentially with local scope for let/+= assignments.
+ */
+export async function evaluateExeBlock(
+  block: ExeBlockNode,
+  env: Environment,
+  args: Record<string, unknown> = {}
+): Promise<EvalResult> {
+  let blockEnv = env.createChild();
+
+  if (args && Object.keys(args).length > 0) {
+    const importer = new VariableImporter();
+    for (const [param, value] of Object.entries(args)) {
+      const variable = importer.createVariableFromValue(
+        param,
+        value,
+        'exe-param',
+        undefined,
+        { env: blockEnv }
+      );
+      blockEnv.setVariable(param, variable);
+    }
+  }
+
+  for (const stmt of block.values?.statements ?? []) {
+    if (isLetAssignment(stmt)) {
+      blockEnv = await evaluateLetAssignment(stmt, blockEnv);
+    } else if (isAugmentedAssignment(stmt)) {
+      blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
+    } else {
+      const result = await evaluate(stmt, blockEnv);
+      blockEnv = result.env || blockEnv;
+    }
+  }
+
+  let returnValue: unknown = undefined;
+  const returnNode = block.values?.return;
+  const hasReturnValue = returnNode?.meta?.hasValue !== false;
+  if (returnNode && hasReturnValue) {
+    const returnNodes = Array.isArray(returnNode.values) ? returnNode.values : [];
+    if (returnNodes.length > 0) {
+      const returnResult = await evaluate(returnNodes, blockEnv, { isExpression: true });
+      returnValue = returnResult.value;
+      blockEnv = returnResult.env || blockEnv;
+    }
+  }
+
+  env.mergeChild(blockEnv);
+  return { value: returnValue, env };
+}
 
 async function interpolateAndRecord(
   nodes: any,
@@ -611,6 +686,34 @@ export async function evaluateExe(
       type: 'code',
       codeTemplate: contentNodes, // Store the ForExpression node
       language: 'mlld-for', // Special language marker
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
+
+  } else if (directive.subtype === 'exeBlock') {
+    const statements = (directive.values as any)?.statements || [];
+    const returnStmt = (directive.values as any)?.return;
+    
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+
+    const blockNode: ExeBlockNode = {
+      type: 'ExeBlock',
+      values: {
+        statements,
+        ...(returnStmt ? { return: returnStmt } : {})
+      },
+      meta: {
+        statementCount: (directive.meta as any)?.statementCount ?? statements.length,
+        hasReturn: (directive.meta as any)?.hasReturn ?? Boolean(returnStmt)
+      },
+      location: directive.location
+    };
+
+    executableDef = {
+      type: 'code',
+      codeTemplate: [blockNode],
+      language: 'mlld-exe-block',
       paramNames,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;

@@ -17,6 +17,7 @@ import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
+import { evaluateExeBlock, type ExeBlockNode } from './exe';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
@@ -2056,6 +2057,17 @@ async function evaluateExecInvocationInternal(
       // Evaluate the for expression with the parameter environment
       const { evaluateForExpression } = await import('./for');
       result = await evaluateForExpression(forExprNode, execEnv);
+    } else if (definition.language === 'mlld-exe-block') {
+      const blockNode = Array.isArray(definition.codeTemplate)
+        ? (definition.codeTemplate[0] as ExeBlockNode | undefined)
+        : undefined;
+      if (!blockNode || !blockNode.values) {
+        throw new MlldInterpreterError('mlld-exe-block executable missing block content');
+      }
+
+      const blockResult = await evaluateExeBlock(blockNode, execEnv);
+      result = blockResult.value;
+      execEnv = blockResult.env;
     } else {
       // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
       let code: string;

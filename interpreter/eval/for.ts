@@ -21,6 +21,8 @@ import { materializeDisplayValue } from '../utils/display-materialization';
 import { accessFields } from '../utils/field-access';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { evaluateWhenExpression } from './when-expression';
+import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
+import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown, env: Environment): Variable {
@@ -163,6 +165,14 @@ export async function evaluateForDirective(
     const inherited = (env as any).__forOptions as typeof specified | undefined;
     const effective = specified ?? inherited;
 
+    if (effective?.parallel && directive.meta?.actionType === 'block') {
+      throw new MlldDirectiveError(
+        'Parallel for loops not supported with block bodies. Use exe wrapper pattern.',
+        'for',
+        { location: directive.location }
+      );
+    }
+
     const iterableArray = Array.from(iterable);
 
     const runOne = async (entry: [any, any], idx: number) => {
@@ -205,38 +215,60 @@ export async function evaluateForDirective(
       const retry = new RateLimitRetry();
       while (true) {
         try {
-          let actionResult: any = { value: undefined, env: childEnv };
-          for (const actionNode of actionNodes) {
-            if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
-              const nodeWithFirst = {
-                ...actionNode,
-                meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
-              };
-              actionResult = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
-            } else {
-              actionResult = await evaluate(actionNode, childEnv);
+          if (directive.meta?.actionType === 'block') {
+            let blockEnv = childEnv;
+            for (const actionNode of actionNodes) {
+              if (isLetAssignment(actionNode)) {
+                blockEnv = await evaluateLetAssignment(actionNode, blockEnv);
+              } else if (isAugmentedAssignment(actionNode)) {
+                blockEnv = await evaluateAugmentedAssignment(actionNode, blockEnv);
+              } else if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
+                const nodeWithFirst = {
+                  ...actionNode,
+                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
+                };
+                const actionResult = await evaluateWhenExpression(nodeWithFirst as any, blockEnv);
+                blockEnv = actionResult.env || blockEnv;
+              } else {
+                const actionResult = await evaluate(actionNode, blockEnv);
+                blockEnv = actionResult.env || blockEnv;
+              }
             }
-            if (actionResult.env) childEnv = actionResult.env;
-          }
-          // Emit bare exec output as effect (legacy behavior)
-          if (
-            directive.values.action.length === 1 &&
-            directive.values.action[0].type === 'ExecInvocation' &&
-            actionResult.value !== undefined && actionResult.value !== null
-          ) {
-            const materialized = materializeDisplayValue(
-              actionResult.value,
-              undefined,
-              actionResult.value
-            );
-            let outputContent = materialized.text;
-            if (!outputContent.endsWith('\n')) {
-              outputContent += '\n';
+            childEnv = blockEnv;
+          } else {
+            let actionResult: any = { value: undefined, env: childEnv };
+            for (const actionNode of actionNodes) {
+              if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
+                const nodeWithFirst = {
+                  ...actionNode,
+                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
+                };
+                actionResult = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
+              } else {
+                actionResult = await evaluate(actionNode, childEnv);
+              }
+              if (actionResult.env) childEnv = actionResult.env;
             }
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // Emit bare exec output as effect (legacy behavior)
+            if (
+              directive.values.action.length === 1 &&
+              directive.values.action[0].type === 'ExecInvocation' &&
+              actionResult.value !== undefined && actionResult.value !== null
+            ) {
+              const materialized = materializeDisplayValue(
+                actionResult.value,
+                undefined,
+                actionResult.value
+              );
+              let outputContent = materialized.text;
+              if (!outputContent.endsWith('\n')) {
+                outputContent += '\n';
+              }
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
+              env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
             }
-            env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
           }
           retry.reset();
           break;

@@ -3,6 +3,7 @@ import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
+import type { ExeBlockNode } from './exe';
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
@@ -763,7 +764,6 @@ export async function evaluateRun(
       setOutput(result.value);
       
     } else if (definition.type === 'code') {
-      // Interpolate the code template with parameters
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
@@ -774,21 +774,6 @@ export async function evaluateRun(
         { sourceLocation: directive.location, directiveType: 'run' }
       );
       
-      // Interpolate executable code templates with parameters (canonical behavior)
-      const code = await interpolateWithPendingDescriptor(
-        definition.codeTemplate,
-        InterpolationContext.ShellCommand,
-        tempEnv
-      );
-      if (process.env.DEBUG_EXEC) {
-        logger.debug('run.ts code execution debug:', {
-          codeTemplate: definition.codeTemplate,
-          interpolatedCode: code,
-          argValues
-        });
-      }
-      
-      // Pass captured shadow environments to code execution
       const codeParams = { ...argValues };
       const capturedEnvs = execVar.internal?.capturedShadowEnvs;
       if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
@@ -824,7 +809,37 @@ export async function evaluateRun(
           outputType: typeof outputValue,
           outputValue: outputText.substring(0, 100)
         });
+      } else if (definition.language === 'mlld-exe-block') {
+        const blockNode = Array.isArray(definition.codeTemplate)
+          ? (definition.codeTemplate[0] as ExeBlockNode | undefined)
+          : undefined;
+        if (!blockNode || !blockNode.values) {
+          throw new Error('mlld-exe-block executable missing block content');
+        }
+
+        const execEnv = env.createChild();
+        for (const [key, value] of Object.entries(codeParams)) {
+          execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
+        }
+
+        const { evaluateExeBlock } = await import('./exe');
+        const blockResult = await evaluateExeBlock(blockNode, execEnv);
+        setOutput(blockResult.value);
       } else {
+        // Interpolate executable code templates with parameters (canonical behavior)
+        const code = await interpolateWithPendingDescriptor(
+          definition.codeTemplate,
+          InterpolationContext.ShellCommand,
+          tempEnv
+        );
+        if (process.env.DEBUG_EXEC) {
+          logger.debug('run.ts code execution debug:', {
+            codeTemplate: definition.codeTemplate,
+            interpolatedCode: code,
+            argValues
+          });
+        }
+
         setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
           return await env.executeCode(
             code,
