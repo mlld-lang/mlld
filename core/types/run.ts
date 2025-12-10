@@ -10,7 +10,17 @@ import type { PathMeta } from './meta';
 /**
  * With clause for pipeline and dependency management
  */
-export type PipelineStageEntry = PipelineCommand | InlineCommandStage | InlineValueStage;
+export interface WhilePipelineStage {
+  type: 'whileStage';
+  cap: number;
+  rateMs: number | null;
+  processor: VariableNodeArray;
+  rawIdentifier?: string;
+  meta?: { hasRate?: boolean; [key: string]: unknown };
+  location?: any;
+}
+
+export type PipelineStageEntry = PipelineCommand | InlineCommandStage | InlineValueStage | WhilePipelineStage;
 export type PipelineStage = PipelineStageEntry | PipelineStageEntry[];
 
 export interface GuardOverrideOptions {

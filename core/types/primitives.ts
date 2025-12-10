@@ -97,7 +97,7 @@ export interface VariableReferenceNode extends BaseMlldNode {
 // Literal value node
 export interface LiteralNode extends BaseMlldNode {
   type: 'Literal';
-  value: string | number | boolean | null;
+  value: string | number | boolean | null | BaseMlldNode[];
   valueType?: string;
 }
 

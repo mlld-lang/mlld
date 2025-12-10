@@ -19,6 +19,8 @@ export interface ExeRaw {
   code?: string;
   withClause?: WithClause;
   securityLabels?: string;
+  statements?: string;
+  hasReturn?: boolean;
 }
 
 /**
@@ -36,6 +38,8 @@ export interface ExeMeta {
   };
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  statementCount?: number;
+  hasReturn?: boolean;
 }
 
 /**
@@ -50,7 +54,18 @@ export interface ExeDirectiveNode extends TypedDirectiveNode<'exe', ExeSubtype> 
 /**
  * Exe subtypes
  */
-export type ExeSubtype = 'exeCommand' | 'exeCode';
+export type ExeSubtype =
+  | 'exeCommand'
+  | 'exeCode'
+  | 'exeData'
+  | 'exeTemplate'
+  | 'exeTemplateFile'
+  | 'exeSection'
+  | 'exeWhen'
+  | 'exeForeach'
+  | 'exeFor'
+  | 'exeResolver'
+  | 'exeBlock';
 
 /**
  * Exe directive values - different structures based on subtype
@@ -64,6 +79,8 @@ export interface ExeValues {
   code?: ContentNodeArray;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  statements?: any[];
+  return?: any[];
 }
 
 /**
@@ -110,6 +127,28 @@ export interface ExeCodeDirectiveNode extends ExeDirectiveNode {
     securityLabels?: string;
   };
   meta: ExeMeta;
+}
+
+export interface ExeBlockDirectiveNode extends ExeDirectiveNode {
+  subtype: 'exeBlock';
+  values: {
+    identifier: TextNodeArray;
+    params: ParameterNode[];
+    statements: any[];
+    return?: any[];
+    securityLabels?: DataLabel[];
+  };
+  raw: {
+    identifier: string;
+    params: string[];
+    statements: string;
+    hasReturn: boolean;
+    securityLabels?: string;
+  };
+  meta: ExeMeta & {
+    statementCount: number;
+    hasReturn: boolean;
+  };
 }
 
 /**

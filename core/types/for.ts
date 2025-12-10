@@ -30,7 +30,8 @@ export interface ForDirective extends DirectiveNode {
   };
   meta: {
     hasVariables: true;
-    actionType: 'single';
+    actionType: 'single' | 'block';
+    block?: { statementCount?: number };
   };
 }
 
