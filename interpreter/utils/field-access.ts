@@ -126,15 +126,27 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
-  
+
+  // Extract the raw value if we have a Variable (do this BEFORE metadata check)
+  let rawValue = isVariable(value) ? value.value : value;
+  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
+  const structuredCtx = (structuredWrapper?.ctx ?? undefined) as Record<string, unknown> | undefined;
+  if (structuredWrapper) {
+    rawValue = structuredWrapper.data;
+  }
+
   // Special handling for Variable metadata properties
+  // IMPORTANT: Check metadata for core properties (.type, .ctx, etc.),
+  // but allow data precedence for guard quantifiers (.all, .any, .none)
   if (isVariable(value) && field.type === 'field') {
     const fieldName = String(field.value);
-    
-    if (VARIABLE_METADATA_PROPS.includes(fieldName)) {
-      // Return metadata property
+
+    // Core metadata properties always come from Variable, never from data
+    const CORE_METADATA = ['type', 'isComplex', 'source', 'metadata', 'internal', 'ctx', 'raw', 'totalTokens', 'maxTokens'];
+
+    if (CORE_METADATA.includes(fieldName)) {
       const metadataValue = value[fieldName as keyof typeof value];
-      
+
       if (options?.preserveContext) {
         return {
           value: metadataValue,
@@ -145,14 +157,28 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
       return metadataValue;
     }
-  }
-  
-  // Extract the raw value if we have a Variable
-  let rawValue = isVariable(value) ? value.value : value;
-  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
-  const structuredCtx = (structuredWrapper?.ctx ?? undefined) as Record<string, unknown> | undefined;
-  if (structuredWrapper) {
-    rawValue = structuredWrapper.data;
+
+    // Guard quantifiers (.all, .any, .none) - allow data to override
+    const GUARD_QUANTIFIERS = ['all', 'any', 'none'];
+    if (GUARD_QUANTIFIERS.includes(fieldName)) {
+      // Check if this field exists in the actual data first
+      const fieldExistsInData = rawValue && typeof rawValue === 'object' && fieldName in rawValue;
+
+      if (!fieldExistsInData) {
+        // Field doesn't exist in data, so return metadata property
+        const metadataValue = value[fieldName as keyof typeof value];
+
+        if (options?.preserveContext) {
+          return {
+            value: metadataValue,
+            parentVariable: value,
+            accessPath: [...(options.parentPath || []), fieldName],
+            isVariable: false
+          };
+        }
+        return metadataValue;
+      }
+    }
   }
   const fieldValue = field.value;
   

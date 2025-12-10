@@ -1,0 +1,4 @@
+/exe @claude(prompt) = @prompt | cmd { claude -p --model haiku }
+/var @hugeobject = <@base/interpreter/eval/exe*>
+/var @request = "I'm running a test. Can you see a huge array of files? YES or NO <files>@hugeobject</files>"
+/show @claude(@request)
