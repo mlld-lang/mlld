@@ -425,6 +425,20 @@ ExeStatementBlock "exe statement block"
         }
       };
     }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'ExeBlockBody',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
   / "[" _ &{
       let depth = 1;
       let i = peg$currPos;
@@ -457,6 +471,13 @@ ExeBlockBody
         returnStmt: returnStmt || null
       };
     }
+  / returnStmt:ExeReturnStatement _ extra:ExeBlockStatement {
+      helpers.mlldError(
+        'Return must be the last statement in a block.',
+        'end of block',
+        location()
+      );
+    }
   / returnStmt:ExeReturnStatement {
       return {
         statements: [],
@@ -473,7 +494,18 @@ ExeBlockStatementList
 ExeBlockStatement
   = LetAssignment
   / AugmentedAssignment
-  / WhenRHSAction
+  / ExeBlockAction
+
+ExeBlockAction
+  = EffectAction
+  / WhenRHSVarAssignment
+  / WhenRHSCommandAction
+  / WhenRHSFunctionCall
+  / WhenRHSSkipAction
+  / WhenRHSRetryAction
+  / WhenRHSVariableReference
+  / DoneLiteral
+  / ContinueLiteral
 
 ExeReturnStatement "exe return statement"
   = "return" _ value:ExeReturnValue? {
@@ -540,6 +572,20 @@ WhenExpression "when expression"
       
       return helpers.createWhenExpression(conditions, tail, location(), modifier);
     }
+  / "when" _ modifier:WhenExprModifier? _ "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenExpressionConditionList',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
   // Error recovery: Missing bracket after when
   / "when" _ WhenExprModifier? _ !"[" {
       helpers.mlldError(
@@ -571,13 +617,6 @@ WhenExpression "when expression"
       helpers.mlldError(
         `Unclosed array in when expression. Expected ']' to close the condition list.`,
         "]",
-        location()
-      );
-    }
-  / "when" _ WhenExprModifier? _ !"[" {
-      helpers.mlldError(
-        `Missing condition list in when expression. Expected: when [condition => value, ...]`,
-        "[",
         location()
       );
     }

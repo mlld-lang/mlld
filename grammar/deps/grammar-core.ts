@@ -61,6 +61,16 @@ type WarningCollector = ((warning: GrammarWarning) => void) | GrammarWarning[];
 
 let warningCollector: ((warning: GrammarWarning) => void) | null = null;
 
+export interface BlockReparseOptions {
+  parse: (input: string, options?: any) => any;
+  SyntaxErrorClass: new (...args: any[]) => any;
+  text: string;
+  startRule: string;
+  baseLocation: any;
+  grammarSource?: string;
+  mode?: string;
+}
+
 export const helpers = {
   debug(msg: string, ...args: unknown[]) {
     if (process.env.DEBUG_MLLD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
@@ -1045,6 +1055,106 @@ export const helpers = {
     error.expectedToken = expectedToken;
     error.mlldErrorLocation = loc;
     throw error;
+  },
+
+  /**
+   * Capture content inside balanced [ ] brackets starting at startPos (the first character after '[')
+   * Returns null if no matching closing bracket is found
+   */
+  captureBracketContent(input: string, startPos: number): { content: string; endOffset: number } | null {
+    let depth = 1;
+    let i = startPos;
+    let inString = false;
+    let quote: string | null = null;
+
+    while (i < input.length && depth > 0) {
+      const ch = input[i];
+      if (inString) {
+        if (ch === quote && input[i - 1] !== '\\') {
+          inString = false;
+          quote = null;
+        }
+      } else {
+        if (ch === '"' || ch === '\'' || ch === '`') {
+          inString = true;
+          quote = ch;
+        } else if (ch === '[') {
+          depth++;
+        } else if (ch === ']') {
+          depth--;
+          if (depth === 0) {
+            return {
+              content: input.slice(startPos, i),
+              endOffset: i
+            };
+          }
+        }
+      }
+      i++;
+    }
+
+    return null;
+  },
+
+  /**
+   * Offset a location object by a base location (start of the block content)
+   */
+  offsetLocation(loc: any, baseLocation: any) {
+    if (!loc || !baseLocation?.start) return loc;
+
+    const baseStart = baseLocation.start;
+    const adjustPosition = (pos: any) => {
+      const line = (pos?.line || 1) + (baseStart.line || 1) - 1;
+      const column =
+        pos?.line === 1
+          ? (pos?.column || 1) + (baseStart.column || 1) - 1
+          : pos?.column || 1;
+
+      return {
+        offset: (pos?.offset || 0) + (baseStart.offset || 0),
+        line,
+        column
+      };
+    };
+
+    return {
+      source: baseLocation.source || loc.source,
+      start: adjustPosition(loc.start),
+      end: adjustPosition(loc.end)
+    };
+  },
+
+  /**
+   * Reparse a block substring with a specific start rule to surface inner errors with corrected offsets
+   */
+  reparseBlock(options: BlockReparseOptions): never {
+    const parseOptions: Record<string, any> = { startRule: options.startRule };
+    if (options.mode) parseOptions.mode = options.mode;
+    if (options.grammarSource) parseOptions.grammarSource = options.grammarSource;
+
+    try {
+      // Trim trailing whitespace to mirror outer `_` consumption before the closing bracket
+      const normalizedText = options.text.replace(/\s+$/, '');
+      options.parse(normalizedText, parseOptions);
+    } catch (error: any) {
+      const err = error as any;
+      if (err instanceof options.SyntaxErrorClass && err.location) {
+        const adjustedLocation = this.offsetLocation(err.location, options.baseLocation);
+        const enhancedError = new options.SyntaxErrorClass(
+          err.message,
+          err.expected,
+          err.found,
+          adjustedLocation
+        ) as any;
+        enhancedError.expected = err.expected;
+        enhancedError.found = err.found;
+        enhancedError.location = adjustedLocation;
+        throw enhancedError;
+      }
+      throw error as Error;
+    }
+
+    throw this.mlldError('Invalid block content.', undefined, options.baseLocation);
   },
   
   // Parser State Management for Code Blocks

@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All effect actions (`show`, `log`, `output`, `append`) now work uniformly in all RHS contexts including `/exe ... = for ... => when [...]`
 - Streaming no longer produces duplicate output when using format adapters
 - Regex arguments are parsed as RegExp values, so `.match(/.../)` conditions (including grouped patterns) work in when-expressions and other exec calls without falling back to strings
+- Block directive parse errors now reparse inner blocks with correct offsets for exe, for, when, and guard bodies, improving error locations inside `[...]` content
 - Registry publish flow bases branches on upstream `mlld-lang/registry` main and recreates missing fork refs, reducing metadata/tags conflicts on updates
 - Registry PRs use a minimal body (module payload only) with update vs add titles aligned to module existence
 - Raw URL verification errors now instruct users to push commits or check paths, improving clarity for repository publishes

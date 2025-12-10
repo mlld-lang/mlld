@@ -45,13 +45,13 @@ SlashWhen
     }
   / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
   // Bare block form with modifier: /when <modifier>: [...] => <action>
-  / DirectiveContext WhenKeyword _ modifier:WhenModifier _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
+  / DirectiveContext WhenKeyword _ modifier:WhenModifier _ ":"? _ block:WhenConditionBlock 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
-      helpers.debug('WhenBareBlockWithModifierForm matched', { modifier, conditions, action });
+      helpers.debug('WhenBareBlockWithModifierForm matched', { modifier, conditions: block, action });
       
       const values = {
-        conditions: conditions,
+        conditions: block,
         modifier: [modifier]
       };
       
@@ -61,7 +61,7 @@ SlashWhen
       
       // Create raw representation
       const raw = {
-        conditions: conditions.map(c => ({
+        conditions: block.map(c => ({
           condition: helpers.reconstructRawString(c.condition),
           action: c.action ? helpers.reconstructRawString(c.action) : undefined
         }))
@@ -79,7 +79,7 @@ SlashWhen
         raw,
         {
           modifier: modifier ? modifier.content : 'default',
-          conditionCount: conditions.length,
+          conditionCount: block.length,
           hasVariable: false
         },
         location()
@@ -147,7 +147,7 @@ SlashWhen
     }
 
 // -------------------------------------------------------------
-// SIMPLE FORM: /when <condition> => <action>
+// SIMPLE FORM: /when <condition> => <action> (no brackets needed)
 // -------------------------------------------------------------
 
 WhenSimpleForm
@@ -177,7 +177,7 @@ WhenSimpleForm
 // -------------------------------------------------------------
 
 WhenMatchForm
-  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
+  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ conditions:WhenConditionBlock {
       helpers.debug('WhenMatchForm matched', { expression, conditions });
       
       return helpers.createStructuredDirective(
@@ -211,7 +211,7 @@ WhenBlockForm
         identifier: id
       }, location()); 
     })? _ 
-    modifier:WhenModifier? _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
+    modifier:WhenModifier? _ ":"? _ conditions:WhenConditionBlock 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
       helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action });
@@ -269,7 +269,7 @@ WhenBlockForm
 // -------------------------------------------------------------
 
 WhenBareBlockForm
-  = DirectiveContext WhenKeyword _ "[" _ conditions:WhenConditionList _ "]" {
+  = DirectiveContext WhenKeyword _ conditions:WhenConditionBlock {
       
       helpers.debug('WhenBareBlockForm matched', { conditions });
       
@@ -426,6 +426,45 @@ NonNegatedCondition
 // -------------------------------------------------------------
 
 // List of when block entries (let assignments and condition pairs)
+WhenConditionBlock
+  = "[" _ conditions:WhenConditionList _ "]" {
+      return conditions;
+    }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenConditionList',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
+    }
+
 WhenConditionList
   = first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* {
       return [first, ...rest];
@@ -474,7 +513,50 @@ WhenAction
 
 // Block of directives as action: [directive1, directive2, ...]
 WhenActionBlock
-  = "[" _ first:WhenBlockAction rest:(_ d:WhenBlockAction { return d; })* _ "]" {
+  = "[" _ actions:WhenActionBlockContent _ "]" {
+      return actions;
+    }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenActionBlockContent',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block in when action. Expected ']' to close the block.`,
+        "]",
+        location()
+      );
+    }
+
+WhenActionBlockContent
+  = first:WhenBlockAction rest:(_ d:WhenBlockAction { return d; })* {
       return [first, ...rest].flat();
     }
 

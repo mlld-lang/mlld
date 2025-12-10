@@ -125,11 +125,21 @@ if (process.argv.includes('--debug')) {
 }
 
 // ---------- peggy generate TypeScript ----------
+const allowedStartRules = [
+  'Start',
+  'ExeBlockBody',
+  'ForBlockStatementList',
+  'WhenConditionList',
+  'WhenExpressionConditionList',
+  'GuardRuleList',
+  'WhenActionBlockContent'
+];
+
 const peggyOptsTS = {
   format: 'es',
   output: 'source',
   optimize: 'speed',
-  allowedStartRules: ['Start'],
+  allowedStartRules,
   // Native TypeScript type file!
   dts: true,
   returnTypes: { Start: 'import("@core/types").MlldNode[]' },
@@ -192,7 +202,7 @@ const peggyOptsJS = {
   format: 'es',
   output: 'source',
   optimize: 'speed',
-  allowedStartRules: ['Start'],
+  allowedStartRules,
   dependencies: {
     NodeType: './deps/node-type.js',
     DirectiveKind: './deps/directive-kind.js',
@@ -219,7 +229,7 @@ const peggyOptsCJS = {
   format: 'commonjs',
   output: 'source',
   optimize: 'speed',
-  allowedStartRules: ['Start'],
+  allowedStartRules,
   dependencies: {
     NodeType: './deps/node-type.cjs',
     DirectiveKind: './deps/directive-kind.cjs',
