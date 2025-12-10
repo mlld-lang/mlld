@@ -19,6 +19,8 @@ import { asText, asData, isStructuredValue, ensureStructuredValue } from '../uti
 import { VariableImporter } from './import/VariableImporter';
 import { combineValues } from '../utils/value-combine';
 import { extractVariableValue } from '../utils/variable-resolution';
+import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
+import { evaluateUnifiedExpression } from './expressions';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -68,6 +70,10 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
 
     // Handle Literal nodes directly - extract the value
     if (nodeType === 'Literal' && 'value' in (normalized as Record<string, unknown>)) {
+      const valueType = (normalized as Record<string, unknown>).valueType;
+      if (valueType === 'done' || valueType === 'continue') {
+        return normalized;
+      }
       normalized = (normalized as { value: unknown }).value;
     } else {
       // Try to extract variable value for other node types
@@ -81,6 +87,26 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
   }
 
   return normalized;
+}
+
+async function evaluateControlLiteral(
+  literal: DoneLiteralNode | ContinueLiteralNode,
+  env: Environment
+): Promise<unknown> {
+  const val = literal.value;
+  if (Array.isArray(val)) {
+    const target = val.length === 1 ? val[0] : val;
+    if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {
+      const evaluated = await evaluateUnifiedExpression(target as any, env);
+      return evaluated.value;
+    }
+    const evaluated = await evaluate(val as any, env, { isExpression: true });
+    return evaluated.value;
+  }
+  if (val === 'done' || val === 'continue') {
+    return undefined;
+  }
+  return val;
 }
 
 /**
@@ -412,6 +438,14 @@ export async function evaluateWhenExpression(
             value = actionResult.value;
           }
           value = await normalizeActionValue(value, actionEnv);
+          const executionEnv = actionResult?.env ?? actionEnv;
+          if (isDoneLiteral(value as any)) {
+            const resolved = await evaluateControlLiteral(value as any, executionEnv);
+            value = { __whileControl: 'done', value: resolved };
+          } else if (isContinueLiteral(value as any)) {
+            const resolved = await evaluateControlLiteral(value as any, executionEnv);
+            value = { __whileControl: 'continue', value: resolved };
+          }
           if (Array.isArray(pair.action) && pair.action.length === 1) {
             const singleAction = pair.action[0];
             if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
@@ -452,8 +486,6 @@ export async function evaluateWhenExpression(
           }
           
           // Apply tail modifiers if present
-          const executionEnv = actionResult?.env ?? actionEnv;
-
           if (node.withClause && node.withClause.pipes) {
             value = await applyTailModifiers(value, node.withClause.pipes, executionEnv);
           }
@@ -463,6 +495,10 @@ export async function evaluateWhenExpression(
           // We use mergeChild to merge variables; since actions are evaluated
           // with isExpression=true, no user-facing nodes are produced.
           accumulatedEnv.mergeChild(executionEnv);
+
+          if (value && typeof value === 'object' && '__whileControl' in (value as Record<string, unknown>)) {
+            return buildResult(value, accumulatedEnv);
+          }
 
           // In "first" mode, return immediately after first match
           if (isFirstMode) {

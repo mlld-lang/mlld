@@ -1,0 +1,9 @@
+# While loop with done/continue
+
+/exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+
+/var @result = 5 | while(10) @countdown
+/show @result

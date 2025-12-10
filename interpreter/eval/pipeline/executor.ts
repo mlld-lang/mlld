@@ -1,5 +1,5 @@
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand, PipelineStage, PipelineStageEntry, InlineCommandStage, InlineValueStage } from '@core/types';
+import type { PipelineCommand, PipelineStage, PipelineStageEntry, InlineCommandStage, InlineValueStage, WhilePipelineStage } from '@core/types';
 import type { ExecInvocation, CommandReference } from '@core/types/primitives';
 import type { OperationContext, PipelineContextSnapshot } from '../../env/ContextManager';
 import type { StructuredValue } from '../../utils/structured-value';
@@ -16,7 +16,6 @@ import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
 import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 import {
-  asText,
   asData,
   isStructuredValue,
   wrapStructured,
@@ -37,6 +36,7 @@ import { StreamBus, type StreamEvent } from './stream-bus';
 import type { StreamingOptions } from './streaming-options';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import { resolveWorkingDirectory } from '../../utils/working-directory';
+import { evaluateWhileStage } from '../while';
 
 interface StageExecutionResult {
   result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
@@ -421,6 +421,34 @@ export class PipelineExecutor {
         let stageExecution: StageExecutionResult | undefined;
         while (true) {
           try {
+            if ((command as WhilePipelineStage).type === 'whileStage') {
+              const whileStage = command as WhilePipelineStage;
+              const whileResult = await evaluateWhileStage(
+                whileStage,
+                structuredInput,
+                stageEnv!,
+                async (processor, stateValue, iterEnv) => {
+                  const processorCommand = this.buildWhileProcessorCommand(processor);
+                  const normalizedState = this.normalizeWhileInput(stateValue);
+                  const execution = await this.executeCommand(
+                    processorCommand,
+                    normalizedState.text,
+                    normalizedState.structured,
+                    iterEnv,
+                    stageOpContext,
+                    stageHookNode,
+                    stageIndex,
+                    context
+                  );
+                  return { value: execution.result, env: iterEnv };
+                }
+              );
+              stageExecution = {
+                result: whileResult
+              };
+              this.rateLimiter.reset();
+              break;
+            }
             if ((command as InlineValueStage).type === 'inlineValue') {
               stageExecution = await this.executeInlineValueStage(
                 command as InlineValueStage,
@@ -728,6 +756,93 @@ export class PipelineExecutor {
     return {
       result: this.finalizeStageOutput(wrapped, stageInput, value, mergedDescriptor),
       labelDescriptor: mergedDescriptor
+    };
+  }
+
+  private normalizeWhileInput(value: StructuredValue | unknown): { structured: StructuredValue; text: string } {
+    if (isStructuredValue(value)) {
+      const textValue = value.text ?? safeJSONStringify(asData(value));
+      return { structured: value, text: textValue };
+    }
+
+    const textValue = typeof value === 'string' ? value : safeJSONStringify(value);
+    const kind: StructuredValue['type'] =
+      Array.isArray(value) ? 'array' : typeof value === 'object' && value !== null ? 'object' : 'text';
+    const structured = wrapStructured(value as any, kind, textValue);
+    return { structured, text: textValue };
+  }
+
+  private buildWhileProcessorCommand(processor: any): PipelineCommand {
+    if (processor?.type === 'ExecInvocation') {
+      const ref = processor.commandRef || {};
+      const identifier = Array.isArray(ref.identifier)
+        ? ref.identifier
+        : ref.identifier
+          ? [ref.identifier]
+          : [];
+      const rawIdentifier =
+        ref.name ||
+        (Array.isArray(ref.identifier)
+          ? ref.identifier.map((id: any) => id.identifier || id.content || '').find(Boolean)
+          : ref.identifier) ||
+        'while-processor';
+      const rawArgs = (ref.args || []).map((arg: any) => {
+        if (arg && typeof arg === 'object') {
+          if ('content' in arg && typeof (arg as any).content === 'string') {
+            return (arg as any).content;
+          }
+          if ((arg as any).identifier) {
+            return `@${(arg as any).identifier}`;
+          }
+        }
+        return '';
+      });
+      const command: PipelineCommand & { stream?: boolean } = {
+        identifier,
+        args: ref.args || [],
+        fields: ref.fields || [],
+        rawIdentifier,
+        rawArgs,
+        meta: {}
+      };
+      if (processor.withClause && processor.withClause.stream !== undefined) {
+        command.stream = processor.withClause.stream;
+      }
+      return command;
+    }
+
+    if (processor?.type === 'VariableReferenceWithTail') {
+      const variable = (processor as any).variable || processor;
+      const rawIdentifier = variable?.identifier || 'while-processor';
+      return {
+        identifier: variable ? [variable] : [],
+        args: [],
+        fields: variable?.fields || [],
+        rawIdentifier,
+        rawArgs: []
+      };
+    }
+
+    if (processor?.type === 'VariableReference') {
+      return {
+        identifier: [processor],
+        args: [],
+        fields: processor.fields || [],
+        rawIdentifier: processor.identifier || 'while-processor',
+        rawArgs: []
+      };
+    }
+
+    const fallbackId =
+      (processor && typeof processor === 'object' && 'identifier' in processor && (processor as any).identifier) ||
+      (processor && typeof processor === 'object' && 'rawIdentifier' in processor && (processor as any).rawIdentifier) ||
+      'while-processor';
+    return {
+      identifier: [],
+      args: [],
+      fields: [],
+      rawIdentifier: fallbackId as string,
+      rawArgs: []
     };
   }
 

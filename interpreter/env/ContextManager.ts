@@ -219,6 +219,7 @@ export class ContextManager {
     const pipelineFields = this.buildPipelineFields(pipeline);
     const guardContext = this.peekGuardContext();
     const deniedContext = this.peekDeniedContext();
+    const whileContext = this.peekGenericContext('while');
 
     const ctxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -236,7 +237,8 @@ export class ContextManager {
       policy: security?.policy ?? null,
       operation: currentOperation ?? null,
       op: currentOperation ?? null,
-      guard: guardContext ?? (deniedContext ? {} : null)
+      guard: guardContext ?? (deniedContext ? {} : null),
+      ...(whileContext ? { while: whileContext } : {})
     };
 
     if (deniedContext) {

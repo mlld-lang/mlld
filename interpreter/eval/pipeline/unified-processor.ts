@@ -9,7 +9,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
 import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
-import type { PipelineStage, PipelineCommand } from '@core/types';
+import type { PipelineStage, PipelineCommand, WhilePipelineStage } from '@core/types';
 import { PipelineExecutor } from './executor';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
@@ -291,6 +291,27 @@ async function validatePipeline(
       await validatePipeline(stage, env, identifier);
       continue;
     }
+    if ((stage as any).type === 'whileStage') {
+      const processorName = getWhileProcessorName(stage as WhilePipelineStage);
+      if (!processorName) {
+        continue;
+      }
+      const variable = env.getVariable(processorName);
+      if (!variable) {
+        throw new MlldDirectiveError(
+          `While processor '@${processorName}' is not defined${identifier ? ` (in @${identifier})` : ''}. ` +
+            `Available functions: ${getAvailableFunctions(env).join(', ')}`,
+          'pipeline'
+        );
+      }
+      if (variable.type !== 'executable' && variable.type !== 'computed') {
+        throw new MlldDirectiveError(
+          `'@${processorName}' is not a function, it's a ${variable.type}${identifier ? ` (in @${identifier})` : ''}`,
+          'pipeline'
+        );
+      }
+      continue;
+    }
     if ((stage as any).type === 'inlineCommand' || (stage as any).type === 'inlineValue') {
       continue;
     }
@@ -319,6 +340,42 @@ async function validatePipeline(
       );
     }
   }
+}
+
+function getWhileProcessorName(stage: WhilePipelineStage): string | undefined {
+  const processor = (stage as any)?.processor;
+  if (!processor) {
+    return undefined;
+  }
+
+  if (processor.commandRef) {
+    const ref = processor.commandRef;
+    if (ref.name) {
+      return ref.name;
+    }
+    if (Array.isArray(ref.identifier)) {
+      const candidate = ref.identifier.map((id: any) => id.identifier || id.content || '').find(Boolean);
+      if (candidate) {
+        return candidate;
+      }
+    } else if (ref.identifier) {
+      return ref.identifier;
+    }
+  }
+
+  if (processor.identifier) {
+    return processor.identifier;
+  }
+
+  if (Array.isArray(processor.identifier) && processor.identifier[0]?.identifier) {
+    return processor.identifier[0].identifier;
+  }
+
+  if (processor.rawIdentifier) {
+    return processor.rawIdentifier;
+  }
+
+  return undefined;
 }
 
 // Note: attachBuiltinEffects is imported from './effects-attachment' above.

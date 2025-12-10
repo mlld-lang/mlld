@@ -684,6 +684,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       }
       return { value: 'retry', env };
     }
+
+    if (node.valueType === 'done' || node.valueType === 'continue') {
+      return { value: node, env };
+    }
     
     return { value: node.value, env };
   }
