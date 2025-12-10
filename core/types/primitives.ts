@@ -217,7 +217,9 @@ export type DirectiveKind =
   | 'stream'
   | 'needs'
   | 'wants'
-  | 'policy';
+  | 'policy'
+  | 'while'
+  | 'for';
 
 export type DirectiveSubtype =
   // Import subtypes
@@ -228,8 +230,9 @@ export type DirectiveSubtype =
   | 'var'
   // Unified show subtypes
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
-  // Unified exe subtype
-  | 'exe'
+  // Unified exe subtypes
+  | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeTemplate' | 'exeTemplateFile'
+  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeResolver' | 'exeBlock'
   // Path subtypes
   | 'pathAssignment'
   // Run subtypes
@@ -242,6 +245,10 @@ export type DirectiveSubtype =
   | 'whenSimple' | 'whenBlock' | 'whenMatch'
   // Guard subtype
   | 'guard'
+  // For subtype
+  | 'for'
+  // While subtype
+  | 'while'
   // Needs/Wants subtypes
   | 'needs'
   | 'wants'
