@@ -5,13 +5,17 @@ ForKeyword
   = "/"? "for"
 
 SlashFor "for directive"
-  = DirectiveContext ForKeyword opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction ending:StandardDirectiveEnding {
-      helpers.debug('SlashFor matched', { pattern, action, ending });
+  = DirectiveContext ForKeyword opts:ForParallelSpec? _ pattern:ForIterationPattern _ actionVariant:ForActionVariant ending:StandardDirectiveEnding {
+      helpers.debug('SlashFor matched', { pattern, action: actionVariant, ending });
       
       const meta = {
         hasVariables: true,
-        actionType: 'single'
+        actionType: actionVariant.actionType
       };
+
+      if (actionVariant.blockMeta) {
+        meta.block = actionVariant.blockMeta;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -24,13 +28,13 @@ SlashFor "for directive"
         {
           variable: [pattern.variable],
           source: pattern.source,
-          action: Array.isArray(action) ? action : [action],
+          action: actionVariant.action,
           forOptions: opts || undefined
         },
         {
           variable: helpers.reconstructRawString(pattern.variable),
           source: helpers.reconstructRawString(pattern.source),
-          action: helpers.reconstructRawString(action)
+          action: actionVariant.raw
         },
         meta,
         location()

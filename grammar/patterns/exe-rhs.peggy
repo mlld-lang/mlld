@@ -42,6 +42,7 @@ ExeRHSContent "exe assignment value"
   / ExeTemplateFromFilePattern  // template "path" - external template file
   / ExeTemplatePattern          // [[...]] and `...` - inline template executables
   / ExeSectionPattern           // [@file # section] - section extraction
+  / ExeStatementBlock           // [ ... ] - statement block for exe definitions
   / ExeResolverPattern          // @resolver/path - resolver patterns
   / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
 
@@ -398,6 +399,99 @@ ExeEnvironmentDeclaration "exe environment declaration"
     }
 
 // -------------------------------------------------------------
+// EXE STATEMENT BLOCKS
+// -------------------------------------------------------------
+
+ExeStatementBlock "exe statement block"
+  = "[" _ body:ExeBlockBody _ "]" {
+      const statements = body.statements || [];
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
+      const normalizedStatements = statements.flatMap(normalize);
+      const hasReturn = !!body.returnStmt;
+      return {
+        subtype: 'exeBlock',
+        source: 'block',
+        values: {
+          statements: normalizedStatements,
+          ...(body.returnStmt ? { return: body.returnStmt } : {})
+        },
+        raw: {
+          statements: helpers.reconstructRawString(normalizedStatements),
+          hasReturn
+        },
+        meta: {
+          statementCount: normalizedStatements.length,
+          hasReturn
+        }
+      };
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block. Expected ']' to close the block.`,
+        "]",
+        location()
+      );
+    }
+
+ExeBlockBody
+  = statements:ExeBlockStatementList returnStmt:(_ ret:ExeReturnStatement { return ret; })? {
+      return {
+        statements,
+        returnStmt: returnStmt || null
+      };
+    }
+  / returnStmt:ExeReturnStatement {
+      return {
+        statements: [],
+        returnStmt
+      };
+    }
+
+ExeBlockStatementList
+  = first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* {
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
+      return [...normalize(first), ...rest.flatMap(normalize)];
+    }
+
+ExeBlockStatement
+  = LetAssignment
+  / AugmentedAssignment
+  / WhenRHSAction
+
+ExeReturnStatement "exe return statement"
+  = "return" _ value:ExeReturnValue? {
+      const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
+      return {
+        type: 'ExeReturn',
+        values: normalized,
+        raw: text(),
+        meta: {
+          hasValue: normalized.length > 0
+        }
+      };
+    }
+
+ExeReturnValue
+  = WhenRHSAction
+
+// -------------------------------------------------------------
 // HELPER RULES (no conflicts with exe.peggy versions)
 // -------------------------------------------------------------
 
@@ -524,13 +618,13 @@ WhenExpressionAction
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:WhenRHSAction batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:ForExpressionAction batchPipe:ForBatchPipeline? {
       helpers.debug('ForExpressionExe matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
-        action,  // Note: accepts WhenRHSAction instead of VarRHSContent
+        action,  // Accepts directive actions or block statements
         location(),
         opts || null,
         batchPipe || null

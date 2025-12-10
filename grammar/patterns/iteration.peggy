@@ -99,3 +99,88 @@ ForSingleAction "for action"
       // Follow the /when pattern - no @ consumption
       return [invocation];
     }
+
+// Separator for block statements - disallow commas to avoid array confusion
+BlockStatementSeparator
+  = _ "," _ {
+      helpers.mlldError(
+        'Comma separators are not allowed in block statements. Use whitespace between statements.',
+        "whitespace",
+        location()
+      );
+    }
+  / _
+
+// Statement list for for-block bodies
+ForBlockStatementList "for block statement list"
+  = first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* {
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
+      return [...normalize(first), ...rest.flatMap(normalize)];
+    }
+
+// Single statement inside a for block
+ForBlockStatement "for block statement"
+  = ForSingleAction
+
+// Block action for /for directives and for-expressions
+ForBlockAction "for block action"
+  = "[" _ statements:ForBlockStatementList _ "]" {
+      return {
+        type: 'ForBlock',
+        statements,
+        meta: {
+          statementCount: statements.length
+        }
+      };
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block in for action. Expected ']' to close the block.`,
+        "]",
+        location()
+      );
+    }
+
+// Action variant for /for directives: single action or block
+ForActionVariant "for action variant"
+  = "=>" _ action:ForSingleAction {
+      const normalized = Array.isArray(action) ? action : [action];
+      return {
+        action: normalized,
+        actionType: 'single',
+        raw: helpers.reconstructRawString(normalized)
+      };
+    }
+  / "=>" _ block:ForBlockAction {
+      const normalized = Array.isArray(block.statements) ? block.statements : [block.statements];
+      return {
+        action: normalized,
+        actionType: 'block',
+        raw: helpers.reconstructRawString(normalized),
+        blockMeta: block.meta
+      };
+    }
+
+// Action surface for exe for-expressions
+ForExpressionAction "for expression action"
+  = block:ForBlockAction { return block.statements; }
+  / action:WhenRHSAction {
+      return Array.isArray(action) ? action : [action];
+    }
