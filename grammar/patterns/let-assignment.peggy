@@ -22,7 +22,14 @@ LetAssignment "let assignment"
 // Syntax: @varName += value (also accepts leading 'let @varName +=' for block contexts)
 // Supports: arrays (concat), strings (append), objects (shallow merge)
 AugmentedAssignment "augmented assignment"
-  = ("let" __)? "@" id:BaseIdentifier _ "+=" _ value:VarRHSContent {
+  = ("let" __)? ComplexAugmentedLHS "+=" _ value:VarRHSContent {
+      helpers.mlldError(
+        'ETOOCOMPLEX: Augmented assignment only supports simple variables. Use: let @variable += value',
+        '@variable',
+        location()
+      );
+    }
+  / ("let" __)? "@" id:BaseIdentifier _ "+=" _ value:VarRHSContent {
       return helpers.createNode('AugmentedAssignment', {
         identifier: id,
         operator: '+=',
@@ -30,6 +37,9 @@ AugmentedAssignment "augmented assignment"
         location: location()
       });
     }
+
+ComplexAugmentedLHS
+  = "@" BaseIdentifier _? ("." / "[") (!"+=" .)*
 
 // Combined pattern for when entries that need local assignment
 LocalAssignment "local assignment"

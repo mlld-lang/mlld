@@ -465,26 +465,35 @@ ExeStatementBlock "exe statement block"
     }
 
 ExeBlockBody
-  = statements:ExeBlockStatementList returnStmt:(
+  = statements:ExeBlockStatementList firstReturn:(
       BlockStatementSeparator ret:ExeReturnStatement { return ret; }
     / _ ret:ExeReturnStatement { return ret; }
-    )? {
+    )
+    extraReturn:(BlockStatementSeparator ExeReturnStatement { return true; })?
+    trailing:(BlockStatementSeparator ExeBlockStatement { return true; })? {
+      if (extraReturn) {
+        helpers.mlldError(
+          'Multiple return statements in exe block. Only one return allowed as last statement.',
+          'single return',
+          location()
+        );
+      }
+      if (trailing) {
+        helpers.mlldError(
+          'Return must be the last statement in a block.',
+          'end of block',
+          location()
+        );
+      }
       return {
         statements,
-        returnStmt: returnStmt || null
+        returnStmt: firstReturn
       };
     }
-  / returnStmt:ExeReturnStatement _ extra:ExeBlockStatement {
-      helpers.mlldError(
-        'Return must be the last statement in a block.',
-        'end of block',
-        location()
-      );
-    }
-  / returnStmt:ExeReturnStatement {
+  / statements:ExeBlockStatementList {
       return {
-        statements: [],
-        returnStmt
+        statements,
+        returnStmt: null
       };
     }
 
