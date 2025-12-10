@@ -42,7 +42,8 @@ export const DirectiveKind = {
     // NO deprecated entries - clean break!
     needs: 'needs',
     wants: 'wants',
-    policy: 'policy'
+    policy: 'policy',
+    while: 'while'
 };
 let warningCollector = null;
 export const helpers = {

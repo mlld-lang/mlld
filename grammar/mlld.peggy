@@ -224,6 +224,7 @@ Directive
     / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)
     / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
     / SlashFor      // For directives (iteration)
+    / SlashWhile    // While directives (bounded iteration)
     / SlashRun      // Run directives (commands, code)
     / SlashPath     // Path directives (path variables)
     / SlashImport   // Import directives (from other files)

@@ -84,6 +84,7 @@ PipelineStageList
 
 PipelineStage
   = ParallelGroupArray
+  / WhilePipelineStage
   / PipelineStageEntry
 
 // Parallel group inside with { pipeline: [...] }, only commands allowed inside
@@ -164,6 +165,7 @@ GuardOverrideDoubleChars
 PipelineStageEntry
   = PipelineInlineValueStage
   / PipelineInlineCommandStage
+  / WhilePipelineStage
   / PipelineCommand
 
 // Single pipeline command (command reference with @input support)
@@ -247,6 +249,39 @@ PipelineInlineValueStage
         rawIdentifier: 'data-literal',
         location: location()
       };
+    }
+
+// While loop pipeline stage
+WhilePipelineStage "while pipeline stage"
+  = "while" _ "(" _ cap:NumberLiteral _ rate:("," _ wait:TimeDurationLiteral)? _ ")" _ processor:UnifiedReferenceForPipeline {
+      const wait = rate ? rate[2] : null;
+      const rateMs = wait ? helpers.ttlToSeconds(wait.value, wait.unit) * 1000 : null;
+      const proc = processor;
+      return {
+        type: 'whileStage',
+        cap: Number(cap),
+        rateMs,
+        processor: proc,
+        rawIdentifier: proc?.rawIdentifier || 'while',
+        meta: {
+          hasRate: !!rateMs
+        },
+        location: location()
+      };
+    }
+  / "while" _ "(" _ ")" {
+      helpers.mlldError(
+        "while() requires a maximum iteration count, e.g., while(10) @processor",
+        "number",
+        location()
+      );
+    }
+  / "while" _ "(" _ cap:NumberLiteral _ ")" _ !("@") {
+      helpers.mlldError(
+        "while expects an executable reference like @processor after the iteration cap.",
+        "@",
+        location()
+      );
     }
 
 // -------------------------------------------------------------

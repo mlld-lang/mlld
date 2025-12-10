@@ -45,7 +45,8 @@ export const DirectiveKind = {
   // NO deprecated entries - clean break!
   needs: 'needs',
   wants: 'wants',
-  policy: 'policy'
+  policy: 'policy',
+  while: 'while'
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 
