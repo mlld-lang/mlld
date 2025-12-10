@@ -241,17 +241,52 @@ SlashExe
         metaObj.metadata = { type: meta };
       }
       
-      // Add with clause if present
-      if (withClause) {
-        values.withClause = withClause;
-        raw.withClause = withClause;
-        metaObj.withClause = withClause;
+      const mergedWithClause = (() => {
+        let combined = content.values?.withClause
+          ? { ...content.values.withClause }
+          : undefined;
+        if (withClause) {
+          combined = { ...(combined || {}), ...withClause };
+        }
+        if (tail) {
+          combined = { ...(combined || {}), ...tail };
+        }
+        if (parallelCaps && (combined?.pipeline || tail?.pipeline)) {
+          combined = { ...(combined || {}), ...parallelCaps };
+        }
+        return combined;
+      })();
+
+      if (mergedWithClause && Object.keys(mergedWithClause).length > 0) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        metaObj.withClause = mergedWithClause;
+      }
+
+      const pipelineStages =
+        mergedWithClause?.pipeline ||
+        withClause?.pipeline ||
+        content.values?.withClause?.pipeline;
+
+      if (pipelineStages && !raw.pipeline) {
+        raw.pipeline = pipelineStages
+          .map(stage =>
+            Array.isArray(stage)
+              ? `[${stage.map(cmd => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(', ')}]`
+              : `@${stage.rawIdentifier || stage.name || stage}`
+          )
+          .join(' | ');
+        metaObj.hasPipeline = true;
       }
 
       if (labelInfo) {
         values.securityLabels = labelInfo.labels;
         raw.securityLabels = labelInfo.raw;
         metaObj.securityLabels = labelInfo.labels;
+      }
+
+      if (comment) {
+        metaObj.comment = comment;
       }
 
       return helpers.createStructuredDirective(

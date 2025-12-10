@@ -348,6 +348,7 @@ export async function evaluateExe(
     // Get parameter names if any
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
+    const withClause = directive.values?.withClause;
     
     // Parameters are allowed to shadow outer scope variables
     
@@ -363,6 +364,7 @@ export async function evaluateExe(
       language,
       paramNames,
       sourceDirective: 'exec',
+      ...(withClause ? { withClause } : {}),
       ...(workingDir ? { workingDir } : {}),
       ...(workingDirMeta ? { workingDirMeta } : {})
     } satisfies CodeExecutable;

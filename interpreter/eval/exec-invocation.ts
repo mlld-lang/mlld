@@ -2306,6 +2306,27 @@ async function evaluateExecInvocationInternal(
       result = wrapStructured(payload, (result as any).type, (result as any).text, (result as any).metadata);
     }
 
+    if (definition.withClause) {
+      if (definition.withClause.pipeline && definition.withClause.pipeline.length > 0) {
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        const pipelineInput = toPipelineInput(result);
+        const pipelineResult = await processPipeline({
+          value: pipelineInput,
+          env: execEnv,
+          pipeline: definition.withClause.pipeline,
+          format: definition.withClause.format as string | undefined,
+          isRetryable: false,
+          identifier: commandName,
+          location: node.location,
+          descriptorHint: resultSecurityDescriptor
+        });
+        result = pipelineResult;
+      } else {
+        const withClauseResult = await applyWithClause(result, definition.withClause, execEnv);
+        result = withClauseResult.value ?? withClauseResult;
+      }
+    }
+
     const inputDescriptors = Object.values(variableMetadata)
       .map(meta => getSecurityDescriptorFromCarrier(meta))
       .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
@@ -2373,6 +2394,12 @@ async function evaluateExecInvocationInternal(
           // Evaluate the individual argument node
           const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
           value = argResult?.value;
+        }
+        if (typeof value === 'string') {
+          const paramVar = execEnv.getVariable(value);
+          if (paramVar?.internal?.isParameter) {
+            value = isStructuredValue(paramVar.value) ? paramVar.value : paramVar.value;
+          }
         }
         if (value !== undefined) {
           refArgs.push(value);
