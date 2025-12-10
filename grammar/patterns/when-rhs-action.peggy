@@ -7,10 +7,14 @@
 // Main pattern - try error recovery first, then side-effect actions, then pure values
 WhenRHSAction "when RHS action"
   = WhenRHSExeDefinitionError  // Error recovery FIRST - before ExecInvocationPattern can match
+  / LetAssignment              // Allow let @x = value inside when actions
+  / AugmentedAssignment        // Allow @x += (or let @x +=) inside when actions
   / EffectAction               // Unified effects: show, log, output, append
   / WhenRHSVarAssignment
   / WhenRHSCommandAction
   / WhenRHSFunctionCall
+  / DoneLiteral
+  / ContinueLiteral
   / WhenRHSSkipAction
   / WhenRHSVariableReference  // Allow @var (optionally with pipelines) as value-returning action
   / WhenRHSRetryAction

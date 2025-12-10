@@ -40,6 +40,9 @@ SlashFor "for directive"
         location()
       );
     }
+  / DirectiveContext ForKeyword opts:ForParallelSpec? _ pattern:ForIterationPattern _ "[" {
+      helpers.mlldError("Unterminated block. Expected ']' to close block.", "]", location());
+    }
 
   // Error recovery patterns
   / DirectiveContext ForKeyword _ pattern:ForIterationPattern _ !"=>" {

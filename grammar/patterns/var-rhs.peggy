@@ -35,7 +35,7 @@ ExpressionWithOperator
       // Only look within the current line/directive context
       const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)>>/);
       const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
-      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
+      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }
     expr:Expression {
       return expr;
@@ -462,23 +462,23 @@ CodeChar
 
 // Note: when-expressions are allowed in /var assignments
 
-// FOR EXPRESSION - for @var in @collection => expression
+// FOR EXPRESSION - for @var in @collection => expression or block
 // Used in /var and /exe assignments to collect results
 ForExpression "for expression"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent batchPipe:ForBatchPipeline? {
-      helpers.debug('ForExpression matched', { pattern, expr, hasBatch: !!batchPipe });
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionBody batchPipe:ForBatchPipeline? {
+      helpers.debug('ForExpression matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
-        expr,
+        action,
         location(),
         opts || null,
         batchPipe || null
       );
     }
   // Error recovery
-  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !"=>" {
+  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !( "=>" / "[" ) {
       helpers.mlldError("Missing '=>' in for expression. Expected: for @var in @collection => expression", "=>", location());
     }
   / "for" _ "@" id:BaseIdentifier _ !"in" {
@@ -487,6 +487,10 @@ ForExpression "for expression"
   / "for" _ !"each" _ !"@" {
       helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => expression", "@", location());
     }
+
+ForExpressionBody
+  = "=>" _ expr:VarRHSContent { return expr; }
+  / block:ForBlockAction { return block.statements; }
 
 ForBatchPipeline "for batch pipeline"
   = _ "=>" _ "||" _ firstParallel:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {

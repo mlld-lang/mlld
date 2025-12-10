@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc78]
 
 ### Added
+- **Block syntax for exe and for** (**PLANNED**): Multi-statement bodies using `[...]` delimiter
+  - Exe blocks: `/exe @func() = [let @x = 1; let @y = 2; => @x + @y]` (semicolon separates statements on one line)
+  - For blocks: `/for @item in @items [show @item; let @count += 1]` (arrow `=>` optional, deprecated)
+  - `let @var = value` creates block-scoped variables; `let @var += value` for augmented assignment
+  - `=> @value` explicit return required as last statement in exe blocks
+  - Nested for/when inside blocks supported; inner directives are slashless
+  - Blocks use `[...]` (not `{...}`) to distinguish mlld control flow from code/command/data
+- **While loops** (**PLANNED**): Bounded iteration with `done`/`continue` control flow
+  - `/while (100) @processor` - directive form with iteration cap
+  - `@input | while(100, 1s) @processor` - pipeline stage with optional pacing
+  - `done @value` terminates iteration and returns value
+  - `continue @newState` advances to next iteration with new state
+  - `@ctx.while.iteration` (1-based) and `@ctx.while.limit` available in processor
 - **Streaming format adapters**: NDJSON streaming output is now parsed via configurable adapters instead of hardcoded heuristics
   - `with { streamFormat: "claude-code" }` selects Claude SDK-specific parsing
   - Default `ndjson` adapter handles generic JSON streaming

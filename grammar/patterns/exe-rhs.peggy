@@ -465,7 +465,10 @@ ExeStatementBlock "exe statement block"
     }
 
 ExeBlockBody
-  = statements:ExeBlockStatementList returnStmt:(_ ret:ExeReturnStatement { return ret; })? {
+  = statements:ExeBlockStatementList returnStmt:(
+      BlockStatementSeparator ret:ExeReturnStatement { return ret; }
+    / _ ret:ExeReturnStatement { return ret; }
+    )? {
       return {
         statements,
         returnStmt: returnStmt || null
@@ -494,6 +497,8 @@ ExeBlockStatementList
 ExeBlockStatement
   = LetAssignment
   / AugmentedAssignment
+  / WhenExpressionAny
+  / ForNestedDirective
   / ExeBlockAction
 
 ExeBlockAction
@@ -506,9 +511,11 @@ ExeBlockAction
   / WhenRHSVariableReference
   / DoneLiteral
   / ContinueLiteral
+  / ExeForeachPattern
+  / ExeDataPattern
 
 ExeReturnStatement "exe return statement"
-  = "return" _ value:ExeReturnValue? {
+  = "=>" _ value:ExeReturnValue? {
       const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
       return {
         type: 'ExeReturn',
@@ -647,7 +654,21 @@ WhenExpressionConditionPair
 
 // Actions in when expressions - for /exe context, supports both side effects and return values
 WhenExpressionAction
-  = WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
+  = block:ExeStatementBlock { return block; }
+  / WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
+
+// Inline single-condition when expression (no brackets)
+WhenExpressionInline
+  = "when" _ condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
+      const act = Array.isArray(action) ? action : [action];
+      const conditions = [{ condition: [condition], action: act }];
+      return helpers.createWhenExpression(conditions, null, location(), null);
+    }
+
+// Alias to allow both inline and bracketed when expressions
+WhenExpressionAny
+  = WhenExpressionInline
+  / WhenExpression
 
 // -------------------------------------------------------------
 // FOR EXPRESSION - Iteration with directive action support for executable assignments
@@ -657,7 +678,7 @@ WhenExpressionAction
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:ForExpressionAction batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionExeBody batchPipe:ForBatchPipeline? {
       helpers.debug('ForExpressionExe matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(
@@ -670,7 +691,7 @@ ForExpressionExe "for expression with actions"
       );
     }
   // Error recovery
-  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !"=>" {
+  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !( "=>" / "[" ) {
       helpers.mlldError("Missing '=>' in for expression. Expected: for @var in @collection => action", "=>", location());
     }
   / "for" _ "@" id:BaseIdentifier _ !"in" {
@@ -679,3 +700,7 @@ ForExpressionExe "for expression with actions"
   / "for" _ !"each" _ !"@" {
       helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => action", "@", location());
     }
+
+ForExpressionExeBody
+  = "=>" _ action:ForExpressionAction { return action; }
+  / block:ForBlockAction { return block.statements; }

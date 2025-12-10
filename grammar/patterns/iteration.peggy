@@ -53,35 +53,8 @@ ForParallelSpec
 
 // Single action for for loops - uses unified effect actions
 ForSingleAction "for action"
-  // Support nested for directive (without slash) - creates a nested ForDirective
-  = "for" _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction {
-      helpers.debug('Nested for directive matched', { pattern, action });
-
-      // Create a nested ForDirective node (not ForExpression)
-      const nestedFor = helpers.createStructuredDirective(
-        'for',
-        'for',
-        {
-          variable: [pattern.variable],
-          source: pattern.source,
-          action: Array.isArray(action) ? action : [action]
-        },
-        {
-          variable: pattern.variable.identifier,
-          source: pattern.source,
-          action: action
-        },
-        {
-          hasVariables: true,
-          actionType: 'single',
-          isNested: true
-        },
-        location()
-      );
-
-      // Return as array for consistency with other actions
-      return [nestedFor];
-    }
+  // Nested for directive
+  = ForNestedDirective
   // Unified effect actions: show, log, output, append
   / effect:EffectAction {
       return Array.isArray(effect) ? effect : [effect];
@@ -100,15 +73,57 @@ ForSingleAction "for action"
       return [invocation];
     }
 
+// Nested for directive allowed inside block bodies (no leading slash)
+ForNestedDirective
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ actionVariant:ForActionVariant {
+      helpers.debug('Nested for directive matched', { pattern, action: actionVariant });
+
+      const meta = {
+        hasVariables: true,
+        actionType: actionVariant.actionType,
+        isNested: true
+      };
+
+      if (actionVariant.blockMeta) {
+        meta.block = actionVariant.blockMeta;
+      }
+
+      const normalizedAction = Array.isArray(actionVariant.action)
+        ? actionVariant.action
+        : [actionVariant.action];
+
+      const nestedFor = helpers.createStructuredDirective(
+        'for',
+        'for',
+        {
+          variable: [pattern.variable],
+          source: pattern.source,
+          action: normalizedAction,
+          forOptions: opts || undefined
+        },
+        {
+          variable: helpers.reconstructRawString(pattern.variable),
+          source: helpers.reconstructRawString(pattern.source),
+          action: actionVariant.raw
+        },
+        meta,
+        location()
+      );
+
+      // Return as array for consistency with other actions
+      return [nestedFor];
+    }
+
 // Separator for block statements - disallow commas to avoid array confusion
 BlockStatementSeparator
   = _ "," _ {
       helpers.mlldError(
-        'Comma separators are not allowed in block statements. Use whitespace between statements.',
+        'Comma separators are not allowed in block statements. Use whitespace or semicolons between statements.',
         "whitespace",
         location()
       );
     }
+  / _ ";" _
   / _
 
 // Statement list for for-block bodies
@@ -120,7 +135,11 @@ ForBlockStatementList "for block statement list"
 
 // Single statement inside a for block
 ForBlockStatement "for block statement"
-  = ForSingleAction
+  = LetAssignment
+  / AugmentedAssignment
+  / WhenExpressionAny
+  / ForNestedDirective
+  / ForSingleAction
 
 // Block action for /for directives and for-expressions
 ForBlockAction "for block action"
@@ -191,10 +210,20 @@ ForActionVariant "for action variant"
         blockMeta: block.meta
       };
     }
+  / block:ForBlockAction {
+      const normalized = Array.isArray(block.statements) ? block.statements : [block.statements];
+      return {
+        action: normalized,
+        actionType: 'block',
+        raw: helpers.reconstructRawString(normalized),
+        blockMeta: block.meta
+      };
+    }
 
 // Action surface for exe for-expressions
 ForExpressionAction "for expression action"
   = block:ForBlockAction { return block.statements; }
+  / whenExpr:WhenExpressionAny { return [whenExpr]; }
   / action:WhenRHSAction {
       return Array.isArray(action) ? action : [action];
     }

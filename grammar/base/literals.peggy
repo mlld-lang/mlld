@@ -64,7 +64,15 @@ DeniedLiteral "denied literal"
     }
 
 DoneLiteral "done literal"
-  = "done" _ value:VarRHSContent {
+  = "done" _ "(" _ expr:Expression _ ")" {
+      const normalized = Array.isArray(expr) ? expr : [expr];
+      return helpers.createNode('Literal', {
+        value: normalized,
+        valueType: 'done',
+        location: location()
+      });
+    }
+  / "done" _ value:VarRHSContent {
       const normalized = Array.isArray(value) ? value : [value];
       return helpers.createNode('Literal', {
         value: normalized,
@@ -81,7 +89,15 @@ DoneLiteral "done literal"
     }
 
 ContinueLiteral "continue literal"
-  = "continue" _ value:VarRHSContent {
+  = "continue" _ "(" _ expr:Expression _ ")" {
+      const normalized = Array.isArray(expr) ? expr : [expr];
+      return helpers.createNode('Literal', {
+        value: normalized,
+        valueType: 'continue',
+        location: location()
+      });
+    }
+  / "continue" _ value:VarRHSContent {
       const normalized = Array.isArray(value) ? value : [value];
       return helpers.createNode('Literal', {
         value: normalized,

@@ -30,12 +30,23 @@ UnifiedLogicalAnd
 
 // Comparison operators (left-associative)
 UnifiedComparison
-  = first:UnifiedPrimary rest:(_ op:UnifiedComparisonOp _ right:UnifiedPrimary { return { op, right }; })* {
+  = first:UnifiedAdditive rest:(_ op:UnifiedComparisonOp _ right:UnifiedAdditive { return { op, right }; })* {
       return helpers.createBinaryExpression(first, rest, location());
     }
 
 UnifiedComparisonOp
   = "==" / "!=" / "~=" / "<=" / ">=" / "<" !"=" / ">" !"="
+
+// Arithmetic operators
+UnifiedAdditive
+  = first:UnifiedMultiplicative rest:(_ op:("+" / "-") _ right:UnifiedMultiplicative { return { op, right }; })* {
+      return helpers.createBinaryExpression(first, rest, location());
+    }
+
+UnifiedMultiplicative
+  = first:UnifiedPrimary rest:(_ op:("*" / "/" / "%") _ right:UnifiedPrimary { return { op, right }; })* {
+      return helpers.createBinaryExpression(first, rest, location());
+    }
 
 // Primary expressions (highest precedence)
 UnifiedPrimary

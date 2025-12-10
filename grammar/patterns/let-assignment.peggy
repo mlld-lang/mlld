@@ -19,10 +19,10 @@ LetAssignment "let assignment"
     }
 
 // AUGMENTED ASSIGNMENT - Modify an existing local variable
-// Syntax: @varName += value
+// Syntax: @varName += value (also accepts leading 'let @varName +=' for block contexts)
 // Supports: arrays (concat), strings (append), objects (shallow merge)
 AugmentedAssignment "augmented assignment"
-  = "@" id:BaseIdentifier _ "+=" _ value:VarRHSContent {
+  = ("let" __)? "@" id:BaseIdentifier _ "+=" _ value:VarRHSContent {
       return helpers.createNode('AugmentedAssignment', {
         identifier: id,
         operator: '+=',
