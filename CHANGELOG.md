@@ -8,14 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc78]
 
 ### Added
-- **Block syntax for exe and for** (**PLANNED**): Multi-statement bodies using `[...]` delimiter
-  - Exe blocks: `/exe @func() = [let @x = 1; let @y = 2; => @x + @y]` (semicolon separates statements on one line)
-  - For blocks: `/for @item in @items [show @item; let @count += 1]` (arrow `=>` optional, deprecated)
-  - `let @var = value` creates block-scoped variables; `let @var += value` for augmented assignment
-  - `=> @value` explicit return required as last statement in exe blocks
+- **Block syntax for exe and for**: Multi-statement bodies using `[...]` delimiters
+  - Exe blocks: `/exe @func() = [let @x = 1; let @y = 2; => @x + @y]` (statements separated by newlines or semicolons)
+  - For blocks: `/for @item in @items [show @item; let @count += 1]` (`=>` optional for block bodies)
+  - `let @var = value` creates block-scoped variables; `let @var += value` for augmented assignment (arrays, strings, objects, numbers)
+  - `=> @value` optional return must be the last statement when present in exe blocks
   - Nested for/when inside blocks supported; inner directives are slashless
   - Blocks use `[...]` (not `{...}`) to distinguish mlld control flow from code/command/data
-- **While loops** (**PLANNED**): Bounded iteration with `done`/`continue` control flow
+- **While loops**: Bounded iteration with `done`/`continue` control flow
   - `/while (100) @processor` - directive form with iteration cap
   - `@input | while(100, 1s) @processor` - pipeline stage with optional pacing
   - `done @value` terminates iteration and returns value
