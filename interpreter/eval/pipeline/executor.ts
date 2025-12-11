@@ -55,6 +55,47 @@ function createPipelineId(): string {
   return `pipeline-${pipelineCounter}`;
 }
 
+interface ParallelStageError {
+  index: number;
+  key?: string | number | null;
+  message: string;
+  error: string;
+  value?: unknown;
+}
+
+function formatParallelStageError(error: unknown): string {
+  if (error instanceof Error) {
+    let message = error.message;
+    if (message.startsWith('Directive error (')) {
+      const prefixEnd = message.indexOf(': ');
+      if (prefixEnd >= 0) {
+        message = message.slice(prefixEnd + 2);
+      }
+      const lineIndex = message.indexOf(' at line ');
+      if (lineIndex >= 0) {
+        message = message.slice(0, lineIndex);
+      }
+    }
+    return message;
+  }
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function resetParallelErrorsContext(env: Environment, errors: ParallelStageError[]): void {
+  const ctxManager = env.getContextManager?.();
+  if (!ctxManager) return;
+  while (ctxManager.popGenericContext('parallel')) {
+    // clear previous parallel context
+  }
+  ctxManager.pushGenericContext('parallel', { errors, timestamp: Date.now() });
+  ctxManager.setLatestErrors(errors);
+}
+
 /**
  * Pipeline Executor - Handles actual execution using state machine
  */
@@ -857,19 +898,6 @@ export class PipelineExecutor {
     const evaluatedArgs: any[] = [];
 
     for (const arg of args) {
-      // Validate arguments - prevent explicit @input passing
-      if (arg && typeof arg === 'object') {
-        const isInputVariable = 
-          (arg.type === 'variable' && arg.name === 'input') ||
-          (arg.type === 'VariableReference' && arg.identifier === 'input');
-        
-        if (isInputVariable) {
-          throw new Error(
-            '@input is automatically available in pipelines - you don\'t need to pass it explicitly.'
-          );
-        }
-      }
-
       // Evaluate the argument
       if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean' || arg === null) {
         // Preserve primitives as-is for proper parameter typing downstream
@@ -1079,6 +1107,8 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     try {
+      const errors: ParallelStageError[] = [];
+      resetParallelErrorsContext(this.env, errors);
       const sharedStructuredInput = this.getStageOutput(stageIndex - 1, input);
       const results = await runWithConcurrency(
         commands,
@@ -1161,7 +1191,19 @@ export class PipelineExecutor {
               await this.runInlineEffects(cmd, normalized, subEnv);
               return { normalized, labels: stageExecution.labelDescriptor };
             } catch (err) {
-              throw err;
+              const message = formatParallelStageError(err);
+              const marker: ParallelStageError = {
+                index: parallelIndex,
+                key: parallelIndex,
+                message,
+                error: message,
+                value: extractStageValue(branchInput)
+              };
+              errors.push(marker);
+              const markerText = safeJSONStringify(marker);
+              const normalized = wrapStructured(marker, 'object', markerText);
+              this.logStructuredStage('output', cmd.rawIdentifier, stageIndex, normalized, true);
+              return { normalized };
             }
           };
 
@@ -1181,10 +1223,28 @@ export class PipelineExecutor {
       }
 
       const branchPayloads = results as Array<{ normalized: StructuredValue; labels?: SecurityDescriptor }>;
+      if (errors.length === 0) {
+        for (let i = 0; i < branchPayloads.length; i++) {
+          const candidate = extractStageValue(branchPayloads[i].normalized);
+          if (candidate && typeof candidate === 'object' && 'message' in (candidate as any) && 'error' in (candidate as any)) {
+            const marker: ParallelStageError = {
+              index: typeof (candidate as any).index === 'number' ? (candidate as any).index : i,
+              key: (candidate as any).key ?? i,
+              message: String((candidate as any).message ?? (candidate as any).error),
+              error: String((candidate as any).error ?? (candidate as any).message),
+              value: (candidate as any).value
+            };
+            errors.push(marker);
+          }
+        }
+      }
+      resetParallelErrorsContext(this.env, errors);
+
       const aggregatedData = branchPayloads.map(result => extractStageValue(result.normalized));
       const aggregatedText = safeJSONStringify(aggregatedData);
       const aggregatedBase = wrapStructured(aggregatedData, 'array', aggregatedText, {
-        stages: branchPayloads.map(result => result.normalized)
+        stages: branchPayloads.map(result => result.normalized),
+        errors
       });
       const stageDescriptors = branchPayloads
         .map(result => result.labels ?? getStructuredSecurityDescriptor(result.normalized))

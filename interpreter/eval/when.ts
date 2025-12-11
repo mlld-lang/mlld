@@ -67,6 +67,7 @@ export async function evaluateAugmentedAssignment(
   entry: AugmentedAssignmentNode,
   env: Environment
 ): Promise<Environment> {
+  const isolationRoot = findIsolationRoot(env);
   // Get existing variable - must exist
   const existing = env.getVariable(entry.identifier);
   if (!existing) {
@@ -75,6 +76,16 @@ export async function evaluateAugmentedAssignment(
       `Use "let @${entry.identifier} = ..." first.`,
       entry.location
     );
+  }
+
+  if (isolationRoot) {
+    const owner = findVariableOwner(env, entry.identifier);
+    if (!owner || !isDescendantEnvironment(owner, isolationRoot)) {
+      throw new MlldWhenExpressionError(
+        `Parallel for block cannot mutate outer variable @${entry.identifier}.`,
+        entry.location
+      );
+    }
   }
 
   // Evaluate the RHS value
@@ -115,6 +126,35 @@ export async function evaluateAugmentedAssignment(
   }
   (targetEnv ?? env).updateVariable(entry.identifier, updatedVar);
   return env;
+}
+
+function findIsolationRoot(env: Environment): Environment | undefined {
+  let current: Environment | undefined = env;
+  while (current) {
+    if ((current as any).__parallelIsolationRoot === current) {
+      return current;
+    }
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function findVariableOwner(env: Environment, name: string): Environment | undefined {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current.getCurrentVariables().has(name)) return current;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function isDescendantEnvironment(env: Environment, ancestor: Environment): boolean {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current === ancestor) return true;
+    current = current.getParent();
+  }
+  return false;
 }
 
 /**

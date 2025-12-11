@@ -10,6 +10,7 @@ import { asText, isStructuredValue } from '../utils/structured-value';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execSync } from 'child_process';
 
 function getDirectiveNodes(ast: any, name: string) {
   const nodes = Array.isArray(ast) ? ast : Array.isArray(ast?.body) ? ast.body : [];
@@ -23,6 +24,14 @@ function getDirectiveNodes(ast: any, name: string) {
 
 describe('evaluateRun (structured)', () => {
   let env: Environment;
+  const pythonAvailable = (() => {
+    try {
+      execSync('python - <<\"PY\"\nprint(\"ok\")\nPY', { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
 
   beforeEach(() => {
     const fs = new MemoryFileSystem();
@@ -136,7 +145,7 @@ describe('evaluateRun (structured)', () => {
     }
   });
 
-  it('runs /run python with :path working directory', async () => {
+  (pythonAvailable ? it : it.skip)('runs /run python with :path working directory', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-wd-py-'));
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();

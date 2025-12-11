@@ -1,6 +1,6 @@
-/var @tpl = `
-/for @v in ["x","y"]
-- @v
-/end
-`
-/show @tpl
+/var @xs = [1, null, 2, null, 3]
+/var @filtered = for @x in @xs => when [
+  @x != null => @x
+  none => skip
+]
+/show @filtered   # => ["1","2","3"]

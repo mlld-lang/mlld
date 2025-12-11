@@ -1,7 +1,12 @@
-/exe @countdown(n) = when [
-  @n <= 0 => done "finished"
-  * => continue (@n - 1)
+/exe @source() = when first [
+  @ctx.try == 1 => "draft"
+  * => "final"
 ]
 
-/var @result = 5 | while(10) @countdown
+/exe @validator() = when first [
+  @ctx.input == "draft" => retry "missing title"
+  * => `Used hint: @ctx.hint`
+]
+
+/var @result = @source() | @validator
 /show @result

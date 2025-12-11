@@ -69,6 +69,11 @@ export async function evaluateShow(
 
   let resultValue: unknown | undefined;
   let content = '';
+  let skipJsonFormatting = false;
+  const hasErrorMetadata = (val: unknown): boolean =>
+    isStructuredValue(val) &&
+    Array.isArray((val as any).metadata?.errors) &&
+    (val as any).metadata?.errors?.length > 0;
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
   let isStreamingShow = false;
   let interpolatedDescriptor: SecurityDescriptor | undefined;
@@ -480,15 +485,24 @@ export async function evaluateShow(
       const params = (value as any).paramNames || [];
       content = `<function(${params.join(', ')})>`;
     } else {
-      if (Array.isArray(value) && process.env.MLLD_DEBUG === 'true') {
-        logger.debug('show.ts: Formatting array:', {
-          varName: variable.name,
-          valueLength: value.length,
-          value,
-          isForeachSection
-        });
+      if (isStructuredValue(value)) {
+        if (hasErrorMetadata(value)) {
+          content = asText(value);
+          skipJsonFormatting = true;
+        } else {
+          content = formatForDisplay(value, { isForeachSection, pretty: true });
+        }
+      } else {
+        if (Array.isArray(value) && process.env.MLLD_DEBUG === 'true') {
+          logger.debug('show.ts: Formatting array:', {
+            varName: variable.name,
+            valueLength: value.length,
+            value,
+            isForeachSection
+          });
+        }
+        content = formatForDisplay(value, { isForeachSection, pretty: false });
       }
-      content = formatForDisplay(value, { isForeachSection });
     }
     
     // Legacy path: only run when invocation is not present (avoid double-processing)
@@ -924,7 +938,12 @@ export async function evaluateShow(
 
     // Convert result to string appropriately
     if (isStructuredValue(result.value)) {
-      content = formatForDisplay(result.value);
+      if (hasErrorMetadata(result.value)) {
+        content = asText(result.value);
+        skipJsonFormatting = true;
+      } else {
+        content = formatForDisplay(result.value, { pretty: false });
+      }
     } else if (typeof result.value === 'string') {
       content = result.value;
     } else if (result.value === null || result.value === undefined) {
@@ -1178,7 +1197,7 @@ export async function evaluateShow(
     } catch {
       content = String(content);
     }
-  } else if (typeof content === 'string') {
+  } else if (typeof content === 'string' && !skipJsonFormatting) {
     const parsed = parseAndWrapJson(content, { preserveText: true });
     if (parsed && typeof parsed !== 'string' && isStructuredValue(parsed)) {
       content = JSONFormatter.stringify(parsed.data, { pretty: true });

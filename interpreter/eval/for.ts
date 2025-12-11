@@ -24,6 +24,14 @@ import { evaluateWhenExpression } from './when-expression';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 
+interface ForIterationError {
+  index: number;
+  key?: string | number | null;
+  message: string;
+  error: string;
+  value?: unknown;
+}
+
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown, env: Environment): Variable {
   // If already a Variable, return as-is
@@ -119,6 +127,58 @@ function enhanceFieldAccessError(
   });
 }
 
+function formatIterationError(error: unknown): string {
+  if (error instanceof Error) {
+    let message = error.message;
+    // Strip directive wrapper noise for user-facing markers
+    if (message.startsWith('Directive error (')) {
+      const prefixEnd = message.indexOf(': ');
+      if (prefixEnd >= 0) {
+        message = message.slice(prefixEnd + 2);
+      }
+      const lineIndex = message.indexOf(' at line ');
+      if (lineIndex >= 0) {
+        message = message.slice(0, lineIndex);
+      }
+    }
+    return message;
+  }
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function resetForErrorsContext(env: Environment, errors: ForIterationError[]): void {
+  const ctxManager = env.getContextManager?.();
+  if (!ctxManager) return;
+  while (ctxManager.popGenericContext('for')) {
+    // clear previous loop context
+  }
+  ctxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
+  ctxManager.setLatestErrors(errors);
+}
+
+function findVariableOwner(env: Environment, name: string): Environment | undefined {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current.getCurrentVariables().has(name)) return current;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function isDescendantEnvironment(env: Environment, ancestor: Environment): boolean {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current === ancestor) return true;
+    current = current.getParent();
+  }
+  return false;
+}
+
 export async function evaluateForDirective(
   directive: ForDirective,
   env: Environment
@@ -165,19 +225,19 @@ export async function evaluateForDirective(
     const inherited = (env as any).__forOptions as typeof specified | undefined;
     const effective = specified ?? inherited;
 
-    if (effective?.parallel && directive.meta?.actionType === 'block') {
-      throw new MlldDirectiveError(
-        'Parallel for loops not supported with block bodies. Use exe wrapper pattern.',
-        'for',
-        { location: directive.location }
-      );
-    }
-
     const iterableArray = Array.from(iterable);
+    const forErrors = effective?.parallel ? ([] as ForIterationError[]) : null;
+    if (forErrors) {
+      resetForErrorsContext(env, forErrors);
+    }
 
     const runOne = async (entry: [any, any], idx: number) => {
       const [key, value] = entry;
-      let childEnv = env.createChildEnvironment();
+      const iterationRoot = env.createChildEnvironment();
+      if (effective?.parallel) {
+        (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
+      }
+      let childEnv = iterationRoot;
       // Inherit forOptions for nested loops if set
       if (effective) (childEnv as any).__forOptions = effective;
       let derivedValue: unknown;
@@ -221,6 +281,16 @@ export async function evaluateForDirective(
               if (isLetAssignment(actionNode)) {
                 blockEnv = await evaluateLetAssignment(actionNode, blockEnv);
               } else if (isAugmentedAssignment(actionNode)) {
+                if (effective?.parallel) {
+                  const owner = findVariableOwner(blockEnv, actionNode.identifier);
+                  if (!owner || !isDescendantEnvironment(owner, iterationRoot)) {
+                    throw new MlldDirectiveError(
+                      `Parallel for block cannot mutate outer variable @${actionNode.identifier}.`,
+                      'for',
+                      { location: actionNode.location }
+                    );
+                  }
+                }
                 blockEnv = await evaluateAugmentedAssignment(actionNode, blockEnv);
               } else if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
                 const nodeWithFirst = {
@@ -277,6 +347,16 @@ export async function evaluateForDirective(
             const again = await retry.wait();
             if (again) continue;
           }
+          if (forErrors) {
+            forErrors.push({
+              index: idx,
+              key: key ?? null,
+              message: formatIterationError(err),
+              error: formatIterationError(err),
+              value
+            });
+            return;
+          }
           throw err;
         }
       }
@@ -329,18 +409,25 @@ export async function evaluateForExpression(
   }
 
   const results: unknown[] = [];
-  const errors: Array<{ index: number; error: Error; value: unknown }> = [];
+  const errors: ForIterationError[] = [];
 
   const specified = (expr.meta as any)?.forOptions as { parallel?: boolean; cap?: number; rateMs?: number } | undefined;
   const inherited = (env as any).__forOptions as typeof specified | undefined;
   const effective = specified ?? inherited;
+  if (effective?.parallel) {
+    resetForErrorsContext(env, errors);
+  }
 
   const iterableArray = Array.from(iterable);
 
   const SKIP = Symbol('skip');
   const runOne = async (entry: [any, any], idx: number) => {
     const [key, value] = entry;
-    let childEnv = env.createChildEnvironment();
+    const iterationRoot = env.createChildEnvironment();
+    if (effective?.parallel) {
+      (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
+    }
+    let childEnv = iterationRoot;
     if (effective) (childEnv as any).__forOptions = effective;
     let derivedValue: unknown;
     if (varFields && varFields.length > 0) {
@@ -431,7 +518,18 @@ export async function evaluateForExpression(
       }
       return exprResult as any;
     } catch (error) {
-      errors.push({ index: idx, error: error as Error, value });
+      const message = formatIterationError(error);
+      const marker: ForIterationError = {
+        index: idx,
+        key: key ?? null,
+        message,
+        error: message,
+        value
+      };
+      errors.push(marker);
+      if (effective?.parallel) {
+        return marker as any;
+      }
       return null as any;
     }
   };

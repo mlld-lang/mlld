@@ -1,2 +1,7 @@
-/var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @json
-/show @data.users[0].name
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg

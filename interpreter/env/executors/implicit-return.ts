@@ -29,7 +29,9 @@ export function addImplicitReturn(code: string): string {
   // Preserve legacy single-line implicit return behaviour for simple helpers.
   const isSingleLine = !code.includes('\n');
   const looksLikeStatement =
-    code.includes(';') || trimmed.startsWith('console.log');
+    code.includes(';') ||
+    trimmed.startsWith('console.log') ||
+    trimmed.startsWith('throw');
 
   if (isSingleLine && !looksLikeStatement) {
     return `return (${code})`;

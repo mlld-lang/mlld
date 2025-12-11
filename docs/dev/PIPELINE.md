@@ -232,6 +232,7 @@ Pipeline stages run in parallel when grouped with `||`.
 - Leading `||` syntax: The double-bar prefix explicitly enters pipeline mode with parallel execution, avoiding ambiguity with boolean OR (`||`) expressions. Only matches when followed by function calls (with parentheses), not plain variables.
 - Equivalence: `|| @a() || @b() | @c` produces same AST as `"" with { pipeline: [[@a, @b], @c] }`
 - Output: The next stage receives a StructuredValue array; `.data` preserves branch outputs in declaration order and `.text` is the JSON string form. The same wrapper is stored in `@p` for that stage.
+- Error handling: Branch failures are best-effort. Errors are captured as markers `{ index, key?, message, error, value }` in the array and accumulated in `@ctx.errors` (cleared per parallel group). Pipelines do not abort on a single branch failure; downstream stages decide how to repair or retry.
 - Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 - Caps and pacing: `(n, wait)` after the pipeline sets a per-pipeline concurrency cap and delay between starts, equivalent to `with { parallel: n, delay: wait }`.
 - Effects: Inline effects attached before a parallel group run once per branch after that branch succeeds; effect failures abort the pipeline.

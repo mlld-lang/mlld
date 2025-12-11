@@ -190,8 +190,9 @@ Syntax options:
 Semantics:
 - Concurrency cap: defaults to `MLLD_PARALLEL_LIMIT` (env), overridable per loop; cap never exceeds collection length.
 - Pacing: optional minimum delay between iteration starts; `parallel(n, 1s)` adds ~1 second between starts across the loop.
-- Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff.
-- Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is `null`.
+- Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff; block bodies run in isolated iteration scopes and aggregate errors into `@ctx.errors` instead of failing the loop.
+- Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is an error marker `{ index, key?, message, error, value }`; `@ctx.errors` is reset at loop start and populated for parallel loops.
+- Parallel block bodies are supported; augmented assignments to variables defined outside the iteration scope fail and record an error marker. Each iteration shares read-only access to outer values but cannot mutate them.
 - Nested loops: inner loops inherit outer `forOptions` unless overridden.
 
 Implementation references:

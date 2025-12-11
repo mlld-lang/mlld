@@ -318,6 +318,18 @@ Output (collection form):
 ["X","Y","Z"]
 ```
 
+Parallel loops support block bodies as well:
+```mlld
+/for parallel(3) @task in @tasks [
+  let @result = @runTask(@task)
+  show `done:@task.id`
+]
+show `errors:@ctx.errors.length`
+```
+- Directive form keeps streaming effects as iterations finish (order may vary).
+- Expression form preserves input order; failed iterations add error markers `{ index, key?, message, error, value }` in the results array.
+- `@ctx.errors` resets at the start of each parallel loop and records any failures; outer-scope variables cannot be mutated inside a parallel block body.
+
 ### Foreach Transforms
 
 Use `foreach` to transform collections with templates or executables:
@@ -683,6 +695,7 @@ Notes:
 - Leading `||` syntax avoids ambiguity with boolean OR expressions.
 - Use `(n, wait)` after the pipeline to override concurrency cap and add pacing between starts.
 - Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
+- Errors inside a parallel group are collected as `{ index, key?, message, error, value }` elements and exposed via `@ctx.errors`; the pipeline continues so downstream stages can repair or decide whether to retry.
 - Inline effects attached to grouped commands run after each command completes.
 
 ### Complex Retry Patterns

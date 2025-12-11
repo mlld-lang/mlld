@@ -101,6 +101,6 @@ PipelineRest
 
 // One pipeline stage consisting of multiple commands executed in parallel
 ParallelSequence
-  = first:PipelineStageEntry rest:(_ "||" _ c:PipelineStageEntry { return c; })+ {
+  = leading:("||" _)? first:PipelineStageEntry rest:(_ "||" _ c:PipelineStageEntry { return c; })+ {
       return [first, ...rest];
     }

@@ -100,6 +100,7 @@ export class ContextManager {
   private readonly guardStack: GuardContextSnapshot[] = [];
   private readonly deniedStack: DeniedContextSnapshot[] = [];
   private readonly genericContexts: Map<string, unknown[]> = new Map();
+  private latestErrors: unknown[] = [];
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -220,6 +221,22 @@ export class ContextManager {
     const guardContext = this.peekGuardContext();
     const deniedContext = this.peekDeniedContext();
     const whileContext = this.peekGenericContext('while');
+    const forContext = this.peekGenericContext('for');
+    const parallelContext = this.peekGenericContext('parallel');
+    const errorsContext = (() => {
+      const contexts = [parallelContext, forContext].filter(Boolean) as Array<{ errors?: unknown; timestamp?: number }>;
+      if (contexts.length === 0) return null;
+      const sorted = contexts.sort((a, b) => {
+        const ta = typeof a.timestamp === 'number' ? a.timestamp! : -Infinity;
+        const tb = typeof b.timestamp === 'number' ? b.timestamp! : -Infinity;
+        return tb - ta;
+      });
+      return sorted[0];
+    })();
+    const resolvedErrors =
+      errorsContext && typeof errorsContext === 'object' && Array.isArray((errorsContext as any).errors)
+        ? (errorsContext as any).errors
+        : this.latestErrors;
 
     const ctxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -238,7 +255,8 @@ export class ContextManager {
       operation: currentOperation ?? null,
       op: currentOperation ?? null,
       guard: guardContext ?? (deniedContext ? {} : null),
-      ...(whileContext ? { while: whileContext } : {})
+      ...(whileContext ? { while: whileContext } : {}),
+      errors: Array.isArray(resolvedErrors) ? resolvedErrors : []
     };
 
     if (deniedContext) {
@@ -302,6 +320,10 @@ export class ContextManager {
     } finally {
       this.popGenericContext(type);
     }
+  }
+
+  setLatestErrors(errors: unknown[]): void {
+    this.latestErrors = errors;
   }
 
   private normalizeGuardContext(

@@ -265,6 +265,19 @@ let executionResult: StructuredValue;
     }
     throw error;
   }
+  const errorsMeta =
+    isStructuredValue(executionResult) &&
+    executionResult.metadata &&
+    Array.isArray((executionResult.metadata as any).errors)
+      ? (executionResult.metadata as any).errors as any[]
+      : undefined;
+
+  if (errorsMeta && errorsMeta.length > 0) {
+    const ctxManager = env.getContextManager?.();
+    ctxManager?.setLatestErrors(errorsMeta);
+    ctxManager?.pushGenericContext('parallel', { errors: errorsMeta, timestamp: Date.now() });
+  }
+
   if (pipelineDescriptor && isStructuredValue(executionResult)) {
     const metadata: StructuredValueMetadata = {
       ...(executionResult.metadata || {}),
