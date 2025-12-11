@@ -273,6 +273,41 @@ describe('Import type handling', () => {
     expect(lines[2]).toBe('Agent: hi');
   });
 
+  it('supports dynamic template selection with bracket access', async () => {
+    await fileSystem.writeFile(
+      '/project/templates/agents/alice.att',
+      'Agent: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/agents/party.att',
+      'Party: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/agents/finance/bob.att',
+      'Finance: @message'
+    );
+
+    const source = `/var @agent = "party"
+/var @group = "finance"
+/var @person = "bob"
+/import templates from "./templates" as @tpl(message)
+/show @tpl.agents[@agent]("welcome")
+/show @tpl.agents[@group][@person]("regional update")
+/show @tpl.agents.alice("hi")`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n');
+    expect(lines[0]).toBe('Party: welcome');
+    expect(lines[1]).toBe('Finance: regional update');
+    expect(lines[2]).toBe('Agent: hi');
+  });
+
   it('treats quoted non-resolver namespace as module reference', async () => {
     // This tests that "@author/module" in quotes gets treated as a module import
     // even though it goes through variable interpolation in the grammar

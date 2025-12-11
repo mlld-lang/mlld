@@ -23,6 +23,7 @@ import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import {
   asText,
+  asData,
   isStructuredValue,
   wrapStructured,
   parseAndWrapJson,
@@ -422,6 +423,15 @@ async function evaluateExecInvocationInternal(
     'isDefined'
   ];
 
+  const normalizeFields = (fields?: Array<{ type: string; value: any }>) =>
+    (fields || []).map(field => {
+      if (!field || typeof field !== 'object') return field;
+      if (field.type === 'Field') {
+        return { ...field, type: 'field' };
+      }
+      return field;
+    });
+
   let streamingOptions = env.getStreamingOptions();
   let streamingRequested =
     node.stream === true ||
@@ -603,6 +613,20 @@ async function evaluateExecInvocationInternal(
   } else {
     throw new Error('ExecInvocation node missing both commandRef and name');
   }
+
+  // Resolve dynamic method names when the final segment is a variable index (e.g., @obj[@name]())
+  const identifierNode = (node.commandRef as any)?.identifier?.[0];
+  const identifierFields = normalizeFields(identifierNode?.fields);
+  const lastField = identifierFields[identifierFields.length - 1];
+  if (lastField?.type === 'variableIndex') {
+    const indexVar = env.getVariable(lastField.value);
+    if (!indexVar) {
+      throw new MlldInterpreterError(`Variable not found for index: ${lastField.value}`);
+    }
+    const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+    const resolvedName = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
+    commandName = String(resolvedName);
+  }
   
   if (!commandName) {
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
@@ -668,15 +692,37 @@ async function evaluateExecInvocationInternal(
 
         // Navigate through fields if present
         if (objectRef.fields && objectRef.fields.length > 0) {
-          for (const field of objectRef.fields) {
-            if (typeof objectValue === 'object' && objectValue !== null) {
-              objectValue = (objectValue as any)[field.value];
+          const normalizedFields = normalizeFields(objectRef.fields);
+          for (const field of normalizedFields) {
+            let targetValue: any = objectValue;
+            let key = field.value;
+
+            if (field.type === 'variableIndex') {
+              if (isStructuredValue(targetValue)) {
+                targetValue = asData(targetValue);
+              }
+              const indexVar = env.getVariable(field.value);
+              if (!indexVar) {
+                if (isTypeCheckingBuiltin) {
+                  const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined);
+                  return createEvalResult(typeCheckResult, env);
+                }
+                throw new MlldInterpreterError(`Variable not found for index: ${field.value}`);
+              }
+              const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+              key = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
+            }
+
+            if (isStructuredValue(targetValue) && typeof key === 'string' && key in (targetValue as any)) {
+              objectValue = (targetValue as any)[key];
+            } else if (typeof targetValue === 'object' && targetValue !== null) {
+              objectValue = (targetValue as any)[key];
             } else {
               if (isTypeCheckingBuiltin) {
                 const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined);
                 return createEvalResult(typeCheckResult, env);
               }
-              throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+              throw new MlldInterpreterError(`Cannot access field ${String(key)} on non-object`);
             }
           }
         }
@@ -700,7 +746,29 @@ async function evaluateExecInvocationInternal(
           const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, objectValue);
           return createEvalResult(typeCheckResult, env);
         }
+        if (process.env.DEBUG_EXEC) {
+          logger.debug('Builtin invocation unresolved object value', {
+            commandName,
+            objectIdentifier: commandRefWithObject.objectReference?.identifier,
+            fields: commandRefWithObject.objectReference?.fields
+          });
+        }
         throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
+      }
+
+      if (process.env.DEBUG_EXEC) {
+        logger.debug('Builtin invocation object value', {
+          commandName,
+          objectType: Array.isArray(objectValue) ? 'array' : typeof objectValue,
+          objectPreview:
+            typeof objectValue === 'string'
+              ? objectValue.slice(0, 80)
+              : Array.isArray(objectValue)
+              ? `[array length=${objectValue.length}]`
+              : objectValue && typeof objectValue === 'object'
+              ? Object.keys(objectValue)
+              : objectValue
+        });
       }
 
       chainDebug('builtin invocation start', {
@@ -882,33 +950,16 @@ async function evaluateExecInvocationInternal(
     
     // Access the field
     if (objectRef.fields && objectRef.fields.length > 0) {
-      // Navigate through nested fields
-      let currentValue = objectValue;
-      for (const field of objectRef.fields) {
-        if (process.env.DEBUG_EXEC) {
-          logger.debug('Accessing field', {
-            fieldType: field.type,
-            fieldValue: field.value,
-            currentValueType: typeof currentValue,
-            currentValueKeys: typeof currentValue === 'object' && currentValue !== null ? Object.keys(currentValue) : 'not-object'
-          });
-        }
-        if (typeof currentValue === 'object' && currentValue !== null) {
-          currentValue = (currentValue as any)[field.value];
-          if (process.env.DEBUG_EXEC) {
-            logger.debug('Field access result', {
-              fieldValue: field.value,
-              resultType: typeof currentValue,
-              resultKeys: typeof currentValue === 'object' && currentValue !== null ? Object.keys(currentValue) : 'not-object'
-            });
-          }
-        } else {
-          throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
-        }
-      }
-      // Now access the command field
-      if (typeof currentValue === 'object' && currentValue !== null) {
-        const fieldValue = (currentValue as any)[commandName];
+      const { accessFields } = await import('../utils/field-access');
+      const accessedObject = await accessFields(objectValue, normalizeFields(objectRef.fields), {
+        env,
+        preserveContext: false,
+        returnUndefinedForMissing: true,
+        sourceLocation: objectRef.location
+      });
+
+      if (typeof accessedObject === 'object' && accessedObject !== null) {
+        const fieldValue = (accessedObject as any)[commandName];
         variable = fieldValue;
       }
     } else {
