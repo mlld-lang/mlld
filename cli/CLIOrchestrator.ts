@@ -1,4 +1,4 @@
-import { version } from '@core/version';
+import { version, buildTime } from '@core/version';
 import type { CLIOptions } from './index';
 import { ErrorHandler } from './error/ErrorHandler';
 import { UserInteraction } from './interaction/UserInteraction';
@@ -70,7 +70,27 @@ export class CLIOrchestrator {
       
       // Handle version flag
       if (cliOptions.version) {
-        console.log(`mlld version ${version}`);
+        // Detect if running locally (not from node_modules)
+        const isLocal = !__dirname.includes('node_modules');
+        if (isLocal && buildTime) {
+          const elapsed = Date.now() - buildTime;
+          const minutes = Math.floor(elapsed / 60000);
+          const hours = Math.floor(minutes / 60);
+          const days = Math.floor(hours / 24);
+          let timeAgo: string;
+          if (days > 0) {
+            timeAgo = `${days} day${days === 1 ? '' : 's'} ago`;
+          } else if (hours > 0) {
+            timeAgo = `${hours} hour${hours === 1 ? '' : 's'} ago`;
+          } else if (minutes > 0) {
+            timeAgo = `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+          } else {
+            timeAgo = 'just now';
+          }
+          console.log(`mlld version ${version} -- last built ${timeAgo}`);
+        } else {
+          console.log(`mlld version ${version}`);
+        }
         return;
       }
 
