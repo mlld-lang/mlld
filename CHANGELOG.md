@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **StreamingManager**: Centralized sink management replaces fragmented sink creation
   - Single owner for StreamBus lifecycle
 - **When separators and for-when filter sugar**: Semicolons separate when arms across directive and expression forms, and `for ... when ...` adds an implicit `none => skip` branch so filtered for-expressions drop non-matches without null placeholders
+- **Parallel execution error accumulation**: Best-effort error handling for parallel for blocks and pipeline groups
+  - `/for parallel @x in @xs [complex-block]` now supported with block-scoped `let` only (outer-scope writes blocked)
+  - Errors accumulate in `@ctx.errors` array instead of failing fast
+  - Failed iterations produce error markers `{ index, key?, message, error, value }` in results array (index-aligned)
+  - Parallel pipeline groups (`|| @a || @b || @c`) also accumulate errors for graceful degradation
+  - Caller decides repair strategy: `when @ctx.errors.length > 0 => @repair(@results, @ctx.errors)`
+  - Enables multi-agent orchestration with AI-driven repair (2/3 succeed → Haiku decides next steps)
 
 ### Changed
 - `/exe` RHS pipe sugar accepts direct `@value | cmd { ... }` pipelines (legacy `run` form still works); identity definitions keep with-clause pipelines when evaluating parameters

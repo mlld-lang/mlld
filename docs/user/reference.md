@@ -464,6 +464,7 @@ Built-in transformers:
 Pipeline context variables:
 - `@ctx.try`: current attempt number
 - `@ctx.stage`: current pipeline stage
+- `@ctx.errors`: array of errors from parallel operations (for loops or pipeline groups); error markers: `{ index, key?, message, error, value }`
 - `@p[0]`: pipeline input (original/base value)
 - `@p[1]` … `@p[n]`: outputs from completed stages (as `StructuredValue` wrappers)
 - `@p[-1]`: previous stage output; `@p[-2]` two stages back

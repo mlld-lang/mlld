@@ -330,6 +330,21 @@ show `errors:@ctx.errors.length`
 - Expression form preserves input order; failed iterations add error markers `{ index, key?, message, error, value }` in the results array.
 - `@ctx.errors` resets at the start of each parallel loop and records any failures; outer-scope variables cannot be mutated inside a parallel block body.
 
+**Error handling with repair pattern:**
+
+```mlld
+/exe @invokeAll(agents, msg) = [
+  let @results = for parallel @a in @agents => @invoke(@a, @msg)
+  => when [
+    @ctx.errors.length == 0 => @results
+    @results.length >= 2 => @results  # 2/3 succeeded is acceptable
+    * => @repair(@results, @ctx.errors, @msg)  # AI-driven repair
+  ]
+]
+```
+
+This enables multi-agent orchestration with graceful degradation. If some agents fail, the repair function sees partial results and decides next steps.
+
 ### Foreach Transforms
 
 Use `foreach` to transform collections with templates or executables:
@@ -697,6 +712,22 @@ Notes:
 - Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
 - Errors inside a parallel group are collected as `{ index, key?, message, error, value }` elements and exposed via `@ctx.errors`; the pipeline continues so downstream stages can repair or decide whether to retry.
 - Inline effects attached to grouped commands run after each command completes.
+
+**Error handling with graceful degradation:**
+
+```mlld
+>> Multi-source fetch with repair
+/exe @aggregate(sources) = [
+  let @data = || @fetch(@sources[0]) || @fetch(@sources[1]) || @fetch(@sources[2])
+  => when [
+    @ctx.errors.length == 0 => @data
+    @data.length >= 2 => @data  # 2/3 is good enough
+    * => retry `Need at least 2 sources. Failed: @ctx.errors`
+  ]
+]
+```
+
+This enables best-effort parallel execution where partial success is acceptable. The `@ctx.errors` array provides details on what failed, and `@data` contains results from successful operations plus error markers for failed ones.
 
 ### Complex Retry Patterns
 
