@@ -7,6 +7,7 @@ import { MlldConditionError } from '@core/errors';
 import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
 import { VariableImporter } from './import/VariableImporter';
 import { evaluate, interpolate } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
 import { logger } from '@core/utils/logger';
 import {
   isTextLike,
@@ -30,7 +31,60 @@ async function evaluateAssignmentValue(
   env: Environment
 ): Promise<unknown> {
   let value: unknown;
+  const tail = (entry as any).withClause;
+  let handledByRunEvaluator = false;
   const wrapperType = (entry as any).meta?.wrapperType;
+  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+
+  if (firstValue && typeof firstValue === 'object' && (firstValue as any).type === 'code') {
+    const { evaluateCodeExecution } = await import('./code-execution');
+    const result = await evaluateCodeExecution(firstValue as any, env);
+    value = result.value;
+  }
+
+  if (firstValue && typeof firstValue === 'object' && (firstValue as any).type === 'command') {
+    const commandNode: any = firstValue;
+
+    if (tail) {
+      const { evaluateRun } = await import('./run');
+      const runDirective: any = {
+        type: 'Directive',
+        nodeId: (entry as any).nodeId ? `${(entry as any).nodeId}-run` : undefined,
+        location: entry.location,
+        kind: 'run',
+        subtype: 'runCommand',
+        source: 'command',
+        values: {
+          command: commandNode.command,
+          withClause: tail
+        },
+        raw: {
+          command: Array.isArray(commandNode.command) ? (commandNode.meta?.raw || '') : String(commandNode.command),
+          withClause: tail
+        },
+        meta: {
+          isDataValue: true
+        }
+      };
+      const result = await evaluateRun(runDirective, env);
+      value = result.value;
+      handledByRunEvaluator = true;
+    } else {
+      if (Array.isArray(commandNode.command)) {
+        const interpolatedCommand = await interpolate(
+          commandNode.command,
+          env,
+          InterpolationContext.ShellCommand
+        );
+        value = await env.executeCommand(interpolatedCommand);
+      } else {
+        value = await env.executeCommand(commandNode.command);
+      }
+
+      const { processCommandOutput } = await import('../utils/json-auto-parser');
+      value = processCommandOutput(value);
+    }
+  }
 
   if (wrapperType && Array.isArray(entry.value)) {
     if (wrapperType === 'tripleColon') {
@@ -46,7 +100,6 @@ async function evaluateAssignmentValue(
     }
   }
 
-  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
   const isRawPrimitive = firstValue === null ||
     typeof firstValue === 'number' ||
     typeof firstValue === 'boolean' ||
@@ -61,7 +114,7 @@ async function evaluateAssignmentValue(
     }
   }
 
-  if ((entry as any).withClause) {
+  if (tail && !handledByRunEvaluator) {
     const { processPipeline } = await import('./pipeline/unified-processor');
     value = await processPipeline({
       value,

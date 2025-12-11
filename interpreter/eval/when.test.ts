@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { evaluateWhen } from './when';
+import { evaluateWhen, evaluateLetAssignment } from './when';
 import { Environment } from '../env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import type { WhenSimpleNode, WhenBlockNode } from '@core/types/when';
+import type { WhenSimpleNode, WhenBlockNode, LetAssignmentNode } from '@core/types/when';
+import { extractVariableValue } from '../utils/variable-resolution';
 
 describe('evaluateWhen', () => {
   let env: Environment;
@@ -183,6 +184,70 @@ describe('evaluateWhen', () => {
       
       const result = await evaluateWhen(node, env);
       expect(result.value).toBe('Should execute');
+    });
+  });
+
+  describe('let RHS parity with var', () => {
+    it('executes cmd RHS', async () => {
+      const node: LetAssignmentNode = {
+        type: 'LetAssignment',
+        nodeId: 'let-cmd',
+        identifier: 'resp',
+        value: [
+          {
+            type: 'command',
+            command: 'echo hello'
+          } as any
+        ]
+      };
+
+      const childEnv = await evaluateLetAssignment(node, env);
+      const variable = childEnv.getVariable('resp');
+      expect(variable).toBeTruthy();
+      const value = await extractVariableValue(variable!, childEnv);
+      expect(value).toBe('hello');
+    });
+
+    it('executes sh code RHS', async () => {
+      const node: LetAssignmentNode = {
+        type: 'LetAssignment',
+        nodeId: 'let-sh',
+        identifier: 'resp',
+        value: [
+          {
+            type: 'code',
+            language: 'sh',
+            code: 'echo shell-ok'
+          } as any
+        ]
+      };
+
+      const childEnv = await evaluateLetAssignment(node, env);
+      const variable = childEnv.getVariable('resp');
+      expect(variable).toBeTruthy();
+      const value = await extractVariableValue(variable!, childEnv);
+      expect(value).toBe('shell-ok');
+    });
+
+    it('executes js code RHS', async () => {
+      const node: LetAssignmentNode = {
+        type: 'LetAssignment',
+        nodeId: 'let-js',
+        identifier: 'resp',
+        value: [
+          {
+            type: 'code',
+            language: 'js',
+            code: 'return 21 + 21;'
+          } as any
+        ]
+      };
+
+      const childEnv = await evaluateLetAssignment(node, env);
+      const variable = childEnv.getVariable('resp');
+      expect(variable).toBeTruthy();
+      const value = await extractVariableValue(variable!, childEnv);
+      expect(value).toBe('42');
     });
   });
 });
