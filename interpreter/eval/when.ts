@@ -6,7 +6,7 @@ import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
 import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
 import { VariableImporter } from './import/VariableImporter';
-import { evaluate } from '../core/interpreter';
+import { evaluate, interpolate } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
 import {
   isTextLike,
@@ -25,6 +25,56 @@ import { MlldWhenExpressionError } from '@core/errors';
 
 const DENIED_KEYWORD = 'denied';
 
+async function evaluateAssignmentValue(
+  entry: LetAssignmentNode | AugmentedAssignmentNode,
+  env: Environment
+): Promise<unknown> {
+  let value: unknown;
+  const wrapperType = (entry as any).meta?.wrapperType;
+
+  if (wrapperType && Array.isArray(entry.value)) {
+    if (wrapperType === 'tripleColon') {
+      value = entry.value;
+    } else if (
+      wrapperType === 'backtick' &&
+      entry.value.length === 1 &&
+      (entry.value[0] as any).type === 'Text'
+    ) {
+      value = (entry.value[0] as any).content;
+    } else {
+      value = await interpolate(entry.value, env);
+    }
+  }
+
+  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+  const isRawPrimitive = firstValue === null ||
+    typeof firstValue === 'number' ||
+    typeof firstValue === 'boolean' ||
+    (typeof firstValue === 'string' && !('type' in (firstValue as any)));
+
+  if (value === undefined) {
+    if (isRawPrimitive) {
+      value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+    } else {
+      const valueResult = await evaluate(entry.value, env);
+      value = valueResult.value;
+    }
+  }
+
+  if ((entry as any).withClause) {
+    const { processPipeline } = await import('./pipeline/unified-processor');
+    value = await processPipeline({
+      value,
+      env,
+      node: entry,
+      identifier: entry.identifier,
+      location: entry.location
+    });
+  }
+
+  return value;
+}
+
 /**
  * Helper to evaluate a let assignment and return updated environment
  */
@@ -32,20 +82,7 @@ export async function evaluateLetAssignment(
   entry: LetAssignmentNode,
   env: Environment
 ): Promise<Environment> {
-  let value: unknown;
-  // Check if value is a raw primitive or contains nodes
-  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-  const isRawPrimitive = firstValue === null ||
-    typeof firstValue === 'number' ||
-    typeof firstValue === 'boolean' ||
-    (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-  if (isRawPrimitive) {
-    value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
-  } else {
-    const valueResult = await evaluate(entry.value, env);
-    value = valueResult.value;
-  }
+  const value = await evaluateAssignmentValue(entry, env);
 
   const importer = new VariableImporter();
   const variable = importer.createVariableFromValue(
@@ -89,19 +126,7 @@ export async function evaluateAugmentedAssignment(
   }
 
   // Evaluate the RHS value
-  let rhsValue: unknown;
-  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-  const isRawPrimitive = firstValue === null ||
-    typeof firstValue === 'number' ||
-    typeof firstValue === 'boolean' ||
-    (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-  if (isRawPrimitive) {
-    rhsValue = (entry.value as any[]).length === 1 ? firstValue : entry.value;
-  } else {
-    const rhsResult = await evaluate(entry.value, env);
-    rhsValue = rhsResult.value;
-  }
+  const rhsValue = await evaluateAssignmentValue(entry, env);
 
   // Get current value of the variable
   const existingValue = await extractVariableValue(existing, env);
