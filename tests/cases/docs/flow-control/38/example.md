@@ -1,7 +1,10 @@
-/var @files = ["config.json", "data.json", "users.json"]
-/exe @processFile(file) = when first [
-  @file.endsWith(".json") => `Processed: @file`
-  * => `Skipped: @file`
-]
-/var @results = foreach @processFile(@files)
-/for @result in @results => show @result
+/exe @left(input) = `L:@input`
+/exe @right(input) = `R:@input`
+/exe @combine(input) = js {
+  // Parallel stage returns a JSON array string
+  const [l, r] = JSON.parse(input);
+  return `${l} | ${r}`;
+}
+
+/var @out = "seed" with { pipeline: [ @left || @right, @combine ] }
+/show @out

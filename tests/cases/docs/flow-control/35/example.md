@@ -1,5 +1,7 @@
-/var @canDeploy = @testsPass && @isApproved
-/when [
-  @canDeploy => run {npm run deploy}
-  !@canDeploy => show "Deployment blocked - check tests and approval"
+/exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
 ]
+
+/var @result = 5 | while(10) @countdown
+/show @result

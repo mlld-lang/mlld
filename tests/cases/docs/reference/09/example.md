@@ -29,3 +29,10 @@
 /exe @wrap(x) = `[@x]`
 /exe @wrapAll(items) = foreach @wrap(@items)
 /show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]
+
+# Exe blocks with `[...]` syntax
+/exe @greet(name) = [
+  let @greeting = "Hello"
+  => "@greeting @name!"
+]
+/show @greet("World")   # => Hello World!

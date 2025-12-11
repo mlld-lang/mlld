@@ -1,3 +1,7 @@
-/var @readme = <README.md>
-/var @config = <package.json>
-/show <documentation.md>
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg

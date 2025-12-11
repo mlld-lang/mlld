@@ -1,5 +1,11 @@
-/var @greetings = ["Hello", "Hi", "Hey"]
-/var @names = ["Alice", "Bob", "Charlie"]
-/exe @custom_greeting(greet, name) = :::{{greet}}, {{name}}! Nice to see you.:::
-/var @messages = foreach @custom_greeting(@greetings, @names)
-/show @messages
+/exe @upper(s) = js { return String(s).toUpperCase() }
+
+# Directive form (streams as done; order not guaranteed)
+/for parallel @x in ["a","b","c","d"] => show @x
+
+# Cap override and pacing between task starts
+/for parallel(2, 1s) @n in [1,2,3,4] => show `Item: @n`
+
+# Collection form (preserves input order)
+/var @res = for parallel(2) @x in ["x","y","z"] => @upper(@x)
+/show @res

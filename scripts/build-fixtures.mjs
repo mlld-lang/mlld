@@ -549,6 +549,16 @@ async function processExampleDirectory(dirPath, category, name, directive = null
   // Look for example*.md files (or copied .mld files in examples directory)
   const files = await fs.readdir(dirPath);
 
+  // Optional config per test directory
+  const configPath = path.join(dirPath, 'config.json');
+  let config = null;
+  try {
+    const configContent = await fs.readFile(configPath, 'utf-8');
+    config = JSON.parse(configContent);
+  } catch (error) {
+    // No config or invalid JSON; ignore
+  }
+
   // Check for skip files
   const skipFiles = files.filter(f => f === 'skip.md' || f.startsWith('skip-') && f.endsWith('.md'));
   if (skipFiles.length > 0) {
@@ -642,9 +652,10 @@ async function processExampleDirectory(dirPath, category, name, directive = null
       // Parse the content (may fail for invalid/exceptions, which is expected)
       let ast = null;
       let parseError = null;
+      const parseOptions = config?.mode ? { mode: config.mode } : undefined;
       
       try {
-        ast = await parse(content);
+        ast = parseOptions ? await parse(content, parseOptions) : await parse(content);
       } catch (error) {
         parseError = {
           message: error.message,
@@ -682,10 +693,15 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         fixtureName = `${fullPath}-${variant}`;
       }
 
+      const description =
+        (config && typeof config.description === 'string' && config.description.trim())
+          ? config.description.trim()
+          : `Test fixture for ${fixtureName}`;
+
       // The fixture name should be unique for each test
       const fixture = {
         name: fixtureName,
-        description: `Test fixture for ${fixtureName}`,
+        description,
         category,
         subcategory: name,
         input: content,
@@ -694,7 +710,9 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         expectedWarning: warningContent,
         actualOutput: actualOutput, // Include generated output for smoke tests
         ast: ast,
-        parseError: parseError
+        parseError: parseError,
+        ...(config?.env ? { environmentVariables: config.env } : {}),
+        ...(config?.mode ? { mlldMode: config.mode } : {})
       };
       
       // Write fixture only if content changed

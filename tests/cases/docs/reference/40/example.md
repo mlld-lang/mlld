@@ -1,3 +1,5 @@
->> Start-of-line comment
-/var @name = "Alice"    >> end-of-line comment
-/show @greeting         << also end-of-line
+/exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+/var @result = 5 | while(10) @countdown

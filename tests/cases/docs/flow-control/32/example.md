@@ -1,3 +1,2 @@
->> These produce identical results:
-/var @shorthand = || @a() || @b() | @combine
-/var @longhand = "" with { pipeline: [[@a, @b], @combine] }
+/var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @json
+/show @data.users[0].name

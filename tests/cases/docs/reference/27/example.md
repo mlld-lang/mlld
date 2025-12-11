@@ -1,2 +1,2 @@
-/import { @helper } from "./utils.mld"
-/import { @config } from "@base/config.mld"
+/import { @parallel, @retry } from @mlld/core
+/import @company/utils as @utils

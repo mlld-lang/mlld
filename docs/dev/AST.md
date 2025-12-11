@@ -471,8 +471,90 @@ async function authorizeRunDirective(directive: RunDirective) {
 
 Understanding context is crucial for correctly interpreting Mlld's AST. While the reuse of node types provides consistency and modularity in the grammar, it requires AST consumers to be context-aware. This guide should serve as a reference for implementing robust AST processing that handles all the nuances of Mlld's context-dependent node system.
 
+## New Node Types (Block Syntax Epic)
+
+### ExeBlock Nodes
+
+Exe blocks (`/exe @f() = [...]`) parse as:
+
+```javascript
+{
+  type: 'Directive',
+  kind: 'exe',
+  subtype: 'exeBlock',
+  source: 'block',
+  values: {
+    identifier: [...],      // VariableReference array
+    params: [...],          // Parameter nodes
+    statements: [...],      // Array of statement nodes
+    return: {               // ExeReturn structure
+      type: 'ExeReturn',
+      values: [...],        // Return value nodes
+      meta: { hasValue: true }
+    }
+  },
+  meta: {
+    statementCount: number,
+    hasReturn: boolean
+  }
+}
+```
+
+### For Block Metadata
+
+For blocks use `meta.actionType` discriminator:
+
+```javascript
+{
+  kind: 'for',
+  subtype: 'for',
+  values: {
+    action: [...]  // Array when block mode
+  },
+  meta: {
+    actionType: 'block' | 'single',
+    block: {
+      statementCount: number  // When actionType='block'
+    }
+  }
+}
+```
+
+### While Pipeline Stages
+
+While loops in pipelines:
+
+```javascript
+{
+  type: 'whileStage',
+  cap: number,
+  rateMs: number | null,
+  processor: VariableReferenceNode,
+  rawIdentifier: 'while',
+  meta: { hasRate: boolean }
+}
+```
+
+### Control Literals
+
+Done and continue literals:
+
+```javascript
+{
+  type: 'Literal',
+  valueType: 'done' | 'continue',
+  value: BaseMlldNode[]  // May be empty or contain expression
+}
+```
+
+Type guards available in `core/types/control.ts`:
+- `isDoneLiteral(node)`: checks for done
+- `isContinueLiteral(node)`: checks for continue
+
 ## Normalization Notes
 
 - Tail modifiers (e.g., `with { ... }`) normalize to a unified `withClause` on directives and exec invocations.
 - Exec calls `@fn(...)` parse as distinct `ExecInvocation` nodes; plain `@fn` is a `VariableReference`.
 - Quote/template syntaxes normalize to arrays for interpolation; interpreter handles them via `interpolate()`.
+- Exe blocks normalize to `subtype: 'exeBlock'` with statement array and optional return.
+- For blocks set `meta.actionType` to discriminate block vs single-action mode.

@@ -28,7 +28,7 @@
 </SYNTAX>
 <COMMANDS>
   <RUN_VS_RUN_SH> .................. Decision tree, security & syntax differences, param passing.
-  <EXE_EXECUTABLES> ................ Defining shell/js/node/template/section executables; shadow env intro.
+  <EXE_EXECUTABLES> ................ Defining shell/js/node/template/section executables; exe blocks with [..]; shadow env intro.
   <OUTPUT_DIRECTIVE> ............... Write to files/stdout/stderr with optional formats.
   <LOG_DIRECTIVE> .................. Syntactic sugar for /output to stdout; works in action contexts.
   <APPEND_DIRECTIVE> ............... Append JSONL/plain records via /append or `| append` builtin.
@@ -36,7 +36,7 @@
 </COMMANDS>
 <CONTROL_FLOW>
   <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
-  <ITERATION> ...................... foreach vs /for; nested loops; objects with _key; collection form.
+  <ITERATION> ...................... foreach vs /for; block syntax with [..]; while loops with done/continue; nested loops; objects with _key; collection form.
   <NO_EARLY_EXIT> .................. Design flows instead of exits; patterns.
 </CONTROL_FLOW>
 <MODULES> .......................... Module-first philosophy; imports; helpers; shadow environments; isolation.
@@ -890,7 +890,31 @@ Define reusable commands/code/templates/sections.
 
 # With stdin (pipe sugar)
 /exe @filterActive(data) = run @data | { cat } | @transformFilter
+
+# Exe blocks with `[...]` (multi-statement bodies)
+/exe @greet(name) = [
+  let @greeting = "Hello"
+  let @punctuation = "!"
+  => "@greeting @name@punctuation"
+]
+/show @greet("World")   # Hello World!
+
+# Exe blocks with accumulation
+/exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]
 ```
+
+Exe block notes:
+- Use `[...]` for multi-statement bodies
+- `let @var = value` for block-scoped variables
+- `let @var += value` for accumulation (arrays/strings/objects only)
+- `=> value` required as last statement for return
+- Nested for/when allowed in blocks
 
 Shadow environments (JS/Node):
 Expose JS helpers across `js {}` blocks in the same module:
@@ -1145,6 +1169,43 @@ Batch pipelines - process collected results after iteration:
 ```
 
 Batch stage receives the collected array (or object) directly, so helpers work with native arrays/objects without manual parsing.
+
+For blocks with `[...]` syntax (multi-statement bodies):
+
+```mlld
+/for @item in @items [
+  show "Processing: @item"
+  let @processed = @transform(@item)
+]
+```
+
+Note: Arrow syntax `for @x => [...]` still works but `for @x [...]` (without arrow) is preferred.
+
+While loops for bounded iteration:
+
+```mlld
+/exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+/var @result = 5 | while(10) @countdown
+```
+
+While control keywords:
+- `done @value` - Terminate iteration, return value
+- `done` - Terminate, return current state
+- `continue @value` - Next iteration with new state
+- `continue` - Next iteration with current state (implicit)
+
+While context (`@ctx.while`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap
+- `active` - true when inside while
+
+Notes:
+- Use `continue` instead of `retry` in while processors
+- Cap required: `while(100) @processor`
+- Optional pacing: `while(100, 1s) @processor` (delay BETWEEN iterations)
 
 </ITERATION>
 

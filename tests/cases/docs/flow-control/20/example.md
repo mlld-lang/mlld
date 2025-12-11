@@ -1,3 +1,4 @@
-/exe @wrap(x) = `[@x]`
-/exe @wrapAll(items) = foreach @wrap(@items)
-/show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]
+/var @names = ["Alice", "Bob", "Charlie"]
+/exe @greeting(name) = :::{{name}}, welcome to the team!:::
+/var @welcomes = foreach @greeting(@names)
+/show @welcomes

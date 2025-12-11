@@ -1,3 +1,3 @@
-/var @filename = <package.json>.ctx.filename
-/var @tokens = <large-file.md>.ctx.tokens
-/var @frontmatter = <doc.md>.ctx.fm.title
+/var @readme = <README.md>
+/var @config = <package.json>
+/show <documentation.md>

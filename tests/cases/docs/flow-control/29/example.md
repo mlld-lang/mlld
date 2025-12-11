@@ -1,12 +1,6 @@
-/exe @source() = when first [
-  @ctx.try == 1 => "draft"
-  * => "final"
+/var @xs = [1, null, 2, null, 3]
+/var @filtered = for @x in @xs => when [
+  @x != null => @x
+  none => skip
 ]
-
-/exe @validator() = when first [
-  @ctx.input == "draft" => retry "missing title"
-  * => `Used hint: @ctx.hint`
-]
-
-/var @result = @source() | @validator
-/show @result
+/show @filtered   # => ["1","2","3"]

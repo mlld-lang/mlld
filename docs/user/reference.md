@@ -119,6 +119,13 @@ Define reusable functions and templates:
 /exe @wrap(x) = `[@x]`
 /exe @wrapAll(items) = foreach @wrap(@items)
 /show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]
+
+# Exe blocks with `[...]` syntax
+/exe @greet(name) = [
+  let @greeting = "Hello"
+  => "@greeting @name!"
+]
+/show @greet("World")   # => Hello World!
 ```
 
 ### Conditionals (`/when`)
@@ -196,6 +203,15 @@ Nested loops:
 
 ```mlld
 /for @x in ["A", "B"] => for @y in [1, 2] => show `@x-@y`
+```
+
+For blocks with `[...]` syntax:
+
+```mlld
+/for @item in @items [
+  show "Processing: @item"
+  let @count += 1
+]
 ```
 
 Transform collections with `foreach`:
@@ -462,6 +478,25 @@ Retry with hints:
   * => "fallback"
 ]
 ```
+
+While loops for bounded iteration:
+
+```mlld
+/exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+/var @result = 5 | while(10) @countdown
+```
+
+Control keywords:
+- `done @value` - Terminate and return value
+- `continue @value` - Next iteration with new state
+
+While context (`@ctx.while`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap
+- `active` - true when inside while loop
 
 ### Operators
 

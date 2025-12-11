@@ -1,2 +1,3 @@
-/var @allDocs = <docs/*.md>
-/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
+/var @filename = <package.json>.ctx.filename
+/var @tokens = <large-file.md>.ctx.tokens
+/var @frontmatter = <doc.md>.ctx.fm.title

@@ -669,8 +669,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   
   // Handle expression nodes
   if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
-    const { evaluateExpression } = await import('../eval/expression');
-    return evaluateExpression(node, env);
+    const { evaluateUnifiedExpression } = await import('../eval/expressions');
+    const result = await evaluateUnifiedExpression(node, env);
+    return { value: result.value, env };
   }
   
   // Handle literal nodes

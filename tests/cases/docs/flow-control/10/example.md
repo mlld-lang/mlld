@@ -1,2 +1,7 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/for @fruit in @fruits => show `Fruit: @fruit`
+/exe @greet(name) = [
+  let @greeting = "Hello"
+  let @punctuation = "!"
+  => "@greeting @name@punctuation"
+]
+
+/show @greet("World")

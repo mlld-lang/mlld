@@ -1,7 +1,6 @@
-/var @items = ["A","B"]
-/var @msg = ::
-/for @x in @items
-- @x
+/var @tpl = `
+/for @v in ["x","y"]
+- @v
 /end
-::
-/show @msg
+`
+/show @tpl

@@ -138,6 +138,60 @@ Hello World!
 # @msg is not accessible here
 ```
 
+### Exe Block Syntax
+
+Use `[...]` for multi-statement exe bodies with local variables:
+
+```mlld
+/exe @greet(name) = [
+  let @greeting = "Hello"
+  let @punctuation = "!"
+  => "@greeting @name@punctuation"
+]
+
+/show @greet("World")
+```
+
+Output:
+```
+Hello World!
+```
+
+Exe blocks require an explicit return with `=>` as the last statement:
+
+```mlld
+/exe @combine(a, b) = [
+  let @result = "@a-@b"
+  => @result
+]
+
+/show @combine("hello", "world")
+```
+
+Output:
+```
+hello-world
+```
+
+Use `let @var += value` for accumulation within blocks:
+
+```mlld
+/exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]
+
+/show @countItems(["a", "b", "c"])
+```
+
+Output:
+```
+3
+```
+
 ## Iteration
 
 ### For Loops
@@ -190,6 +244,41 @@ blue-1-b
 blue-2-a
 blue-2-b
 ```
+
+### For Block Syntax
+
+Use `[...]` for multi-statement iteration bodies:
+
+```mlld
+/for @item in ["a", "b", "c"] [
+  show "Processing: @item"
+  show "Done with: @item"
+]
+```
+
+Output:
+```
+Processing: a
+Done with: a
+Processing: b
+Done with: b
+Processing: c
+Done with: c
+```
+
+For blocks support `let` for local variables per iteration:
+
+```mlld
+/for @user in @users [
+  let @status = when [
+    @user.active => "active"
+    * => "inactive"
+  ]
+  show "@user.name: @status"
+]
+```
+
+Note: The arrow syntax `for @x in @xs => [...]` still works but `for @x in @xs [...]` (without arrow) is preferred.
 
 ### Collection Form
 
@@ -486,6 +575,56 @@ Output:
 ```
 Used hint: missing title
 ```
+
+### While Loops (Bounded Iteration)
+
+Use `while(cap)` for bounded iteration with explicit control flow:
+
+```mlld
+/exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+
+/var @result = 5 | while(10) @countdown
+/show @result
+```
+
+Output:
+```
+finished
+```
+
+The `while(cap)` stage invokes a processor repeatedly until it returns `done`:
+- `done @value` - Terminate iteration and return the value
+- `done` - Terminate and return current state
+- `continue @value` - Continue with new state for next iteration
+- `continue` - Continue with current state (implicit if no control keyword)
+
+Access iteration context with `@ctx.while`:
+
+```mlld
+/exe @process(state) = when [
+  @ctx.while.iteration > 5 => done @state
+  @ctx.while.iteration == @ctx.while.limit => done "hit cap"
+  * => continue @state
+]
+```
+
+Context variables:
+- `@ctx.while.iteration` - Current iteration (1-based)
+- `@ctx.while.limit` - Configured cap
+- `@ctx.while.active` - true when inside while loop
+
+Optional pacing with `while(cap, delay)`:
+
+```mlld
+/var @result = @initial | while(100, 1s) @processor
+```
+
+The delay is applied BETWEEN iterations (not before first or after last).
+
+Note: Use `continue` instead of `retry` in while processors. Retry is for pipeline retries, not loop iteration.
 
 ### Parallel Pipelines
 

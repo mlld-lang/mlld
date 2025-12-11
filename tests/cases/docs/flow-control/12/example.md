@@ -1,1 +1,9 @@
-/for @x in ["red", "blue"] => for @y in [1, 2] => for @z in ["a", "b"] => show "@x-@y-@z"
+/exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]
+
+/show @countItems(["a", "b", "c"])

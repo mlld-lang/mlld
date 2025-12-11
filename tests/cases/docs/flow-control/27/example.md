@@ -1,2 +1,5 @@
-/var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @json
-/show @data.users[0].name
+/var @runs = ["alpha", "beta", "gamma"]
+/var @_ = for @name in @runs =>
+  `processed @name` | append "runs.log"
+
+/show <runs.log>

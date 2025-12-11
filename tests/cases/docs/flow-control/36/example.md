@@ -1,5 +1,5 @@
-/var @result = @data | @validate | @process
-/when [
-  @result.success => output @result.data to "output.json"
-  !@result.success => show `Processing failed: @result.error`
+/exe @process(state) = when [
+  @ctx.while.iteration > 5 => done @state
+  @ctx.while.iteration == @ctx.while.limit => done "hit cap"
+  * => continue @state
 ]

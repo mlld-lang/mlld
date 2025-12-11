@@ -1,2 +1,6 @@
-/var @config = {"host": "localhost", "port": 3000}
-/for @value in @config => show `@value_key: @value`
+/exe @combine(a, b) = [
+  let @result = "@a-@b"
+  => @result
+]
+
+/show @combine("hello", "world")
