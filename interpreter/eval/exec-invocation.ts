@@ -172,6 +172,19 @@ function applyGuardTransformsToExecArgs(options: {
   }
 }
 
+const resolveVariableIndexValue = async (fieldValue: any, env: Environment): Promise<unknown> => {
+  const { evaluateDataValue } = await import('./data-value-evaluator');
+  const node =
+    typeof fieldValue === 'object'
+      ? (fieldValue as any)
+      : {
+          type: 'VariableReference',
+          valueType: 'varIdentifier',
+          identifier: String(fieldValue)
+        };
+  return evaluateDataValue(node as any, env);
+};
+
 type StringBuiltinMethod =
   | 'toLowerCase'
   | 'toUpperCase'
@@ -619,12 +632,7 @@ async function evaluateExecInvocationInternal(
   const identifierFields = normalizeFields(identifierNode?.fields);
   const lastField = identifierFields[identifierFields.length - 1];
   if (lastField?.type === 'variableIndex') {
-    const indexVar = env.getVariable(lastField.value);
-    if (!indexVar) {
-      throw new MlldInterpreterError(`Variable not found for index: ${lastField.value}`);
-    }
-    const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-    const resolvedName = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
+    const resolvedName = await resolveVariableIndexValue(lastField.value, env);
     commandName = String(resolvedName);
   }
   
@@ -701,16 +709,7 @@ async function evaluateExecInvocationInternal(
               if (isStructuredValue(targetValue)) {
                 targetValue = asData(targetValue);
               }
-              const indexVar = env.getVariable(field.value);
-              if (!indexVar) {
-                if (isTypeCheckingBuiltin) {
-                  const typeCheckResult = handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined);
-                  return createEvalResult(typeCheckResult, env);
-                }
-                throw new MlldInterpreterError(`Variable not found for index: ${field.value}`);
-              }
-              const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-              key = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
+              key = await resolveVariableIndexValue(field.value, env);
             }
 
             if (isStructuredValue(targetValue) && typeof key === 'string' && key in (targetValue as any)) {

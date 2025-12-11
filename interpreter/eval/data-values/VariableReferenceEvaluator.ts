@@ -187,13 +187,16 @@ export class VariableReferenceEvaluator {
       for (const field of value.fields) {
         // Handle variableIndex type - need to resolve the variable first
         if (field.type === 'variableIndex') {
-          const indexVar = env.getVariable(field.value);
-          if (!indexVar) {
-            throw new Error(`Variable not found for index: ${field.value}`);
-          }
-          // Extract index value - WHY: Array/object indices must be raw values
-          const { extractVariableValue: extract } = await import('@interpreter/utils/variable-resolution');
-          const indexValue = await extract(indexVar, env);
+          const { evaluateDataValue } = await import('../data-value-evaluator');
+          const indexNode =
+            typeof field.value === 'object'
+              ? (field.value as any)
+              : {
+                  type: 'VariableReference',
+                  valueType: 'varIdentifier',
+                  identifier: String(field.value)
+                };
+          const indexValue = await evaluateDataValue(indexNode as any, env);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = await accessField(result, resolvedField, { 

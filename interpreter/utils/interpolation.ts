@@ -341,13 +341,16 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           for (const field of fieldsToProcess) {
             // Handle variableIndex type - need to resolve the variable first
             if (field.type === 'variableIndex') {
-              const indexVar = env.getVariable(field.value);
-              if (!indexVar) {
-                throw new Error(`Variable not found for index: ${field.value}`);
-              }
-              // Extract Variable value for index access - WHY: Index values must be raw strings/numbers
-              const { resolveValue: resolveVal, ResolutionContext: ResCtx2 } = await import('../utils/variable-resolution');
-              const indexValue = await resolveVal(indexVar, env, ResCtx2.StringInterpolation);
+              const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+              const indexNode =
+                typeof field.value === 'object'
+                  ? (field.value as any)
+                  : {
+                      type: 'VariableReference',
+                      valueType: 'varIdentifier',
+                      identifier: String(field.value)
+                    };
+              const indexValue = await evaluateDataValue(indexNode as any, env);
               // Create a new field with the resolved value
               const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
               const fieldResult = await accessField(value, resolvedField, { 

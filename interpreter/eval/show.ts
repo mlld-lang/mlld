@@ -356,20 +356,16 @@ export async function evaluateShow(
       for (const field of fieldsToProcess) {
         // Handle variableIndex type - need to resolve the variable first
         if (field.type === 'variableIndex') {
-          const indexVar = env.getVariable(field.value);
-          if (!indexVar) {
-            const { FieldAccessError } = await import('@core/errors');
-            throw new FieldAccessError(`Variable not found for index: ${field.value}`,
-              { baseValue: value, fieldAccessChain: [], failedAtIndex: 0, failedKey: String(field.value) },
-              { sourceLocation: directiveLocation, env }
-            );
-          }
-          // Get the actual value to use as index
-          let indexValue = indexVar.value;
-          if (isTextLike(indexVar)) {
-            indexValue = indexVar.value;
-          }
-          // Create a new field with the resolved value
+          const { evaluateDataValue } = await import('./data-value-evaluator');
+          const indexNode =
+            typeof field.value === 'object'
+              ? (field.value as any)
+              : {
+                  type: 'VariableReference',
+                  valueType: 'varIdentifier',
+                  identifier: String(field.value)
+                };
+          const indexValue = await evaluateDataValue(indexNode as any, env);
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = await accessField(value, resolvedField, {
             preserveContext: true,

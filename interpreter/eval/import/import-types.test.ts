@@ -308,6 +308,30 @@ describe('Import type handling', () => {
     expect(lines[2]).toBe('Agent: hi');
   });
 
+  it('resolves bracket access with field expressions', async () => {
+    await fileSystem.writeFile(
+      '/project/templates/agents/alice.att',
+      'Agent: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/agents/party.att',
+      'Party: @message'
+    );
+
+    const source = `/var @agentObj = { agent: "party" }
+/import templates from "./templates" as @tpl(message)
+/show @tpl.agents[@agentObj.agent]("dynamic field")`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect((output as string).trim()).toBe('Party: dynamic field');
+  });
+
   it('treats quoted non-resolver namespace as module reference', async () => {
     // This tests that "@author/module" in quotes gets treated as a module import
     // even though it goes through variable interpolation in the grammar

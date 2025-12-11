@@ -15,3 +15,7 @@ description: template collection access with both dot and bracket notation
 /var @who = "alice"
 /var @prompt = @tpl.agents[@who]("cached")
 /show @prompt
+
+>> Bracket notation with field access inside index
+/var @agentObj = { agent: "alice" }
+/show @tpl.agents[@agentObj.agent]("from obj")

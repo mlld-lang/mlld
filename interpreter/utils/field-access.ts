@@ -698,18 +698,18 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         });
       }
 
-      const indexVar = env.getVariable(field.value);
-      if (!indexVar) {
-        throw new FieldAccessError(`Variable not found for index: ${field.value}`, {
-          baseValue: value,
-          fieldAccessChain: options?.parentPath || [],
-          failedAtIndex: options?.parentPath ? options.parentPath.length : 0,
-          failedKey: field.value
-        });
-      }
+      const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+      // Build a VariableReference node when only an identifier string is provided
+      const indexNode =
+        typeof field.value === 'object'
+          ? (field.value as any)
+          : {
+              type: 'VariableReference',
+              valueType: 'varIdentifier',
+              identifier: String(field.value)
+            };
 
-      const { resolveValue, ResolutionContext } = await import('./variable-resolution');
-      const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
+      const indexValue = await evaluateDataValue(indexNode as any, env);
       const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
       return accessField(value, resolvedField, options);
     }
