@@ -61,7 +61,7 @@ export async function createStageEnvironment(
   format?: string,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
-  allRetryHistory?: Map<string, string[]>,
+  allRetryHistory?: Map<string, StructuredValue[]>,
   structuredAccess?: StageOutputAccessor,
   options?: StageEnvironmentOptions
 ): Promise<Environment> {
@@ -119,13 +119,17 @@ export async function createStageEnvironment(
     stage: userVisibleStage,
     totalStages: userVisibleTotalStages,
     currentCommand: rawId,
-    input: input,
-    previousOutputs: context.previousOutputs,
+    input: context.currentStructuredInput ?? structuredInput ?? input,
+    previousOutputs: context.previousStructuredOutputs && context.previousStructuredOutputs.length > 0
+      ? context.previousStructuredOutputs
+      : context.previousOutputs,
     format: format,
     // Use context-local attempt for ambient @ctx.try
     attemptCount: context.contextAttempt,
     // Preserve attempts history for @ctx.tries
-    attemptHistory: context.history,
+    attemptHistory: context.historyStructured && context.historyStructured.length > 0
+      ? context.historyStructured
+      : context.history,
     // Provide hint info for ambient @ctx.hint
     hint: normalizedHint,
     hintHistory: context.hintHistory || [],
@@ -230,7 +234,7 @@ function setSimplifiedPipelineVariable(
   context: StageContext,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
-  allRetryHistory?: Map<string, string[]>,
+  allRetryHistory?: Map<string, StructuredValue[]>,
   structuredAccess?: StageOutputAccessor
 ): void {
   const pipelineContext = createSimplifiedPipelineContext(
@@ -272,7 +276,7 @@ function createSimplifiedPipelineContext(
   context: StageContext,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
-  allRetryHistory?: Map<string, string[]>,
+  allRetryHistory?: Map<string, StructuredValue[]>,
   structuredAccess?: StageOutputAccessor,
   guardHistoryProvider?: () => ReadonlyArray<GuardHistoryEntry>
 ): SimplifiedPipelineContext {
@@ -314,14 +318,27 @@ function createSimplifiedPipelineContext(
     length: userVisibleWrappers.length
   };
 
-  const retryHistoryEntries =
-    context.history.length > 0
-      ? context.history
-      : allRetryHistory && allRetryHistory.size > 0
-        ? Array.from(allRetryHistory.values())
-        : [];
+  let triesText: unknown = [];
+  let structuredTries: unknown = [];
+  if (context.historyStructured && context.historyStructured.length > 0) {
+    structuredTries = context.historyStructured.map(cloneStructuredValue);
+    triesText = (structuredTries as StructuredValue[]).map(entry => entry.text);
+  } else if (context.history.length > 0) {
+    triesText = [...context.history];
+    structuredTries = context.history.map(entry => toStructured(null, entry));
+  } else if (allRetryHistory && allRetryHistory.size > 0) {
+    const attempts = Array.from(allRetryHistory.values()).map(history =>
+      history.map(attempt => cloneStructuredValue(attempt))
+    );
+    structuredTries = attempts;
+    triesText = attempts.map(history => history.map(item => item.text));
+  }
 
-  pipelineContext.tries = retryHistoryEntries;
+  pipelineContext.tries = triesText;
+  Object.defineProperty(pipelineContext, 'structuredTries', {
+    value: structuredTries,
+    enumerable: false
+  });
   pipelineContext[0] = baseWrapper;
   if (hasSyntheticSource) {
     userVisibleWrappers.forEach((wrapper, index) => {
@@ -355,10 +372,10 @@ function createSimplifiedPipelineContext(
       if (!allRetryHistory || allRetryHistory.size === 0) {
         return { all: [] };
       }
-      const allAttempts: Array<Array<string | StructuredValue>> = [];
+      const allAttempts: Array<Array<StructuredValue>> = [];
       for (const attempts of allRetryHistory.values()) {
         if (attempts.length > 0) {
-          const mapped = attempts.map(attempt => toStructured(null, attempt));
+          const mapped = attempts.map(attempt => cloneStructuredValue(attempt));
           allAttempts.push(mapped);
         }
       }
@@ -375,4 +392,10 @@ function createSimplifiedPipelineContext(
   });
 
   return pipelineContext as SimplifiedPipelineContext;
+}
+
+function cloneStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
+  const clone = wrapStructured(value);
+  inheritExpressionProvenance(clone, value);
+  return clone;
 }

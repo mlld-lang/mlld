@@ -75,7 +75,7 @@ export class PipelineExecutor {
   private delayMs?: number;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
   private initialInputText: string = ''; // Store initial input for synthetic source
-  private allRetryHistory: Map<string, string[]> = new Map();
+  private allRetryHistory: Map<string, StructuredValue[]> = new Map();
   private rateLimiter = new RateLimitRetry();
   private structuredOutputs: Map<number, StructuredValue> = new Map();
   private initialOutput?: StructuredValue;
@@ -216,7 +216,11 @@ export class PipelineExecutor {
       this.emitStream({ type: 'PIPELINE_START', source: 'pipeline' });
       
       // Start the pipeline
-      let nextStep = this.stateMachine.transition({ type: 'START', input: this.initialInputText });
+      let nextStep = this.stateMachine.transition({
+        type: 'START',
+        input: this.initialInputText,
+        structuredInput: this.initialOutput ? cloneStructuredValue(this.initialOutput) : undefined
+      });
       let iteration = 0;
 
       // Process steps until complete
@@ -562,7 +566,7 @@ export class PipelineExecutor {
         const normalizedText = normalized.text ?? '';
         if (!normalizedText || normalizedText.trim() === '') {
           await this.runInlineEffects(command, normalized, stageEnv!);
-          return { type: 'success', output: normalizedText };
+          return { type: 'success', output: normalizedText, structuredOutput: normalized };
         }
 
         try {
@@ -576,7 +580,7 @@ export class PipelineExecutor {
         } catch {}
 
         await this.runInlineEffects(command, normalized, stageEnv!);
-        return { type: 'success', output: normalizedText };
+        return { type: 'success', output: normalizedText, structuredOutput: normalized };
       };
 
       const runWithinPipeline = async (): Promise<StageResult> => {
@@ -1192,7 +1196,7 @@ export class PipelineExecutor {
       this.structuredOutputs.set(stageIndex, aggregated);
       this.finalOutput = aggregated;
       this.lastStageIndex = stageIndex;
-      return { type: 'success', output: aggregated.text };
+      return { type: 'success', output: aggregated.text, structuredOutput: aggregated };
     } catch (err) {
       return { type: 'error', error: err as Error };
     }

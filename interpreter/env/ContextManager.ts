@@ -28,7 +28,7 @@ export interface PipelineContextSnapshot {
   totalStages: number;
   currentCommand: string;
   input: unknown;
-  previousOutputs: string[];
+  previousOutputs: unknown[];
   format?: string;
   attemptCount?: number;
   attemptHistory?: unknown[];
