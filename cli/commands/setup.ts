@@ -14,6 +14,27 @@ import { GitHubResolver } from '@core/resolvers/GitHubResolver';
 import { LocalResolver } from '@core/resolvers/LocalResolver';
 import { existsSync } from 'fs';
 
+const CONFIG_FILES = ['mlld-config.json', 'mlld-lock.json', 'mlld.lock.json'];
+
+/**
+ * Find the nearest directory (starting from startDir and moving up) that contains
+ * an mlld config or lock file. Returns null if none are found.
+ */
+export function findNearestConfigDir(startDir: string): string | null {
+  let current = path.resolve(startDir);
+  while (true) {
+    const hasConfig = CONFIG_FILES.some(file => existsSync(path.join(current, file)));
+    if (hasConfig) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
 export interface SetupOptions {
   interactive?: boolean;
   github?: boolean;
@@ -44,13 +65,38 @@ export class SetupCommand {
 
     console.log(chalk.blue('mlld Setup - Project Configuration Wizard\n'));
 
-    const projectRoot = process.cwd();
-    const projectConfig = new ProjectConfig(projectRoot);
+    const currentDir = process.cwd();
+    const nearestConfigDir = findNearestConfigDir(currentDir);
+    let targetRoot = currentDir;
+    let confirmedParentUpdate = false;
+
+    // If a parent config exists and we're in a child dir, ask before mutating it
+    if (nearestConfigDir && nearestConfigDir !== currentDir && !options.force) {
+      const rlPre = readline.createInterface({ input: process.stdin, output: process.stdout });
+      try {
+        const choice = await rlPre.question(
+          `Found existing mlld-config.json in parent: ${nearestConfigDir}\n` +
+          `Update that config instead of creating a new one here? (Y = update parent, n = new here) [Y/n]: `
+        );
+        const useParent = choice.trim() === '' || /^y(es)?$/i.test(choice.trim());
+        if (useParent) {
+          targetRoot = nearestConfigDir;
+          confirmedParentUpdate = true;
+        }
+      } finally {
+        rlPre.close();
+      }
+    } else if (nearestConfigDir) {
+      targetRoot = nearestConfigDir;
+      confirmedParentUpdate = nearestConfigDir !== currentDir;
+    }
+
+    const projectConfig = new ProjectConfig(targetRoot);
 
     // Check for existing configuration
-    const configPath = path.join(projectRoot, 'mlld-config.json');
+    const configPath = path.join(targetRoot, 'mlld-config.json');
     const hasExistingConfig = existsSync(configPath);
-    if (hasExistingConfig && !options.force) {
+    if (hasExistingConfig && !options.force && !confirmedParentUpdate) {
       const shouldUpdate = await this.promptYesNo(
         'mlld-config.json already exists. Update resolver configuration?',
         true
@@ -128,7 +174,7 @@ export class SetupCommand {
 
       // Configure local resolver
       if (setupType === 'local' || setupType === 'both') {
-        const localConfig = await this.setupLocalResolver(rl);
+        const localConfig = await this.setupLocalResolver(rl, projectConfig);
         if (localConfig) {
           // Remove existing local resolvers and add new one
           resolverRegistries = resolverRegistries.filter(r => r.resolver !== 'LOCAL');
@@ -298,7 +344,7 @@ export class SetupCommand {
     };
   }
 
-  private async setupLocalResolver(rl: readline.Interface): Promise<any | null> {
+  private async setupLocalResolver(rl: readline.Interface, projectConfig: ProjectConfig): Promise<any | null> {
     console.log('');
     console.log('---');
     console.log('');
@@ -316,8 +362,11 @@ export class SetupCommand {
     // Normalize prefix format
     prefix = this.normalizePrefix(prefix);
 
-    // Check if path exists and offer to create it
-    const absolutePath = path.resolve(localPath);
+    // Check if path exists and offer to create it (resolve relative to project root)
+    const projectRoot = projectConfig.getProjectRoot();
+    const absolutePath = path.isAbsolute(localPath)
+      ? localPath
+      : path.resolve(projectRoot, localPath);
     const pathExists = existsSync(absolutePath);
     
     if (!pathExists) {
@@ -410,8 +459,11 @@ Information about this module.
     const defaultDir = 'llm/run';
     const scriptDir = (await rl.question(`Script directory [${currentScriptDir}]: `)) || currentScriptDir;
     
-    // Check if directory exists and offer to create it
-    const absolutePath = path.resolve(scriptDir);
+    // Check if directory exists and offer to create it (resolve relative to project root)
+    const projectRoot = projectConfig.getProjectRoot();
+    const absolutePath = path.isAbsolute(scriptDir)
+      ? scriptDir
+      : path.resolve(projectRoot, scriptDir);
     const pathExists = existsSync(absolutePath);
     
     if (!pathExists) {
@@ -557,7 +609,7 @@ A simple mlld script example.
       if (choice === '1') {
         newResolver = await this.setupGitHubResolver(rl);
       } else if (choice === '2') {
-        newResolver = await this.setupLocalResolver(rl);
+        newResolver = await this.setupLocalResolver(rl, projectConfig);
       } else {
         console.log(chalk.yellow('Invalid choice. Cancelled.'));
         return;
