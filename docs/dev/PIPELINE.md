@@ -225,13 +225,13 @@ Pipeline stages run in parallel when grouped with `||`.
 - With-clause parity: Nested arrays in `with { pipeline: [...] }` represent a parallel stage. Example: `with { pipeline: [ [@left, @right], @combine ] }` is equivalent to `| @left || @right | @combine`.
 - Leading groups: Pipelines can start with a leading `||` operator to execute parallel stages immediately. Examples:
   - `/var @result = || @a() || @b() || @c()` runs all three in parallel, returns `["resultA", "resultB", "resultC"]`
-  - `/run || @fetch1() || @fetch2() || @fetch3()` executes in parallel, outputs JSON array
+  - `/run || @fetch1() || @fetch2() || @fetch3()` executes in parallel, emits a structured array (`.text` prints as JSON)
   - `/var @out = || @func1() || @func2() | @combine` parallel group followed by combiner
   - `/exe @composed() = || @helper1() || @helper2() | @merge` works in exe definitions
   - Concurrency caps work with leading parallel: `|| @a() || @b() || @c() (2, 100ms)` caps at 2 concurrent with 100ms pacing
 - Leading `||` syntax: The double-bar prefix explicitly enters pipeline mode with parallel execution, avoiding ambiguity with boolean OR (`||`) expressions. Only matches when followed by function calls (with parentheses), not plain variables.
 - Equivalence: `|| @a() || @b() | @c` produces same AST as `"" with { pipeline: [[@a, @b], @c] }`
-- Output: The next stage receives a JSON array string of the group’s outputs.
+- Output: The next stage receives a StructuredValue array; `.data` preserves branch outputs in declaration order and `.text` is the JSON string form. The same wrapper is stored in `@p` for that stage.
 - Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 - Caps and pacing: `(n, wait)` after the pipeline sets a per-pipeline concurrency cap and delay between starts, equivalent to `with { parallel: n, delay: wait }`.
 - Effects: Inline effects attached before a parallel group run once per branch after that branch succeeds; effect failures abort the pipeline.
@@ -242,7 +242,7 @@ See tests in `tests/pipeline/parallel-runtime.test.ts` for ordering, concurrency
 #### Related: /for Parallel
 - Iterator parallelism uses the same concurrency utility as pipelines but has different semantics.
 - `/for parallel` (see `docs/dev/ITERATORS.md`) streams directive outputs as iterations complete (order not guaranteed), while the collection form preserves input order.
-- Pipeline groups always deliver a JSON array string to the next stage, maintain declaration order, and do not support `retry` from inside the group.
+- Pipeline groups always deliver a StructuredValue array to the next stage (declaration order maintained) and do not support `retry` from inside the group. `.text` exposes the JSON array for display; `.data` holds the native array for computation.
 
 #### Nested Groups
 - Nested parallel groups are not supported semantically. While AST arrays can nest syntactically, execution treats each array as a single stage boundary and does not introduce multi-level parallel orchestration.
@@ -319,7 +319,7 @@ Pipeline history is attempt‑grouped. The history records attempts as an outer 
 - Shape: `history: Attempt[]` where `Attempt` is `StageEntry[]`.
 - Empty attempt group: `history: [[]]` represents a retry context that exists but has no recorded stage entries yet.
 - No attempts: `history: []` represents no retry contexts.
-- Parallel groups: a parallel stage contributes a single stage entry that encapsulates the group output (a JSON array string) to preserve ordering and avoid ambiguity across retries.
+- Parallel groups: a parallel stage contributes a single stage entry that encapsulates the group output as a StructuredValue array (branch outputs in `.data`, JSON string in `.text`) to preserve ordering and avoid ambiguity across retries. Stage environments and `@p` read the structured wrapper; the state machine tracks the `.text` channel for control flow and retry accounting.
 
 This grouping aligns with shorthand `||` and with‑clause nested array syntax: `| @left || @right |` is equivalent to `with { pipeline: [[@left, @right], ...] }`, and history preserves attempt boundaries independently of intra‑stage parallelism.
 
