@@ -501,11 +501,8 @@ export class VariableImporter {
     // Infer the variable type from the value
     const originalType = this.inferVariableType(value);
 
-    // Convert non-string primitives to strings
+    // Preserve primitive types (no stringification) so math/boolean logic works in eval
     let processedValue = value;
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      processedValue = String(value);
-    }
     
     // For array types, create an ArrayVariable to preserve array behaviors
     if (originalType === 'array' && Array.isArray(processedValue)) {

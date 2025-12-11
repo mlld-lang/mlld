@@ -1,5 +1,3 @@
-# While loop with done/continue
-
 /exe @countdown(n) = when [
   @n <= 0 => done "finished"
   * => continue (@n - 1)

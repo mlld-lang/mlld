@@ -7,6 +7,7 @@
 
 import { MlldDirectiveError } from '@core/errors';
 import { asText, asData, isStructuredValue } from './structured-value';
+import { toNumber } from '../eval/expression';
 
 /**
  * Check if a value is a plain object (not null, not array, not special type)
@@ -47,6 +48,18 @@ export function combineValues(
     // If source is array, spread it; otherwise wrap as single item
     const sourceArray = Array.isArray(sourceValue) ? sourceValue : [sourceValue];
     return [...targetValue, ...sourceArray];
+  }
+
+  // Number: add (numeric)
+  if (typeof targetValue === 'number') {
+    const rhsNumber = toNumber(sourceValue);
+    if (Number.isNaN(rhsNumber)) {
+      throw new MlldDirectiveError(
+        'let',
+        `Cannot += non-numeric value to number @${targetName}.`
+      );
+    }
+    return targetValue + rhsNumber;
   }
 
   // String: append
