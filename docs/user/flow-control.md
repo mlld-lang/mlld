@@ -337,8 +337,8 @@ show `errors:@ctx.errors.length`
   let @results = for parallel @a in @agents => @invoke(@a, @msg)
   => when [
     @ctx.errors.length == 0 => @results
-    @results.length >= 2 => @results  # 2/3 succeeded is acceptable
-    * => @repair(@results, @ctx.errors, @msg)  # AI-driven repair
+    @results.length >= 2 => @results  << 2/3 succeeded is acceptable
+    * => @repair(@results, @ctx.errors, @msg)  << AI-driven repair
   ]
 ]
 ```
@@ -721,7 +721,7 @@ Notes:
   let @data = || @fetch(@sources[0]) || @fetch(@sources[1]) || @fetch(@sources[2])
   => when [
     @ctx.errors.length == 0 => @data
-    @data.length >= 2 => @data  # 2/3 is good enough
+    @data.length >= 2 => @data  << 2/3 is good enough
     * => retry `Need at least 2 sources. Failed: @ctx.errors`
   ]
 ]

@@ -123,15 +123,17 @@ BlockStatementSeparator
         location()
       );
     }
+  / _? BlockComments+ _
   / _ ";" _
   / _
 
 // Statement list for for-block bodies
 ForBlockStatementList "for block statement list"
-  = first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* {
+  = BlockComments* first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* trailing:BlockComments* {
       const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
       return [...normalize(first), ...rest.flatMap(normalize)];
     }
+  / BlockComments+ { return []; }
 
 // Single statement inside a for block
 ForBlockStatement "for block statement"

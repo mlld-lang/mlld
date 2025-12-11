@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `=> @value` optional return must be the last statement when present in exe blocks
   - Nested for/when inside blocks supported; inner directives are slashless
   - Blocks use `[...]` (not `{...}`) to distinguish mlld control flow from code/command/data
+- **Block comments in bracket bodies**: `>>`/`<<` comments inside `[...]` blocks (exe, for, when, guard, when-expressions) are consumed as whitespace
 - **While loops**: Bounded iteration with `done`/`continue` control flow
   - `/while (100) @processor` - directive form with iteration cap
   - `@input | while(100, 1s) @processor` - pipeline stage with optional pacing

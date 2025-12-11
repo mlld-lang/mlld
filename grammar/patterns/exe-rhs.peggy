@@ -498,10 +498,11 @@ ExeBlockBody
     }
 
 ExeBlockStatementList
-  = first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* {
+  = BlockComments* first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* trailing:BlockComments* {
       const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
       return [...normalize(first), ...rest.flatMap(normalize)];
     }
+  / BlockComments+ { return []; }
 
 ExeBlockStatement
   = LetAssignment
@@ -524,7 +525,7 @@ ExeBlockAction
   / ExeDataPattern
 
 ExeReturnStatement "exe return statement"
-  = "=>" _ value:ExeReturnValue? {
+  = "=>" _ value:ExeReturnValue? noise:BlockComments* {
       const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
       return {
         type: 'ExeReturn',
@@ -643,9 +644,10 @@ WhenExprModifier = mod:("first") { return mod; }
 // Value-oriented condition list for when expressions
 // Reuses WhenConditionSeparator from when.peggy (shared abstraction)
 WhenExpressionConditionList
-  = first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* {
+  = BlockComments* first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* trailing:BlockComments* {
       return [first, ...rest];
     }
+  / BlockComments+ { return []; }
 
 // Single entry in a when expression - let assignment, augmented assignment, or condition pair
 WhenExpressionEntry

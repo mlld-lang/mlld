@@ -164,6 +164,11 @@ InlineComment
     };
   }
 
+// Block-level comments - consumed and ignored inside blocks
+BlockComments
+  = Comment { return null; }
+  / InlineComment { return null; }
+
 // -------------------------------------------------------------------------
 // TEXT BLOCKS
 // -------------------------------------------------------------------------

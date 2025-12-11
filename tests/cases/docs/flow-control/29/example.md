@@ -1,1 +1,5 @@
-/var @_ = "summary" | append @runs to "runs.jsonl"
+/var @runs = ["alpha", "beta", "gamma"]
+/var @_ = for @name in @runs =>
+  `processed @name` | append "runs.log"
+
+/show <runs.log>

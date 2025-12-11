@@ -466,9 +466,10 @@ WhenConditionBlock
     }
 
 WhenConditionList
-  = first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* {
+  = BlockComments* first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* trailing:BlockComments* {
       return [first, ...rest];
     }
+  / BlockComments+ { return []; }
 
 // Single entry in a when block - let assignment, augmented assignment, or condition pair
 WhenEntry
@@ -494,6 +495,7 @@ WhenConditionSeparator
         location()
       );
     }
+  / _? BlockComments+ _
   / _ ";" _
   / _
 
@@ -558,9 +560,10 @@ WhenActionBlock
     }
 
 WhenActionBlockContent
-  = first:WhenBlockAction rest:(_ d:WhenBlockAction { return d; })* {
+  = BlockComments* first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
       return [first, ...rest].flat();
     }
+  / BlockComments+ { return []; }
 
 // Single action within a when block - supports both implicit and explicit
 WhenBlockAction

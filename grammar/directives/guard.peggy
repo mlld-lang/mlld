@@ -203,9 +203,10 @@ GuardModifier
   = WhenModifier
 
 GuardRuleList
-  = first:GuardEntry rest:(GuardRuleSeparator entry:GuardEntry { return entry; })* {
+  = BlockComments* first:GuardEntry rest:(GuardRuleSeparator entry:GuardEntry { return entry; })* trailing:BlockComments* {
       return [first, ...rest];
     }
+  / BlockComments+ { return []; }
 
 GuardRuleSeparator
   = WhenConditionSeparator
