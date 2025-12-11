@@ -142,3 +142,6 @@ parseperf-results.json
 
 todo
 scripts/mlld
+
+# Beads
+.beads/bd.sock.startlock
