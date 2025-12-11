@@ -616,33 +616,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       
       // Apply each field access in sequence
       for (const field of node.fields) {
-        // Handle variableIndex type - need to resolve the variable first
-        if (field.type === 'variableIndex') {
-          const indexVar = env.getVariable(field.value);
-          if (!indexVar) {
-            throw new Error(`Variable not found for index: ${field.value}`);
-          }
-          // Extract Variable value for index access
-          const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-          const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
-          // Create a new field with the resolved value
-          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = await accessField(resolvedValue, resolvedField, { 
-            preserveContext: true,
-            returnUndefinedForMissing: context?.isCondition,
-            env,
-            sourceLocation: fieldAccessLocation
-          });
-          resolvedValue = (fieldResult as any).value;
-        } else {
-          const fieldResult = await accessField(resolvedValue, field, { 
-            preserveContext: true,
-            returnUndefinedForMissing: context?.isCondition,
-            env,
-            sourceLocation: fieldAccessLocation
-          });
-          resolvedValue = (fieldResult as any).value;
-        }
+        const fieldResult = await accessField(resolvedValue, field, { 
+          preserveContext: true,
+          returnUndefinedForMissing: context?.isCondition,
+          env,
+          sourceLocation: fieldAccessLocation
+        });
+        resolvedValue = (fieldResult as any).value;
         if (resolvedValue === undefined) break;
       }
     }

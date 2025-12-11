@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Parallel pipeline groups (`|| @a || @b || @c`) also accumulate errors for graceful degradation
   - Caller decides repair strategy: `when @ctx.errors.length > 0 => @repair(@results, @ctx.errors)`
   - Enables multi-agent orchestration with AI-driven repair (2/3 succeed → Haiku decides next steps)
+- **Comments in block bodies**: Start-of-line (`>>`) and end-of-line (`<<`) comments now work inside all `[...]` blocks (exe, for, when, guard) for documenting complex logic
 
 ### Changed
 - `/exe` RHS pipe sugar accepts direct `@value | cmd { ... }` pipelines (legacy `run` form still works); identity definitions keep with-clause pipelines when evaluating parameters
