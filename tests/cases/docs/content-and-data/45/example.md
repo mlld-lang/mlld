@@ -1,22 +1,14 @@
->> Load environment-specific config
-/import { NODE_ENV } from @input
-/var @env = @NODE_ENV || "development"
+>> Collect all module documentation
+/var @modules = <modules/**/*.md>
 
->> Load base config and environment overrides
-/var @baseConfig = <config/base.json>
-/var @envConfig = <config/@env.json>
+>> Build README with metadata
+/var @readme = `# Project Modules
 
->> Merge configurations using JS
-/var @config = js {
-  return Object.assign(
-    {},
-    @baseConfig.json,
-    @envConfig.json,
-    {
-      environment: @env,
-      timestamp: @now
-    }
-  )
-}
+Total modules: @modules.length
+Last updated: @now
 
-/output @config to "runtime-config.json" as json
+@modules
+
+`
+
+/output @readme to "README.md"

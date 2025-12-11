@@ -1,8 +1,22 @@
-/var @file = <config.json>
+>> Load environment-specific config
+/import { NODE_ENV } from @input
+/var @env = @NODE_ENV || "development"
 
-# ✗ This loses metadata
-/var @result = @file | @process          # @process gets string, no .ctx
+>> Load base config and environment overrides
+/var @baseConfig = <config/base.json>
+/var @envConfig = <config/@env.json>
 
-# ✓ Keep structured form
-/exe @process(file) = `Name: @file.ctx.filename, Tokens: @file.ctx.tokens`
-/var @result = @file.keep | @process
+>> Merge configurations using JS
+/var @config = js {
+  return Object.assign(
+    {},
+    @baseConfig.json,
+    @envConfig.json,
+    {
+      environment: @env,
+      timestamp: @now
+    }
+  )
+}
+
+/output @config to "runtime-config.json" as json

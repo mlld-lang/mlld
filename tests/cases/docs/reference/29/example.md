@@ -3,3 +3,4 @@
 /import live { @value } from @input
 /import cached(5m) "https://api.example.com/status" as @statusSnapshot
 /import local { @helper } from @local/dev-tools
+/import templates from "./templates" as @tpl(message, context)

@@ -13,3 +13,4 @@
 >> ✗ Importing template files
 /import { @tpl } from "./file.att"    >> Error
 /exe @tpl(x) = template "./file.att"  >> ✓
+/import templates from "./templates" as @tpl(x, y)  >> Use this for template directories

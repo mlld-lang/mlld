@@ -1,17 +1,7 @@
->> Load files and check context limits
-/var @files = <src/**/*.ts>
+>> Access piped JSON data
+/import { version, author } from @input
+/show `Release @version by @author`
 
->> Define filter for large files (over 2000 tokens)
-/exe @filterLarge(files) = js {
-  return files.filter(f => f.tokest > 2000)
-}
-/var @large = @filterLarge(@files)
-
->> Calculate total tokens
-/exe @sumTokens(files) = js {
-  return files.reduce((sum, f) => sum + (f.tokest || 0), 0)
-}
-/var @totalTokens = @sumTokens(@files)
-
-/show `Found @large.length files over 2000 tokens`
-/show `Total estimated tokens: @totalTokens`
+>> Access piped text (becomes 'content' field)
+/import { content } from @input
+/show `Received: @content`

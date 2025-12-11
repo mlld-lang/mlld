@@ -5,14 +5,16 @@ import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { VariableImporter } from './VariableImporter';
 import { ExportManifest } from './ExportManifest';
 import { parse } from '@grammar/parser';
+import type { TemplateExecutable } from '@core/types/executable';
 import { interpolate, evaluate } from '../../core/interpreter';
-import { MlldError } from '@core/errors';
+import { MlldError, MlldImportError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
 import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -73,6 +75,10 @@ export class ModuleContentProcessor {
       this.env.recordSecurityDescriptor(combinedDescriptor);
     }
     try {
+      if (resolution.importType === 'templates') {
+        return await this.processTemplateCollection(resolution, directive);
+      }
+
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerPath = resolvedPath.toLowerCase();
       if (lowerPath.endsWith('.att') || lowerPath.endsWith('.mtt')) {
@@ -251,6 +257,233 @@ export class ModuleContentProcessor {
       // End import tracking
       this.securityValidator.endImport(ref);
     }
+  }
+
+  private async processTemplateCollection(
+    resolution: ImportResolution,
+    directive: DirectiveNode
+  ): Promise<ModuleProcessingResult> {
+    const fsService = this.env.getFileSystemService?.();
+    if (!fsService || typeof fsService.readdir !== 'function') {
+      throw new MlldImportError('Templates import requires filesystem access', {
+        code: 'TEMPLATE_IMPORT_FS_UNAVAILABLE',
+        details: { path: resolution.resolvedPath }
+      });
+    }
+
+    const paramNames = this.extractParamNames((directive as any)?.values?.templateParams);
+    if (paramNames.length === 0) {
+      throw new MlldImportError(
+        'Templates import requires parameters. Use: /import templates from "dir" as @name(param1, param2)',
+        {
+          code: 'TEMPLATE_IMPORT_MISSING_PARAMS',
+          details: { path: resolution.resolvedPath }
+        }
+      );
+    }
+
+    const baseDir = resolution.resolvedPath;
+    const isDir = await fsService.isDirectory(baseDir);
+    if (!isDir) {
+      throw new MlldImportError(`Templates import must target a directory: ${baseDir}`, {
+        code: 'TEMPLATE_IMPORT_NOT_DIRECTORY',
+        details: { path: baseDir }
+      });
+    }
+
+    const moduleObject: Record<string, any> = {};
+    await this.walkTemplateDirectory(fsService, baseDir, moduleObject, paramNames, baseDir);
+
+    if (Object.keys(moduleObject).length === 0) {
+      throw new MlldImportError(`No templates found under ${baseDir}`, {
+        code: 'TEMPLATE_IMPORT_EMPTY',
+        details: { path: baseDir }
+      });
+    }
+
+    const childEnv = this.env.createChild(baseDir);
+    childEnv.setCurrentFilePath(baseDir);
+
+    return {
+      moduleObject,
+      frontmatter: null,
+      childEnvironment: childEnv,
+      guardDefinitions: []
+    };
+  }
+
+  private async walkTemplateDirectory(
+    fsService: IFileSystemService,
+    dir: string,
+    target: Record<string, any>,
+    paramNames: string[],
+    root: string
+  ): Promise<void> {
+    const entries = await fsService.readdir(dir);
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      const stat = await fsService
+        .stat(fullPath)
+        .catch(() => ({ isDirectory: () => false, isFile: () => false }));
+
+      if (stat.isDirectory()) {
+        const key = this.sanitizeKey(entry);
+        if (key in target) {
+          throw new MlldImportError(
+            `Duplicate template group '${key}' in ${dir}`,
+            {
+              code: 'TEMPLATE_IMPORT_DUPLICATE_GROUP',
+              details: { path: fullPath }
+            }
+          );
+        }
+        const childGroup: Record<string, any> = {};
+        await this.walkTemplateDirectory(fsService, fullPath, childGroup, paramNames, root);
+        if (Object.keys(childGroup).length > 0) {
+          target[key] = childGroup;
+        }
+      } else if (stat.isFile()) {
+        const lower = entry.toLowerCase();
+        if (!lower.endsWith('.att') && !lower.endsWith('.mtt')) {
+          continue;
+        }
+        const key = this.sanitizeKey(entry);
+        if (key in target) {
+          throw new MlldImportError(
+            `Duplicate template name '${key}' in ${dir}`,
+            {
+              code: 'TEMPLATE_IMPORT_DUPLICATE_TEMPLATE',
+              details: { path: fullPath }
+            }
+          );
+        }
+        const relativePath = path.relative(root, fullPath) || entry;
+        target[key] = await this.buildTemplateExecutable(fullPath, paramNames, relativePath);
+      }
+    }
+  }
+
+  private async buildTemplateExecutable(
+    filePath: string,
+    paramNames: string[],
+    displayPath: string
+  ): Promise<Record<string, unknown>> {
+    const ext = path.extname(filePath).toLowerCase();
+    const fileContent = await this.env.readFile(filePath);
+    const { parseSync } = await import('@grammar/parser');
+    const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
+    let templateNodes: any[];
+    try {
+      templateNodes = parseSync(fileContent, { startRule });
+    } catch (err: any) {
+      let normalized = fileContent;
+      if (ext === '.mtt') {
+        normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
+      }
+      templateNodes = this.buildTemplateAst(normalized);
+    }
+
+    this.validateTemplateParameters(templateNodes, paramNames, displayPath);
+
+    const execDef: TemplateExecutable = {
+      type: 'template',
+      template: templateNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    };
+
+    return {
+      __executable: true,
+      value: execDef,
+      executableDef: execDef,
+      internal: { executableDef: execDef }
+    };
+  }
+
+  private validateTemplateParameters(
+    templateNodes: any[],
+    paramNames: string[],
+    templatePath: string
+  ): void {
+    const references = new Set<string>();
+    this.collectTemplateReferences(templateNodes, references);
+    const allowed = new Set<string>([
+      ...paramNames,
+      'ctx',
+      'pipeline',
+      'p',
+      'state',
+      'payload',
+      'input'
+    ]);
+    const invalid = Array.from(references).filter(ref => !allowed.has(ref));
+    if (invalid.length > 0) {
+      throw new MlldImportError(
+        `Template '${templatePath}' references undeclared variables: ${invalid.join(', ')}`,
+        {
+          code: 'TEMPLATE_IMPORT_PARAM_MISMATCH',
+          details: {
+            template: templatePath,
+            allowed: paramNames,
+            invalid
+          }
+        }
+      );
+    }
+  }
+
+  private collectTemplateReferences(node: any, refs: Set<string>): void {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(child => this.collectTemplateReferences(child, refs));
+      return;
+    }
+    if (typeof node !== 'object') {
+      return;
+    }
+
+    if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
+      refs.add(node.identifier);
+    }
+    if (
+      node.type === 'VariableReferenceWithTail' &&
+      node.variable &&
+      typeof node.variable.identifier === 'string'
+    ) {
+      refs.add(node.variable.identifier);
+    }
+
+    for (const value of Object.values(node)) {
+      if (value && typeof value === 'object') {
+        this.collectTemplateReferences(value, refs);
+      }
+    }
+  }
+
+  private sanitizeKey(name: string): string {
+    const withoutExt = name.replace(/\.[^.]+$/, '');
+    const sanitized = withoutExt.replace(/[^a-zA-Z0-9_]/g, '_');
+    return sanitized.length > 0 ? sanitized : 'template';
+  }
+
+  private extractParamNames(params: any[] | undefined): string[] {
+    if (!params || params.length === 0) {
+      return [];
+    }
+    return params
+      .map(param => {
+        if (typeof param === 'string') {
+          return param;
+        }
+        if (param?.type === 'Parameter' && param.name) {
+          return param.name;
+        }
+        if (param?.identifier) {
+          return param.identifier;
+        }
+        return '';
+      })
+      .filter(Boolean);
   }
 
   /**

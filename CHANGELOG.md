@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `StructuredResult.streaming` contains accumulated text and parsed events
   - `with { streamFormat: @adapterConfig }` accepts AdapterConfig objects (for example `@claudeAgentSdkAdapter` from `@mlld/stream-claude-agent-sdk`)
 - **Command working directories**: `cmd:/abs/path`, `sh:/abs/path`, `bash:/abs/path`, `js:/abs/path`, `node:/abs/path`, and `python:/abs/path` set the execution directory for `/run`, inline pipelines, and `/exe` definitions; execution fails on relative, missing, or non-Unix paths
+- **Template collection imports**: Load entire directories of templates with shared parameter signatures
+  - `/import templates from "@base/agents" as @agents(message, context)` imports all `.att`/`.mtt` files in directory
+  - All templates in collection share the same parameter signature declared in import
+  - Nested directories accessible via dot notation: `@agents.support["helper"]`
+  - Templates invoked by filename: `@agents["alice"](@msg, @ctx)`
+  - Parse-time validation ensures templates only reference declared parameters
 - **StreamingManager**: Centralized sink management replaces fragmented sink creation
   - Single owner for StreamBus lifecycle
 

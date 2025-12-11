@@ -48,6 +48,7 @@ export interface ImportValues {
   withClause?: WithClause;
   securityLabels?: DataLabel[];
   namespace?: TextNode[];
+  templateParams?: any[];
 }
 
 export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;

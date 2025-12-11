@@ -1,10 +1,22 @@
-/var @files = <docs/*.md>
+>> Process API data
+/var @users = run {curl -s api.example.com/users}
+/var @parsed = @users | @json
 
-# ✗ This won't work - loop variable is unwrapped text
-/for @file in @files => show @file.ctx.filename   # Error: .ctx on string
+>> Define filter function for active users
+/exe @filterActive(users) = js {
+  return users.filter(u => u.status === "active")
+}
+/var @active = @filterActive(@parsed)
 
-# ✓ Access via array index
-/for @i in [0, 1, 2] => show @files[@i].ctx.filename
+>> Generate report
+/var @report = `# User Report
 
-# ✓ Or use @keep helper to preserve structure
-/for @file in @files.keep => show @file.ctx.filename
+Active users: @active.length
+Generated: @now
+
+## Users
+@active
+
+`
+
+/output @report to "user-report.md"

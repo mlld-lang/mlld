@@ -1,7 +1,5 @@
->> Access piped JSON data
-/import { version, author } from @input
-/show `Release @version by @author`
+/import templates from "@base/agents" as @agents(message, context)
+/import templates from "@base/formatters" as @fmt(data)
 
->> Access piped text (becomes 'content' field)
-/import { content } from @input
-/show `Received: @content`
+/show @agents["alice"](@msg, @ctx)    >> (message, context)
+/show @fmt["json"](@result)           >> (data)

@@ -79,7 +79,7 @@
  * Information about a /import directive.
  *
  * - source: string - Import path (e.g., '@author/module', './utils.mld')
- * - type: 'module' | 'static' | 'live' | 'cached' | 'local' | 'policy'
+ * - type: 'module' | 'static' | 'live' | 'cached' | 'local' | 'policy' | 'templates'
  * - names: string[] - Imported names, empty for namespace imports
  * - alias?: string - Namespace alias for `* as @alias` imports
  *
@@ -220,7 +220,7 @@ export interface ImportInfo {
   source: string;
 
   /** Import type */
-  type: 'module' | 'static' | 'live' | 'cached' | 'local' | 'policy';
+  type: 'module' | 'static' | 'live' | 'cached' | 'local' | 'policy' | 'templates';
 
   /** Imported names (empty for namespace imports) */
   names: string[];

@@ -65,6 +65,7 @@
   <MISTAKE_STRING_CONCAT> .......... Prefer templates over procedural concatenation.
   <MISTAKE_COMPLEX_LOGIC> .......... Move algorithms into helpers/modules.
   <MISTAKE_IMPORT_BRACKETS> ........ Know when to use angle brackets for path resolvers.
+  <MISTAKE_TEMPLATE_IMPORT> ........ Template collections need params and directories, not single files.
   <MISTAKE_NO_EARLY_EXIT> .......... Model flows via /when rather than exits.
 </COMMON_MISTAKES>
 <REFERENCE> ........................ Execution context table, syntax summary, quick transforms list.
@@ -381,12 +382,18 @@ Module imports and path imports. Import type keywords control resolution behavio
 /import live <https://status.api.io> as @status  # fresh every execution
 /import cached(30m) <https://feed.xml> as @feed  # cached with TTL (5m, 1h, 7d)
 /import local { @helper } from @me/dev-module    # llm/modules/ during dev
+
+# Template collections (directory of templates with shared signature)
+/import templates from "@base/agents" as @agents(message, context)
+/show @agents["alice"](@msg, @ctx)              # invokes agents/alice.att
+/show @agents.support["helper"](@msg, @ctx)     # invokes agents/support/helper.att
 ```
 
 - Prefix identifiers in the braces with `@` so imported names match runtime variable syntax (e.g., `{ @helper }`).
 - Aliases after `as` must include `@` (e.g., `as @utils`), and wildcard imports require `* as @alias`.
-- Import types: `module` (offline after install), `static` (zero runtime cost), `live` (always fresh), `cached(TTL)` (smart caching), `local` (dev modules).
+- Import types: `module` (offline after install), `static` (zero runtime cost), `live` (always fresh), `cached(TTL)` (smart caching), `local` (dev modules), `templates` (directory of .att/.mtt files with shared params).
 - When omitted, mlld infers the safest option.
+- Template collections require parameters: all templates in directory share the same signature.
 
 </RULE_9_IMPORTS>
 
@@ -1247,9 +1254,10 @@ Module-first philosophy: keep `.mld` files readable; move complexity into focuse
 
 **Core patterns:**
 * `/export { @func }` required (auto-export is legacy)
-* Import types: `module` (registry), `static` (embedded), `live` (fresh), `cached(TTL)`, `local` (dev)
+* Import types: `module` (registry), `static` (embedded), `live` (fresh), `cached(TTL)`, `local` (dev), `templates` (directory)
 * Namespace imports avoid collisions: `as @alias`
 * Executables preserve module scope (sibling variables always accessible)
+* Template collections: import directories of .att/.mtt files with shared parameter signature
 
 **Creating modules:**
 
@@ -1293,7 +1301,16 @@ license: CC0
 /import live <https://status.io> as @status      # always fresh
 /import cached(1h) <https://feed> as @feed       # TTL cache
 /import local { @dev } from @alice/experimental  # llm/modules/
+
+# Template collections (local directories with shared params)
+/import templates from "@base/agents" as @agents(message, context)
+/show @agents["alice"](@msg, @ctx)               # bracket notation
+/show @agents.alice(@msg, @ctx)                  # dot notation (if valid identifier)
+/show @agents.support["helper"](@msg, @ctx)      # nested dirs
+/show @agents["json_pretty"](@data)              # json-pretty.att sanitized to json_pretty
 ```
+
+Template collections: local directories only. Filenames sanitized (hyphens/special chars → underscores). For registry modules, use individual template exports.
 
 **Local development:**
 
@@ -1773,8 +1790,23 @@ Move heavy logic to `/exe` helpers or modules; keep `.mld` orchestration simple.
 </MISTAKE_COMPLEX_LOGIC>
 
 <MISTAKE_IMPORT_BRACKETS>
-Know when to use angle brackets for resolver paths; modules don’t use them.
+Know when to use angle brackets for resolver paths; modules don't use them.
 </MISTAKE_IMPORT_BRACKETS>
+
+<MISTAKE_TEMPLATE_IMPORT>
+
+```mlld
+❌ /import { @tpl } from "./file.att"           # single file not supported
+❌ /import templates from "./agents" as @agents # missing params
+❌ /show @agents["alice"](@msg, @other)         # params don't match signature
+
+✅ /exe @tpl(x) = template "./file.att"         # single file
+✅ /import templates from "./agents" as @agents(message, context)
+✅ /show @agents["alice"](@msg, @ctx)
+```
+
+Template collections require parameters and target directories, not single files.
+</MISTAKE_TEMPLATE_IMPORT>
 
 <MISTAKE_NO_EARLY_EXIT>
 Model alternative outcomes with `/when` and flags rather than aborting.

@@ -1,14 +1,10 @@
->> Collect all module documentation
-/var @modules = <modules/**/*.md>
+>> Import specific variables
+/import { API_KEY, NODE_ENV } from @input
+/show `Deploying to @NODE_ENV with key @API_KEY`
 
->> Build README with metadata
-/var @readme = `# Project Modules
-
-Total modules: @modules.length
-Last updated: @now
-
-@modules
-
-`
-
-/output @readme to "README.md"
+>> Import and use in objects
+/var @config = {
+  "apiKey": @API_KEY,
+  "environment": @NODE_ENV,
+  "timestamp": @now
+}

@@ -29,6 +29,7 @@ export interface PathMeta {
 export interface ImportMeta extends DirectiveMeta {
   path: PathMeta; // Path metadata is required for import directives
   importType?: ImportType;
+  templateParams?: string[];
 }
 
 /**

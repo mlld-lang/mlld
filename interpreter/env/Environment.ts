@@ -745,10 +745,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Fallback in legacy mode
     return this.basePath;
   }
-
-  getFileSystemService(): IFileSystemService {
-    return this.fileSystem;
-  }
   
   /**
    * Legacy method - returns project root for backward compatibility
@@ -1080,6 +1076,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Get from this environment or parent
     if (this.resolverManager) return this.resolverManager;
     return this.parent?.getResolverManager();
+  }
+
+  getFileSystemService(): IFileSystemService {
+    return this.fileSystem;
   }
   
   // --- File Interpolation Support ---

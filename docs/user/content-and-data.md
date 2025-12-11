@@ -734,6 +734,82 @@ Loops with `/for` and `/end` are supported in `::...::`, backticks, and `.att` f
 >> ✗ Importing template files
 /import { @tpl } from "./file.att"    >> Error
 /exe @tpl(x) = template "./file.att"  >> ✓
+/import templates from "./templates" as @tpl(x, y)  >> Use this for template directories
+```
+
+### Template Collections
+
+Load entire directories of templates that share a parameter signature. Currently supports local directories only (not registry modules).
+
+```mlld
+/import templates from "@base/agents" as @agents(message, context)
+
+>> All templates accept (message, context)
+/show @agents["alice"](@msg, @ctx)
+/show @agents["bob"](@msg, @ctx)
+
+>> Dynamic selection in loops
+/for @name in ["alice", "bob", "charlie"] [
+  show @agents[@name](@msg, @ctx)
+]
+```
+
+For registry modules, use individual template exports:
+
+```mlld
+>> In the published module
+/exe @alice(msg, ctx) = template "alice.att"
+/exe @bob(msg, ctx) = template "bob.att"
+/export { @alice, @bob }
+
+>> Import and use
+/import { @alice, @bob } from @author/templates
+/show @alice(@msg, @ctx)
+```
+
+**Directory structure:**
+
+```
+agents/
+├── alice.att         → @agents["alice"] or @agents.alice
+├── bob.att           → @agents["bob"] or @agents.bob
+├── json-pretty.att   → @agents["json_pretty"] (sanitized)
+└── support/
+    └── helper.att    → @agents.support["helper"]
+```
+
+**Access patterns:**
+- Directories: dot notation (`@agents.support`)
+- Templates: brackets (`@agents["alice"]`) or dots if valid identifier (`@agents.alice`)
+- Filenames sanitized: hyphens and special chars become underscores (`json-pretty.att` → `json_pretty`)
+- Full bracket notation also works: `@agents["support"]["helper"]`
+
+**Shared parameter contract:**
+
+All templates in a collection must use only the declared parameters:
+
+```
+>> agents/alice.att - ✓ valid
+Hello @message! I'm Alice.
+Context: @context
+
+>> agents/invalid.att - ✗ error at parse time
+Hello @message!
+Extra: @undeclared
+```
+
+Error: `Template 'invalid.att' references @undeclared but signature only declares (message, context)`
+
+Templates don't have to use all parameters, but can't reference any undeclared ones.
+
+**Different parameter needs = different collections:**
+
+```mlld
+/import templates from "@base/agents" as @agents(message, context)
+/import templates from "@base/formatters" as @fmt(data)
+
+/show @agents["alice"](@msg, @ctx)    >> (message, context)
+/show @fmt["json"](@result)           >> (data)
 ```
 
 #### Interpolation Contexts

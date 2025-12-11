@@ -11,6 +11,7 @@ export interface ImportRaw {
   path: string;
   importType?: string;
   securityLabels?: string;
+  templateParams?: string[];
 }
 
 /**

@@ -115,20 +115,28 @@ SlashImport
 
 // Shorthand import alias must include @ prefix when provided
 SlashImportShorthand
-  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ ("from" _)? path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
       helpers.mlldError(
         `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
         '@',
         location()
       );
     }
-  / DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ path:ImportPath alias:(_ "as" _ name:ImportAliasIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImportShorthand matched', { path, alias, tail, importType: typeInfo?.type });
+  / DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ fromSeg:("from" _)? path:ImportPath aliasSegment:(_ "as" _ name:ImportAliasIdentifier params:ExecParameters? { return { alias: name, params }; })? tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportShorthand matched', { path, alias: aliasSegment?.alias, tail, importType: typeInfo?.type });
+      
+      if (aliasSegment?.params && (!typeInfo || typeInfo.type !== 'templates')) {
+        helpers.mlldError("Import parameters are only supported with 'templates' imports", "templates", location());
+      }
       
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // NEW: Derive namespace from path if no alias provided
-      let namespace = alias;
+      let namespace = aliasSegment?.alias;
+      const templateParams = aliasSegment?.params || [];
+      if (typeInfo?.type === 'templates' && !namespace) {
+        helpers.mlldError("Templates import requires an alias with parameters. Use: /import templates from \"dir\" as @name(param1, param2)", "@", location());
+      }
       if (!namespace) {
         // Extract namespace from path
         const pathStr = path.raw?.path || path.raw?.module || '';
@@ -149,6 +157,7 @@ SlashImportShorthand
       // Create values object with namespace import structure
       const values = {
         namespace: [helpers.createNode(NodeType.Text, { content: namespace, location: location() })],  // Store namespace as array for consistency
+        templateParams,
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       if (labelInfo) {
@@ -169,7 +178,8 @@ SlashImportShorthand
       
       // Create raw object with text segments
       const raw = {
-        namespace: alias ? `@${namespace}` : namespace,  // Preserve explicit alias prefix in raw output
+        namespace: aliasSegment?.alias ? `@${namespace}` : namespace,  // Preserve explicit alias prefix in raw output
+        templateParams: templateParams.length > 0 ? templateParams.map(p => p.name) : undefined,
         path: path.raw?.path || path.raw?.module || path // Handle string paths like @input
       };
       if (typeInfo) {
@@ -185,6 +195,9 @@ SlashImportShorthand
       };
       if (typeInfo) {
         meta.importType = typeInfo.type;
+      }
+      if (templateParams && templateParams.length > 0) {
+        meta.templateParams = templateParams.map(p => p.name);
       }
       if (labelInfo) {
         meta.securityLabels = labelInfo.labels;
@@ -364,7 +377,7 @@ ImportTypeClause
   / BasicImportType
 
 BasicImportType
-  = type:("module" / "static" / "live" / "local") ![a-zA-Z0-9_] {
+  = type:("module" / "static" / "live" / "local" / "templates") ![a-zA-Z0-9_] {
       const raw = text();
       return {
         type,

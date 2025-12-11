@@ -63,6 +63,26 @@ export class ImportDirectiveEvaluator {
         resolution.cacheDurationMs = importContext.cacheDurationMs;
       }
 
+      if (resolution.importType === 'templates' && resolution.type !== 'file') {
+        const resolvedPath = await env.resolvePath(resolution.resolvedPath);
+        resolution.resolvedPath = resolvedPath;
+        resolution.type = 'file';
+      }
+
+      if (
+        (directive as any)?.values?.templateParams &&
+        (directive as any).values.templateParams.length > 0 &&
+        resolution.importType !== 'templates'
+      ) {
+        throw new MlldImportError('Import parameters are only supported with templates imports', {
+          code: 'IMPORT_TYPE_MISMATCH',
+          details: {
+            importType: resolution.importType,
+            path: resolution.resolvedPath
+          }
+        });
+      }
+
       const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
       const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
       const taintSnapshot = deriveImportTaint({
@@ -238,6 +258,19 @@ export class ImportDirectiveEvaluator {
           code: 'IMPORT_TYPE_MISMATCH',
           details: { importType: type, resolvedType: resolution.type }
         });
+
+      case 'templates': {
+        const isAllowedResolver =
+          resolution.type === 'resolver' &&
+          (resolverName === 'base' || resolverName === 'project' || resolverName === 'local');
+        if (resolution.type === 'file' || isAllowedResolver) {
+          return;
+        }
+        throw new MlldImportError("Import type 'templates' expects a directory from the local filesystem or @base/@project/@local resolvers.", {
+          code: 'IMPORT_TYPE_MISMATCH',
+          details: { importType: type, resolvedType: resolution.type }
+        });
+      }
 
       default:
         return;

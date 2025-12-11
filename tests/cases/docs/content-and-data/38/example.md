@@ -1,14 +1,10 @@
->> In directives
-/show @name
+/import templates from "@base/agents" as @agents(message, context)
 
->> In double quotes
-/var @greeting = "Hello @name"
+>> All templates accept (message, context)
+/show @agents["alice"](@msg, @ctx)
+/show @agents["bob"](@msg, @ctx)
 
->> In command braces
-/run cmd {echo "Welcome @name"}
-
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
-
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Dynamic selection in loops
+/for @name in ["alice", "bob", "charlie"] [
+  show @agents[@name](@msg, @ctx)
+]
