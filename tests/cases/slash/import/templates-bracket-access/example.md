@@ -10,3 +10,8 @@ description: template collection access with both dot and bracket notation
 
 >> Full bracket notation
 /show @tpl["agents"]["alice"]("world")
+
+>> Bracket notation inside /var assignment
+/var @who = "alice"
+/var @prompt = @tpl.agents[@who]("cached")
+/show @prompt

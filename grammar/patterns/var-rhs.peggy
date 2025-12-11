@@ -218,9 +218,13 @@ FieldAccessExecPattern "field access exec invocation"
       }, location());
       
       // Create the exec invocation
+      const identifierRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        fields
+      }, location());
       const ref = {
         name: methodName,
-        identifier: [helpers.createNode(NodeType.Text, { content: methodName, location: location() })],
+        identifier: [identifierRef],
         args: args || [],
         isCommandReference: true,
         objectReference: objectRef
