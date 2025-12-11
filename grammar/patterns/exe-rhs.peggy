@@ -687,7 +687,49 @@ WhenExpressionAny
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionExeBody batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
+      const hasNoneCondition = Array.isArray(whenExpr.conditions) && whenExpr.conditions.some((entry) => {
+        const condition = entry && entry.condition;
+        return Array.isArray(condition) &&
+          condition.length === 1 &&
+          condition[0]?.type === NodeType.Literal &&
+          condition[0]?.valueType === 'none';
+      });
+
+      let normalizedWhen = whenExpr;
+      if (!hasNoneCondition) {
+        const loc = whenExpr.location || location();
+        const noneLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'none',
+          valueType: 'none',
+          location: loc
+        });
+        const skipLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'skip',
+          valueType: 'skip',
+          location: loc
+        });
+        const conditions = [...whenExpr.conditions, { condition: [noneLiteral], action: [skipLiteral] }];
+        normalizedWhen = helpers.createWhenExpression(
+          conditions,
+          whenExpr.withClause || null,
+          loc,
+          whenExpr.meta?.modifier || null
+        );
+      }
+
+      helpers.debug('ForExpressionExe when-filter matched', { pattern, hasNoneCondition });
+
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source, 
+        [normalizedWhen],  // Accepts directive actions or block statements
+        location(),
+        opts || null,
+        batchPipe || null
+      );
+    }
+  / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionExeBody batchPipe:ForBatchPipeline? {
       helpers.debug('ForExpressionExe matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(

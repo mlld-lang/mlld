@@ -465,7 +465,49 @@ CodeChar
 // FOR EXPRESSION - for @var in @collection => expression or block
 // Used in /var and /exe assignments to collect results
 ForExpression "for expression"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionBody batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
+      const hasNoneCondition = Array.isArray(whenExpr.conditions) && whenExpr.conditions.some((entry) => {
+        const condition = entry && entry.condition;
+        return Array.isArray(condition) &&
+          condition.length === 1 &&
+          condition[0]?.type === NodeType.Literal &&
+          condition[0]?.valueType === 'none';
+      });
+
+      let normalizedWhen = whenExpr;
+      if (!hasNoneCondition) {
+        const loc = whenExpr.location || location();
+        const noneLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'none',
+          valueType: 'none',
+          location: loc
+        });
+        const skipLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'skip',
+          valueType: 'skip',
+          location: loc
+        });
+        const conditions = [...whenExpr.conditions, { condition: [noneLiteral], action: [skipLiteral] }];
+        normalizedWhen = helpers.createWhenExpression(
+          conditions,
+          whenExpr.withClause || null,
+          loc,
+          whenExpr.meta?.modifier || null
+        );
+      }
+
+      helpers.debug('ForExpression when-filter matched', { pattern, hasNoneCondition });
+
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source, 
+        [normalizedWhen],
+        location(),
+        opts || null,
+        batchPipe || null
+      );
+    }
+  / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionBody batchPipe:ForBatchPipeline? {
       helpers.debug('ForExpression matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(

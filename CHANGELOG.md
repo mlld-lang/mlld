@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Parse-time validation ensures templates only reference declared parameters
 - **StreamingManager**: Centralized sink management replaces fragmented sink creation
   - Single owner for StreamBus lifecycle
+- **When separators and for-when filter sugar**: Semicolons separate when arms across directive and expression forms, and `for ... when ...` adds an implicit `none => skip` branch so filtered for-expressions drop non-matches without null placeholders
 
 ### Changed
 - `/exe` RHS pipe sugar accepts direct `@value | cmd { ... }` pipelines (legacy `run` form still works); identity definitions keep with-clause pipelines when evaluating parameters

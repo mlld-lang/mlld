@@ -481,9 +481,10 @@ WhenConditionSeparator
   = _ "," _ {
       helpers.mlldError(
         'Comma separators are not allowed in /when conditions. ' +
-        'For readability, /when conditions must be separated by whitespace (newlines or spaces) instead of commas.\n' +
-        '💡 Remove the comma and use a newline or space:\n' +
+        'Separate conditions with whitespace or semicolons instead of commas.\n' +
+        '💡 Remove the comma and use whitespace or semicolons:\n' +
         '   /when expr: [value1 => action1, value2 => action2]  ❌\n' +
+        '   /when expr: [value1 => action1; value2 => action2]  ✅\n' +
         '   /when expr: [value1 => action1  value2 => action2]  ✅\n' +
         '   /when expr: [\n' +
         '     value1 => action1\n' +
@@ -493,6 +494,7 @@ WhenConditionSeparator
         location()
       );
     }
+  / _ ";" _
   / _
 
 // Single condition => action pair
