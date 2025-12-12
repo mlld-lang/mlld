@@ -76,10 +76,14 @@ export interface SplitterState {
   parenDepth: number;
   /** Stack of template delimiters: backtick, ::, or ::: */
   templateStack: ('`' | '::' | ':::')[];
-  /** Currently inside a // or /* comment */
+  /** Currently inside a line comment */
   inComment: boolean;
   /** Currently inside a ``` code fence */
   inCodeFence: boolean;
+  /** Currently inside a single-quoted string */
+  inSingleQuote: boolean;
+  /** Currently inside a double-quoted string */
+  inDoubleQuote: boolean;
 }
 
 /**
@@ -175,7 +179,9 @@ export function createInitialSplitterState(): SplitterState {
     parenDepth: 0,
     templateStack: [],
     inComment: false,
-    inCodeFence: false
+    inCodeFence: false,
+    inSingleQuote: false,
+    inDoubleQuote: false
   };
 }
 
@@ -189,7 +195,9 @@ export function canSplitAt(state: SplitterState): boolean {
          state.parenDepth === 0 &&
          state.templateStack.length === 0 &&
          !state.inComment &&
-         !state.inCodeFence;
+         !state.inCodeFence &&
+         !state.inSingleQuote &&
+         !state.inDoubleQuote;
 }
 
 /**
@@ -200,7 +208,7 @@ const MAX_CHUNKS = 200;
 /**
  * Bare directive keywords that can start a directive in strict mode.
  */
-const BARE_DIRECTIVE_PATTERN = /^(var|show|exe|run|for|when|while|stream|guard|import|export|output|append|log|path)\b/;
+const BARE_DIRECTIVE_PATTERN = /^(var|show|exe|run|for|foreach|when|while|stream|guard|import|export|output|append|log|path)\b/;
 
 /**
  * Checks if a line starts a new directive.
@@ -235,10 +243,36 @@ function updateStateForLine(state: SplitterState, line: string): void {
 
   if (state.inCodeFence) return;
 
+  let escapeNext = false;
+
   // Scan character by character for brackets, templates, etc.
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
     const nextChar = line[i + 1];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+
+    // Handle strings
+    if (state.inSingleQuote) {
+      if (char === '\'') {
+        state.inSingleQuote = false;
+      }
+      continue;
+    }
+    if (state.inDoubleQuote) {
+      if (char === '"') {
+        state.inDoubleQuote = false;
+      }
+      continue;
+    }
 
     // Check for >> comment start
     if (char === '>' && nextChar === '>') {
@@ -256,6 +290,18 @@ function updateStateForLine(state: SplitterState, line: string): void {
       if (char === '}') state.braceDepth = Math.max(0, state.braceDepth - 1);
       if (char === '(') state.parenDepth++;
       if (char === ')') state.parenDepth = Math.max(0, state.parenDepth - 1);
+    }
+
+    // String entry (only when not in template)
+    if (state.templateStack.length === 0) {
+      if (char === '\'') {
+        state.inSingleQuote = true;
+        continue;
+      }
+      if (char === '"') {
+        state.inDoubleQuote = true;
+        continue;
+      }
     }
 
     // Template handling
@@ -326,14 +372,18 @@ export function splitIntoChunks(text: string, mode: MlldMode): Chunk[] {
   let chunkStartOffset = 0;
   let currentOffset = 0;
   let wasBlankLine = false;
+  let previousLineWasDirective = false;
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const line = lines[lineIndex];
     const lineLength = line.length;
     const isBlank = line.trim() === '';
 
+    const startsDirective = isDirectiveStart(line, mode);
+    const splitForAdjacentDirective = previousLineWasDirective && startsDirective && canSplitAt(state);
+
     // Check if we can split here
-    if (wasBlankLine && !isBlank && canSplitAt(state) && isDirectiveStart(line, mode)) {
+    if ((wasBlankLine && !isBlank && canSplitAt(state) && startsDirective) || splitForAdjacentDirective) {
       // We have a valid split point before this line
       // Calculate the end of the previous chunk (includes the blank line)
       const prevLineEnd = currentOffset; // This is the offset at the start of current line
@@ -377,6 +427,7 @@ export function splitIntoChunks(text: string, mode: MlldMode): Chunk[] {
 
     // Track whether this was a blank line for next iteration
     wasBlankLine = isBlank;
+    previousLineWasDirective = !isBlank && startsDirective && canSplitAt(state);
 
     // Update offset (include newline except for last line)
     currentOffset += lineLength;
@@ -409,13 +460,14 @@ export function splitIntoChunks(text: string, mode: MlldMode): Chunk[] {
 function createChunkDiagnostic(chunk: Chunk, error: any): Diagnostic {
   // Extract line from error if available (parser errors have location)
   const errorLine = error?.location?.start?.line ?? 1;
-  const errorCol = error?.location?.start?.column ?? 0;
+  const errorCol = error?.location?.start?.column ?? 1;
+  const character = chunk.startColumn + Math.max(0, errorCol - 1);
 
   return {
     severity: DiagnosticSeverity.Error,
     range: {
-      start: { line: chunk.startLine + errorLine - 1, character: errorCol },
-      end: { line: chunk.startLine + errorLine - 1, character: errorCol + 1 }
+      start: { line: chunk.startLine + errorLine - 1, character },
+      end: { line: chunk.startLine + errorLine - 1, character: character + 1 }
     },
     message: error?.message || 'Syntax error',
     source: 'mlld'
@@ -473,6 +525,13 @@ export function mergeChunkResults(results: ChunkParseResult[]): MergedParseResul
   const errors: Diagnostic[] = [];
   const failedRanges: Range[] = [];
 
+  function getChunkEndCharacter(chunk: Chunk): number {
+    if (!chunk.text) return 0;
+    const parts = chunk.text.split('\n');
+    const lastLine = parts[parts.length - 1] ?? '';
+    return lastLine.length;
+  }
+
   for (const result of results) {
     if (result.success) {
       nodes.push(...result.ast);
@@ -480,7 +539,7 @@ export function mergeChunkResults(results: ChunkParseResult[]): MergedParseResul
       // Track failed range for downstream handling
       failedRanges.push({
         start: { line: result.chunk.startLine, character: 0 },
-        end: { line: result.chunk.endLine, character: 0 }
+        end: { line: result.chunk.endLine, character: getChunkEndCharacter(result.chunk) }
       });
     }
 

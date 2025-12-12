@@ -21,6 +21,15 @@ describe('splitIntoChunks', () => {
     expect(chunks[1].text).toBe('/var @b = 2');
   });
 
+  it('splits adjacent directives even without blank line', () => {
+    const text = `/var @a = 1
+/var @b = 2`;
+    const chunks = splitIntoChunks(text, 'markdown');
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].text.trim()).toBe('/var @a = 1');
+    expect(chunks[1].text.trim()).toBe('/var @b = 2');
+  });
+
   it('does not split inside block syntax', () => {
     const text = `/exe @f() = [
   let @x = 1
@@ -113,6 +122,16 @@ var @b = 2`;
 }`;
     const chunks = splitIntoChunks(text, 'markdown');
     expect(chunks).toHaveLength(1);
+  });
+
+  it('does not count brackets inside strings', () => {
+    const text = `/run js {
+  const s = "{[()]}";
+}
+
+/var @after = 1`;
+    const chunks = splitIntoChunks(text, 'markdown');
+    expect(chunks).toHaveLength(2);
   });
 
   it('does not split inside parentheses', () => {
@@ -620,6 +639,7 @@ describe('mergeChunkResults', () => {
     expect(merged.errors).toHaveLength(1);
     expect(merged.failedRanges).toHaveLength(1);
     expect(merged.failedRanges[0].start.line).toBe(2);
+    expect(merged.failedRanges[0].end.character).toBeGreaterThan(0);
   });
 
   it('handles all failed chunks', () => {
