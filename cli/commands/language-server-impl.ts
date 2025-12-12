@@ -42,6 +42,12 @@ import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import type { MlldMode } from '@core/types/mode';
 import { inferMlldMode } from '@core/utils/mode';
+import {
+  splitIntoChunks,
+  parseChunk,
+  mergeChunkResults,
+  MergedParseResult
+} from './chunk-parsing';
 
 /**
  * Determine the parsing mode from a file URI
@@ -562,10 +568,11 @@ export async function startLanguageServer(): Promise<void> {
         };
         errors.push(diagnostic);
         
-        // Attempt fault-tolerant parsing
-        const partialAst = await attemptPartialParsing(text, error, mode);
-        ast = partialAst.nodes;
-        errors.push(...partialAst.errors);
+        // Attempt fault-tolerant parsing using chunk-based strategy
+        const partialResult = await parseWithChunks(text, error, mode);
+        ast = partialResult.nodes;
+        errors.push(...partialResult.errors);
+        // Note: partialResult.failedRanges available for downstream handling if needed
         
         // Analyze whatever we could parse
         if (ast.length > 0) {
@@ -1429,6 +1436,49 @@ export async function startLanguageServer(): Promise<void> {
       });
       // Don't re-throw - return partial results instead of crashing
     }
+  }
+
+  /**
+   * Parses document using chunk-based strategy for error recovery.
+   * Falls back to legacy parsing if chunk parsing fails completely.
+   */
+  async function parseWithChunks(
+    text: string,
+    originalError: any,
+    mode: MlldMode
+  ): Promise<MergedParseResult> {
+    // Check if chunk parsing is disabled
+    if (process.env.MLLD_CHUNK_PARSING === '0') {
+      const result = await attemptPartialParsing(text, originalError, mode);
+      return { nodes: result.nodes, errors: result.errors, failedRanges: [] };
+    }
+
+    logger.debug('[CHUNK] Starting chunk-based parsing');
+
+    // Split into chunks
+    const chunks = splitIntoChunks(text, mode);
+
+    // Parse each chunk
+    const results = await Promise.all(
+      chunks.map(chunk => parseChunk(chunk, mode))
+    );
+
+    // Log parse results
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    logger.debug('[CHUNK] Parsed chunks', { total: results.length, success: successCount, failed: failCount });
+
+    // Merge results
+    const merged = mergeChunkResults(results);
+
+    // Fallback: if all chunks failed, try legacy approach
+    if (merged.nodes.length === 0 && results.every(r => !r.success)) {
+      logger.debug('[CHUNK] All chunks failed, using legacy parser');
+      const legacy = await attemptPartialParsing(text, originalError, mode);
+      return { nodes: legacy.nodes, errors: legacy.errors, failedRanges: [] };
+    }
+
+    return merged;
   }
 
   /**

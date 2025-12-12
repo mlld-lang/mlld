@@ -325,10 +325,11 @@ The server maintains:
 ### Analysis Pipeline
 
 1. **Parse** - Use mlld grammar to parse documents
-2. **Analyze** - Extract variables, imports, exports
-3. **Generate Tokens** - Create semantic tokens using AST visitor pattern
-4. **Cache** - Store analysis results and text extracts for performance
-5. **Update** - Send diagnostics, completions, and semantic tokens
+2. **Chunk Recovery** - If parse fails, split into chunks and parse each independently
+3. **Analyze** - Extract variables, imports, exports
+4. **Generate Tokens** - Create semantic tokens using AST visitor pattern
+5. **Cache** - Store analysis results and text extracts for performance
+6. **Update** - Send diagnostics, completions, and semantic tokens
 
 ### Performance
 
@@ -348,6 +349,35 @@ The language server implements intelligent error suppression to improve the edit
 4. **Different Delays** - Semantic tokens update faster (250ms) than error validation (1000ms)
 
 This prevents annoying red squiggles while typing new directives like `/var @name = "value"` and maintains syntax highlighting even when the document temporarily has syntax errors.
+
+### Chunk-Based Error Recovery
+
+When the parser encounters a syntax error, the language server uses chunk-based
+parsing to recover as much valid AST as possible:
+
+1. **Document Splitting**: The document is split into logical chunks at directive
+   boundaries, respecting nested constructs (blocks, templates, code fences)
+
+2. **Independent Parsing**: Each chunk is parsed independently with the appropriate
+   mode (strict or markdown)
+
+3. **Location Rebasing**: AST node locations are adjusted to global document positions
+
+4. **Result Merging**: Successfully parsed chunks are merged; failed chunks produce
+   error diagnostics
+
+**Benefits:**
+- Syntax errors don't break highlighting for the entire document
+- Valid code before and after errors remains highlighted
+- Multiple errors can be shown simultaneously
+
+**Configuration:**
+- Disable with `MLLD_CHUNK_PARSING=0` environment variable
+- Falls back to line-by-line parsing if chunk parsing fails completely
+
+**Limitations:**
+- Errors inside multi-line constructs (blocks, templates) affect the entire construct
+- Performance overhead for documents with many chunk boundaries
 
 ### Semantic Token Architecture
 
@@ -557,3 +587,9 @@ If syntax highlighting isn't showing correctly:
    - **Operators not colored**: Check theme supports `operator` semantic token
    - **Comments not colored**: Ensure proper length calculation (offset-based)
    - **Templates look wrong**: Template delimiters map to `operator` for visibility
+
+7. **Error Recovery Not Working**:
+   - Chunk-based parsing requires valid chunk boundaries
+   - Errors inside `[...]` blocks affect the entire block
+   - Try `MLLD_CHUNK_PARSING=0` to use legacy line-by-line recovery
+   - Check debug logs: `DEBUG=mlld:lsp mlld language-server`
