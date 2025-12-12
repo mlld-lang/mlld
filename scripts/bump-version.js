@@ -56,7 +56,18 @@ packageJson.version = newVersion;
 try {
   fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
   console.log(`Version bumped from ${currentVersion} to ${newVersion}`);
-  
+
+  // Sync VSCode extension version
+  const vscodePackageJsonPath = path.join(__dirname, '..', 'editors', 'vscode', 'package.json');
+  try {
+    const vscodePackageJson = JSON.parse(fs.readFileSync(vscodePackageJsonPath, 'utf8'));
+    vscodePackageJson.version = newVersion;
+    fs.writeFileSync(vscodePackageJsonPath, JSON.stringify(vscodePackageJson, null, 2) + '\n');
+    console.log(`VSCode extension version synced to ${newVersion}`);
+  } catch (error) {
+    console.error('Warning: Could not sync VSCode extension version:', error.message);
+  }
+
   // Also sync mlldx version
   const { execSync } = require('child_process');
   console.log('\nSyncing mlldx version...');

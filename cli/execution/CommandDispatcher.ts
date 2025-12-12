@@ -16,6 +16,7 @@ import { errorTestCommand } from '../commands/error-test';
 import { createDevCommand } from '../commands/dev';
 import { createCleanCommand } from '../commands/clean';
 import { createNvimSetupCommand } from '../commands/nvim-setup';
+import { createNvimDoctorCommand } from '../commands/nvim-doctor';
 import { createUpdateCommand } from '../commands/update';
 import { createOutdatedCommand } from '../commands/outdated';
 import { createMcpCommand } from '../commands/mcp';
@@ -61,6 +62,7 @@ export class CommandDispatcher {
     this.commandMap.set('serve', mcpCommand); // Alias for backward compatibility
     this.commandMap.set('nvim-setup', createNvimSetupCommand());
     this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
+    this.commandMap.set('nvim-doctor', createNvimDoctorCommand());
   }
 
   async executeCommand(

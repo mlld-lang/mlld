@@ -59,6 +59,25 @@ function getModeFromUri(uri: string): MlldMode {
   return inferMlldMode(path);
 }
 
+function isMlldDocument(uri: string): boolean {
+  const path = uri.replace('file://', '').toLowerCase();
+  return path.endsWith('.mld') || path.endsWith('.mld.md');
+}
+
+function looksLikeMlldContent(text: string): boolean {
+  // Detect common directive and variable markers
+  if (text.includes('/var ') || text.includes('/exe ') || text.includes('/run ') || text.includes('/for ') || text.includes('/when ')) {
+    return true;
+  }
+  if (/^\s*\/\w+/m.test(text)) return true;
+  if (/^\s*exe\s+@/m.test(text) || /^\s*for\s+@/m.test(text) || /^\s*when\s+/m.test(text)) {
+    return true;
+  }
+  if (/@\w+\s*\(/.test(text)) return true;
+  if (/<[^>]+>/.test(text)) return true;
+  return false;
+}
+
 // Semantic token types for mlld syntax
 // Standard VSCode semantic token types we use
 const TOKEN_TYPES = [
@@ -201,12 +220,19 @@ export async function startLanguageServer(): Promise<void> {
   // without passing '--stdio'. Default to stdio when no explicit transport flag
   // is present, otherwise defer to vscode-languageserver's CLI parsing.
   const argv = (process?.argv ?? []);
+  console.error('[LSP] Creating connection (argv:', argv, ')');
   const hasExplicitTransport = argv.includes('--stdio')
     || argv.includes('--node-ipc')
     || argv.some(a => a.startsWith('--socket='));
+  console.error('[LSP] hasExplicitTransport:', hasExplicitTransport);
   const connection = hasExplicitTransport
     ? createConnection(ProposedFeatures.all)
     : createConnection(ProposedFeatures.all, process.stdin, process.stdout);
+  console.error('[LSP] Connection created');
+
+  // Debug: Check if stdin is readable
+  console.error('[LSP] stdin.isTTY:', process.stdin.isTTY);
+  console.error('[LSP] stdin.readable:', process.stdin.readable);
 
   // Create a simple text document manager
   const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
@@ -301,6 +327,7 @@ export async function startLanguageServer(): Promise<void> {
   }
 
   connection.onInitialize((params: InitializeParams) => {
+    console.error('[LSP] onInitialize called');
     const capabilities = params.capabilities;
 
     hasConfigurationCapability = !!(
@@ -344,10 +371,12 @@ export async function startLanguageServer(): Promise<void> {
       };
     }
 
+    console.error('[LSP] Returning initialize result');
     return result;
   });
 
   connection.onInitialized(() => {
+    console.error('[LSP] onInitialized called');
     connection.console.log('[LSP] Server initialized');
     connection.console.log('[LSP] Semantic tokens provider available: ' + (!!connection.languages.semanticTokens));
     
@@ -466,6 +495,20 @@ export async function startLanguageServer(): Promise<void> {
   );
 
   async function analyzeDocument(document: TextDocument): Promise<DocumentAnalysis> {
+    // Skip non-mlld documents (plain .md without .mld.md suffix)
+    if (!isMlldDocument(document.uri)) {
+      const empty: DocumentAnalysis = {
+        ast: [],
+        errors: [],
+        variables: new Map(),
+        imports: [],
+        exports: [],
+        lastAnalyzed: document.version
+      };
+      documentCache.set(document.uri, empty);
+      return empty;
+    }
+
     const cached = documentCache.get(document.uri);
     if (cached && cached.lastAnalyzed === document.version) {
       return cached;
@@ -580,7 +623,18 @@ export async function startLanguageServer(): Promise<void> {
         }
       } else {
         // Full parse succeeded
-        ast = result.ast;
+        let parsedAst = result.ast;
+
+        // Heuristic: if markdown mode returns only Text nodes but content looks mlld-like, retry in strict mode
+        if (mode === 'markdown' && parsedAst.length > 0 && parsedAst.every(node => node?.type === 'Text') && looksLikeMlldContent(text)) {
+          logger.debug('[CHUNK] Markdown parse returned only Text; retrying in strict mode');
+          const strictResult = await parse(text, { mode: 'strict' });
+          if (strictResult.success) {
+            parsedAst = strictResult.ast;
+          }
+        }
+
+        ast = parsedAst;
         analyzeAST(ast, document, variables, imports, exports);
 
         // In strict mode, check for text nodes that shouldn't be there
@@ -632,7 +686,8 @@ export async function startLanguageServer(): Promise<void> {
    */
   function checkStrictModeTextNodes(ast: any[], errors: Diagnostic[]): void {
     function checkNode(node: any): void {
-      if (node.type === 'Text' && node.content?.trim()) {
+      // Only top-level Text nodes are illegal in strict mode. Text inside directives is allowed.
+      if (node.type === 'Text' && node.content?.trim() && node.parent?.type !== 'Directive') {
         // Text nodes with content are not allowed in strict mode
         const loc = node.location;
         if (loc) {
@@ -1606,10 +1661,19 @@ export async function startLanguageServer(): Promise<void> {
   }
 
   // Make the connection listen on the input/output streams
+  console.error('[LSP] Setting up document manager...');
   documents.listen(connection);
+  console.error('[LSP] Starting connection listener...');
   connection.listen();
-  
+  console.error('[LSP] Connection listener started');
+
   // Log that the server started
   connection.console.log('mlld language server started');
   connection.console.log('Semantic tokens provider registered: ' + (!!connection.languages.semanticTokens));
+
+  // Keep the process alive - connection.listen() should do this, but make it explicit
+  console.error('[LSP] Server ready and listening...');
+
+  // Keep the process alive (connection.listen() is non-blocking)
+  await new Promise(() => {}); // Never resolves, keeps process alive
 }

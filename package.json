@@ -101,12 +101,13 @@
     "bump:major": "node scripts/bump-version.js major",
     "testecho": "echo",
     "install:vim": "cd editors/vim && ./install.sh",
-    "install:vscode": "cd editors/vscode && npm install && npx vsce package && code --install-extension mlld-vscode-*.vsix",
-    "install:cursor": "cd editors/vscode && npm install && npx vsce package && cursor --install-extension mlld-vscode-*.vsix",
-    "install:windsurf": "cd editors/vscode && npm install && npx vsce package && windsurf --install-extension mlld-vscode-*.vsix",
+    "sync:vscode-version": "node -e \"const fs=require('fs'); const main=JSON.parse(fs.readFileSync('package.json')); const vscode=JSON.parse(fs.readFileSync('editors/vscode/package.json')); vscode.version=main.version; fs.writeFileSync('editors/vscode/package.json', JSON.stringify(vscode,null,2)+'\\n')\"",
+    "install:vscode": "npm run sync:vscode-version && cd editors/vscode && rm -f *.vsix && npm install && npx vsce package && code --install-extension *.vsix",
+    "install:cursor": "npm run sync:vscode-version && cd editors/vscode && rm -f *.vsix && npm install && npx vsce package && cursor --install-extension *.vsix",
+    "install:windsurf": "npm run sync:vscode-version && cd editors/vscode && rm -f *.vsix && npm install && npx vsce package && windsurf --install-extension *.vsix",
     "install:editors": "npm run install:vim && npm run install:vscode",
-    "publish:vscode": "cd editors/vscode && npm install && npx vsce publish",
-    "package:vscode": "cd editors/vscode && npm install && npx vsce package",
+    "publish:vscode": "npm run sync:vscode-version && cd editors/vscode && npm install && npx vsce publish",
+    "package:vscode": "npm run sync:vscode-version && cd editors/vscode && npm install && npx vsce package",
     "knip": "knip"
   },
   "repository": {
@@ -159,6 +160,9 @@
     "turndown": "^7.2.0",
     "uuid": "^11.1.0",
     "validator": "^13.15.15",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "vscode-languageserver-types": "^3.17.5",
     "web-tree-sitter": "^0.20.8",
     "winston": "^3.17.0",
     "xmldom": "^0.6.0",
@@ -189,12 +193,9 @@
     "typescript-eslint": "^8.29.1",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.1.1",
-    "vitest-mock-extended": "^2.0.1",
-    "vscode-languageserver-textdocument": "^1.0.12",
-    "vscode-languageserver-types": "^3.17.5"
+    "vitest-mock-extended": "^2.0.1"
   },
   "optionalDependencies": {
-    "keytar": "^7.9.0",
-    "vscode-languageserver": "^9.0.1"
+    "keytar": "^7.9.0"
   }
 }

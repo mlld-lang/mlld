@@ -231,15 +231,19 @@ export class EmbeddedLanguageService {
   private async loadLanguage(name: string): Promise<void> {
     try {
       const parser = new Parser();
-      
+
       // Try multiple possible locations for WASM files
       const possiblePaths = [
+        // Production: relative to bundle location (works for global install)
+        // cli.cjs is at dist/cli.cjs, wasm is at dist/wasm/*.wasm
+        path.join(__dirname, 'wasm', `tree-sitter-${name}.wasm`),
+        // Development: from project root
+        path.join(process.cwd(), 'dist', 'wasm', `tree-sitter-${name}.wasm`),
         // Development: from node_modules
         path.join(process.cwd(), 'node_modules', `tree-sitter-${name}`, `tree-sitter-${name}.wasm`),
-        // Production: bundled with the LSP
-        path.join(__dirname, '..', '..', '..', 'wasm', `tree-sitter-${name}.wasm`),
-        // Alternative development path
-        path.join(process.cwd(), 'dist', 'wasm', `tree-sitter-${name}.wasm`),
+        // Fallback: go up from bundle
+        path.join(__dirname, '..', 'wasm', `tree-sitter-${name}.wasm`),
+        path.join(__dirname, '..', '..', 'wasm', `tree-sitter-${name}.wasm`),
       ];
       
       let language: Parser.Language | null = null;
