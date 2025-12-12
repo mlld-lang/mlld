@@ -22,14 +22,20 @@ export class VariableVisitor extends BaseVisitor {
   
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
-    
+
     const identifier = node.identifier || '';
     const valueType = node.valueType;
-    
-    
+
+    if (process.env.DEBUG) {
+      console.log('[VAR-VISITOR]', { identifier, valueType, location: `${node.location.start.line}:${node.location.start.column}` });
+    }
+
     // Skip only 'identifier' valueType (used in declarations)
     // 'varIdentifier' should be processed (used in references)
     if (valueType === 'identifier') {
+      if (process.env.DEBUG) {
+        console.log('[VAR-VISITOR] Skipping identifier valueType');
+      }
       return;
     }
     

@@ -84,6 +84,9 @@ export class ASTSemanticVisitor {
     this.registerVisitor('array', structureVisitor);
     this.registerVisitor('Property', structureVisitor);
     this.registerVisitor('MemberExpression', structureVisitor);
+    this.registerVisitor('field', structureVisitor);
+    this.registerVisitor('numericField', structureVisitor);
+    this.registerVisitor('arrayIndex', structureVisitor);
     this.registerVisitor('FileReference', fileReferenceVisitor);
     this.registerVisitor('load-content', fileReferenceVisitor);
     this.registerVisitor('Comment', fileReferenceVisitor);
@@ -148,6 +151,9 @@ export class ASTSemanticVisitor {
       const visitor = this.visitors.get(node.type);
       if (visitor) {
         visitor.visitNode(node, actualContext);
+        // Visit children to ensure nested nodes are processed
+        // Visitors that manually recurse will skip duplicates via valueType checks
+        this.visitChildren(node, actualContext);
       } else {
         switch (node.type) {
           case 'Text':
@@ -195,8 +201,25 @@ export class ASTSemanticVisitor {
   
   visitChildren(node: any, context?: VisitorContext): void {
     const actualContext = context || this.currentContext;
+
+    // If this is a container object without .type, visit ALL its properties
+    if (!node.type) {
+      for (const key of Object.keys(node)) {
+        const value = node[key];
+        if (Array.isArray(value)) {
+          for (const child of value) {
+            this.visitNode(child, actualContext);
+          }
+        } else if (value && typeof value === 'object') {
+          this.visitNode(value, actualContext);
+        }
+      }
+      return;
+    }
+
+    // For nodes with .type, check specific child properties
     const childProps = ['values', 'children', 'body', 'content', 'nodes', 'elements'];
-    
+
     for (const prop of childProps) {
       if (node[prop]) {
         if (Array.isArray(node[prop])) {
@@ -204,7 +227,13 @@ export class ASTSemanticVisitor {
             this.visitNode(child, actualContext);
           }
         } else if (typeof node[prop] === 'object') {
-          this.visitNode(node[prop], actualContext);
+          // Check if it's a node or a container object
+          if (node[prop].type) {
+            this.visitNode(node[prop], actualContext);
+          } else {
+            // Plain container object - recurse into its properties
+            this.visitChildren(node[prop], actualContext);
+          }
         }
       }
     }

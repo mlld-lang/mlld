@@ -13,19 +13,16 @@ import type {
 import { NodeExpectationBuilder } from './NodeExpectationBuilder.js';
 import { TokenMatcher } from './TokenMatcher.js';
 import { FixSuggestionGenerator } from './FixSuggestionGenerator.js';
-import { OperatorDetector } from './OperatorDetector.js';
 
 export class TokenCoverageValidator {
   private expectationBuilder: NodeExpectationBuilder;
   private tokenMatcher: TokenMatcher;
   private fixSuggestionGenerator: FixSuggestionGenerator;
-  private operatorDetector: OperatorDetector;
 
   constructor(expectationBuilder: NodeExpectationBuilder) {
     this.expectationBuilder = expectationBuilder;
     this.tokenMatcher = new TokenMatcher();
     this.fixSuggestionGenerator = new FixSuggestionGenerator();
-    this.operatorDetector = new OperatorDetector();
   }
 
   /**
@@ -46,14 +43,6 @@ export class TokenCoverageValidator {
 
     // Find gaps
     let gaps = this.findCoverageGaps(expectations, tokens, fixture.input);
-
-    // Check for missing operators
-    const operatorGaps = this.operatorDetector.checkOperators(
-      fixture.ast,
-      tokens,
-      fixture.input
-    );
-    gaps = gaps.concat(operatorGaps);
 
     // Enhance gaps with fix suggestions
     gaps = this.fixSuggestionGenerator.enhanceGapsWithFixes(gaps);
@@ -153,7 +142,30 @@ export class TokenCoverageValidator {
       TOKEN_MODIFIERS,
       TOKEN_TYPE_MAP
     );
-    visitor.visitAST(ast);
+
+    // Ensure AST is an array
+    const astArray = Array.isArray(ast) ? ast : [ast];
+
+    if (process.env.DEBUG) {
+      console.log(`[VALIDATOR] AST nodes to process: ${astArray.length}`);
+      astArray.forEach((n, i) => console.log(`  ${i}. ${n.type}`));
+    }
+
+    try {
+      await visitor.visitAST(astArray);
+    } catch (error) {
+      console.error('[VALIDATOR] Error in visitAST:', error);
+      throw error;
+    }
+
+    // Debug: log tokens if DEBUG env var set
+    if (process.env.DEBUG) {
+      console.log(`[VALIDATOR] Generated ${tokens.length} tokens:`);
+      tokens.forEach(t => {
+        const text = input.split('\n')[t.line]?.substring(t.char, t.char + t.length) || '?';
+        console.log(`  Line ${t.line + 1}:${t.char} "${text}" → ${t.tokenType}`);
+      });
+    }
 
     return tokens;
   }

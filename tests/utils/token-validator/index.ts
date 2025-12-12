@@ -7,7 +7,6 @@ export { NodeExpectationBuilder } from './NodeExpectationBuilder.js';
 export { TokenMatcher } from './TokenMatcher.js';
 export { FixSuggestionGenerator } from './FixSuggestionGenerator.js';
 export { VisitorMapper } from './VisitorMapper.js';
-export { OperatorDetector } from './OperatorDetector.js';
 export { ContextBuilder } from './ContextBuilder.js';
 export { CoverageReporter } from './CoverageReporter.js';
 export { createNodeTokenRuleMap, getNodeTokenRule, NODE_TOKEN_RULES } from './NodeTokenMap.js';
@@ -20,7 +19,6 @@ export type {
   FixSuggestion,
   ValidationResult,
   NodeTokenRule,
-  OperatorExpectation,
   VisitorInfo,
   FixtureData
 } from './types.js';

@@ -103,11 +103,22 @@ export class CommandVisitor extends BaseVisitor {
   }
   
   private visitExecInvocation(node: any, context: VisitorContext): void {
+    if (process.env.DEBUG) {
+      console.log('[EXEC-INVOCATION-VISITOR]', {
+        hasCommandRef: !!node.commandRef,
+        name: node.commandRef?.name,
+        location: node.location
+      });
+    }
+
     if (node.commandRef && node.commandRef.name) {
       const name = node.commandRef.name;
       
       // Handle case where location is 'none' or undefined - use identifier location
       if (node.location === 'none' || !node.location) {
+        if (process.env.DEBUG) {
+          console.log('[EXEC-INV] Using identifier location path');
+        }
         if (process.env.DEBUG_LSP === 'true') {
           console.log('[EXEC-INVOCATION]', {
             name: node.commandRef.name,
@@ -292,11 +303,22 @@ export class CommandVisitor extends BaseVisitor {
       }
       
       // Original code for when location is available
+      if (process.env.DEBUG) {
+        console.log('[EXEC-INV] Using node location path');
+      }
+
       if (!node.location || typeof node.location !== 'object') {
+        if (process.env.DEBUG) {
+          console.log('[EXEC-INV] Returning early - bad location', { location: node.location });
+        }
         return;
       }
       const charPos = node.location.start.column - 1;
-      
+
+      if (process.env.DEBUG) {
+        console.log('[EXEC-INV] Tokenizing exec invocation', { name, charPos });
+      }
+
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
         char: charPos,

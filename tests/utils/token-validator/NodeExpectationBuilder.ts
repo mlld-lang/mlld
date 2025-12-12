@@ -20,7 +20,7 @@ export class NodeExpectationBuilder {
    * Build expectations from AST
    */
   buildExpectations(
-    ast: any[],
+    ast: any[] | any,
     mode: 'strict' | 'markdown',
     input: string
   ): NodeExpectation[] {
@@ -32,7 +32,9 @@ export class NodeExpectationBuilder {
       mode
     };
 
-    this.walkAST(ast, rootContext, input);
+    // Ensure AST is an array
+    const astArray = Array.isArray(ast) ? ast : [ast];
+    this.walkAST(astArray, rootContext, input);
 
     return this.expectations;
   }
@@ -130,8 +132,15 @@ export class NodeExpectationBuilder {
 
       if (Array.isArray(value)) {
         this.walkAST(value, context, input);
-      } else if (value && typeof value === 'object' && value.type) {
-        this.walkAST([value], context, input);
+      } else if (value && typeof value === 'object') {
+        // Recurse into all objects (not just those with .type)
+        // This handles .values containers and nested structures
+        if (value.type) {
+          this.walkAST([value], context, input);
+        } else {
+          // Plain object - recurse into its properties
+          this.walkNodeChildren(value, context, input);
+        }
       }
     }
   }
