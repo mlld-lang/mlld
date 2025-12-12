@@ -51,7 +51,7 @@ export async function execute(
   const fileSystem = options.fileSystem ?? new NodeFileSystem();
   const pathService = options.pathService ?? new PathService();
 
-  const languageMode = resolveMlldMode(options.mode, filePath);
+  const languageMode = resolveMlldMode(options.mode, filePath, 'strict');
   const cacheEntry = await getCachedAst(filePath, fileSystem, languageMode);
 
   const dynamicModules: Record<string, string | Record<string, unknown>> = {

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc78]
 
 ### Added
+- **Strict mode for .mld files**: Bare directive syntax without slash prefixes
+  - `.mld` files use strict mode: bare directives (`var`, `show`, `exe`), text lines error, blank lines ignored
+  - `.mld.md` and `.md` files use markdown mode: require `/` prefix, text becomes content (existing behavior)
+  - Slash prefix optional in strict mode for backward compatibility (`/var` and `var` both work)
+  - SDK defaults to strict mode for raw strings (no file path) and unknown extensions
+  - File extension determines parsing mode: `.mld` → strict, `.mld.md`/`.md` → markdown
+  - CLI flags: `--loose`/`--markdown`/`--md`/`--prose` force markdown mode
+  - Mode included in AST cache keys to differentiate same file parsed in different modes
 - **Block syntax for exe and for**: Multi-statement bodies using `[...]` delimiters
   - Exe blocks: `/exe @func() = [let @x = 1; let @y = 2; => @x + @y]` (statements separated by newlines or semicolons)
   - For blocks: `/for @item in @items [show @item; let @count += 1]` (`=>` optional for block bodies)
@@ -50,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `/exe` RHS pipe sugar accepts direct `@value | cmd { ... }` pipelines (legacy `run` form still works); identity definitions keep with-clause pipelines when evaluating parameters
-- **Mode-aware parsing and test defaults**: Parser and CLI/SDK support `mode: 'strict' | 'markdown'`, with `.mld` files and raw strings defaulting to strict when `MLLD_STRICT=1`. Setting `MLLD_STRICT=0` forces markdown parsing (used by broad test runs) while strict coverage is added incrementally. Optional leading slashes on directives are accepted in strict mode.
+- **Mode-aware parsing**: Environment variable `MLLD_STRICT=1` forces strict mode, `MLLD_STRICT=0` forces markdown mode, overriding file extension inference
   - FormatAdapterSink and TerminalSink are mutually exclusive
 - **Import from @payload and @state**: Route files can now import fields from execute() payload and state
   - `/import { @message, @userId } from @payload` imports specific fields

@@ -38,7 +38,7 @@ export async function interpret(
   const languageMode = resolveMlldMode(
     options.mlldMode,
     options.filePath,
-    'markdown'
+    'strict'
   );
   
   // Parse the source into AST (or use provided AST)
