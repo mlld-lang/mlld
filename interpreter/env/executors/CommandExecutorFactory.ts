@@ -4,6 +4,7 @@ import { JavaScriptExecutor, type ShadowEnvironment } from './JavaScriptExecutor
 import { NodeExecutor, type NodeShadowEnvironmentProvider } from './NodeExecutor';
 import { PythonExecutor, type ShellCommandExecutor as IShellCommandExecutor } from './PythonExecutor';
 import { BashExecutor, type VariableProvider } from './BashExecutor';
+import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 
 export interface ExecutorDependencies {
@@ -109,7 +110,7 @@ export class CommandExecutorFactory {
           // Validate the simple command (ensure no dangerous shell operators)
           const safe = (() => {
             try {
-              return require('../CommandUtils').CommandUtils.validateAndParseCommand(command);
+              return CommandUtils.validateAndParseCommand(command);
             } catch (e) {
               // If validation fails, rethrow to be handled by ShellCommandExecutor as before
               throw e;

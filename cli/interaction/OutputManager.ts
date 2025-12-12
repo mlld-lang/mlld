@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import type { CLIOptions } from '../index';
 import type { UserInteraction, OverwriteResult } from './UserInteraction';
 
@@ -75,7 +75,7 @@ export class OutputManager {
       }
 
       // Check if it's actually a directory
-      const stat = require('fs').statSync(dir);
+      const stat = statSync(dir);
       if (!stat.isDirectory()) {
         return { 
           isValid: false, 

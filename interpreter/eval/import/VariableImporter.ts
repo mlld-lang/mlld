@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { DirectiveNode } from '@core/types';
 import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, TemplateVariable, VariableMetadata } from '@core/types/variable';
 import { 
@@ -543,7 +544,6 @@ export class VariableImporter {
           agentRosterPreview: normalizedObject && (normalizedObject as any).agent_roster
         });
         try {
-          const fs = require('fs');
           fs.appendFileSync(
             '/tmp/mlld-debug.log',
             JSON.stringify({

@@ -15,6 +15,7 @@ import { interpolate } from '../../core/interpreter';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import type { NeedsDeclaration, CommandNeeds } from '@core/policy/needs';
 import { spawnSync } from 'child_process';
+import { createRequire } from 'module';
 import * as path from 'path';
 
 const MODULE_SOURCE_EXTENSIONS = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'] as const;
@@ -1027,7 +1028,9 @@ export class ImportDirectiveEvaluator {
 
   private isNodePackageAvailable(name: string, basePath: string): boolean {
     try {
-      require.resolve(name, { paths: [basePath] });
+      // Use createRequire for ESM compatibility
+      const esmRequire = createRequire(import.meta.url);
+      esmRequire.resolve(name, { paths: [basePath] });
       return true;
     } catch {
       return false;

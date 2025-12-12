@@ -1,6 +1,4 @@
-// Note: use dynamic require so tests can spy on child_process methods
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const child_process = require('child_process');
+import * as child_process from 'child_process';
 import * as fs from 'fs';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import { CommandUtils } from '../CommandUtils';

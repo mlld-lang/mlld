@@ -2,6 +2,8 @@
  * Utility for accessing fields on objects/arrays
  */
 
+import * as fs from 'fs';
+import * as util from 'util';
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL, isLoadContentResultArray } from '@core/types/load-content';
@@ -211,8 +213,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           rawValueTypeField: (rawValue as any)?.type
         });
         try {
-          const fs = require('fs');
-          const util = require('util');
           const preview =
             Array.isArray(rawValue) && rawValue.length > 0
               ? { isArray: true, length: rawValue.length, first: rawValue[0] }

@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { DirectiveNode, VarValue, VariableNodeArray } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -1435,7 +1436,6 @@ async function evaluateArrayItem(
         .join('');
       if (process.env.MLLD_DEBUG_FIX === 'true') {
         try {
-          const fs = require('fs');
           fs.appendFileSync(
             '/tmp/mlld-debug.log',
             JSON.stringify({

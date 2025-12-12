@@ -5,6 +5,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 
 export interface StatsEvent {
   module: string;
@@ -157,6 +159,8 @@ export class StatsCollector {
 
   private getMlldVersion(): string {
     try {
+      // Use createRequire for ESM compatibility - works in both ESM and CJS
+      const require = createRequire(import.meta.url);
       const packageJson = require('../../../package.json') as { version?: string };
       return packageJson.version || 'unknown';
     } catch {

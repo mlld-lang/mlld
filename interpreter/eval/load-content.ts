@@ -7,6 +7,7 @@
  */
 
 import { JSDOM } from 'jsdom';
+import yaml from 'js-yaml';
 import type {
   LoadContentResult,
   LoadContentResultURL,
@@ -72,7 +73,6 @@ export class LoadContentResultImpl implements LoadContentResult {
         const fmMatch = contentToParse.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
         if (fmMatch) {
           // Parse YAML frontmatter
-          const yaml = require('js-yaml');
           this._fm = yaml.load(fmMatch[1]);
         }
       } catch (error) {

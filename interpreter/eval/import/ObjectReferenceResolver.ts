@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { Variable, ExecutableVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 
@@ -231,7 +232,6 @@ export class ObjectReferenceResolver {
           hasEntries: true
         });
         try {
-          const fs = require('fs');
           fs.appendFileSync(
             '/tmp/mlld-debug.log',
             JSON.stringify({
@@ -256,7 +256,6 @@ export class ObjectReferenceResolver {
           hasProperties: true
         });
         try {
-          const fs = require('fs');
           fs.appendFileSync(
             '/tmp/mlld-debug.log',
             JSON.stringify({

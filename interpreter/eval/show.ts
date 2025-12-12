@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { DirectiveNode } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
@@ -450,7 +451,6 @@ export async function evaluateShow(
 
     if (process.env.MLLD_DEBUG_FIX === 'true' && varName === 'complex') {
       try {
-        const fs = require('fs');
         fs.appendFileSync(
           '/tmp/mlld-debug.log',
           JSON.stringify({
@@ -1214,7 +1214,6 @@ export async function evaluateShow(
 
   if (process.env.MLLD_DEBUG_FIX === 'true') {
     try {
-      const fs = require('fs');
       fs.appendFileSync(
         '/tmp/mlld-debug.log',
         JSON.stringify({

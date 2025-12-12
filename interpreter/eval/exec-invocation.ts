@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { ExecInvocation, WithClause } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
@@ -2709,7 +2710,6 @@ async function evaluateExecInvocationInternal(
         commandName === 'agentsContext'
       ) {
         try {
-          const fs = require('fs');
           fs.appendFileSync('/tmp/mlld-debug.log', JSON.stringify(summary) + '\n');
         } catch {}
       }

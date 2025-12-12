@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
@@ -224,7 +225,6 @@ export class CollectionEvaluator {
                 itemTypes: (item.content as any[]).map(n => n?.type)
               });
               try {
-                const fs = require('fs');
                 fs.appendFileSync(
                   '/tmp/mlld-debug.log',
                   JSON.stringify({

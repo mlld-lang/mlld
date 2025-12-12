@@ -1,7 +1,7 @@
 import * as vm from 'vm';
 import * as path from 'path';
 import * as fs from 'fs';
-import Module from 'module';
+import Module, { createRequire } from 'module';
 
 /**
  * Node.js shadow environment using VM module for module-level isolation.
@@ -311,8 +311,9 @@ export class NodeShadowEnvironment {
     // If not in dev, try to find mlld's installation directory
     if (!mlldNodeModules) {
       try {
-        // Try to resolve mlld's package.json location
-        const mlldPath = require.resolve('mlld/package.json');
+        // Try to resolve mlld's package.json location using createRequire for ESM compatibility
+        const esmRequire = createRequire(import.meta.url);
+        const mlldPath = esmRequire.resolve('mlld/package.json');
         mlldNodeModules = path.join(path.dirname(mlldPath), 'node_modules');
       } catch {
         // If that fails, check if we're running from dist/cli.cjs
