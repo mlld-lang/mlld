@@ -1,0 +1,31 @@
+exe @createFallback(type) = `Fallback @type created`
+exe @processData(data) = `Processed: @data`
+exe @validate(input) = `Valid: @input`
+
+var @needsFallback = "true"
+var @hasData = "true"
+var @status = "pending"
+var @inputData = "test data"
+
+when @needsFallback => var @fallback = @createFallback("review")
+show @fallback
+
+when @status: [
+  "pending" => var @result = @processData(@inputData)
+  "complete" => var @result = "Already complete"
+  "error" => var @result = @createFallback("error")
+]
+show @result
+
+when @hasData first: [
+  @needsFallback => var @validated = @validate(@inputData)
+  @inputData => var @validated = "data exists"
+]
+show @validated
+
+var @mode = "process"
+when @mode: [
+  "process" => var @output = @processData(@validate(@inputData))
+  "fallback" => var @output = @createFallback("data")
+]
+show @output

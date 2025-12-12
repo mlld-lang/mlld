@@ -24,7 +24,7 @@ RunKeyword
 // Primary /run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 SlashRun
-  = DirectiveContext RunKeyword _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  = DirectiveContext RunKeyword _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched leading parallel pipeline', { leading, caps });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -72,7 +72,7 @@ SlashRun
         'pipeline'
       );
     }
-  / DirectiveContext RunKeyword _ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched quoted command', { command, tail });
 
       const commandLocation = location();
@@ -140,7 +140,7 @@ SlashRun
         'command'
       );
     }
-  / DirectiveContext RunKeyword _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched command', { content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -184,7 +184,7 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext RunKeyword _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -231,7 +231,7 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext RunKeyword _ codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched with language code pattern', { codeCore, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -275,7 +275,7 @@ SlashRun
         'code'
       );
     }
-  / DirectiveContext RunKeyword _ commandRef:UnifiedReferenceWithTail labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ commandRef:UnifiedReferenceWithTail labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched unified command reference', { commandRef });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;

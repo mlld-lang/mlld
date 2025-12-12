@@ -85,6 +85,12 @@ export class ArgumentParser {
         case '--permissive':
           options.strict = false;
           break;
+        case '--loose':
+        case '--markdown':
+        case '--md':
+        case '--prose':
+          options.mode = 'markdown';
+          break;
         case '--home-path':
           options.homePath = args[++i];
           break;

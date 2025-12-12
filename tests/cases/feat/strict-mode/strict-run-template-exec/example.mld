@@ -1,0 +1,4 @@
+exe @greet(name) = cmd {echo "Hello, @name!"}
+exe @backtickGreet(name) = `Backtick says: @name!`
+run @greet("Alice")
+run @backtickGreet("Carol")

@@ -426,7 +426,7 @@ async function processCategoryDirectory(dirPath, categoryName, dirName) {
     // For valid tests (regular directories at root level)
     // Check if this directory contains example.md files directly
     const entries = await fs.readdir(dirPath);
-    const hasDirectMdFiles = entries.some(f => f.startsWith('example') && f.endsWith('.md'));
+    const hasDirectMdFiles = entries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
 
     if (hasDirectMdFiles) {
       // This directory contains test files directly
@@ -454,7 +454,7 @@ async function processCategoryDirectory(dirPath, categoryName, dirName) {
       
       // Check if this subdirectory contains example.md files directly
       const subEntries = await fs.readdir(subDirPath);
-      const hasDirectMdFiles = subEntries.some(f => f.startsWith('example') && f.endsWith('.md'));
+      const hasDirectMdFiles = subEntries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
       
       if (hasDirectMdFiles) {
         // Process this directory directly
@@ -574,8 +574,8 @@ async function processExampleDirectory(dirPath, category, name, directive = null
   }
 
   const exampleFiles = name === 'examples' ?
-    files.filter(f => f.endsWith('.md') && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.')) :
-    files.filter(f => f.startsWith('example') && f.endsWith('.md'));
+    files.filter(f => (f.endsWith('.md') || f.endsWith('.mld')) && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.')) :
+    files.filter(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
   
   // Determine output directory - mirrors the structure under tests/cases/
   const testPath = path.relative(CASES_DIR, dirPath);
@@ -626,9 +626,9 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     // Allow any fixture to specify error expectations via local error.md (and variants)
     if (!errorContent) {
       const errorFile =
-        file === 'example.md'
+        (file === 'example.md' || file === 'example.mld')
           ? 'error.md'
-          : file.replace('example-', 'error-');
+          : file.replace('example-', 'error-').replace('.mld', '.md');
       if (files.includes(errorFile)) {
         errorContent = await fs.readFile(path.join(dirPath, errorFile), 'utf-8');
       }
@@ -638,13 +638,13 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     let fixtureFileName;
     if (name === 'examples') {
       // For examples directory, use the filename as the fixture name
-      fixtureFileName = file.replace('.md', '') + '.generated-fixture.json';
-    } else if (file !== 'example.md') {
+      fixtureFileName = file.replace('.md', '').replace('.mld', '') + '.generated-fixture.json';
+    } else if (file !== 'example.md' && file !== 'example.mld') {
       // Handle variants like example-multiline.md
-      const variant = file.replace('example-', '').replace('.md', '');
+      const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
       fixtureFileName = `${name}-${variant}.generated-fixture.json`;
     } else {
-      // For standard example.md files, use the directory name
+      // For standard example.md or example.mld files, use the directory name
       fixtureFileName = `${name}.generated-fixture.json`;
     }
     
@@ -652,7 +652,9 @@ async function processExampleDirectory(dirPath, category, name, directive = null
       // Parse the content (may fail for invalid/exceptions, which is expected)
       let ast = null;
       let parseError = null;
-      const parseOptions = config?.mode ? { mode: config.mode } : undefined;
+      // Infer mode from file extension or config
+      const inferredMode = file.endsWith('.mld') ? 'strict' : (config?.mode || undefined);
+      const parseOptions = inferredMode ? { mode: inferredMode } : undefined;
       
       try {
         ast = parseOptions ? await parse(content, parseOptions) : await parse(content);
@@ -688,8 +690,8 @@ async function processExampleDirectory(dirPath, category, name, directive = null
 
       // For variant files, include the variant in the name
       let fixtureName = fullPath;
-      if (file !== 'example.md' && file.startsWith('example-')) {
-        const variant = file.replace('example-', '').replace('.md', '');
+      if (file !== 'example.md' && file !== 'example.mld' && file.startsWith('example-')) {
+        const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
         fixtureName = `${fullPath}-${variant}`;
       }
 
@@ -712,7 +714,7 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         ast: ast,
         parseError: parseError,
         ...(config?.env ? { environmentVariables: config.env } : {}),
-        ...(config?.mode ? { mlldMode: config.mode } : {})
+        ...(inferredMode ? { mlldMode: inferredMode } : {})
       };
       
       // Write fixture only if content changed
@@ -871,8 +873,8 @@ async function buildExamplesMarkdown() {
         const node = tree[key];
         if (node._examples.length > 0) {
           for (const ex of node._examples) {
-            if (ex.file !== 'example.md') {
-              const variant = ex.file.replace('example-', '').replace('.md', '');
+            if (ex.file !== 'example.md' && ex.file !== 'example.mld') {
+              const variant = ex.file.replace('example-', '').replace('.md', '').replace('.mld', '');
               contentLines.push(`${'#'.repeat(level + 1)} ${capitalize(variant)} Variant`);
               contentLines.push('');
             }
@@ -904,8 +906,8 @@ async function buildExamplesMarkdown() {
       // Add examples for this node
       if (node._examples.length > 0) {
         for (const ex of node._examples) {
-          if (ex.file !== 'example.md') {
-            const variant = ex.file.replace('example-', '').replace('.md', '');
+          if (ex.file !== 'example.md' && ex.file !== 'example.mld') {
+            const variant = ex.file.replace('example-', '').replace('.md', '').replace('.mld', '');
             contentLines.push(`${'#'.repeat(level + 1)} ${capitalize(variant)} Variant`);
             contentLines.push('');
           }

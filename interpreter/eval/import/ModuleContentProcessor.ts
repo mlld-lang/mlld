@@ -15,6 +15,7 @@ import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
 import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import { inferMlldMode } from '@core/utils/mode';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -152,7 +153,8 @@ export class ModuleContentProcessor {
     content: string,
     ref: string,
     directive: DirectiveNode,
-    contentType?: 'module' | 'data' | 'text'
+    contentType?: 'module' | 'data' | 'text',
+    labels?: readonly string[]
   ): Promise<ModuleProcessingResult> {
     // Begin import tracking for security
     this.securityValidator.beginImport(ref);
@@ -219,12 +221,16 @@ export class ModuleContentProcessor {
       // Cache the source content for error reporting
       this.env.cacheSource(ref, content);
 
+      // Check if this is a dynamic module (has 'src:dynamic' label)
+      const isDynamicModule = labels?.includes('src:dynamic') ?? false;
+
       // Parse content based on type
       const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
         content,
         ref,
         directive,
-        contentType
+        contentType,
+        isDynamicModule
       );
 
       // Check if this is a JSON file (special handling)
@@ -512,7 +518,8 @@ export class ModuleContentProcessor {
     content: string,
     resolvedPath: string,
     directive: DirectiveNode,
-    contentType?: 'module' | 'data' | 'text'
+    contentType?: 'module' | 'data' | 'text',
+    isDynamicModule?: boolean
   ): Promise<{ parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' }> {
     // Check if this is a JSON file
     if (resolvedPath.endsWith('.json')) {
@@ -576,8 +583,18 @@ export class ModuleContentProcessor {
     // Removed: triple-colon detection for .mld/.mld.md imports.
     // External template detection now uses .att and .mtt extensions.
 
-    // Parse the imported mlld content
-    const parseResult = await parse(processedContent);
+    // Infer mode from the imported file's extension
+    // For virtual/test files (starting with /), use markdown mode for backward compatibility
+    // unless isDynamicModule explicitly requests otherwise
+    const isVirtualFile = resolvedPath.startsWith('/') && !resolvedPath.startsWith('//');
+    const mode = isDynamicModule
+      ? this.env.getDynamicModuleMode()
+      : isVirtualFile
+        ? 'markdown'
+        : inferMlldMode(resolvedPath);
+
+    // Parse the imported mlld content with the inferred mode
+    const parseResult = await parse(processedContent, { mode });
 
     // Check if parsing succeeded
     if (!parseResult.success) {

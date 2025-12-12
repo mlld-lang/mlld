@@ -1,0 +1,4 @@
+import { * as @config } from "strict-config.json"
+
+var @result = :::Config values - name: {{config.name}}, version: {{config.version}}, environment: {{config.environment}}:::
+show @result

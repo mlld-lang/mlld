@@ -1,0 +1,4 @@
+import { * as @config } from "strict-namespace-settings.mld"
+
+var @result = :::Config author: {{config.author}}, API URL: {{config.apiUrl}}:::
+show @result

@@ -1,0 +1,8 @@
+/export { * }
+
+/var @greeting = "Hello from utils!"
+/var @version = "2.0.0"
+/var @helper = {
+  "format": "json",
+  "enabled": true
+}

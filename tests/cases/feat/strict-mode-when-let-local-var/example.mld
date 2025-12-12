@@ -1,0 +1,22 @@
+var @mode = "active"
+when @mode: [
+  let @prefix = "Status:"
+  "active" => show "@prefix Active"
+  * => show "@prefix Unknown"
+]
+exe @getDefault() = when [
+  let @defaultVal = "fallback"
+  * => @defaultVal
+]
+show @getDefault()
+exe @format(name) = when [
+  let @greeting = "Hello"
+  let @punctuation = "!"
+  * => "@greeting @name@punctuation"
+]
+show @format("World")
+exe @getNum() = when [
+  let @num = 42
+  * => @num
+]
+show @getNum()

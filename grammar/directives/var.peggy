@@ -6,7 +6,7 @@ VarKeyword
   = "/"? "var"
 
 SlashVar "var directive"
-  = DirectiveContext VarKeyword labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+  = DirectiveContext VarKeyword labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       helpers.debug('AtVar matched', { id, value, ending });
       
       // Extract ending components

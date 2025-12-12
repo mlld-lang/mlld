@@ -32,5 +32,5 @@ export function resolveMlldMode(
     }
   }
 
-  return fallback;
+  return inferMlldMode(filePath, fallback);
 }

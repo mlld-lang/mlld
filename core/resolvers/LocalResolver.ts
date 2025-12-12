@@ -659,7 +659,9 @@ export class LocalResolver implements Resolver {
     if (hasMLLDExtension || (!filePath.endsWith('.json'))) {
       try {
         const { parse } = await import('@grammar/parser');
-        const result = await parse(content);
+        const { inferMlldMode } = await import('@core/utils/mode');
+        const mode = inferMlldMode(filePath);
+        const result = await parse(content, { mode });
         if (result.success && this.hasModuleExports(result.ast)) {
           return 'module';
         }

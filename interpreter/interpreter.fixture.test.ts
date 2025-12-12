@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'tinyglobby';
 import { Environment } from './env/Environment';
+import { inferMlldMode } from '@core/utils/mode';
 
 // Mock tinyglobby for fixture tests
 vi.mock('tinyglobby', () => ({
@@ -623,6 +624,32 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     }
   }
   
+  // Helper to determine mode for a fixture based on its file path
+  function getFixtureMode(fixtureFile: string, fixture: any): 'markdown' | 'strict' {
+    // If the fixture explicitly specifies a mode, use it
+    if ((fixture as any).mlldMode) {
+      return (fixture as any).mlldMode;
+    }
+
+    // Infer mode from the test case file path
+    // Convert fixture path to test case path (e.g., valid/feat/alligator/glob-concat.generated-fixture.json -> tests/cases/valid/feat/alligator/example.md)
+    const testCasePath = getTestCasePathFromFixture(fixtureFile);
+    if (testCasePath) {
+      // Check for example.mld first (strict mode), then example.md (markdown mode)
+      const exampleMldPath = path.join(testCasePath, 'example.mld');
+      if (fs.existsSync(exampleMldPath)) {
+        return 'strict';
+      }
+      const exampleMdPath = path.join(testCasePath, 'example.md');
+      if (fs.existsSync(exampleMdPath)) {
+        return inferMlldMode(exampleMdPath, 'markdown');
+      }
+    }
+
+    // Default to markdown to maintain current behavior
+    return 'markdown';
+  }
+
   // Recursive function to copy test files to virtual filesystem
   async function copyTestFilesToVFS(sourcePath: string, targetPath: string) {
     const entries = fs.readdirSync(sourcePath, { withFileTypes: true });
@@ -1315,7 +1342,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               fileSystem,
               pathService,
               format: 'markdown',
-              mlldMode: (fixture as any).mlldMode,
+              mlldMode: getFixtureMode(fixtureFile, fixture),
               basePath,
               urlConfig,
               stdinContent,
@@ -1503,7 +1530,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               fileSystem,
               pathService,
               format: 'markdown',
-              mlldMode: (fixture as any).mlldMode,
+              mlldMode: getFixtureMode(fixtureFile, fixture),
               basePath,
               urlConfig,
               stdinContent,

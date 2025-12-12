@@ -23,7 +23,7 @@ ExeKeyword
 
 // Primary /exe directive - unified LHS parsing with RHS delegation
 SlashExe
-  = DirectiveContext ExeKeyword labelsSegment:(_ DataLabelList _ &"@")? _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
+  = DirectiveContext ExeKeyword labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
       helpers.debug('SlashExe matched with ExeRHSContent', { id, params, content });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;

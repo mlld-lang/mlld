@@ -1,0 +1,17 @@
+show ::Section 1::
+
+
+show ::Section 2::
+
+
+
+show ::Section 3::
+
+var @para = ::
+Paragraph content
+::
+
+show @para
+
+
+show ::Final section::

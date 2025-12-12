@@ -1,0 +1,21 @@
+var @items = [
+  { "id": 1, "name": "Item 1" },
+  { "id": 2, "name": "Item 2" }
+]
+exe @process(data) = js {
+  if (typeof data === 'string') {
+    const items = JSON.parse(data);
+    return items.map(p => p.name).join(', ');
+  } else if (Array.isArray(data)) {
+    return data.map(p => p.name).join(', ');
+  } else {
+    const items = data.data;
+    return items.map(p => p.name).join(', ');
+  }
+}
+var @direct = @process(@items)
+show :::Direct: {{direct}}:::
+var @piped = @items | @process
+show :::Piped: {{piped}}:::
+var @formatted = @items with { format: "json", pipeline: [@process] }
+show :::Formatted: {{formatted}}:::

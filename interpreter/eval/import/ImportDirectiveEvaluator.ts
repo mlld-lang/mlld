@@ -540,7 +540,8 @@ export class ImportDirectiveEvaluator {
         resolverContent.content,
         processingRef,
         directive,
-        resolverContent.contentType
+        resolverContent.contentType,
+        resolverContent.ctx?.labels
       );
 
       this.validateModuleResult(processingResult, directive, processingRef);

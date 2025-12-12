@@ -1,0 +1,3 @@
+import "strict-import-all-config.mld"
+show @strict_import_all_config.greeting
+show @strict_import_all_config.count

@@ -51,8 +51,8 @@ export async function execute(
   const fileSystem = options.fileSystem ?? new NodeFileSystem();
   const pathService = options.pathService ?? new PathService();
 
-  const cacheEntry = await getCachedAst(filePath, fileSystem);
   const languageMode = resolveMlldMode(options.mode, filePath);
+  const cacheEntry = await getCachedAst(filePath, fileSystem, languageMode);
 
   const dynamicModules: Record<string, string | Record<string, unknown>> = {
     ...(options.dynamicModules ?? {}),
@@ -224,9 +224,9 @@ function buildMetrics(result: StructuredResult, context: MetricsContext, now = p
 
 export { astCache as MemoryAstCache };
 
-async function getCachedAst(filePath: string, fileSystem: IFileSystemService) {
+async function getCachedAst(filePath: string, fileSystem: IFileSystemService, mode: MlldMode) {
   try {
-    return await astCache.get(filePath, fileSystem);
+    return await astCache.get(filePath, fileSystem, mode);
   } catch (error) {
     throw wrapExecuteError(error, filePath);
   }

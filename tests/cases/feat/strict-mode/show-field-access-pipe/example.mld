@@ -1,0 +1,2 @@
+var @data = [{"name":"Alice","code":"line1\nline2\nline3\nline4"}]
+show @data.0.code | cmd {head -2}

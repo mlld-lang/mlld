@@ -21,7 +21,7 @@ DataLabelList
     }
 
 DataLabelSequence
-  = first:DataLabelToken rest:(_ "," _ DataLabelToken)* {
+  = first:DataLabelToken rest:(HWS "," HWS DataLabelToken)* {
       const tokens = [first];
       for (const entry of rest) {
         tokens.push(entry[3]);

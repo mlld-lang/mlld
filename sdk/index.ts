@@ -144,6 +144,27 @@ export interface ProcessOptions {
    * ```
    */
   dynamicModuleSource?: string;
+
+  /**
+   * Parsing mode for string dynamic modules (default: 'strict').
+   * String dynamic modules are programmatic/code, so they default to strict mode.
+   * Set to 'markdown' if you need to inject markdown-style content.
+   *
+   * @example
+   * ```typescript
+   * // Default (strict mode) - directives without / prefix
+   * processMlld(script, {
+   *   dynamicModules: { '@foo': 'var @x = 1\nexport { @x }' }
+   * });
+   *
+   * // Markdown mode - allows text content
+   * processMlld(script, {
+   *   dynamicModules: { '@foo': 'Some text\n/var @x = 1' },
+   *   dynamicModuleMode: 'markdown'
+   * });
+   * ```
+   */
+  dynamicModuleMode?: MlldMode;
 }
 
 /**
@@ -175,6 +196,7 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     useMarkdownFormatter: options?.useMarkdownFormatter,
     dynamicModules: options?.dynamicModules,
     dynamicModuleSource: options?.dynamicModuleSource,
+    dynamicModuleMode: options?.dynamicModuleMode,
     mlldMode: languageMode
   });
 

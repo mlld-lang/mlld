@@ -216,7 +216,11 @@ export async function interpret(
   if (options.allowAbsolutePaths !== undefined) {
     env.setAllowAbsolutePaths(options.allowAbsolutePaths);
   }
-  
+
+  if (options.dynamicModuleMode !== undefined) {
+    env.setDynamicModuleMode(options.dynamicModuleMode);
+  }
+
   // Test-only hook: if a resolverManager with fetchURL is provided, shim global fetch
   if ((options as any).resolverManager && typeof (options as any).resolverManager.fetchURL === 'function') {
     const rm = (options as any).resolverManager;

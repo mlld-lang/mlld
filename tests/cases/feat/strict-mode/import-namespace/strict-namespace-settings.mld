@@ -1,0 +1,4 @@
+/export { * }
+
+/var @author = "Settings Author"
+/var @apiUrl = "https://api.example.com"

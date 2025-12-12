@@ -1,4 +1,5 @@
 import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
+import type { MlldMode } from '@core/types/mode';
 import type { Variable, VariableSource, PipelineInput } from '@core/types/variable';
 import { 
   createSimpleTextVariable, 
@@ -173,9 +174,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
-  
+
   // Ephemeral mode flag for error context
   private isEphemeralMode: boolean = false;
+
+  // Dynamic module parsing mode (default: strict)
+  private dynamicModuleMode?: MlldMode;
   
   // Track child environments for cleanup
   private childEnvironments: Set<Environment> = new Set();
@@ -2357,7 +2361,21 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   setApproveAllImports(approve: boolean): void {
     this.approveAllImports = approve;
   }
-  
+
+  /**
+   * Set dynamic module parsing mode
+   */
+  setDynamicModuleMode(mode: MlldMode | undefined): void {
+    this.dynamicModuleMode = mode;
+  }
+
+  /**
+   * Get dynamic module parsing mode (defaults to 'strict')
+   */
+  getDynamicModuleMode(): MlldMode {
+    return this.dynamicModuleMode ?? 'strict';
+  }
+
   /**
    * Set blank line normalization flag
    */

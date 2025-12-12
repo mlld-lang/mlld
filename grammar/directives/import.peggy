@@ -115,14 +115,14 @@ SlashImport
 
 // Shorthand import alias must include @ prefix when provided
 SlashImportShorthand
-  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ ("from" _)? path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(HWS DataLabelList)? _ ("from" _)? path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
       helpers.mlldError(
         `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
         '@',
         location()
       );
     }
-  / DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ fromSeg:("from" _)? path:ImportPath aliasSegment:(_ "as" _ name:ImportAliasIdentifier params:ExecParameters? { return { alias: name, params }; })? tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(HWS DataLabelList)? _ fromSeg:("from" _)? path:ImportPath aliasSegment:(_ "as" _ name:ImportAliasIdentifier params:ExecParameters? { return { alias: name, params }; })? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImportShorthand matched', { path, alias: aliasSegment?.alias, tail, importType: typeInfo?.type });
       
       if (aliasSegment?.params && (!typeInfo || typeInfo.type !== 'templates')) {
@@ -262,7 +262,7 @@ SlashImportPolicy
 
 // Full import with explicit imports list
 SlashImportFull
-  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(HWS DataLabelList)? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImport matched', { imports, path, tail, importType: typeInfo?.type });
       
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
