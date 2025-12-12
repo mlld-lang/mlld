@@ -315,18 +315,30 @@ export class NodeShadowEnvironment {
         const mlldPath = require.resolve('mlld/package.json');
         mlldNodeModules = path.join(path.dirname(mlldPath), 'node_modules');
       } catch {
-        // If that fails, try common global install locations
-        const possiblePaths = [
-          '/opt/homebrew/lib/node_modules/mlld/node_modules',
-          '/usr/local/lib/node_modules/mlld/node_modules',
-          '/usr/lib/node_modules/mlld/node_modules',
-          path.join(process.env.HOME || '', '.npm-global/lib/node_modules/mlld/node_modules')
-        ];
-        
-        for (const p of possiblePaths) {
-          if (fs.existsSync(p)) {
-            mlldNodeModules = p;
-            break;
+        // If that fails, check if we're running from dist/cli.cjs
+        const cliPath = process.argv[1];
+        if (cliPath && cliPath.endsWith('dist/cli.cjs')) {
+          const projectRoot = path.dirname(path.dirname(cliPath));
+          const projectNodeModules = path.join(projectRoot, 'node_modules');
+          if (fs.existsSync(projectNodeModules)) {
+            mlldNodeModules = projectNodeModules;
+          }
+        }
+
+        // If still not found, try common global install locations
+        if (!mlldNodeModules) {
+          const possiblePaths = [
+            '/opt/homebrew/lib/node_modules/mlld/node_modules',
+            '/usr/local/lib/node_modules/mlld/node_modules',
+            '/usr/lib/node_modules/mlld/node_modules',
+            path.join(process.env.HOME || '', '.npm-global/lib/node_modules/mlld/node_modules')
+          ];
+
+          for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+              mlldNodeModules = p;
+              break;
+            }
           }
         }
       }
