@@ -342,7 +342,7 @@ describe('Path Content Type Validation', () => {
         resolverManager
       });
       
-      expect(result.trim()).toBe('Text data\n/text @mod = "Module"');
+      expect(result.trim()).toBe('Text data\n\n/text @mod = "Module"');
     });
   });
 });

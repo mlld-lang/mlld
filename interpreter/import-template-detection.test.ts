@@ -56,6 +56,6 @@ describe('Template import detection', () => {
     } as any);
 
     const out = typeof result === 'string' ? result : (result as any).output;
-    expect(String(out).trim()).toBe('---\ntitle: Doc\nmeta: m1\n---\nBody: Hello');
+    expect(String(out).trim()).toBe('---\ntitle: Doc\nmeta: m1\n---\n\nBody: Hello');
   });
 });

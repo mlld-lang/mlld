@@ -55,7 +55,7 @@ describe('Policy config integration', () => {
       approveAllImports: true
     });
 
-    expect((output as string).trim()).toBe(['prod', 'production', '["echo"]'].join('\n'));
+    expect((output as string).trim()).toBe(['prod', 'production', '["echo"]'].join('\n\n'));
   });
 
   it('applies policy environment without imports', async () => {

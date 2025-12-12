@@ -32,6 +32,7 @@ describe('Complex Import Scenarios', () => {
 /show @aMessage
 /show @aResult`,
           expectedOutput: `Hello from C
+
 HELLO FROM C`
         });
         
@@ -71,6 +72,7 @@ HELLO FROM C`
 /show @bothValues.left
 /show @bothValues.right`,
           expectedOutput: `1
+
 1`
         });
         
@@ -243,7 +245,9 @@ HELLO
 /show @var50  
 /show @var100`,
           expectedOutput: `1
+
 50
+
 100`,
           timeout: 10000 // Allow more time for large module
         });

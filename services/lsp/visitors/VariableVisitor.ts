@@ -167,9 +167,8 @@ export class VariableVisitor extends BaseVisitor {
         }
         
         let currentPos = 0;
-        let pipeIndex = 0;
-        
-        while (pipeIndex < node.pipes.length) {
+
+        for (let pipeIndex = 0; pipeIndex < node.pipes.length; pipeIndex++) {
           const pipePos = nodeText.indexOf('|', currentPos);
           if (pipePos === -1) break;
           
@@ -358,7 +357,6 @@ export class VariableVisitor extends BaseVisitor {
             // No transform, just move past the pipe(s)
             currentPos = pipePos + (isParallel ? 2 : 1);
           }
-          pipeIndex++;
         }
       }
     }

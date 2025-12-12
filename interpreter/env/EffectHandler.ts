@@ -40,6 +40,7 @@ export class DefaultEffectHandler implements EffectHandler {
   private recordEffects: boolean;
   private effectLog: Effect[] = [];
   private ansiOptions: AnsiProcessingOptions;
+  private hasWrittenContent: boolean = false;  // Track if we've written any non-newline content
 
   constructor(options: { streaming?: boolean; recordEffects?: boolean; ansiEnabled?: boolean } = {}) {
     // Streaming is enabled by default, can be disabled via env var or option
@@ -69,8 +70,24 @@ export class DefaultEffectHandler implements EffectHandler {
       case 'doc':
         // Write to stdout if streaming (for real-time display)
         if (this.streamingEnabled) {
-          const stdoutContent = this.processContent(content, 'stdout', keepAnsi);
-          process.stdout.write(stdoutContent);
+          let stdoutContent = this.processContent(content, 'stdout', keepAnsi);
+
+          // Skip leading newlines in streaming output until first real content
+          if (!this.hasWrittenContent) {
+            // Check if content is only newlines
+            if (/^\n+$/.test(stdoutContent)) {
+              // Skip all-newline content before first real content
+              stdoutContent = '';
+            } else if (stdoutContent) {
+              // Strip leading newlines from first real content
+              stdoutContent = stdoutContent.replace(/^\n+/, '');
+              this.hasWrittenContent = true;
+            }
+          }
+
+          if (stdoutContent) {
+            process.stdout.write(stdoutContent);
+          }
         }
         // Document buffer: strip ANSI markers (plain text)
         const docContent = this.processContent(content, 'doc', keepAnsi);
@@ -92,8 +109,24 @@ export class DefaultEffectHandler implements EffectHandler {
       case 'both':
         // Write to stdout if streaming
         if (this.streamingEnabled) {
-          const bothStdout = this.processContent(content, 'stdout', keepAnsi);
-          process.stdout.write(bothStdout);
+          let bothStdout = this.processContent(content, 'stdout', keepAnsi);
+
+          // Skip leading newlines in streaming output until first real content
+          if (!this.hasWrittenContent) {
+            // Check if content is only newlines
+            if (/^\n+$/.test(bothStdout)) {
+              // Skip all-newline content before first real content
+              bothStdout = '';
+            } else if (bothStdout) {
+              // Strip leading newlines from first real content
+              bothStdout = bothStdout.replace(/^\n+/, '');
+              this.hasWrittenContent = true;
+            }
+          }
+
+          if (bothStdout) {
+            process.stdout.write(bothStdout);
+          }
         }
         // Document buffer: strip ANSI markers
         const bothDoc = this.processContent(content, 'doc', keepAnsi);
@@ -119,10 +152,12 @@ export class DefaultEffectHandler implements EffectHandler {
   }
 
   getDocument(): string {
+    const raw = this.documentBuffer.join('');
+    if (process.env.DEBUG_NORMALIZER) {
+      console.error(`[EffectHandler.getDocument] buffer length=${raw.length}, content=${raw.substring(0, 100).replace(/\n/g, '\\n')}`);
+    }
     // Basic newline normalization
-    return this.documentBuffer
-      .join('')
-      .replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
+    return raw.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
   }
 
   isStreamingEnabled(): boolean {

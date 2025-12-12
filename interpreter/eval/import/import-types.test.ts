@@ -267,7 +267,7 @@ describe('Import type handling', () => {
       approveAllImports: true
     });
 
-    const lines = (output as string).trim().split('\n');
+    const lines = (output as string).trim().split('\n').filter(l => l.length > 0);
     expect(lines[0]).toBe('Finance: numbers');
     expect(lines[1]).toBe('Report: q1');
     expect(lines[2]).toBe('Agent: hi');
@@ -302,7 +302,7 @@ describe('Import type handling', () => {
       approveAllImports: true
     });
 
-    const lines = (output as string).trim().split('\n');
+    const lines = (output as string).trim().split('\n').filter(l => l.length > 0);
     expect(lines[0]).toBe('Party: welcome');
     expect(lines[1]).toBe('Finance: regional update');
     expect(lines[2]).toBe('Agent: hi');

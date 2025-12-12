@@ -40,6 +40,18 @@ import { logger } from '@core/utils/logger';
 import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis, DocumentState } from './language-server';
 import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
+import type { MlldMode } from '@core/types/mode';
+import { inferMlldMode } from '@core/utils/mode';
+
+/**
+ * Determine the parsing mode from a file URI
+ * @param uri File URI (e.g., "file:///path/to/file.mld")
+ * @returns The parsing mode ('strict' for .mld, 'markdown' for .mld.md)
+ */
+function getModeFromUri(uri: string): MlldMode {
+  const path = uri.replace('file://', '');
+  return inferMlldMode(path);
+}
 
 // Semantic token types for mlld syntax
 // Standard VSCode semantic token types we use
@@ -227,7 +239,8 @@ export async function startLanguageServer(): Promise<void> {
         uri,
         version: 0,
         content: '',
-        lastEditTime: Date.now()
+        lastEditTime: Date.now(),
+        mode: getModeFromUri(uri)
       };
       documentStates.set(uri, state);
     }
@@ -301,7 +314,8 @@ export async function startLanguageServer(): Promise<void> {
         textDocumentSync: TextDocumentSyncKind.Incremental,
         completionProvider: {
           resolveProvider: true,
-          triggerCharacters: ['@', '{', '[', ' ', '"']
+          // Include '/' for markdown mode and letters for strict mode directive suggestions
+          triggerCharacters: ['@', '{', '[', ' ', '"', '/', 'v', 's', 'p', 'r', 'e', 'i', 'w', 'o', 'l']
         },
         hoverProvider: true,
         definitionProvider: true,
@@ -474,9 +488,10 @@ export async function startLanguageServer(): Promise<void> {
         documentCache.set(document.uri, analysis);
         return analysis;
       }
-      
-      const result = await parse(text);
-      
+
+      const mode = getModeFromUri(document.uri);
+      const result = await parse(text, { mode });
+
       if (!result.success) {
         // Convert parse error to diagnostic
         const error = result.error;
@@ -548,7 +563,7 @@ export async function startLanguageServer(): Promise<void> {
         errors.push(diagnostic);
         
         // Attempt fault-tolerant parsing
-        const partialAst = await attemptPartialParsing(text, error);
+        const partialAst = await attemptPartialParsing(text, error, mode);
         ast = partialAst.nodes;
         errors.push(...partialAst.errors);
         
@@ -560,6 +575,11 @@ export async function startLanguageServer(): Promise<void> {
         // Full parse succeeded
         ast = result.ast;
         analyzeAST(ast, document, variables, imports, exports);
+
+        // In strict mode, check for text nodes that shouldn't be there
+        if (mode === 'strict') {
+          checkStrictModeTextNodes(ast, errors);
+        }
       }
 
       const analysis: DocumentAnalysis = {
@@ -600,10 +620,52 @@ export async function startLanguageServer(): Promise<void> {
     }
   }
 
+  /**
+   * Check for text nodes in strict mode that shouldn't be there
+   */
+  function checkStrictModeTextNodes(ast: any[], errors: Diagnostic[]): void {
+    function checkNode(node: any): void {
+      if (node.type === 'Text' && node.content?.trim()) {
+        // Text nodes with content are not allowed in strict mode
+        const loc = node.location;
+        if (loc) {
+          const startLine = (loc.start.line || 1) - 1;
+          const startChar = (loc.start.column || 1) - 1;
+          const endLine = (loc.end.line || 1) - 1;
+          const endChar = (loc.end.column || 1) - 1;
+
+          errors.push({
+            severity: DiagnosticSeverity.Error,
+            range: {
+              start: { line: startLine, character: startChar },
+              end: { line: endLine, character: endChar }
+            },
+            message: 'Text content not allowed in strict mode (.mld files). Use /show for output or rename file to .mld.md for prose.',
+            source: 'mlld'
+          });
+        }
+      }
+
+      // Recursively check child nodes
+      if (node.values && typeof node.values === 'object') {
+        for (const key in node.values) {
+          const value = node.values[key];
+          if (Array.isArray(value)) {
+            value.forEach(checkNode);
+          } else if (value && typeof value === 'object') {
+            checkNode(value);
+          }
+        }
+      }
+    }
+
+    ast.forEach(checkNode);
+  }
+
   function analyzeAST(
-    ast: any[], 
-    document: TextDocument, 
-    variables: Map<string, VariableInfo>, 
+    ast: any[],
+    document: TextDocument,
+    variables: Map<string, VariableInfo>,
     imports: string[],
     exports: string[]
   ) {
@@ -689,6 +751,7 @@ export async function startLanguageServer(): Promise<void> {
     const settings = await getDocumentSettings(params.textDocument.uri);
     if (!settings.enableAutocomplete) return [];
 
+    const mode = getModeFromUri(params.textDocument.uri);
     const text = document.getText();
     const offset = document.offsetAt(params.position);
     const beforeCursor = text.substring(0, offset);
@@ -699,7 +762,10 @@ export async function startLanguageServer(): Promise<void> {
     // Check context for appropriate completions
     if (line.match(/\/$/)) {
       // After / - suggest directives
-      completions.push(...getDirectiveCompletions());
+      completions.push(...getDirectiveCompletions(mode));
+    } else if (mode === 'strict' && line.match(/^\s*$|^\s*\w*$/)) {
+      // In strict mode, at start of line or typing first word - suggest bare directives
+      completions.push(...getDirectiveCompletions(mode));
     } else if (line.match(/@$/)) {
       // After @ - suggest variables and resolvers
       completions.push(...await getVariableCompletions(document));
@@ -735,7 +801,11 @@ export async function startLanguageServer(): Promise<void> {
     } else if (line.match(/\/(\w*)$/)) {
       // Partial directive
       const partial = line.match(/\/(\w*)$/)?.[1] || '';
-      completions.push(...getDirectiveCompletions().filter(c => c.label.startsWith(`/${partial}`)));
+      completions.push(...getDirectiveCompletions(mode).filter(c => c.label.startsWith(`/${partial}`)));
+    } else if (mode === 'strict' && line.match(/^\s*\w+$/)) {
+      // In strict mode, partial bare directive at start of line
+      const partial = line.match(/^\s*(\w+)$/)?.[1] || '';
+      completions.push(...getDirectiveCompletions(mode).filter(c => c.label.startsWith(partial)));
     } else if (line.match(/@\w*$/)) {
       // Partial variable or resolver
       const partial = line.match(/@(\w*)$/)?.[1] || '';
@@ -811,24 +881,27 @@ export async function startLanguageServer(): Promise<void> {
     return completions;
   });
 
-  function getDirectiveCompletions(): CompletionItem[] {
+  function getDirectiveCompletions(mode?: MlldMode): CompletionItem[] {
     const directives = [
-      { name: '/var', desc: 'Define a variable (replaces @text/@data)' },
-      { name: '/show', desc: 'Display content (replaces @add)' },
-      { name: '/path', desc: 'Define a file path' },
-      { name: '/run', desc: 'Execute a command' },
-      { name: '/exe', desc: 'Define a reusable command (replaces @exec)' },
-      { name: '/import', desc: 'Import from files or modules' },
-      { name: '/when', desc: 'Conditional execution' },
-      { name: '/output', desc: 'Define output target' },
-      { name: '/log', desc: 'Log to stdout; alias of output to stdout' }
+      { name: 'var', desc: 'Define a variable (replaces @text/@data)' },
+      { name: 'show', desc: 'Display content (replaces @add)' },
+      { name: 'path', desc: 'Define a file path' },
+      { name: 'run', desc: 'Execute a command' },
+      { name: 'exe', desc: 'Define a reusable command (replaces @exec)' },
+      { name: 'import', desc: 'Import from files or modules' },
+      { name: 'when', desc: 'Conditional execution' },
+      { name: 'output', desc: 'Define output target' },
+      { name: 'log', desc: 'Log to stdout; alias of output to stdout' }
     ];
 
+    const prefix = mode === 'strict' ? '' : '/';
+    const detail = mode === 'strict' ? 'Directive (slash optional)' : 'Directive';
+
     return directives.map(d => ({
-      label: d.name,
+      label: `${prefix}${d.name}`,
       kind: CompletionItemKind.Keyword,
-      detail: d.desc,
-      insertText: d.name
+      detail: `${detail}: ${d.desc}`,
+      insertText: `${prefix}${d.name}`
     }));
   }
 
@@ -1363,8 +1436,9 @@ export async function startLanguageServer(): Promise<void> {
    * to recover as much valid AST as possible when the full parse fails
    */
   async function attemptPartialParsing(
-    text: string, 
-    originalError: any
+    text: string,
+    originalError: any,
+    mode: MlldMode
   ): Promise<{ nodes: any[], errors: Diagnostic[] }> {
     const nodes: any[] = [];
     const errors: Diagnostic[] = [];
@@ -1375,7 +1449,7 @@ export async function startLanguageServer(): Promise<void> {
       const textBeforeError = lines.slice(0, originalError.line - 1).join('\n');
       if (textBeforeError.trim()) {
         try {
-          const result = await parse(textBeforeError);
+          const result = await parse(textBeforeError, { mode });
           if (result.success) {
             nodes.push(...result.ast);
           }
@@ -1406,7 +1480,7 @@ export async function startLanguageServer(): Promise<void> {
       
       if (isTopLevel && currentBlock) {
         // Try to parse the previous block
-        await tryParseBlock(currentBlock, blockStartLine, nodes, errors);
+        await tryParseBlock(currentBlock, blockStartLine, nodes, errors, mode);
         currentBlock = '';
       }
       
@@ -1416,23 +1490,24 @@ export async function startLanguageServer(): Promise<void> {
       
       currentBlock += (currentBlock ? '\n' : '') + line;
     }
-    
+
     // Parse any remaining block
     if (currentBlock) {
-      await tryParseBlock(currentBlock, blockStartLine, nodes, errors);
+      await tryParseBlock(currentBlock, blockStartLine, nodes, errors, mode);
     }
-    
+
     return { nodes, errors };
   }
-  
+
   async function tryParseBlock(
-    block: string, 
-    startLine: number, 
-    nodes: any[], 
-    errors: Diagnostic[]
+    block: string,
+    startLine: number,
+    nodes: any[],
+    errors: Diagnostic[],
+    mode: MlldMode
   ): Promise<void> {
     try {
-      const result = await parse(block);
+      const result = await parse(block, { mode });
       if (result.success && result.ast.length > 0) {
         // Adjust line numbers in the AST
         adjustLineNumbers(result.ast, startLine);

@@ -405,7 +405,7 @@ export class FileProcessor {
     // Check if streaming was enabled - if so, skip final output since it was already streamed
     const effectHandler = interpretEnvironment?.getEffectHandler?.();
     const isStreaming = effectHandler?.isStreamingEnabled?.() ?? false;
-    
+
     // Output handling - skip if streaming already output everything
     if (stdout && !isStreaming) {
       console.log(result);

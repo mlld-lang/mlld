@@ -252,16 +252,29 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           // Emit intents for non-directive nodes (preserves document structure with break collapsing)
           if (isText(n)) {
-            const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitIntent({
-              type: 'content',
-              value: materialized.text,
-              source: 'text',
-              visibility: 'always',
-              collapsible: false
-            });
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // If Text node contains only newlines, emit as collapsible breaks
+            if (/^\n+$/.test(n.content)) {
+              for (let i = 0; i < n.content.length; i++) {
+                env.emitIntent({
+                  type: 'break',
+                  value: '\n',
+                  source: 'newline',
+                  visibility: 'always',
+                  collapsible: true
+                });
+              }
+            } else {
+              const materialized = materializeDisplayValue(n.content, undefined, n.content);
+              env.emitIntent({
+                type: 'content',
+                value: materialized.text,
+                source: 'text',
+                visibility: 'always',
+                collapsible: false
+              });
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
             }
           } else if (isNewline(n)) {
             env.emitIntent({
@@ -310,7 +323,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
         const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
-        
+
         // Add all nodes to environment for document reconstruction
         // This enables /output directive to recreate the complete document
         if (!context?.isExpression) {
@@ -331,16 +344,29 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           }
           // Emit intents for non-directive nodes (preserves document structure with break collapsing)
           if (isText(n)) {
-            const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitIntent({
-              type: 'content',
-              value: materialized.text,
-              source: 'text',
-              visibility: 'always',
-              collapsible: false
-            });
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // If Text node contains only newlines, emit as collapsible breaks
+            if (/^\n+$/.test(n.content)) {
+              for (let i = 0; i < n.content.length; i++) {
+                env.emitIntent({
+                  type: 'break',
+                  value: '\n',
+                  source: 'newline',
+                  visibility: 'always',
+                  collapsible: true
+                });
+              }
+            } else {
+              const materialized = materializeDisplayValue(n.content, undefined, n.content);
+              env.emitIntent({
+                type: 'content',
+                value: materialized.text,
+                source: 'text',
+                visibility: 'always',
+                collapsible: false
+              });
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
             }
           } else if (isNewline(n)) {
             env.emitIntent({

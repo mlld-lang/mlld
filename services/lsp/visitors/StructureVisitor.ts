@@ -49,13 +49,21 @@ export class StructureVisitor extends BaseVisitor {
   private visitObjectExpression(node: any, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const objectText = sourceText.substring(node.location.start.offset, node.location.end.offset);
-    
-    if (node.properties && typeof node.properties === 'object') {
+
+    // Handle both 'entries' (AST format) and 'properties' (legacy format)
+    const entries = node.entries || (node.properties ? Object.entries(node.properties).map(([key, value]) => ({
+      type: 'pair',
+      key,
+      value
+    })) : []);
+
+    if (entries.length > 0) {
       // Check if this is a plain object (all values are primitives) or has mlld constructs
-      const hasASTNodes = Object.values(node.properties).some(value => 
-        typeof value === 'object' && value !== null && value.type
-      );
-      
+      const hasASTNodes = entries.some((entry: any) => {
+        const value = entry.value;
+        return typeof value === 'object' && value !== null && value.type;
+      });
+
       if (!hasASTNodes) {
         // Plain object - let embedded service handle all tokens including braces
         this.tokenizePlainObject(node, objectText);
@@ -65,8 +73,12 @@ export class StructureVisitor extends BaseVisitor {
         this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
         // Object with mlld constructs - process AST nodes
         let lastPropertyEndOffset = node.location.start.offset + 1; // After '{'
-        
-        for (const [key, value] of Object.entries(node.properties)) {
+
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          const key = entry.key;
+          const value = entry.value;
+
           // Find and tokenize the property key
           const keyPattern = new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`);
           const keyMatch = objectText.match(keyPattern);
@@ -79,14 +91,14 @@ export class StructureVisitor extends BaseVisitor {
               tokenType: 'string',
               modifiers: []
             });
-            
+
             // Find and tokenize the colon
             const colonIndex = objectText.indexOf(':', keyMatch.index + keyMatch[0].length);
             if (colonIndex !== -1) {
               this.operatorHelper.addOperatorToken(node.location.start.offset + colonIndex, 1);
             }
           }
-          
+
           // Process the value
           if (typeof value === 'object' && value !== null) {
             if (value.type) {
@@ -102,7 +114,7 @@ export class StructureVisitor extends BaseVisitor {
                   }
                 }
               }
-              // Regular AST node
+              // Regular AST node - RECURSIVE VISITATION FOR MLLD VALUES
               this.mainVisitor.visitNode(value, context);
               if (value.location) {
                 lastPropertyEndOffset = value.location.end.offset;
@@ -141,11 +153,9 @@ export class StructureVisitor extends BaseVisitor {
               }
             }
           }
-          
+
           // Find and tokenize comma if not the last property
-          const entries = Object.entries(node.properties);
-          const currentIndex = entries.findIndex(([k]) => k === key);
-          if (currentIndex < entries.length - 1) {
+          if (i < entries.length - 1) {
             // Use helper to find and tokenize comma
             this.operatorHelper.tokenizeOperatorBetween(
               lastPropertyEndOffset,
@@ -155,8 +165,12 @@ export class StructureVisitor extends BaseVisitor {
           }
         }
       }
+    } else if (node.properties && typeof node.properties === 'object') {
+      // Fallback for old format with properties object but no entries
+      this.tokenizePlainObject(node, objectText);
+      return;
     }
-    
+
     // Add closing brace
     this.operatorHelper.addOperatorToken(node.location.end.offset - 1, 1);
   }
@@ -271,20 +285,28 @@ export class StructureVisitor extends BaseVisitor {
         
         for (let i = 0; i < node.items.length; i++) {
           const item = node.items[i];
-          
-          // Process the item if it's an AST node
+
+          // Process the item if it's an AST node (e.g., VariableReference, object, array)
           if (typeof item === 'object' && item !== null && item.type) {
+            // RECURSIVE VISITATION FOR MLLD VALUES (variables, nested objects/arrays, etc.)
             this.mainVisitor.visitNode(item, context);
             if (item.location) {
               lastItemEndOffset = item.location.end.offset;
             }
+          } else {
+            // Primitive value - scan and tokenize
+            const itemStart = lastItemEndOffset;
+            const scannedLen = this.scanAndTokenizePrimitive(arrayText, itemStart - node.location.start.offset, node.location.start.offset);
+            if (scannedLen > 0) {
+              lastItemEndOffset = itemStart + scannedLen;
+            }
           }
-          
+
           // Find and tokenize comma if not the last item
           if (i < node.items.length - 1) {
             // Use helper to tokenize comma between items
-            const nextItemStart = (i + 1 < node.items.length && node.items[i + 1]?.location) 
-              ? node.items[i + 1].location.start.offset 
+            const nextItemStart = (i + 1 < node.items.length && node.items[i + 1]?.location)
+              ? node.items[i + 1].location.start.offset
               : node.location.end.offset;
             this.operatorHelper.tokenizeOperatorBetween(
               lastItemEndOffset,

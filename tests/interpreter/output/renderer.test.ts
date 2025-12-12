@@ -5,7 +5,7 @@ import type { OutputIntent } from '@interpreter/output/intent';
 
 describe('OutputRenderer', () => {
   describe('break collapsing', () => {
-    it('collapses adjacent collapsible breaks', () => {
+    it('collapses 3+ breaks to 2 (preserves one blank line)', () => {
       const emitted: OutputIntent[] = [];
       const renderer = new OutputRenderer((intent) => emitted.push(intent));
 
@@ -14,11 +14,11 @@ describe('OutputRenderer', () => {
       renderer.emit(breakIntent('\n', true));
       renderer.emit(contentIntent('content'));
 
-      expect(emitted).toHaveLength(2);
+      // 3 breaks → 2 breaks (preserves one blank line)
+      expect(emitted).toHaveLength(3);
       expect(emitted[0].type).toBe('break');
-      expect(emitted[0].value).toBe('\n');
-      expect(emitted[1].type).toBe('content');
-      expect(emitted[1].value).toBe('content');
+      expect(emitted[1].type).toBe('break');
+      expect(emitted[2].type).toBe('content');
     });
 
     it('does not collapse non-collapsible breaks', () => {
@@ -41,18 +41,20 @@ describe('OutputRenderer', () => {
 
       renderer.emit(breakIntent('\n', true));
       renderer.emit(breakIntent('\n', true));
-      renderer.emit(breakIntent('\n', false)); // Non-collapsible flushes pending
+      renderer.emit(breakIntent('\n', false)); // Non-collapsible flushes pending (2 breaks)
       renderer.emit(breakIntent('\n', true));
       renderer.emit(contentIntent('content'));
 
-      expect(emitted).toHaveLength(4);
-      expect(emitted[0].type).toBe('break'); // Collapsed collapsibles
-      expect(emitted[1].type).toBe('break'); // Non-collapsible
-      expect(emitted[2].type).toBe('break'); // New collapsible
-      expect(emitted[3].type).toBe('content');
+      // 2 collapsible → 2, then non-collapsible, then 1 collapsible
+      expect(emitted).toHaveLength(5);
+      expect(emitted[0].type).toBe('break');
+      expect(emitted[1].type).toBe('break');
+      expect(emitted[2].type).toBe('break'); // Non-collapsible
+      expect(emitted[3].type).toBe('break'); // New collapsible
+      expect(emitted[4].type).toBe('content');
     });
 
-    it('collapses breaks with content interruption', () => {
+    it('preserves blank lines with content interruption', () => {
       const emitted: OutputIntent[] = [];
       const renderer = new OutputRenderer((intent) => emitted.push(intent));
 
@@ -63,16 +65,19 @@ describe('OutputRenderer', () => {
       renderer.emit(breakIntent('\n', true));
       renderer.emit(contentIntent('second'));
 
-      expect(emitted).toHaveLength(4);
+      // 2 breaks preserved before each content
+      expect(emitted).toHaveLength(6);
       expect(emitted[0].type).toBe('break');
-      expect(emitted[1].type).toBe('content');
-      expect(emitted[1].value).toBe('first');
-      expect(emitted[2].type).toBe('break');
-      expect(emitted[3].type).toBe('content');
-      expect(emitted[3].value).toBe('second');
+      expect(emitted[1].type).toBe('break');
+      expect(emitted[2].type).toBe('content');
+      expect(emitted[2].value).toBe('first');
+      expect(emitted[3].type).toBe('break');
+      expect(emitted[4].type).toBe('break');
+      expect(emitted[5].type).toBe('content');
+      expect(emitted[5].value).toBe('second');
     });
 
-    it('flushes trailing breaks on render', () => {
+    it('flushes trailing breaks on render (up to 2)', () => {
       const emitted: OutputIntent[] = [];
       const renderer = new OutputRenderer((intent) => emitted.push(intent));
 
@@ -81,9 +86,11 @@ describe('OutputRenderer', () => {
       renderer.emit(breakIntent('\n', true));
       renderer.render();
 
-      expect(emitted).toHaveLength(2);
+      // 2 trailing breaks preserved
+      expect(emitted).toHaveLength(3);
       expect(emitted[0].type).toBe('content');
       expect(emitted[1].type).toBe('break');
+      expect(emitted[2].type).toBe('break');
     });
   });
 
@@ -179,7 +186,8 @@ describe('DocumentRenderer', () => {
     renderer.emit(breakIntent('\n'));
     renderer.emit(contentIntent('Content'));
 
-    expect(renderer.getDocument()).toBe('# Header\nContent\n');
+    // Normalizer adds blank line after header
+    expect(renderer.getDocument()).toBe('# Header\n\nContent\n');
   });
 
   it('ignores progress and error intents', () => {

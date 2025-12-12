@@ -358,6 +358,38 @@ describe('Semantic Tokens Coverage Tests', () => {
       ]);
     });
 
+    it('tokenizes all pipes with even number of transforms (GH#328)', async () => {
+      const code = '/var @x = @data | @transform1 | @transform2';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@x', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'variable', text: '@data', modifiers: ['reference'] },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@transform1' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@transform2' }
+      ]);
+    });
+
+    it('tokenizes all pipes with four transforms', async () => {
+      const code = '/var @x = @val | @t1 | @t2 | @t3 | @t4';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@x', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'variable', text: '@val', modifiers: ['reference'] },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@t1' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@t2' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@t3' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@t4' }
+      ]);
+    });
+
     it('tokenizes inline log effect with variable arg', async () => {
       const code = '/var @a = @x | log @a';
       await expectTokens(code, [
@@ -710,7 +742,7 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'operator', text: '`' }
       ]);
     });
-    
+
     it('tokenizes function invocation', async () => {
       const code = '/var @msg = @greet("World")';
       await expectTokens(code, [
@@ -721,6 +753,57 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'operator', text: '(' },
         { tokenType: 'string', text: '"World"' },
         { tokenType: 'operator', text: ')' }
+      ]);
+    });
+  });
+
+  describe('Objects and Arrays with mlld Values (GH#332)', () => {
+    it('tokenizes object with variable values', async () => {
+      const code = '/var @data = { name: @userName, age: @userAge }';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@data', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'operator', text: '{' },
+        // Note: Property keys ("name", "age") and colons are not currently tokenized
+        // This is a known limitation separate from GH#332
+        { tokenType: 'variable', text: '@userName' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'variable', text: '@userAge' },
+        { tokenType: 'operator', text: '}' }
+      ]);
+    });
+
+    it('tokenizes array with variable values', async () => {
+      const code = '/var @items = [@a, @b, @c]';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@items', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'operator', text: '[' },
+        { tokenType: 'variable', text: '@a' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'variable', text: '@b' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'variable', text: '@c' },
+        { tokenType: 'operator', text: ']' }
+      ]);
+    });
+
+    it('tokenizes nested object and array with variables', async () => {
+      const code = '/var @data = { items: [@x, @y] }';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@data', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'operator', text: '{' },
+        // Note: Property keys and colons not currently tokenized
+        { tokenType: 'operator', text: '[' },
+        { tokenType: 'variable', text: '@x' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'variable', text: '@y' },
+        { tokenType: 'operator', text: ']' },
+        { tokenType: 'operator', text: '}' }
       ]);
     });
   });

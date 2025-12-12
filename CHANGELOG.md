@@ -87,6 +87,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@@` and `\@` both escape to literal `@` in all interpolation contexts
 - Template paths (`template "path"`) now support `@var` interpolation in double-quoted strings; single-quoted paths remain literal
 - CLI `--payload` alias for `--inject` for SDK consistency
+- **ESM bundle compatibility**: MJS bundle no longer throws "Dynamic require of fs is not supported" in Node 24+ ESM projects. Converted all `require()` calls to ESM imports or `createRequire()`, and externalized TypeScript to prevent CJS code bundling.
+- **LSP: Mode-aware highlighting**: Language server detects `.mld` (strict) vs `.mld.md` (markdown) and highlights bare directives correctly; text content in strict mode shows diagnostics; completions adapt to mode
+- **LSP: rc78 syntax support**: Semantic tokens for block syntax `[...]`, `let` keyword, `+=` augmented assignment, `while`/`done`/`continue`, `stream` directive, working directories `cmd:/path`, when semicolons
+- **LSP bug fixes**: When block assignments ([#327](https://github.com/mlld-lang/mlld/issues/327)), pipe transform parity ([#328](https://github.com/mlld-lang/mlld/issues/328)), EOL comments in when ([#329](https://github.com/mlld-lang/mlld/issues/329)), variable interpolation in /run ([#330](https://github.com/mlld-lang/mlld/issues/330)), function execution in /run ([#331](https://github.com/mlld-lang/mlld/issues/331)), array/object value highlighting ([#332](https://github.com/mlld-lang/mlld/issues/332))
 
 ## [2.0.0-rc77]
 

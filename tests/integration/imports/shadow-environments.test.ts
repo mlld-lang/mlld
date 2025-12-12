@@ -141,6 +141,7 @@ describe('Shadow Environment Import Tests', () => {
 /show @jsResult
 /show @nodeResult`,
           expectedOutput: `from JS shadow
+
 from Node shadow`
         });
         

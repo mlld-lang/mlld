@@ -327,12 +327,15 @@ export async function interpret(
   // Evaluate the AST
   const runExecution = async (): Promise<string> => {
     await evaluate(ast, env);
-    
+
+    // Flush any pending breaks before getting final output
+    env.renderOutput();
+
     // Display collected errors with rich formatting if enabled
     if (options.outputOptions?.collectErrors) {
       await env.displayCollectedErrors();
     }
-    
+
     // Get the document from the effect handler
     const activeEffectHandler = env.getEffectHandler();
     let output: string;
@@ -340,9 +343,10 @@ export async function interpret(
     if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
       // Get the accumulated document from the effect handler
       output = activeEffectHandler.getDocument();
-      
-      // Apply output normalization if requested
-      if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
+
+      // Apply output normalization if requested (default format is markdown)
+      const format = options.format || 'markdown';
+      if (options.useMarkdownFormatter !== false && format === 'markdown') {
         const { normalizeOutput } = await import('./output/normalizer');
         output = normalizeOutput(output);
       }

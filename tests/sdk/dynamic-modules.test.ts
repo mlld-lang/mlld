@@ -13,7 +13,7 @@ describe('dynamic module imports', () => {
       }
     });
 
-    expect(result.trim()).toBe('Hello\n2');
+    expect(result.trim()).toBe('Hello\n\n2');
   });
 
   it('supports namespace imports with nested dynamic data', async () => {
@@ -27,7 +27,7 @@ describe('dynamic module imports', () => {
       }
     });
 
-    expect(result.trim()).toBe('5\nAda');
+    expect(result.trim()).toBe('5\n\nAda');
   });
 
   it('parses string-backed dynamic modules without filesystem paths', async () => {

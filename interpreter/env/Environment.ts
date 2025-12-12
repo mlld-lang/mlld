@@ -281,8 +281,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Initialize effect handler: use provided, inherit from parent, or create default
     this.effectHandler = effectHandler || parent?.effectHandler || new DefaultEffectHandler();
 
-    // Initialize output renderer with callback that emits to effect handler
-    this.outputRenderer = new OutputRenderer((intent) => {
+    // Initialize output renderer: inherit from parent to share break collapsing state
+    this.outputRenderer = parent?.outputRenderer || new OutputRenderer((intent) => {
       this.intentToEffect(intent);
     });
 
@@ -1470,6 +1470,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     if (type === 'doc' && this.isImportingContent) {
       return;
     }
+
+    // Flush pending breaks before emitting content
+    // This ensures break collapsing works even when emitEffect is called directly
+    if ((type === 'doc' || type === 'both') && content && !/^\n+$/.test(content)) {
+      this.outputRenderer.render();
+    }
+
     const snapshot = this.getSecuritySnapshot();
     let capability: CapabilityContext | undefined;
     if (snapshot) {

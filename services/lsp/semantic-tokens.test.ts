@@ -551,10 +551,78 @@ describe('Semantic Tokens', () => {
     it('handles complex shell commands with multiple interpolations', async () => {
       const code = '/run {cp "@source" "@dest"}'; // mlld doesn't support && in commands
       const tokens = await getSemanticTokens(code);
-      
+
       const interpolations = tokens.filter(t => t.tokenType === 'variable');
       expect(interpolations).toHaveLength(2);
       expect(interpolations.map(t => t.text)).toEqual(['@source', '@dest']);
+    });
+
+    it('highlights variables in /run cmd blocks', async () => {
+      const code = '/run cmd { echo @message }';
+      const tokens = await getSemanticTokens(code);
+
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '/run',
+        tokenType: 'keyword'
+      }));
+
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@message',
+        tokenType: 'variable'
+      }));
+    });
+
+    it('highlights multiple variables in /run cmd blocks', async () => {
+      const code = '/run cmd { curl @url -H @header }';
+      const tokens = await getSemanticTokens(code);
+
+      const interpolations = tokens.filter(t => t.tokenType === 'variable');
+      expect(interpolations).toHaveLength(2);
+      expect(interpolations.map(t => t.text)).toEqual(['@url', '@header']);
+    });
+
+    it('highlights function calls in /run @function(@arg)', async () => {
+      const code = '/run @processor(@data)';
+      const tokens = await getSemanticTokens(code);
+
+      // Check that @processor is highlighted as a variable reference
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@processor',
+        tokenType: 'variable',
+        modifiers: ['reference']
+      }));
+
+      // Check that @data is highlighted as a variable
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@data',
+        tokenType: 'variable'
+      }));
+
+      // Check that parentheses are highlighted as operators
+      const operators = tokens.filter(t => t.tokenType === 'operator');
+      expect(operators.some(t => t.text === '(')).toBe(true);
+      expect(operators.some(t => t.text === ')')).toBe(true);
+    });
+
+    it('highlights function calls with multiple arguments', async () => {
+      const code = '/run @transform(@input, @config)';
+      const tokens = await getSemanticTokens(code);
+
+      // Check function name
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@transform',
+        tokenType: 'variable',
+        modifiers: ['reference']
+      }));
+
+      // Check all arguments are highlighted
+      const variables = tokens.filter(t => t.tokenType === 'variable');
+      expect(variables).toHaveLength(3); // @transform, @input, @config
+      expect(variables.map(t => t.text)).toEqual(['@transform', '@input', '@config']);
+
+      // Check comma is highlighted as operator
+      const operators = tokens.filter(t => t.tokenType === 'operator');
+      expect(operators.some(t => t.text === ',')).toBe(true);
     });
   });
 
@@ -658,10 +726,145 @@ describe('Semantic Tokens', () => {
     });
   });
 
+  describe('While Loops', () => {
+    it('should highlight while directive with cap', async () => {
+      const code = '/while (100) @processor';
+      const tokens = await getSemanticTokens(code);
+
+      // Check while directive
+      const directive = tokens.find(t => t.tokenType === 'keyword' && t.text === '/while');
+      expect(directive).toBeDefined();
+
+      // Check parentheses as operators
+      const operators = tokens.filter(t => t.tokenType === 'operator');
+      expect(operators.some(o => o.text === '(')).toBe(true);
+      expect(operators.some(o => o.text === ')')).toBe(true);
+
+      // Check cap number
+      const number = tokens.find(t => t.tokenType === 'number' && t.text === '100');
+      expect(number).toBeDefined();
+
+      // Check processor reference
+      const varRef = tokens.find(t => t.tokenType === 'variable' && t.text === '@processor');
+      expect(varRef).toBeDefined();
+    });
+
+    it('should highlight done keyword', async () => {
+      const code = '/exe @countdown(n) = when [@n <= 0 => done "finished"]';
+      const tokens = await getSemanticTokens(code);
+
+      // Check done keyword
+      const doneKeyword = tokens.find(t => t.tokenType === 'keyword' && t.text === 'done');
+      expect(doneKeyword).toBeDefined();
+    });
+
+    it('should highlight continue keyword', async () => {
+      const code = '/exe @countdown(n) = when [* => continue (@n - 1)]';
+      const tokens = await getSemanticTokens(code);
+
+      // Check continue keyword
+      const continueKeyword = tokens.find(t => t.tokenType === 'keyword' && t.text === 'continue');
+      expect(continueKeyword).toBeDefined();
+    });
+  });
+
+  describe('Streaming', () => {
+    it('should highlight stream directive', async () => {
+      const code = '/stream @output';
+      const tokens = await getSemanticTokens(code);
+
+      // Check stream directive
+      const directive = tokens.find(t => t.tokenType === 'keyword' && t.text === '/stream');
+      expect(directive).toBeDefined();
+
+      // Check reference
+      const varRef = tokens.find(t => t.tokenType === 'variable' && t.text === '@output');
+      expect(varRef).toBeDefined();
+    });
+  });
+
+  describe('Block Syntax (rc78)', () => {
+    it('should highlight exe blocks with let and return', async () => {
+      const code = '/exe @add(@a, @b) = [let @result = @a + @b; => @result]';
+      const tokens = await getSemanticTokens(code);
+
+      // Check directive
+      const directive = tokens.find(t => t.tokenType === 'keyword' && t.text === '/exe');
+      expect(directive).toBeDefined();
+
+      // Check function name
+      const funcName = tokens.find(t => t.tokenType === 'variable' && t.text === '@add' && t.modifiers?.includes('declaration'));
+      expect(funcName).toBeDefined();
+
+      // Check brackets
+      const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
+      expect(brackets).toHaveLength(2);
+
+      // Check let keyword
+      const letKeyword = tokens.find(t => t.tokenType === 'keyword' && t.text === 'let');
+      expect(letKeyword).toBeDefined();
+
+      // Check return arrow
+      const returnArrow = tokens.find(t => t.tokenType === 'operator' && t.text === '=>');
+      expect(returnArrow).toBeDefined();
+    });
+
+    it('should highlight let with += operator', async () => {
+      const code = '/exe @counter() = [let @count = 0; let @count += 1; => @count]';
+      const tokens = await getSemanticTokens(code);
+
+      // Check let keywords
+      const letKeywords = tokens.filter(t => t.tokenType === 'keyword' && t.text === 'let');
+      expect(letKeywords).toHaveLength(2);
+
+      // Check += operator
+      const plusEqual = tokens.find(t => t.tokenType === 'operator' && t.text === '+=');
+      expect(plusEqual).toBeDefined();
+
+      // Check = operator (should also exist)
+      const equal = tokens.find(t => t.tokenType === 'operator' && t.text === '=');
+      expect(equal).toBeDefined();
+    });
+
+    it('should highlight for blocks with let', async () => {
+      const code = '/for @item in @items [let @index = 0; show @item]';
+      const tokens = await getSemanticTokens(code);
+
+      // Check for directive
+      const directive = tokens.find(t => t.tokenType === 'keyword' && t.text === '/for');
+      expect(directive).toBeDefined();
+
+      // Check brackets
+      const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
+      expect(brackets).toHaveLength(2);
+
+      // Check let keyword inside block
+      const letKeyword = tokens.find(t => t.tokenType === 'keyword' && t.text === 'let');
+      expect(letKeyword).toBeDefined();
+    });
+
+    it('should highlight when blocks', async () => {
+      const code = '/when @value: [1 => "one"; 2 => "two"]';
+      const tokens = await getSemanticTokens(code);
+
+      // Check when directive
+      const directive = tokens.find(t => t.tokenType === 'keyword' && t.text === '/when');
+      expect(directive).toBeDefined();
+
+      // Check brackets
+      const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
+      expect(brackets).toHaveLength(2);
+
+      // Check arrows
+      const arrows = tokens.filter(t => t.tokenType === 'operator' && t.text === '=>');
+      expect(arrows).toHaveLength(2);
+    });
+  });
+
   describe('Error Recovery', () => {
     it('handles partial AST gracefully', async () => {
       const code = '/var @incomplete ='; // Incomplete directive
-      
+
       // Parse error should throw
       await expect(getSemanticTokens(code)).rejects.toThrow('Parse error');
     });

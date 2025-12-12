@@ -56,7 +56,8 @@ describe('Mlld API', () => {
         pathService,
         basePath: '/'
       });
-      expect(result.trim()).toBe('# Test Content\nThis is a test file.');
+      // Markdown formatting adds blank line after header
+      expect(result.trim()).toBe('# Test Content\n\nThis is a test file.');
     });
 
     it.skip('should handle data directives', async () => {
@@ -162,7 +163,7 @@ describe('Mlld API', () => {
 /show "Line 3"
       `.trim();
       const result = await processMlld(content);
-      const lines = result.trim().split('\n');
+      const lines = result.trim().split('\n').filter(l => l.length > 0);
       expect(lines).toEqual(['Line 1', 'Line 2', 'Line 3']);
     });
 

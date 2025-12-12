@@ -650,6 +650,29 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     return 'markdown';
   }
 
+  // Helper to determine if markdown formatting should be enabled for a fixture
+  function shouldUseMarkdownFormatter(fixture: any): boolean {
+    // Enable formatting only for specific when-related tests that were manually updated
+    // to have proper markdown formatting with blank lines around headers
+    const formattedTests = [
+      'slash/when/exe-conditions',
+      'slash/when/exe-when-all-matches',
+      'slash/when/first-individual-actions',
+      'slash/when/operators-chained',
+      'slash/when/operators-comparison',
+      'slash/when/truthiness-edge-cases',
+      'slash/when/var-complex-types',
+      'slash/when/var-function-calls',
+      'slash/when/when-switch',
+      'slash/when/when-literal-condition',
+      'slash/when/wildcard-always-true',
+      'feat/pipeline/when-all-any-pipes',
+      'feat/transformers/md-basic'
+    ];
+
+    return formattedTests.some(test => fixture.name.includes(test));
+  }
+
   // Recursive function to copy test files to virtual filesystem
   async function copyTestFilesToVFS(sourcePath: string, targetPath: string) {
     const entries = fs.readdirSync(sourcePath, { withFileTypes: true });
@@ -1534,7 +1557,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               basePath,
               urlConfig,
               stdinContent,
-              useMarkdownFormatter: false, // Disable prettier for tests to maintain exact output
+              useMarkdownFormatter: shouldUseMarkdownFormatter(fixture), // Enable for tests with headers
               outputOptions: {
                 showProgress: false // Disable progress output in tests
               },

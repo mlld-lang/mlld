@@ -67,8 +67,12 @@ describe('Output Management Integration', () => {
     });
     
     // Verify all lines are present (not truncated)
-    expect(result).toContain('1\n2\n3\n4\n5');
-    expect(result).toContain('96\n97\n98\n99\n100');
+    // Filter out blank lines from paragraph spacing to check content lines
+    const lines = (result as string).split('\n').filter(l => l.trim().length > 0);
+    expect(lines).toContain('1');
+    expect(lines).toContain('50');
+    expect(lines).toContain('100');
+    expect(lines.length).toBeGreaterThanOrEqual(100); // All 100 numbers present
     expect(result).not.toContain('more lines, use --verbose to see all)');
   });
 

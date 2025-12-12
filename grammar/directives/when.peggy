@@ -151,9 +151,17 @@ SlashWhen
 // -------------------------------------------------------------
 
 WhenSimpleForm
-  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction {
-      helpers.debug('WhenSimpleForm matched', { condition, action });
-      
+  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction comment:InlineComment? {
+      helpers.debug('WhenSimpleForm matched', { condition, action, comment });
+
+      const meta = {
+        hasVariables: condition.some(n => n.type === NodeType.VariableReference)
+      };
+
+      if (comment) {
+        meta.comment = comment;
+      }
+
       return helpers.createStructuredDirective(
         'when',
         'whenSimple',
@@ -165,9 +173,7 @@ WhenSimpleForm
           condition: helpers.reconstructRawString(condition),
           action: helpers.reconstructRawString(action)
         },
-        {
-          hasVariables: condition.some(n => n.type === NodeType.VariableReference)
-        },
+        meta,
         location()
       );
     }

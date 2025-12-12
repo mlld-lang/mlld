@@ -61,15 +61,21 @@ export class OutputRenderer {
   /**
    * Flush pending breaks
    *
-   * Collapses adjacent collapsible breaks into a single break.
+   * Collapses adjacent collapsible breaks, preserving up to 2 (one blank line):
+   * - 1 break → 1 break (line ending)
+   * - 2 breaks → 2 breaks (one blank line)
+   * - 3+ breaks → 2 breaks (collapsed to one blank line)
+   *
    * Called automatically when content arrives.
    */
   private flushBreaks(): void {
     if (this.pendingBreaks.length === 0) return;
 
-    // Collapse: Keep only the first break
-    const collapsed = this.pendingBreaks[0];
-    this.emitToHandler(collapsed);
+    // Emit up to 2 breaks (preserves one blank line, collapses more)
+    const breaksToEmit = Math.min(this.pendingBreaks.length, 2);
+    for (let i = 0; i < breaksToEmit; i++) {
+      this.emitToHandler(this.pendingBreaks[i]);
+    }
 
     this.pendingBreaks = [];
   }

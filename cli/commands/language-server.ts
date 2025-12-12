@@ -135,4 +135,5 @@ export interface DocumentState {
   lastValidTokens?: any; // SemanticTokens data
   currentEditLine?: number;
   lastEditTime: number;
+  mode?: import('@core/types/mode').MlldMode;
 }
