@@ -34,6 +34,14 @@ mlld lsp
 
 ## Features
 
+### Mode Detection
+
+The language server automatically detects parsing mode from file extensions:
+- `.mld` files → **strict mode**: bare directives (`var`, `show`) highlighted as keywords
+- `.mld.md` files → **markdown mode**: only `/var`, `/show` highlighted as keywords
+
+In strict mode, text content produces diagnostics suggesting `/show` or renaming to `.mld.md`. Completions adapt to mode (bare vs slash-prefixed directives).
+
 ### 1. Syntax Validation
 
 - Real-time parsing using the mlld grammar
@@ -160,7 +168,9 @@ const TOKEN_TYPE_MAP = {
 
 #### Highlighted Elements
 
-- **Directives** - `/var`, `/show`, `/run`, etc. → `keyword`
+- **Directives** - `/var`, `/show`, `/run`, `/while`, `/stream`, `/guard`, etc. → `keyword`
+- **Block syntax** - `[...]` brackets, `let` keyword, `=>` return arrow → `operator`/`keyword`
+- **Control flow** - `while`, `done`, `continue`, `stream` → `keyword`
 - **Variables** - Declaration vs reference distinction → `variable`
 - **Templates** - Different template types with proper interpolation rules:
   - Backtick templates with `@var` interpolation
