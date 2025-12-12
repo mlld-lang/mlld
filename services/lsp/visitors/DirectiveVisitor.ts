@@ -31,17 +31,42 @@ export class DirectiveVisitor extends BaseVisitor {
   
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
-    
-    
-    // Only add directive token if not an implicit directive
-    if (!node.meta?.implicit && node.kind) {
-      this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column - 1,
-        length: (node.kind?.length || 0) + 1,
-        tokenType: 'directive',
-        modifiers: []
-      });
+
+
+    // Add directive token for both explicit (with /) and implicit directives (without /)
+    if (node.kind) {
+      const sourceText = this.document.getText();
+      const startOffset = node.location.start.offset;
+      const hasSlash = sourceText[startOffset] === '/';
+
+      // For implicit directives, check if the keyword appears at the start
+      if (node.meta?.implicit) {
+        // Check if the keyword matches at the start position
+        const keywordAtStart = sourceText.substring(startOffset, startOffset + node.kind.length);
+        if (keywordAtStart === node.kind) {
+          // Tokenize the keyword without slash
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: node.location.start.column - 1,
+            length: node.kind.length,
+            tokenType: 'directive',
+            modifiers: []
+          });
+        }
+      } else {
+        // For explicit directives, include the slash
+        const tokenLength = hasSlash
+          ? (node.kind?.length || 0) + 1
+          : (node.kind?.length || 0);
+
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: tokenLength,
+          tokenType: 'directive',
+          modifiers: []
+        });
+      }
     }
     
     if (node.kind === 'when') {
