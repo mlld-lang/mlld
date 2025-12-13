@@ -11,10 +11,8 @@ const filePath = process.argv[2] || 'tmp/claude-helpers.mld';
 const absolutePath = resolve(filePath);
 const content = await readFile(absolutePath, 'utf-8');
 
-// Import from local dist (this script runs in repo context)
-const { parseSync } = await import('../dist/index.mjs');
-const { TextDocument } = await import('vscode-languageserver-textdocument');
-const { SemanticTokensBuilder } = await import('vscode-languageserver/node.js');
+// Import parser directly from generated file
+import parser from '../grammar/generated/parser/parser.js';
 
 // ASTSemanticVisitor isn't exported, so we'll use the validator instead
 const validatorModule = await import('../tests/utils/token-validator/index.ts');
@@ -24,14 +22,13 @@ const { TokenCoverageValidator, NodeExpectationBuilder, createNodeTokenRuleMap }
 const mode = filePath.endsWith('.mld') ? 'strict' : 'markdown';
 console.log(`\n=== Parsing ${filePath} (mode: ${mode}) ===\n`);
 
-const result = parseSync(content, { mode });
-
-if (!result.success) {
-  console.log('Parse failed:', result.error.message);
+let ast;
+try {
+  ast = parser.parse(content, { mode });
+} catch (err) {
+  console.log('Parse failed:', err.message);
   process.exit(1);
 }
-
-const ast = result.ast;
 console.log('AST nodes:', ast.length);
 
 // Use validator to generate tokens (same code path it tests)
@@ -61,5 +58,28 @@ if (validationResult.gaps.length > 0) {
     console.log(`  Expected: ${gap.expectedTokenTypes.join(', ')}`);
     console.log(`  Actual: ${gap.actualTokens.map(t => t.tokenType).join(', ') || 'none'}`);
     console.log(`  Text: "${gap.text.substring(0, 50)}"`);
+
+    // Show diagnostic info if available
+    if (gap.diagnostic && process.argv.includes('--diagnostics')) {
+      console.log(`  🔍 Diagnostics:`);
+
+      if (gap.diagnostic.visitorCalls.length > 0) {
+        for (const call of gap.diagnostic.visitorCalls) {
+          const status = call.called ? '✓' : '✗';
+          console.log(`    ${status} ${call.visitorClass}: ${call.tokensEmitted} emitted, ${call.tokensAccepted} accepted, ${call.tokensRejected} rejected`);
+        }
+      } else {
+        console.log(`    ✗ No visitor called`);
+      }
+
+      if (gap.diagnostic.tokenAttempts.length > 0) {
+        console.log(`    Token attempts:`);
+        for (const attempt of gap.diagnostic.tokenAttempts) {
+          const status = attempt.accepted ? '✓' : '✗';
+          const reason = attempt.rejectionReason ? ` (${attempt.rejectionReason})` : '';
+          console.log(`      ${status} ${attempt.tokenType} at ${attempt.position.line}:${attempt.position.char}${reason}`);
+        }
+      }
+    }
   });
 }

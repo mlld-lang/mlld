@@ -31,6 +31,32 @@ export interface SemanticToken {
   modifiers?: string[];
 }
 
+export interface TokenAttempt {
+  tokenType: string;
+  position: { line: number; char: number; length: number };
+  accepted: boolean;
+  rejectionReason?: 'invalid_position' | 'negative_position' | 'duplicate' | 'unknown_type' | 'nan_value';
+  sourceNode?: string;
+  callerInfo?: string;
+}
+
+export interface VisitorDiagnostic {
+  visitorClass: string;
+  nodeType: string;
+  nodeId: string;
+  called: boolean;
+  tokensEmitted: number;
+  tokensAccepted: number;
+  tokensRejected: number;
+}
+
+export interface DiagnosticContext {
+  visitorCalls: VisitorDiagnostic[];
+  tokenAttempts: TokenAttempt[];
+  nodeTraversalPath: string[];
+  contextState: any;
+}
+
 export interface CoverageGap {
   nodeId: string;
   nodeType: string;
@@ -40,6 +66,7 @@ export interface CoverageGap {
   severity: 'error' | 'warning';
   text: string;
   fix: FixSuggestion;
+  diagnostic?: DiagnosticContext;
 }
 
 export interface FixSuggestion {
