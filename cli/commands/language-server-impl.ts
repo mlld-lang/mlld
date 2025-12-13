@@ -123,7 +123,12 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   'parameter': 'parameter',
   'comment': 'comment',
   'number': 'number',
-  'property': 'property'
+  'property': 'property',
+  'function': 'function',
+  'label': 'label',
+  'typeParameter': 'typeParameter',
+  'interface': 'interface',
+  'namespace': 'namespace'
 };
 
 const TOKEN_MODIFIERS = [
@@ -712,13 +717,13 @@ export async function startLanguageServer(): Promise<void> {
   }
 
   /**
-   * Check for text nodes in strict mode that shouldn't be there
+   * Check for text nodes in strict mode that shouldn't be there.
+   * Only TOP-LEVEL Text nodes are invalid. Text inside directive values is allowed.
    */
   function checkStrictModeTextNodes(ast: any[], errors: Diagnostic[]): void {
-    function checkNode(node: any): void {
-      // Only top-level Text nodes are illegal in strict mode. Text inside directives is allowed.
-      if (node.type === 'Text' && node.content?.trim() && node.parent?.type !== 'Directive') {
-        // Text nodes with content are not allowed in strict mode
+    // Only check top-level nodes - don't recurse into directive children
+    for (const node of ast) {
+      if (node.type === 'Text' && node.content?.trim()) {
         const loc = node.location;
         if (loc) {
           const startLine = (loc.start.line || 1) - 1;
@@ -737,21 +742,7 @@ export async function startLanguageServer(): Promise<void> {
           });
         }
       }
-
-      // Recursively check child nodes
-      if (node.values && typeof node.values === 'object') {
-        for (const key in node.values) {
-          const value = node.values[key];
-          if (Array.isArray(value)) {
-            value.forEach(checkNode);
-          } else if (value && typeof value === 'object') {
-            checkNode(value);
-          }
-        }
-      }
     }
-
-    ast.forEach(checkNode);
   }
 
   function analyzeAST(

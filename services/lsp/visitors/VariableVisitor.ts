@@ -85,6 +85,19 @@ export class VariableVisitor extends BaseVisitor {
         tokenType: 'interpolation',
         modifiers: []
       });
+
+      // Tokenize field access for {{var.field}} style
+      if (node.fields) {
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+          console.log('[INTERPOLATION-FIELDS {{}}]', {
+            identifier,
+            hasFields: !!node.fields,
+            fieldCount: node.fields?.length,
+            fields: node.fields
+          });
+        }
+        this.operatorHelper.tokenizePropertyAccess(node);
+      }
     } else if (node.identifier) {
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
@@ -111,7 +124,7 @@ export class VariableVisitor extends BaseVisitor {
       const source = this.document.getText();
       const charAtOffset = source.charAt(node.location.start.offset);
       const includesAt = charAtOffset === '@';
-      
+
       // If location doesn't start with @, we need to go back one position
       const charPos = includesAt
         ? node.location.start.column - 1   // Already includes @, just convert to 0-based
@@ -131,21 +144,13 @@ export class VariableVisitor extends BaseVisitor {
         return; // Skip this token
       }
 
-      // Determine token type based on special variables
-      let tokenType = 'variableRef';
+      // All variable references are tokenized as variables
+      // (built-in resolver names like @now, @input can be shadowed by user variables)
+      const tokenType = 'variableRef';
       const modifiers: string[] = ['reference'];
-
-      // Check for special built-in variables
-      if (identifier === 'pipeline' || identifier === 'p' || identifier === 'ctx' ||
-          identifier === 'now' || identifier === 'debug' || identifier === 'input' ||
-          identifier === 'base') {
-        tokenType = 'keyword';
-        modifiers.length = 0; // Clear reference modifier for keywords
-      }
 
       // Check for _key pattern (used in for loops for array indices)
       if (identifier.endsWith('_key')) {
-        // Still treat as variable but could add special modifier if needed
         modifiers.push('key');
       }
 
@@ -167,7 +172,17 @@ export class VariableVisitor extends BaseVisitor {
         });
       }
       this.operatorHelper.tokenizePropertyAccess(node);
-      
+
+      // Visit nested VariableReferences inside variableIndex fields (e.g., @templates[@key])
+      if (node.fields && Array.isArray(node.fields)) {
+        for (const field of node.fields) {
+          if (field.type === 'variableIndex' && field.value?.type === 'VariableReference') {
+            // Visit the nested VariableReference
+            this.mainVisitor.visitNode(field.value, context);
+          }
+        }
+      }
+
       // Handle pipes if present
       if (node.pipes && Array.isArray(node.pipes) && node.pipes.length > 0) {
         if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax') || this.document.uri.includes('test-vscode')) {

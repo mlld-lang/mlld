@@ -79,11 +79,20 @@ export class StructureVisitor extends BaseVisitor {
           const key = entry.key;
           const value = entry.value;
 
-          // Find and tokenize the property key
-          const keyPattern = new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`);
-          const keyMatch = objectText.match(keyPattern);
-          if (keyMatch && keyMatch.index !== undefined) {
-            const keyPosition = this.document.positionAt(node.location.start.offset + keyMatch.index);
+          // Find and tokenize the property key (quoted or unquoted)
+          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const quotedPattern = new RegExp(`"${escapedKey}"`);
+          const unquotedPattern = new RegExp(`\\b${escapedKey}\\s*:`);
+
+          const quotedMatch = objectText.match(quotedPattern);
+          const unquotedMatch = objectText.match(unquotedPattern);
+
+          const keyMatch = quotedMatch || unquotedMatch; // For use in subsequent code
+          const keyMatchIndex = quotedMatch?.index ?? unquotedMatch?.index;
+
+          if (quotedMatch && quotedMatch.index !== undefined) {
+            // Quoted key
+            const keyPosition = this.document.positionAt(node.location.start.offset + quotedMatch.index);
             this.tokenBuilder.addToken({
               line: keyPosition.line,
               char: keyPosition.character,
@@ -93,9 +102,31 @@ export class StructureVisitor extends BaseVisitor {
             });
 
             // Find and tokenize the colon
-            const colonIndex = objectText.indexOf(':', keyMatch.index + keyMatch[0].length);
+            const colonIndex = objectText.indexOf(':', quotedMatch.index + quotedMatch[0].length);
             if (colonIndex !== -1) {
               this.operatorHelper.addOperatorToken(node.location.start.offset + colonIndex, 1);
+            }
+          } else if (unquotedMatch && unquotedMatch.index !== undefined) {
+            // Unquoted key
+            const keyPosition = this.document.positionAt(node.location.start.offset + unquotedMatch.index);
+            this.tokenBuilder.addToken({
+              line: keyPosition.line,
+              char: keyPosition.character,
+              length: key.length,
+              tokenType: 'property',
+              modifiers: []
+            });
+
+            // Tokenize the colon (it's part of the match)
+            const colonOffset = node.location.start.offset + unquotedMatch.index + key.length;
+            const sourceText = this.document.getText();
+            // Find the colon after the key
+            let colonPos = colonOffset;
+            while (colonPos < sourceText.length && sourceText[colonPos] !== ':') {
+              colonPos++;
+            }
+            if (sourceText[colonPos] === ':') {
+              this.operatorHelper.addOperatorToken(colonPos, 1);
             }
           }
 

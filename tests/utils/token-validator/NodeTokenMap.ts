@@ -91,10 +91,10 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   },
 
   // =============================================================================
-  // VARIABLES - Always need variable tokens
+  // VARIABLES - Can be variable or function (when used in function calls)
   // =============================================================================
   'VariableReference': {
-    expectedTokenTypes: ['variable'],
+    expectedTokenTypes: ['variable', 'function'],
     mustBeCovered: true,
     includeAtSign: true,
     visitor: 'VariableVisitor'
@@ -164,7 +164,9 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
     visitor: 'StructureVisitor'
   },
   'field': {
-    expectedTokenTypes: ['property'],
+    // Fields can be properties (.name) or methods (.indexOf)
+    // Method calls in ExecInvocation tokenize as 'function'
+    expectedTokenTypes: ['property', 'function'],
     mustBeCovered: true,
     visitor: 'StructureVisitor'
   },
@@ -172,6 +174,12 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
     expectedTokenTypes: ['property'],
     mustBeCovered: true,
     visitor: 'StructureVisitor'
+  },
+  'variableIndex': {
+    // Bracket access like @templates[@key] - brackets are operators
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    visitor: 'VariableVisitor'
   },
 
   // =============================================================================
