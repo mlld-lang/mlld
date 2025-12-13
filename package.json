@@ -135,6 +135,7 @@
   },
   "homepage": "https://github.com/mlld-lang/mlld#readme",
   "dependencies": {
+    "-": "^0.0.1",
     "@mozilla/readability": "^0.6.0",
     "@octokit/rest": "^22.0.0",
     "@types/inquirer": "^9.0.8",
@@ -147,6 +148,7 @@
     "chalk": "^4.1.2",
     "commander": "^13.1.0",
     "fs-extra": "^11.3.0",
+    "g": "^2.0.1",
     "glob": "^11.0.1",
     "gray-matter": "^4.0.3",
     "inquirer": "^12.8.2",
