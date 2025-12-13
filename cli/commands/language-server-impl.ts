@@ -93,7 +93,8 @@ const TOKEN_TYPES = [
   'property',         // Object properties
   'interface',        // Interfaces (file references)
   'typeParameter',    // Type parameters (file paths in sections)
-  'namespace'         // Namespaces (section names)
+  'namespace',        // Namespaces (section names)
+  'function'          // Functions (exec invocations)
 ];
 
 // Map mlld-specific token names to standard types
@@ -326,6 +327,34 @@ export async function startLanguageServer(): Promise<void> {
     });
   }
 
+  function sanitizePosition(position: Position): Position {
+    const line = Number(position.line);
+    const character = Number(position.character);
+
+    return {
+      line: Number.isFinite(line) && line >= 0 ? line : 0,
+      character: Number.isFinite(character) && character >= 0 ? character : 0
+    };
+  }
+
+  function sanitizeRange(range: Range): Range {
+    const start = sanitizePosition(range.start);
+    const end = sanitizePosition(range.end);
+
+    if (end.line < start.line || (end.line === start.line && end.character < start.character)) {
+      return { start, end: start };
+    }
+
+    return { start, end };
+  }
+
+  function sanitizeDiagnostics(errors: Diagnostic[]): Diagnostic[] {
+    return errors.map(error => ({
+      ...error,
+      range: sanitizeRange(error.range)
+    }));
+  }
+
   connection.onInitialize((params: InitializeParams) => {
     console.error('[LSP] onInitialize called');
     const capabilities = params.capabilities;
@@ -472,11 +501,12 @@ export async function startLanguageServer(): Promise<void> {
       timeSinceEdit,
       settings.showIncompleteLineErrors ?? false
     );
+    const sanitizedErrors = sanitizeDiagnostics(filteredErrors);
     
     // Send diagnostics
     connection.sendDiagnostics({
       uri: textDocument.uri,
-      diagnostics: filteredErrors.slice(0, settings.maxNumberOfProblems)
+      diagnostics: sanitizedErrors.slice(0, settings.maxNumberOfProblems)
     });
   }
   

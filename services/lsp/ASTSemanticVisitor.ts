@@ -96,6 +96,8 @@ export class ASTSemanticVisitor {
     this.registerVisitor('MlldRunBlock', fileReferenceVisitor);
     this.registerVisitor('foreach', foreachVisitor);
     this.registerVisitor('foreach-command', foreachVisitor);
+    this.registerVisitor('LetAssignment', expressionVisitor);
+    this.registerVisitor('ExeReturn', expressionVisitor);
   }
   
   private registerVisitor(nodeType: string, visitor: INodeVisitor): void {
@@ -218,7 +220,18 @@ export class ASTSemanticVisitor {
     }
 
     // For nodes with .type, check specific child properties
-    const childProps = ['values', 'children', 'body', 'content', 'nodes', 'elements'];
+    const childProps = [
+      'values',
+      'value',
+      'variable',
+      'invocation',
+      'withClause',
+      'children',
+      'body',
+      'content',
+      'nodes',
+      'elements'
+    ];
 
     for (const prop of childProps) {
       if (node[prop]) {

@@ -18,16 +18,18 @@ export class ExpressionVisitor extends BaseVisitor {
   }
   
   canHandle(node: any): boolean {
-    return node.type === 'BinaryExpression' || 
+    return node.type === 'BinaryExpression' ||
            node.type === 'UnaryExpression' ||
            node.type === 'TernaryExpression' ||
            node.type === 'WhenExpression' ||
-           node.type === 'ForExpression';
+           node.type === 'ForExpression' ||
+           node.type === 'LetAssignment' ||
+           node.type === 'ExeReturn';
   }
   
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
-    
+
     switch (node.type) {
       case 'BinaryExpression':
       case 'UnaryExpression':
@@ -41,6 +43,12 @@ export class ExpressionVisitor extends BaseVisitor {
         break;
       case 'ForExpression':
         this.visitForExpression(node, context);
+        break;
+      case 'LetAssignment':
+        this.visitLetAssignment(node, context);
+        break;
+      case 'ExeReturn':
+        this.visitExeReturn(node, context);
         break;
     }
   }
@@ -391,4 +399,78 @@ export class ExpressionVisitor extends BaseVisitor {
       }
     }
   }
+
+  private visitLetAssignment(node: any, context: VisitorContext): void {
+    // Tokenize "let" keyword
+    const sourceText = this.document.getText();
+    const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const letIndex = nodeText.indexOf('let');
+
+    if (letIndex !== -1) {
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column + letIndex - 1,
+        length: 3,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize @identifier
+    if (node.identifier) {
+      // Find @ position after "let "
+      const atIndex = nodeText.indexOf('@', letIndex);
+      if (atIndex !== -1) {
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column + atIndex - 1,
+          length: node.identifier.length + 1, // +1 for @
+          tokenType: 'variable',
+          modifiers: ['declaration']
+        });
+      }
+    }
+
+    // Tokenize = operator
+    const equalIndex = nodeText.indexOf('=', letIndex);
+    if (equalIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + equalIndex,
+        1
+      );
+    }
+
+    // Visit the value expression
+    if (node.value && Array.isArray(node.value)) {
+      for (const valueNode of node.value) {
+        this.mainVisitor.visitNode(valueNode, context);
+      }
+    }
+  }
+
+  private visitExeReturn(node: any, context: VisitorContext): void {
+    // Tokenize => operator
+    const sourceText = this.document.getText();
+    const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const arrowIndex = nodeText.indexOf('=>');
+
+    if (arrowIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + arrowIndex,
+        2 // => is 2 characters
+      );
+    }
+
+    // Visit the return value
+    if (node.value) {
+      if (Array.isArray(node.value)) {
+        for (const valueNode of node.value) {
+          this.mainVisitor.visitNode(valueNode, context);
+        }
+      } else {
+        this.mainVisitor.visitNode(node.value, context);
+      }
+    }
+  }
 }
+

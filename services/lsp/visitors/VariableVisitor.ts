@@ -113,28 +113,42 @@ export class VariableVisitor extends BaseVisitor {
       const includesAt = charAtOffset === '@';
       
       // If location doesn't start with @, we need to go back one position
-      const charPos = includesAt 
+      const charPos = includesAt
         ? node.location.start.column - 1   // Already includes @, just convert to 0-based
         : node.location.start.column - 2;  // Doesn't include @, go back one more
-      
+
+      // Validate charPos before proceeding
+      if (charPos < 0) {
+        if (process.env.DEBUG) {
+          console.log('[VAR-VISITOR] Invalid charPos', {
+            identifier,
+            column: node.location.start.column,
+            includesAt,
+            charPos,
+            baseLength
+          });
+        }
+        return; // Skip this token
+      }
+
       // Determine token type based on special variables
       let tokenType = 'variableRef';
       const modifiers: string[] = ['reference'];
-      
+
       // Check for special built-in variables
-      if (identifier === 'pipeline' || identifier === 'p' || identifier === 'ctx' || 
-          identifier === 'now' || identifier === 'debug' || identifier === 'input' || 
+      if (identifier === 'pipeline' || identifier === 'p' || identifier === 'ctx' ||
+          identifier === 'now' || identifier === 'debug' || identifier === 'input' ||
           identifier === 'base') {
         tokenType = 'keyword';
         modifiers.length = 0; // Clear reference modifier for keywords
       }
-      
+
       // Check for _key pattern (used in for loops for array indices)
       if (identifier.endsWith('_key')) {
         // Still treat as variable but could add special modifier if needed
         modifiers.push('key');
       }
-      
+
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
         char: charPos,

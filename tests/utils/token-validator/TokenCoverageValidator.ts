@@ -18,11 +18,13 @@ export class TokenCoverageValidator {
   private expectationBuilder: NodeExpectationBuilder;
   private tokenMatcher: TokenMatcher;
   private fixSuggestionGenerator: FixSuggestionGenerator;
+  private useRealLSP: boolean;
 
-  constructor(expectationBuilder: NodeExpectationBuilder) {
+  constructor(expectationBuilder: NodeExpectationBuilder, useRealLSP: boolean = false) {
     this.expectationBuilder = expectationBuilder;
     this.tokenMatcher = new TokenMatcher();
     this.fixSuggestionGenerator = new FixSuggestionGenerator();
+    this.useRealLSP = useRealLSP;
   }
 
   /**
@@ -210,13 +212,27 @@ export class TokenCoverageValidator {
     const text = expectation.text ||
       this.tokenMatcher.extractText(input, expectation.location);
 
+    // Determine severity based on what we found
+    let severity: 'error' | 'warning' = 'error';
+    if (actualTokens.length > 0) {
+      // Tokens exist but wrong type - this is a warning (less severe)
+      severity = 'warning';
+    }
+
+    if (process.env.DEBUG && actualTokens.length > 0) {
+      console.log(`[GAP-ANALYSIS] ${expectation.nodeType} at ${expectation.location.start.line}:${expectation.location.start.column}`);
+      console.log(`  Expected: ${expectation.expectedTokenTypes.join(', ')}`);
+      console.log(`  Actual: ${actualTokens.map(t => t.tokenType).join(', ')}`);
+      console.log(`  Text: "${text}"`);
+    }
+
     return {
       nodeId: expectation.nodeId,
       nodeType: expectation.nodeType,
       location: expectation.location,
       expectedTokenTypes: expectation.expectedTokenTypes,
       actualTokens,
-      severity: 'error',
+      severity,
       text,
       fix: this.createPlaceholderFix(expectation, text)
     };

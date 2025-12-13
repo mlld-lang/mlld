@@ -342,14 +342,19 @@ export class DirectiveVisitor extends BaseVisitor {
     if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
       const firstIdentifier = identifierNodes[0];
       const identifierName = firstIdentifier.identifier || '';
-      
+
       if (identifierName) {
-        // For implicit directives, the identifier starts at the beginning
-        const identifierStart = node.meta?.implicit 
-          ? node.location.start.column 
-          : node.location.start.column + node.kind.length + 2;
-        
-        
+        // Check source text to determine if directive has slash
+        const sourceText = this.document.getText();
+        const startOffset = node.location.start.offset;
+        const hasSlash = sourceText[startOffset] === '/';
+
+        // For implicit directives (no slash), identifier starts after "exe "
+        // For explicit directives (with slash), identifier starts after "/exe "
+        const identifierStart = hasSlash
+          ? node.location.start.column + node.kind.length + 2  // "/exe " = 5 chars
+          : node.location.start.column + node.kind.length + 1; // "exe " = 4 chars
+
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
           char: identifierStart - 1,

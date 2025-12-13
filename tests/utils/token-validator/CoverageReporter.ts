@@ -44,9 +44,25 @@ export class CoverageReporter {
     lines.push('');
 
     const allGaps = results.flatMap(r => r.gaps);
-    const topIssues = this.fixSuggestionGenerator.getTopIssues(allGaps, 5);
+    const missingTokens = allGaps.filter(g => g.severity === 'error');
+    const wrongTypeTokens = allGaps.filter(g => g.severity === 'warning');
 
-    lines.push(`🔴 Top Issues (${allGaps.length} total gaps)`);
+    if (wrongTypeTokens.length > 0) {
+      lines.push(`⚠️  Wrong Token Types (${wrongTypeTokens.length} nodes have tokens but wrong type)`);
+      lines.push('');
+      const wrongTypeIssues = this.fixSuggestionGenerator.getTopIssues(wrongTypeTokens, 3);
+      for (const issue of wrongTypeIssues) {
+        lines.push(`   ${issue.nodeType} (${issue.count} occurrence${issue.count > 1 ? 's' : ''})`);
+        lines.push(`   Expected: ${issue.example.expectedTokenTypes.join(', ')}`);
+        lines.push(`   Actual: ${issue.example.actualTokens.map(t => t.tokenType).join(', ')}`);
+        lines.push('');
+      }
+      lines.push('');
+    }
+
+    const topIssues = this.fixSuggestionGenerator.getTopIssues(missingTokens, 5);
+
+    lines.push(`🔴 Missing Tokens (${missingTokens.length} total)`);
     lines.push('');
 
     for (let i = 0; i < topIssues.length; i++) {

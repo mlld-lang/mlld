@@ -4,8 +4,11 @@ Comprehensive validation system for LSP semantic token coverage that eliminates 
 
 ## Current Status
 
-**Strict Mode**: 96.0% coverage (1016/1058 nodes), 14 fixtures failing, 39 passing
-**Main Issues**: ExecInvocation nodes (24 gaps), field/numericField nodes (16 gaps), Literal nodes (2 gaps)
+**Strict Mode Fixtures**: 100% coverage (1058/1058 nodes), 53 passing, 0 failing ✅
+
+**Production Files**: Still have issues - see epic [mlld-76c](../.beads/issues/mlld-76c.md) for tracking
+
+The validator achieves 100% on test fixtures, but real files expose additional edge cases. Use `npm run test:nvim-lsp <file>` to test actual editor integration.
 
 ## Features
 
@@ -28,11 +31,15 @@ During initial testing, the validator revealed critical bugs in the LSP implemen
 
 These bugs meant that child nodes inside Directive `.values` containers (like variables, parameters, literals) were never visited and thus never tokenized.
 
-### Fixes Applied
+### Critical Bugs Fixed
 
-- Added `field`, `numericField`, `arrayIndex` visitor registrations to `ASTSemanticVisitor.ts:87-89`
-- Updated `visitChildren()` to recurse into container objects: checks if object has `.type`, if not, iterates all its properties
-- Fixed `NodeExpectationBuilder` to use same container recursion logic
+1. **Negative character positions** (`DirectiveVisitor.ts:340-365`) - `meta.implicit` was null for strict mode, causing wrong position calculations. Fixed by checking source text for `/` instead of trusting meta flag. This was **causing Neovim crashes** and malformed tokens.
+
+2. **Missing visitor registrations** - `field`, `numericField`, `arrayIndex` weren't registered in `ASTSemanticVisitor.ts:87-89`
+
+3. **Container object recursion** - `visitChildren()` now iterates ALL properties of plain objects without `.type`, properly handling Directive `.values` containers
+
+4. **Wrong token types** - ExecInvocation sent as `variable` instead of `function` (`CommandVisitor.ts:142, 326`)
 
 ## Usage
 
@@ -164,7 +171,62 @@ tests/utils/token-validator/
 ```bash
 # Run validator tests
 npm test tests/utils/token-validator/TokenCoverageValidator.test.ts
+
+# Test what Neovim actually receives from LSP
+npm run test:nvim-lsp <file.mld>
+npm run test:nvim-lsp:verbose <file.mld>
 ```
+
+### Testing Real Editor Integration
+
+The `test:nvim-lsp` script tests what the actual LSP server sends to Neovim:
+
+```bash
+# Test specific file (shows errors only)
+npm run test:nvim-lsp <file.mld>
+
+# Show all LSP activity
+npm run test:nvim-lsp:verbose <file.mld>
+```
+
+**How it works:**
+1. Opens file in Neovim headless
+2. Waits for LSP to process (3 second timeout)
+3. Captures LSP logs from `~/.local/state/nvim/lsp.log`
+4. Filters for token errors and semantic activity
+5. Shows summary with token count
+
+**Example output:**
+```
+Summary:
+  ✅ 247 tokens generated
+  🔴 2 token position errors (these tokens were rejected)
+  ⚠️  2 unknown node types (no visitors registered)
+```
+
+**Key difference from validator**: This tests the FULL LSP pipeline (parse → analyze → tokenize → encode → send), not just `ASTSemanticVisitor` in isolation. It reveals issues like:
+- Invalid token positions that crash editors
+- Parse errors preventing tokenization
+- Unknown node types
+- Diagnostic bugs
+
+Use this to verify fixes work in actual editors before deploying.
+
+## Known Issues
+
+See epic **[mlld-76c](../../.beads/issues/mlld-76c.md)** for tracking all tokenization issues.
+
+**Critical P0 issues:**
+- [mlld-ghp](../../.beads/issues/mlld-ghp.md) - Negative token position causing failures
+- [mlld-7t7](../../.beads/issues/mlld-7t7.md) - @variables not highlighted
+- [mlld-ktr](../../.beads/issues/mlld-ktr.md) - @exe() calls not highlighted
+- [mlld-kks](../../.beads/issues/mlld-kks.md) - False error on import with 'as' clause
+- [mlld-08i](../../.beads/issues/mlld-08i.md) - Strings marked as invalid
+
+**Lower priority:**
+- [mlld-514](../../.beads/issues/mlld-514.md) - Bracket property access edge case
+- [mlld-ddn](../../.beads/issues/mlld-ddn.md) - Object keys not highlighted
+- [mlld-drm](../../.beads/issues/mlld-drm.md) - Comment highlighting inconsistent
 
 ## Known Limitations
 
@@ -180,19 +242,20 @@ npm test tests/utils/token-validator/TokenCoverageValidator.test.ts
 
 ## Next Steps
 
-To reach 100% coverage (currently at 96.0%):
+✅ **Strict mode: 100% coverage achieved!**
 
-1. **Fix ExecInvocation** gaps (24 occurrences) - CommandVisitor.visitExecInvocation() is called but may not tokenize in all cases
-2. **Fix field/numericField** gaps (16 occurrences) - StructureVisitor needs to handle these node types
-3. **Fix Literal** gaps (2 occurrences) - LiteralVisitor edge cases
-
-Most gaps are now fixed! Down from 183 to 42 gaps.
+Next:
+1. **Test markdown mode** - Run validator on `.md` fixtures
+2. **Add to CI** - Fail builds if coverage drops
+3. **Test on real files** - Validate large production files like `~/dev/party/proto-3.7/llm/routes/orchestrate.mld`
 
 ## CI Integration
 
-**Do NOT add to CI yet** - coverage is 96.0%, will fail builds. Once 100% is reached:
+**Ready for CI!** Strict mode has 100% coverage:
 
 ```yaml
 - name: Validate semantic token coverage
   run: npm run validate:tokens
 ```
+
+This will fail builds if token coverage drops below 100%.

@@ -261,9 +261,14 @@ export class StructureVisitor extends BaseVisitor {
     
     if (node.items && Array.isArray(node.items)) {
       // Check if this is a plain array (all values are primitives) or has mlld constructs
-      const hasASTNodes = node.items.some((item: any) => 
-        typeof item === 'object' && item !== null && item.type
-      );
+      const hasASTNodes = node.items.some((item: any) => {
+        if (typeof item !== 'object' || item === null) return false;
+        if (item.type) return true;
+        if (Array.isArray(item.content)) {
+          return item.content.some((part: any) => typeof part === 'object' && part !== null && part.type);
+        }
+        return false;
+      });
       
       if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
         console.log('[ARRAY]', {
@@ -286,12 +291,20 @@ export class StructureVisitor extends BaseVisitor {
         for (let i = 0; i < node.items.length; i++) {
           const item = node.items[i];
 
-          // Process the item if it's an AST node (e.g., VariableReference, object, array)
           if (typeof item === 'object' && item !== null && item.type) {
-            // RECURSIVE VISITATION FOR MLLD VALUES (variables, nested objects/arrays, etc.)
+            // AST node (variable/object/array/etc.)
             this.mainVisitor.visitNode(item, context);
-            if (item.location) {
-              lastItemEndOffset = item.location.end.offset;
+            if (item.location) lastItemEndOffset = item.location.end.offset;
+          } else if (typeof item === 'object' && item !== null && Array.isArray(item.content)) {
+            // Wrapper object that contains AST nodes (e.g., quoted string content)
+            for (const part of item.content) {
+              if (part && typeof part === 'object' && part.type) {
+                this.mainVisitor.visitNode(part, context);
+              }
+            }
+            const lastPartWithLocation = [...item.content].reverse().find((p: any) => p?.location);
+            if (lastPartWithLocation?.location) {
+              lastItemEndOffset = lastPartWithLocation.location.end.offset;
             }
           } else {
             // Primitive value - scan and tokenize
@@ -305,9 +318,12 @@ export class StructureVisitor extends BaseVisitor {
           // Find and tokenize comma if not the last item
           if (i < node.items.length - 1) {
             // Use helper to tokenize comma between items
-            const nextItemStart = (i + 1 < node.items.length && node.items[i + 1]?.location)
-              ? node.items[i + 1].location.start.offset
-              : node.location.end.offset;
+            const nextItem = node.items[i + 1];
+            const nextItemContent = Array.isArray(nextItem?.content) ? nextItem.content : [];
+            const nextItemStart =
+              (nextItem?.location?.start?.offset) ??
+              (nextItemContent.find((p: any) => p?.location)?.location?.start?.offset) ??
+              node.location.end.offset;
             this.operatorHelper.tokenizeOperatorBetween(
               lastItemEndOffset,
               nextItemStart,

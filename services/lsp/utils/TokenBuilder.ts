@@ -20,9 +20,47 @@ export class TokenBuilder {
   ) {}
   
   addToken(token: TokenInfo): void {
+    // Validate token position
+    if (!Number.isFinite(token.line) || !Number.isFinite(token.char) || !Number.isFinite(token.length)) {
+      // Get source text to show what was being tokenized
+      const sourceText = this.document.getText();
+      const lineText = sourceText.split('\n')[token.line] || '';
+
+      console.error(`[TOKEN-ERROR] Invalid token position:`, {
+        line: token.line,
+        char: token.char,
+        length: token.length,
+        tokenType: token.tokenType,
+        lineText: lineText.substring(0, 100),
+        uri: this.document.uri
+      });
+      return;
+    }
+
+    if (token.line < 0 || token.char < 0 || token.length < 0) {
+      const sourceText = this.document.getText();
+      const lineText = sourceText.split('\n')[token.line] || '';
+
+      console.error(`[TOKEN-ERROR] Negative token position:`, {
+        line: token.line,
+        char: token.char,
+        length: token.length,
+        tokenType: token.tokenType,
+        lineText: lineText.substring(0, 100),
+        uri: this.document.uri
+      });
+
+      // Log stack trace to find where this is coming from
+      if (process.env.DEBUG) {
+        console.error('[TOKEN-ERROR-STACK]', new Error().stack);
+      }
+
+      return;
+    }
+
     // Map custom token types to standard types if mapping provided
     const mappedType = this.tokenTypeMap?.[token.tokenType] || token.tokenType;
-    
+
     const typeIndex = this.tokenTypes.indexOf(mappedType);
     if (typeIndex === -1) {
       console.warn(`Unknown token type: ${token.tokenType} (mapped to: ${mappedType})`);

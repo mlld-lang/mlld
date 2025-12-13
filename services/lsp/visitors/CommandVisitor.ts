@@ -133,22 +133,46 @@ export class CommandVisitor extends BaseVisitor {
           return;
         }
         const identifierLoc = node.commandRef.identifier[0].location;
-        
-        // Add the @ and function name
-        this.tokenBuilder.addToken({
-          line: identifierLoc.start.line - 1,
-          char: identifierLoc.start.column - 1,
-          length: name.length + 1, // +1 for @
-          tokenType: 'variable',
-          modifiers: []
-        });
+
+        const source = this.document.getText();
+        const includesAt = source.charAt(identifierLoc.start.offset) === '@';
+        const atCharPos = includesAt
+          ? identifierLoc.start.column - 1
+          : identifierLoc.start.column - 2;
+        const nameCharPos = includesAt ? atCharPos + 1 : atCharPos + 1;
+
+        if (process.env.DEBUG) {
+          console.log('[EXEC-INV-NOLOC]', { name, atCharPos, nameCharPos, includesAt });
+        }
+
+        // Tokenize @ as variable and name as function to avoid overlapping tokens
+        if (atCharPos >= 0) {
+          this.tokenBuilder.addToken({
+            line: identifierLoc.start.line - 1,
+            char: atCharPos,
+            length: 1,
+            tokenType: 'variableRef',
+            modifiers: ['reference']
+          });
+        }
+
+        // Safety check: ensure name and length are valid
+        if (name && typeof name === 'string' && name.length > 0) {
+          this.tokenBuilder.addToken({
+            line: identifierLoc.start.line - 1,
+            char: nameCharPos,
+            length: name.length,
+            tokenType: 'function',
+            modifiers: ['reference']
+          });
+        }
         
         // If there are args, add parentheses
         if (node.commandRef.args && node.commandRef.args.length >= 0) {
           // Add opening parenthesis
           this.tokenBuilder.addToken({
             line: identifierLoc.start.line - 1,
-            char: identifierLoc.start.column - 1 + name.length + 1, // After @name
+            char: atCharPos + name.length + 1, // After @ + name
             length: 1,
             tokenType: 'operator',
             modifiers: []
@@ -292,7 +316,7 @@ export class CommandVisitor extends BaseVisitor {
             // Empty args - put paren right after opening paren
             this.tokenBuilder.addToken({
               line: identifierLoc.start.line - 1,
-              char: identifierLoc.start.column - 1 + name.length + 2, // After @name(
+              char: atCharPos + name.length + 2, // After @ + name + (
               length: 1,
               tokenType: 'operator',
               modifiers: []
@@ -314,22 +338,41 @@ export class CommandVisitor extends BaseVisitor {
         return;
       }
       const charPos = node.location.start.column - 1;
+      const source = this.document.getText();
+      const includesAt = source.charAt(node.location.start.offset) === '@';
+      const atCharPos = includesAt ? charPos : charPos - 1;
+      const nameCharPos = includesAt ? atCharPos + 1 : atCharPos + 1;
 
       if (process.env.DEBUG) {
         console.log('[EXEC-INV] Tokenizing exec invocation', { name, charPos });
       }
 
-      this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: charPos,
-        length: name.length + 1,
-        tokenType: 'variableRef',
-        modifiers: ['reference']
-      });
-      
-      if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
-        // Add opening parenthesis
-        const openParenPos = charPos + name.length + 1;
+      if (atCharPos >= 0) {
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: atCharPos,
+          length: 1,
+          tokenType: 'variableRef',
+          modifiers: ['reference']
+        });
+      }
+
+      // Safety check: ensure name and length are valid
+      const hasValidName = name && typeof name === 'string' && name.length > 0;
+
+      if (hasValidName) {
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: nameCharPos,
+          length: name.length,
+          tokenType: 'function',
+          modifiers: ['reference']
+        });
+      }
+
+      // Add opening parenthesis (only if we have valid name for position calculation)
+      if (hasValidName && node.commandRef.args && Array.isArray(node.commandRef.args)) {
+        const openParenPos = atCharPos + name.length + 1;
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
           char: openParenPos,
@@ -444,8 +487,8 @@ export class CommandVisitor extends BaseVisitor {
             modifiers: []
           });
         }
-      }
-      
+      } // Close hasValidName && args if
+
       // Handle withClause pipeline (for pipes after function calls)
       if (node.withClause && node.withClause.pipeline) {
         // The pipes are in a different structure for ExecInvocation
@@ -490,12 +533,28 @@ export class CommandVisitor extends BaseVisitor {
   }
   
   private visitCommandReference(node: any, context: VisitorContext): void {
-    this.tokenBuilder.addToken({
-      line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: node.name?.length || 0,
-      tokenType: 'variableRef',
-      modifiers: ['reference']
-    });
+    // Check for invalid location
+    if (!node.location || node.location.start.column <= 0) {
+      if (process.env.DEBUG) {
+        console.log('[CMD-REF] Invalid location', { location: node.location, name: node.name });
+      }
+      return;
+    }
+
+    const char = node.location.start.column - 1;
+    const length = node.name?.length || 0;
+
+    // Validate before creating token
+    if (char >= 0 && length > 0) {
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char,
+        length,
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
+    } else if (process.env.DEBUG) {
+      console.log('[CMD-REF] Skipping invalid token', { char, length, name: node.name, column: node.location.start.column });
+    }
   }
 }

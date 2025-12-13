@@ -91,6 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LSP: Mode-aware highlighting**: Language server detects `.mld` (strict) vs `.mld.md` (markdown) and highlights bare directives correctly; text content in strict mode shows diagnostics; completions adapt to mode
 - **LSP: rc78 syntax support**: Semantic tokens for block syntax `[...]`, `let` keyword, `+=` augmented assignment, `while`/`done`/`continue`, `stream` directive, working directories `cmd:/path`, when semicolons
 - **LSP bug fixes**: When block assignments ([#327](https://github.com/mlld-lang/mlld/issues/327)), pipe transform parity ([#328](https://github.com/mlld-lang/mlld/issues/328)), EOL comments in when ([#329](https://github.com/mlld-lang/mlld/issues/329)), variable interpolation in /run ([#330](https://github.com/mlld-lang/mlld/issues/330)), function execution in /run ([#331](https://github.com/mlld-lang/mlld/issues/331)), array/object value highlighting ([#332](https://github.com/mlld-lang/mlld/issues/332))
+- **AST-driven semantic token validator** (`tests/utils/token-validator/`) - validates LSP tokens against AST structure, achieved 100% coverage on strict mode fixtures. Tools: `npm run validate:tokens`, `npm run test:nvim-lsp <file>`. See `docs/dev/LSP-TOKEN-VALIDATOR.md`.
+- **LSP tokenization fixes**: Negative char positions causing Neovim crashes, missing visitor registrations (field/numericField/arrayIndex/LetAssignment/ExeReturn), container object recursion in visitChildren(), ExecInvocation wrong token type. Epic [mlld-76c](/.beads/issues/mlld-76c.md) tracks remaining gaps.
 
 ## [2.0.0-rc77]
 

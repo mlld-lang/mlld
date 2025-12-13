@@ -111,6 +111,9 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   // =============================================================================
   'Literal': {
     expectedTokenTypes: (node: any) => {
+      // Special keyword-like literals
+      if (node.valueType === 'wildcard' || node.valueType === 'none' || node.valueType === 'retry') return ['keyword'];
+      if (node.valueType === 'done' || node.valueType === 'continue') return ['keyword'];
       if (node.valueType === 'number') return ['number'];
       if (node.valueType === 'boolean') return ['keyword'];
       if (node.value === null) return ['keyword'];
@@ -318,6 +321,20 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
     visitor: 'TemplateVisitor'
+  },
+
+  // =============================================================================
+  // BLOCK STATEMENTS (let, =>, etc.)
+  // =============================================================================
+  'LetAssignment': {
+    expectedTokenTypes: ['keyword'],
+    mustBeCovered: true,
+    visitor: 'ExpressionVisitor'
+  },
+  'ExeReturn': {
+    expectedTokenTypes: ['operator'],
+    mustBeCovered: true,
+    visitor: 'ExpressionVisitor'
   },
 
   // =============================================================================
