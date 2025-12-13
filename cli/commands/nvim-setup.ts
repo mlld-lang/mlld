@@ -6,7 +6,7 @@ import chalk from 'chalk';
 
 // Config version - bump when making breaking changes
 // nvim-doctor uses this to detect outdated configs
-export const NVIM_CONFIG_VERSION = 7;
+export const NVIM_CONFIG_VERSION = 8;
 
 // File extension semantics:
 // - .mld files → strict mode (bare directives like `var @x = 1`)
@@ -62,6 +62,30 @@ if use_new_api then
 
   -- Enable autostart for mlld_ls
   vim.lsp.enable('mlld_ls')
+
+  -- Enable semantic tokens on LSP attach
+  vim.api.nvim_create_autocmd('LspAttach', {
+    callback = function(args)
+      local client = vim.lsp.get_client_by_id(args.data.client_id)
+      if client and client.name == 'mlld_ls' and client.server_capabilities.semanticTokensProvider then
+        -- Define highlight groups for mlld semantic tokens
+        vim.api.nvim_set_hl(0, '@lsp.type.variable.mld', { link = 'Identifier' })
+        vim.api.nvim_set_hl(0, '@lsp.type.property.mld', { link = 'Type' })
+        vim.api.nvim_set_hl(0, '@lsp.type.function.mld', { link = 'Function', italic = true })
+        vim.api.nvim_set_hl(0, '@lsp.type.parameter.mld', { link = 'Parameter' })
+        vim.api.nvim_set_hl(0, '@lsp.type.string.mld', { link = 'String' })
+        vim.api.nvim_set_hl(0, '@lsp.type.number.mld', { link = 'Number' })
+        vim.api.nvim_set_hl(0, '@lsp.type.keyword.mld', { link = 'Keyword' })
+        vim.api.nvim_set_hl(0, '@lsp.type.operator.mld', { link = 'Operator' })
+        vim.api.nvim_set_hl(0, '@lsp.type.comment.mld', { link = 'Comment' })
+        -- Modifiers for additional nuance
+        vim.api.nvim_set_hl(0, '@lsp.typemod.variable.declaration.mld', { link = 'Identifier', bold = true })
+        vim.api.nvim_set_hl(0, '@lsp.typemod.function.reference.mld', { link = 'Function', italic = true })
+
+        vim.lsp.semantic_tokens.start(args.buf, client.id)
+      end
+    end,
+  })
 else
   -- Neovim 0.9: Use lspconfig
   local ok, lspconfig = pcall(require, 'lspconfig')
@@ -152,6 +176,30 @@ return {
 
       -- Enable autostart for mlld_ls
       vim.lsp.enable('mlld_ls')
+
+      -- Enable semantic tokens on LSP attach
+      vim.api.nvim_create_autocmd('LspAttach', {
+        callback = function(args)
+          local client = vim.lsp.get_client_by_id(args.data.client_id)
+          if client and client.name == 'mlld_ls' and client.server_capabilities.semanticTokensProvider then
+            -- Define highlight groups for mlld semantic tokens
+            vim.api.nvim_set_hl(0, '@lsp.type.variable.mld', { link = 'Identifier' })
+            vim.api.nvim_set_hl(0, '@lsp.type.property.mld', { link = 'Type' })
+            vim.api.nvim_set_hl(0, '@lsp.type.function.mld', { link = 'Function', italic = true })
+            vim.api.nvim_set_hl(0, '@lsp.type.parameter.mld', { link = 'Parameter' })
+            vim.api.nvim_set_hl(0, '@lsp.type.string.mld', { link = 'String' })
+            vim.api.nvim_set_hl(0, '@lsp.type.number.mld', { link = 'Number' })
+            vim.api.nvim_set_hl(0, '@lsp.type.keyword.mld', { link = 'Keyword' })
+            vim.api.nvim_set_hl(0, '@lsp.type.operator.mld', { link = 'Operator' })
+            vim.api.nvim_set_hl(0, '@lsp.type.comment.mld', { link = 'Comment' })
+            -- Modifiers for additional nuance
+            vim.api.nvim_set_hl(0, '@lsp.typemod.variable.declaration.mld', { link = 'Identifier', bold = true })
+            vim.api.nvim_set_hl(0, '@lsp.typemod.function.reference.mld', { link = 'Function', italic = true })
+
+            vim.lsp.semantic_tokens.start(args.buf, client.id)
+          end
+        end,
+      })
     else
       -- Neovim 0.9: Use lspconfig
       local lspconfig = require("lspconfig")
