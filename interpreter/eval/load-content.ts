@@ -18,6 +18,7 @@ import {
   type TokenEstimationOptions,
   type TokenMetrics
 } from '@core/utils/token-metrics';
+import type { DataLabel } from '@core/types/security';
 
 /**
  * Internal class implementation of LoadContentResult
@@ -136,6 +137,10 @@ export class LoadContentResultImpl implements LoadContentResult {
   get ctx() {
     const self = this;
     return {
+      labels: [] as readonly DataLabel[],
+      taint: [] as readonly DataLabel[],
+      sources: [this.absolute] as readonly string[],
+      policy: null,
       filename: this.filename,
       relative: this.relative,
       absolute: this.absolute,
@@ -259,6 +264,7 @@ export class LoadContentResultURLImpl extends LoadContentResultImpl implements L
     const base = super.ctx;
     return {
       ...base,
+      sources: [this.url] as readonly string[],
       url: this.url,
       domain: this.domain,
       title: this.title,
