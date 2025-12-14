@@ -58,7 +58,14 @@ export interface LoadContentResult {
 }
 
 /**
- * Type guard for LoadContentResult
+ * Structural guard for LoadContentResult - checks for required properties.
+ *
+ * LAYERING: This is a core guard - no symbol dependency.
+ * Use in core/ or when you need structural check only.
+ *
+ * For interpreter code that needs to check for file-loaded values, consider:
+ * - isFileLoad() - checks both wrapped and unwrapped forms
+ * - isFileLoadStructuredValue() - checks wrapped StructuredValue with file metadata
  */
 export function isLoadContentResult(value: unknown): value is LoadContentResult {
   return (

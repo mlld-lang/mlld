@@ -180,15 +180,31 @@ function deriveArrayText(value: any[]): string {
 }
 
 /**
+ * Symbol-aware guard for file-loaded StructuredValues.
+ * Use in interpreter/ when you specifically need a wrapped StructuredValue from file.
+ */
+export function isFileLoadStructuredValue(value: unknown): value is StructuredValue {
+  return isStructuredValue(value) && Boolean(value.ctx?.filename);
+}
+
+/**
+ * Combined check - handles both wrapped and unwrapped forms.
+ * Use in interpreter/ when you want to check if data came from a file,
+ * regardless of whether it's been wrapped yet.
+ */
+export function isFileLoad(value: unknown): boolean {
+  return isLoadContentResult(value) || isFileLoadStructuredValue(value);
+}
+
+/**
  * Check if a value represents a file-loaded StructuredValue or LoadContentResult.
  * Use this when you need to know "was this data loaded from a file?"
  * Works with both wrapped (StructuredValue) and unwrapped (LoadContentResult) forms.
+ *
+ * @deprecated Use isFileLoad() instead for clearer intent
  */
 export function hasFileLoadMetadata(value: unknown): boolean {
-  if (isStructuredValue(value)) {
-    return Boolean(value.ctx?.filename);
-  }
-  return isLoadContentResult(value);
+  return isFileLoad(value);
 }
 
 /**
