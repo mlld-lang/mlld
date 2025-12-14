@@ -360,6 +360,134 @@ const result = await resolveVariable(variable, env, ResolutionContext.ArrayEleme
 const value = await resolveVariableValue(variable, env);
 ```
 
+## Type Guards for File-Loaded Content
+
+mlld provides three type guards for working with file-loaded content. Choose the appropriate one based on your layer and needs:
+
+### Core Layer: `isLoadContentResult()`
+
+**Location**: `core/types/load-content.ts`
+
+**Checks**: Structural properties without symbols
+```typescript
+export function isLoadContentResult(value: unknown): value is LoadContentResult {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'content' in value &&
+    'filename' in value &&
+    'relative' in value &&
+    'absolute' in value
+  );
+}
+```
+
+**Use in core/ code** that should not import from interpreter/:
+```typescript
+import { isLoadContentResult } from '@core/types/load-content';
+
+if (isLoadContentResult(value)) {
+  // Structural check only - no symbol checking
+  console.log(value.filename);  // Safe in core
+  console.log(value.content);   // Safe in core
+}
+```
+
+**Why**: Maintains unidirectional dependency: `core/` → nothing, `interpreter/` → `core/`.
+
+### Interpreter Layer: `isFileLoadStructuredValue()`
+
+**Location**: `interpreter/utils/load-content-structured.ts`
+
+**Checks**: Symbol-aware guard for wrapped file-loaded StructuredValues
+```typescript
+export function isFileLoadStructuredValue(value: unknown): value is StructuredValue {
+  return isStructuredValue(value) && Boolean(value.ctx?.filename);
+}
+```
+
+**Use in interpreter/ code** when you need a **wrapped** StructuredValue from file loading:
+```typescript
+import { isFileLoadStructuredValue } from '@interpreter/utils/load-content-structured';
+
+if (isFileLoadStructuredValue(value)) {
+  // It's wrapped and has file metadata
+  const metadata = value.ctx;      // Canonical metadata access
+  const content = value.text;      // Display-ready content
+  const parsed = value.data;       // Parsed content (for JSON/JSONL)
+
+  // Recommended for new code
+  console.log(metadata.filename);
+  console.log(metadata.tokens);
+  console.log(metadata.fm);        // Frontmatter if present
+}
+```
+
+**Why**: Only StructuredValues have the symbol; this guard verifies file metadata is available.
+
+### Interpreter Layer: `isFileLoad()`
+
+**Location**: `interpreter/utils/load-content-structured.ts`
+
+**Checks**: Either unwrapped LoadContentResult or wrapped StructuredValue
+```typescript
+export function isFileLoad(value: unknown): boolean {
+  return isLoadContentResult(value) || isFileLoadStructuredValue(value);
+}
+```
+
+**Use in interpreter/ code** when you need to accept **both** forms (before and after wrapping):
+```typescript
+import { isFileLoad } from '@interpreter/utils/load-content-structured';
+
+if (isFileLoad(value)) {
+  // Handles unwrapped LoadContentResult OR wrapped StructuredValue
+  // Useful during transitional phases or when the form is unknown
+}
+```
+
+**Why**: Some code paths may encounter either form. Use when you don't care about the wrapper state.
+
+### Accessing Metadata: Prefer `.ctx`
+
+**Recommendation**: In new code, use `.ctx` for metadata access (available on StructuredValue):
+
+```typescript
+// Good - new code
+const sv = value as StructuredValue;
+console.log(sv.ctx.filename);      // Canonical path
+console.log(sv.ctx.tokens);        // Token metrics
+console.log(sv.ctx.relative);      // Relative path
+console.log(sv.ctx.fm);            // Frontmatter (if present)
+console.log(sv.ctx.tokest);        // Token estimate
+```
+
+Metadata fields available in `.ctx`:
+- `filename`: Original filename
+- `relative`: Relative path to project root
+- `absolute`: Absolute file path
+- `url`: URL (for remote content)
+- `domain`: Domain name (for URLs)
+- `title`: Page title (for HTML)
+- `description`: Page description (for HTML)
+- `tokens`: Exact token count (if computed)
+- `tokest`: Estimated token count
+- `fm`: Frontmatter object (if file has YAML/TOML frontmatter)
+- `source`: Source type ('load-content', 'pipeline', etc.)
+- `retries`: Number of retry attempts (if applicable)
+- `labels`: Security labels
+- `taint`: Taint tracking labels
+
+### Summary: Which Guard to Use
+
+| Context | Guard | Use | Reason |
+|---------|-------|-----|--------|
+| core/ code | `isLoadContentResult()` | Structural check | No symbol, maintains layering |
+| interpreter/ with wrapped values | `isFileLoadStructuredValue()` | Symbol + metadata check | Verify wrapped & has metadata |
+| interpreter/ either form | `isFileLoad()` | Accepts both | Transitional or ambiguous state |
+
+**For new interpreter code**: Prefer `isFileLoadStructuredValue()` with `.ctx` metadata access—ensures wrapped form and provides full metadata surface.
+
 ## Migration Notes
 
 The type system refactor (Phase 0-5) transitioned from:

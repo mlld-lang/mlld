@@ -410,6 +410,47 @@ const result = await AutoUnwrapManager.executeWithPreservation(async () => {
 });
 ```
 
+## Type System Integration with StructuredValue
+
+File loading via alligator syntax produces **StructuredValue-compatible values** in mlld's unified type system:
+
+```typescript
+// When you load a file, you get a StructuredValue wrapper:
+// {
+//   type: 'text' | 'array' | 'object',
+//   text: string,           // Display representation
+//   data: T,                // Parsed content (for JSON/JSONL)
+//   ctx: {                  // Metadata
+//     filename, relative, absolute,  // Paths
+//     url, domain,                   // For remote content
+//     tokens, tokest, fm,            // Metrics & frontmatter
+//     labels, taint,                 // Security
+//     ...
+//   }
+// }
+```
+
+Use type guards to work with file-loaded content:
+
+```typescript
+import { isFileLoadStructuredValue, isFileLoad } from '@interpreter/utils/load-content-structured';
+
+// Check for wrapped file-loaded StructuredValue (preferred in new code)
+if (isFileLoadStructuredValue(value)) {
+  console.log(value.ctx.filename);   // File path
+  console.log(value.ctx.tokens);     // Token count
+  console.log(value.data);           // Parsed content (JSON/JSONL)
+  console.log(value.text);           // Raw content string
+}
+
+// Or check for either form (wrapped or unwrapped)
+if (isFileLoad(value)) {
+  // Handles both LoadContentResult and StructuredValue
+}
+```
+
+For complete documentation on type guards, see **docs/dev/TYPES.md** → "Type Guards for File-Loaded Content".
+
 ## Debugging
 
 Enable debug output to trace array behavior:
