@@ -16,6 +16,10 @@
  * This is acceptable - wrapping happens at usage boundaries where computation is expected.
  *
  * See docs/dev/TYPES.md for complete architecture documentation.
+ *
+ * TECH DEBT: Spread-based creation bypasses wrapLoadContentValue()
+ * - interpreter/eval/auto-unwrap-manager.ts:104
+ * TODO: Replace with factory function in Phase 3
  */
 
 import {
@@ -176,6 +180,18 @@ function deriveArrayText(value: any[]): string {
 }
 
 /**
+ * Check if a value represents a file-loaded StructuredValue or LoadContentResult.
+ * Use this when you need to know "was this data loaded from a file?"
+ * Works with both wrapped (StructuredValue) and unwrapped (LoadContentResult) forms.
+ */
+export function hasFileLoadMetadata(value: unknown): boolean {
+  if (isStructuredValue(value)) {
+    return Boolean(value.ctx?.filename);
+  }
+  return isLoadContentResult(value);
+}
+
+/**
  * Wraps LoadContentResult into StructuredValue
  *
  * This is the bridge between source data (LoadContentResult) and wrapped data (StructuredValue).
@@ -195,14 +211,6 @@ function deriveArrayText(value: any[]): string {
  * JSON/JSONL parsing and security extraction always happen for file loads.
  */
 export function wrapLoadContentValue(value: any): StructuredValue {
-  if (isStructuredValue(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    return wrapStructured(value, 'text', value, { source: 'load-content' });
-  }
-
   if (isLoadContentResult(value)) {
     const baseMetadata = extractLoadContentMetadata(value);
     const contentText = typeof value.content === 'string' ? value.content : String(value.content ?? '');
@@ -234,6 +242,14 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     }
     // Default text handling: data is the content string, metadata carries file info
     return wrapStructured(contentText, 'text', contentText, baseMetadata);
+  }
+
+  if (isStructuredValue(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return wrapStructured(value, 'text', value, { source: 'load-content' });
   }
 
   if (Array.isArray(value)) {
