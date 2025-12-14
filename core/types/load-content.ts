@@ -1,9 +1,26 @@
 /**
  * Type definitions for content loading with metadata support
+ *
+ * ARCHITECTURAL NOTE: This is the source data layer.
+ *
+ * LoadContentResult represents raw file/URL content as loaded by content loaders.
+ * It does NOT extend StructuredValue - that's the wrapped form created by
+ * wrapLoadContentValue() in interpreter/utils/load-content-structured.ts.
+ *
+ * LAYERING CONSTRAINT: This file (core/) does NOT import from interpreter/.
+ * - Core is unaware of STRUCTURED_VALUE_SYMBOL
+ * - isLoadContentResult() is a structural guard (checks properties, not symbol)
+ * - interpreter/ imports from core/, never the reverse
+ *
+ * See docs/dev/TYPES.md for complete architecture documentation.
  */
 
 /**
  * Result of loading content with rich metadata
+ *
+ * This represents the source data layer - raw content as loaded from files/URLs.
+ * For the wrapped form with STRUCTURED_VALUE_SYMBOL and security metadata,
+ * see wrapLoadContentValue() in interpreter/utils/load-content-structured.ts.
  */
 export interface LoadContentResult {
   // Always available properties

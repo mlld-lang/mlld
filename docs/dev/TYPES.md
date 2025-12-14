@@ -6,6 +6,106 @@ This document describes mlld's Variable type system and how types are preserved 
 
 mlld uses a sophisticated Variable type system that preserves type information throughout the entire execution lifecycle. Variables are not just containers for values - they carry rich metadata about their origin, type, and behavior.
 
+## LoadContentResult vs StructuredValue Architecture
+
+mlld has two distinct but related type systems for handling loaded content:
+
+### Core Design Decisions
+
+These architectural decisions ensure clean layering and proper separation of concerns:
+
+#### 1. Layering: Core vs Interpreter
+
+**Decision**: Core stays unaware of `STRUCTURED_VALUE_SYMBOL`; `isLoadContentResult()` remains a structural guard.
+
+- `core/types/load-content.ts` defines LoadContentResult interface with structural properties
+- `core/` does NOT import from `interpreter/` (maintains dependency direction)
+- `isLoadContentResult()` checks for `{content, filename, relative, absolute}` structure (no symbol)
+- `interpreter/utils/structured-value.ts` defines StructuredValue with `STRUCTURED_VALUE_SYMBOL`
+- `interpreter/utils/load-content-structured.ts` bridges the two via `wrapLoadContentValue()`
+
+**Why**: Prevents circular dependencies and keeps core types independent of runtime implementation.
+
+#### 2. Generic Types: LoadContentResult Does NOT Extend StructuredValue
+
+**Decision**: LoadContentResult is the **source data layer**; StructuredValue is the **wrapped form**.
+
+- LoadContentResult is created by content loaders (files, URLs)
+- StructuredValue is created by wrapping LoadContentResult (adds symbol, security metadata)
+- No inheritance relationship; wrapping handles transformation
+- `wrapLoadContentValue()` performs the conversion, including JSON/JSONL parsing
+
+**Why**: LoadContentResult represents raw file data; StructuredValue adds runtime metadata and security context. They serve different purposes in different layers.
+
+#### 3. End-State Semantics: Text vs Data for Different File Types
+
+**Decision**: File type determines `.text` and `.data` semantics after wrapping.
+
+**Text files (.txt, .md, etc.)**:
+- `.text` = raw file content
+- `.data` = raw file content (same as .text)
+- File metadata via `.ctx.filename`, `.ctx.absolute`, etc.
+
+**JSON files (.json)**:
+- `.text` = raw file content (unparsed string)
+- `.data` = parsed JSON object or array
+- File metadata via `.ctx.filename`, `.ctx.absolute`, etc.
+
+**JSONL files (.jsonl)**:
+- `.text` = raw file content (unparsed lines)
+- `.data` = parsed array of JSON objects
+- File metadata via `.ctx.filename`, `.ctx.absolute`, etc.
+
+**Why**: Preserves raw content for display while providing parsed data for computation. Both forms are accessible.
+
+#### 4. Lazy Evaluation: Accept Eager Computation When Wrapping
+
+**Decision**: Lazy getters on LoadContentResult are preserved, but wrapping triggers eager computation.
+
+- LoadContentResult has lazy getters for `.tokest`, `.tokens`, `.fm`, `.json`
+- `wrapLoadContentValue()` accesses these getters (triggers computation)
+- Eager computation during wrapping is acceptable cost
+- Lazy getters remain useful for code using LoadContentResult directly
+
+**Why**: Wrapping happens at usage boundaries where computation is expected. Simplifies code vs preserving laziness through wrapper.
+
+#### 5. Symbol Strategy: LoadContentResult Does NOT Gain STRUCTURED_VALUE_SYMBOL
+
+**Decision**: Only StructuredValue wrappers have `STRUCTURED_VALUE_SYMBOL`.
+
+- LoadContentResult remains a plain object/class without the symbol
+- StructuredValue (from `wrapStructured()`) has the symbol
+- `wrapLoadContentValue()` checks `isLoadContentResult()` BEFORE `isStructuredValue()`
+- Prevents early return that would skip JSON/JSONL parsing
+
+**Why**: Maintains clear distinction between source data and wrapped data. Ensures parsing and security extraction always happen.
+
+### Migration Path
+
+For code that needs to handle both LoadContentResult and StructuredValue:
+
+```typescript
+// In interpreter/ code - use helpers
+import { isFileLoad, isFileLoadStructuredValue } from '@interpreter/utils/load-content-structured';
+
+if (isFileLoad(value)) {
+  // Handles both LoadContentResult and wrapped StructuredValue
+}
+
+// In core/ code - use structural guard
+import { isLoadContentResult } from '@core/types/load-content';
+
+if (isLoadContentResult(value)) {
+  // Structural check only
+}
+```
+
+### See Also
+
+- `plan-loadcontent-to-structuredvalue.md` - Full implementation plan (GH#497)
+- `interpreter/utils/load-content-structured.ts` - Wrapping implementation
+- `core/types/load-content.ts` - Source interface
+
 ### Key Principles
 
 1. **Type Preservation**: Variables maintain their type discriminators and metadata through transformation
