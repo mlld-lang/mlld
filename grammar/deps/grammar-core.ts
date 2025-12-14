@@ -1358,7 +1358,7 @@ export const helpers = {
   /**
    * Creates an action node for /for directive actions
    */
-  createForActionNode(directive: string, content: any, location: any, endingTail?: any) {
+  createForActionNode(directive: string, content: any, location: any, endingTail?: any, endingComment?: any) {
     const kind = directive as DirectiveKindKey;
     // Special-case: support show actions with either templates/quotes or unified references
     if (kind === 'show' && content) {
@@ -1369,12 +1369,16 @@ export const helpers = {
         if (endingTail && endingTail.pipeline) {
           values.pipeline = endingTail.pipeline;
         }
+        const meta: any = { implicit: false, isTemplateContent: true };
+        if (endingComment) {
+          meta.comment = endingComment;
+        }
         return [this.createNode(NodeType.Directive, {
           kind,
           subtype: 'showTemplate',
           values,
           raw: { content: this.reconstructRawString((content as any).content) },
-          meta: { implicit: false, isTemplateContent: true },
+          meta,
           location
         })];
       }
@@ -1386,21 +1390,29 @@ export const helpers = {
       if (endingTail && endingTail.pipeline) {
         values.withClause = { pipeline: endingTail.pipeline };
       }
+      const meta: any = { implicit: false };
+      if (endingComment) {
+        meta.comment = endingComment;
+      }
       return [this.createNode(NodeType.Directive, {
         kind,
         subtype: isExec ? 'showInvocation' : 'showVariable',
         values,
         raw: { content: this.reconstructRawString(content) },
-        meta: { implicit: false },
+        meta,
         location
       })];
+    }
+    const meta: any = { implicit: false };
+    if (endingComment) {
+      meta.comment = endingComment;
     }
     return [this.createNode(NodeType.Directive, {
       kind,
       subtype: kind,
       values: { content: Array.isArray(content) ? content : [content] },
       raw: { content: this.reconstructRawString(content) },
-      meta: { implicit: false },
+      meta,
       location
     })];
   },

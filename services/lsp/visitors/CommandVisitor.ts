@@ -577,6 +577,24 @@ export class CommandVisitor extends BaseVisitor {
         }
       } // Close hasValidName && args if
 
+      // Handle args for cases where hasValidName is false (e.g., computed property calls)
+      // where name is an object instead of a string
+      if (!hasValidName && node.commandRef.args && Array.isArray(node.commandRef.args) && node.commandRef.args.length > 0) {
+        const newContext = {
+          ...context,
+          inCommand: true,
+          interpolationAllowed: true,
+          variableStyle: '@var' as const,
+          inFunctionArgs: true
+        };
+
+        for (const arg of node.commandRef.args) {
+          if (arg && typeof arg === 'object' && arg.type) {
+            this.mainVisitor.visitNode(arg, newContext);
+          }
+        }
+      }
+
       // Handle withClause pipeline (for pipes after function calls)
       if (node.withClause && node.withClause.pipeline) {
         // The pipes are in a different structure for ExecInvocation

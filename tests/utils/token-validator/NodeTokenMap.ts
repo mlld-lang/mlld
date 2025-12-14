@@ -22,71 +22,85 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   'VarDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'ShowDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'RunDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'ExeDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'WhenDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'ForDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'ImportDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'ExportDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'PathDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'OutputDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'AppendDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'GuardDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'WhileDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
   'StreamDirective': {
     expectedTokenTypes: ['keyword'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'DirectiveVisitor'
   },
 
@@ -96,6 +110,7 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   'VariableReference': {
     expectedTokenTypes: ['variable', 'function'],
     mustBeCovered: true,
+    requireExactType: false,
     includeAtSign: true,
     visitor: 'VariableVisitor'
   },
@@ -130,6 +145,7 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   'Parameter': {
     expectedTokenTypes: ['parameter'],
     mustBeCovered: true,
+    requireExactType: true,
     visitor: 'FileReferenceVisitor'
   },
 

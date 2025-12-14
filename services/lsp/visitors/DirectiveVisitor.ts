@@ -39,6 +39,9 @@ export class DirectiveVisitor extends BaseVisitor {
       const startOffset = node.location.start.offset;
       const hasSlash = sourceText[startOffset] === '/';
 
+      // TEST: Use different token types for different directives to see colors
+      const tokenType = this.getDirectiveTokenType(node.kind);
+
       // For implicit directives, check if the keyword appears at the start
       if (node.meta?.implicit) {
         // Check if the keyword matches at the start position
@@ -49,7 +52,7 @@ export class DirectiveVisitor extends BaseVisitor {
             line: node.location.start.line - 1,
             char: node.location.start.column - 1,
             length: node.kind.length,
-            tokenType: 'directive',
+            tokenType,
             modifiers: []
           });
         }
@@ -63,7 +66,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: node.location.start.line - 1,
           char: node.location.start.column - 1,
           length: tokenLength,
-          tokenType: 'directive',
+          tokenType,
           modifiers: []
         });
       }
@@ -71,47 +74,56 @@ export class DirectiveVisitor extends BaseVisitor {
     
     if (node.kind === 'when') {
       this.visitWhenDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'output') {
       this.visitOutputDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'import') {
       this.visitImportDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'for') {
       this.visitForDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'export') {
       this.visitExportDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'guard') {
       this.visitGuardDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     // /append is like /output - writes to a target
     if (node.kind === 'append') {
       this.visitOutputDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'while') {
       this.visitWhileDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'stream') {
       this.visitStreamDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
@@ -258,6 +270,8 @@ export class DirectiveVisitor extends BaseVisitor {
         // Handle exe blocks: /exe @func() = [statements; => return]
         if (node.subtype === 'exeBlock' && node.values.statements) {
           this.visitExeBlock(node, context);
+          this.tokenizeSecurityLabels(node);
+          this.handleDirectiveComment(node);
           return; // Skip normal value processing
         }
       } else {
@@ -290,18 +304,18 @@ export class DirectiveVisitor extends BaseVisitor {
             });
           }
         }
+        this.tokenizeSecurityLabels(node);
+        this.handleDirectiveComment(node);
         return; // Skip normal processing
       }
     }
-    
+
     if (node.values) {
       this.visitDirectiveValues(node, context);
     }
-    
+
     // Handle end-of-line comments
-    if (node.meta?.comment) {
-      this.visitEndOfLineComment(node.meta.comment);
-    }
+    this.handleDirectiveComment(node);
   }
 
   private visitExportDirective(directive: any, context: VisitorContext): void {
@@ -324,7 +338,7 @@ export class DirectiveVisitor extends BaseVisitor {
   
   private visitEndOfLineComment(comment: any): void {
     if (!comment.location) return;
-    
+
     if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
       console.log('[EOL-COMMENT]', {
         marker: comment.marker,
@@ -333,10 +347,20 @@ export class DirectiveVisitor extends BaseVisitor {
         offset: `${comment.location.start.offset}-${comment.location.end.offset}`
       });
     }
-    
+
     this.commentHelper.tokenizeEndOfLineComment(comment);
   }
-  
+
+  /**
+   * Handle end-of-line comments attached to directives via meta.comment
+   * Call this before early returns to ensure comments are tokenized
+   */
+  private handleDirectiveComment(node: any): void {
+    if (node.meta?.comment) {
+      this.visitEndOfLineComment(node.meta.comment);
+    }
+  }
+
   private handleVariableDeclaration(node: any, skipEquals: boolean = false): void {
     const identifierNodes = node.values.identifier;
     if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
@@ -356,11 +380,14 @@ export class DirectiveVisitor extends BaseVisitor {
         if (atIndex !== -1) {
           const atPosition = this.document.positionAt(startOffset + atIndex);
 
+          // Use 'function' for exe declarations, 'variable' for var/path
+          const tokenType = node.kind === 'exe' ? 'function' : 'variable';
+
           this.tokenBuilder.addToken({
             line: atPosition.line,
             char: atPosition.character,
             length: identifierName.length + 1,
-            tokenType: 'variable',
+            tokenType,
             modifiers: ['declaration']
           });
         } else {
@@ -369,11 +396,13 @@ export class DirectiveVisitor extends BaseVisitor {
             ? node.location.start.column + node.kind.length + 2
             : node.location.start.column + node.kind.length + 1;
 
+          const tokenType = node.kind === 'exe' ? 'function' : 'variable';
+
           this.tokenBuilder.addToken({
             line: node.location.start.line - 1,
             char: identifierStart - 1,
             length: identifierName.length + 1,
-            tokenType: 'variable',
+            tokenType,
             modifiers: ['declaration']
           });
         }
@@ -1007,20 +1036,8 @@ export class DirectiveVisitor extends BaseVisitor {
     }
     
     if (values?.lang) {
-      const langText = TextExtractor.extract(Array.isArray(values.lang) ? values.lang : [values.lang]);
-      if (langText && directive.location) {
-        const langStart = directive.location.start.column + 4; // After "/run "
-        
-        this.tokenBuilder.addToken({
-          line: directive.location.start.line - 1,
-          char: langStart,
-          length: langText.length,
-          tokenType: 'embedded',
-          modifiers: []
-        });
-      }
-      
       // For language-specific code blocks, use the language helper
+      // (it handles language identifier tokenization internally)
       if (values.code && directive.location) {
         this.languageHelper.tokenizeCodeBlock(directive);
       }
@@ -2373,6 +2390,10 @@ export class DirectiveVisitor extends BaseVisitor {
         } else {
           this.mainVisitor.visitNode(actionNode, context);
         }
+        // Handle comments attached to nested action directives
+        if (actionNode.type === 'Directive' && actionNode.meta?.comment) {
+          this.handleDirectiveComment(actionNode);
+        }
       }
     }
 
@@ -2982,6 +3003,27 @@ export class DirectiveVisitor extends BaseVisitor {
     // Visit the invocation/reference
     if (node.values.invocation) {
       this.mainVisitor.visitNode(node.values.invocation, context);
+    }
+  }
+
+  /**
+   * Get token type for directive keyword based on kind
+   * Different directive groups use different semantic types for color coding
+   */
+  private getDirectiveTokenType(kind: string): string {
+    switch (kind) {
+      // Definition directives: var, exe, guard, policy
+      // Use 'modifier' semantic type → renders as pink italic
+      case 'var':
+      case 'exe':
+      case 'guard':
+      case 'policy':
+        return 'directiveDefinition';
+
+      // Everything else (for/when/while/run/show/import/export/etc)
+      // Uses 'directive' → maps to 'keyword' → light teal italic
+      default:
+        return 'directive';
     }
   }
 }

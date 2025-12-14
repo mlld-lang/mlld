@@ -30,13 +30,24 @@ export class VariableVisitor extends BaseVisitor {
       console.log('[VAR-VISITOR]', { identifier, valueType, location: `${node.location.start.line}:${node.location.start.column}` });
     }
 
-    // Skip only 'identifier' valueType (used in declarations)
-    // 'varIdentifier' should be processed (used in references)
+    // Skip 'identifier' valueType ONLY if location doesn't include @
+    // In declarations (var/exe), location doesn't include @, so skip
+    // In exports, location DOES include @, so process it
     if (valueType === 'identifier') {
-      if (process.env.DEBUG) {
-        console.log('[VAR-VISITOR] Skipping identifier valueType');
+      const source = this.document.getText();
+      const charAtOffset = source.charAt(node.location.start.offset);
+      const includesAt = charAtOffset === '@';
+
+      if (!includesAt) {
+        if (process.env.DEBUG) {
+          console.log('[VAR-VISITOR] Skipping identifier valueType (no @ in location)');
+        }
+        return;
       }
-      return;
+      // If location includes @, fall through to process it
+      if (process.env.DEBUG) {
+        console.log('[VAR-VISITOR] Processing identifier valueType (@ in location, likely export)');
+      }
     }
     
     const baseLength = identifier.length + 1;
@@ -116,32 +127,71 @@ export class VariableVisitor extends BaseVisitor {
     valueType: string,
     baseLength: number
   ): void {
-    if (valueType === 'varIdentifier' || valueType === 'varInterpolation') {
-      // WORKAROUND: Parser location quirk - inconsistent @ symbol inclusion
-      // In /show directive context, the AST location doesn't include @
-      // In other contexts (assignments, expressions, objects), it does
-      // TODO: Remove this workaround when parser is fixed (see docs/dev/LANGUAGE-SERVER.md:343)
+    if (valueType === 'varIdentifier' || valueType === 'varInterpolation' || valueType === 'identifier') {
+      // Find @ position using offset-based search
+      // This is more reliable than column arithmetic which breaks with:
+      // - Multi-byte characters, tabs, datatype labels, etc.
       const source = this.document.getText();
-      const charAtOffset = source.charAt(node.location.start.offset);
+      const startOffset = node.location.start.offset;
+      const charAtOffset = source.charAt(startOffset);
       const includesAt = charAtOffset === '@';
 
-      // If location doesn't start with @, we need to go back one position
-      const charPos = includesAt
-        ? node.location.start.column - 1   // Already includes @, just convert to 0-based
-        : node.location.start.column - 2;  // Doesn't include @, go back one more
+      if (process.env.DEBUG) {
+        console.log('[VAR-POS]', {
+          identifier,
+          startOffset,
+          charAtOffset,
+          includesAt,
+          line: node.location.start.line,
+          column: node.location.start.column
+        });
+      }
 
-      // Validate charPos before proceeding
-      if (charPos < 0) {
-        if (process.env.DEBUG) {
-          console.log('[VAR-VISITOR] Invalid charPos', {
-            identifier,
-            column: node.location.start.column,
-            includesAt,
-            charPos,
-            baseLength
-          });
+      // Search for @ symbol near node location
+      let atOffset = startOffset;
+      if (!includesAt) {
+        // Location doesn't include @, search for it nearby
+        // First try searching forward (for bracket expressions like [@var])
+        const forwardSearchEnd = Math.min(source.length, startOffset + 3);
+        const forwardText = source.substring(startOffset, forwardSearchEnd);
+        const forwardIndex = forwardText.indexOf('@');
+
+        if (forwardIndex !== -1) {
+          atOffset = startOffset + forwardIndex;
+        } else {
+          // Try searching backwards (for other cases)
+          const searchStart = Math.max(0, startOffset - 10);
+          const searchText = source.substring(searchStart, startOffset + 1);
+          const backwardIndex = searchText.lastIndexOf('@');
+          if (backwardIndex !== -1) {
+            atOffset = searchStart + backwardIndex;
+          } else {
+            // Fallback: couldn't find @, skip this token
+            if (process.env.DEBUG) {
+              console.log('[VAR-VISITOR] Could not find @ symbol', {
+                identifier,
+                startOffset,
+                forwardText,
+                searchText
+              });
+            }
+            return;
+          }
         }
-        return; // Skip this token
+      }
+
+      // Convert offset to line/character position
+      const atPos = this.document.positionAt(atOffset);
+      const charPos = atPos.character;
+
+      if (process.env.DEBUG) {
+        console.log('[VAR-TOKEN]', {
+          identifier,
+          atOffset,
+          line: atPos.line,
+          char: charPos,
+          length: baseLength
+        });
       }
 
       // All variable references are tokenized as variables

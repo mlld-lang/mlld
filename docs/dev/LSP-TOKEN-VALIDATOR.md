@@ -172,6 +172,7 @@ Validate completeness: `node scripts/validate-token-mappings.mjs`
 - **Visitor recursion** - ASTSemanticVisitor calls `visitChildren()` after every visitor. Manual recursion in visitors can cause duplicate tokens. Use `visitedNodeIds` deduplication or don't recurse manually.
 - **sourceNode tracking** - TokenBuilder.setSourceNode() must be called before addToken() for diagnostics to correlate tokens to AST nodes
 - **Diagnostic overhead** - Tracking adds ~5-10% performance overhead. Only enabled during validation, not in production LSP.
+- **Nvim highlight group overrides hide theme colors** - When testing which semantic token type gives you a desired color, check that nvim config doesn't have `vim.api.nvim_set_hl(0, '@lsp.type.X.mld', ...)` overriding it. Example: `@lsp.type.modifier.mld → Keyword` will force modifier tokens to use Keyword color instead of the theme's natural modifier color. To use theme's default color for a semantic type, don't define a highlight group for it. Check: `grep "@lsp.type" cli/commands/nvim-setup.ts`
 
 ## Debugging
 

@@ -94,7 +94,8 @@ const TOKEN_TYPES = [
   'interface',        // Interfaces (file references)
   'typeParameter',    // Type parameters (file paths in sections)
   'namespace',        // Namespaces (section names)
-  'function'          // Functions (exec invocations)
+  'function',         // Functions (exec invocations)
+  'modifier'          // Definition directives (var/exe/guard/policy)
 ];
 
 // Map mlld-specific token names to standard types
@@ -102,11 +103,12 @@ const TOKEN_TYPES = [
 const TOKEN_TYPE_MAP: Record<string, string> = {
   // mlld-specific mappings
   'directive': 'keyword',          // /var, /show, etc.
+  'directiveDefinition': 'modifier',  // var/exe/guard/policy → pink
   'variableRef': 'variable',       // @variable references
   'interpolation': 'variable',     // @var in templates
   'template': 'operator',          // Template delimiters
   'templateContent': 'string',     // Template content
-  'embedded': 'label',             // Language labels (js, python)
+  'embedded': 'type',              // Language labels (js, python, sh, cmd)
   'embeddedCode': 'string',        // Embedded code content
   'alligator': 'interface',        // File paths in <>
   'alligatorOpen': 'interface',    // < bracket
@@ -128,7 +130,8 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   'label': 'label',
   'typeParameter': 'typeParameter',
   'interface': 'interface',
-  'namespace': 'namespace'
+  'namespace': 'namespace',
+  'modifier': 'modifier'
 };
 
 const TOKEN_MODIFIERS = [
@@ -138,7 +141,8 @@ const TOKEN_MODIFIERS = [
   'interpolated',     // interpolated content
   'literal',          // literal strings (single quotes)
   'invalid',          // invalid syntax
-  'deprecated'        // deprecated syntax
+  'deprecated',       // deprecated syntax
+  'italic'            // embedded code styling
 ];
 
 // Debounced processor for delayed validation and token generation
