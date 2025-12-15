@@ -460,6 +460,16 @@ export async function startLanguageServer(): Promise<void> {
     return result;
   }
 
+  // Document opened - trigger initial analysis
+  documents.onDidOpen(async (event) => {
+    const document = event.document;
+    const settings = await getDocumentSettings(document.uri) || defaultSettings;
+
+    // Trigger immediate validation and semantic token generation
+    debouncedProcessor.scheduleValidation(document, 0);
+    debouncedProcessor.scheduleTokenGeneration(document, 0);
+  });
+
   // Only keep settings for open documents
   documents.onDidClose(e => {
     documentSettings.delete(e.document.uri);

@@ -5,6 +5,7 @@ export interface VisitorContext {
   interpolationAllowed?: boolean;
   variableStyle?: '@var' | '{{var}}';
   inSingleQuotes?: boolean;
+  wrapperType?: 'doubleQuote' | 'singleQuote' | 'backtick' | 'doubleColon' | 'tripleColon';
 }
 
 export class ContextStack {

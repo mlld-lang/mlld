@@ -231,14 +231,14 @@ export class ExpressionVisitor extends BaseVisitor {
           if (lastCondition?.location && firstAction?.location) {
             const searchStart = lastCondition.location.end.offset;
             const searchEnd = firstAction.location.start.offset;
-            this.operatorHelper.tokenizeOperatorBetween(searchStart, searchEnd, '=>');
+            this.operatorHelper.tokenizeOperatorBetween(searchStart, searchEnd, '=>', 'modifier');
           } else if (lastCondition?.location) {
             // Fallback: search until end of when block
             const sourceText = this.document.getText();
             const searchText = sourceText.substring(lastCondition.location.end.offset, node.location.end.offset);
             const arrowIndex = searchText.indexOf('=>');
             if (arrowIndex !== -1) {
-              this.operatorHelper.addOperatorToken(lastCondition.location.end.offset + arrowIndex, 2);
+              this.operatorHelper.addOperatorToken(lastCondition.location.end.offset + arrowIndex, 2, 'modifier');
             }
           }
         }
@@ -392,12 +392,12 @@ export class ExpressionVisitor extends BaseVisitor {
     if (arrowMatch && arrowMatch.index !== undefined) {
       const arrowOffset = node.location.start.offset + arrowMatch.index + arrowMatch[0].indexOf('=>');
       const arrowPosition = this.document.positionAt(arrowOffset);
-      
+
       this.tokenBuilder.addToken({
         line: arrowPosition.line,
         char: arrowPosition.character,
         length: 2,
-        tokenType: 'operator',
+        tokenType: 'modifier',
         modifiers: []
       });
     }
