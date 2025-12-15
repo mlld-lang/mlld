@@ -68,28 +68,9 @@ export class DefaultEffectHandler implements EffectHandler {
 
     switch (effect.type) {
       case 'doc':
-        // Write to stdout if streaming (for real-time display)
-        if (this.streamingEnabled) {
-          let stdoutContent = this.processContent(content, 'stdout', keepAnsi);
-
-          // Skip leading newlines in streaming output until first real content
-          if (!this.hasWrittenContent) {
-            // Check if content is only newlines
-            if (/^\n+$/.test(stdoutContent)) {
-              // Skip all-newline content before first real content
-              stdoutContent = '';
-            } else if (stdoutContent) {
-              // Strip leading newlines from first real content
-              stdoutContent = stdoutContent.replace(/^\n+/, '');
-              this.hasWrittenContent = true;
-            }
-          }
-
-          if (stdoutContent) {
-            process.stdout.write(stdoutContent);
-          }
-        }
         // Document buffer: strip ANSI markers (plain text)
+        // Note: We always buffer first, then output normalized content at the end
+        // This ensures streaming and non-streaming modes produce identical normalized output
         const docContent = this.processContent(content, 'doc', keepAnsi);
         this.documentBuffer.push(docContent);
         break;
