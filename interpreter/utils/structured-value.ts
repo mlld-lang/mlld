@@ -59,6 +59,7 @@ export interface StructuredValueInternal extends Record<string, unknown> {}
 export interface StructuredValue<T = unknown> {
   type: StructuredValueType;
   text: string;
+  content?: string;
   data: T;
   metadata?: StructuredValueMetadata;
   internal?: StructuredValueInternal;
@@ -309,6 +310,13 @@ function createStructuredValue<T>(
       return resolvedText;
     }
   } as StructuredValue<T>;
+
+  // Backward-compatible .content alias
+  Object.defineProperty(structuredValue, 'content', {
+    get() { return structuredValue.text; },
+    enumerable: false,
+    configurable: true
+  });
 
   defineStructuredCtx(structuredValue, resolvedMetadata, type);
   defineStructuredInternal(structuredValue, {});
