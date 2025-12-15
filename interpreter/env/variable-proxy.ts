@@ -10,9 +10,8 @@
 
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from '@interpreter/utils/variable-resolution';
-import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
+import { wrapLoadContentValue, isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
-import { isLoadContentResult } from '@core/types/load-content';
 
 function cloneValue<T>(input: T | undefined): T | undefined {
   if (input === undefined) {
@@ -172,25 +171,38 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     return createVariableProxy(value);
   }
 
-  // Check if it's a LoadContentResult (might be wrapped in StructuredValue)
-  const unwrappedValue = isStructuredValue(value) ? value.data : value;
-  if (isLoadContentResult(unwrappedValue)) {
-    if (target && key) {
-      recordPrimitiveMetadata(target, key, {
-        isVariable: false,
-        type: 'load-content',
-        ctx: isStructuredValue(value) ? value.ctx : undefined,
-        internal: isStructuredValue(value) ? value.internal : undefined
-      });
+  // Handle file-loaded values (both StructuredValue and legacy LoadContentResult)
+  if (isFileLoadedValue(value)) {
+    if (isStructuredValue(value)) {
+      // StructuredValue with file metadata
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: 'load-content',
+          ctx: value.ctx,
+          internal: value.internal,
+          text: value.text
+        });
+      }
+      return value.text;
+    } else {
+      // Legacy LoadContentResult
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: 'load-content',
+          ctx: undefined,
+          internal: undefined
+        });
+      }
+      return (value as any).content;
     }
-    return unwrappedValue.content;
   }
 
+  // Handle other StructuredValue types
   if (isStructuredValue(value)) {
-    // For load-content arrays, use .text (concatenated content) not .data (raw array)
-    // This preserves the "files joined with \n\n" behavior for /show, templates, etc.
+    // For load-content arrays, use .text (concatenated content)
     if (value.type === 'array') {
-      // Check if this is a load-content array (from glob, file loading)
       const isLoadContentArray = value.ctx?.source === 'load-content' ||
                                    value.metadata?.source === 'load-content';
 
@@ -209,7 +221,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       }
     }
 
-    // For non-array structured values or non-load-content arrays, extract data
+    // For non-load-content structured values, extract data
     const data = asData(value);
     if (target && key) {
       recordPrimitiveMetadata(target, key, {
