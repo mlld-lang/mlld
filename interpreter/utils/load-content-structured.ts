@@ -245,3 +245,20 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
   return wrapStructured(value, 'object', fallbackText, { source: 'load-content' });
 }
+
+export function isFileLoadedValue(value: unknown): boolean {
+  if (isStructuredValue(value)) {
+    return Boolean(value.ctx?.filename || value.ctx?.url);
+  }
+  return isLoadContentResult(value);
+}
+
+export function isURLLoadedValue(value: unknown): boolean {
+  if (isStructuredValue(value)) {
+    return Boolean(value.ctx?.url);
+  }
+  if (isLoadContentResult(value)) {
+    return Boolean((value as any).url);
+  }
+  return false;
+}
