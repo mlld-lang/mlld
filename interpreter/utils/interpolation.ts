@@ -223,24 +223,9 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           } else if (value.type === 'PipelineInput') {
             assertStructuredValue(value, 'interpolate:pipeline-input');
             stringValue = asText(value);
-          } else if (value.type === 'LoadContentResultArray') {
-            // MIGRATION: StructuredValue with LoadContentResultArray type
-            // Expected behavior: Extract data and join with \n\n
-            const { isRenamedContentArray } = await import('@core/types/load-content');
-            const { asData } = await import('../utils/structured-value');
-            const resolved = asData(value);
-            assertArrayBehavior(
-              Array.isArray(resolved),
-              'LoadContentResultArray StructuredValue should have array data',
-              { valueType: value.type, resolvedType: typeof resolved }
-            );
-            if (Array.isArray(resolved) && isRenamedContentArray(resolved)) {
-              stringValue = resolved
-                .map(item => (typeof item === 'string' ? item : (item as any)?.content ?? ''))
-                .join('\n\n');
-            } else {
-              stringValue = resolved.map((item: any) => item.content).join('\n\n');
-            }
+          } else if (isStructuredValue(value) && value.type === 'array') {
+            // StructuredValue arrays already have proper .text
+            stringValue = value.text;
           }
         } else if (typeof value === 'object') {
           stringValue = JSON.stringify(value);
