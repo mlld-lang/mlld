@@ -4,7 +4,6 @@ import { isVariableReferenceNode } from '@core/types/guards';
 import { SliceHandler } from './slice/SliceHandler';
 import { FilterHandler } from './filter/FilterHandler';
 import { MetadataPreserver } from './metadata/MetadataPreserver';
-import { isLoadContentResultArray } from '@core/types/load-content';
 import { isVariable, resolveValue, ResolutionContext } from '@interpreter/utils/variable-resolution';
 import { asData, isStructuredValue } from '../structured-value';
 
@@ -91,13 +90,16 @@ export class ArrayOperationsHandler {
   }
 
   private extractArrayData(value: any): ArrayData | null {
-    // LoadContentResultArray - keep objects intact
-    if (isLoadContentResultArray(value)) {
-      return {
-        type: 'load-content-result',
-        items: value,  // Array of LoadContentResult objects
-        original: value
-      };
+    // StructuredValue array - keep wrapper intact for metadata preservation
+    if (isStructuredValue(value) && value.type === 'array') {
+      const data = asData(value);
+      if (Array.isArray(data)) {
+        return {
+          type: 'structured-value',
+          items: data,
+          original: value
+        };
+      }
     }
 
     // Variable containing array
@@ -107,17 +109,6 @@ export class ArrayOperationsHandler {
         items: value.value,
         original: value
       };
-    }
-
-    if (isStructuredValue(value)) {
-      const data = asData(value);
-      if (Array.isArray(data)) {
-        return {
-          type: 'structured-value',
-          items: data,
-          original: value
-        };
-      }
     }
 
     // Plain JavaScript array
@@ -143,7 +134,7 @@ export class ArrayOperationsHandler {
 }
 
 export interface ArrayData {
-  type: 'load-content-result' | 'array-variable' | 'plain-array' | 'ast-array' | 'structured-value';
-  items: any[];  // Can be LoadContentResult[] or plain values
+  type: 'array-variable' | 'plain-array' | 'ast-array' | 'structured-value';
+  items: any[];
   original: any;
 }

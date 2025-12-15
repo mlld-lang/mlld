@@ -1,9 +1,7 @@
 import { asText, asData, isStructuredValue, type StructuredValue } from './structured-value';
 import { JSONFormatter } from '../core/json-formatter';
 import {
-  isLoadContentResult,
-  isLoadContentResultArray,
-  isRenamedContentArray
+  isLoadContentResult
 } from '@core/types/load-content';
 
 type SimpleClassification = { kind: 'simple'; text: string };
@@ -50,19 +48,19 @@ export function classifyShellValue(value: unknown): ShellValueClassification {
   }
 
   if (isLoadContentResult(value)) {
-    return { kind: 'complex', text: value.content ?? '' };
+    return { kind: 'complex', text: asText(value) };
   }
 
-  if (isLoadContentResultArray(value)) {
-    const content = typeof (value as any).content === 'string'
-      ? (value as any).content
-      : value.map(item => item.content ?? '').join('\n\n');
-    return { kind: 'complex', text: content };
-  }
-
-  if (isRenamedContentArray(value)) {
-    const elements = Array.from(value, item => String(item ?? ''));
-    return { kind: 'array-simple', elements };
+  if (isStructuredValue(value) && value.type === 'array') {
+    // Check if this is a renamed-content array (array-simple) or load-content-result array (complex)
+    const arrayType = value.ctx?.arrayType;
+    if (arrayType === 'renamed-content') {
+      const data = value.data as any[];
+      const elements = data.map(item => String(item ?? ''));
+      return { kind: 'array-simple', elements };
+    }
+    // load-content-result arrays are complex
+    return { kind: 'complex', text: value.text };
   }
 
   if (Array.isArray(value)) {
@@ -145,14 +143,15 @@ function normalizeForJson(value: unknown): unknown {
       // Ignore json getter errors and fall back to content parsing
     }
     try {
-      return JSON.parse(value.content ?? '');
+      return JSON.parse(asText(value));
     } catch {
-      return value.content ?? '';
+      return asText(value);
     }
   }
 
-  if (isLoadContentResultArray(value)) {
-    return value.map(item => normalizeForJson(item));
+  if (isStructuredValue(value) && value.type === 'array') {
+    const data = value.data as any[];
+    return data.map(item => normalizeForJson(item));
   }
 
   if (Array.isArray(value)) {

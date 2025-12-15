@@ -18,6 +18,24 @@ import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { classifyShellValue } from '../utils/shell-value';
 import * as shellQuote from 'shell-quote';
 
+/**
+ * ASSERTION HELPER FOR PHASE 2.3 MIGRATION
+ *
+ * Enable runtime assertions during migration to verify array behavior changes.
+ * Set MLLD_ASSERT_ARRAY_BEHAVIOR=true to enable assertion mode.
+ *
+ * These assertions help catch unexpected behavior changes when migrating from
+ * specific array type checks to generic StructuredValue array handling.
+ */
+const ASSERT_MODE = process.env.MLLD_ASSERT_ARRAY_BEHAVIOR === 'true';
+
+function assertArrayBehavior(condition: boolean, message: string, context?: Record<string, unknown>): void {
+  if (ASSERT_MODE && !condition) {
+    const contextStr = context ? `\nContext: ${JSON.stringify(context, null, 2)}` : '';
+    throw new Error(`[ARRAY MIGRATION ASSERTION] ${message}${contextStr}`);
+  }
+}
+
 export interface InterpolationNode {
   type: string;
   content?: string;
@@ -205,17 +223,9 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           } else if (value.type === 'PipelineInput') {
             assertStructuredValue(value, 'interpolate:pipeline-input');
             stringValue = asText(value);
-          } else if (value.type === 'LoadContentResultArray') {
-            const { isRenamedContentArray } = await import('@core/types/load-content');
-            const { asData } = await import('../utils/structured-value');
-            const resolved = asData(value);
-            if (Array.isArray(resolved) && isRenamedContentArray(resolved)) {
-              stringValue = resolved
-                .map(item => (typeof item === 'string' ? item : (item as any)?.content ?? ''))
-                .join('\n\n');
-            } else {
-              stringValue = resolved.map((item: any) => item.content).join('\n\n');
-            }
+          } else if (isStructuredValue(value) && value.type === 'array') {
+            // StructuredValue arrays already have proper .text
+            stringValue = value.text;
           }
         } else if (typeof value === 'object') {
           stringValue = JSON.stringify(value);
@@ -487,18 +497,17 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             }
           }
         } else if (Array.isArray(value)) {
-          const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
-          if (isLoadContentResultArray(value)) {
-            stringValue = value.content;
-          } else if (isRenamedContentArray(value)) {
-            if ('content' in value) {
-              stringValue = value.content;
-            } else if (value.toString !== Array.prototype.toString) {
-              stringValue = value.toString();
-            } else {
-              stringValue = value.join('\n\n');
-            }
+          if (isStructuredValue(value) && value.type === 'array') {
+            // MIGRATION: This branch handles StructuredValue arrays (glob patterns)
+            // Expected behavior: Join array items with \n\n separator (already in .text)
+            stringValue = value.text;
+            assertArrayBehavior(
+              typeof stringValue === 'string',
+              'StructuredValue array should have .text property',
+              { arrayLength: Array.isArray(value.data) ? value.data.length : 0, resultType: typeof stringValue }
+            );
           } else {
+            // MIGRATION: Generic array handling
             const { JSONFormatter } = await import('../core/json-formatter');
             const printableArray = value.map(item => {
               if (isStructuredValue(item)) {
@@ -512,11 +521,12 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             stringValue = JSONFormatter.stringify(printableArray);
           }
         } else if (typeof value === 'object') {
-          const { isLoadContentResult, isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
+          const { isLoadContentResult } = await import('@core/types/load-content');
           if (isLoadContentResult(value)) {
-            stringValue = value.content;
-          } else if (isLoadContentResultArray(value)) {
-            stringValue = value.map(item => item.content).join('\n\n');
+            stringValue = asText(value);
+          } else if (isStructuredValue(value) && value.type === 'array') {
+            // StructuredValue arrays already have concatenated text
+            stringValue = value.text;
           } else if (variable && variable.internal?.isNamespace && node.fields?.length === 0) {
             const { JSONFormatter } = await import('../core/json-formatter');
             stringValue = JSONFormatter.stringifyNamespace(value);
@@ -726,7 +736,7 @@ export async function interpolateFileReference(
   try {
     // Use existing content loader
     const { processContentLoader } = await import('../eval/content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { isLoadContentResult } = await import('@core/types/load-content');
     
     let loadResult: any;
     try {
@@ -824,10 +834,11 @@ export async function interpolateFileReference(
     }
     
     // Handle glob results (array of files)
-    if (isLoadContentResultArray(loadResult)) {
-      // For glob patterns, join all file contents
+    if (isStructuredValue(loadResult) && loadResult.type === 'array') {
+      // For glob patterns, process each file and join all file contents
+      const items = loadResult.data as LoadContentResult[];
       const contents = await Promise.all(
-        loadResult.map(file => processFileFields(file, node.fields, node.pipes, env))
+        items.map(file => processFileFields(file, node.fields, node.pipes, env))
       );
       return contents.join('\n\n');
     }
@@ -856,7 +867,7 @@ export async function processFileFields(
   if (isLoadContentResult(result)) {
     if (!fields || fields.length === 0) {
       // No field access needed, extract content
-      result = result.content;
+      result = asText(result);
     }
     // If we have fields to access, keep the full LoadContentResult object so we can access .fm, .json, etc.
   }

@@ -3,10 +3,7 @@
  * while preserving all special behaviors
  */
 
-import type { Variable, ArrayVariable } from '@core/types/variable/VariableTypes';
-import type { LoadContentResult } from '@core/types/load-content';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
-import { labelsForPath } from '@core/security/paths';
+import type { Variable } from '@core/types/variable/VariableTypes';
 
 /**
  * Extracts the value from a Variable while preserving special behaviors
@@ -44,7 +41,7 @@ export function extractVariableValue(variable: Variable): any {
     }
   }
   
-  // For LoadContentResultArray, add the content getter
+  // For arrays of LoadContentResult items, add the content getter
   const contentGetter =
     (internalMeta?.contentGetter as (() => string) | undefined);
   if (variable.type === 'array' && contentGetter) {
@@ -71,179 +68,6 @@ export function extractVariableValue(variable: Variable): any {
   return value;
 }
 
-/**
- * Creates a Variable that preserves RenamedContentArray behavior
- */
-type RenamedContentOptions = {
-  name?: string;
-  ctx?: Partial<ArrayVariable['ctx']>;
-  internal?: {
-    fromGlobPattern?: boolean;
-    globPattern?: string;
-    fileCount?: number;
-  };
-  fromGlobPattern?: boolean;
-  globPattern?: string;
-  fileCount?: number;
-};
-
-export function createRenamedContentVariable(
-  items: string[],
-  options?: RenamedContentOptions
-): ArrayVariable {
-  const customToString = function() {
-    return items.join('\n\n');
-  };
-  const customToJSON = function() {
-    return [...items];
-  };
-  const baseInternal = {
-    arrayType: 'renamed-content',
-    joinSeparator: '\n\n',
-    customToString,
-    customToJSON
-  };
-  const internalOverrides: Record<string, unknown> = {};
-  const internalSource = options?.internal ?? {};
-  const legacySource = options ?? {};
-
-  const applyOverride = (
-    key: 'fromGlobPattern' | 'globPattern' | 'fileCount',
-    source: Record<string, unknown>
-  ) => {
-    if (Object.prototype.hasOwnProperty.call(source, key) && (source as any)[key] !== undefined) {
-      internalOverrides[key] = (source as any)[key];
-    }
-  };
-
-  applyOverride('fromGlobPattern', internalSource);
-  applyOverride('globPattern', internalSource);
-  applyOverride('fileCount', internalSource);
-  applyOverride('fromGlobPattern', legacySource);
-  applyOverride('globPattern', legacySource);
-  applyOverride('fileCount', legacySource);
-
-  return {
-    type: 'array',
-    name: options?.name ?? options?.ctx?.name ?? 'renamed-content',
-    value: items,
-    source: {
-      directive: 'var',
-      syntax: 'array',
-      hasInterpolation: false,
-      isMultiLine: false
-    },
-    createdAt: Date.now(),
-    modifiedAt: Date.now(),
-    ctx: {
-      ...options?.ctx
-    },
-    internal: {
-      ...baseInternal,
-      ...internalOverrides
-    }
-  };
-}
-
-/**
- * Creates a Variable that preserves LoadContentResultArray behavior
- */
-type LoadContentOptions = {
-  name?: string;
-  ctx?: Partial<ArrayVariable['ctx']>;
-  internal?: {
-    fromGlobPattern?: boolean;
-    globPattern?: string;
-    fileCount?: number;
-  };
-  fromGlobPattern?: boolean;
-  globPattern?: string;
-  fileCount?: number;
-};
-
-export function createLoadContentResultVariable(
-  items: LoadContentResult[],
-  options?: LoadContentOptions
-): ArrayVariable {
-  // Define the functions outside to avoid circular references
-  const toStringFunc = function() {
-    return items.map(item => item.content).join('\n\n');
-  };
-  
-  const toJSONFunc = function() {
-    return items.map(item => item.toJSON());
-  };
-  
-  const contentGetterFunc = function() {
-    return items.map(item => item.content).join('\n\n');
-  };
-  const internalOverrides: Record<string, unknown> = {};
-  const internalSource = options?.internal ?? {};
-  const legacySource = options ?? {};
-
-  const applyOverride = (
-    key: 'fromGlobPattern' | 'globPattern' | 'fileCount',
-    source: Record<string, unknown>
-  ) => {
-    if (Object.prototype.hasOwnProperty.call(source, key) && (source as any)[key] !== undefined) {
-      internalOverrides[key] = (source as any)[key];
-    }
-  };
-
-  applyOverride('fromGlobPattern', internalSource);
-  applyOverride('globPattern', internalSource);
-  applyOverride('fileCount', internalSource);
-  applyOverride('fromGlobPattern', legacySource);
-  applyOverride('globPattern', legacySource);
-  applyOverride('fileCount', legacySource);
-  
-  const aggregatedSecurity = items
-    .map(item => {
-      if (!item.absolute || /^https?:\/\//i.test(item.absolute)) {
-        return undefined;
-      }
-      const dirLabels = labelsForPath(item.absolute);
-      return makeSecurityDescriptor({
-        taint: ['src:file', ...dirLabels],
-        sources: [item.absolute]
-      });
-    })
-    .filter((descriptor): descriptor is ReturnType<typeof makeSecurityDescriptor> => Boolean(descriptor));
-
-  const mergedSecurity = aggregatedSecurity.length > 0 ? mergeDescriptors(...aggregatedSecurity) : undefined;
-
-  return {
-    type: 'array',
-    name: options?.name ?? options?.ctx?.name ?? 'load-content-result',
-    value: items,
-    source: {
-      directive: 'var',
-      syntax: 'array',
-      hasInterpolation: false,
-      isMultiLine: false
-    },
-    createdAt: Date.now(),
-    modifiedAt: Date.now(),
-    ctx: {
-      ...options?.ctx,
-      ...(mergedSecurity
-        ? {
-            labels: mergedSecurity.labels,
-            taint: mergedSecurity.taint,
-            sources: mergedSecurity.sources
-          }
-        : {})
-    },
-    internal: {
-      arrayType: 'load-content-result',
-      joinSeparator: '\n\n',
-      customToString: toStringFunc,
-      customToJSON: toJSONFunc,
-      contentGetter: contentGetterFunc,
-      ...internalOverrides
-    }
-  };
-}
 
 /**
  * Helper to check if a value has Variable metadata attached
@@ -265,18 +89,3 @@ export function getVariableMetadata(value: unknown): Variable | undefined {
   return undefined;
 }
 
-/**
- * Type guard that checks if a Variable is a RenamedContentArray Variable
- */
-export function isRenamedContentVariable(variable: Variable): boolean {
-  return variable.type === 'array' &&
-         variable.internal?.arrayType === 'renamed-content';
-}
-
-/**
- * Type guard that checks if a Variable is a LoadContentResultArray Variable
- */
-export function isLoadContentResultVariable(variable: Variable): boolean {
-  return variable.type === 'array' &&
-         variable.internal?.arrayType === 'load-content-result';
-}

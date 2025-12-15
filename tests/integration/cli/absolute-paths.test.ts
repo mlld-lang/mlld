@@ -194,7 +194,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
 /show @externalContent`, 'utf-8');
       
       const { stdout } = await execAsync(`node "${mlldBin}" --allow-absolute "${scriptPath}"`, { cwd: projectDir, timeout: 10000 });
-      expect(stdout.trim()).toBe('INTERNAL_CONTENT\nEXTERNAL_CONTENT');
+      expect(stdout.trim()).toBe('INTERNAL_CONTENT\n\nEXTERNAL_CONTENT');
     }, 15000);
     
     it('should respect project boundaries for relative paths even with --allow-absolute', async () => {

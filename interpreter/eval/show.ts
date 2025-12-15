@@ -1002,16 +1002,10 @@ export async function evaluateShow(
     
     // Use the content loader to process the node
     const { processContentLoader } = await import('./content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-    const { wrapLoadContentValue } = await import('../utils/load-content-structured');
     const loadResult = await processContentLoader(loadContentNode, env);
 
     // Handle different return types from processContentLoader
-    if (isLoadContentResult(loadResult) || isLoadContentResultArray(loadResult)) {
-      const structured = wrapLoadContentValue(loadResult);
-      resultValue = structured;
-      content = asText(structured);
-    } else if (isStructuredValue(loadResult)) {
+    if (isStructuredValue(loadResult)) {
       resultValue = loadResult;
       content = asText(loadResult);
     } else if (typeof loadResult === 'string') {
@@ -1180,13 +1174,8 @@ export async function evaluateShow(
   // Final safety: ensure content is a string and pretty-print JSON when possible
   if (typeof content !== 'string') {
     try {
-      const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
       if (isStructuredValue(content)) {
         content = asText(content);
-      } else if (isLoadContentResult(content)) {
-        content = content.content;
-      } else if (isLoadContentResultArray(content)) {
-        content = content.map(item => item.content).join('\n\n');
       } else if (Array.isArray(content)) {
         content = JSONFormatter.stringify(content, { pretty: true });
       } else if (content !== null && content !== undefined) {

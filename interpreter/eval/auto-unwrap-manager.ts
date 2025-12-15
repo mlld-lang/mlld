@@ -7,7 +7,7 @@
  */
 
 import { AsyncLocalStorage } from 'async_hooks';
-import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
+import { isLoadContentResult, LoadContentResult } from '@core/types/load-content';
 import { isStructuredValue, StructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 
 /**
@@ -28,12 +28,17 @@ class MetadataShelf {
    * Store LoadContentResult objects on the shelf before unwrapping
    */
   storeMetadata(value: any): void {
-    if (isLoadContentResultArray(value)) {
-      // Store each LoadContentResult keyed by its content
-      for (const item of value) {
+    if (isStructuredValue(value) && value.type === 'array') {
+      // Store each LoadContentResult from the array's data
+      const items = value.data as any[];
+      for (const item of items) {
         if (isLoadContentResult(item)) {
           this.getBucket(item.content).push(item);
         }
+      }
+      // Also store the structured value itself
+      if (value.data && typeof value.data === 'object') {
+        this.structuredShelf.set(value.data as object, value);
       }
     } else if (isLoadContentResult(value)) {
       // Store both in shelf (for exact matching) and as single file metadata (for auto-restoration)
@@ -225,26 +230,46 @@ export class AutoUnwrapManager {
       return value.data;
     }
 
-    if (process.env.MLLD_DEBUG === 'true' && (isLoadContentResult(value) || isLoadContentResultArray(value))) {
+    // Handle arrays of LoadContentResult
+    if (Array.isArray(value)) {
+      const hasLoadContentResults = value.some(item => isLoadContentResult(item));
+      if (hasLoadContentResults) {
+        // Store metadata for each LoadContentResult
+        for (const item of value) {
+          if (isLoadContentResult(item)) {
+            shelf.storeMetadata(item);
+          }
+        }
+        // Unwrap each LoadContentResult to its content
+        return value.map(item =>
+          isLoadContentResult(item) ? item.content : item
+        );
+      }
+    }
+
+    const isLegacyLCR = isLoadContentResult(value);
+    const isStructuredArray = isStructuredValue(value) && value.type === 'array';
+
+    if (process.env.MLLD_DEBUG === 'true' && (isLegacyLCR || isStructuredArray)) {
       console.error('[AutoUnwrapManager.unwrap] Unwrapping:', {
-        type: isLoadContentResultArray(value) ? 'LoadContentResultArray' : 'LoadContentResult',
+        type: isStructuredArray ? 'StructuredValue[array]' : 'LoadContentResult',
         shelfInContext: !!asyncLocalStorage.getStore()
       });
     }
-    
+
     // Store metadata before unwrapping
     shelf.storeMetadata(value);
-    
+
     // Handle single LoadContentResult
     if (isLoadContentResult(value)) {
       return value.content;
     }
-    
-    // Handle LoadContentResultArray - unwrap to array of content strings
-    if (isLoadContentResultArray(value)) {
-      return value.map(item => item.content);
+
+    // Handle StructuredValue arrays - unwrap to underlying data
+    if (isStructuredArray) {
+      return value.data;
     }
-    
+
     // Return original value if not a LoadContentResult
     return value;
   }

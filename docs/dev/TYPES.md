@@ -188,29 +188,35 @@ Bash and shell environments receive string values only (no type information) to 
 
 ## Special Array Types
 
-mlld preserves special array behaviors through metadata:
+mlld preserves special array behaviors through StructuredValue metadata:
 
-### RenamedContentArray
+### Arrays with renamed content
 Used when loading content with header transformations:
 ```mlld
 /var @sections = <*.md # Introduction> as "## Overview"
 ```
 
-The array has metadata:
+The array is wrapped as StructuredValue with metadata:
 ```typescript
 {
-  arrayType: 'renamed-content',
-  joinSeparator: '\n\n',
-  customToString: () => items.join('\n\n')
+  type: 'array',
+  data: ['content1', 'content2'],
+  text: 'content1\n\ncontent2',  // Custom join separator
+  ctx: {
+    source: 'load-content',
+    // Additional metadata preserved here
+  }
 }
 ```
 
-### LoadContentResultArray
+### Arrays of LoadContentResult items
 Arrays of file metadata objects from glob patterns:
 ```mlld
 /var @files = <*.json>
-/show @files[0].filename  # Access metadata
+/show @files[0].filename  # Access metadata from ctx
 ```
+
+Each item in the array is a StructuredValue with file metadata in `ctx`.
 
 ## Complex vs Simple Variables
 
@@ -258,6 +264,70 @@ const result = await resolveVariable(variable, env, ResolutionContext.ArrayEleme
 
 // Less ideal - loses type information
 const value = await resolveVariableValue(variable, env);
+```
+
+## Type Guard Patterns (Post Phase 3)
+
+### When to Use Each Type Guard
+
+**isStructuredValue(value)**
+- Primary type guard for values in the evaluation pipeline
+- All values from evaluate() are now StructuredValue
+- Check `.type` property to determine content type: 'text', 'array', 'object', etc.
+- Use `.ctx` to access metadata (filename, url, tokens, etc.)
+- Use `.data` to access the underlying content/parsed data
+
+**isFileLoadedValue(value)**
+- Helper function for backward compatibility
+- Handles both StructuredValue and LoadContentResult formats
+- Returns true if value has file/URL metadata (`.ctx.filename` or `.ctx.url`)
+- Use when code might receive either format during migration
+- Defined in: `interpreter/utils/load-content-structured.ts`
+
+**isLoadContentResult(value)**
+- Use ONLY in factory/conversion layers
+- Input validation before wrapping into StructuredValue
+- Checking items inside arrays (may be unwrapped LoadContentResult objects)
+- Primary usage: `load-content-structured.ts`, `content-loader.ts`
+
+### Migration Complete
+
+As of Phase 3 (StructuredValue migration):
+- All arrays use StructuredValue with type='array'
+- Pipeline code uses isStructuredValue or isFileLoadedValue
+- Factory code keeps isLoadContentResult for inputs
+- 33 legitimate isLoadContentResult usages remain in factory/conversion layers
+- 188 isStructuredValue usages across the codebase
+- 4 isFileLoadedValue usages for dual-format compatibility
+
+### Example Usage
+
+```typescript
+// Pipeline code - check for StructuredValue
+if (isStructuredValue(value)) {
+  if (value.type === 'array') {
+    // Handle array
+    const items = value.data;
+  }
+  if (value.ctx?.filename) {
+    // Has file metadata
+    console.log('Loaded from:', value.ctx.filename);
+  }
+}
+
+// Compatibility code - handle both formats
+if (isFileLoadedValue(value)) {
+  // Works for both StructuredValue and LoadContentResult
+  const filename = isStructuredValue(value)
+    ? value.ctx?.filename
+    : value.filename;
+}
+
+// Factory code - validate inputs
+if (isLoadContentResult(result)) {
+  // Convert to StructuredValue
+  return wrapLoadContentValue(result);
+}
 ```
 
 ## Migration Notes

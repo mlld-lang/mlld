@@ -10,8 +10,7 @@
 
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from '@interpreter/utils/variable-resolution';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
-import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
+import { wrapLoadContentValue, isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 function cloneValue<T>(input: T | undefined): T | undefined {
@@ -171,21 +170,58 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
     return createVariableProxy(value);
   }
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    const wrapped = wrapLoadContentValue(value);
-    const data = asData(wrapped);
-    if (target && key) {
-      recordPrimitiveMetadata(target, key, {
-        isVariable: false,
-        type: wrapped.type,
-        ctx: wrapped.ctx,
-        internal: wrapped.internal,
-        text: wrapped.text
-      });
+
+  // Handle file-loaded values (both StructuredValue and legacy LoadContentResult)
+  if (isFileLoadedValue(value)) {
+    if (isStructuredValue(value)) {
+      // StructuredValue with file metadata
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: 'load-content',
+          ctx: value.ctx,
+          internal: value.internal,
+          text: value.text
+        });
+      }
+      return value.text;
+    } else {
+      // Legacy LoadContentResult
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: 'load-content',
+          ctx: undefined,
+          internal: undefined
+        });
+      }
+      return (value as any).content;
     }
-    return data;
   }
+
+  // Handle other StructuredValue types
   if (isStructuredValue(value)) {
+    // For load-content arrays, use .text (concatenated content)
+    if (value.type === 'array') {
+      const isLoadContentArray = value.ctx?.source === 'load-content' ||
+                                   value.metadata?.source === 'load-content';
+
+      if (isLoadContentArray) {
+        // Return text for display - preserves concatenation
+        if (target && key) {
+          recordPrimitiveMetadata(target, key, {
+            isVariable: false,
+            type: value.type,
+            ctx: value.ctx,
+            internal: value.internal,
+            text: value.text
+          });
+        }
+        return value.text;
+      }
+    }
+
+    // For non-load-content structured values, extract data
     const data = asData(value);
     if (target && key) {
       recordPrimitiveMetadata(target, key, {

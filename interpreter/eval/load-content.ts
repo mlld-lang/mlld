@@ -1,9 +1,8 @@
 /**
  * Implementation classes for content loading with metadata support
- * 
- * Note: The special array factory functions (createLoadContentResultArray and 
- * createRenamedContentArray) are deprecated as of Phase 2 of the type refactor.
- * Use the Variable-based alternatives from variable-migration.ts instead.
+ *
+ * Note: Legacy array types (LoadContentResultArray, RenamedContentArray) have been
+ * removed as of Phase 5 cleanup. All values are now wrapped as StructuredValue.
  */
 
 import { JSDOM } from 'jsdom';

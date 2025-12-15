@@ -27,7 +27,6 @@ import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { isPipelineInput } from '@core/types/variable/TypeGuards';
 import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import type { CommandExecutionHookOptions } from './command-execution';
 import type { CommandExecutionContext } from '../../env/ErrorUtils';
@@ -1308,12 +1307,6 @@ export class PipelineExecutor {
       const normalizedArray = output.map(item => extractStageValue(item));
       const text = safeJSONStringify(normalizedArray);
       const wrapped = wrapStructured(normalizedArray, 'array', text);
-      this.logStructuredValue('normalize:wrapped', wrapped);
-      return wrapped;
-    }
-
-    if (isLoadContentResult(output) || isLoadContentResultArray(output)) {
-      const wrapped = wrapLoadContentValue(output);
       this.logStructuredValue('normalize:wrapped', wrapped);
       return wrapped;
     }

@@ -2,6 +2,7 @@ import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import { getExpressionProvenance } from './expression-provenance';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
@@ -58,6 +59,7 @@ export interface StructuredValueInternal extends Record<string, unknown> {}
 export interface StructuredValue<T = unknown> {
   type: StructuredValueType;
   text: string;
+  content?: string;
   data: T;
   metadata?: StructuredValueMetadata;
   internal?: StructuredValueInternal;
@@ -121,6 +123,17 @@ export function isStructuredValue<T = unknown>(value: unknown): value is Structu
 export function asText(value: unknown): string {
   if (isStructuredValue(value)) {
     return value.text;
+  }
+  if (isLoadContentResult(value)) {
+    return value.content ?? '';
+  }
+  if (Array.isArray(value)) {
+    // For LoadContentResult arrays, join their content
+    if (value.length > 0 && isLoadContentResult(value[0])) {
+      return value.map(item => item.content ?? '').join('\n\n');
+    }
+    // For other arrays, recursively call asText on items
+    return value.map(item => asText(item)).join('\n\n');
   }
   if (value === null || value === undefined) {
     return '';
@@ -305,6 +318,13 @@ function createStructuredValue<T>(
       return resolvedText;
     }
   } as StructuredValue<T>;
+
+  // Backward-compatible .content alias
+  Object.defineProperty(structuredValue, 'content', {
+    get() { return structuredValue.text; },
+    enumerable: false,
+    configurable: true
+  });
 
   defineStructuredCtx(structuredValue, resolvedMetadata, type);
   defineStructuredInternal(structuredValue, {});

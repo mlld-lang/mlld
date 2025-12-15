@@ -139,27 +139,29 @@ export class FormatAdapterSink implements StreamSink {
   private emitEventToOutput(event: SDKStreamingEvent): void {
     if (!this.env) return;
 
+    // Use 'both' for streaming output so it goes to stdout during streaming
+    // AND to the document buffer for normalized output
     switch (event.type) {
       case 'streaming:thinking':
         if (event.formatted?.plain) {
-          this.env.emitEffect('doc', event.formatted.plain + '\n\n');
+          this.env.emitEffect('both', event.formatted.plain + '\n\n');
         }
         break;
 
       case 'streaming:message':
         // Emit chunks directly for streaming feel
-        this.env.emitEffect('doc', event.chunk);
+        this.env.emitEffect('both', event.chunk);
         break;
 
       case 'streaming:tool-use':
         if (event.formatted?.plain) {
-          this.env.emitEffect('doc', '\n' + event.formatted.plain + '\n');
+          this.env.emitEffect('both', '\n' + event.formatted.plain + '\n');
         }
         break;
 
       case 'streaming:tool-result':
         if (event.formatted?.plain) {
-          this.env.emitEffect('doc', event.formatted.plain + '\n');
+          this.env.emitEffect('both', event.formatted.plain + '\n');
         }
         break;
 

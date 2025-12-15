@@ -29,7 +29,6 @@ import { inheritExpressionProvenance, setExpressionProvenance } from '../../util
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { resolveNestedValue } from '../../utils/display-materialization';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 /**
  * Context for pipeline processing
@@ -471,18 +470,6 @@ async function prepareStructuredInput(
       const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
       return finalizeWrapper(nested);
     }
-  }
-
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    const wrapped = wrapLoadContentValue(value);
-    return finalizeWrapper(
-      wrapStructured(
-        wrapped,
-        wrapped.type,
-        wrapped.text,
-        mergedMetadata(wrapped.metadata)
-      )
-    );
   }
 
   if (typeof value === 'string') {

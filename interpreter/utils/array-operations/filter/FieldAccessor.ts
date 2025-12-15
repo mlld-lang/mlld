@@ -1,5 +1,3 @@
-import { isLoadContentResult } from '@core/types/load-content';
-
 export class FieldAccessor {
   get(item: any, field: string | string[]): any {
     if (typeof field === 'string') {
