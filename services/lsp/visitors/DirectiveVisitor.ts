@@ -1340,9 +1340,10 @@ export class DirectiveVisitor extends BaseVisitor {
         templateType: templateType as any,
         interpolationAllowed,
         variableStyle,
-        inSingleQuotes: wrapperType === 'singleQuote'
+        inSingleQuotes: wrapperType === 'singleQuote',
+        wrapperType: wrapperType as any
       };
-      
+
       for (const node of values) {
         this.mainVisitor.visitNode(node, newContext);
       }
@@ -1455,7 +1456,8 @@ export class DirectiveVisitor extends BaseVisitor {
           this.operatorHelper.tokenizeOperatorBetween(
             conditionEnd.offset,
             actionStart.offset,
-            '=>'
+            '=>',
+            'modifier'
           );
         }
         
@@ -1756,7 +1758,7 @@ export class DirectiveVisitor extends BaseVisitor {
               line: pair.arrowLocation.start.line - 1,
               char: pair.arrowLocation.start.column - 1,
               length: 2,
-              tokenType: 'operator',
+              tokenType: 'modifier',
               modifiers: []
             });
           } else if (pair.condition && pair.action) {
@@ -1772,7 +1774,8 @@ export class DirectiveVisitor extends BaseVisitor {
               this.operatorHelper.tokenizeOperatorBetween(
                 conditionEnd.offset,
                 actionStart.offset,
-                '=>'
+                '=>',
+                'modifier'
               );
             }
           }
@@ -1853,7 +1856,7 @@ export class DirectiveVisitor extends BaseVisitor {
                 line: arrowPosition.line,
                 char: arrowPosition.character,
                 length: 2,
-                tokenType: 'operator',
+                tokenType: 'modifier',
                 modifiers: []
               });
             }
@@ -1890,7 +1893,8 @@ export class DirectiveVisitor extends BaseVisitor {
             this.operatorHelper.tokenizeOperatorBetween(
               conditionEnd.offset,
               actionStart.offset,
-              '=>'
+              '=>',
+              'modifier'
             );
           }
         }
@@ -1904,9 +1908,22 @@ export class DirectiveVisitor extends BaseVisitor {
               node.location.end.offset
             );
             
-            // Find opening bracket (use enum for dim structural color)
+            // Find and tokenize => operator
             const arrowIndex = directiveText.indexOf('=>');
             if (arrowIndex !== -1) {
+              // Tokenize => operator
+              const arrowPosition = this.document.positionAt(
+                node.location.start.offset + arrowIndex
+              );
+              this.tokenBuilder.addToken({
+                line: arrowPosition.line,
+                char: arrowPosition.character,
+                length: 2,
+                tokenType: 'modifier',
+                modifiers: []
+              });
+
+              // Find opening bracket after =>
               const afterArrow = directiveText.substring(arrowIndex + 2);
               const openBracketIndex = afterArrow.search(/\[/);
 
@@ -2477,7 +2494,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: arrowPosition.line,
           char: arrowPosition.character,
           length: 2,
-          tokenType: 'operator',
+          tokenType: 'modifier',
           modifiers: []
         });
       }
@@ -2556,7 +2573,14 @@ export class DirectiveVisitor extends BaseVisitor {
         const arrowMatch = directiveText.match(/=>/);
         if (arrowMatch && arrowMatch.index !== undefined) {
           const arrowOffset = directive.location.start.offset + arrowMatch.index;
-          this.operatorHelper.addOperatorToken(arrowOffset, 2);
+          const arrowPosition = this.document.positionAt(arrowOffset);
+          this.tokenBuilder.addToken({
+            line: arrowPosition.line,
+            char: arrowPosition.character,
+            length: 2,
+            tokenType: 'modifier',
+            modifiers: []
+          });
         }
       }
 
@@ -2773,7 +2797,14 @@ export class DirectiveVisitor extends BaseVisitor {
             const arrowMatch = ruleText.match(/=>/);
             if (arrowMatch && arrowMatch.index !== undefined) {
               const arrowOffset = rule.location.start.offset + arrowMatch.index;
-              this.operatorHelper.addOperatorToken(arrowOffset, 2);
+              const arrowPosition = this.document.positionAt(arrowOffset);
+              this.tokenBuilder.addToken({
+                line: arrowPosition.line,
+                char: arrowPosition.character,
+                length: 2,
+                tokenType: 'modifier',
+                modifiers: []
+              });
             }
           }
 
