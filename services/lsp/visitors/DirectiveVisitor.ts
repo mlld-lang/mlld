@@ -2118,17 +2118,78 @@ export class DirectiveVisitor extends BaseVisitor {
           modifiers: ['readonly']
         });
       } else {
-        // File path string
-        // Check if this is a simple string or contains variables
-        const hasVariables = values.path.some(node =>
-          node.type === 'VariableReference' && node.valueType === 'varIdentifier'
-        );
-        
-        if (hasVariables) {
-          // Complex path with variables like "@base/something.mld"
-          // First, find the opening quote
-          const quoteMatch = directiveText.match(/from\s+("[^"]*")/);
-          if (quoteMatch && quoteMatch.index !== undefined) {
+        // File path - can be alligator <...> or quoted "..."
+        // Check if this is alligator syntax
+        const alligatorMatch = directiveText.match(/<[^>]+>/);
+
+        if (alligatorMatch && alligatorMatch.index !== undefined) {
+          // Alligator path like <@base/file.md> or <test.md>
+          const openBracketOffset = directive.location.start.offset + alligatorMatch.index;
+          const openBracketPosition = this.document.positionAt(openBracketOffset);
+
+          // Token for "<"
+          this.tokenBuilder.addToken({
+            line: openBracketPosition.line,
+            char: openBracketPosition.character,
+            length: 1,
+            tokenType: 'alligatorOpen',
+            modifiers: []
+          });
+
+          // Process each path node (VariableReference, Text, PathSeparator)
+          for (const node of values.path) {
+            if (node.type === 'VariableReference' && node.valueType === 'varIdentifier' && node.location) {
+              // Variable like @base - highlight as variable (light blue)
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: node.location.start.column - 1,
+                length: node.identifier.length + 1, // +1 for @
+                tokenType: 'variable',
+                modifiers: []
+              });
+            } else if (node.type === 'Text' && node.location && node.content) {
+              // Text content like "file.md" - highlight as alligator (light teal)
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: node.location.start.column - 1,
+                length: node.content.length,
+                tokenType: 'alligator',
+                modifiers: []
+              });
+            } else if (node.type === 'PathSeparator' && node.location) {
+              // Path separator "/" - highlight as operator
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: node.location.start.column - 1,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
+          }
+
+          // Token for ">"
+          const closeBracketOffset = openBracketOffset + alligatorMatch[0].length - 1;
+          const closeBracketPosition = this.document.positionAt(closeBracketOffset);
+          this.tokenBuilder.addToken({
+            line: closeBracketPosition.line,
+            char: closeBracketPosition.character,
+            length: 1,
+            tokenType: 'alligatorClose',
+            modifiers: []
+          });
+        } else {
+          // Quoted path
+          // Check if this is a simple string or contains variables
+          const hasVariables = values.path.some(node =>
+            node.type === 'VariableReference' && node.valueType === 'varIdentifier'
+          );
+
+          if (hasVariables) {
+            // Complex path with variables like "@base/something.mld"
+            // First, find the opening quote
+            const quoteMatch = directiveText.match(/from\s+("[^"]*")/);
+            if (quoteMatch && quoteMatch.index !== undefined) {
             const quoteOffset = directive.location.start.offset + quoteMatch.index + quoteMatch[0].indexOf('"');
             const quotePosition = this.document.positionAt(quoteOffset);
             
@@ -2181,20 +2242,21 @@ export class DirectiveVisitor extends BaseVisitor {
               });
             }
           }
-        } else {
-          // Simple string path like "shared.mld" - tokenize as one unit
-          const stringMatch = directiveText.match(/from\s+("[^"]*")/);
-          if (stringMatch && stringMatch.index !== undefined) {
-            const stringOffset = directive.location.start.offset + stringMatch.index + stringMatch[0].indexOf('"');
-            const stringPosition = this.document.positionAt(stringOffset);
-            
-            this.tokenBuilder.addToken({
-              line: stringPosition.line,
-              char: stringPosition.character,
-              length: stringMatch[1].length, // includes both quotes
-              tokenType: 'string',
-              modifiers: []
-            });
+          } else {
+            // Simple string path like "shared.mld" - tokenize as one unit
+            const stringMatch = directiveText.match(/from\s+("[^"]*")/);
+            if (stringMatch && stringMatch.index !== undefined) {
+              const stringOffset = directive.location.start.offset + stringMatch.index + stringMatch[0].indexOf('"');
+              const stringPosition = this.document.positionAt(stringOffset);
+
+              this.tokenBuilder.addToken({
+                line: stringPosition.line,
+                char: stringPosition.character,
+                length: stringMatch[1].length, // includes both quotes
+                tokenType: 'string',
+                modifiers: []
+              });
+            }
           }
         }
       }
@@ -2289,7 +2351,7 @@ export class DirectiveVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
     
-    // Tokenize optional parallel keyword and pacing tuple
+    // Tokenize optional parallel keyword and its argument
     const parallelMatch = directiveText.match(/\bparallel\b/);
     if (parallelMatch && parallelMatch.index !== undefined) {
       const parOffset = directive.location.start.offset + parallelMatch.index;
@@ -2298,11 +2360,37 @@ export class DirectiveVisitor extends BaseVisitor {
         line: parPos.line,
         char: parPos.character,
         length: 'parallel'.length,
-        tokenType: 'keyword',
+        tokenType: 'label',
         modifiers: []
       });
+
+      // Check for parallel(n) syntax - number after parallel
+      const afterParallel = directiveText.substring(parallelMatch.index + 'parallel'.length);
+      const argMatch = afterParallel.match(/^\s*\((\d+)\)/);
+      if (argMatch) {
+        const openParenOffset = parOffset + 'parallel'.length + afterParallel.indexOf('(');
+        const closeParenOffset = openParenOffset + argMatch[0].indexOf(')');
+        const numberOffset = openParenOffset + 1;
+
+        // '('
+        this.operatorHelper.addOperatorToken(openParenOffset, 1);
+
+        // number
+        const numPos = this.document.positionAt(numberOffset);
+        this.tokenBuilder.addToken({
+          line: numPos.line,
+          char: numPos.character,
+          length: argMatch[1].length,
+          tokenType: 'number',
+          modifiers: []
+        });
+
+        // ')'
+        this.operatorHelper.addOperatorToken(closeParenOffset, 1);
+      }
     }
-    // Pacing tuple: (n, interval)
+
+    // Pacing tuple: (n, interval) parallel - legacy syntax
     const pacingMatch = directiveText.match(/\(([\s\d,smhd]+)\)\s*parallel/);
     if (pacingMatch && pacingMatch.index !== undefined) {
       const openOffset = directive.location.start.offset + pacingMatch.index;
