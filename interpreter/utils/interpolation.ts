@@ -497,15 +497,15 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             }
           }
         } else if (Array.isArray(value)) {
-          const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
-          if (isLoadContentResultArray(value)) {
-            // MIGRATION: This branch handles LoadContentResult arrays (glob patterns)
-            // Expected behavior: Join array items with \n\n separator
-            stringValue = asText(value);
+          const { isRenamedContentArray } = await import('@core/types/load-content');
+          if (isStructuredValue(value) && value.type === 'array') {
+            // MIGRATION: This branch handles StructuredValue arrays (glob patterns)
+            // Expected behavior: Join array items with \n\n separator (already in .text)
+            stringValue = value.text;
             assertArrayBehavior(
               typeof stringValue === 'string',
-              'LoadContentResultArray should convert to string via asText',
-              { arrayLength: value.length, resultType: typeof stringValue }
+              'StructuredValue array should have .text property',
+              { arrayLength: Array.isArray(value.data) ? value.data.length : 0, resultType: typeof stringValue }
             );
           } else if (isRenamedContentArray(value)) {
             // MIGRATION: This branch handles renamed content arrays (glob as transform)
@@ -537,11 +537,12 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             stringValue = JSONFormatter.stringify(printableArray);
           }
         } else if (typeof value === 'object') {
-          const { isLoadContentResult, isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
+          const { isLoadContentResult, isRenamedContentArray } = await import('@core/types/load-content');
           if (isLoadContentResult(value)) {
             stringValue = asText(value);
-          } else if (isLoadContentResultArray(value)) {
-            stringValue = value.map(item => asText(item)).join('\n\n');
+          } else if (isStructuredValue(value) && value.type === 'array') {
+            // StructuredValue arrays already have concatenated text
+            stringValue = value.text;
           } else if (variable && variable.internal?.isNamespace && node.fields?.length === 0) {
             const { JSONFormatter } = await import('../core/json-formatter');
             stringValue = JSONFormatter.stringifyNamespace(value);
@@ -751,7 +752,7 @@ export async function interpolateFileReference(
   try {
     // Use existing content loader
     const { processContentLoader } = await import('../eval/content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { isLoadContentResult } = await import('@core/types/load-content');
     
     let loadResult: any;
     try {
@@ -849,10 +850,11 @@ export async function interpolateFileReference(
     }
     
     // Handle glob results (array of files)
-    if (isLoadContentResultArray(loadResult)) {
-      // For glob patterns, join all file contents
+    if (isStructuredValue(loadResult) && loadResult.type === 'array') {
+      // For glob patterns, process each file and join all file contents
+      const items = loadResult.data as LoadContentResult[];
       const contents = await Promise.all(
-        loadResult.map(file => processFileFields(file, node.fields, node.pipes, env))
+        items.map(file => processFileFields(file, node.fields, node.pipes, env))
       );
       return contents.join('\n\n');
     }
