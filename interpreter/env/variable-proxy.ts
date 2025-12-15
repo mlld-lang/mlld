@@ -10,9 +10,9 @@
 
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from '@interpreter/utils/variable-resolution';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { isLoadContentResult } from '@core/types/load-content';
 
 function cloneValue<T>(input: T | undefined): T | undefined {
   if (input === undefined) {
@@ -171,21 +171,45 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
     return createVariableProxy(value);
   }
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    const wrapped = wrapLoadContentValue(value);
-    const data = asData(wrapped);
+
+  // Check if it's a LoadContentResult (might be wrapped in StructuredValue)
+  const unwrappedValue = isStructuredValue(value) ? value.data : value;
+  if (isLoadContentResult(unwrappedValue)) {
     if (target && key) {
       recordPrimitiveMetadata(target, key, {
         isVariable: false,
-        type: wrapped.type,
-        ctx: wrapped.ctx,
-        internal: wrapped.internal,
-        text: wrapped.text
+        type: 'load-content',
+        ctx: isStructuredValue(value) ? value.ctx : undefined,
+        internal: isStructuredValue(value) ? value.internal : undefined
       });
     }
-    return data;
+    return unwrappedValue.content;
   }
+
   if (isStructuredValue(value)) {
+    // For load-content arrays, use .text (concatenated content) not .data (raw array)
+    // This preserves the "files joined with \n\n" behavior for /show, templates, etc.
+    if (value.type === 'array') {
+      // Check if this is a load-content array (from glob, file loading)
+      const isLoadContentArray = value.ctx?.source === 'load-content' ||
+                                   value.metadata?.source === 'load-content';
+
+      if (isLoadContentArray) {
+        // Return text for display - preserves concatenation
+        if (target && key) {
+          recordPrimitiveMetadata(target, key, {
+            isVariable: false,
+            type: value.type,
+            ctx: value.ctx,
+            internal: value.internal,
+            text: value.text
+          });
+        }
+        return value.text;
+      }
+    }
+
+    // For non-array structured values or non-load-content arrays, extract data
     const data = asData(value);
     if (target && key) {
       recordPrimitiveMetadata(target, key, {

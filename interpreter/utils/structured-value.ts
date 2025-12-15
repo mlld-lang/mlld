@@ -127,6 +127,14 @@ export function asText(value: unknown): string {
   if (isLoadContentResult(value)) {
     return value.content ?? '';
   }
+  if (Array.isArray(value)) {
+    // For LoadContentResult arrays, join their content
+    if (value.length > 0 && isLoadContentResult(value[0])) {
+      return value.map(item => item.content ?? '').join('\n\n');
+    }
+    // For other arrays, recursively call asText on items
+    return value.map(item => asText(item)).join('\n\n');
+  }
   if (value === null || value === undefined) {
     return '';
   }

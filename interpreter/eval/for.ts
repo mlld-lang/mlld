@@ -9,7 +9,7 @@ import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import {
   asData,
   asText,
@@ -39,9 +39,9 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
     return value;
   }
   
-  // Special handling for LoadContentResult objects
+  // Special handling for LoadContentResult objects and StructuredValue arrays
   // These need to be preserved as objects with their special metadata
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
+  if (isLoadContentResult(value)) {
     return createObjectVariable(
       name,
       value,
@@ -54,7 +54,24 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
       },
       {
         isLoadContentResult: true,
-        arrayType: isLoadContentResultArray(value) ? 'load-content-result' : undefined,
+        source: 'for-loop'
+      }
+    );
+  }
+
+  if (isStructuredValue(value) && value.type === 'array') {
+    return createObjectVariable(
+      name,
+      value,
+      false, // Not complex - it's already evaluated
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        arrayType: 'structured-value-array',
         source: 'for-loop'
       }
     );

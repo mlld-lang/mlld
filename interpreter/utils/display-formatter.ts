@@ -1,5 +1,5 @@
 import { JSONFormatter } from '../core/json-formatter';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import { asText, isStructuredValue } from './structured-value';
 
 export interface DisplayFormatOptions {
@@ -22,10 +22,6 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
 
   if (isLoadContentResult(value)) {
     return asText(value);
-  }
-
-  if (isLoadContentResultArray(value)) {
-    return value.map(item => asText(item)).join('\n\n');
   }
 
   if (isStructuredValue(value)) {

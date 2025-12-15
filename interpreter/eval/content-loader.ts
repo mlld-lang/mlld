@@ -3,7 +3,6 @@ import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl } from './load-content';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { wrapLoadContentValue } from '../utils/load-content-structured';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
@@ -19,6 +18,7 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import { extractVariableValue } from '../utils/variable-resolution';
+import { isLoadContentResult } from '@core/types/load-content';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -1252,19 +1252,17 @@ function finalizeLoaderResult<T>(
   value: T,
   options?: { type?: StructuredValueType; text?: string; metadata?: StructuredValueMetadata }
 ): T | StructuredValue {
+  // ADD THIS CHECK FIRST - before any other logic
+  if (isLoadContentResult(value)) {
+    return wrapLoadContentValue(value) as any;
+  }
+
   if (isStructuredValue(value)) {
     const metadata = mergeMetadata(value.metadata, options?.metadata);
     if (!options?.type && !options?.text && (!metadata || metadata === value.metadata)) {
       return value;
     }
     return wrapStructured(value, options?.type, options?.text, metadata);
-  }
-
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    const wrapped = wrapLoadContentValue(value);
-    const metadata = mergeMetadata(wrapped.metadata, options?.metadata);
-    const text = options?.text ?? wrapped.text;
-    return wrapStructured(wrapped, wrapped.type, text, metadata);
   }
 
   const inferredType = options?.type ?? inferLoaderType(value);
@@ -1289,16 +1287,16 @@ function deriveLoaderText(value: unknown, type: StructuredValueType): string {
   }
 
   if (type === 'array') {
-    // For LoadContentResultArray (glob results), concatenate file contents
-    if (Array.isArray(value) && value.length > 0 && isLoadContentResult(value[0])) {
-      return value.map((item: any) => item.content ?? '').join('\n\n');
+    if (Array.isArray(value)) {
+      // Check if it's an array of LoadContentResult objects
+      if (value.length > 0 && isLoadContentResult(value[0])) {
+        // Concatenate file contents with \n\n separator
+        return value.map(item => item.content ?? '').join('\n\n');
+      }
+      // For other arrays (like string arrays from renamed content)
+      return value.map(item => String(item)).join('\n\n');
     }
-
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value ?? '');
-    }
+    return String(value ?? '');
   }
 
   if (type === 'object' && value && typeof value === 'object' && 'content' in value && typeof (value as any).content === 'string') {

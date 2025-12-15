@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 
 /**
@@ -86,13 +86,8 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
         })
       ];
 
-      // Wrap in StructuredValue with LoadContentResultArray type
-      const structuredValue = {
-        type: 'LoadContentResultArray' as const,
-        data: array,
-        text: '', // Will be computed
-        ctx: {}
-      };
+      // Wrap in StructuredValue with array type (proper StructuredValue with Symbol)
+      const structuredValue = wrapStructured(array, 'array', 'Item 1\n\nItem 2');
 
       const result = asText(structuredValue);
 
@@ -124,12 +119,7 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
 
   describe('asText() behavior with mixed StructuredValue types', () => {
     it('should handle StructuredValue with text type', () => {
-      const value = {
-        type: 'text' as const,
-        text: 'Simple text',
-        data: 'Simple text',
-        ctx: {}
-      };
+      const value = wrapStructured('Simple text', 'text', 'Simple text');
 
       const result = asText(value);
 
@@ -137,12 +127,7 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
     });
 
     it('should handle StructuredValue with json type', () => {
-      const value = {
-        type: 'json' as const,
-        data: { key: 'value' },
-        text: '{"key":"value"}',
-        ctx: {}
-      };
+      const value = wrapStructured({ key: 'value' }, 'json', '{"key":"value"}');
 
       const result = asText(value);
 
@@ -150,12 +135,7 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
     });
 
     it('should verify isStructuredValue works correctly', () => {
-      const value = {
-        type: 'text' as const,
-        text: 'Test',
-        data: 'Test',
-        ctx: {}
-      };
+      const value = wrapStructured('Test', 'text', 'Test');
 
       expect(isStructuredValue(value)).toBe(true);
       expect(isStructuredValue('plain string')).toBe(false);
@@ -175,18 +155,28 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
         absolute: '/test.md'
       });
 
+      // After migration: wrapLoadContentValue returns StructuredValue, not raw LoadContentResult
       expect(isStructuredValue(item)).toBe(true);
-      expect(isLoadContentResult(item)).toBe(true);
+      // The .data property contains the LoadContentResult-like metadata
+      expect(isLoadContentResult(item.data)).toBe(false); // .data is the parsed content, not metadata
+
+      // For wrapped values, check the context instead
+      expect(item.ctx.filename).toBe('test.md');
 
       const array = [item];
-      expect(isLoadContentResultArray(array)).toBe(true);
+      // isLoadContentResultArray expects raw LoadContentResult objects, not wrapped ones
+      expect(isLoadContentResultArray(array)).toBe(false);
     });
 
     it('should detect renamed content arrays', async () => {
       const { isRenamedContentArray } = await import('@core/types/load-content');
 
       const array = ['name1.md', 'name2.md'];
-      (array as any).__arrayType = 'renamed-content';
+      // After migration: isRenamedContentArray checks for __variable.internal.arrayType
+      (array as any).__variable = {
+        type: 'array',
+        internal: { arrayType: 'renamed-content' }
+      };
 
       expect(isRenamedContentArray(array)).toBe(true);
     });

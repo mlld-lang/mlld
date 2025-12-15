@@ -12,7 +12,7 @@ import {
 } from '@core/types/variable';
 // import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
@@ -853,10 +853,8 @@ function createSyncJsWrapper(
           argValue = asData(argValue);
         } else if (isLoadContentResult(argValue)) {
           argValue = argValue.content;
-        } else if (isLoadContentResultArray(argValue)) {
-          argValue = argValue.map(item => item.content);
         }
-        
+
         // Try to parse numeric values (same logic as async wrapper)
         if (typeof argValue === 'string') {
           const numValue = Number(argValue);
