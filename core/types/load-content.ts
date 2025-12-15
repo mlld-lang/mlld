@@ -78,61 +78,6 @@ export function isLoadContentResult(value: unknown): value is LoadContentResult 
   );
 }
 
-/**
- * Array of LoadContentResult with special toString behavior
- */
-export interface LoadContentResultArray extends Array<LoadContentResult> {
-  toString(): string;
-}
-
-/**
- * Type guard for LoadContentResultArray
- */
-export function isLoadContentResultArray(value: unknown): value is LoadContentResultArray {
-  // Check for tagged Variable first
-  const variable = (value as any)?.__variable;
-  if (variable && variable.type === 'array' && variable.internal?.arrayType === 'load-content-result') {
-    return true;
-  }
-  
-  // Original check for actual LoadContentResult arrays
-  // Do not treat empty arrays as LoadContentResult arrays to avoid
-  // misclassifying generic empty arrays (e.g., for-expression results).
-  return Array.isArray(value) && value.length > 0 && value.every(isLoadContentResult);
-}
-
-/**
- * Array of renamed content strings
- */
-export interface RenamedContentArray extends Array<string> {
-  toString(): string;
-}
-
-/**
- * Type guard for RenamedContentArray
- */
-export function isRenamedContentArray(value: unknown): value is RenamedContentArray {
-  // Check for tagged Variable first
-  const variable = (value as any)?.__variable;
-  if (variable && variable.type === 'array' && variable.internal?.arrayType === 'renamed-content') {
-    return true;
-  }
-  
-  // Check if it's a string array with custom toString
-  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
-    // Check if it has the custom toString behavior
-    const hasCustomToString = value.toString !== Array.prototype.toString;
-    if (hasCustomToString && value.toString() === value.join('\n\n')) {
-      return true;
-    }
-  }
-  
-  // REMOVED: The broken content-based check that was too generic
-  // DO NOT use: Array.isArray(value) && value.every(item => typeof item === 'string')
-  // This would match ANY string array, not just RenamedContentArray
-  
-  return false;
-}
 
 /**
  * Extended metadata for URL content

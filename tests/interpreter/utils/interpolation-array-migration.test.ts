@@ -145,8 +145,8 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
   });
 
   describe('Array type detection for migration', () => {
-    it('should detect LoadContentResult items in arrays', async () => {
-      const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    it('should wrap LoadContentResult items as StructuredValue', async () => {
+      const { isLoadContentResult } = await import('@core/types/load-content');
 
       const item = wrapLoadContentValue({
         content: 'Test',
@@ -157,28 +157,16 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
 
       // After migration: wrapLoadContentValue returns StructuredValue, not raw LoadContentResult
       expect(isStructuredValue(item)).toBe(true);
-      // The .data property contains the LoadContentResult-like metadata
-      expect(isLoadContentResult(item.data)).toBe(false); // .data is the parsed content, not metadata
+      // The .data property contains the parsed content, not the metadata
+      expect(isLoadContentResult(item.data)).toBe(false); // .data is the parsed content
 
       // For wrapped values, check the context instead
       expect(item.ctx.filename).toBe('test.md');
 
       const array = [item];
-      // isLoadContentResultArray expects raw LoadContentResult objects, not wrapped ones
-      expect(isLoadContentResultArray(array)).toBe(false);
-    });
-
-    it('should detect renamed content arrays', async () => {
-      const { isRenamedContentArray } = await import('@core/types/load-content');
-
-      const array = ['name1.md', 'name2.md'];
-      // After migration: isRenamedContentArray checks for __variable.internal.arrayType
-      (array as any).__variable = {
-        type: 'array',
-        internal: { arrayType: 'renamed-content' }
-      };
-
-      expect(isRenamedContentArray(array)).toBe(true);
+      // Arrays of StructuredValue items should be wrapped as array type
+      expect(Array.isArray(array)).toBe(true);
+      expect(isStructuredValue(array[0])).toBe(true);
     });
   });
 });

@@ -188,29 +188,35 @@ Bash and shell environments receive string values only (no type information) to 
 
 ## Special Array Types
 
-mlld preserves special array behaviors through metadata:
+mlld preserves special array behaviors through StructuredValue metadata:
 
-### RenamedContentArray
+### Arrays with renamed content
 Used when loading content with header transformations:
 ```mlld
 /var @sections = <*.md # Introduction> as "## Overview"
 ```
 
-The array has metadata:
+The array is wrapped as StructuredValue with metadata:
 ```typescript
 {
-  arrayType: 'renamed-content',
-  joinSeparator: '\n\n',
-  customToString: () => items.join('\n\n')
+  type: 'array',
+  data: ['content1', 'content2'],
+  text: 'content1\n\ncontent2',  // Custom join separator
+  ctx: {
+    source: 'load-content',
+    // Additional metadata preserved here
+  }
 }
 ```
 
-### LoadContentResultArray
+### Arrays of LoadContentResult items
 Arrays of file metadata objects from glob patterns:
 ```mlld
 /var @files = <*.json>
-/show @files[0].filename  # Access metadata
+/show @files[0].filename  # Access metadata from ctx
 ```
+
+Each item in the array is a StructuredValue with file metadata in `ctx`.
 
 ## Complex vs Simple Variables
 

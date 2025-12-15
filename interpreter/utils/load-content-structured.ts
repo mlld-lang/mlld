@@ -1,6 +1,5 @@
 import {
   isLoadContentResult,
-  isLoadContentResultArray,
   type LoadContentResult,
   type LoadContentResultHTML,
   type LoadContentResultURL
@@ -149,7 +148,7 @@ function deriveArrayText(value: any[]): string {
     return value.toString();
   }
 
-  // For LoadContentResultArray (glob results), concatenate file contents
+  // For arrays of LoadContentResult items (glob results), concatenate file contents
   if (value.length > 0 && isLoadContentResult(value[0])) {
     return value.map(item => item.content ?? '').join('\n\n');
   }
@@ -209,7 +208,9 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
     // Preserve original variable metadata if tagged
     const variableMetadata = hasVariableMetadata(value) ? getVariableMetadata(value) : undefined;
-    const aggregatedSecurity = isLoadContentResultArray(value)
+
+    // Aggregate security descriptors from LoadContentResult items
+    const aggregatedSecurity = value.length > 0 && isLoadContentResult(value[0])
       ? value
           .map(item => buildLoadSecurityDescriptor(item))
           .filter((descriptor): descriptor is NonNullable<ReturnType<typeof buildLoadSecurityDescriptor>> =>

@@ -41,7 +41,7 @@ export function extractVariableValue(variable: Variable): any {
     }
   }
   
-  // For LoadContentResultArray, add the content getter
+  // For arrays of LoadContentResult items, add the content getter
   const contentGetter =
     (internalMeta?.contentGetter as (() => string) | undefined);
   if (variable.type === 'array' && contentGetter) {

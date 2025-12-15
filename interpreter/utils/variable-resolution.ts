@@ -216,7 +216,7 @@ export async function extractVariableValue(
       return evaluatedValue;
     }
     
-    // Check if this is an array with custom behaviors (LoadContentResultArray, RenamedContentArray)
+    // Check if this is an array with custom behaviors (load-content-result, renamed-content)
     // WHY: Special array types have behaviors (toString, content getter) that must be preserved
     //      during value extraction to maintain proper output formatting
     const arrayType = variable.internal?.arrayType;
