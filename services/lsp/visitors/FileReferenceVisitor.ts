@@ -881,10 +881,12 @@ export class FileReferenceVisitor extends BaseVisitor {
   }
 
   private visitParameter(node: any): void {
+    // Parameter location includes @ symbol but name doesn't, so add 1
+    const length = node.name ? (node.name.length + 1) : TextExtractor.extract([node]).length;
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
-      length: node.name?.length || TextExtractor.extract([node]).length,
+      length,
       tokenType: 'parameter',
       modifiers: []
     });

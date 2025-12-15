@@ -1,5 +1,5 @@
 ---
-updated: 2025-12-14
+updated: 2025-12-15
 tags: #lsp, #tooling, #testing
 related-docs: docs/dev/LANGUAGE-SERVER.md
 related-code: tests/utils/token-validator/*.ts, services/lsp/ASTSemanticVisitor.ts, services/lsp/utils/TokenBuilder.ts
@@ -192,7 +192,11 @@ Validate completeness: `node scripts/validate-token-mappings.mjs`
 
 - **Test fixtures != production coverage** - Validator passes 100% on fixtures but real files expose edge cases. Always test production files with `npm run dump:tokens <file> -- --diagnostics`
 - **TOKEN_TYPE_MAP required** - Every token type visitors emit MUST be in TOKEN_TYPE_MAP or tokens silently rejected with `unknown_type`
-- **Visitor recursion** - ASTSemanticVisitor calls `visitChildren()` after every visitor. Manual recursion in visitors can cause duplicate tokens. Use `visitedNodeIds` deduplication or don't recurse manually.
+- **Visitor recursion** - ASTSemanticVisitor calls `visitChildren()` after every visitor (line 202). Manual recursion in visitors can cause duplicate tokens. Use early returns or visitedNodeIds deduplication.
+- **Missing visitor registration** - Adding `canHandle()` to visitor without `registerVisitor()` in ASTSemanticVisitor.initializeVisitors() causes silent skipping. Both required.
+- **Broken AST locations** - exe function identifiers have locations spanning entire directive (offset 0-end). Filter suspicious spans (>50 chars) to prevent duplicate tokens from wrong @ symbol searches.
+- **Parse errors corrupt tokenization** - Invalid syntax triggers error recovery producing broken AST. Highlighting issues often caused by upstream syntax errors, not tokenization bugs.
+- **LSP protocol corruption** - `console.log()` writes to stdout, breaking JSON-RPC. Use `console.error()` for stderr or `connection.console.log()` for LSP channel.
 - **sourceNode tracking** - TokenBuilder.setSourceNode() must be called before addToken() for diagnostics to correlate tokens to AST nodes
 - **Diagnostic overhead** - Tracking adds ~5-10% performance overhead. Only enabled during validation, not in production LSP.
 - **Nvim highlight group overrides hide theme colors** - When testing which semantic token type gives you a desired color, check that nvim config doesn't have `vim.api.nvim_set_hl(0, '@lsp.type.X.mld', ...)` overriding it. Example: `@lsp.type.modifier.mld → Keyword` will force modifier tokens to use Keyword color instead of the theme's natural modifier color. To use theme's default color for a semantic type, don't define a highlight group for it. Check: `grep "@lsp.type" cli/commands/nvim-setup.ts`
@@ -341,6 +345,32 @@ When you need to find which semantic token type gives you a specific color:
 **Issue**: Element in bracket expression like `[@var.field]` not highlighted
 - **Cause**: AST location doesn't include `@`, column arithmetic breaks
 - **Solution**: Search forward for `@` from node location (offset-based)
+
+**Issue**: Text nodes not highlighting (strings appear as default color)
+- **Check**: Is 'Text' registered? `grep "registerVisitor('Text'" services/lsp/ASTSemanticVisitor.ts`
+- **Cause**: Adding `canHandle(node.type === 'Text')` without registering in visitor map
+- **Solution**: Add `this.registerVisitor('Text', templateVisitor)` to initializeVisitors()
+
+**Issue**: Duplicate/overlapping tokens at wrong positions
+- **Check**: `tail -f ~/.local/state/nvim/lsp.log | grep "duplicate\|TOKEN-ERROR"`
+- **Common cause**: Visitor returns early but ASTSemanticVisitor.visitChildren() runs anyway (line 202)
+- **Solution**: Add early returns after visitTemplateValue/visitInlineCode to skip visitChildren()
+
+**Issue**: Strings highlight inconsistently (green in some contexts, not others)
+- **Check AST**: `npm run ast -- '/when @x > 0 => show "text"'` - Does nested show have meta.wrapperType?
+- **Cause**: Nested show directives in for/when lack wrapperType in meta
+- **Solution**: Infer wrapperType from source text when meta doesn't have it
+
+**Issue**: Parse errors cause broken/missing highlighting
+- **Check**: Look for syntax errors first - are you using invalid syntax?
+- **Symptom**: Validator shows gaps that appear/disappear with minor syntax changes
+- **Solution**: Fix syntax errors. Error recovery produces broken AST with wrong locations.
+
+**Issue**: Overlapping tokens with higher priority win (wrong color shows)
+- **Check**: `:Inspect` in nvim shows multiple semantic tokens at position
+- **Debugging**: Add logging to TokenBuilder.addToken() for specific line numbers
+- **Common cause**: Visitor with broken location search finds wrong @ symbol, tokenizes at wrong position
+- **Solution**: Filter suspicious location spans or use deduplication
 
 ### Required workflow for highlighting changes
 

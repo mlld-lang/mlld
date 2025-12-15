@@ -279,35 +279,6 @@ export class DirectiveVisitor extends BaseVisitor {
         this.handleVariableDeclaration(node);
       }
       
-      // Special handling for /exe with params and string template
-      if (node.kind === 'exe' && node.values?.params && node.values?.template && 
-          node.meta?.wrapperType === 'doubleQuote') {
-        // For simple string templates in exe directives, tokenize as a single string
-        const sourceText = this.document.getText();
-        const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
-        const equalIndex = nodeText.indexOf('=');
-        
-        if (equalIndex !== -1) {
-          const afterEqual = nodeText.substring(equalIndex + 1).trim();
-          const stringStart = node.location.start.offset + nodeText.indexOf('"', equalIndex);
-          const stringEnd = node.location.start.offset + nodeText.lastIndexOf('"') + 1;
-          const stringLength = stringEnd - stringStart;
-          
-          if (stringLength > 0) {
-            const stringPosition = this.document.positionAt(stringStart);
-            this.tokenBuilder.addToken({
-              line: stringPosition.line,
-              char: stringPosition.character,
-              length: stringLength,
-              tokenType: 'string',
-              modifiers: []
-            });
-          }
-        }
-        this.tokenizeSecurityLabels(node);
-        this.handleDirectiveComment(node);
-        return; // Skip normal processing
-      }
     }
 
     if (node.values) {
@@ -455,17 +426,45 @@ export class DirectiveVisitor extends BaseVisitor {
     // Handle /show directives with content field first
     if (directive.kind === 'show' && values.content) {
       // Check for wrapperType in either location (meta or content[0])
-      const wrapperType = directive.meta?.wrapperType || 
-                         (values.content[0] && values.content[0].wrapperType);
-      
-      
+      let wrapperType = directive.meta?.wrapperType ||
+                       (values.content[0] && values.content[0].wrapperType);
+
+      // If wrapperType not in meta (common for nested show in for/when), infer from source
+      if (!wrapperType && directive.location) {
+        const sourceText = this.document.getText();
+        const directiveText = sourceText.substring(
+          directive.location.start.offset,
+          directive.location.end.offset
+        );
+        // Check what quote character appears after 'show'
+        if (directiveText.match(/show\s*"/)) {
+          wrapperType = 'doubleQuote';
+        } else if (directiveText.match(/show\s*'/)) {
+          wrapperType = 'singleQuote';
+        } else if (directiveText.match(/show\s*`/)) {
+          wrapperType = 'backtick';
+        } else if (directiveText.match(/show\s*:::/)) {
+          wrapperType = 'tripleColon';
+        } else if (directiveText.match(/show\s*::/)) {
+          wrapperType = 'doubleColon';
+        }
+      }
+
       if (wrapperType) {
-        // For show directives, the content structure is nested
-        // values.content[0].content contains the actual template nodes
-        const templateContent = values.content[0]?.content || values.content;
-        
-        const tempDirective = { 
-          ...directive, 
+        // For show directives, determine the template content structure
+        // Top-level: values.content[0].content is array of Text/VarRef
+        // Nested: values.content is already array of Text/VarRef
+        let templateContent;
+        if (values.content[0]?.content && Array.isArray(values.content[0].content)) {
+          // Nested structure - extract from first item
+          templateContent = values.content[0].content;
+        } else {
+          // Flat structure - use as-is
+          templateContent = values.content;
+        }
+
+        const tempDirective = {
+          ...directive,
           values: { ...values, value: templateContent },
           meta: { ...directive.meta, wrapperType }
         };
@@ -498,11 +497,14 @@ export class DirectiveVisitor extends BaseVisitor {
     if (directive.kind === 'exe' && values.template) {
       // Use visitTemplateValue to properly handle template delimiters
       this.visitTemplateValue(directive, context);
+      return; // Template fully handled, don't visit children again
     } else if (directive.kind === 'exe' && values.code && directive.raw?.lang) {
       // Handle /exe with inline code
       this.visitInlineCode(directive, context);
+      return; // Code fully handled, don't visit children again
     } else if (directive.meta?.wrapperType) {
       this.visitTemplateValue(directive, context);
+      return; // Template fully handled, don't visit children again
     } else if (values.variable) {
       if (Array.isArray(values.variable)) {
         for (const varRef of values.variable) {
@@ -900,10 +902,17 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Handle /run cmd { ... } syntax with AST-parsed command parts
     if (values?.command && Array.isArray(values.command)) {
-      // Find and tokenize braces
+      // Find and tokenize 'cmd' keyword if present
       if (directive.location) {
         const sourceText = this.document.getText();
         const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+
+        // Check for 'cmd' keyword after /run
+        const cmdMatch = directiveText.match(/\/run\s+(cmd)\s*\{/);
+        if (cmdMatch && cmdMatch.index !== undefined) {
+          const cmdOffset = directive.location.start.offset + cmdMatch.index + cmdMatch[0].indexOf('cmd');
+          this.languageHelper.tokenizeLanguageIdentifier('cmd', cmdOffset);
+        }
 
         const openBraceOffset = directiveText.indexOf('{');
         const closeBraceOffset = directiveText.lastIndexOf('}');

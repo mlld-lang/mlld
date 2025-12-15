@@ -179,6 +179,15 @@ export class CommandVisitor extends BaseVisitor {
                 tokenType: 'namespace',
                 modifiers: ['readonly']
               });
+
+              // Tokenize code content inside braces (cmd blocks = shell commands)
+              const contentStart = openBraceOffset + openBraceMatch[0].length;
+              const codeContent = nodeText.substring(contentStart, closeBraceIndex);
+              this.tokenizeCodeWithVariables(
+                codeContent,
+                effectiveLocation.start.offset + contentStart,
+                'cmd'
+              );
             }
           }
         } else if (langMatch) {
@@ -219,6 +228,15 @@ export class CommandVisitor extends BaseVisitor {
                 tokenType: 'namespace',
                 modifiers: []
               });
+
+              // Tokenize code content inside braces
+              const contentStart = openBraceOffset + openBraceMatch[0].length;
+              const codeContent = nodeText.substring(contentStart, closeBraceIndex);
+              this.tokenizeCodeWithVariables(
+                codeContent,
+                effectiveLocation.start.offset + contentStart,
+                lang
+              );
             }
           }
         }
@@ -978,6 +996,63 @@ export class CommandVisitor extends BaseVisitor {
     }
   }
   
+  /**
+   * Tokenize code content with @variable interpolation support
+   * Used for nested cmd/js/sh blocks inside for/exe/when
+   */
+  private tokenizeCodeWithVariables(code: string, startOffset: number, language: string): void {
+    const varPattern = /@[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g;
+    const lines = code.split('\n');
+    const startPosition = this.document.positionAt(startOffset);
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const lineText = lines[lineIndex];
+      const currentLine = startPosition.line + lineIndex;
+      const lineStartChar = lineIndex === 0 ? startPosition.character : 0;
+
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+      varPattern.lastIndex = 0;
+
+      while ((match = varPattern.exec(lineText)) !== null) {
+        // Tokenize string content before the variable
+        if (match.index > lastIndex) {
+          const beforeText = lineText.substring(lastIndex, match.index);
+          this.tokenBuilder.addToken({
+            line: currentLine,
+            char: lineStartChar + lastIndex,
+            length: beforeText.length,
+            tokenType: 'string',
+            modifiers: ['italic']
+          });
+        }
+
+        // Tokenize the variable
+        this.tokenBuilder.addToken({
+          line: currentLine,
+          char: lineStartChar + match.index,
+          length: match[0].length,
+          tokenType: 'interpolation',
+          modifiers: []
+        });
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      // Tokenize remaining string content after last variable
+      if (lastIndex < lineText.length) {
+        const afterText = lineText.substring(lastIndex);
+        this.tokenBuilder.addToken({
+          line: currentLine,
+          char: lineStartChar + lastIndex,
+          length: afterText.length,
+          tokenType: 'string',
+          modifiers: ['italic']
+        });
+      }
+    }
+  }
+
   private visitCommandReference(node: any, context: VisitorContext): void {
     // Check for invalid location
     if (!node.location || node.location.start.column <= 0) {

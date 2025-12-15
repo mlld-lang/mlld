@@ -30,9 +30,8 @@ export class VariableVisitor extends BaseVisitor {
       console.log('[VAR-VISITOR]', { identifier, valueType, location: `${node.location.start.line}:${node.location.start.column}` });
     }
 
-    // Skip 'identifier' valueType ONLY if location doesn't include @
-    // In declarations (var/exe), location doesn't include @, so skip
-    // In exports, location DOES include @, so process it
+    // Skip identifiers that are declarations (var/exe function names)
+    // These are already tokenized by handleVariableDeclaration
     if (valueType === 'identifier') {
       const source = this.document.getText();
       const charAtOffset = source.charAt(node.location.start.offset);
@@ -47,6 +46,16 @@ export class VariableVisitor extends BaseVisitor {
       // If location includes @, fall through to process it
       if (process.env.DEBUG) {
         console.log('[VAR-VISITOR] Processing identifier valueType (@ in location, likely export)');
+      }
+    }
+
+    // Skip exe function identifiers that have broken AST locations spanning entire directive
+    // These are already tokenized as 'function' by handleVariableDeclaration
+    if (valueType === 'varIdentifier' && node.location) {
+      const locationSpan = node.location.end.offset - node.location.start.offset;
+      // If location spans more than 50 chars, it's likely a broken identifier location
+      if (locationSpan > 50) {
+        return;
       }
     }
     

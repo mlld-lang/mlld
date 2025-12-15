@@ -48,16 +48,6 @@ export class TemplateVisitor extends BaseVisitor {
     // - Single-quoted strings are handled as StringLiteral, not as Text children
 
     const wrapperType = context.wrapperType;
-    const uri = this.document.uri.toLowerCase();
-
-    if (uri.endsWith('.att') || uri.endsWith('.mtt')) {
-      console.error('[LSP-TEXT]', {
-        content: node.content?.substring(0, 50),
-        wrapperType,
-        templateType: context.templateType,
-        location: `${node.location?.start.line}:${node.location?.start.column}`
-      });
-    }
 
     if (wrapperType === 'doubleQuote') {
       // Double quotes: tokenize text content as string (light green)
