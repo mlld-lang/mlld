@@ -414,24 +414,55 @@ export class CommandVisitor extends BaseVisitor {
 
         const source = this.document.getText();
         const includesAt = source.charAt(identifierLoc.start.offset) === '@';
-        const atCharPos = includesAt
-          ? identifierLoc.start.column - 1
-          : identifierLoc.start.column - 2;
-        const nameCharPos = includesAt ? atCharPos + 1 : atCharPos + 1;
 
-        if (process.env.DEBUG) {
-          console.log('[EXEC-INV-NOLOC]', { name, atCharPos, nameCharPos, includesAt });
-        }
+        // IMPORTANT: AST locations can be wrong for ExecInvocations in templates
+        // Verify @ symbol is actually at the expected position before tokenizing
+        if (!includesAt) {
+          // Location is wrong - search forward for the actual @ symbol
+          const searchStart = identifierLoc.start.offset;
+          const searchEnd = Math.min(searchStart + 100, source.length);
+          const searchText = source.substring(searchStart, searchEnd);
+          const atIndex = searchText.indexOf('@' + name);
 
-        // Tokenize @functionName as a single token for consistent coloring
-        if (name && typeof name === 'string' && name.length > 0 && atCharPos >= 0) {
-          this.tokenBuilder.addToken({
-            line: identifierLoc.start.line - 1,
-            char: atCharPos,
-            length: name.length + 1, // Include @ in length
-            tokenType: 'function',
-            modifiers: ['reference']
-          });
+          if (atIndex !== -1) {
+            // Found the actual @ symbol position
+            const actualOffset = searchStart + atIndex;
+            const actualPos = this.document.positionAt(actualOffset);
+
+            this.tokenBuilder.addToken({
+              line: actualPos.line,
+              char: actualPos.character,
+              length: name.length + 1, // Include @ in length
+              tokenType: 'function',
+              modifiers: ['reference']
+            });
+
+            // Update identifierLoc for args processing below
+            identifierLoc.start.line = actualPos.line + 1; // Convert back to 1-based
+            identifierLoc.start.column = actualPos.character + 1;
+            identifierLoc.start.offset = actualOffset;
+          } else {
+            // Can't find the @ symbol - skip tokenization to avoid wrong position
+            return;
+          }
+        } else {
+          // Location is correct - use it directly
+          const atCharPos = identifierLoc.start.column - 1;
+
+          if (process.env.DEBUG) {
+            console.log('[EXEC-INV-NOLOC]', { name, atCharPos, includesAt });
+          }
+
+          // Tokenize @functionName as a single token for consistent coloring
+          if (name && typeof name === 'string' && name.length > 0 && atCharPos >= 0) {
+            this.tokenBuilder.addToken({
+              line: identifierLoc.start.line - 1,
+              char: atCharPos,
+              length: name.length + 1, // Include @ in length
+              tokenType: 'function',
+              modifiers: ['reference']
+            });
+          }
         }
         
         // If there are args, add parentheses
@@ -714,22 +745,53 @@ export class CommandVisitor extends BaseVisitor {
         }
       } else {
         // SIMPLE FUNCTION CALL: @functionName(args)
-        const charPos = node.location.start.column - 1;
         const includesAt = source.charAt(node.location.start.offset) === '@';
-        const atCharPos = includesAt ? charPos : charPos - 1;
 
-        // Tokenize @functionName as a single token for consistent coloring
-        if (hasValidName && atCharPos >= 0) {
-          this.tokenBuilder.addToken({
-            line: node.location.start.line - 1,
-            char: atCharPos,
-            length: name.length + 1, // Include @ in length
-            tokenType: 'function',
-            modifiers: ['reference']
-          });
+        // IMPORTANT: AST locations can be wrong for ExecInvocations in templates
+        // Verify @ symbol is actually at the expected position before tokenizing
+        if (!includesAt) {
+          // Location is wrong - search forward for the actual @ symbol
+          const searchStart = node.location.start.offset;
+          const searchEnd = Math.min(searchStart + 100, source.length);
+          const searchText = source.substring(searchStart, searchEnd);
+          const atIndex = searchText.indexOf('@' + name);
+
+          if (atIndex !== -1) {
+            // Found the actual @ symbol position
+            const actualOffset = searchStart + atIndex;
+            const actualPos = this.document.positionAt(actualOffset);
+
+            this.tokenBuilder.addToken({
+              line: actualPos.line,
+              char: actualPos.character,
+              length: name.length + 1, // Include @ in length
+              tokenType: 'function',
+              modifiers: ['reference']
+            });
+
+            methodEndOffset = actualOffset + name.length + 1;
+          } else {
+            // Can't find the @ symbol - skip tokenization to avoid wrong position
+            methodEndOffset = node.location.start.offset;
+          }
+        } else {
+          // Location is correct - use it directly
+          const charPos = node.location.start.column - 1;
+          const atCharPos = charPos;
+
+          // Tokenize @functionName as a single token for consistent coloring
+          if (hasValidName && atCharPos >= 0) {
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: atCharPos,
+              length: name.length + 1, // Include @ in length
+              tokenType: 'function',
+              modifiers: ['reference']
+            });
+          }
+
+          methodEndOffset = node.location.start.offset + name.length + 1;
         }
-
-        methodEndOffset = node.location.start.offset + name.length + 1;
       }
 
       // Add opening parenthesis (only if we have valid name for position calculation)
