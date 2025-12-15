@@ -148,6 +148,12 @@ function deriveArrayText(value: any[]): string {
   if (typeof value.toString === 'function' && value.toString !== Array.prototype.toString) {
     return value.toString();
   }
+
+  // For LoadContentResultArray (glob results), concatenate file contents
+  if (value.length > 0 && isLoadContentResult(value[0])) {
+    return value.map(item => item.content ?? '').join('\n\n');
+  }
+
   try {
     return JSON.stringify(value);
   } catch {

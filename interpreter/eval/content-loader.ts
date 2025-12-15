@@ -12,14 +12,13 @@ import { MlldDirectiveError } from '@core/errors';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
-import type { ArrayVariable, Variable } from '@core/types/variable/VariableTypes';
-import { createRenamedContentVariable, createLoadContentResultVariable, extractVariableValue } from '@interpreter/utils/variable-migration';
 import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
+import { extractVariableValue } from '../utils/variable-resolution';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -116,7 +115,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
     let astPatterns = ast as AstPattern[];
 
     // Resolve variables in patterns (type-filter-var, name-list-var)
-    astPatterns = astPatterns.map(pattern => {
+    astPatterns = await Promise.all(astPatterns.map(async pattern => {
       if (pattern.type === 'type-filter-var') {
         const variable = env.getVariable(pattern.identifier);
         if (!variable) {
@@ -125,7 +124,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
             { identifier: pattern.identifier }
           );
         }
-        const varValue = extractVariableValue(variable);
+        const varValue = await extractVariableValue(variable, env);
         const filter = varValue ? String(varValue) : undefined;
         if (!filter) {
           throw new MlldDirectiveError(
@@ -142,7 +141,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
             { identifier: pattern.identifier }
           );
         }
-        const varValue = extractVariableValue(variable);
+        const varValue = await extractVariableValue(variable, env);
         const filter = varValue ? String(varValue) : undefined;
         if (!filter) {
           throw new MlldDirectiveError(
@@ -153,7 +152,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
         return { type: 'name-list', filter, usage: pattern.usage };
       }
       return pattern;
-    }) as AstPattern[];
+    })) as AstPattern[];
 
     // Validate: cannot mix content patterns with name-list patterns
     const hasNames = hasNameListPattern(astPatterns);
@@ -810,43 +809,10 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
       continue;
     }
   }
-  
-  // Type assertion based on what we're returning
-  if (options?.section?.renamed) {
-    // Create RenamedContentArray Variable
-    const arrayValue = results as string[];
-    
-    // Create Variable with RenamedContentArray behavior
-    const variable = createRenamedContentVariable(arrayValue, {
-      name: 'glob-result',
-      fromGlobPattern: true,
-      globPattern: pattern,
-      fileCount: arrayValue.length
-    });
-    
-    // Extract the value with behaviors preserved
-    const arrayWithBehaviors = extractVariableValue(variable);
-    
-    // For compatibility, still return the array but with behaviors and tagging
-    return arrayWithBehaviors;
-  } else {
-    // Create LoadContentResultArray Variable
-    const loadContentArray = results as LoadContentResult[];
-    
-    // Create Variable with LoadContentResultArray behavior
-    const variable = createLoadContentResultVariable(loadContentArray, {
-      name: 'glob-result',
-      fromGlobPattern: true,
-      globPattern: pattern,
-      fileCount: loadContentArray.length
-    });
-    
-    // Extract the value with behaviors preserved
-    const arrayWithBehaviors = extractVariableValue(variable);
-    
-    // For compatibility, still return the array but with behaviors and tagging
-    return arrayWithBehaviors;
-  }
+
+  // Return the results array directly
+  // The caller will handle wrapping with wrapStructured if needed
+  return results as LoadContentResult[] | string[];
 }
 
 /**
@@ -1323,6 +1289,11 @@ function deriveLoaderText(value: unknown, type: StructuredValueType): string {
   }
 
   if (type === 'array') {
+    // For LoadContentResultArray (glob results), concatenate file contents
+    if (Array.isArray(value) && value.length > 0 && isLoadContentResult(value[0])) {
+      return value.map((item: any) => item.content ?? '').join('\n\n');
+    }
+
     try {
       return JSON.stringify(value);
     } catch {
