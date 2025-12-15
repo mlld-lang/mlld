@@ -16,7 +16,8 @@ export class LanguageBlockHelper {
     'js', 'javascript', 'node',
     'python', 'py', 'python3',
     'sh', 'bash', 'shell', 'zsh',
-    'ts', 'typescript'
+    'ts', 'typescript',
+    'cmd'
   ];
   
   constructor(
@@ -37,16 +38,20 @@ export class LanguageBlockHelper {
     if (!LanguageBlockHelper.LANGUAGE_IDENTIFIERS.includes(language)) {
       return false;
     }
-    
+
+    // cmd uses function token type (purple) to distinguish from js/py/sh
+    // All other languages use property token type (darker teal)
+    const tokenType = language === 'cmd' ? 'cmdLanguage' : 'embedded';
+
     const position = this.document.positionAt(offset);
     this.tokenBuilder.addToken({
       line: position.line,
       char: position.character,
       length: language.length,
-      tokenType: 'embedded', // Using 'embedded' as per the established pattern
+      tokenType,
       modifiers: []
     });
-    
+
     return true;
   }
 
@@ -110,14 +115,18 @@ export class LanguageBlockHelper {
       }
     }
     
-    // Find and tokenize opening brace
+    // Find and tokenize opening brace (use namespace to make lang blocks stand out)
     const braceIndex = directiveText.indexOf('{');
     if (braceIndex === -1) return false;
-    
-    this.operatorHelper.addOperatorToken(
-      directive.location.start.offset + braceIndex,
-      1
-    );
+
+    const openBracePos = this.document.positionAt(directive.location.start.offset + braceIndex);
+    this.tokenBuilder.addToken({
+      line: openBracePos.line,
+      char: openBracePos.character,
+      length: 1,
+      tokenType: 'namespace',
+      modifiers: []
+    });
     
     // Find closing brace
     const closeBraceIndex = directiveText.lastIndexOf('}');
@@ -175,11 +184,15 @@ export class LanguageBlockHelper {
       }
     }
     
-    // Tokenize closing brace
-    this.operatorHelper.addOperatorToken(
-      directive.location.start.offset + closeBraceIndex,
-      1
-    );
+    // Tokenize closing brace (use namespace to make lang blocks stand out)
+    const closeBracePos = this.document.positionAt(directive.location.start.offset + closeBraceIndex);
+    this.tokenBuilder.addToken({
+      line: closeBracePos.line,
+      char: closeBracePos.character,
+      length: 1,
+      tokenType: 'namespace',
+      modifiers: []
+    });
     
     return true;
   }
@@ -333,20 +346,28 @@ export class LanguageBlockHelper {
    * @param lastCommand Last command node (for closing brace)
    */
   tokenizeCommandBraces(firstCommand: any, lastCommand: any): void {
-    // Add opening brace
+    // Add opening brace (namespace with readonly modifier for dimmer cmd blocks)
     if (firstCommand?.location) {
-      this.operatorHelper.addOperatorToken(
-        firstCommand.location.start.offset - 1, // Brace is before command
-        1
-      );
+      const openBracePos = this.document.positionAt(firstCommand.location.start.offset - 1);
+      this.tokenBuilder.addToken({
+        line: openBracePos.line,
+        char: openBracePos.character,
+        length: 1,
+        tokenType: 'namespace',
+        modifiers: ['readonly']
+      });
     }
-    
-    // Add closing brace
+
+    // Add closing brace (namespace with readonly modifier for dimmer cmd blocks)
     if (lastCommand?.location) {
-      this.operatorHelper.addOperatorToken(
-        lastCommand.location.end.offset,
-        1
-      );
+      const closeBracePos = this.document.positionAt(lastCommand.location.end.offset);
+      this.tokenBuilder.addToken({
+        line: closeBracePos.line,
+        char: closeBracePos.character,
+        length: 1,
+        tokenType: 'namespace',
+        modifiers: ['readonly']
+      });
     }
   }
 

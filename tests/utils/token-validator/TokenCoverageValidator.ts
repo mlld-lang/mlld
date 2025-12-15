@@ -117,11 +117,13 @@ export class TokenCoverageValidator {
     const TOKEN_TYPE_MAP: Record<string, string> = {
       'directive': 'keyword',
       'directiveDefinition': 'modifier',
+      'directiveAction': 'property',
+      'cmdLanguage': 'function',
       'variableRef': 'variable',
       'interpolation': 'variable',
       'template': 'operator',
       'templateContent': 'string',
-      'embedded': 'type',
+      'embedded': 'property',
       'embeddedCode': 'string',
       'alligator': 'interface',
       'alligatorOpen': 'interface',
@@ -143,7 +145,8 @@ export class TokenCoverageValidator {
       'typeParameter': 'typeParameter',
       'interface': 'interface',
       'namespace': 'namespace',
-      'modifier': 'modifier'
+      'modifier': 'modifier',
+      'enum': 'enum'
     };
 
     // Create document

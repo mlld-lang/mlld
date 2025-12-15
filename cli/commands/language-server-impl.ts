@@ -93,9 +93,10 @@ const TOKEN_TYPES = [
   'property',         // Object properties
   'interface',        // Interfaces (file references)
   'typeParameter',    // Type parameters (file paths in sections)
-  'namespace',        // Namespaces (section names)
+  'namespace',        // Namespaces (section names, lang/cmd block braces)
   'function',         // Functions (exec invocations)
-  'modifier'          // Definition directives (var/exe/guard/policy)
+  'modifier',         // Definition directives (var/exe/guard/policy), action keywords, => arrows
+  'enum'              // Enums (block statement brackets)
 ];
 
 // Map mlld-specific token names to standard types
@@ -104,11 +105,13 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   // mlld-specific mappings
   'directive': 'keyword',          // /var, /show, etc.
   'directiveDefinition': 'modifier',  // var/exe/guard/policy → pink
+  'directiveAction': 'property',   // run/show/output/append/log/stream → darker teal (includes nested run)
+  'cmdLanguage': 'function',       // cmd language label → purple (distinct from js/py/sh)
   'variableRef': 'variable',       // @variable references
   'interpolation': 'variable',     // @var in templates
   'template': 'operator',          // Template delimiters
   'templateContent': 'string',     // Template content
-  'embedded': 'type',              // Language labels (js, python, sh, cmd)
+  'embedded': 'property',          // Language labels (js, python, sh, node) - darker teal
   'embeddedCode': 'string',        // Embedded code content
   'alligator': 'interface',        // File paths in <>
   'alligatorOpen': 'interface',    // < bracket
@@ -131,7 +134,8 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   'typeParameter': 'typeParameter',
   'interface': 'interface',
   'namespace': 'namespace',
-  'modifier': 'modifier'
+  'modifier': 'modifier',
+  'enum': 'enum'
 };
 
 const TOKEN_MODIFIERS = [

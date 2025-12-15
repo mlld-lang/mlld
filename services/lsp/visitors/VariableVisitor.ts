@@ -413,13 +413,14 @@ export class VariableVisitor extends BaseVisitor {
               // Advance currentPos conservatively to after the effect name
               currentPos = transformStart + effectName.length;
             } else {
-              // Regular @transform
+              // Regular @transform - use function token type (purple italic)
+              // Pipeline transforms are function invocations with implicit stdin
               const transformLength = (pipe.transform?.length || 0) + (hasAt ? 1 : 0);
               const tokenInfo = {
                 line: transformPosition.line,
                 char: transformPosition.character,
                 length: transformLength,
-                tokenType: 'variable',
+                tokenType: 'function',
                 modifiers: []
               };
               if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-final') || this.document.uri.includes('test-syntax')) {

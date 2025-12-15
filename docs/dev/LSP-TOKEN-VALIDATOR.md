@@ -1,5 +1,5 @@
 ---
-updated: 2025-12-12
+updated: 2025-12-14
 tags: #lsp, #tooling, #testing
 related-docs: docs/dev/LANGUAGE-SERVER.md
 related-code: tests/utils/token-validator/*.ts, services/lsp/ASTSemanticVisitor.ts, services/lsp/utils/TokenBuilder.ts
@@ -10,9 +10,9 @@ related-types: tests/utils/token-validator/types.ts { CoverageGap, DiagnosticCon
 
 ## tldr
 
-AST-driven validation system that ensures every semantically meaningful AST node has corresponding semantic tokens. Eliminates false positives. Includes diagnostic tracing to show WHY tokens are missing (visitor not called, token rejected with reason, etc.). Critical for maintaining LSP highlighting quality.
+AST-driven validation system that ensures every semantically meaningful AST node has corresponding semantic tokens. Includes `requireExactType` flag to distinguish semantic nodes (Parameter, Directive) from structural nodes. Diagnostic tracing shows WHY tokens are missing (visitor not called, token rejected with reason, wrong token type, etc.). Critical for maintaining LSP highlighting quality.
 
-**Status**: 100% coverage on 56 strict mode fixtures (1086/1086 nodes). Production files still have gaps.
+**Status**: 96.2% coverage on 56 strict mode fixtures (1045/1086 nodes), 51 fixtures passing. Enhanced with requireExactType flag - wrong-type tokens on critical nodes now counted as errors.
 
 ## Principles
 
@@ -53,6 +53,29 @@ Defines expected token types for each AST node:
 - `BinaryExpression` → `['operator']`
 - `Literal` → Dynamic based on valueType (number/string/boolean/null/keyword)
 - `field` → `['property', 'function']` (function for method calls)
+
+**requireExactType Flag** (added 2025-12-14):
+
+Node rules can include `requireExactType: true` to distinguish semantic nodes from structural nodes:
+
+```typescript
+'Parameter': {
+  expectedTokenTypes: ['parameter'],
+  mustBeCovered: true,
+  requireExactType: true,  // Wrong type = ERROR not warning
+  visitor: 'FileReferenceVisitor'
+}
+```
+
+When `requireExactType: true`:
+- Wrong token type creates **error gap** (counts in coverage %)
+- Example: Parameter node with overlapping `operator` token = error
+
+When `requireExactType: false` or not set:
+- Wrong token type creates **warning gap** (doesn't count in coverage %)
+- Example: VariableReference can be `variable` OR `function` token
+
+This prevents false positives like operator tokens `(`, `,`, `)` overlapping Parameter nodes and being counted as "covered".
 
 ### Diagnostic System
 
@@ -217,3 +240,122 @@ Tests full pipeline including LSP protocol encoding. Catches issues validator ca
 - Invalid token positions that crash editors
 - Parse errors preventing tokenization
 - LSP protocol errors
+
+### Validator passes but editor doesn't highlight
+
+If validator shows 100% coverage but elements aren't highlighted in the editor:
+
+1. **Check highlight group overrides**:
+   ```bash
+   grep "@lsp.type" cli/commands/nvim-setup.ts
+   ```
+   Highlight groups like `@lsp.type.parameter.mld → Identifier` override the theme's natural color for that semantic type.
+
+2. **Verify config regeneration**:
+   ```bash
+   npm run build
+   mlld nvim-setup --force
+   # Check that config was written:
+   grep "@lsp.type.parameter" ~/.config/nvim/lua/plugins/mlld.lua
+   ```
+
+3. **Completely restart editor** - Reload window is not enough, need full restart for LSP server changes
+
+4. **Check if highlight group exists**:
+   In vim: `:hi Function` - should show a color definition
+   If "cleared" or empty, that group doesn't exist in your theme
+
+5. **Test with DEBUG_LSP**:
+   ```bash
+   DEBUG_LSP=true npm run dump:tokens file.mld 2>&1 | grep "\[TOKEN\]"
+   ```
+   Confirms tokens are being generated with correct types
+
+### Testing semantic token colors in your theme
+
+When you need to find which semantic token type gives you a specific color:
+
+1. **Temporarily modify code** to use test token types:
+   ```typescript
+   // In DirectiveVisitor.ts
+   private getDirectiveTokenType(kind: string): string {
+     switch (kind) {
+       case 'var': return 'testTokenMacro';     // Test 'macro' color
+       case 'exe': return 'testTokenDecorator'; // Test 'decorator' color
+       case 'guard': return 'testTokenModifier'; // Test 'modifier' color
+       default: return 'directive';
+     }
+   }
+   ```
+
+2. **Add test types to TOKEN_TYPES and TOKEN_TYPE_MAP**:
+   ```typescript
+   // In language-server-impl.ts
+   const TOKEN_TYPES = [..., 'macro', 'decorator', 'modifier'];
+   const TOKEN_TYPE_MAP = {
+     ...
+     'testTokenMacro': 'macro',
+     'testTokenDecorator': 'decorator',
+     'testTokenModifier': 'modifier'
+   };
+   ```
+
+3. **Build and test**:
+   ```bash
+   npm run build
+   mlld nvim-setup --force
+   # Restart editor completely
+   # Open test file and see which directive has the color you want
+   ```
+
+4. **DON'T define highlight groups for test types** - Let theme's natural colors show through
+
+5. **Record results**, then implement the winner
+
+**Example**: We found `modifier` semantic type → pink italic by testing guard directive.
+
+### Common highlighting issues and solutions
+
+**Issue**: Element tokens generated but shows as default/no color
+- **Check**: Highlight group exists for that semantic type
+- **Solution**: Either define highlight group or use a different semantic type
+
+**Issue**: Wrong color despite correct token type
+- **Check**: `grep "@lsp.type.X.mld" cli/commands/nvim-setup.ts`
+- **Solution**: Remove highlight group override to use theme's natural color
+
+**Issue**: Color testing showed different color than in actual use
+- **Cause**: Added highlight group override after color test
+- **Solution**: Don't define highlight group for semantic types you want theme to handle
+
+**Issue**: Parameters work in declarations but not in function call arguments
+- **Check**: Are arguments in AST? `npm run ast file.mld | grep -A10 args`
+- **Common cause**: `hasValidName` check fails for computed property calls, args array never visited
+- **Solution**: Add fallback to visit args even when name is an object (not string)
+
+**Issue**: Position off by one or two characters
+- **Cause**: Column-based arithmetic (`column + offset`) instead of offset-based search
+- **Solution**: Use `indexOf('@' + identifier, startOffset)` then `positionAt(offset)`
+- **See**: VariableVisitor.ts handleRegularReference() for correct pattern
+
+**Issue**: Element in bracket expression like `[@var.field]` not highlighted
+- **Cause**: AST location doesn't include `@`, column arithmetic breaks
+- **Solution**: Search forward for `@` from node location (offset-based)
+
+### Required workflow for highlighting changes
+
+All three steps are REQUIRED for changes to take effect:
+
+```bash
+# 1. Build
+npm run build
+
+# 2. Regenerate editor config
+mlld nvim-setup --force
+
+# 3. COMPLETELY restart editor (not just reload window)
+# - VSCode: Quit and reopen
+# - Vim: Exit completely and restart
+```
+
+Skipping any step will result in old highlighting behavior persisting.
