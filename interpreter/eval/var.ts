@@ -1560,17 +1560,14 @@ async function evaluateArrayItem(
       // Load content node in array - use the content loader
       const { processContentLoader } = await import('./content-loader');
       const loadResult = await processContentLoader(item, env);
-      
-      // Check if this is a LoadContentResult and return its content
-      const { isLoadContentResult } = await import('@core/types/load-content');
-      if (isStructuredValue(loadResult)) {
-        return loadResult;
+
+      // Handle file-loaded values (both StructuredValue and LoadContentResult formats)
+      const { isFileLoadedValue } = await import('@interpreter/utils/load-content-structured');
+      if (isFileLoadedValue(loadResult)) {
+        // Return structured format if already wrapped, otherwise extract content
+        return isStructuredValue(loadResult) ? loadResult : loadResult.content;
       }
 
-      if (isLoadContentResult(loadResult)) {
-        return loadResult.content;
-      }
-      
       return loadResult;
 
     default:

@@ -12,7 +12,7 @@ import {
 } from '@core/types/variable';
 // import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
-import { isLoadContentResult } from '@core/types/load-content';
+import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
@@ -851,7 +851,8 @@ function createSyncJsWrapper(
         // Auto-unwrap without async shelf (sync context)
         if (isStructuredValue(argValue)) {
           argValue = asData(argValue);
-        } else if (isLoadContentResult(argValue)) {
+        } else if (isFileLoadedValue(argValue)) {
+          // Handle LoadContentResult format
           argValue = argValue.content;
         }
 
