@@ -145,3 +145,5 @@ scripts/mlld
 
 # Beads
 .beads/bd.sock.startlock
+
+tmp
