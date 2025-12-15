@@ -123,8 +123,8 @@ describe('LanguageBlockHelper', () => {
         length: 2
       });
       
-      // Check braces
-      const braceTokens = tokens.filter(t => t.tokenType === 'operator');
+      // Check braces (now 'namespace' for lang blocks)
+      const braceTokens = tokens.filter(t => t.tokenType === 'namespace');
       expect(braceTokens.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -211,13 +211,15 @@ describe('LanguageBlockHelper', () => {
         line: 0,
         char: 6, // offset 6 (7-1)
         length: 1,
-        tokenType: 'operator'
+        tokenType: 'namespace',
+        modifiers: ['readonly'] // cmd blocks get readonly modifier for dimmer appearance
       });
       expect(tokens[1]).toMatchObject({
         line: 0,
         char: 19,
         length: 1,
-        tokenType: 'operator'
+        tokenType: 'namespace',
+        modifiers: ['readonly']
       });
     });
   });

@@ -39,6 +39,9 @@ export class DirectiveVisitor extends BaseVisitor {
       const startOffset = node.location.start.offset;
       const hasSlash = sourceText[startOffset] === '/';
 
+      // TEST: Use different token types for different directives to see colors
+      const tokenType = this.getDirectiveTokenType(node.kind);
+
       // For implicit directives, check if the keyword appears at the start
       if (node.meta?.implicit) {
         // Check if the keyword matches at the start position
@@ -49,7 +52,7 @@ export class DirectiveVisitor extends BaseVisitor {
             line: node.location.start.line - 1,
             char: node.location.start.column - 1,
             length: node.kind.length,
-            tokenType: 'directive',
+            tokenType,
             modifiers: []
           });
         }
@@ -63,7 +66,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: node.location.start.line - 1,
           char: node.location.start.column - 1,
           length: tokenLength,
-          tokenType: 'directive',
+          tokenType,
           modifiers: []
         });
       }
@@ -71,47 +74,56 @@ export class DirectiveVisitor extends BaseVisitor {
     
     if (node.kind === 'when') {
       this.visitWhenDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'output') {
       this.visitOutputDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'import') {
       this.visitImportDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'for') {
       this.visitForDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'export') {
       this.visitExportDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'guard') {
       this.visitGuardDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     // /append is like /output - writes to a target
     if (node.kind === 'append') {
       this.visitOutputDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'while') {
       this.visitWhileDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'stream') {
       this.visitStreamDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
@@ -258,6 +270,8 @@ export class DirectiveVisitor extends BaseVisitor {
         // Handle exe blocks: /exe @func() = [statements; => return]
         if (node.subtype === 'exeBlock' && node.values.statements) {
           this.visitExeBlock(node, context);
+          this.tokenizeSecurityLabels(node);
+          this.handleDirectiveComment(node);
           return; // Skip normal value processing
         }
       } else {
@@ -290,18 +304,18 @@ export class DirectiveVisitor extends BaseVisitor {
             });
           }
         }
+        this.tokenizeSecurityLabels(node);
+        this.handleDirectiveComment(node);
         return; // Skip normal processing
       }
     }
-    
+
     if (node.values) {
       this.visitDirectiveValues(node, context);
     }
-    
+
     // Handle end-of-line comments
-    if (node.meta?.comment) {
-      this.visitEndOfLineComment(node.meta.comment);
-    }
+    this.handleDirectiveComment(node);
   }
 
   private visitExportDirective(directive: any, context: VisitorContext): void {
@@ -324,7 +338,7 @@ export class DirectiveVisitor extends BaseVisitor {
   
   private visitEndOfLineComment(comment: any): void {
     if (!comment.location) return;
-    
+
     if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
       console.log('[EOL-COMMENT]', {
         marker: comment.marker,
@@ -333,10 +347,20 @@ export class DirectiveVisitor extends BaseVisitor {
         offset: `${comment.location.start.offset}-${comment.location.end.offset}`
       });
     }
-    
+
     this.commentHelper.tokenizeEndOfLineComment(comment);
   }
-  
+
+  /**
+   * Handle end-of-line comments attached to directives via meta.comment
+   * Call this before early returns to ensure comments are tokenized
+   */
+  private handleDirectiveComment(node: any): void {
+    if (node.meta?.comment) {
+      this.visitEndOfLineComment(node.meta.comment);
+    }
+  }
+
   private handleVariableDeclaration(node: any, skipEquals: boolean = false): void {
     const identifierNodes = node.values.identifier;
     if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
@@ -356,11 +380,14 @@ export class DirectiveVisitor extends BaseVisitor {
         if (atIndex !== -1) {
           const atPosition = this.document.positionAt(startOffset + atIndex);
 
+          // Use 'function' for exe declarations, 'variable' for var/path
+          const tokenType = node.kind === 'exe' ? 'function' : 'variable';
+
           this.tokenBuilder.addToken({
             line: atPosition.line,
             char: atPosition.character,
             length: identifierName.length + 1,
-            tokenType: 'variable',
+            tokenType,
             modifiers: ['declaration']
           });
         } else {
@@ -369,11 +396,13 @@ export class DirectiveVisitor extends BaseVisitor {
             ? node.location.start.column + node.kind.length + 2
             : node.location.start.column + node.kind.length + 1;
 
+          const tokenType = node.kind === 'exe' ? 'function' : 'variable';
+
           this.tokenBuilder.addToken({
             line: node.location.start.line - 1,
             char: identifierStart - 1,
             length: identifierName.length + 1,
-            tokenType: 'variable',
+            tokenType,
             modifiers: ['declaration']
           });
         }
@@ -546,9 +575,23 @@ export class DirectiveVisitor extends BaseVisitor {
   }
   
   private visitWithClause(withClause: any, directive: any, context: VisitorContext): void {
-    // Find the "as" keyword position
+    // Find and tokenize the "with" keyword
     const source = this.document.getText();
     const directiveText = source.substring(directive.location.start.offset, directive.location.end.offset);
+    const withIndex = directiveText.indexOf(' with ');
+
+    if (withIndex !== -1) {
+      // Token for "with" keyword (light teal italic like for/when/while)
+      this.tokenBuilder.addToken({
+        line: directive.location.start.line - 1,
+        char: directive.location.start.column - 1 + withIndex + 1, // +1 to skip the space before "with"
+        length: 4,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Find the "as" keyword position
     const asIndex = directiveText.lastIndexOf(' as ');
     
     if (asIndex !== -1) {
@@ -1007,20 +1050,8 @@ export class DirectiveVisitor extends BaseVisitor {
     }
     
     if (values?.lang) {
-      const langText = TextExtractor.extract(Array.isArray(values.lang) ? values.lang : [values.lang]);
-      if (langText && directive.location) {
-        const langStart = directive.location.start.column + 4; // After "/run "
-        
-        this.tokenBuilder.addToken({
-          line: directive.location.start.line - 1,
-          char: langStart,
-          length: langText.length,
-          tokenType: 'embedded',
-          modifiers: []
-        });
-      }
-      
       // For language-specific code blocks, use the language helper
+      // (it handles language identifier tokenization internally)
       if (values.code && directive.location) {
         this.languageHelper.tokenizeCodeBlock(directive);
       }
@@ -1065,6 +1096,11 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     } else {
       this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+    }
+
+    // Handle withClause if present (for /run with { pipeline: [...] })
+    if (values?.withClause) {
+      this.visitWithClause(values.withClause, directive, context);
     }
 
     // Tokenize pipeline operators (| and ||)
@@ -1442,17 +1478,17 @@ export class DirectiveVisitor extends BaseVisitor {
           const sourceText = this.document.getText();
           const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
           
-          // Find the opening bracket after /when
+          // Find the opening bracket after /when (use enum for dim structural color)
           const bracketMatch = nodeText.match(/^\/when\s*(\[)/);
           if (bracketMatch && bracketMatch.index !== undefined) {
             const bracketOffset = bracketMatch[0].indexOf('[');
             const bracketPosition = this.document.positionAt(node.location.start.offset + bracketOffset);
-            
+
             this.tokenBuilder.addToken({
               line: bracketPosition.line,
               char: bracketPosition.character,
               length: 1,
-              tokenType: 'operator',
+              tokenType: 'enum',
               modifiers: []
             });
           }
@@ -1520,7 +1556,7 @@ export class DirectiveVisitor extends BaseVisitor {
                 modifiers: []
               });
               
-              // Look for opening bracket after colon
+              // Look for opening bracket after colon (use enum for dim structural color)
               const afterColon = afterExpr.substring(colonIndex + 1);
               const openBracketIndex = afterColon.search(/\[/);
               if (openBracketIndex !== -1) {
@@ -1528,7 +1564,7 @@ export class DirectiveVisitor extends BaseVisitor {
                   line: exprEnd.line - 1,
                   char: exprEnd.column - 1 + colonIndex + 1 + openBracketIndex,
                   length: 1,
-                  tokenType: 'operator',
+                  tokenType: 'enum',
                   modifiers: []
                 });
               }
@@ -1587,7 +1623,7 @@ export class DirectiveVisitor extends BaseVisitor {
                   modifiers: []
                 });
                 
-                // Look for opening bracket after the pattern modifier's colon
+                // Look for opening bracket after the pattern modifier's colon (use enum for dim structural color)
                 const afterColon = nodeText.substring(colonOffset + colonMatch[0].length);
                 const openBracketMatch = afterColon.match(/^\s*\[/);
                 if (openBracketMatch) {
@@ -1597,7 +1633,7 @@ export class DirectiveVisitor extends BaseVisitor {
                     line: bracketPosition.line,
                     char: bracketPosition.character,
                     length: 1,
-                    tokenType: 'operator',
+                    tokenType: 'enum',
                     modifiers: []
                   });
                 }
@@ -1868,19 +1904,19 @@ export class DirectiveVisitor extends BaseVisitor {
               node.location.end.offset
             );
             
-            // Find opening bracket
+            // Find opening bracket (use enum for dim structural color)
             const arrowIndex = directiveText.indexOf('=>');
             if (arrowIndex !== -1) {
               const afterArrow = directiveText.substring(arrowIndex + 2);
               const openBracketIndex = afterArrow.search(/\[/);
-              
+
               if (openBracketIndex !== -1) {
                 // Add opening bracket token
                 this.tokenBuilder.addToken({
                   line: node.location.start.line - 1,
                   char: node.location.start.column + arrowIndex + 2 + openBracketIndex - 1,
                   length: 1,
-                  tokenType: 'operator',
+                  tokenType: 'enum',
                   modifiers: []
                 });
               }
@@ -1891,21 +1927,21 @@ export class DirectiveVisitor extends BaseVisitor {
               this.mainVisitor.visitNode(action, context);
             }
             
-            // Find closing bracket position
+            // Find closing bracket position (use enum for dim structural color)
             const closeBracketIndex = directiveText.lastIndexOf(']');
             if (closeBracketIndex !== -1) {
               // Calculate the actual line and column for the closing bracket
               const linesBeforeBracket = directiveText.substring(0, closeBracketIndex).split('\n');
               const bracketLine = node.location.start.line + linesBeforeBracket.length - 2;
-              const bracketColumn = linesBeforeBracket.length > 1 
+              const bracketColumn = linesBeforeBracket.length > 1
                 ? linesBeforeBracket[linesBeforeBracket.length - 1].length
                 : node.location.start.column + closeBracketIndex - 1;
-              
+
               this.tokenBuilder.addToken({
                 line: bracketLine,
                 char: bracketColumn,
                 length: 1,
-                tokenType: 'operator',
+                tokenType: 'enum',
                 modifiers: []
               });
             }
@@ -2373,6 +2409,10 @@ export class DirectiveVisitor extends BaseVisitor {
         } else {
           this.mainVisitor.visitNode(actionNode, context);
         }
+        // Handle comments attached to nested action directives
+        if (actionNode.type === 'Directive' && actionNode.meta?.comment) {
+          this.handleDirectiveComment(actionNode);
+        }
       }
     }
 
@@ -2565,11 +2605,31 @@ export class DirectiveVisitor extends BaseVisitor {
       });
     }
 
+    // Tokenize guard block modifier (first/all/any) - same as exe when blocks
+    if (values.guard && Array.isArray(values.guard) && values.guard[0]) {
+      const guardBlock = values.guard[0];
+      if (guardBlock.modifier && guardBlock.modifier !== 'default') {
+        const modifierMatch = directiveText.match(new RegExp(`\\bwhen\\s+(${guardBlock.modifier})\\b`));
+        if (modifierMatch && modifierMatch.index !== undefined) {
+          const modifierOffset = directive.location.start.offset + modifierMatch.index + modifierMatch[0].indexOf(guardBlock.modifier);
+          const modifierPosition = this.document.positionAt(modifierOffset);
+
+          this.tokenBuilder.addToken({
+            line: modifierPosition.line,
+            char: modifierPosition.character,
+            length: guardBlock.modifier.length,
+            tokenType: 'keyword',
+            modifiers: []
+          });
+        }
+      }
+    }
+
     // Tokenize guard block brackets and rules
     if (values.guard && Array.isArray(values.guard) && values.guard[0]) {
       const guardBlock = values.guard[0];
 
-      // Find opening bracket
+      // Find opening bracket (use enum for dim structural color)
       const openBracketIndex = directiveText.indexOf('[');
       if (openBracketIndex !== -1) {
         const openBracketPosition = this.document.positionAt(directive.location.start.offset + openBracketIndex);
@@ -2577,7 +2637,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: openBracketPosition.line,
           char: openBracketPosition.character,
           length: 1,
-          tokenType: 'operator',
+          tokenType: 'enum',
           modifiers: []
         });
       }
@@ -2608,9 +2668,15 @@ export class DirectiveVisitor extends BaseVisitor {
             }
           }
 
-          // Process condition
+          // Process condition (same as exe when blocks)
           if (rule.condition) {
-            this.mainVisitor.visitNode(rule.condition, context);
+            if (Array.isArray(rule.condition)) {
+              for (const cond of rule.condition) {
+                this.mainVisitor.visitNode(cond, context);
+              }
+            } else {
+              this.mainVisitor.visitNode(rule.condition, context);
+            }
           }
 
           // Find and tokenize '=>' operator between condition and action
@@ -2628,7 +2694,8 @@ export class DirectiveVisitor extends BaseVisitor {
             const action = rule.action;
             const decision = action.decision;
 
-            // Find and tokenize the action keyword
+            // Find and tokenize the action keyword (allow/deny/retry)
+            // Use 'modifier' type for standout pink color like var/exe
             if (decision && rule.location) {
               const ruleText = sourceText.substring(rule.location.start.offset, rule.location.end.offset);
               const actionMatch = ruleText.match(new RegExp(`\\b${decision}\\b`));
@@ -2640,7 +2707,7 @@ export class DirectiveVisitor extends BaseVisitor {
                   line: actionPosition.line,
                   char: actionPosition.character,
                   length: decision.length,
-                  tokenType: 'keyword',
+                  tokenType: 'modifier',
                   modifiers: []
                 });
               }
@@ -2677,7 +2744,7 @@ export class DirectiveVisitor extends BaseVisitor {
         }
       }
 
-      // Find closing bracket
+      // Find closing bracket (use enum for dim structural color)
       const closeBracketIndex = directiveText.lastIndexOf(']');
       if (closeBracketIndex !== -1) {
         const closeBracketPosition = this.document.positionAt(directive.location.start.offset + closeBracketIndex);
@@ -2685,7 +2752,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: closeBracketPosition.line,
           char: closeBracketPosition.character,
           length: 1,
-          tokenType: 'operator',
+          tokenType: 'enum',
           modifiers: []
         });
       }
@@ -2919,7 +2986,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: labelPosition.line,
           char: labelPosition.character,
           length: label.length,
-          tokenType: 'label',
+          tokenType: 'parameter',
           modifiers: []
         });
 
@@ -2982,6 +3049,37 @@ export class DirectiveVisitor extends BaseVisitor {
     // Visit the invocation/reference
     if (node.values.invocation) {
       this.mainVisitor.visitNode(node.values.invocation, context);
+    }
+  }
+
+  /**
+   * Get token type for directive keyword based on kind
+   * Different directive groups use different semantic types for color coding
+   */
+  private getDirectiveTokenType(kind: string): string {
+    switch (kind) {
+      // Definition directives: var, exe, guard, policy
+      // Use 'modifier' semantic type → renders as pink italic
+      case 'var':
+      case 'exe':
+      case 'guard':
+      case 'policy':
+        return 'directiveDefinition';
+
+      // Action directives: run, show, output, append, log, stream
+      // Use 'property' semantic type → renders as darker teal + italic
+      case 'run':
+      case 'show':
+      case 'output':
+      case 'append':
+      case 'log':
+      case 'stream':
+        return 'directiveAction';
+
+      // Everything else (for/when/while/import/export/etc)
+      // Uses 'directive' → maps to 'keyword' → light teal italic
+      default:
+        return 'directive';
     }
   }
 }

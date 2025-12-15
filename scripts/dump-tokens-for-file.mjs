@@ -34,7 +34,7 @@ console.log('AST nodes:', ast.length);
 // Use validator to generate tokens (same code path it tests)
 const nodeTokenRules = createNodeTokenRuleMap();
 const expectationBuilder = new NodeExpectationBuilder(nodeTokenRules);
-const validator = new TokenCoverageValidator(expectationBuilder);
+const validator = new TokenCoverageValidator(expectationBuilder, nodeTokenRules);
 
 // Generate tokens using validator's method
 const fixture = {

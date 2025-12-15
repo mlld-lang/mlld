@@ -73,6 +73,7 @@ export class ASTSemanticVisitor {
     this.registerVisitor('TemplateInlineShow', templateVisitor);
     this.registerVisitor('CommandBase', commandVisitor);
     this.registerVisitor('command', commandVisitor);
+    this.registerVisitor('code', commandVisitor);
     this.registerVisitor('ExecInvocation', commandVisitor);
     this.registerVisitor('CommandReference', commandVisitor);
     this.registerVisitor('BinaryExpression', expressionVisitor);

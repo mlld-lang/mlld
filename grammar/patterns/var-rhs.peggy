@@ -389,7 +389,7 @@ NestedDirective
 
 InlineShowDirective
   = "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
-      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
+      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null, ending ? ending.comment : null);
     }
 
 // Command content inside brackets

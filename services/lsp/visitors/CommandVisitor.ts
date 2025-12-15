@@ -16,8 +16,9 @@ export class CommandVisitor extends BaseVisitor {
   }
   
   canHandle(node: any): boolean {
-    return node.type === 'CommandBase' || 
-           node.type === 'command' || 
+    return node.type === 'CommandBase' ||
+           node.type === 'command' ||
+           node.type === 'code' ||
            node.type === 'ExecInvocation' ||
            node.type === 'CommandReference';
   }
@@ -37,6 +38,18 @@ export class CommandVisitor extends BaseVisitor {
       // For ExecInvocation with location 'none', try to process it anyway
       if (node.type === 'ExecInvocation' && node.commandRef) {
         this.visitExecInvocation(node, context);
+        return;
+      }
+      // For command nodes with location 'none', try to tokenize anyway
+      // (nested run cmd/js blocks often lack locations)
+      if (node.type === 'command') {
+        this.visitCommand(node, context);
+        return;
+      }
+      // For code nodes with location 'none', try to tokenize anyway
+      if (node.type === 'code') {
+        this.visitCodeNode(node, context);
+        return;
       }
       return;
     }
@@ -48,12 +61,170 @@ export class CommandVisitor extends BaseVisitor {
       case 'CommandReference':
         this.visitCommandReference(node, context);
         break;
+      case 'code':
+        this.visitCodeNode(node, context);
+        break;
       default:
         this.visitCommand(node, context);
     }
   }
   
   private visitCommand(node: any, context: VisitorContext): void {
+    // Handle command nodes without location (common in nested contexts)
+    let effectiveLocation = node.location;
+    if (!effectiveLocation || effectiveLocation === 'none') {
+      // Try to reconstruct location from first child node
+      const firstChild = node.command?.[0] || node.commandBases?.[0];
+      if (firstChild?.location) {
+        // Search backward from first child to find 'run' keyword
+        const sourceText = this.document.getText();
+        const searchStart = Math.max(0, firstChild.location.start.offset - 30);
+        const searchEnd = firstChild.location.start.offset;
+        const searchText = sourceText.substring(searchStart, searchEnd);
+        const runIndex = searchText.lastIndexOf('run');
+
+        if (process.env.DEBUG_LSP === 'true') {
+          console.log('[COMMAND-LOC]', {
+            hasRunKeyword: node.hasRunKeyword,
+            firstChild: firstChild.location,
+            searchText,
+            runIndex
+          });
+        }
+
+        if (runIndex !== -1 && node.hasRunKeyword) {
+          // Find the end of the command block (closing brace or last child)
+          const lastChild = node.command?.[node.command.length - 1];
+          const endOffset = lastChild?.location?.end?.offset || firstChild.location.end.offset;
+          // Search forward for closing brace
+          const afterLast = sourceText.substring(endOffset, endOffset + 20);
+          const closeBraceIndex = afterLast.indexOf('}');
+          const finalEnd = closeBraceIndex !== -1 ? endOffset + closeBraceIndex + 1 : endOffset;
+
+          effectiveLocation = {
+            start: { offset: searchStart + runIndex, line: 0, column: 0 },
+            end: { offset: finalEnd, line: 0, column: 0 }
+          };
+        } else {
+          effectiveLocation = firstChild.location;
+        }
+      }
+    }
+
+    // Tokenize 'run' keyword if present (for nested run cmd/js blocks)
+    if (node.hasRunKeyword && effectiveLocation) {
+      const sourceText = this.document.getText();
+      const nodeText = sourceText.substring(effectiveLocation.start.offset, effectiveLocation.end.offset);
+      const runMatch = nodeText.match(/^\s*run\b/);
+
+      if (process.env.DEBUG_LSP === 'true') {
+        console.log('[RUN-TOKENIZE]', {
+          hasRunKeyword: node.hasRunKeyword,
+          effectiveLocation,
+          nodeText,
+          runMatch: !!runMatch
+        });
+      }
+
+      if (runMatch) {
+        const runOffset = effectiveLocation.start.offset + runMatch.index! + runMatch[0].indexOf('run');
+        const runPos = this.document.positionAt(runOffset);
+        this.tokenBuilder.addToken({
+          line: runPos.line,
+          char: runPos.character,
+          length: 3,
+          tokenType: 'directiveAction', // Same as top-level run directives
+          modifiers: []
+        });
+
+        // Tokenize 'cmd' or language identifier if it follows 'run'
+        const afterRun = nodeText.substring(runMatch.index! + runMatch[0].length);
+        const cmdMatch = afterRun.match(/^\s*cmd\b/);
+        const langMatch = afterRun.match(/^\s*(js|node|py|sh)\b/);
+
+        if (cmdMatch) {
+          const cmdOffset = runOffset + 3 + cmdMatch.index! + cmdMatch[0].indexOf('cmd');
+          const cmdPos = this.document.positionAt(cmdOffset);
+          this.tokenBuilder.addToken({
+            line: cmdPos.line,
+            char: cmdPos.character,
+            length: 3,
+            tokenType: 'cmdLanguage', // Distinct from js/py/sh
+            modifiers: []
+          });
+
+          // Tokenize braces for cmd blocks (namespace + readonly for dim appearance)
+          const afterCmd = nodeText.substring(runMatch.index! + runMatch[0].length + cmdMatch.index! + cmdMatch[0].length);
+          const openBraceMatch = afterCmd.match(/^\s*\{/);
+          if (openBraceMatch) {
+            const openBraceOffset = cmdOffset + 3 + openBraceMatch.index! + openBraceMatch[0].indexOf('{');
+            const openBracePos = this.document.positionAt(openBraceOffset);
+            this.tokenBuilder.addToken({
+              line: openBracePos.line,
+              char: openBracePos.character,
+              length: 1,
+              tokenType: 'namespace',
+              modifiers: ['readonly']
+            });
+
+            // Find closing brace
+            const closeBraceIndex = nodeText.lastIndexOf('}');
+            if (closeBraceIndex !== -1) {
+              const closeBraceOffset = effectiveLocation.start.offset + closeBraceIndex;
+              const closeBracePos = this.document.positionAt(closeBraceOffset);
+              this.tokenBuilder.addToken({
+                line: closeBracePos.line,
+                char: closeBracePos.character,
+                length: 1,
+                tokenType: 'namespace',
+                modifiers: ['readonly']
+              });
+            }
+          }
+        } else if (langMatch) {
+          const lang = langMatch[1];
+          const langOffset = runOffset + 3 + langMatch.index! + langMatch[0].indexOf(lang);
+          const langPos = this.document.positionAt(langOffset);
+          this.tokenBuilder.addToken({
+            line: langPos.line,
+            char: langPos.character,
+            length: lang.length,
+            tokenType: 'embedded', // Same as top-level js/py/sh
+            modifiers: []
+          });
+
+          // Tokenize braces for lang blocks (namespace for standout appearance)
+          const afterLang = nodeText.substring(runMatch.index! + runMatch[0].length + langMatch.index! + langMatch[0].length);
+          const openBraceMatch = afterLang.match(/^\s*\{/);
+          if (openBraceMatch) {
+            const openBraceOffset = langOffset + lang.length + openBraceMatch.index! + openBraceMatch[0].indexOf('{');
+            const openBracePos = this.document.positionAt(openBraceOffset);
+            this.tokenBuilder.addToken({
+              line: openBracePos.line,
+              char: openBracePos.character,
+              length: 1,
+              tokenType: 'namespace',
+              modifiers: []
+            });
+
+            // Find closing brace
+            const closeBraceIndex = nodeText.lastIndexOf('}');
+            if (closeBraceIndex !== -1) {
+              const closeBraceOffset = effectiveLocation.start.offset + closeBraceIndex;
+              const closeBracePos = this.document.positionAt(closeBraceOffset);
+              this.tokenBuilder.addToken({
+                line: closeBracePos.line,
+                char: closeBracePos.character,
+                length: 1,
+                tokenType: 'namespace',
+                modifiers: []
+              });
+            }
+          }
+        }
+      }
+    }
+
     if (node.language) {
       if (node.languageLocation) {
         this.tokenBuilder.addToken({
@@ -101,7 +272,114 @@ export class CommandVisitor extends BaseVisitor {
       }
     }
   }
-  
+
+  private visitCodeNode(node: any, context: VisitorContext): void {
+    // Handle code nodes (run js/node/py/sh blocks)
+    if (process.env.DEBUG_LSP === 'true') {
+      console.log('[CODE-NODE]', {
+        language: node.language,
+        hasRunKeyword: node.hasRunKeyword,
+        code: node.code?.substring(0, 20)
+      });
+    }
+
+    if (!node.language) return;
+
+    // Reconstruct location from code content or use hasRunKeyword
+    const sourceText = this.document.getText();
+
+    // Search for the pattern "run <lang> {" in the document
+    const pattern = node.hasRunKeyword
+      ? new RegExp(`run\\s+${node.language}\\s*\\{`, 'g')
+      : new RegExp(`${node.language}\\s*\\{`, 'g');
+
+    let match;
+    let foundMatch = null;
+
+    // Search through all matches to find the one that contains our code
+    while ((match = pattern.exec(sourceText)) !== null) {
+      const codeStart = match.index + match[0].length;
+      const searchCode = sourceText.substring(codeStart, codeStart + 100);
+      if (node.code && searchCode.includes(node.code.substring(0, Math.min(20, node.code.length)))) {
+        foundMatch = match;
+        break;
+      }
+    }
+
+    if (!foundMatch) return;
+
+    const matchStart = foundMatch.index;
+
+    if (node.hasRunKeyword) {
+      // Tokenize 'run' keyword
+      const runMatch = foundMatch[0].match(/^run/);
+      if (runMatch) {
+        const runPos = this.document.positionAt(matchStart);
+        this.tokenBuilder.addToken({
+          line: runPos.line,
+          char: runPos.character,
+          length: 3,
+          tokenType: 'directiveAction',
+          modifiers: []
+        });
+      }
+    }
+
+    // Tokenize language identifier (js/node/py/sh)
+    const langMatch = foundMatch[0].match(new RegExp(`\\b${node.language}\\b`));
+    if (langMatch) {
+      const langOffset = matchStart + foundMatch[0].indexOf(node.language);
+      const langPos = this.document.positionAt(langOffset);
+      this.tokenBuilder.addToken({
+        line: langPos.line,
+        char: langPos.character,
+        length: node.language.length,
+        tokenType: 'embedded', // js/py/sh/node use embedded type
+        modifiers: []
+      });
+    }
+
+    // Tokenize opening brace (namespace for standout)
+    const openBraceMatch = foundMatch[0].match(/\{/);
+    if (openBraceMatch) {
+      const braceOffset = matchStart + foundMatch[0].indexOf('{');
+      const bracePos = this.document.positionAt(braceOffset);
+      this.tokenBuilder.addToken({
+        line: bracePos.line,
+        char: bracePos.character,
+        length: 1,
+        tokenType: 'namespace',
+        modifiers: []
+      });
+
+      // Find closing brace
+      const codeStart = braceOffset + 1;
+      let depth = 1;
+      let closeBraceOffset = -1;
+      for (let i = codeStart; i < sourceText.length && depth > 0; i++) {
+        if (sourceText[i] === '{') depth++;
+        if (sourceText[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            closeBraceOffset = i;
+            break;
+          }
+        }
+      }
+
+      if (closeBraceOffset !== -1) {
+        const closeBracePos = this.document.positionAt(closeBraceOffset);
+        this.tokenBuilder.addToken({
+          line: closeBracePos.line,
+          char: closeBracePos.character,
+          length: 1,
+          tokenType: 'namespace',
+          modifiers: []
+        });
+      }
+    }
+  }
+
   private visitExecInvocation(node: any, context: VisitorContext): void {
     if (process.env.DEBUG) {
       console.log('[EXEC-INVOCATION-VISITOR]', {
@@ -576,6 +854,24 @@ export class CommandVisitor extends BaseVisitor {
           });
         }
       } // Close hasValidName && args if
+
+      // Handle args for cases where hasValidName is false (e.g., computed property calls)
+      // where name is an object instead of a string
+      if (!hasValidName && node.commandRef.args && Array.isArray(node.commandRef.args) && node.commandRef.args.length > 0) {
+        const newContext = {
+          ...context,
+          inCommand: true,
+          interpolationAllowed: true,
+          variableStyle: '@var' as const,
+          inFunctionArgs: true
+        };
+
+        for (const arg of node.commandRef.args) {
+          if (arg && typeof arg === 'object' && arg.type) {
+            this.mainVisitor.visitNode(arg, newContext);
+          }
+        }
+      }
 
       // Handle withClause pipeline (for pipes after function calls)
       if (node.withClause && node.withClause.pipeline) {

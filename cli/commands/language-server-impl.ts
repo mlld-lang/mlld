@@ -93,8 +93,10 @@ const TOKEN_TYPES = [
   'property',         // Object properties
   'interface',        // Interfaces (file references)
   'typeParameter',    // Type parameters (file paths in sections)
-  'namespace',        // Namespaces (section names)
-  'function'          // Functions (exec invocations)
+  'namespace',        // Namespaces (section names, lang/cmd block braces)
+  'function',         // Functions (exec invocations)
+  'modifier',         // Definition directives (var/exe/guard/policy), action keywords
+  'enum'              // Enums (block statement brackets)
 ];
 
 // Map mlld-specific token names to standard types
@@ -102,11 +104,14 @@ const TOKEN_TYPES = [
 const TOKEN_TYPE_MAP: Record<string, string> = {
   // mlld-specific mappings
   'directive': 'keyword',          // /var, /show, etc.
+  'directiveDefinition': 'modifier',  // var/exe/guard/policy → pink
+  'directiveAction': 'property',   // run/show/output/append/log/stream → darker teal (includes nested run)
+  'cmdLanguage': 'function',       // cmd language label → purple (distinct from js/py/sh)
   'variableRef': 'variable',       // @variable references
   'interpolation': 'variable',     // @var in templates
   'template': 'operator',          // Template delimiters
   'templateContent': 'string',     // Template content
-  'embedded': 'label',             // Language labels (js, python)
+  'embedded': 'property',          // Language labels (js, python, sh, node) - darker teal
   'embeddedCode': 'string',        // Embedded code content
   'alligator': 'interface',        // File paths in <>
   'alligatorOpen': 'interface',    // < bracket
@@ -128,7 +133,9 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   'label': 'label',
   'typeParameter': 'typeParameter',
   'interface': 'interface',
-  'namespace': 'namespace'
+  'namespace': 'namespace',
+  'modifier': 'modifier',
+  'enum': 'enum'
 };
 
 const TOKEN_MODIFIERS = [
@@ -138,7 +145,8 @@ const TOKEN_MODIFIERS = [
   'interpolated',     // interpolated content
   'literal',          // literal strings (single quotes)
   'invalid',          // invalid syntax
-  'deprecated'        // deprecated syntax
+  'deprecated',       // deprecated syntax
+  'italic'            // embedded code styling
 ];
 
 // Debounced processor for delayed validation and token generation

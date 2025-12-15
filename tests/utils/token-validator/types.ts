@@ -90,6 +90,7 @@ export interface ValidationResult {
 export interface NodeTokenRule {
   expectedTokenTypes: string[] | ((node: any, context: ValidationContext) => string[]);
   mustBeCovered?: boolean;
+  requireExactType?: boolean;
   visitor?: string;
   skipValidation?: boolean;
   isStructural?: boolean;

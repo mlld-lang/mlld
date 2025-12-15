@@ -57,15 +57,20 @@ export class CoverageReporter {
     if (wrongTypeTokens.length > 0) {
       lines.push(`⚠️  Wrong Token Types (${wrongTypeTokens.length} nodes have tokens but wrong type)`);
       lines.push('');
-      const wrongTypeIssues = this.fixSuggestionGenerator.getTopIssues(wrongTypeTokens, 3);
+      const wrongTypeIssues = this.fixSuggestionGenerator.getTopIssues(wrongTypeTokens, 5);
       for (const issue of wrongTypeIssues) {
         lines.push(`   ${issue.nodeType} (${issue.count} occurrence${issue.count > 1 ? 's' : ''})`);
         lines.push(`   Expected: ${issue.example.expectedTokenTypes.join(', ')}`);
-        lines.push(`   Actual: ${issue.example.actualTokens.map(t => t.tokenType).join(', ')}`);
-        // Show example fixture for wrong token types
+
+        const tokenDetails = issue.example.actualTokens.map(t =>
+          `${t.tokenType}@${t.char}(len=${t.length})`
+        ).join(', ');
+        lines.push(`   Actual:   ${tokenDetails}`);
+
         const exampleFixture = results.find(r => r.gaps.some(g => g.nodeId === issue.example.nodeId));
         if (exampleFixture) {
-          lines.push(`   Example: ${exampleFixture.fixturePath} line ${issue.example.location.start.line}`);
+          lines.push(`   Example:  ${exampleFixture.fixturePath} line ${issue.example.location.start.line}`);
+          lines.push(`   Text:     "${issue.example.text}"`);
         }
         lines.push('');
       }

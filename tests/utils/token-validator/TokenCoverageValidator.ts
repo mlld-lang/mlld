@@ -8,7 +8,8 @@ import type {
   SemanticToken,
   NodeExpectation,
   FixtureData,
-  FixSuggestion
+  FixSuggestion,
+  NodeTokenRule
 } from './types.js';
 import { NodeExpectationBuilder } from './NodeExpectationBuilder.js';
 import { TokenMatcher } from './TokenMatcher.js';
@@ -18,12 +19,14 @@ export class TokenCoverageValidator {
   private expectationBuilder: NodeExpectationBuilder;
   private tokenMatcher: TokenMatcher;
   private fixSuggestionGenerator: FixSuggestionGenerator;
+  private nodeTokenRules: Map<string, NodeTokenRule>;
   private useRealLSP: boolean;
 
-  constructor(expectationBuilder: NodeExpectationBuilder, useRealLSP: boolean = false) {
+  constructor(expectationBuilder: NodeExpectationBuilder, nodeTokenRules: Map<string, NodeTokenRule>, useRealLSP: boolean = false) {
     this.expectationBuilder = expectationBuilder;
     this.tokenMatcher = new TokenMatcher();
     this.fixSuggestionGenerator = new FixSuggestionGenerator();
+    this.nodeTokenRules = nodeTokenRules;
     this.useRealLSP = useRealLSP;
   }
 
@@ -52,15 +55,18 @@ export class TokenCoverageValidator {
     // Group by visitor
     const gapsByVisitor = this.fixSuggestionGenerator.groupByVisitor(gaps);
 
+    // Only count error gaps in coverage percentage
+    const errorGaps = gaps.filter(g => g.severity === 'error');
+
     return {
       fixturePath: fixture.name,
       mode,
       totalNodes: expectations.length,
-      coveredNodes: expectations.length - gaps.length,
+      coveredNodes: expectations.length - errorGaps.length,
       gaps,
       gapsByVisitor,
       coveragePercentage: expectations.length > 0
-        ? ((expectations.length - gaps.length) / expectations.length) * 100
+        ? ((expectations.length - errorGaps.length) / expectations.length) * 100
         : 100
     };
   }
@@ -91,7 +97,8 @@ export class TokenCoverageValidator {
       'interface',        // 10
       'typeParameter',    // 11
       'namespace',        // 12
-      'function'          // 13
+      'function',         // 13
+      'modifier'          // 14 Definition directives
     ];
 
     // Token modifiers (MUST MATCH language-server-impl.ts EXACTLY)
@@ -102,17 +109,21 @@ export class TokenCoverageValidator {
       'interpolated',     // 3
       'literal',          // 4
       'invalid',          // 5
-      'deprecated'        // 6
+      'deprecated',       // 6
+      'italic'            // 7
     ];
 
     // Token type map (MUST MATCH language-server-impl.ts EXACTLY)
     const TOKEN_TYPE_MAP: Record<string, string> = {
       'directive': 'keyword',
+      'directiveDefinition': 'modifier',
+      'directiveAction': 'property',
+      'cmdLanguage': 'function',
       'variableRef': 'variable',
       'interpolation': 'variable',
       'template': 'operator',
       'templateContent': 'string',
-      'embedded': 'label',
+      'embedded': 'property',
       'embeddedCode': 'string',
       'alligator': 'interface',
       'alligatorOpen': 'interface',
@@ -133,7 +144,9 @@ export class TokenCoverageValidator {
       'label': 'label',
       'typeParameter': 'typeParameter',
       'interface': 'interface',
-      'namespace': 'namespace'
+      'namespace': 'namespace',
+      'modifier': 'modifier',
+      'enum': 'enum'
     };
 
     // Create document
@@ -219,15 +232,19 @@ export class TokenCoverageValidator {
         expectation.location
       );
 
+      const rule = this.nodeTokenRules.get(expectation.nodeType);
+      const requireExactType = rule?.requireExactType ?? false;
+
       if (expectation.mustBeCovered && overlappingTokens.length === 0) {
-        const gap = this.createGap(expectation, [], input);
+        const gap = this.createGap(expectation, [], input, 'error');
         gap.diagnostic = this.buildDiagnosticForNode(expectation.nodeId, expectation.nodeType, diagnostics);
         gaps.push(gap);
       } else if (
         overlappingTokens.length > 0 &&
         !this.tokenMatcher.tokensMatchExpectation(overlappingTokens, expectation)
       ) {
-        const gap = this.createGap(expectation, overlappingTokens, input);
+        const severity = requireExactType ? 'error' : 'warning';
+        const gap = this.createGap(expectation, overlappingTokens, input, severity);
         gap.diagnostic = this.buildDiagnosticForNode(expectation.nodeId, expectation.nodeType, diagnostics);
         gaps.push(gap);
       }
@@ -242,17 +259,11 @@ export class TokenCoverageValidator {
   private createGap(
     expectation: NodeExpectation,
     actualTokens: SemanticToken[],
-    input: string
+    input: string,
+    severity: 'error' | 'warning'
   ): CoverageGap {
     const text = expectation.text ||
       this.tokenMatcher.extractText(input, expectation.location);
-
-    // Determine severity based on what we found
-    let severity: 'error' | 'warning' = 'error';
-    if (actualTokens.length > 0) {
-      // Tokens exist but wrong type - this is a warning (less severe)
-      severity = 'warning';
-    }
 
     if (process.env.DEBUG && actualTokens.length > 0) {
       console.log(`[GAP-ANALYSIS] ${expectation.nodeType} at ${expectation.location.start.line}:${expectation.location.start.column}`);

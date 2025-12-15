@@ -6,7 +6,7 @@ import chalk from 'chalk';
 
 // Config version - bump when making breaking changes
 // nvim-doctor uses this to detect outdated configs
-export const NVIM_CONFIG_VERSION = 8;
+export const NVIM_CONFIG_VERSION = 13;
 
 // File extension semantics:
 // - .mld files → strict mode (bare directives like `var @x = 1`)
@@ -69,18 +69,22 @@ if use_new_api then
       local client = vim.lsp.get_client_by_id(args.data.client_id)
       if client and client.name == 'mlld_ls' and client.server_capabilities.semanticTokensProvider then
         -- Define highlight groups for mlld semantic tokens
-        vim.api.nvim_set_hl(0, '@lsp.type.variable.mld', { link = 'Identifier' })
+        vim.api.nvim_set_hl(0, '@lsp.type.variable.mld', { link = 'Function' })
         vim.api.nvim_set_hl(0, '@lsp.type.property.mld', { link = 'Type' })
-        vim.api.nvim_set_hl(0, '@lsp.type.function.mld', { link = 'Function', italic = true })
-        vim.api.nvim_set_hl(0, '@lsp.type.parameter.mld', { link = 'Parameter' })
+        vim.api.nvim_set_hl(0, '@lsp.type.function.mld', { link = 'Identifier', italic = true })
         vim.api.nvim_set_hl(0, '@lsp.type.string.mld', { link = 'String' })
         vim.api.nvim_set_hl(0, '@lsp.type.number.mld', { link = 'Number' })
         vim.api.nvim_set_hl(0, '@lsp.type.keyword.mld', { link = 'Keyword' })
         vim.api.nvim_set_hl(0, '@lsp.type.operator.mld', { link = 'Operator' })
         vim.api.nvim_set_hl(0, '@lsp.type.comment.mld', { link = 'Comment' })
+        vim.api.nvim_set_hl(0, '@lsp.type.label.mld', { link = 'Special' })
+        vim.api.nvim_set_hl(0, '@lsp.type.type.mld', { link = 'Type' })
         -- Modifiers for additional nuance
-        vim.api.nvim_set_hl(0, '@lsp.typemod.variable.declaration.mld', { link = 'Identifier', bold = true })
-        vim.api.nvim_set_hl(0, '@lsp.typemod.function.reference.mld', { link = 'Function', italic = true })
+        vim.api.nvim_set_hl(0, '@lsp.typemod.variable.declaration.mld', { link = 'Function', bold = true })
+        vim.api.nvim_set_hl(0, '@lsp.typemod.function.declaration.mld', { link = 'Identifier', bold = true })
+        vim.api.nvim_set_hl(0, '@lsp.typemod.function.reference.mld', { link = 'Identifier', italic = true })
+        -- Embedded code styling (italic modifier)
+        vim.api.nvim_set_hl(0, '@lsp.mod.italic.mld', { italic = true })
 
         vim.lsp.semantic_tokens.start(args.buf, client.id)
       end
@@ -183,18 +187,21 @@ return {
           local client = vim.lsp.get_client_by_id(args.data.client_id)
           if client and client.name == 'mlld_ls' and client.server_capabilities.semanticTokensProvider then
             -- Define highlight groups for mlld semantic tokens
-            vim.api.nvim_set_hl(0, '@lsp.type.variable.mld', { link = 'Identifier' })
+            vim.api.nvim_set_hl(0, '@lsp.type.variable.mld', { link = 'Function' })
             vim.api.nvim_set_hl(0, '@lsp.type.property.mld', { link = 'Type' })
-            vim.api.nvim_set_hl(0, '@lsp.type.function.mld', { link = 'Function', italic = true })
-            vim.api.nvim_set_hl(0, '@lsp.type.parameter.mld', { link = 'Parameter' })
-            vim.api.nvim_set_hl(0, '@lsp.type.string.mld', { link = 'String' })
+            vim.api.nvim_set_hl(0, '@lsp.type.function.mld', { link = 'Identifier', italic = true })
+                vim.api.nvim_set_hl(0, '@lsp.type.string.mld', { link = 'String' })
             vim.api.nvim_set_hl(0, '@lsp.type.number.mld', { link = 'Number' })
             vim.api.nvim_set_hl(0, '@lsp.type.keyword.mld', { link = 'Keyword' })
             vim.api.nvim_set_hl(0, '@lsp.type.operator.mld', { link = 'Operator' })
             vim.api.nvim_set_hl(0, '@lsp.type.comment.mld', { link = 'Comment' })
+            vim.api.nvim_set_hl(0, '@lsp.type.label.mld', { link = 'Special' })
+            vim.api.nvim_set_hl(0, '@lsp.type.type.mld', { link = 'Type' })
             -- Modifiers for additional nuance
-            vim.api.nvim_set_hl(0, '@lsp.typemod.variable.declaration.mld', { link = 'Identifier', bold = true })
-            vim.api.nvim_set_hl(0, '@lsp.typemod.function.reference.mld', { link = 'Function', italic = true })
+            vim.api.nvim_set_hl(0, '@lsp.typemod.variable.declaration.mld', { link = 'Function', bold = true })
+            vim.api.nvim_set_hl(0, '@lsp.typemod.function.reference.mld', { link = 'Identifier', italic = true })
+            -- Embedded code styling (italic modifier)
+            vim.api.nvim_set_hl(0, '@lsp.mod.italic.mld', { italic = true })
 
             vim.lsp.semantic_tokens.start(args.buf, client.id)
           end

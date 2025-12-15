@@ -97,7 +97,7 @@ async function main() {
   // Create validator
   const nodeTokenRules = createNodeTokenRuleMap();
   const expectationBuilder = new NodeExpectationBuilder(nodeTokenRules);
-  const validator = new TokenCoverageValidator(expectationBuilder);
+  const validator = new TokenCoverageValidator(expectationBuilder, nodeTokenRules);
   const reporter = new CoverageReporter();
 
   // Load fixtures

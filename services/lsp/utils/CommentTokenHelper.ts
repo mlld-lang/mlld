@@ -17,36 +17,52 @@ export class CommentTokenHelper {
    */
   tokenizeEndOfLineComment(comment: any): void {
     if (!comment.location) return;
-    
+
     const sourceText = this.document.getText();
-    
-    // The comment location in the AST starts after the space after the marker
-    // We need to find the actual position of the marker in the source text
-    const lineStart = sourceText.split('\n').slice(0, comment.location.start.line - 1).join('\n').length;
-    const lineOffset = lineStart > 0 ? lineStart + 1 : 0; // +1 for newline if not first line
-    
-    // Find the marker position by searching backwards from the comment start
-    const searchStart = Math.max(0, comment.location.start.offset - 10); // Look back up to 10 chars
+
+    // The comment location in the AST may include leading whitespace (including newlines)
+    // when the grammar's InlineComment rule captures whitespace before the marker.
+    // We need to find the actual position of the marker in the source text.
+
+    // First, search within the comment's location range (forward search)
+    const commentText = sourceText.substring(comment.location.start.offset, comment.location.end.offset);
+    let markerIndexInComment = commentText.indexOf(comment.marker);
+
+    if (markerIndexInComment !== -1) {
+      // Found the marker within the comment range
+      const absoluteMarkerOffset = comment.location.start.offset + markerIndexInComment;
+      const position = this.document.positionAt(absoluteMarkerOffset);
+      const totalLength = comment.location.end.offset - absoluteMarkerOffset;
+
+      this.tokenBuilder.addToken({
+        line: position.line,
+        char: position.character,
+        length: totalLength,
+        tokenType: 'comment',
+        modifiers: []
+      });
+      return;
+    }
+
+    // Fallback: search backwards from the comment start (legacy behavior)
+    const searchStart = Math.max(0, comment.location.start.offset - 10);
     const searchText = sourceText.substring(searchStart, comment.location.start.offset);
     const markerIndex = searchText.lastIndexOf(comment.marker);
-    
+
     if (markerIndex !== -1) {
-      // Found the marker, calculate the actual start position
       const markerOffset = searchStart + markerIndex;
-      const markerLine = comment.location.start.line - 1;
-      const markerChar = markerOffset - lineOffset;
+      const position = this.document.positionAt(markerOffset);
       const totalLength = comment.location.end.offset - markerOffset;
-      
-      // Token for the entire comment including the marker
+
       this.tokenBuilder.addToken({
-        line: markerLine,
-        char: markerChar,
+        line: position.line,
+        char: position.character,
         length: totalLength,
         tokenType: 'comment',
         modifiers: []
       });
     } else {
-      // Fallback: just use the comment location as-is
+      // Last fallback: use the comment location as-is
       this.tokenBuilder.addToken({
         line: comment.location.start.line - 1,
         char: comment.location.start.column - 1,
