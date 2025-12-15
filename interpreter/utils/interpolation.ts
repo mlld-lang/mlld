@@ -18,6 +18,24 @@ import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { classifyShellValue } from '../utils/shell-value';
 import * as shellQuote from 'shell-quote';
 
+/**
+ * ASSERTION HELPER FOR PHASE 2.3 MIGRATION
+ *
+ * Enable runtime assertions during migration to verify array behavior changes.
+ * Set MLLD_ASSERT_ARRAY_BEHAVIOR=true to enable assertion mode.
+ *
+ * These assertions help catch unexpected behavior changes when migrating from
+ * specific array type checks to generic StructuredValue array handling.
+ */
+const ASSERT_MODE = process.env.MLLD_ASSERT_ARRAY_BEHAVIOR === 'true';
+
+function assertArrayBehavior(condition: boolean, message: string, context?: Record<string, unknown>): void {
+  if (ASSERT_MODE && !condition) {
+    const contextStr = context ? `\nContext: ${JSON.stringify(context, null, 2)}` : '';
+    throw new Error(`[ARRAY MIGRATION ASSERTION] ${message}${contextStr}`);
+  }
+}
+
 export interface InterpolationNode {
   type: string;
   content?: string;
@@ -206,9 +224,16 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             assertStructuredValue(value, 'interpolate:pipeline-input');
             stringValue = asText(value);
           } else if (value.type === 'LoadContentResultArray') {
+            // MIGRATION: StructuredValue with LoadContentResultArray type
+            // Expected behavior: Extract data and join with \n\n
             const { isRenamedContentArray } = await import('@core/types/load-content');
             const { asData } = await import('../utils/structured-value');
             const resolved = asData(value);
+            assertArrayBehavior(
+              Array.isArray(resolved),
+              'LoadContentResultArray StructuredValue should have array data',
+              { valueType: value.type, resolvedType: typeof resolved }
+            );
             if (Array.isArray(resolved) && isRenamedContentArray(resolved)) {
               stringValue = resolved
                 .map(item => (typeof item === 'string' ? item : (item as any)?.content ?? ''))
@@ -489,8 +514,17 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         } else if (Array.isArray(value)) {
           const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
           if (isLoadContentResultArray(value)) {
+            // MIGRATION: This branch handles LoadContentResult arrays (glob patterns)
+            // Expected behavior: Join array items with \n\n separator
             stringValue = asText(value);
+            assertArrayBehavior(
+              typeof stringValue === 'string',
+              'LoadContentResultArray should convert to string via asText',
+              { arrayLength: value.length, resultType: typeof stringValue }
+            );
           } else if (isRenamedContentArray(value)) {
+            // MIGRATION: This branch handles renamed content arrays (glob as transform)
+            // Expected behavior: Join renamed items appropriately
             if ('content' in value) {
               stringValue = asText(value);
             } else if (value.toString !== Array.prototype.toString) {
@@ -498,7 +532,13 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             } else {
               stringValue = value.join('\n\n');
             }
+            assertArrayBehavior(
+              typeof stringValue === 'string',
+              'RenamedContentArray should convert to string',
+              { arrayLength: value.length, hasContent: 'content' in value }
+            );
           } else {
+            // MIGRATION: Generic array handling
             const { JSONFormatter } = await import('../core/json-formatter');
             const printableArray = value.map(item => {
               if (isStructuredValue(item)) {

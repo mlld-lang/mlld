@@ -1,0 +1,93 @@
+#!/usr/bin/env mlld
+# Critical Array Behavior Canary Test
+# Run this before/after Phase 2.3 migration to verify array interpolation behavior
+#
+# Expected output is captured in tmp/baseline-canary-output.txt
+# Run: mlld run test-array-behavior.mld > tmp/baseline-canary-output.txt
+#
+# After migration, re-run and diff against baseline to detect regressions
+
+## Test 1: Basic glob concatenation (LoadContentResult array)
+
+
+### Test 1a: Direct interpolation
+Expected: Files concatenate with \n\n separator
+Actual output:
+@files
+
+---
+
+### Test 1b: Array indexing
+First file:
+@files[0]
+
+Second file:
+@files[1]
+
+---
+
+### Test 1c: Array length
+File count: @files.length
+
+---
+
+### Test 1d: Array .content field access
+Content via .content:
+@files.content
+
+---
+
+## Test 2: Renamed content array (glob as transform)
+
+
+### Test 2a: Direct interpolation of renamed array
+Filenames:
+@renamed
+
+---
+
+### Test 2b: Array operations on renamed content
+First filename: @renamed[0]
+Array length: @renamed.length
+
+---
+
+### Test 2c: Join operation on renamed array
+
+---
+
+## Test 3: File reference glob patterns
+
+
+### Test 3a: Direct file reference interpolation
+File references:
+@refs
+
+---
+
+### Test 3b: File reference in template string
+Files found: 0
+---
+
+## Test 4: Array in template context
+
+
+### Test 4a: Variable interpolation in template
+File contents: 
+---
+
+### Test 4b: Nested interpolation
+
+FieldAccess: Array index 0 out of bounds (length: 0)
+
+Details:
+  baseValue: 
+  fieldAccessChain: 
+  failedAtIndex: 0
+  failedKey: 0
+
+
+[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[34m mlld error [0m[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[36m/show[0m [90m.......................................[0m [90mtest-array-behavior.mld.md:unknown[0m
+[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
