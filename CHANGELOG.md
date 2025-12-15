@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables explicit, auditable access to runtime-injected data
   - Similar pattern to `/import { USER } from @input` for environment variables
 - **Live @state and literal payload strings**: `@state` reads stay fresh after state writes, and `@payload/@state` dynamic modules emit literal strings so @mentions and user data do not interpolate.
+- **LoadContentResult implements StructuredValue surface**: File loading now returns values with `.text`, `.data`, and `.ctx` surfaces. Access metadata via `.ctx.filename`, `.ctx.tokens`, `.ctx.fm` etc. Direct property access (`.content`, `.filename`) remains for backward compatibility but `.ctx` is recommended for new code.
 
 ### Fixed
 - **Arithmetic operators in exe blocks and let assignments**: Math operators (`+`, `-`, `*`, `/`, `%`) now work in exe block statements, let assignments, and return values. Previously only worked in `/var` and `/when` due to interpreter routing to old expression evaluator. Fixed by using unified expression evaluator that supports all operators.
