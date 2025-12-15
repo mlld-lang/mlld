@@ -1229,7 +1229,7 @@ export const helpers = {
     /**
      * Creates an action node for /for directive actions
      */
-    createForActionNode(directive, content, location, endingTail) {
+    createForActionNode(directive, content, location, endingTail, endingComment) {
         const kind = directive;
         // Special-case: support show actions with either templates/quotes or unified references
         if (kind === 'show' && content) {
@@ -1240,12 +1240,16 @@ export const helpers = {
                 if (endingTail && endingTail.pipeline) {
                     values.pipeline = endingTail.pipeline;
                 }
+                const meta = { implicit: false, isTemplateContent: true };
+                if (endingComment) {
+                    meta.comment = endingComment;
+                }
                 return [this.createNode(NodeType.Directive, {
                         kind,
                         subtype: 'showTemplate',
                         values,
                         raw: { content: this.reconstructRawString(content.content) },
-                        meta: { implicit: false, isTemplateContent: true },
+                        meta,
                         location
                     })];
             }
@@ -1256,21 +1260,29 @@ export const helpers = {
             if (endingTail && endingTail.pipeline) {
                 values.withClause = { pipeline: endingTail.pipeline };
             }
+            const meta = { implicit: false };
+            if (endingComment) {
+                meta.comment = endingComment;
+            }
             return [this.createNode(NodeType.Directive, {
                     kind,
                     subtype: isExec ? 'showInvocation' : 'showVariable',
                     values,
                     raw: { content: this.reconstructRawString(content) },
-                    meta: { implicit: false },
+                    meta,
                     location
                 })];
+        }
+        const meta = { implicit: false };
+        if (endingComment) {
+            meta.comment = endingComment;
         }
         return [this.createNode(NodeType.Directive, {
                 kind,
                 subtype: kind,
                 values: { content: Array.isArray(content) ? content : [content] },
                 raw: { content: this.reconstructRawString(content) },
-                meta: { implicit: false },
+                meta,
                 location
             })];
     },

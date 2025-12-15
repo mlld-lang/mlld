@@ -1,261 +1,361 @@
-# AST-Driven Semantic Token Validator
+---
+updated: 2025-12-14
+tags: #lsp, #tooling, #testing
+related-docs: docs/dev/LANGUAGE-SERVER.md
+related-code: tests/utils/token-validator/*.ts, services/lsp/ASTSemanticVisitor.ts, services/lsp/utils/TokenBuilder.ts
+related-types: tests/utils/token-validator/types.ts { CoverageGap, DiagnosticContext, TokenAttempt }
+---
 
-Comprehensive validation system for LSP semantic token coverage that eliminates false positives by validating AST nodes against semantic tokens.
+# LSP Semantic Token Validator
 
-## Current Status
+## tldr
 
-**Strict Mode Fixtures**: 100% coverage (1058/1058 nodes), 53 passing, 0 failing ✅
+AST-driven validation system that ensures every semantically meaningful AST node has corresponding semantic tokens. Includes `requireExactType` flag to distinguish semantic nodes (Parameter, Directive) from structural nodes. Diagnostic tracing shows WHY tokens are missing (visitor not called, token rejected with reason, wrong token type, etc.). Critical for maintaining LSP highlighting quality.
 
-**Production Files**: Still have issues - see epic [mlld-76c](../.beads/issues/mlld-76c.md) for tracking
+**Status**: 96.2% coverage on 56 strict mode fixtures (1045/1086 nodes), 51 fixtures passing. Enhanced with requireExactType flag - wrong-type tokens on critical nodes now counted as errors.
 
-The validator achieves 100% on test fixtures, but real files expose additional edge cases. Use `npm run test:nvim-lsp <file>` to test actual editor integration.
+## Principles
 
-## Features
+- **AST-driven expectations** - Each node type maps to expected token types via NodeTokenMap
+- **Zero false positives** - Structural delimiters marked optional, whitespace skipped
+- **Diagnostic transparency** - Track full pipeline: visitor call → token emission → acceptance/rejection
+- **Actionable output** - Show which visitor file and method to fix, with rejection reasons
+- **Double validation** - Fixtures pass 100%, but real files expose gaps → fixtures incomplete
 
-- **AST-node validation** - Validates each semantically meaningful AST node has corresponding tokens
-- **Zero false positives** - Structural delimiters never flagged as missing
-- **Actionable feedback** - Shows exactly which visitor file to fix and what method to add
-- **Fast iteration** - Run → see all gaps → fix → rerun
-- **Mode-aware** - Handles strict mode (.mld) and markdown mode (.md)
-- **Comprehensive** - Validates against all 1,069 test fixtures automatically
-- **Bug finder** - Already revealed critical bugs in `ASTSemanticVisitor.visitChildren()` recursion
+## Details
 
-## What the Validator Discovered
-
-During initial testing, the validator revealed critical bugs in the LSP implementation:
-
-1. **Missing visitor registrations** - `field`, `numericField`, `arrayIndex` node types weren't registered
-2. **Incomplete AST traversal** - `visitChildren()` only checked specific properties (`values`, `children`, etc.) but didn't iterate ALL properties of container objects like `.values = { invocation: {...} }`
-3. **Container object recursion** - Plain objects without `.type` property (like Directive `.values`) weren't being recursed into properly
-4. **False 100% coverage** - Initially showed 100% because it wasn't walking into nested structures
-
-These bugs meant that child nodes inside Directive `.values` containers (like variables, parameters, literals) were never visited and thus never tokenized.
-
-### Critical Bugs Fixed
-
-1. **Negative character positions** (`DirectiveVisitor.ts:340-365`) - `meta.implicit` was null for strict mode, causing wrong position calculations. Fixed by checking source text for `/` instead of trusting meta flag. This was **causing Neovim crashes** and malformed tokens.
-
-2. **Missing visitor registrations** - `field`, `numericField`, `arrayIndex` weren't registered in `ASTSemanticVisitor.ts:87-89`
-
-3. **Container object recursion** - `visitChildren()` now iterates ALL properties of plain objects without `.type`, properly handling Directive `.values` containers
-
-4. **Wrong token types** - ExecInvocation sent as `variable` instead of `function` (`CommandVisitor.ts:142, 326`)
-
-## Usage
-
-### Basic Validation
+### Commands
 
 ```bash
-# Validate all strict mode fixtures
-npm run validate:tokens
-
-# Validate with verbose output
-npm run validate:tokens:verbose
-
-# Validate specific fixture or pattern
-npm run validate:tokens -- feat/strict-mode/variables
+npm run validate:tokens                              # All fixtures, summary only
+npm run validate:tokens -- --verbose                 # Add visitor coverage stats
+npm run validate:tokens -- --verbose --diagnostics   # Add WHY diagnostics
+npm run dump:tokens <file.mld> -- --diagnostics      # Single file with diagnostics
+node scripts/validate-token-mappings.mjs             # Check TOKEN_TYPE_MAP completeness
 ```
 
-### Output Format
+### Core Flow
 
 ```
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Semantic Token Coverage Report - Strict Mode            ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-
-Coverage: 246/246 nodes (100.0%)
-Fixtures: 56 passed, 0 failed
-
-✅ All fixtures have complete token coverage!
+AST → NodeExpectationBuilder → expectations[]
+AST → ASTSemanticVisitor → TokenBuilder → tokens[] + diagnostics[]
+expectations[] + tokens[] → TokenMatcher → gaps[] [enriched with diagnostics]
+gaps[] → CoverageReporter → terminal output
 ```
 
-## Architecture
+### Node Token Rules
 
-### Core Components
+**File**: `tests/utils/token-validator/NodeTokenMap.ts`
 
-- **TokenCoverageValidator** - Main orchestrator
-- **NodeExpectationBuilder** - Builds expectations from AST
-- **TokenMatcher** - Matches tokens to node locations
-- **FixSuggestionGenerator** - Maps gaps to visitor fixes
-- **CoverageReporter** - Formats terminal output
-- **NodeTokenMap** - Defines expected tokens for each AST node type
-- **ContextBuilder** - Tracks template/command context
+Defines expected token types for each AST node:
+- `VariableReference` → `['variable', 'function']` (function when used in calls)
+- `Directive` → `['keyword']`
+- `BinaryExpression` → `['operator']`
+- `Literal` → Dynamic based on valueType (number/string/boolean/null/keyword)
+- `field` → `['property', 'function']` (function for method calls)
 
-### Node Type Mapping
+**requireExactType Flag** (added 2025-12-14):
 
-The validator knows what each AST node type should generate:
+Node rules can include `requireExactType: true` to distinguish semantic nodes from structural nodes:
 
 ```typescript
-'VariableReference' → expects 'variable' token
-'Directive' → expects 'keyword' token
-'Parameter' → expects 'parameter' token
-'Comment' → expects 'comment' token
-'Literal' → expects 'number', 'keyword', or 'string' based on value type
-```
-
-### False Positive Elimination
-
-- Structural delimiters (`[`, `]`, `{`, `}`, `:`, `,`) marked as optional
-- Whitespace and newlines skipped
-- Context-aware Text nodes (only require tokens inside templates)
-- Mode-aware (markdown vs strict)
-
-## Programmatic Usage
-
-```typescript
-import {
-  TokenCoverageValidator,
-  NodeExpectationBuilder,
-  createNodeTokenRuleMap
-} from './tests/utils/token-validator';
-
-// Create validator
-const nodeTokenRules = createNodeTokenRuleMap();
-const expectationBuilder = new NodeExpectationBuilder(nodeTokenRules);
-const validator = new TokenCoverageValidator(expectationBuilder);
-
-// Validate a fixture
-const result = await validator.validateFixture({
-  name: 'feat/variables',
-  input: 'var @name = "Alice"',
-  ast: [...],
-  mlldMode: 'strict'
-});
-
-console.log(`Coverage: ${result.coveragePercentage.toFixed(1)}%`);
-console.log(`Gaps: ${result.gaps.length}`);
-```
-
-## Extending
-
-### Add New Node Type
-
-1. Add to `NodeTokenMap.ts`:
-
-```typescript
-'MyNewNode': {
-  expectedTokenTypes: ['keyword'],
+'Parameter': {
+  expectedTokenTypes: ['parameter'],
   mustBeCovered: true,
-  visitor: 'MyVisitor'
+  requireExactType: true,  // Wrong type = ERROR not warning
+  visitor: 'FileReferenceVisitor'
 }
 ```
 
-2. Add to `VisitorMapper.ts`:
+When `requireExactType: true`:
+- Wrong token type creates **error gap** (counts in coverage %)
+- Example: Parameter node with overlapping `operator` token = error
 
-```typescript
-'MyNewNode': {
-  class: 'MyVisitor',
-  file: 'services/lsp/visitors/MyVisitor.ts'
-}
+When `requireExactType: false` or not set:
+- Wrong token type creates **warning gap** (doesn't count in coverage %)
+- Example: VariableReference can be `variable` OR `function` token
+
+This prevents false positives like operator tokens `(`, `,`, `)` overlapping Parameter nodes and being counted as "covered".
+
+### Diagnostic System
+
+Tracks token generation pipeline:
+
+**TokenBuilder** (`services/lsp/utils/TokenBuilder.ts`):
+- `addToken()` tracks ALL attempts as `TokenAttempt[]`
+- Records: `{tokenType, position, accepted, rejectionReason, sourceNode}`
+- Rejection reasons: `duplicate`, `negative_position`, `nan_value`, `unknown_type`
+- Accessible via `getAttempts()`
+
+**ASTSemanticVisitor** (`services/lsp/ASTSemanticVisitor.ts`):
+- `visitNode()` tracks visitor calls as `VisitorDiagnostic[]`
+- Records: `{visitorClass, nodeId, called, tokensEmitted, tokensAccepted, tokensRejected}`
+- Sets source node via `tokenBuilder.setSourceNode(nodeId)` before visitor call
+- Accessible via `getVisitorDiagnostics()`
+
+**TokenCoverageValidator** (`tests/utils/token-validator/TokenCoverageValidator.ts`):
+- Collects diagnostics from visitor and builder
+- Correlates diagnostics to gaps by nodeId
+- Each `CoverageGap` includes optional `diagnostic?: DiagnosticContext`
+
+**CoverageReporter** (`tests/utils/token-validator/CoverageReporter.ts`):
+- `formatDiagnosticTrace()` - Per-gap diagnostic output
+- `generateDiagnosticSummary()` - Overall rejection statistics
+- Shows visitor call status, token emission counts, rejection reasons
+
+### Diagnostic Output Patterns
+
+**Pattern 1: No visitor called**
+```
+✗ No visitor called
+→ Register visitor in ASTSemanticVisitor.initializeVisitors()
+→ OR add node type to existing visitor's switch statement
 ```
 
-## Files
-
+**Pattern 2: Visitor called, no tokens**
 ```
-tests/utils/token-validator/
-├── TokenCoverageValidator.ts   - Main orchestrator
-├── NodeExpectationBuilder.ts   - Builds expectations from AST
-├── TokenMatcher.ts              - Matches tokens to nodes
-├── NodeTokenMap.ts              - Node type → token type rules
-├── ContextBuilder.ts            - Tracks template/command context
-├── FixSuggestionGenerator.ts    - Maps gaps to fixes
-├── VisitorMapper.ts             - Node types → visitor classes
-├── CoverageReporter.ts          - Terminal output formatter
-├── types.ts                     - TypeScript interfaces
-├── index.ts                     - Exports
-└── README.md                    - This file
+✓ CommandVisitor: 0 emitted, 0 accepted, 0 rejected
+→ Visitor logic doesn't handle this node structure
+→ Add tokenization logic to visitor method
 ```
 
-## Testing
+**Pattern 3: Tokens rejected**
+```
+✓ VariableVisitor: 1 emitted, 0 accepted, 1 rejected
+Token attempts:
+  ✗ variable at 3:24 (negative_position)
+→ Fix character position calculation in visitor
+```
+
+**Pattern 4: Tokens duplicated**
+```
+✓ StructureVisitor: 5 emitted, 0 accepted, 5 rejected (duplicate)
+→ Node appears in AST multiple times
+→ OR multiple visitors handling same position
+→ Use visitedNodeIds deduplication or fix AST structure
+```
+
+**Pattern 5: Unknown type**
+```
+✗ function at 2:10 (unknown_type)
+→ Add 'function': 'function' to TOKEN_TYPE_MAP
+→ Run: node scripts/validate-token-mappings.mjs
+```
+
+### TOKEN_TYPE_MAP
+
+**File**: `cli/commands/language-server-impl.ts:102-132`
+
+Maps mlld-specific token names → standard LSP types:
+- Custom types: `variableRef` → `variable`, `directive` → `keyword`
+- Standard types pass through: `variable` → `variable`, `function` → `function`
+- Missing mappings cause `unknown_type` rejection
+
+Validate completeness: `node scripts/validate-token-mappings.mjs`
+
+### Adding New Node Types
+
+1. Add rule to `NodeTokenMap.ts`:
+   ```typescript
+   'MyNode': {
+     expectedTokenTypes: ['keyword'],
+     mustBeCovered: true,
+     visitor: 'MyVisitor'
+   }
+   ```
+
+2. Register in `ASTSemanticVisitor.ts:66-101`:
+   ```typescript
+   this.registerVisitor('MyNode', myVisitor);
+   ```
+
+3. Implement in visitor:
+   ```typescript
+   visitNode(node: any, context: VisitorContext): void {
+     if (node.type === 'MyNode') {
+       this.tokenBuilder.addToken({...});
+     }
+   }
+   ```
+
+4. If using custom token type, add to TOKEN_TYPE_MAP in `language-server-impl.ts`
+
+### Entry Points
+
+- **Validation**: `tests/utils/token-validator/TokenCoverageValidator.ts:33` - `validateFixture()`
+- **Token generation**: `TokenCoverageValidator.ts:71` - `generateSemanticTokens()`
+- **Gap detection**: `TokenCoverageValidator.ts:185` - `findCoverageGaps()`
+- **Reporting**: `CoverageReporter.ts:23` - `generateReport()`
+- **CLI**: `scripts/validate-tokens.mjs` - `main()`
+
+## Gotchas
+
+- **Test fixtures != production coverage** - Validator passes 100% on fixtures but real files expose edge cases. Always test production files with `npm run dump:tokens <file> -- --diagnostics`
+- **TOKEN_TYPE_MAP required** - Every token type visitors emit MUST be in TOKEN_TYPE_MAP or tokens silently rejected with `unknown_type`
+- **Visitor recursion** - ASTSemanticVisitor calls `visitChildren()` after every visitor. Manual recursion in visitors can cause duplicate tokens. Use `visitedNodeIds` deduplication or don't recurse manually.
+- **sourceNode tracking** - TokenBuilder.setSourceNode() must be called before addToken() for diagnostics to correlate tokens to AST nodes
+- **Diagnostic overhead** - Tracking adds ~5-10% performance overhead. Only enabled during validation, not in production LSP.
+- **Nvim highlight group overrides hide theme colors** - When testing which semantic token type gives you a desired color, check that nvim config doesn't have `vim.api.nvim_set_hl(0, '@lsp.type.X.mld', ...)` overriding it. Example: `@lsp.type.modifier.mld → Keyword` will force modifier tokens to use Keyword color instead of the theme's natural modifier color. To use theme's default color for a semantic type, don't define a highlight group for it. Check: `grep "@lsp.type" cli/commands/nvim-setup.ts`
+
+## Debugging
+
+### Find why variable isn't highlighted
 
 ```bash
-# Run validator tests
-npm test tests/utils/token-validator/TokenCoverageValidator.test.ts
-
-# Test what Neovim actually receives from LSP
-npm run test:nvim-lsp <file.mld>
-npm run test:nvim-lsp:verbose <file.mld>
+npm run dump:tokens file.mld -- --diagnostics
 ```
 
-### Testing Real Editor Integration
+Look for the VariableReference node:
+- `✗ No visitor called` → Add VariableVisitor call
+- `✓ VariableVisitor: 0 emitted` → Visitor doesn't handle this pattern
+- `✗ variable at X:Y (negative_position)` → Fix char calculation in VariableVisitor:134-145
+- `✗ variable at X:Y (unknown_type)` → Add to TOKEN_TYPE_MAP
 
-The `test:nvim-lsp` script tests what the actual LSP server sends to Neovim:
+### Find duplicate token issues
 
 ```bash
-# Test specific file (shows errors only)
-npm run test:nvim-lsp <file.mld>
-
-# Show all LSP activity
-npm run test:nvim-lsp:verbose <file.mld>
+npm run dump:tokens file.mld -- --diagnostics | grep duplicate
 ```
 
-**How it works:**
-1. Opens file in Neovim headless
-2. Waits for LSP to process (3 second timeout)
-3. Captures LSP logs from `~/.local/state/nvim/lsp.log`
-4. Filters for token errors and semantic activity
-5. Shows summary with token count
+Shows which positions have duplicate tokens. Common causes:
+- AST node appears multiple times with same nodeId
+- Multiple visitors tokenizing same location
+- Manual recursion + automatic visitChildren()
 
-**Example output:**
-```
-Summary:
-  ✅ 247 tokens generated
-  🔴 2 token position errors (these tokens were rejected)
-  ⚠️  2 unknown node types (no visitors registered)
+### Verify TOKEN_TYPE_MAP completeness
+
+```bash
+node scripts/validate-token-mappings.mjs
 ```
 
-**Key difference from validator**: This tests the FULL LSP pipeline (parse → analyze → tokenize → encode → send), not just `ASTSemanticVisitor` in isolation. It reveals issues like:
+Exit code 1 if unmapped types found. Add to TOKEN_TYPE_MAP in `language-server-impl.ts:102-132`.
+
+### Test real LSP (not just validator)
+
+```bash
+npm run test:nvim-lsp file.mld
+```
+
+Tests full pipeline including LSP protocol encoding. Catches issues validator can't:
 - Invalid token positions that crash editors
 - Parse errors preventing tokenization
-- Unknown node types
-- Diagnostic bugs
+- LSP protocol errors
 
-Use this to verify fixes work in actual editors before deploying.
+### Validator passes but editor doesn't highlight
 
-## Known Issues
+If validator shows 100% coverage but elements aren't highlighted in the editor:
 
-See epic **[mlld-76c](../../.beads/issues/mlld-76c.md)** for tracking all tokenization issues.
+1. **Check highlight group overrides**:
+   ```bash
+   grep "@lsp.type" cli/commands/nvim-setup.ts
+   ```
+   Highlight groups like `@lsp.type.parameter.mld → Identifier` override the theme's natural color for that semantic type.
 
-**Critical P0 issues:**
-- [mlld-ghp](../../.beads/issues/mlld-ghp.md) - Negative token position causing failures
-- [mlld-7t7](../../.beads/issues/mlld-7t7.md) - @variables not highlighted
-- [mlld-ktr](../../.beads/issues/mlld-ktr.md) - @exe() calls not highlighted
-- [mlld-kks](../../.beads/issues/mlld-kks.md) - False error on import with 'as' clause
-- [mlld-08i](../../.beads/issues/mlld-08i.md) - Strings marked as invalid
+2. **Verify config regeneration**:
+   ```bash
+   npm run build
+   mlld nvim-setup --force
+   # Check that config was written:
+   grep "@lsp.type.parameter" ~/.config/nvim/lua/plugins/mlld.lua
+   ```
 
-**Lower priority:**
-- [mlld-514](../../.beads/issues/mlld-514.md) - Bracket property access edge case
-- [mlld-ddn](../../.beads/issues/mlld-ddn.md) - Object keys not highlighted
-- [mlld-drm](../../.beads/issues/mlld-drm.md) - Comment highlighting inconsistent
+3. **Completely restart editor** - Reload window is not enough, need full restart for LSP server changes
 
-## Known Limitations
+4. **Check if highlight group exists**:
+   In vim: `:hi Function` - should show a color definition
+   If "cleared" or empty, that group doesn't exist in your theme
 
-1. **Visitor recursion inconsistency** - Some visitors (DirectiveVisitor, TemplateVisitor) manually recurse via `mainVisitor.visitNode()`, others don't. Automatic `visitChildren()` after visitor calls can cause duplicate tokens.
+5. **Test with DEBUG_LSP**:
+   ```bash
+   DEBUG_LSP=true npm run dump:tokens file.mld 2>&1 | grep "\[TOKEN\]"
+   ```
+   Confirms tokens are being generated with correct types
 
-2. **Container object handling** - Directive nodes store children in `.values = { identifier: [...], params: [...], value: [...] }`. The validator now properly recurses into these, but some visitors may not expect to see their children visited automatically.
+### Testing semantic token colors in your theme
 
-3. **Location quirks** - Some AST nodes have locations that span more than they should (e.g., VariableReference location includes the entire directive line instead of just `@name`)
+When you need to find which semantic token type gives you a specific color:
 
-4. **LSP diagnostic bug** - The LSP is currently sending diagnostics with `nil` line numbers, causing Neovim errors: `attempt to perform arithmetic on field 'line' (a nil value)`. This may interfere with semantic token generation and needs separate investigation.
+1. **Temporarily modify code** to use test token types:
+   ```typescript
+   // In DirectiveVisitor.ts
+   private getDirectiveTokenType(kind: string): string {
+     switch (kind) {
+       case 'var': return 'testTokenMacro';     // Test 'macro' color
+       case 'exe': return 'testTokenDecorator'; // Test 'decorator' color
+       case 'guard': return 'testTokenModifier'; // Test 'modifier' color
+       default: return 'directive';
+     }
+   }
+   ```
 
-5. **Highlighting instability** - Edits sometimes break highlighting that doesn't recover even when reverting to valid code. May be related to semantic token caching or diagnostic errors.
+2. **Add test types to TOKEN_TYPES and TOKEN_TYPE_MAP**:
+   ```typescript
+   // In language-server-impl.ts
+   const TOKEN_TYPES = [..., 'macro', 'decorator', 'modifier'];
+   const TOKEN_TYPE_MAP = {
+     ...
+     'testTokenMacro': 'macro',
+     'testTokenDecorator': 'decorator',
+     'testTokenModifier': 'modifier'
+   };
+   ```
 
-## Next Steps
+3. **Build and test**:
+   ```bash
+   npm run build
+   mlld nvim-setup --force
+   # Restart editor completely
+   # Open test file and see which directive has the color you want
+   ```
 
-✅ **Strict mode: 100% coverage achieved!**
+4. **DON'T define highlight groups for test types** - Let theme's natural colors show through
 
-Next:
-1. **Test markdown mode** - Run validator on `.md` fixtures
-2. **Add to CI** - Fail builds if coverage drops
-3. **Test on real files** - Validate large production files like `~/dev/party/proto-3.7/llm/routes/orchestrate.mld`
+5. **Record results**, then implement the winner
 
-## CI Integration
+**Example**: We found `modifier` semantic type → pink italic by testing guard directive.
 
-**Ready for CI!** Strict mode has 100% coverage:
+### Common highlighting issues and solutions
 
-```yaml
-- name: Validate semantic token coverage
-  run: npm run validate:tokens
+**Issue**: Element tokens generated but shows as default/no color
+- **Check**: Highlight group exists for that semantic type
+- **Solution**: Either define highlight group or use a different semantic type
+
+**Issue**: Wrong color despite correct token type
+- **Check**: `grep "@lsp.type.X.mld" cli/commands/nvim-setup.ts`
+- **Solution**: Remove highlight group override to use theme's natural color
+
+**Issue**: Color testing showed different color than in actual use
+- **Cause**: Added highlight group override after color test
+- **Solution**: Don't define highlight group for semantic types you want theme to handle
+
+**Issue**: Parameters work in declarations but not in function call arguments
+- **Check**: Are arguments in AST? `npm run ast file.mld | grep -A10 args`
+- **Common cause**: `hasValidName` check fails for computed property calls, args array never visited
+- **Solution**: Add fallback to visit args even when name is an object (not string)
+
+**Issue**: Position off by one or two characters
+- **Cause**: Column-based arithmetic (`column + offset`) instead of offset-based search
+- **Solution**: Use `indexOf('@' + identifier, startOffset)` then `positionAt(offset)`
+- **See**: VariableVisitor.ts handleRegularReference() for correct pattern
+
+**Issue**: Element in bracket expression like `[@var.field]` not highlighted
+- **Cause**: AST location doesn't include `@`, column arithmetic breaks
+- **Solution**: Search forward for `@` from node location (offset-based)
+
+### Required workflow for highlighting changes
+
+All three steps are REQUIRED for changes to take effect:
+
+```bash
+# 1. Build
+npm run build
+
+# 2. Regenerate editor config
+mlld nvim-setup --force
+
+# 3. COMPLETELY restart editor (not just reload window)
+# - VSCode: Quit and reopen
+# - Vim: Exit completely and restart
 ```
 
-This will fail builds if token coverage drops below 100%.
+Skipping any step will result in old highlighting behavior persisting.

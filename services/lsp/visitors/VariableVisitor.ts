@@ -30,13 +30,24 @@ export class VariableVisitor extends BaseVisitor {
       console.log('[VAR-VISITOR]', { identifier, valueType, location: `${node.location.start.line}:${node.location.start.column}` });
     }
 
-    // Skip only 'identifier' valueType (used in declarations)
-    // 'varIdentifier' should be processed (used in references)
+    // Skip 'identifier' valueType ONLY if location doesn't include @
+    // In declarations (var/exe), location doesn't include @, so skip
+    // In exports, location DOES include @, so process it
     if (valueType === 'identifier') {
-      if (process.env.DEBUG) {
-        console.log('[VAR-VISITOR] Skipping identifier valueType');
+      const source = this.document.getText();
+      const charAtOffset = source.charAt(node.location.start.offset);
+      const includesAt = charAtOffset === '@';
+
+      if (!includesAt) {
+        if (process.env.DEBUG) {
+          console.log('[VAR-VISITOR] Skipping identifier valueType (no @ in location)');
+        }
+        return;
       }
-      return;
+      // If location includes @, fall through to process it
+      if (process.env.DEBUG) {
+        console.log('[VAR-VISITOR] Processing identifier valueType (@ in location, likely export)');
+      }
     }
     
     const baseLength = identifier.length + 1;
@@ -85,6 +96,19 @@ export class VariableVisitor extends BaseVisitor {
         tokenType: 'interpolation',
         modifiers: []
       });
+
+      // Tokenize field access for {{var.field}} style
+      if (node.fields) {
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+          console.log('[INTERPOLATION-FIELDS {{}}]', {
+            identifier,
+            hasFields: !!node.fields,
+            fieldCount: node.fields?.length,
+            fields: node.fields
+          });
+        }
+        this.operatorHelper.tokenizePropertyAccess(node);
+      }
     } else if (node.identifier) {
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
@@ -103,49 +127,80 @@ export class VariableVisitor extends BaseVisitor {
     valueType: string,
     baseLength: number
   ): void {
-    if (valueType === 'varIdentifier' || valueType === 'varInterpolation') {
-      // WORKAROUND: Parser location quirk - inconsistent @ symbol inclusion
-      // In /show directive context, the AST location doesn't include @
-      // In other contexts (assignments, expressions, objects), it does
-      // TODO: Remove this workaround when parser is fixed (see docs/dev/LANGUAGE-SERVER.md:343)
+    if (valueType === 'varIdentifier' || valueType === 'varInterpolation' || valueType === 'identifier') {
+      // Find @ position using offset-based search
+      // This is more reliable than column arithmetic which breaks with:
+      // - Multi-byte characters, tabs, datatype labels, etc.
       const source = this.document.getText();
-      const charAtOffset = source.charAt(node.location.start.offset);
+      const startOffset = node.location.start.offset;
+      const charAtOffset = source.charAt(startOffset);
       const includesAt = charAtOffset === '@';
-      
-      // If location doesn't start with @, we need to go back one position
-      const charPos = includesAt
-        ? node.location.start.column - 1   // Already includes @, just convert to 0-based
-        : node.location.start.column - 2;  // Doesn't include @, go back one more
 
-      // Validate charPos before proceeding
-      if (charPos < 0) {
-        if (process.env.DEBUG) {
-          console.log('[VAR-VISITOR] Invalid charPos', {
-            identifier,
-            column: node.location.start.column,
-            includesAt,
-            charPos,
-            baseLength
-          });
+      if (process.env.DEBUG) {
+        console.log('[VAR-POS]', {
+          identifier,
+          startOffset,
+          charAtOffset,
+          includesAt,
+          line: node.location.start.line,
+          column: node.location.start.column
+        });
+      }
+
+      // Search for @ symbol near node location
+      let atOffset = startOffset;
+      if (!includesAt) {
+        // Location doesn't include @, search for it nearby
+        // First try searching forward (for bracket expressions like [@var])
+        const forwardSearchEnd = Math.min(source.length, startOffset + 3);
+        const forwardText = source.substring(startOffset, forwardSearchEnd);
+        const forwardIndex = forwardText.indexOf('@');
+
+        if (forwardIndex !== -1) {
+          atOffset = startOffset + forwardIndex;
+        } else {
+          // Try searching backwards (for other cases)
+          const searchStart = Math.max(0, startOffset - 10);
+          const searchText = source.substring(searchStart, startOffset + 1);
+          const backwardIndex = searchText.lastIndexOf('@');
+          if (backwardIndex !== -1) {
+            atOffset = searchStart + backwardIndex;
+          } else {
+            // Fallback: couldn't find @, skip this token
+            if (process.env.DEBUG) {
+              console.log('[VAR-VISITOR] Could not find @ symbol', {
+                identifier,
+                startOffset,
+                forwardText,
+                searchText
+              });
+            }
+            return;
+          }
         }
-        return; // Skip this token
       }
 
-      // Determine token type based on special variables
-      let tokenType = 'variableRef';
+      // Convert offset to line/character position
+      const atPos = this.document.positionAt(atOffset);
+      const charPos = atPos.character;
+
+      if (process.env.DEBUG) {
+        console.log('[VAR-TOKEN]', {
+          identifier,
+          atOffset,
+          line: atPos.line,
+          char: charPos,
+          length: baseLength
+        });
+      }
+
+      // All variable references are tokenized as variables
+      // (built-in resolver names like @now, @input can be shadowed by user variables)
+      const tokenType = 'variableRef';
       const modifiers: string[] = ['reference'];
-
-      // Check for special built-in variables
-      if (identifier === 'pipeline' || identifier === 'p' || identifier === 'ctx' ||
-          identifier === 'now' || identifier === 'debug' || identifier === 'input' ||
-          identifier === 'base') {
-        tokenType = 'keyword';
-        modifiers.length = 0; // Clear reference modifier for keywords
-      }
 
       // Check for _key pattern (used in for loops for array indices)
       if (identifier.endsWith('_key')) {
-        // Still treat as variable but could add special modifier if needed
         modifiers.push('key');
       }
 
@@ -167,7 +222,17 @@ export class VariableVisitor extends BaseVisitor {
         });
       }
       this.operatorHelper.tokenizePropertyAccess(node);
-      
+
+      // Visit nested VariableReferences inside variableIndex fields (e.g., @templates[@key])
+      if (node.fields && Array.isArray(node.fields)) {
+        for (const field of node.fields) {
+          if (field.type === 'variableIndex' && field.value?.type === 'VariableReference') {
+            // Visit the nested VariableReference
+            this.mainVisitor.visitNode(field.value, context);
+          }
+        }
+      }
+
       // Handle pipes if present
       if (node.pipes && Array.isArray(node.pipes) && node.pipes.length > 0) {
         if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax') || this.document.uri.includes('test-vscode')) {
@@ -348,13 +413,14 @@ export class VariableVisitor extends BaseVisitor {
               // Advance currentPos conservatively to after the effect name
               currentPos = transformStart + effectName.length;
             } else {
-              // Regular @transform
+              // Regular @transform - use function token type (purple italic)
+              // Pipeline transforms are function invocations with implicit stdin
               const transformLength = (pipe.transform?.length || 0) + (hasAt ? 1 : 0);
               const tokenInfo = {
                 line: transformPosition.line,
                 char: transformPosition.character,
                 length: transformLength,
-                tokenType: 'variable',
+                tokenType: 'function',
                 modifiers: []
               };
               if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-final') || this.document.uri.includes('test-syntax')) {

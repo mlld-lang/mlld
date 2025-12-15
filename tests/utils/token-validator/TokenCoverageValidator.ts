@@ -8,7 +8,8 @@ import type {
   SemanticToken,
   NodeExpectation,
   FixtureData,
-  FixSuggestion
+  FixSuggestion,
+  NodeTokenRule
 } from './types.js';
 import { NodeExpectationBuilder } from './NodeExpectationBuilder.js';
 import { TokenMatcher } from './TokenMatcher.js';
@@ -18,12 +19,14 @@ export class TokenCoverageValidator {
   private expectationBuilder: NodeExpectationBuilder;
   private tokenMatcher: TokenMatcher;
   private fixSuggestionGenerator: FixSuggestionGenerator;
+  private nodeTokenRules: Map<string, NodeTokenRule>;
   private useRealLSP: boolean;
 
-  constructor(expectationBuilder: NodeExpectationBuilder, useRealLSP: boolean = false) {
+  constructor(expectationBuilder: NodeExpectationBuilder, nodeTokenRules: Map<string, NodeTokenRule>, useRealLSP: boolean = false) {
     this.expectationBuilder = expectationBuilder;
     this.tokenMatcher = new TokenMatcher();
     this.fixSuggestionGenerator = new FixSuggestionGenerator();
+    this.nodeTokenRules = nodeTokenRules;
     this.useRealLSP = useRealLSP;
   }
 
@@ -33,8 +36,8 @@ export class TokenCoverageValidator {
   async validateFixture(fixture: FixtureData): Promise<ValidationResult> {
     const mode = this.inferMode(fixture);
 
-    // Generate semantic tokens
-    const tokens = await this.generateSemanticTokens(fixture.ast, fixture.input);
+    // Generate semantic tokens with diagnostics
+    const { tokens, diagnostics } = await this.generateSemanticTokens(fixture.ast, fixture.input);
 
     // Build node expectations
     const expectations = this.expectationBuilder.buildExpectations(
@@ -43,8 +46,8 @@ export class TokenCoverageValidator {
       fixture.input
     );
 
-    // Find gaps
-    let gaps = this.findCoverageGaps(expectations, tokens, fixture.input);
+    // Find gaps with diagnostic enrichment
+    let gaps = this.findCoverageGaps(expectations, tokens, fixture.input, diagnostics);
 
     // Enhance gaps with fix suggestions
     gaps = this.fixSuggestionGenerator.enhanceGapsWithFixes(gaps);
@@ -52,15 +55,18 @@ export class TokenCoverageValidator {
     // Group by visitor
     const gapsByVisitor = this.fixSuggestionGenerator.groupByVisitor(gaps);
 
+    // Only count error gaps in coverage percentage
+    const errorGaps = gaps.filter(g => g.severity === 'error');
+
     return {
       fixturePath: fixture.name,
       mode,
       totalNodes: expectations.length,
-      coveredNodes: expectations.length - gaps.length,
+      coveredNodes: expectations.length - errorGaps.length,
       gaps,
       gapsByVisitor,
       coveragePercentage: expectations.length > 0
-        ? ((expectations.length - gaps.length) / expectations.length) * 100
+        ? ((expectations.length - errorGaps.length) / expectations.length) * 100
         : 100
     };
   }
@@ -71,34 +77,55 @@ export class TokenCoverageValidator {
   private async generateSemanticTokens(
     ast: any[],
     input: string
-  ): Promise<SemanticToken[]> {
+  ): Promise<{ tokens: SemanticToken[]; diagnostics: DiagnosticContext }> {
     const { SemanticTokensBuilder } = await import('vscode-languageserver/node.js');
     const { TextDocument } = await import('vscode-languageserver-textdocument');
     const { ASTSemanticVisitor } = await import('../../../services/lsp/ASTSemanticVisitor.js');
 
-    // Token type definitions (from language-server-impl.ts)
+    // Token type definitions (MUST MATCH language-server-impl.ts EXACTLY)
     const TOKEN_TYPES = [
-      'keyword', 'variable', 'string', 'number', 'operator',
-      'comment', 'function', 'parameter', 'property', 'type',
-      'namespace', 'label', 'interface'
+      'keyword',          // 0
+      'variable',         // 1
+      'string',           // 2
+      'operator',         // 3
+      'label',            // 4
+      'type',             // 5
+      'parameter',        // 6
+      'comment',          // 7
+      'number',           // 8
+      'property',         // 9
+      'interface',        // 10
+      'typeParameter',    // 11
+      'namespace',        // 12
+      'function',         // 13
+      'modifier'          // 14 Definition directives
     ];
 
+    // Token modifiers (MUST MATCH language-server-impl.ts EXACTLY)
     const TOKEN_MODIFIERS = [
-      'declaration', 'reference', 'readonly', 'static', 'deprecated',
-      'invalid', 'interpolated', 'literal'
+      'declaration',      // 0
+      'reference',        // 1
+      'readonly',         // 2
+      'interpolated',     // 3
+      'literal',          // 4
+      'invalid',          // 5
+      'deprecated',       // 6
+      'italic'            // 7
     ];
 
+    // Token type map (MUST MATCH language-server-impl.ts EXACTLY)
     const TOKEN_TYPE_MAP: Record<string, string> = {
       'directive': 'keyword',
+      'directiveDefinition': 'modifier',
       'variableRef': 'variable',
       'interpolation': 'variable',
       'template': 'operator',
       'templateContent': 'string',
-      'embedded': 'label',
+      'embedded': 'type',
       'embeddedCode': 'string',
       'alligator': 'interface',
-      'alligatorOpen': 'operator',
-      'alligatorClose': 'operator',
+      'alligatorOpen': 'interface',
+      'alligatorClose': 'interface',
       'xmlTag': 'type',
       'section': 'namespace',
       'boolean': 'keyword',
@@ -110,7 +137,13 @@ export class TokenCoverageValidator {
       'parameter': 'parameter',
       'comment': 'comment',
       'number': 'number',
-      'property': 'property'
+      'property': 'property',
+      'function': 'function',
+      'label': 'label',
+      'typeParameter': 'typeParameter',
+      'interface': 'interface',
+      'namespace': 'namespace',
+      'modifier': 'modifier'
     };
 
     // Create document
@@ -169,7 +202,14 @@ export class TokenCoverageValidator {
       });
     }
 
-    return tokens;
+    const diagnostics: DiagnosticContext = {
+      visitorCalls: visitor.getVisitorDiagnostics(),
+      tokenAttempts: visitor.getTokenBuilder().getAttempts(),
+      nodeTraversalPath: [],
+      contextState: {}
+    };
+
+    return { tokens, diagnostics };
   }
 
   /**
@@ -178,7 +218,8 @@ export class TokenCoverageValidator {
   private findCoverageGaps(
     expectations: NodeExpectation[],
     tokens: SemanticToken[],
-    input: string
+    input: string,
+    diagnostics: DiagnosticContext
   ): CoverageGap[] {
     const gaps: CoverageGap[] = [];
 
@@ -188,13 +229,21 @@ export class TokenCoverageValidator {
         expectation.location
       );
 
+      const rule = this.nodeTokenRules.get(expectation.nodeType);
+      const requireExactType = rule?.requireExactType ?? false;
+
       if (expectation.mustBeCovered && overlappingTokens.length === 0) {
-        gaps.push(this.createGap(expectation, [], input));
+        const gap = this.createGap(expectation, [], input, 'error');
+        gap.diagnostic = this.buildDiagnosticForNode(expectation.nodeId, expectation.nodeType, diagnostics);
+        gaps.push(gap);
       } else if (
         overlappingTokens.length > 0 &&
         !this.tokenMatcher.tokensMatchExpectation(overlappingTokens, expectation)
       ) {
-        gaps.push(this.createGap(expectation, overlappingTokens, input));
+        const severity = requireExactType ? 'error' : 'warning';
+        const gap = this.createGap(expectation, overlappingTokens, input, severity);
+        gap.diagnostic = this.buildDiagnosticForNode(expectation.nodeId, expectation.nodeType, diagnostics);
+        gaps.push(gap);
       }
     }
 
@@ -207,17 +256,11 @@ export class TokenCoverageValidator {
   private createGap(
     expectation: NodeExpectation,
     actualTokens: SemanticToken[],
-    input: string
+    input: string,
+    severity: 'error' | 'warning'
   ): CoverageGap {
     const text = expectation.text ||
       this.tokenMatcher.extractText(input, expectation.location);
-
-    // Determine severity based on what we found
-    let severity: 'error' | 'warning' = 'error';
-    if (actualTokens.length > 0) {
-      // Tokens exist but wrong type - this is a warning (less severe)
-      severity = 'warning';
-    }
 
     if (process.env.DEBUG && actualTokens.length > 0) {
       console.log(`[GAP-ANALYSIS] ${expectation.nodeType} at ${expectation.location.start.line}:${expectation.location.start.column}`);
@@ -235,6 +278,25 @@ export class TokenCoverageValidator {
       severity,
       text,
       fix: this.createPlaceholderFix(expectation, text)
+    };
+  }
+
+  /**
+   * Build diagnostic context for a specific node
+   */
+  private buildDiagnosticForNode(
+    nodeId: string,
+    nodeType: string,
+    diagnostics: DiagnosticContext
+  ): DiagnosticContext {
+    const relevantVisitorCalls = diagnostics.visitorCalls.filter(v => v.nodeId === nodeId);
+    const relevantAttempts = diagnostics.tokenAttempts.filter(a => a.sourceNode === nodeId);
+
+    return {
+      visitorCalls: relevantVisitorCalls,
+      tokenAttempts: relevantAttempts,
+      nodeTraversalPath: diagnostics.nodeTraversalPath,
+      contextState: diagnostics.contextState
     };
   }
 

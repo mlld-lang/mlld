@@ -249,7 +249,7 @@ export class FileReferenceVisitor extends BaseVisitor {
               modifiers: []
             });
             
-            // Token for "@" + pipe name as a single variable token (for FileReference nodes)
+            // Token for "@" + pipe name as function (pipeline transforms are function invocations)
             const atSymbolPos = nodeText.indexOf('@', currentPos + (nodeText[currentPos + 1] === '|' ? 2 : 1));
             if (atSymbolPos !== -1) {
               const pipeTransform = pipe.transform || pipe.name; // Support both properties
@@ -259,7 +259,7 @@ export class FileReferenceVisitor extends BaseVisitor {
                   line: node.location.start.line - 1,
                   char: nodeStartChar + atSymbolPos,
                   length: pipeName.length,
-                  tokenType: 'variable',
+                  tokenType: 'function',
                   modifiers: []
                 });
                 
@@ -570,7 +570,7 @@ export class FileReferenceVisitor extends BaseVisitor {
 
               currentPos = nodeText.indexOf('|', contentStart);
             } else {
-              // Standard @transform flow
+              // Standard @transform flow - use function token type (pipeline transforms)
               const atSymbolPos = nodeText.indexOf('@', afterPipe);
               if (atSymbolPos !== -1) {
                 const pipeTransform = pipe.transform || pipe.name;
@@ -580,14 +580,14 @@ export class FileReferenceVisitor extends BaseVisitor {
                     line: node.location.start.line - 1,
                     char: nodeStartChar + atSymbolPos,
                     length: pipeName.length,
-                    tokenType: 'variable',
+                    tokenType: 'function',
                     modifiers: []
                   });
                   currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
                 } else {
                   currentPos = nodeText.indexOf('|', currentPos + 1);
                 }
-            // Token for "@pipeName"
+            // Token for "@pipeName" - use function token type (pipeline transforms)
             const atSymbolPos = nodeText.indexOf('@', currentPos + (isParallel ? 2 : 1));
             if (atSymbolPos !== -1) {
               const pipeTransform = pipe.transform || pipe.name;
@@ -597,7 +597,7 @@ export class FileReferenceVisitor extends BaseVisitor {
                   line: node.location.start.line - 1,
                   char: nodeStartChar + atSymbolPos,
                   length: pipeName.length,
-                  tokenType: 'variable',
+                  tokenType: 'function',
                   modifiers: []
                 });
                 currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
@@ -664,13 +664,13 @@ export class FileReferenceVisitor extends BaseVisitor {
             helper.tokenizeSimpleArg(contentOffset + effectName.length, rest);
           }
         } else {
-          // Regular @transform token
+          // Regular @transform token - use function token type (pipeline transforms)
           const atChar = contentPos.character; // content starts at '@'
           this.tokenBuilder.addToken({
             line: pipe.location.start.line - 1,
             char: atChar,
             length: pipeTransform.length + 1, // +1 for @
-            tokenType: 'variable',
+            tokenType: 'function',
             modifiers: []
           });
         }

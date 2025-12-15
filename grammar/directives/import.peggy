@@ -202,7 +202,10 @@ SlashImportShorthand
       if (labelInfo) {
         meta.securityLabels = labelInfo.labels;
       }
-      
+      if (comment) {
+        meta.comment = comment;
+      }
+
       return helpers.createStructuredDirective(
         'import',
         'importNamespace',  // CHANGED from 'importAll'
@@ -347,9 +350,9 @@ SlashImportFull
       
       // Create meta object with path metadata
       const meta = {
-        path: path.meta || { 
+        path: path.meta || {
           isSpecial: typeof path === 'string',
-          pathSubtype: path.subtype 
+          pathSubtype: path.subtype
         }
       };
       if (typeInfo) {
@@ -358,7 +361,10 @@ SlashImportFull
       if (labelInfo) {
         meta.securityLabels = labelInfo.labels;
       }
-      
+      if (comment) {
+        meta.comment = comment;
+      }
+
       return helpers.createStructuredDirective(
         'import',
         subtype,

@@ -39,6 +39,9 @@ export class DirectiveVisitor extends BaseVisitor {
       const startOffset = node.location.start.offset;
       const hasSlash = sourceText[startOffset] === '/';
 
+      // TEST: Use different token types for different directives to see colors
+      const tokenType = this.getDirectiveTokenType(node.kind);
+
       // For implicit directives, check if the keyword appears at the start
       if (node.meta?.implicit) {
         // Check if the keyword matches at the start position
@@ -49,7 +52,7 @@ export class DirectiveVisitor extends BaseVisitor {
             line: node.location.start.line - 1,
             char: node.location.start.column - 1,
             length: node.kind.length,
-            tokenType: 'directive',
+            tokenType,
             modifiers: []
           });
         }
@@ -63,7 +66,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: node.location.start.line - 1,
           char: node.location.start.column - 1,
           length: tokenLength,
-          tokenType: 'directive',
+          tokenType,
           modifiers: []
         });
       }
@@ -71,47 +74,56 @@ export class DirectiveVisitor extends BaseVisitor {
     
     if (node.kind === 'when') {
       this.visitWhenDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'output') {
       this.visitOutputDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'import') {
       this.visitImportDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'for') {
       this.visitForDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
-    
+
     if (node.kind === 'export') {
       this.visitExportDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'guard') {
       this.visitGuardDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     // /append is like /output - writes to a target
     if (node.kind === 'append') {
       this.visitOutputDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'while') {
       this.visitWhileDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
     if (node.kind === 'stream') {
       this.visitStreamDirective(node, context);
+      this.handleDirectiveComment(node);
       return;
     }
 
@@ -258,6 +270,8 @@ export class DirectiveVisitor extends BaseVisitor {
         // Handle exe blocks: /exe @func() = [statements; => return]
         if (node.subtype === 'exeBlock' && node.values.statements) {
           this.visitExeBlock(node, context);
+          this.tokenizeSecurityLabels(node);
+          this.handleDirectiveComment(node);
           return; // Skip normal value processing
         }
       } else {
@@ -290,18 +304,18 @@ export class DirectiveVisitor extends BaseVisitor {
             });
           }
         }
+        this.tokenizeSecurityLabels(node);
+        this.handleDirectiveComment(node);
         return; // Skip normal processing
       }
     }
-    
+
     if (node.values) {
       this.visitDirectiveValues(node, context);
     }
-    
+
     // Handle end-of-line comments
-    if (node.meta?.comment) {
-      this.visitEndOfLineComment(node.meta.comment);
-    }
+    this.handleDirectiveComment(node);
   }
 
   private visitExportDirective(directive: any, context: VisitorContext): void {
@@ -324,7 +338,7 @@ export class DirectiveVisitor extends BaseVisitor {
   
   private visitEndOfLineComment(comment: any): void {
     if (!comment.location) return;
-    
+
     if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
       console.log('[EOL-COMMENT]', {
         marker: comment.marker,
@@ -333,10 +347,20 @@ export class DirectiveVisitor extends BaseVisitor {
         offset: `${comment.location.start.offset}-${comment.location.end.offset}`
       });
     }
-    
+
     this.commentHelper.tokenizeEndOfLineComment(comment);
   }
-  
+
+  /**
+   * Handle end-of-line comments attached to directives via meta.comment
+   * Call this before early returns to ensure comments are tokenized
+   */
+  private handleDirectiveComment(node: any): void {
+    if (node.meta?.comment) {
+      this.visitEndOfLineComment(node.meta.comment);
+    }
+  }
+
   private handleVariableDeclaration(node: any, skipEquals: boolean = false): void {
     const identifierNodes = node.values.identifier;
     if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
@@ -349,33 +373,47 @@ export class DirectiveVisitor extends BaseVisitor {
         const startOffset = node.location.start.offset;
         const hasSlash = sourceText[startOffset] === '/';
 
-        // For implicit directives (no slash), identifier starts after "exe "
-        // For explicit directives (with slash), identifier starts after "/exe "
-        const identifierStart = hasSlash
-          ? node.location.start.column + node.kind.length + 2  // "/exe " = 5 chars
-          : node.location.start.column + node.kind.length + 1; // "exe " = 4 chars
+        // Find the actual @ position in source (accounts for datatype labels)
+        const directiveText = sourceText.substring(startOffset, node.location.end.offset);
+        const atIndex = directiveText.indexOf('@' + identifierName);
 
-        this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: identifierStart - 1,
-          length: identifierName.length + 1,
-          tokenType: 'variable',
-          modifiers: ['declaration']
-        });
+        if (atIndex !== -1) {
+          const atPosition = this.document.positionAt(startOffset + atIndex);
+
+          // Use 'function' for exe declarations, 'variable' for var/path
+          const tokenType = node.kind === 'exe' ? 'function' : 'variable';
+
+          this.tokenBuilder.addToken({
+            line: atPosition.line,
+            char: atPosition.character,
+            length: identifierName.length + 1,
+            tokenType,
+            modifiers: ['declaration']
+          });
+        } else {
+          // Fallback to old calculation (shouldn't happen)
+          const identifierStart = hasSlash
+            ? node.location.start.column + node.kind.length + 2
+            : node.location.start.column + node.kind.length + 1;
+
+          const tokenType = node.kind === 'exe' ? 'function' : 'variable';
+
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: identifierStart - 1,
+            length: identifierName.length + 1,
+            tokenType,
+            modifiers: ['declaration']
+          });
+        }
         
         // Add = operator token if there's a value (unless skipEquals is true)
-        if (!skipEquals && (node.values.value !== undefined || node.values.template !== undefined || 
+        if (!skipEquals && (node.values.value !== undefined || node.values.template !== undefined ||
             node.values.command !== undefined || node.values.code !== undefined ||
             node.values.content !== undefined || node.meta?.wrapperType !== undefined)) {
-          // Calculate position after variable name (including @)
-          let baseOffset;
-          if (node.meta?.implicit) {
-            // For implicit directives, the identifier location spans the whole assignment
-            // So we need to search from the start + identifier length
-            baseOffset = firstIdentifier.location.start.offset + identifierName.length + 1; // +1 for @
-          } else {
-            baseOffset = node.location.start.offset + identifierStart + identifierName.length;
-          }
+          // Find = operator by searching after the variable name
+          const varEnd = atIndex + identifierName.length + 1; // Position after @var
+          let baseOffset = startOffset + varEnd;
           
           // For /exe with params, = comes after the closing parenthesis
           if (node.kind === 'exe' && node.values.params && node.values.params.length > 0) {
@@ -537,9 +575,23 @@ export class DirectiveVisitor extends BaseVisitor {
   }
   
   private visitWithClause(withClause: any, directive: any, context: VisitorContext): void {
-    // Find the "as" keyword position
+    // Find and tokenize the "with" keyword
     const source = this.document.getText();
     const directiveText = source.substring(directive.location.start.offset, directive.location.end.offset);
+    const withIndex = directiveText.indexOf(' with ');
+
+    if (withIndex !== -1) {
+      // Token for "with" keyword (light teal italic like for/when/while)
+      this.tokenBuilder.addToken({
+        line: directive.location.start.line - 1,
+        char: directive.location.start.column - 1 + withIndex + 1, // +1 to skip the space before "with"
+        length: 4,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Find the "as" keyword position
     const asIndex = directiveText.lastIndexOf(' as ');
     
     if (asIndex !== -1) {
@@ -998,20 +1050,8 @@ export class DirectiveVisitor extends BaseVisitor {
     }
     
     if (values?.lang) {
-      const langText = TextExtractor.extract(Array.isArray(values.lang) ? values.lang : [values.lang]);
-      if (langText && directive.location) {
-        const langStart = directive.location.start.column + 4; // After "/run "
-        
-        this.tokenBuilder.addToken({
-          line: directive.location.start.line - 1,
-          char: langStart,
-          length: langText.length,
-          tokenType: 'embedded',
-          modifiers: []
-        });
-      }
-      
       // For language-specific code blocks, use the language helper
+      // (it handles language identifier tokenization internally)
       if (values.code && directive.location) {
         this.languageHelper.tokenizeCodeBlock(directive);
       }
@@ -1056,6 +1096,11 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     } else {
       this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+    }
+
+    // Handle withClause if present (for /run with { pipeline: [...] })
+    if (values?.withClause) {
+      this.visitWithClause(values.withClause, directive, context);
     }
 
     // Tokenize pipeline operators (| and ||)
@@ -1944,7 +1989,7 @@ export class DirectiveVisitor extends BaseVisitor {
           this.tokenBuilder.addToken({
             line: importItem.location.start.line - 1,
             char: importItem.location.start.column - 1,
-            length: importItem.identifier.length || 0,
+            length: (importItem.identifier.length || 0) + 1,
             tokenType: 'variable',
             modifiers: []
           });
@@ -2062,10 +2107,20 @@ export class DirectiveVisitor extends BaseVisitor {
             modifiers: []
           });
         }
+      } else if (pathNode.type === 'Text' && pathNode.content?.startsWith('@')) {
+        // WORKAROUND: Grammar bug - special resolvers like @payLoad parsed as Text, not VariableReference
+        // TODO: Fix grammar to parse as VariableReference
+        this.tokenBuilder.addToken({
+          line: pathNode.location.start.line - 1,
+          char: pathNode.location.start.column - 1,
+          length: pathNode.content.length,
+          tokenType: 'variable',
+          modifiers: ['readonly']
+        });
       } else {
         // File path string
         // Check if this is a simple string or contains variables
-        const hasVariables = values.path.some(node => 
+        const hasVariables = values.path.some(node =>
           node.type === 'VariableReference' && node.valueType === 'varIdentifier'
         );
         
@@ -2145,14 +2200,31 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     }
     
+    // Handle import type identifier (e.g., "templates" in: import templates from "...")
+    if (directive.raw?.importType && directive.subtype === 'importNamespace') {
+      const importTypeMatch = directiveText.match(/import\s+(\w+)\s+from/);
+      if (importTypeMatch && importTypeMatch[1]) {
+        const typeOffset = directive.location.start.offset + importTypeMatch.index + importTypeMatch[0].indexOf(importTypeMatch[1]);
+        const typePosition = this.document.positionAt(typeOffset);
+
+        this.tokenBuilder.addToken({
+          line: typePosition.line,
+          char: typePosition.character,
+          length: importTypeMatch[1].length,
+          tokenType: 'type',
+          modifiers: []
+        });
+      }
+    }
+
     // Handle "as" alias
     if (directive.subtype === 'importNamespace' && values.namespace) {
-      const asMatch = directiveText.match(/\s+as\s+(\w+)/);
-      if (asMatch && asMatch.index !== undefined && asMatch[1]) {
+      const asMatch = directiveText.match(/\s+as\s+/);
+      if (asMatch && asMatch.index !== undefined) {
         // Token for "as" keyword
         const asOffset = directive.location.start.offset + asMatch.index + asMatch[0].indexOf('as');
         const asPosition = this.document.positionAt(asOffset);
-        
+
         this.tokenBuilder.addToken({
           line: asPosition.line,
           char: asPosition.character,
@@ -2160,18 +2232,52 @@ export class DirectiveVisitor extends BaseVisitor {
           tokenType: 'keyword',
           modifiers: []
         });
-        
-        // Token for alias name
-        const aliasOffset = directive.location.start.offset + asMatch.index + asMatch[0].lastIndexOf(asMatch[1]);
-        const aliasPosition = this.document.positionAt(aliasOffset);
-        
-        this.tokenBuilder.addToken({
-          line: aliasPosition.line,
-          char: aliasPosition.character,
-          length: asMatch[1]?.length || 0,
-          tokenType: 'variable',
-          modifiers: []
-        });
+
+        // Token for alias name @agentTemplates (Text node has content without @)
+        const namespaceNode = Array.isArray(values.namespace) ? values.namespace[0] : values.namespace;
+        if (namespaceNode && namespaceNode.location) {
+          const aliasName = namespaceNode.content || directive.raw?.namespace?.slice(1); // Remove @ from raw
+          if (aliasName) {
+            // Find @ before the alias name
+            const atMatch = directiveText.match(/as\s+(@\w+)/);
+            if (atMatch && atMatch.index !== undefined) {
+              const aliasOffset = directive.location.start.offset + atMatch.index + atMatch[0].indexOf('@');
+              const aliasPosition = this.document.positionAt(aliasOffset);
+
+              this.tokenBuilder.addToken({
+                line: aliasPosition.line,
+                char: aliasPosition.character,
+                length: aliasName.length + 1, // +1 for @
+                tokenType: 'variable',
+                modifiers: []
+              });
+            }
+          }
+        }
+
+        // Token for template parameters if present
+        if (directive.raw?.templateParams && Array.isArray(directive.raw.templateParams)) {
+          const paramsMatch = directiveText.match(/@\w+\(([^)]+)\)/);
+          if (paramsMatch && paramsMatch[1]) {
+            const params = paramsMatch[1].split(',').map(p => p.trim());
+            let searchStart = directive.location.start.offset + paramsMatch.index + paramsMatch[0].indexOf('(') + 1;
+
+            for (const param of params) {
+              const paramOffset = this.document.getText().indexOf(param, searchStart);
+              if (paramOffset !== -1) {
+                const paramPosition = this.document.positionAt(paramOffset);
+                this.tokenBuilder.addToken({
+                  line: paramPosition.line,
+                  char: paramPosition.character,
+                  length: param.length,
+                  tokenType: 'parameter',
+                  modifiers: []
+                });
+                searchStart = paramOffset + param.length;
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -2302,6 +2408,10 @@ export class DirectiveVisitor extends BaseVisitor {
           this.visitOutputDirective(actionNode, context);
         } else {
           this.mainVisitor.visitNode(actionNode, context);
+        }
+        // Handle comments attached to nested action directives
+        if (actionNode.type === 'Directive' && actionNode.meta?.comment) {
+          this.handleDirectiveComment(actionNode);
         }
       }
     }
@@ -2849,7 +2959,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: labelPosition.line,
           char: labelPosition.character,
           length: label.length,
-          tokenType: 'label',
+          tokenType: 'parameter',
           modifiers: []
         });
 
@@ -2912,6 +3022,37 @@ export class DirectiveVisitor extends BaseVisitor {
     // Visit the invocation/reference
     if (node.values.invocation) {
       this.mainVisitor.visitNode(node.values.invocation, context);
+    }
+  }
+
+  /**
+   * Get token type for directive keyword based on kind
+   * Different directive groups use different semantic types for color coding
+   */
+  private getDirectiveTokenType(kind: string): string {
+    switch (kind) {
+      // Definition directives: var, exe, guard, policy
+      // Use 'modifier' semantic type → renders as pink italic
+      case 'var':
+      case 'exe':
+      case 'guard':
+      case 'policy':
+        return 'directiveDefinition';
+
+      // Action directives: run, show, output, append, log, stream
+      // Use 'property' semantic type → renders as darker teal + italic
+      case 'run':
+      case 'show':
+      case 'output':
+      case 'append':
+      case 'log':
+      case 'stream':
+        return 'directiveAction';
+
+      // Everything else (for/when/while/import/export/etc)
+      // Uses 'directive' → maps to 'keyword' → light teal italic
+      default:
+        return 'directive';
     }
   }
 }

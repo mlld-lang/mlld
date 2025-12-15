@@ -145,23 +145,12 @@ export class CommandVisitor extends BaseVisitor {
           console.log('[EXEC-INV-NOLOC]', { name, atCharPos, nameCharPos, includesAt });
         }
 
-        // Tokenize @ as variable and name as function to avoid overlapping tokens
-        if (atCharPos >= 0) {
+        // Tokenize @functionName as a single token for consistent coloring
+        if (name && typeof name === 'string' && name.length > 0 && atCharPos >= 0) {
           this.tokenBuilder.addToken({
             line: identifierLoc.start.line - 1,
             char: atCharPos,
-            length: 1,
-            tokenType: 'variableRef',
-            modifiers: ['reference']
-          });
-        }
-
-        // Safety check: ensure name and length are valid
-        if (name && typeof name === 'string' && name.length > 0) {
-          this.tokenBuilder.addToken({
-            line: identifierLoc.start.line - 1,
-            char: nameCharPos,
-            length: name.length,
+            length: name.length + 1, // Include @ in length
             tokenType: 'function',
             modifiers: ['reference']
           });
@@ -337,50 +326,149 @@ export class CommandVisitor extends BaseVisitor {
         }
         return;
       }
-      const charPos = node.location.start.column - 1;
       const source = this.document.getText();
-      const includesAt = source.charAt(node.location.start.offset) === '@';
-      const atCharPos = includesAt ? charPos : charPos - 1;
-      const nameCharPos = includesAt ? atCharPos + 1 : atCharPos + 1;
-
-      if (process.env.DEBUG) {
-        console.log('[EXEC-INV] Tokenizing exec invocation', { name, charPos });
-      }
-
-      if (atCharPos >= 0) {
-        this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: atCharPos,
-          length: 1,
-          tokenType: 'variableRef',
-          modifiers: ['reference']
-        });
-      }
-
-      // Safety check: ensure name and length are valid
       const hasValidName = name && typeof name === 'string' && name.length > 0;
 
-      if (hasValidName) {
-        this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: nameCharPos,
-          length: name.length,
-          tokenType: 'function',
-          modifiers: ['reference']
+      // Check if this is a method call (has objectReference) vs simple function call
+      const isMethodCall = !!node.commandRef.objectReference;
+
+      if (process.env.DEBUG) {
+        console.log('[EXEC-INV] Tokenizing exec invocation', {
+          name,
+          isMethodCall,
+          hasObjectRef: !!node.commandRef.objectReference
         });
+      }
+
+      let methodEndOffset: number;
+
+      // Check for chained method calls (objectSource is an ExecInvocation)
+      const isChainedMethodCall = !!node.commandRef.objectSource;
+
+      if (isChainedMethodCall && node.commandRef.objectSource) {
+        // CHAINED METHOD CALL: @object.method1().method2(args)
+        // 1. Visit the inner ExecInvocation (recursively handles the chain)
+        this.visitExecInvocation(node.commandRef.objectSource, context);
+
+        // 2. Find and tokenize this method name (from identifier or just the name)
+        // For chained calls, identifier[0] is usually a Text node, not VariableReference
+        const identifier = node.commandRef.identifier?.[0];
+        const methodName = node.commandRef.name;
+
+        if (methodName && typeof methodName === 'string') {
+          // Find the position of the method name in source
+          // It should be after the previous method's closing paren
+          const searchStart = node.location?.start?.offset || 0;
+          const methodOffset = source.indexOf(methodName, searchStart);
+
+          if (methodOffset !== -1) {
+            // Tokenize the dot before the method (if present)
+            if (source[methodOffset - 1] === '.') {
+              const dotPos = this.document.positionAt(methodOffset - 1);
+              this.tokenBuilder.addToken({
+                line: dotPos.line,
+                char: dotPos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
+
+            // Tokenize the method name
+            const methodPos = this.document.positionAt(methodOffset);
+            this.tokenBuilder.addToken({
+              line: methodPos.line,
+              char: methodPos.character,
+              length: methodName.length,
+              tokenType: 'function',
+              modifiers: ['reference']
+            });
+
+            methodEndOffset = methodOffset + methodName.length;
+          }
+        }
+      } else if (isMethodCall && node.commandRef.objectReference) {
+        // METHOD CALL or COMPUTED CALL: @object.method(args) or @object[@key](args)
+
+        // Check what kind of call this is
+        const identifier = node.commandRef.identifier?.[0];
+        if (identifier?.fields && identifier.fields.length > 0) {
+          const lastField = identifier.fields[identifier.fields.length - 1];
+
+          if (lastField?.type === 'variableIndex') {
+            // COMPUTED PROPERTY CALL: @obj[@key](args)
+            // Visit identifier[0] which contains the variableIndex field with nested VariableReference
+            this.mainVisitor.visitNode(identifier, context);
+
+            if (lastField.location) {
+              methodEndOffset = lastField.location.end.offset;
+            }
+          } else if (lastField?.type === 'field' && lastField.location && lastField.value) {
+            // REGULAR METHOD CALL: @obj.method(args)
+            // Visit the objectReference for base variable
+            this.mainVisitor.visitNode(node.commandRef.objectReference, context);
+
+            // Tokenize the dot before the method
+            const dotOffset = lastField.location.start.offset - 1;
+            if (source[dotOffset] === '.') {
+              const dotPos = this.document.positionAt(dotOffset);
+              this.tokenBuilder.addToken({
+                line: dotPos.line,
+                char: dotPos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
+
+            // Tokenize the method name
+            const methodPos = this.document.positionAt(lastField.location.start.offset);
+            this.tokenBuilder.addToken({
+              line: methodPos.line,
+              char: methodPos.character,
+              length: lastField.value.length,
+              tokenType: 'function',
+              modifiers: ['reference']
+            });
+
+            methodEndOffset = lastField.location.end.offset;
+          }
+        }
+      } else {
+        // SIMPLE FUNCTION CALL: @functionName(args)
+        const charPos = node.location.start.column - 1;
+        const includesAt = source.charAt(node.location.start.offset) === '@';
+        const atCharPos = includesAt ? charPos : charPos - 1;
+
+        // Tokenize @functionName as a single token for consistent coloring
+        if (hasValidName && atCharPos >= 0) {
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: atCharPos,
+            length: name.length + 1, // Include @ in length
+            tokenType: 'function',
+            modifiers: ['reference']
+          });
+        }
+
+        methodEndOffset = node.location.start.offset + name.length + 1;
       }
 
       // Add opening parenthesis (only if we have valid name for position calculation)
       if (hasValidName && node.commandRef.args && Array.isArray(node.commandRef.args)) {
-        const openParenPos = atCharPos + name.length + 1;
-        this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: openParenPos,
-          length: 1,
-          tokenType: 'operator',
-          modifiers: []
-        });
-        
+        // Find the opening paren in the source
+        const openParenOffset = source.indexOf('(', methodEndOffset - 1);
+        if (openParenOffset !== -1) {
+          const openParenPos = this.document.positionAt(openParenOffset);
+          this.tokenBuilder.addToken({
+            line: openParenPos.line,
+            char: openParenPos.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+
         const newContext = {
           ...context,
           inCommand: true,
@@ -488,6 +576,24 @@ export class CommandVisitor extends BaseVisitor {
           });
         }
       } // Close hasValidName && args if
+
+      // Handle args for cases where hasValidName is false (e.g., computed property calls)
+      // where name is an object instead of a string
+      if (!hasValidName && node.commandRef.args && Array.isArray(node.commandRef.args) && node.commandRef.args.length > 0) {
+        const newContext = {
+          ...context,
+          inCommand: true,
+          interpolationAllowed: true,
+          variableStyle: '@var' as const,
+          inFunctionArgs: true
+        };
+
+        for (const arg of node.commandRef.args) {
+          if (arg && typeof arg === 'object' && arg.type) {
+            this.mainVisitor.visitNode(arg, newContext);
+          }
+        }
+      }
 
       // Handle withClause pipeline (for pipes after function calls)
       if (node.withClause && node.withClause.pipeline) {

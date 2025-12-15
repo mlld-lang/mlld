@@ -21,12 +21,15 @@ import { FileReferenceVisitor } from '@services/lsp/visitors/FileReferenceVisito
 import { ForeachVisitor } from '@services/lsp/visitors/ForeachVisitor';
 import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
+import type { VisitorDiagnostic } from '@tests/utils/token-validator/types.js';
 
 export class ASTSemanticVisitor {
   private contextStack: ContextStack;
   private tokenBuilder: TokenBuilder;
   private visitors: Map<string, INodeVisitor>;
   private textCache = new Map<string, string>();
+  private visitedNodeIds = new Set<string>();
+  private visitorCalls: VisitorDiagnostic[] = [];
   
   constructor(
     private document: TextDocument,
@@ -115,10 +118,20 @@ export class ASTSemanticVisitor {
   popContext(): void {
     this.contextStack.pop();
   }
-  
+
+  getVisitorDiagnostics(): VisitorDiagnostic[] {
+    return this.visitorCalls;
+  }
+
+  getTokenBuilder(): TokenBuilder {
+    return this.tokenBuilder;
+  }
+
   async visitAST(ast: any[]): Promise<void> {
     this.textCache.clear();
-    
+    this.visitedNodeIds.clear();
+    this.visitorCalls = [];
+
     // Initialize embedded language service if not already initialized
     await embeddedLanguageService.initialize();
     
@@ -133,11 +146,21 @@ export class ASTSemanticVisitor {
   
   visitNode(node: any, context?: VisitorContext): void {
     if (!node || !node.type) return;
-    
+
     if (this.shouldSkipNode(node)) return;
-    
+
     const actualContext = context || this.currentContext;
-    
+
+    const diagnostic: VisitorDiagnostic = {
+      visitorClass: 'Unknown',
+      nodeType: node.type,
+      nodeId: node.nodeId || 'unknown',
+      called: false,
+      tokensEmitted: 0,
+      tokensAccepted: 0,
+      tokensRejected: 0
+    };
+
     try {
       if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
         console.log(`[VISITOR] Node: ${node.type}`, {
@@ -145,18 +168,46 @@ export class ASTSemanticVisitor {
           content: node.content || node.identifier || node.value || '?'
         });
       }
-      
+
       if (!node.location && node.type !== 'Text' && node.type !== 'Newline' && process.env.DEBUG_LSP) {
         console.warn(`Node type ${node.type} missing location`);
       }
-      
+
       const visitor = this.visitors.get(node.type);
       if (visitor) {
+        diagnostic.visitorClass = visitor.constructor.name;
+        diagnostic.called = true;
+
+        if (node.nodeId) {
+          this.tokenBuilder.setSourceNode(node.nodeId);
+        }
+
+        const attemptsBefore = this.tokenBuilder.getAttempts().length;
+
         visitor.visitNode(node, actualContext);
+
+        const attemptsAfter = this.tokenBuilder.getAttempts().length;
+        const newAttempts = this.tokenBuilder.getAttempts().slice(attemptsBefore);
+
+        diagnostic.tokensEmitted = newAttempts.length;
+        diagnostic.tokensAccepted = newAttempts.filter(a => a.accepted).length;
+        diagnostic.tokensRejected = newAttempts.filter(a => !a.accepted).length;
+
+        this.tokenBuilder.clearSourceNode();
+
         // Visit children to ensure nested nodes are processed
         // Visitors that manually recurse will skip duplicates via valueType checks
         this.visitChildren(node, actualContext);
       } else {
+        diagnostic.called = true;
+        diagnostic.visitorClass = 'ASTSemanticVisitor';
+
+        if (node.nodeId) {
+          this.tokenBuilder.setSourceNode(node.nodeId);
+        }
+
+        const attemptsBefore = this.tokenBuilder.getAttempts().length;
+
         switch (node.type) {
           case 'Text':
             this.visitText(node, actualContext);
@@ -169,12 +220,25 @@ export class ASTSemanticVisitor {
           case 'Parameter':
             this.visitParameter(node, actualContext);
             break;
+          case 'VariableReferenceWithTail':
+            this.visitVariableReferenceWithTail(node, actualContext);
+            break;
           default:
             console.warn(`Unknown node type: ${node.type}`);
             this.visitChildren(node, actualContext);
         }
+
+        const attemptsAfter = this.tokenBuilder.getAttempts().length;
+        const newAttempts = this.tokenBuilder.getAttempts().slice(attemptsBefore);
+
+        diagnostic.tokensEmitted = newAttempts.length;
+        diagnostic.tokensAccepted = newAttempts.filter(a => a.accepted).length;
+        diagnostic.tokensRejected = newAttempts.filter(a => !a.accepted).length;
+
+        this.tokenBuilder.clearSourceNode();
       }
     } catch (error) {
+      diagnostic.called = true;
       console.error(`[SEMANTIC-TOKEN-ERROR] Error visiting node type ${node.type}:`, {
         error: error.message,
         stack: error.stack,
@@ -186,18 +250,30 @@ export class ASTSemanticVisitor {
       });
       // Continue processing other nodes
     }
+
+    this.visitorCalls.push(diagnostic);
   }
   
   private shouldSkipNode(node: any): boolean {
     if (!node.type) return true;
-    
+
     const skipTypes = ['Newline', 'Whitespace', 'EOF'];
     if (skipTypes.includes(node.type)) return true;
-    
+
     if (node.error || node.isError) return false;
-    
+
     if (node.type.startsWith('_') || node.type.startsWith('$')) return true;
-    
+
+    // Skip nodes we've already visited (prevents duplicates from manual recursion + visitChildren)
+    if (node.nodeId && this.visitedNodeIds.has(node.nodeId)) {
+      return true;
+    }
+
+    // Mark this node as visited
+    if (node.nodeId) {
+      this.visitedNodeIds.add(node.nodeId);
+    }
+
     return false;
   }
   
@@ -390,7 +466,7 @@ export class ASTSemanticVisitor {
   
   visitParameter(node: any, context: VisitorContext): void {
     if (!node.location || !node.name) return;
-    
+
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
@@ -398,5 +474,42 @@ export class ASTSemanticVisitor {
       tokenType: 'parameter',
       modifiers: []
     });
+  }
+
+  visitVariableReferenceWithTail(node: any, context: VisitorContext): void {
+    // Visit the main variable reference
+    if (node.variable) {
+      this.visitNode(node.variable, context);
+    }
+
+    // Handle the pipeline in withClause
+    if (node.withClause?.pipeline && Array.isArray(node.withClause.pipeline)) {
+      const source = this.document.getText();
+
+      for (const transform of node.withClause.pipeline) {
+        // Each transform has .identifier array with VariableReference nodes
+        if (transform.identifier && Array.isArray(transform.identifier)) {
+          for (const identNode of transform.identifier) {
+            if (identNode.type === 'VariableReference' && identNode.location) {
+              // Find the | operator before this transform
+              const pipeOffset = source.lastIndexOf('|', identNode.location.start.offset);
+              if (pipeOffset !== -1 && pipeOffset > (node.variable?.location?.end?.offset || 0)) {
+                const pipePos = this.document.positionAt(pipeOffset);
+                this.tokenBuilder.addToken({
+                  line: pipePos.line,
+                  char: pipePos.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+
+              // Visit the variable reference in the pipeline
+              this.visitNode(identNode, context);
+            }
+          }
+        }
+      }
+    }
   }
 }

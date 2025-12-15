@@ -94,7 +94,8 @@ const TOKEN_TYPES = [
   'interface',        // Interfaces (file references)
   'typeParameter',    // Type parameters (file paths in sections)
   'namespace',        // Namespaces (section names)
-  'function'          // Functions (exec invocations)
+  'function',         // Functions (exec invocations)
+  'modifier'          // Definition directives (var/exe/guard/policy)
 ];
 
 // Map mlld-specific token names to standard types
@@ -102,11 +103,14 @@ const TOKEN_TYPES = [
 const TOKEN_TYPE_MAP: Record<string, string> = {
   // mlld-specific mappings
   'directive': 'keyword',          // /var, /show, etc.
+  'directiveDefinition': 'modifier',  // var/exe/guard/policy → pink
+  'directiveAction': 'property',   // run/show/output/append/log/stream → darker teal
   'variableRef': 'variable',       // @variable references
   'interpolation': 'variable',     // @var in templates
   'template': 'operator',          // Template delimiters
   'templateContent': 'string',     // Template content
-  'embedded': 'label',             // Language labels (js, python)
+  'embedded': 'property',          // Language labels (js, python, sh, node) - darker teal
+  'cmdLanguage': 'function',       // cmd language label - purple (distinct from js/py/sh)
   'embeddedCode': 'string',        // Embedded code content
   'alligator': 'interface',        // File paths in <>
   'alligatorOpen': 'interface',    // < bracket
@@ -123,7 +127,13 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   'parameter': 'parameter',
   'comment': 'comment',
   'number': 'number',
-  'property': 'property'
+  'property': 'property',
+  'function': 'function',
+  'label': 'label',
+  'typeParameter': 'typeParameter',
+  'interface': 'interface',
+  'namespace': 'namespace',
+  'modifier': 'modifier'
 };
 
 const TOKEN_MODIFIERS = [
@@ -133,7 +143,8 @@ const TOKEN_MODIFIERS = [
   'interpolated',     // interpolated content
   'literal',          // literal strings (single quotes)
   'invalid',          // invalid syntax
-  'deprecated'        // deprecated syntax
+  'deprecated',       // deprecated syntax
+  'italic'            // embedded code styling
 ];
 
 // Debounced processor for delayed validation and token generation
@@ -712,13 +723,13 @@ export async function startLanguageServer(): Promise<void> {
   }
 
   /**
-   * Check for text nodes in strict mode that shouldn't be there
+   * Check for text nodes in strict mode that shouldn't be there.
+   * Only TOP-LEVEL Text nodes are invalid. Text inside directive values is allowed.
    */
   function checkStrictModeTextNodes(ast: any[], errors: Diagnostic[]): void {
-    function checkNode(node: any): void {
-      // Only top-level Text nodes are illegal in strict mode. Text inside directives is allowed.
-      if (node.type === 'Text' && node.content?.trim() && node.parent?.type !== 'Directive') {
-        // Text nodes with content are not allowed in strict mode
+    // Only check top-level nodes - don't recurse into directive children
+    for (const node of ast) {
+      if (node.type === 'Text' && node.content?.trim()) {
         const loc = node.location;
         if (loc) {
           const startLine = (loc.start.line || 1) - 1;
@@ -737,21 +748,7 @@ export async function startLanguageServer(): Promise<void> {
           });
         }
       }
-
-      // Recursively check child nodes
-      if (node.values && typeof node.values === 'object') {
-        for (const key in node.values) {
-          const value = node.values[key];
-          if (Array.isArray(value)) {
-            value.forEach(checkNode);
-          } else if (value && typeof value === 'object') {
-            checkNode(value);
-          }
-        }
-      }
     }
-
-    ast.forEach(checkNode);
   }
 
   function analyzeAST(

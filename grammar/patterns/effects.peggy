@@ -16,7 +16,7 @@ EffectShowAction
   = "show" _ content:WhenRHSShowContent ending:StandardDirectiveEnding {
       helpers.debug('EffectShowAction matched', { content, ending });
       // Use createForActionNode for consistent handling with pipelines
-      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
+      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null, ending ? ending.comment : null);
     }
 
 // Log effect - emits to stderr only, no return value

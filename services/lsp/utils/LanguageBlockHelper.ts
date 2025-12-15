@@ -16,7 +16,8 @@ export class LanguageBlockHelper {
     'js', 'javascript', 'node',
     'python', 'py', 'python3',
     'sh', 'bash', 'shell', 'zsh',
-    'ts', 'typescript'
+    'ts', 'typescript',
+    'cmd'
   ];
   
   constructor(
@@ -37,16 +38,20 @@ export class LanguageBlockHelper {
     if (!LanguageBlockHelper.LANGUAGE_IDENTIFIERS.includes(language)) {
       return false;
     }
-    
+
+    // cmd uses function token type (purple) to distinguish from js/py/sh
+    // All other languages use property token type (darker teal)
+    const tokenType = language === 'cmd' ? 'cmdLanguage' : 'embedded';
+
     const position = this.document.positionAt(offset);
     this.tokenBuilder.addToken({
       line: position.line,
       char: position.character,
       length: language.length,
-      tokenType: 'embedded', // Using 'embedded' as per the established pattern
+      tokenType,
       modifiers: []
     });
-    
+
     return true;
   }
 
@@ -128,29 +133,50 @@ export class LanguageBlockHelper {
       codeContent = directiveText.substring(braceIndex + 1, closeBraceIndex).trim();
     }
     
-    // Tokenize embedded code if supported
-    if (codeContent && this.embeddedService.isLanguageSupported(language)) {
-      const codeStartInDirective = directiveText.indexOf(codeContent, braceIndex + 1);
-      if (codeStartInDirective !== -1) {
-        const codePosition = this.document.positionAt(
-          directive.location.start.offset + codeStartInDirective
-        );
-        
+    // Tokenize embedded code
+    if (codeContent) {
+      const codeStartOffset = directive.location.start.offset + braceIndex + 1;
+      const codeEndOffset = directive.location.start.offset + closeBraceIndex;
+      const fullCodeContent = sourceText.substring(codeStartOffset, codeEndOffset);
+      const codePosition = this.document.positionAt(codeStartOffset);
+
+      // Try WASM tokenization for supported languages (js/node)
+      if (this.embeddedService.isLanguageSupported(language)) {
         try {
           const embeddedTokens = this.embeddedService.generateTokens(
-            codeContent,
+            fullCodeContent,
             language,
             codePosition.line,
             codePosition.character
           );
-          
-          // Add all embedded language tokens
+
+          // Add all embedded language tokens with italic modifier
           for (const token of embeddedTokens) {
-            this.tokenBuilder.addToken(token);
+            this.tokenBuilder.addToken({
+              ...token,
+              modifiers: [...(token.modifiers || []), 'italic']
+            });
           }
         } catch (error) {
-          console.error(`Failed to tokenize embedded ${language} code:`, error);
+          // Fallback: tokenize as string if WASM fails
+          this.tokenBuilder.addToken({
+            line: codePosition.line,
+            char: codePosition.character,
+            length: fullCodeContent.length,
+            tokenType: 'string',
+            modifiers: ['italic']
+          });
         }
+      } else {
+        // For unsupported languages (sh/py/js when WASM unavailable):
+        // Tokenize as string until WASM parsers are set up
+        // But still highlight @variable interpolations
+        // TODO: Enable tree-sitter parsing when WASM bundles are available for sh/py
+        this.tokenizeCodeWithVariables(
+          fullCodeContent,
+          codePosition.line,
+          codePosition.character
+        );
       }
     }
     
@@ -243,6 +269,66 @@ export class LanguageBlockHelper {
     }
     
     return false;
+  }
+
+  /**
+   * Tokenize code content with @variable interpolation support
+   * Used for sh/py/js blocks when WASM is unavailable
+   * @param code The code content to tokenize
+   * @param startLine Starting line number
+   * @param startChar Starting character position
+   */
+  private tokenizeCodeWithVariables(code: string, startLine: number, startChar: number): void {
+    // Pattern to match @variables including field access like @var.field
+    const varPattern = /@[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g;
+    const lines = code.split('\n');
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const lineText = lines[lineIndex];
+      const currentLine = startLine + lineIndex;
+      const lineStartChar = lineIndex === 0 ? startChar : 0;
+
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+      varPattern.lastIndex = 0; // Reset regex state
+
+      while ((match = varPattern.exec(lineText)) !== null) {
+        // Tokenize string content before the variable
+        if (match.index > lastIndex) {
+          const beforeText = lineText.substring(lastIndex, match.index);
+          this.tokenBuilder.addToken({
+            line: currentLine,
+            char: lineStartChar + lastIndex,
+            length: beforeText.length,
+            tokenType: 'string',
+            modifiers: ['italic']
+          });
+        }
+
+        // Tokenize the variable (without italic modifier)
+        this.tokenBuilder.addToken({
+          line: currentLine,
+          char: lineStartChar + match.index,
+          length: match[0].length,
+          tokenType: 'interpolation',
+          modifiers: []
+        });
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      // Tokenize remaining string content after last variable
+      if (lastIndex < lineText.length) {
+        const afterText = lineText.substring(lastIndex);
+        this.tokenBuilder.addToken({
+          line: currentLine,
+          char: lineStartChar + lastIndex,
+          length: afterText.length,
+          tokenType: 'string',
+          modifiers: ['italic']
+        });
+      }
+    }
   }
 
   /**

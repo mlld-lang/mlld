@@ -159,7 +159,7 @@ export class OperatorTokenHelper {
           tokenType: 'operator',
           modifiers: []
         });
-        
+
         // Token for index value
         if (field.value !== undefined) {
           const indexStr = String(field.value);
@@ -172,7 +172,30 @@ export class OperatorTokenHelper {
             modifiers: []
           });
         }
-        
+
+        // Token for closing bracket
+        const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
+        this.tokenBuilder.addToken({
+          line: closeBracketPos.line,
+          char: closeBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      } else if (field.type === 'variableIndex') {
+        // Token for opening bracket
+        const openBracketPos = this.document.positionAt(field.location.start.offset);
+        this.tokenBuilder.addToken({
+          line: openBracketPos.line,
+          char: openBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+
+        // The value is a VariableReference - visit it via callback if provided
+        // For now, just tokenize brackets; the nested VariableReference will be handled by visitChildren
+
         // Token for closing bracket
         const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
         this.tokenBuilder.addToken({

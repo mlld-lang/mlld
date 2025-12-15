@@ -154,7 +154,24 @@ export class ExpressionVisitor extends BaseVisitor {
         });
       }
     }
-    
+
+    // Handle 'first' modifier if present
+    if (node.meta?.modifier === 'first') {
+      const sourceText = this.document.getText();
+      const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+      const firstIndex = nodeText.indexOf('first');
+
+      if (firstIndex !== -1) {
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column + firstIndex - 1,
+          length: 5,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+    }
+
     // Find and tokenize the ':' after 'when'
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
@@ -185,7 +202,14 @@ export class ExpressionVisitor extends BaseVisitor {
         // Visit condition expression(s)
         if (conditionPair.condition && Array.isArray(conditionPair.condition)) {
           conditionPair.condition.forEach((cond: any) => {
-            this.mainVisitor.visitNode(cond, context);
+            // Handle nested array structure [[BinaryExpression]]
+            if (Array.isArray(cond)) {
+              cond.forEach((innerCond: any) => {
+                this.mainVisitor.visitNode(innerCond, context);
+              });
+            } else {
+              this.mainVisitor.visitNode(cond, context);
+            }
           });
         }
         

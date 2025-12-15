@@ -2,8 +2,13 @@
  * CoverageReporter - Formats validation results for terminal output
  */
 
-import type { ValidationResult, CoverageGap } from './types.js';
+import type { ValidationResult, CoverageGap, DiagnosticContext } from './types.js';
 import { FixSuggestionGenerator } from './FixSuggestionGenerator.js';
+
+export interface ReportOptions {
+  verbose?: boolean;
+  showDiagnostics?: boolean;
+}
 
 export class CoverageReporter {
   private fixSuggestionGenerator: FixSuggestionGenerator;
@@ -15,7 +20,9 @@ export class CoverageReporter {
   /**
    * Generate terminal report for validation results
    */
-  generateReport(results: ValidationResult[], verbose: boolean = false): string {
+  generateReport(results: ValidationResult[], options: ReportOptions = {}): string {
+    const verbose = options.verbose || false;
+    const showDiagnostics = options.showDiagnostics || false;
     const lines: string[] = [];
 
     // Header
@@ -50,11 +57,21 @@ export class CoverageReporter {
     if (wrongTypeTokens.length > 0) {
       lines.push(`⚠️  Wrong Token Types (${wrongTypeTokens.length} nodes have tokens but wrong type)`);
       lines.push('');
-      const wrongTypeIssues = this.fixSuggestionGenerator.getTopIssues(wrongTypeTokens, 3);
+      const wrongTypeIssues = this.fixSuggestionGenerator.getTopIssues(wrongTypeTokens, 5);
       for (const issue of wrongTypeIssues) {
         lines.push(`   ${issue.nodeType} (${issue.count} occurrence${issue.count > 1 ? 's' : ''})`);
         lines.push(`   Expected: ${issue.example.expectedTokenTypes.join(', ')}`);
-        lines.push(`   Actual: ${issue.example.actualTokens.map(t => t.tokenType).join(', ')}`);
+
+        const tokenDetails = issue.example.actualTokens.map(t =>
+          `${t.tokenType}@${t.char}(len=${t.length})`
+        ).join(', ');
+        lines.push(`   Actual:   ${tokenDetails}`);
+
+        const exampleFixture = results.find(r => r.gaps.some(g => g.nodeId === issue.example.nodeId));
+        if (exampleFixture) {
+          lines.push(`   Example:  ${exampleFixture.fixturePath} line ${issue.example.location.start.line}`);
+          lines.push(`   Text:     "${issue.example.text}"`);
+        }
         lines.push('');
       }
       lines.push('');
@@ -90,6 +107,13 @@ export class CoverageReporter {
         lines.push(`   ${this.formatCodeExample(issue.example)}`);
         lines.push('');
       }
+
+      // Show diagnostic trace if requested
+      if (showDiagnostics && issue.example.diagnostic) {
+        lines.push('   🔍 Diagnostic Trace:');
+        lines.push(...this.formatDiagnosticTrace(issue.example.diagnostic, '      '));
+        lines.push('');
+      }
     }
 
     // Coverage by visitor
@@ -107,6 +131,11 @@ export class CoverageReporter {
         lines.push(`  ${visitor.padEnd(25)} ${stats.covered}/${stats.total} (${pct}%) ${status}${gapsText}`);
       }
       lines.push('');
+
+      // Diagnostic summary
+      if (showDiagnostics) {
+        lines.push(...this.generateDiagnosticSummary(results));
+      }
     }
 
     // Detailed gaps (if very verbose)
@@ -237,5 +266,79 @@ export class CoverageReporter {
     }
 
     return stats;
+  }
+
+  private formatDiagnosticTrace(diagnostic: DiagnosticContext, indent: string = ''): string[] {
+    const lines: string[] = [];
+
+    if (diagnostic.visitorCalls.length === 0) {
+      lines.push(`${indent}✗ No visitor called for this node`);
+      lines.push(`${indent}  Possible causes:`);
+      lines.push(`${indent}  - Node type not registered in ASTSemanticVisitor`);
+      lines.push(`${indent}  - Node skipped by shouldSkipNode()`);
+    } else {
+      for (const call of diagnostic.visitorCalls) {
+        if (call.called) {
+          lines.push(`${indent}✓ ${call.visitorClass}.visitNode() called`);
+
+          if (call.tokensEmitted === 0) {
+            lines.push(`${indent}  ✗ No tokens emitted`);
+            lines.push(`${indent}    Visitor logic didn't create any tokens`);
+          } else {
+            lines.push(`${indent}  ↳ ${call.tokensEmitted} token(s) attempted`);
+            lines.push(`${indent}    Accepted: ${call.tokensAccepted}, Rejected: ${call.tokensRejected}`);
+          }
+        } else {
+          lines.push(`${indent}✗ ${call.visitorClass} not called`);
+        }
+      }
+    }
+
+    if (diagnostic.tokenAttempts.length > 0) {
+      lines.push(`${indent}`);
+      lines.push(`${indent}Token Emission Attempts:`);
+      for (const attempt of diagnostic.tokenAttempts) {
+        const status = attempt.accepted ? '✓' : '✗';
+        const reason = attempt.rejectionReason ? ` - ${attempt.rejectionReason}` : '';
+        lines.push(`${indent}  ${status} ${attempt.tokenType} at ${attempt.position.line}:${attempt.position.char} len=${attempt.position.length}${reason}`);
+      }
+    }
+
+    return lines;
+  }
+
+  private generateDiagnosticSummary(results: ValidationResult[]): string[] {
+    const lines: string[] = [];
+
+    const allGaps = results.flatMap(r => r.gaps);
+
+    const rejectionStats: Record<string, number> = {};
+    const visitorNeverCalled = allGaps.filter(g =>
+      g.diagnostic?.visitorCalls.every(v => !v.called) ?? false
+    );
+
+    for (const gap of allGaps) {
+      if (!gap.diagnostic) continue;
+      for (const attempt of gap.diagnostic.tokenAttempts) {
+        if (!attempt.accepted && attempt.rejectionReason) {
+          rejectionStats[attempt.rejectionReason] = (rejectionStats[attempt.rejectionReason] || 0) + 1;
+        }
+      }
+    }
+
+    lines.push(this.formatSeparator());
+    lines.push('');
+    lines.push('🔍 Diagnostic Summary:');
+    lines.push('');
+    lines.push(`  Nodes where visitor never called: ${visitorNeverCalled.length}`);
+
+    if (Object.keys(rejectionStats).length > 0) {
+      lines.push(`  Token rejection reasons:`);
+      for (const [reason, count] of Object.entries(rejectionStats)) {
+        lines.push(`    - ${reason}: ${count}`);
+      }
+    }
+
+    return lines;
   }
 }

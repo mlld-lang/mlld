@@ -1,27 +1,3 @@
-/**
- * LoadContentResult to StructuredValue wrapping layer
- *
- * ARCHITECTURAL NOTE: This file bridges the source data layer and wrapped data layer.
- *
- * LoadContentResult (from core/types/load-content.ts) represents raw file/URL content.
- * StructuredValue (from ./structured-value.ts) adds STRUCTURED_VALUE_SYMBOL and security.
- *
- * wrapLoadContentValue() performs the transformation:
- * - Text files: .text = .data = raw content
- * - JSON files: .data = parsed object/array, .text = raw content
- * - JSONL files: .data = parsed array, .text = raw content
- * - File metadata always via .ctx.filename, .ctx.absolute, etc.
- *
- * EAGER COMPUTATION: Wrapping triggers lazy getters (.tokest, .tokens, .fm, .json).
- * This is acceptable - wrapping happens at usage boundaries where computation is expected.
- *
- * See docs/dev/TYPES.md for complete architecture documentation.
- *
- * TECH DEBT: Spread-based creation bypasses wrapLoadContentValue()
- * - interpreter/eval/auto-unwrap-manager.ts:104
- * TODO: Replace with factory function in Phase 3
- */
-
 import {
   isLoadContentResult,
   isLoadContentResultArray,
@@ -179,68 +155,27 @@ function deriveArrayText(value: any[]): string {
   }
 }
 
-/**
- * Symbol-aware guard for file-loaded StructuredValues.
- * Use in interpreter/ when you specifically need a wrapped StructuredValue from file.
- */
-export function isFileLoadStructuredValue(value: unknown): value is StructuredValue {
-  return isStructuredValue(value) && Boolean(value.ctx?.filename);
-}
-
-/**
- * Combined check - handles both wrapped and unwrapped forms.
- * Use in interpreter/ when you want to check if data came from a file,
- * regardless of whether it's been wrapped yet.
- */
-export function isFileLoad(value: unknown): boolean {
-  return isLoadContentResult(value) || isFileLoadStructuredValue(value);
-}
-
-/**
- * Check if a value represents a file-loaded StructuredValue or LoadContentResult.
- * Use this when you need to know "was this data loaded from a file?"
- * Works with both wrapped (StructuredValue) and unwrapped (LoadContentResult) forms.
- *
- * @deprecated Use isFileLoad() instead for clearer intent
- */
-export function hasFileLoadMetadata(value: unknown): boolean {
-  return isFileLoad(value);
-}
-
-/**
- * Wraps LoadContentResult into StructuredValue
- *
- * This is the bridge between source data (LoadContentResult) and wrapped data (StructuredValue).
- *
- * Transformation details:
- * - JSON files (.json): .data becomes parsed object/array, .text stays raw content
- * - JSONL files (.jsonl): .data becomes parsed array, .text stays raw content
- * - Text files: .data and .text both equal raw content
- * - File metadata: Extracted to .ctx (filename, absolute, tokens, fm, etc.)
- * - Security: Labels/taint from file path added to .ctx
- *
- * EAGER COMPUTATION: This function accesses LoadContentResult lazy getters
- * (tokest, tokens, fm, json) via extractLoadContentMetadata(). This is acceptable
- * as wrapping happens at usage boundaries where computation is expected.
- *
- * ORDER NOTE: Check isLoadContentResult() BEFORE isStructuredValue() to ensure
- * JSON/JSONL parsing and security extraction always happen for file loads.
- */
 export function wrapLoadContentValue(value: any): StructuredValue {
+  if (isStructuredValue(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return wrapStructured(value, 'text', value, { source: 'load-content' });
+  }
+
   if (isLoadContentResult(value)) {
     const baseMetadata = extractLoadContentMetadata(value);
     const contentText = typeof value.content === 'string' ? value.content : String(value.content ?? '');
     const filenameLower = (value.filename || '').toLowerCase();
     const skipAutoParse = false;
 
-    // JSON Lines files: Parse each line, .data = array, .text = raw
     if (filenameLower.endsWith('.jsonl') && typeof value.content === 'string') {
       const data = parseJsonLines(contentText, value.filename || 'content');
       const metadata = buildMetadata(baseMetadata, { type: 'jsonl' });
       return wrapStructured(data, 'array', contentText, metadata);
     }
 
-    // JSON files: Parse content, .data = parsed, .text = raw
     if (filenameLower.endsWith('.json') && typeof value.content === 'string') {
       const data = parseJsonWithContext(contentText, value.filename || 'content');
       const metadata = buildMetadata(baseMetadata, { type: 'json' });
@@ -258,14 +193,6 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     }
     // Default text handling: data is the content string, metadata carries file info
     return wrapStructured(contentText, 'text', contentText, baseMetadata);
-  }
-
-  if (isStructuredValue(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    return wrapStructured(value, 'text', value, { source: 'load-content' });
   }
 
   if (Array.isArray(value)) {

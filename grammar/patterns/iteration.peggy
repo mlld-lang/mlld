@@ -62,7 +62,7 @@ ForSingleAction "for action"
   // Variable assignment
   / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
       // Create the action node; pass ending.tail so pipelines are embedded immutably
-      return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null);
+      return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null, ending ? ending.comment : null);
     }
   // Other when-style actions (including directives) directly in for loop bodies
   / whenAction:WhenRHSAction {

@@ -21,6 +21,7 @@ import { prepareValueForShadow } from '../env/variable-proxy';
 import { evaluateExeBlock, type ExeBlockNode } from './exe';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
 import {
   asText,
   asData,
@@ -30,11 +31,10 @@ import {
   collectAndMergeParameterDescriptors,
   extractSecurityDescriptor,
   normalizeWhenShowEffect,
-  applySecurityDescriptorToStructuredValue,
-  type StructuredValue,
-  type StructuredValueContext
+  applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import type { SecurityDescriptor } from '@core/types/security';
@@ -786,6 +786,8 @@ async function evaluateExecInvocationInternal(
       // Structured exec returns wrappers – convert them to plain data before method lookup
       if (isStructuredValue(objectValue)) {
         objectValue = objectValue.type === 'array' ? objectValue.data : asText(objectValue);
+      } else if (LegacyStructuredValue.isStructuredValue?.(objectValue)) {
+        objectValue = objectValue.text;
       }
 
       chainDebug('resolved object value', {
@@ -2863,7 +2865,7 @@ function setStructuredSecurityDescriptor(
   if (!descriptor || !value || typeof value !== 'object') {
     return;
   }
-  applySecurityDescriptorToStructuredValue(value as StructuredValue, descriptor);
+  applySecurityDescriptorToStructuredValue(value as LegacyStructuredValue, descriptor);
 }
 
 function getSecurityDescriptorFromCarrier(carrier?: SecurityCarrier): SecurityDescriptor | undefined {

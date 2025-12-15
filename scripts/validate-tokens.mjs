@@ -23,7 +23,8 @@ const args = process.argv.slice(2);
 const options = {
   mode: 'strict',
   pattern: null,
-  verbose: false
+  verbose: false,
+  showDiagnostics: false
 };
 
 for (const arg of args) {
@@ -31,6 +32,10 @@ for (const arg of args) {
     options.mode = arg.split('=')[1];
   } else if (arg === '--verbose' || arg === '-v') {
     options.verbose = true;
+  } else if (arg === '--diagnostics' || arg === '-d') {
+    options.showDiagnostics = true;
+  } else if (arg.startsWith('--fixture=')) {
+    options.pattern = arg.split('=')[1];
   } else if (!arg.startsWith('--')) {
     options.pattern = arg;
   }
@@ -92,7 +97,7 @@ async function main() {
   // Create validator
   const nodeTokenRules = createNodeTokenRuleMap();
   const expectationBuilder = new NodeExpectationBuilder(nodeTokenRules);
-  const validator = new TokenCoverageValidator(expectationBuilder);
+  const validator = new TokenCoverageValidator(expectationBuilder, nodeTokenRules);
   const reporter = new CoverageReporter();
 
   // Load fixtures
@@ -130,7 +135,10 @@ async function main() {
   process.stdout.write(`\rProcessed ${processed}/${fixtures.length}   \n\n`);
 
   // Generate report
-  const report = reporter.generateReport(results, options.verbose);
+  const report = reporter.generateReport(results, {
+    verbose: options.verbose,
+    showDiagnostics: options.showDiagnostics
+  });
   console.log(report);
 
   // Exit with error code if there are gaps
