@@ -1478,17 +1478,17 @@ export class DirectiveVisitor extends BaseVisitor {
           const sourceText = this.document.getText();
           const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
           
-          // Find the opening bracket after /when
+          // Find the opening bracket after /when (use enum for dim structural color)
           const bracketMatch = nodeText.match(/^\/when\s*(\[)/);
           if (bracketMatch && bracketMatch.index !== undefined) {
             const bracketOffset = bracketMatch[0].indexOf('[');
             const bracketPosition = this.document.positionAt(node.location.start.offset + bracketOffset);
-            
+
             this.tokenBuilder.addToken({
               line: bracketPosition.line,
               char: bracketPosition.character,
               length: 1,
-              tokenType: 'operator',
+              tokenType: 'enum',
               modifiers: []
             });
           }
@@ -1556,7 +1556,7 @@ export class DirectiveVisitor extends BaseVisitor {
                 modifiers: []
               });
               
-              // Look for opening bracket after colon
+              // Look for opening bracket after colon (use enum for dim structural color)
               const afterColon = afterExpr.substring(colonIndex + 1);
               const openBracketIndex = afterColon.search(/\[/);
               if (openBracketIndex !== -1) {
@@ -1564,7 +1564,7 @@ export class DirectiveVisitor extends BaseVisitor {
                   line: exprEnd.line - 1,
                   char: exprEnd.column - 1 + colonIndex + 1 + openBracketIndex,
                   length: 1,
-                  tokenType: 'operator',
+                  tokenType: 'enum',
                   modifiers: []
                 });
               }
@@ -1623,7 +1623,7 @@ export class DirectiveVisitor extends BaseVisitor {
                   modifiers: []
                 });
                 
-                // Look for opening bracket after the pattern modifier's colon
+                // Look for opening bracket after the pattern modifier's colon (use enum for dim structural color)
                 const afterColon = nodeText.substring(colonOffset + colonMatch[0].length);
                 const openBracketMatch = afterColon.match(/^\s*\[/);
                 if (openBracketMatch) {
@@ -1633,7 +1633,7 @@ export class DirectiveVisitor extends BaseVisitor {
                     line: bracketPosition.line,
                     char: bracketPosition.character,
                     length: 1,
-                    tokenType: 'operator',
+                    tokenType: 'enum',
                     modifiers: []
                   });
                 }
@@ -1904,19 +1904,19 @@ export class DirectiveVisitor extends BaseVisitor {
               node.location.end.offset
             );
             
-            // Find opening bracket
+            // Find opening bracket (use enum for dim structural color)
             const arrowIndex = directiveText.indexOf('=>');
             if (arrowIndex !== -1) {
               const afterArrow = directiveText.substring(arrowIndex + 2);
               const openBracketIndex = afterArrow.search(/\[/);
-              
+
               if (openBracketIndex !== -1) {
                 // Add opening bracket token
                 this.tokenBuilder.addToken({
                   line: node.location.start.line - 1,
                   char: node.location.start.column + arrowIndex + 2 + openBracketIndex - 1,
                   length: 1,
-                  tokenType: 'operator',
+                  tokenType: 'enum',
                   modifiers: []
                 });
               }
@@ -1927,21 +1927,21 @@ export class DirectiveVisitor extends BaseVisitor {
               this.mainVisitor.visitNode(action, context);
             }
             
-            // Find closing bracket position
+            // Find closing bracket position (use enum for dim structural color)
             const closeBracketIndex = directiveText.lastIndexOf(']');
             if (closeBracketIndex !== -1) {
               // Calculate the actual line and column for the closing bracket
               const linesBeforeBracket = directiveText.substring(0, closeBracketIndex).split('\n');
               const bracketLine = node.location.start.line + linesBeforeBracket.length - 2;
-              const bracketColumn = linesBeforeBracket.length > 1 
+              const bracketColumn = linesBeforeBracket.length > 1
                 ? linesBeforeBracket[linesBeforeBracket.length - 1].length
                 : node.location.start.column + closeBracketIndex - 1;
-              
+
               this.tokenBuilder.addToken({
                 line: bracketLine,
                 char: bracketColumn,
                 length: 1,
-                tokenType: 'operator',
+                tokenType: 'enum',
                 modifiers: []
               });
             }
@@ -2605,11 +2605,31 @@ export class DirectiveVisitor extends BaseVisitor {
       });
     }
 
+    // Tokenize guard block modifier (first/all/any) - same as exe when blocks
+    if (values.guard && Array.isArray(values.guard) && values.guard[0]) {
+      const guardBlock = values.guard[0];
+      if (guardBlock.modifier && guardBlock.modifier !== 'default') {
+        const modifierMatch = directiveText.match(new RegExp(`\\bwhen\\s+(${guardBlock.modifier})\\b`));
+        if (modifierMatch && modifierMatch.index !== undefined) {
+          const modifierOffset = directive.location.start.offset + modifierMatch.index + modifierMatch[0].indexOf(guardBlock.modifier);
+          const modifierPosition = this.document.positionAt(modifierOffset);
+
+          this.tokenBuilder.addToken({
+            line: modifierPosition.line,
+            char: modifierPosition.character,
+            length: guardBlock.modifier.length,
+            tokenType: 'keyword',
+            modifiers: []
+          });
+        }
+      }
+    }
+
     // Tokenize guard block brackets and rules
     if (values.guard && Array.isArray(values.guard) && values.guard[0]) {
       const guardBlock = values.guard[0];
 
-      // Find opening bracket
+      // Find opening bracket (use enum for dim structural color)
       const openBracketIndex = directiveText.indexOf('[');
       if (openBracketIndex !== -1) {
         const openBracketPosition = this.document.positionAt(directive.location.start.offset + openBracketIndex);
@@ -2617,7 +2637,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: openBracketPosition.line,
           char: openBracketPosition.character,
           length: 1,
-          tokenType: 'operator',
+          tokenType: 'enum',
           modifiers: []
         });
       }
@@ -2648,9 +2668,15 @@ export class DirectiveVisitor extends BaseVisitor {
             }
           }
 
-          // Process condition
+          // Process condition (same as exe when blocks)
           if (rule.condition) {
-            this.mainVisitor.visitNode(rule.condition, context);
+            if (Array.isArray(rule.condition)) {
+              for (const cond of rule.condition) {
+                this.mainVisitor.visitNode(cond, context);
+              }
+            } else {
+              this.mainVisitor.visitNode(rule.condition, context);
+            }
           }
 
           // Find and tokenize '=>' operator between condition and action
@@ -2668,7 +2694,8 @@ export class DirectiveVisitor extends BaseVisitor {
             const action = rule.action;
             const decision = action.decision;
 
-            // Find and tokenize the action keyword
+            // Find and tokenize the action keyword (allow/deny/retry)
+            // Use 'modifier' type for standout pink color like var/exe
             if (decision && rule.location) {
               const ruleText = sourceText.substring(rule.location.start.offset, rule.location.end.offset);
               const actionMatch = ruleText.match(new RegExp(`\\b${decision}\\b`));
@@ -2680,7 +2707,7 @@ export class DirectiveVisitor extends BaseVisitor {
                   line: actionPosition.line,
                   char: actionPosition.character,
                   length: decision.length,
-                  tokenType: 'keyword',
+                  tokenType: 'modifier',
                   modifiers: []
                 });
               }
@@ -2717,7 +2744,7 @@ export class DirectiveVisitor extends BaseVisitor {
         }
       }
 
-      // Find closing bracket
+      // Find closing bracket (use enum for dim structural color)
       const closeBracketIndex = directiveText.lastIndexOf(']');
       if (closeBracketIndex !== -1) {
         const closeBracketPosition = this.document.positionAt(directive.location.start.offset + closeBracketIndex);
@@ -2725,7 +2752,7 @@ export class DirectiveVisitor extends BaseVisitor {
           line: closeBracketPosition.line,
           char: closeBracketPosition.character,
           length: 1,
-          tokenType: 'operator',
+          tokenType: 'enum',
           modifiers: []
         });
       }
