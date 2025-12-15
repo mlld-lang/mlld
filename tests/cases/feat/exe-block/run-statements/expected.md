@@ -1,0 +1,7 @@
+exec:EXEC
+CMD
+JS
+QUOTED
+STDIN
+["A","B"]
+DONE

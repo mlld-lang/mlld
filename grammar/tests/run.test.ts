@@ -8,7 +8,7 @@ describe('Run directive', () => {
       const content = '/run {ls -la}';
       const parseResult = await parse(content);
       
-      // The tests now pass with a single directive node in the AST
+      // The tests pass with a single directive node in the AST
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
@@ -18,7 +18,7 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.command).toBeDefined();
-      // Command is now tokenized into parts
+      // Command tokenizes into parts
       expect(directiveNode.values.command).toHaveLength(3); // 'ls', ' ', '-la'
       expect(directiveNode.values.command[0].content).toBe('ls');
       expect(directiveNode.values.command[1].content).toBe(' ');
@@ -84,7 +84,7 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.command).toBeDefined();
-      // Command is now tokenized: 'ls', ' ', '-la', ' ', '@directory'
+      // Command tokenizes: 'ls', ' ', '-la', ' ', '@directory'
       expect(directiveNode.values.command.length).toBeGreaterThanOrEqual(4);
       expect(directiveNode.values.command[0].content).toBe('ls');
       expect(directiveNode.values.command[2].content).toBe('-la');
