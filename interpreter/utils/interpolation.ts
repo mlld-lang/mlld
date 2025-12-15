@@ -489,10 +489,10 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         } else if (Array.isArray(value)) {
           const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
           if (isLoadContentResultArray(value)) {
-            stringValue = value.content;
+            stringValue = asText(value);
           } else if (isRenamedContentArray(value)) {
             if ('content' in value) {
-              stringValue = value.content;
+              stringValue = asText(value);
             } else if (value.toString !== Array.prototype.toString) {
               stringValue = value.toString();
             } else {
@@ -514,9 +514,9 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         } else if (typeof value === 'object') {
           const { isLoadContentResult, isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
           if (isLoadContentResult(value)) {
-            stringValue = value.content;
+            stringValue = asText(value);
           } else if (isLoadContentResultArray(value)) {
-            stringValue = value.map(item => item.content).join('\n\n');
+            stringValue = value.map(item => asText(item)).join('\n\n');
           } else if (variable && variable.internal?.isNamespace && node.fields?.length === 0) {
             const { JSONFormatter } = await import('../core/json-formatter');
             stringValue = JSONFormatter.stringifyNamespace(value);
@@ -856,7 +856,7 @@ export async function processFileFields(
   if (isLoadContentResult(result)) {
     if (!fields || fields.length === 0) {
       // No field access needed, extract content
-      result = result.content;
+      result = asText(result);
     }
     // If we have fields to access, keep the full LoadContentResult object so we can access .fm, .json, etc.
   }

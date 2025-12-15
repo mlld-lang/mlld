@@ -50,13 +50,13 @@ export function classifyShellValue(value: unknown): ShellValueClassification {
   }
 
   if (isLoadContentResult(value)) {
-    return { kind: 'complex', text: value.content ?? '' };
+    return { kind: 'complex', text: asText(value) };
   }
 
   if (isLoadContentResultArray(value)) {
     const content = typeof (value as any).content === 'string'
       ? (value as any).content
-      : value.map(item => item.content ?? '').join('\n\n');
+      : value.map(item => asText(item)).join('\n\n');
     return { kind: 'complex', text: content };
   }
 
@@ -145,9 +145,9 @@ function normalizeForJson(value: unknown): unknown {
       // Ignore json getter errors and fall back to content parsing
     }
     try {
-      return JSON.parse(value.content ?? '');
+      return JSON.parse(asText(value));
     } catch {
-      return value.content ?? '';
+      return asText(value);
     }
   }
 

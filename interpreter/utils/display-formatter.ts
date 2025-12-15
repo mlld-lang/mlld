@@ -21,11 +21,11 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
   }
 
   if (isLoadContentResult(value)) {
-    return value.content ?? '';
+    return asText(value);
   }
 
   if (isLoadContentResultArray(value)) {
-    return value.map(item => item.content ?? '').join('\n\n');
+    return value.map(item => asText(item)).join('\n\n');
   }
 
   if (isStructuredValue(value)) {

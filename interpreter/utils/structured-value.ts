@@ -2,6 +2,7 @@ import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import { getExpressionProvenance } from './expression-provenance';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
@@ -121,6 +122,9 @@ export function isStructuredValue<T = unknown>(value: unknown): value is Structu
 export function asText(value: unknown): string {
   if (isStructuredValue(value)) {
     return value.text;
+  }
+  if (isLoadContentResult(value)) {
+    return value.content ?? '';
   }
   if (value === null || value === undefined) {
     return '';

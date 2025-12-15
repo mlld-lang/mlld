@@ -7,6 +7,7 @@ import type { Variable, ArrayVariable } from '@core/types/variable/VariableTypes
 import type { LoadContentResult } from '@core/types/load-content';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
+import { asText } from './structured-value';
 
 /**
  * Extracts the value from a Variable while preserving special behaviors
@@ -165,17 +166,16 @@ export function createLoadContentResultVariable(
   items: LoadContentResult[],
   options?: LoadContentOptions
 ): ArrayVariable {
-  // Define the functions outside to avoid circular references
   const toStringFunc = function() {
-    return items.map(item => item.content).join('\n\n');
+    return items.map(item => asText(item)).join('\n\n');
   };
-  
+
   const toJSONFunc = function() {
     return items.map(item => item.toJSON());
   };
-  
+
   const contentGetterFunc = function() {
-    return items.map(item => item.content).join('\n\n');
+    return items.map(item => asText(item)).join('\n\n');
   };
   const internalOverrides: Record<string, unknown> = {};
   const internalSource = options?.internal ?? {};

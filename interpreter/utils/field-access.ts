@@ -410,9 +410,9 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           // CRITICAL: rawValue might be wrapped in StructuredValue, ensure we have the actual array
           const actualArray = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
           if (isLoadContentResultArray(actualArray)) {
-            accessedValue = actualArray.map(item => item.content).join('\n\n');
+            accessedValue = actualArray.map(item => asText(item)).join('\n\n');
           } else {
-            accessedValue = rawValue.map(item => item.content).join('\n\n');
+            accessedValue = rawValue.map(item => asText(item)).join('\n\n');
           }
           break;
         }

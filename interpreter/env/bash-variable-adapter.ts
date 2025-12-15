@@ -59,7 +59,7 @@ function convertToString(value: any): string {
     // Handle arrays of LoadContentResult specially
     if (isLoadContentResultArray(value)) {
       try {
-        return value.map(v => v.content).join('\n\n');
+        return value.map(v => asText(v)).join('\n\n');
       } catch {
         // Fallback: generic conversion
         return value.map(item => convertToString(item)).join('\n');
@@ -73,7 +73,7 @@ function convertToString(value: any): string {
     // Auto-unwrap LoadContentResult objects to their content string
     try {
       if (isLoadContentResult(value)) {
-        return value.content ?? '';
+        return asText(value);
       }
     } catch {}
     // For objects, use JSON representation
