@@ -1,5 +1,29 @@
 /**
  * Type definitions for content loading with metadata support
+ *
+ * USAGE GUIDE:
+ *
+ * - Use `isLoadContentResult(value)` when:
+ *   - Validating INPUT to factory functions (before wrapping)
+ *   - Checking items INSIDE arrays (may still be unwrapped)
+ *   - In factory/utility layers that create StructuredValue
+ *
+ * - Use `isStructuredValue(value)` when:
+ *   - Checking values in the evaluation pipeline
+ *   - Values from evaluate() or evaluateDirective()
+ *   - After Phase 3 migration, most values are StructuredValue
+ *
+ * - Use `isFileLoadedValue(value)` when:
+ *   - Need to handle BOTH old and new formats
+ *   - During migration period or backward compatibility
+ *   - In code that might receive either format
+ *   - Defined in: interpreter/utils/load-content-structured.ts
+ *
+ * MIGRATION STATUS (Phase 3 complete):
+ * - Array handling: Use isStructuredValue && value.type === 'array'
+ * - Individual items: Use isFileLoadedValue() for dual-format support
+ * - Factory code: Keeps isLoadContentResult for input validation
+ * - 33 legitimate isLoadContentResult usages remain in factory/conversion layers
  */
 
 /**

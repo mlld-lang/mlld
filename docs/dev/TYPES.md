@@ -260,6 +260,70 @@ const result = await resolveVariable(variable, env, ResolutionContext.ArrayEleme
 const value = await resolveVariableValue(variable, env);
 ```
 
+## Type Guard Patterns (Post Phase 3)
+
+### When to Use Each Type Guard
+
+**isStructuredValue(value)**
+- Primary type guard for values in the evaluation pipeline
+- All values from evaluate() are now StructuredValue
+- Check `.type` property to determine content type: 'text', 'array', 'object', etc.
+- Use `.ctx` to access metadata (filename, url, tokens, etc.)
+- Use `.data` to access the underlying content/parsed data
+
+**isFileLoadedValue(value)**
+- Helper function for backward compatibility
+- Handles both StructuredValue and LoadContentResult formats
+- Returns true if value has file/URL metadata (`.ctx.filename` or `.ctx.url`)
+- Use when code might receive either format during migration
+- Defined in: `interpreter/utils/load-content-structured.ts`
+
+**isLoadContentResult(value)**
+- Use ONLY in factory/conversion layers
+- Input validation before wrapping into StructuredValue
+- Checking items inside arrays (may be unwrapped LoadContentResult objects)
+- Primary usage: `load-content-structured.ts`, `content-loader.ts`
+
+### Migration Complete
+
+As of Phase 3 (StructuredValue migration):
+- All arrays use StructuredValue with type='array'
+- Pipeline code uses isStructuredValue or isFileLoadedValue
+- Factory code keeps isLoadContentResult for inputs
+- 33 legitimate isLoadContentResult usages remain in factory/conversion layers
+- 188 isStructuredValue usages across the codebase
+- 4 isFileLoadedValue usages for dual-format compatibility
+
+### Example Usage
+
+```typescript
+// Pipeline code - check for StructuredValue
+if (isStructuredValue(value)) {
+  if (value.type === 'array') {
+    // Handle array
+    const items = value.data;
+  }
+  if (value.ctx?.filename) {
+    // Has file metadata
+    console.log('Loaded from:', value.ctx.filename);
+  }
+}
+
+// Compatibility code - handle both formats
+if (isFileLoadedValue(value)) {
+  // Works for both StructuredValue and LoadContentResult
+  const filename = isStructuredValue(value)
+    ? value.ctx?.filename
+    : value.filename;
+}
+
+// Factory code - validate inputs
+if (isLoadContentResult(result)) {
+  // Convert to StructuredValue
+  return wrapLoadContentValue(result);
+}
+```
+
 ## Migration Notes
 
 The type system refactor (Phase 0-5) transitioned from:
