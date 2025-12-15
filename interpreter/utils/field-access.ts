@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as util from 'util';
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
-import { isLoadContentResult, isLoadContentResultURL, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
@@ -404,34 +404,25 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         }
       }
       
-      // Handle LoadContentResultArray - special case for .content
-      if (isLoadContentResultArray(rawValue)) {
-        if (name === 'content') {
-          // CRITICAL: rawValue might be wrapped in StructuredValue, ensure we have the actual array
-          const actualArray = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
-          if (isLoadContentResultArray(actualArray)) {
-            accessedValue = actualArray.map(item => asText(item)).join('\n\n');
-          } else {
-            accessedValue = rawValue.map(item => asText(item)).join('\n\n');
-          }
+      // Handle StructuredValue arrays - special case for .content and .length
+      if (structuredWrapper && structuredWrapper.type === 'array') {
+        // For .content/.text, return the pre-joined text
+        if (name === 'content' || name === 'text') {
+          accessedValue = structuredWrapper.text;
           break;
         }
-        // Try to access as array property
+        // For .length, use the array data
+        if (name === 'length') {
+          accessedValue = (structuredWrapper.data as any[]).length;
+          break;
+        }
+        // For other properties, try to access on the array itself
         const result = (rawValue as any)[name];
         if (result !== undefined) {
           accessedValue = result;
           break;
         }
-        {
-          const chain = [...(options?.parentPath || []), name];
-          const msg = `Field "${name}" not found in LoadContentResultArray`;
-          throw new FieldAccessError(msg, {
-            baseValue: rawValue,
-            fieldAccessChain: [],
-            failedAtIndex: Math.max(0, chain.length - 1),
-            failedKey: name
-          }, { sourceLocation: options?.sourceLocation, env: options?.env });
-        }
+        // If property not found, fall through to error handling below
       }
       
       // Handle Variable objects with type 'object' and value field
