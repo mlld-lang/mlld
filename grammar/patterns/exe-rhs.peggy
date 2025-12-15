@@ -512,7 +512,8 @@ ExeBlockStatement
   / ExeBlockAction
 
 ExeBlockAction
-  = EffectAction
+  = RunBlockAction
+  / EffectAction
   / WhenRHSVarAssignment
   / WhenRHSCommandAction
   / WhenRHSFunctionCall

@@ -66,4 +66,42 @@ describe('Block for grammar', () => {
     expect(directive.meta?.statementCount).toBe(2);
     expect(hasNode(directive, (node) => node.type === 'ExeReturn')).toBe(true);
   });
+
+  it('parses run statements inside exe blocks', () => {
+    const ast = parseSync(
+      `/exe @demo() = [\n` +
+        `  run @otherfunc(@somevalue)\n` +
+        `  run cmd {echo hi}\n` +
+        `  run js {return "hi"}\n` +
+        `  run "echo hi"\n` +
+        `  run @somevalue | cmd {echo hi}\n` +
+        `  => "done"\n` +
+        `]`
+    );
+    const directive = ast[0] as AnyNode;
+
+    expect(directive.kind).toBe('exe');
+    expect(hasNode(directive, (node) => node.kind === 'run' && node.subtype === 'runExec')).toBe(true);
+    expect(hasNode(directive, (node) => node.kind === 'run' && node.subtype === 'runCommand')).toBe(true);
+    expect(hasNode(directive, (node) => node.kind === 'run' && node.subtype === 'runCode')).toBe(true);
+  });
+
+  it('parses run statements inside for blocks', () => {
+    const ast = parseSync(
+      `/for @item in [1] [\n` +
+        `  run @otherfunc(@item)\n` +
+        `  run "echo hi"\n` +
+        `  run @item | cmd {echo hi}\n` +
+        `  run cmd {echo hi}\n` +
+        `  run js {return 1}\n` +
+        `]`
+    );
+    const directive = ast[0] as AnyNode;
+
+    expect(directive.kind).toBe('for');
+    expect(directive.meta?.block?.statementCount).toBe(5);
+    expect(hasNode(directive, (node) => node.kind === 'run' && node.subtype === 'runExec')).toBe(true);
+    expect(hasNode(directive, (node) => node.kind === 'run' && node.subtype === 'runCommand')).toBe(true);
+    expect(hasNode(directive, (node) => node.kind === 'run' && node.subtype === 'runCode')).toBe(true);
+  });
 });

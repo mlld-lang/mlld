@@ -64,6 +64,7 @@ ForSingleAction "for action"
       // Create the action node; pass ending.tail so pipelines are embedded immutably
       return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null, ending ? ending.comment : null);
     }
+  / RunBlockAction
   // Other when-style actions (including directives) directly in for loop bodies
   / whenAction:WhenRHSAction {
       return Array.isArray(whenAction) ? whenAction : [whenAction];
