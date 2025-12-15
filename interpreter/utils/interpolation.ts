@@ -497,7 +497,6 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             }
           }
         } else if (Array.isArray(value)) {
-          const { isRenamedContentArray } = await import('@core/types/load-content');
           if (isStructuredValue(value) && value.type === 'array') {
             // MIGRATION: This branch handles StructuredValue arrays (glob patterns)
             // Expected behavior: Join array items with \n\n separator (already in .text)
@@ -506,21 +505,6 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
               typeof stringValue === 'string',
               'StructuredValue array should have .text property',
               { arrayLength: Array.isArray(value.data) ? value.data.length : 0, resultType: typeof stringValue }
-            );
-          } else if (isRenamedContentArray(value)) {
-            // MIGRATION: This branch handles renamed content arrays (glob as transform)
-            // Expected behavior: Join renamed items appropriately
-            if ('content' in value) {
-              stringValue = asText(value);
-            } else if (value.toString !== Array.prototype.toString) {
-              stringValue = value.toString();
-            } else {
-              stringValue = value.join('\n\n');
-            }
-            assertArrayBehavior(
-              typeof stringValue === 'string',
-              'RenamedContentArray should convert to string',
-              { arrayLength: value.length, hasContent: 'content' in value }
             );
           } else {
             // MIGRATION: Generic array handling
@@ -537,7 +521,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             stringValue = JSONFormatter.stringify(printableArray);
           }
         } else if (typeof value === 'object') {
-          const { isLoadContentResult, isRenamedContentArray } = await import('@core/types/load-content');
+          const { isLoadContentResult } = await import('@core/types/load-content');
           if (isLoadContentResult(value)) {
             stringValue = asText(value);
           } else if (isStructuredValue(value) && value.type === 'array') {
