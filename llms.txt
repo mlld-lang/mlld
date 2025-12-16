@@ -1063,11 +1063,14 @@ Forms:
   * => @data
 ]
 
-# Conditional transformer
-/exe @process(item) = when [
-  @item.priority > 5 => @urgent(@item)
-  @item.archived => null
-  * => @standard(@item)
+# With exe block actions (side effects + return)
+/var @result = when first [
+  @needsProcessing => [
+    show "Processing..."
+    let @processed = @transform(@data)
+    => @processed
+  ]
+  * => @data
 ]
 ```
 

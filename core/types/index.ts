@@ -72,6 +72,9 @@ import { WhenExpressionNode } from './when';
 // Import ForExpression
 import { ForExpression } from './for';
 
+// Import Exe block nodes (used by when-expression actions)
+import type { ExeBlockNode, ExeReturnNode } from './exe';
+
 /**
  * Unified AST node type - MlldNode
  * 
@@ -102,7 +105,9 @@ export type MlldNode =
   | TemplateForBlockNode
   | TemplateInlineShowNode
   | WhenExpressionNode
-  | ForExpression;
+  | ForExpression
+  | ExeBlockNode
+  | ExeReturnNode;
 
 // =========================================================================
 // VARIABLE TYPES

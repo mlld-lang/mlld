@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import type { ExecInvocation, WithClause } from '@core/types';
+import type { ExeBlockNode, ExecInvocation, WithClause } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
@@ -18,7 +18,7 @@ import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
-import { evaluateExeBlock, type ExeBlockNode } from './exe';
+import { evaluateExeBlock } from './exe';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';

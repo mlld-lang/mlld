@@ -15,7 +15,7 @@ import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied } from './when';
 import { logger } from '@core/utils/logger';
-import { asText, asData, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
+import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
 import { VariableImporter } from './import/VariableImporter';
 import { combineValues } from '../utils/value-combine';
 import { extractVariableValue } from '../utils/variable-resolution';
@@ -47,10 +47,6 @@ function isNoneCondition(condition: any): boolean {
 async function normalizeActionValue(value: unknown, actionEnv: Environment): Promise<unknown> {
   let normalized = value;
 
-  if (isStructuredValue(normalized)) {
-    normalized = asData(normalized);
-  }
-
   if (
     normalized &&
     typeof normalized === 'object' &&
@@ -63,6 +59,10 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
     } catch {
       normalized = String(normalized as any);
     }
+  }
+
+  if (isStructuredValue(normalized)) {
+    return normalized;
   }
 
   if (normalized && typeof normalized === 'object' && 'type' in (normalized as Record<string, unknown>)) {
@@ -446,19 +446,27 @@ export async function evaluateWhenExpression(
             const resolved = await evaluateControlLiteral(value as any, executionEnv);
             value = { __whileControl: 'continue', value: resolved };
           }
-          if (Array.isArray(pair.action) && pair.action.length === 1) {
-            const singleAction = pair.action[0];
-            if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
-              const directiveKind = singleAction.kind;
-              // For side-effect directives, handle appropriately for expression context
-              if (directiveKind === 'show') {
-                // Tag as side-effect so pipeline layer can suppress echo
-                value = { __whenEffect: 'show', text: value } as any;
-              } else if (directiveKind === 'output') {
-                // Output actions should return empty string (file write is the side effect)
-                value = '';
-              } else if (directiveKind === 'var') {
-                // Variable assignments in when expressions are side effects
+	          if (Array.isArray(pair.action) && pair.action.length === 1) {
+	            const singleAction = pair.action[0];
+	            if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
+	              const directiveKind = singleAction.kind;
+	              // For side-effect directives, handle appropriately for expression context
+	              if (directiveKind === 'show') {
+	                const textValue =
+	                  typeof value === 'string'
+	                    ? value
+	                    : isStructuredValue(value)
+	                      ? asText(value)
+	                      : value === null || value === undefined
+	                        ? ''
+	                        : String(value);
+	                // Tag as side-effect so callers can suppress or echo as needed.
+	                value = { __whenEffect: 'show', text: textValue } as any;
+	              } else if (directiveKind === 'output') {
+	                // Output actions should return empty string (file write is the side effect)
+	                value = '';
+	              } else if (directiveKind === 'var') {
+	                // Variable assignments in when expressions are side effects
                 // They should not count as value-producing matches for 'none' evaluation
                 // But we do need to extract the value for chaining purposes
                 const identifier = singleAction.values?.identifier;

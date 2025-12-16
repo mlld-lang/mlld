@@ -408,9 +408,7 @@ ExeStatementBlock "exe statement block"
       const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
       const normalizedStatements = statements.flatMap(normalize);
       const hasReturn = !!body.returnStmt;
-      return {
-        subtype: 'exeBlock',
-        source: 'block',
+      return helpers.createNode('ExeBlock', {
         values: {
           statements: normalizedStatements,
           ...(body.returnStmt ? { return: body.returnStmt } : {})
@@ -422,8 +420,9 @@ ExeStatementBlock "exe statement block"
         meta: {
           statementCount: normalizedStatements.length,
           hasReturn
-        }
-      };
+        },
+        location: location()
+      });
     }
   / "[" _ {
       const blockStart = peg$currPos;
@@ -528,14 +527,14 @@ ExeBlockAction
 ExeReturnStatement "exe return statement"
   = "=>" _ value:ExeReturnValue? noise:BlockComments* {
       const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
-      return {
-        type: 'ExeReturn',
+      return helpers.createNode('ExeReturn', {
         values: normalized,
         raw: text(),
         meta: {
           hasValue: normalized.length > 0
-        }
-      };
+        },
+        location: location()
+      });
     }
 
 ExeReturnValue

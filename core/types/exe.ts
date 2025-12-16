@@ -4,8 +4,33 @@
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 import { WithClause } from './run';
-import { ParameterNode } from './primitives';
+import type { BaseMlldNode, ParameterNode } from './primitives';
 import type { DataLabel } from './security';
+
+export interface ExeReturnNode extends BaseMlldNode {
+  type: 'ExeReturn';
+  values: BaseMlldNode[];
+  raw?: string;
+  meta?: {
+    hasValue?: boolean;
+  };
+}
+
+export interface ExeBlockNode extends BaseMlldNode {
+  type: 'ExeBlock';
+  values: {
+    statements: BaseMlldNode[];
+    return?: ExeReturnNode;
+  };
+  raw?: {
+    statements?: string;
+    hasReturn?: boolean;
+  };
+  meta?: {
+    statementCount?: number;
+    hasReturn?: boolean;
+  };
+}
 
 /**
  * Exe directive raw values
@@ -79,8 +104,8 @@ export interface ExeValues {
   code?: ContentNodeArray;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
-  statements?: any[];
-  return?: any[];
+  statements?: BaseMlldNode[];
+  return?: ExeReturnNode;
 }
 
 /**
@@ -134,8 +159,8 @@ export interface ExeBlockDirectiveNode extends ExeDirectiveNode {
   values: {
     identifier: TextNodeArray;
     params: ParameterNode[];
-    statements: any[];
-    return?: any[];
+    statements: BaseMlldNode[];
+    return?: ExeReturnNode;
     securityLabels?: DataLabel[];
   };
   raw: {

@@ -208,6 +208,88 @@ SlashExe
           'for'
         );
       }
+
+      // Handle ExeBlock nodes directly
+      if (content.type === 'ExeBlock') {
+        const statements = content.values?.statements || [];
+        const returnStmt = content.values?.return;
+
+        const values = {
+          identifier: [identifierNode],
+          params: processedParams,
+          statements,
+          ...(returnStmt ? { return: returnStmt } : {})
+        };
+
+        const raw = {
+          identifier: id,
+          params: processedParams.map(p => p.name),
+          statements: content.raw?.statements || helpers.reconstructRawString(statements),
+          hasReturn: Boolean(returnStmt)
+        };
+
+        const metaObj = {
+          parameterCount: processedParams.length,
+          statementCount: content.meta?.statementCount ?? statements.length,
+          hasReturn: Boolean(returnStmt),
+          ...(meta ? { riskLevel: meta } : {})
+        };
+
+        if (meta) {
+          values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
+          raw.metadata = meta;
+          metaObj.metadata = { type: meta };
+        }
+
+        const mergedWithClause = (() => {
+          let combined = withClause ? { ...withClause } : undefined;
+          if (tail) {
+            combined = { ...(combined || {}), ...tail };
+          }
+          if (parallelCaps && (combined?.pipeline || tail?.pipeline)) {
+            combined = { ...(combined || {}), ...parallelCaps };
+          }
+          return combined;
+        })();
+
+        if (mergedWithClause && Object.keys(mergedWithClause).length > 0) {
+          values.withClause = mergedWithClause;
+          raw.withClause = mergedWithClause;
+          metaObj.withClause = mergedWithClause;
+        }
+
+        const pipelineStages = mergedWithClause?.pipeline || withClause?.pipeline;
+        if (pipelineStages && !raw.pipeline) {
+          raw.pipeline = pipelineStages
+            .map(stage =>
+              Array.isArray(stage)
+                ? `[${stage.map(cmd => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(', ')}]`
+                : `@${stage.rawIdentifier || stage.name || stage}`
+            )
+            .join(' | ');
+          metaObj.hasPipeline = true;
+        }
+
+        if (comment) {
+          metaObj.comment = comment;
+        }
+
+        if (labelInfo) {
+          values.securityLabels = labelInfo.labels;
+          raw.securityLabels = labelInfo.raw;
+          metaObj.securityLabels = labelInfo.labels;
+        }
+
+        return helpers.createStructuredDirective(
+          DirectiveKind.exe,
+          'exeBlock',
+          values,
+          raw,
+          metaObj,
+          location(),
+          'block'
+        );
+      }
       
       // Extract subtype and source from content
       const subtype = content.subtype;

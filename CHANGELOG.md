@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Block syntax for exe and for**: Multi-statement bodies using `[...]` delimiters
   - Exe blocks: `/exe @func() = [let @x = 1; let @y = 2; => @x + @y]` (statements separated by newlines or semicolons)
   - For blocks: `/for @item in @items [show @item; let @count += 1]` (`=>` optional for block bodies)
+  - When-expression exe block actions: `when first [ @cond => [...] ]` supports full exe block semantics (let, side effects, return)
   - `let @var = value` creates block-scoped variables; `let @var += value` for augmented assignment (arrays, strings, objects, numbers)
   - `=> @value` optional return must be the last statement when present in exe blocks
   - Nested for/when inside blocks supported; inner directives are slashless

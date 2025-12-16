@@ -704,6 +704,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     const { evaluateWhenExpression } = await import('../eval/when-expression');
     return evaluateWhenExpression(node as any, env, context);
   }
+
+  if (node.type === 'ExeBlock') {
+    const { evaluateExeBlock } = await import('../eval/exe');
+    return evaluateExeBlock(node as any, env);
+  }
   
   // Handle foreach expressions as first-class expressions
   if (node.type === 'foreach' || node.type === 'foreach-command') {

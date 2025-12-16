@@ -1,9 +1,8 @@
-import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause } from '@core/types';
+import type { DirectiveNode, ExeBlockNode, MlldNode, TextNode, VariableReference, WithClause } from '@core/types';
 import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
-import type { ExeBlockNode } from './exe';
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';

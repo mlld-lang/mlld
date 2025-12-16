@@ -1,4 +1,4 @@
-import type { BaseMlldNode, DirectiveNode, TextNode } from '@core/types';
+import type { BaseMlldNode, DirectiveNode, ExeBlockNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable } from '@core/types/executable';
@@ -28,27 +28,6 @@ import {
 } from '@core/types/security';
 import { asData, asText, isStructuredValue } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
-
-export interface ExeReturnNode {
-  type?: 'ExeReturn';
-  values?: BaseMlldNode[];
-  meta?: {
-    hasValue?: boolean;
-  };
-}
-
-export interface ExeBlockNode {
-  type?: 'ExeBlock';
-  values: {
-    statements: BaseMlldNode[];
-    return?: ExeReturnNode;
-  };
-  meta?: {
-    statementCount?: number;
-    hasReturn?: boolean;
-  };
-  location?: any;
-}
 
 /**
  * Evaluate an exe block sequentially with local scope for let/+= assignments.
@@ -699,6 +678,7 @@ export async function evaluateExe(
 
     const blockNode: ExeBlockNode = {
       type: 'ExeBlock',
+      nodeId: directive.nodeId,
       values: {
         statements,
         ...(returnStmt ? { return: returnStmt } : {})
