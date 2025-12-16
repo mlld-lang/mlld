@@ -1,7 +1,7 @@
 {
-  "pid": 31105,
-  "parent_pid": 31071,
+  "pid": 4581,
+  "parent_pid": 4562,
   "database": "/Users/adam/dev/mlld/.beads/beads.db",
   "version": "0.30.0",
-  "started_at": "2025-12-16T04:49:51.784306Z"
+  "started_at": "2025-12-16T08:14:24.025499Z"
 }

@@ -132,7 +132,9 @@ const allowedStartRules = [
   'WhenConditionList',
   'WhenExpressionConditionList',
   'GuardRuleList',
-  'WhenActionBlockContent'
+  'WhenActionBlockContent',
+  'TemplateBodyAtt',
+  'TemplateBodyMtt'
 ];
 
 const peggyOptsTS = {
