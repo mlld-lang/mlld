@@ -1,7 +1,10 @@
 exec:X
+STATIC
 CMD:X
+BRACES
 js:X
 QUOTED
+X
 X
 ["A","B"]
 
