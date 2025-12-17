@@ -276,7 +276,7 @@ LLMs return messy and inconsistent output. mlld's retry mechanism helps you mana
 ]
 ```
 
-The context variable `@mx` is always hanging around to get you context
+The `@mx` variable ("mlld execution") provides execution context—retry count, hints from previous attempts, current stage info, and more
 
 ### Put your complexity and verbosity in modules
 

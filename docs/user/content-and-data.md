@@ -13,6 +13,8 @@ Load files with `<file.txt>` "alligators", work with data structures using dot n
 
 ## .mx has all the metadata
 
+The `.mx` namespace ("metadata") holds information about values—where they came from, how large they are, security labels, and more.
+
 Loaded files and data are objects with three key parts:
 
 ```mlld
