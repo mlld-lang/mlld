@@ -2,6 +2,6 @@
 
 /import policy @prod from "./policy.mld"
 
-/var @first = @ctx.policy.activePolicies[0]
+/var @first = @mx.policy.activePolicies[0]
 /show @first
-/show @ctx.policy.configs.allow.cmd
+/show @mx.policy.configs.allow.cmd

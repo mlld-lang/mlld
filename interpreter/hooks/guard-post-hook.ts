@@ -11,7 +11,7 @@ import {
   createGuardInputHelper
 } from '@core/types/variable/ArrayHelpers';
 import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
-import { ctxToSecurityDescriptor, updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
@@ -533,8 +533,8 @@ function buildPerInputCandidates(
 
   for (let index = 0; index < inputs.length; index++) {
     const variable = inputs[index]!;
-    const labels = Array.isArray(variable.ctx?.labels) ? variable.ctx.labels : [];
-    const sources = Array.isArray(variable.ctx?.sources) ? variable.ctx.sources : [];
+    const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
+    const sources = Array.isArray(variable.mx?.sources) ? variable.mx.sources : [];
 
     const seen = new Set<string>();
     const guards: GuardDefinition[] = [];
@@ -581,7 +581,7 @@ function collectOperationGuards(
 
   if (variables.length > 0) {
     for (const variable of variables) {
-      const labels = Array.isArray(variable.ctx?.labels) ? variable.ctx.labels : [];
+      const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
       for (const label of labels) {
         const defs = registry.getOperationGuardsForTiming(label, 'after');
         for (const def of defs) {
@@ -653,10 +653,10 @@ async function evaluateGuard(options: {
       : resolveGuardValue(outputVariable, inputVariable);
     contextLabels =
       options.labelsOverride ??
-      (Array.isArray(options.activeInput.ctx?.labels) ? options.activeInput.ctx.labels : []);
+      (Array.isArray(options.activeInput.mx?.labels) ? options.activeInput.mx.labels : []);
     contextSources =
       options.sourcesOverride ??
-      (Array.isArray(options.activeInput.ctx?.sources) ? options.activeInput.ctx.sources : []);
+      (Array.isArray(options.activeInput.mx?.sources) ? options.activeInput.mx.sources : []);
     inputPreview = options.inputPreviewOverride ?? buildVariablePreview(inputVariable);
   } else if (scope === 'perInput' && options.perInput) {
     inputVariable = cloneVariable(options.perInput.variable);
@@ -897,8 +897,8 @@ async function evaluateGuardReplacement(
   const { evaluate } = await import('../core/interpreter');
   const result = await evaluate(action.value, guardEnv);
   const descriptor =
-    inputVariable.ctx && inputVariable.ctx.labels
-      ? ctxToSecurityDescriptor(inputVariable.ctx)
+    inputVariable.mx && inputVariable.mx.labels
+      ? varMxToSecurityDescriptor(inputVariable.mx)
       : makeSecurityDescriptor();
   const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
   return materializeGuardTransform(result?.value ?? result, guardLabel, descriptor);
@@ -1218,7 +1218,7 @@ function createGuardHelperExecutable(
     'javascript',
     GUARD_HELPER_SOURCE,
     {
-      ctx: {},
+      mx: {},
       internal: { isSystem: true }
     }
   );
@@ -1315,8 +1315,8 @@ function cloneVariable(variable: Variable): Variable {
   const clone: Variable = {
     ...variable,
     name: 'input',
-    ctx: {
-      ...(variable.ctx ?? {})
+    mx: {
+      ...(variable.mx ?? {})
     },
     internal: {
       ...(variable.internal ?? {}),
@@ -1324,8 +1324,8 @@ function cloneVariable(variable: Variable): Variable {
       isSystem: true
     }
   };
-  if (clone.ctx?.ctxCache) {
-    delete clone.ctx.ctxCache;
+  if (clone.mx?.mxCache) {
+    delete clone.mx.mxCache;
   }
   return clone;
 }
@@ -1428,10 +1428,10 @@ function extractOutputDescriptor(result: EvalResult, output?: Variable): Securit
     mergeArrayElements: true
   });
   const resultDescriptor =
-    result && typeof result === 'object' && 'ctx' in result
-      ? extractSecurityDescriptor((result as Record<string, unknown>).ctx, { recursive: true })
+    result && typeof result === 'object' && 'mx' in result
+      ? extractSecurityDescriptor((result as Record<string, unknown>).mx, { recursive: true })
       : undefined;
-  const outputDescriptor = output?.ctx ? ctxToSecurityDescriptor(output.ctx) : undefined;
+  const outputDescriptor = output?.mx ? varMxToSecurityDescriptor(output.mx) : undefined;
   return mergeDescriptors(valueDescriptor, resultDescriptor, outputDescriptor, makeSecurityDescriptor());
 }
 
@@ -1460,10 +1460,10 @@ function applyDescriptorToVariables(
   variables: readonly Variable[]
 ): void {
   for (const variable of variables) {
-    const ctx = (variable.ctx ?? (variable.ctx = {} as any)) as Record<string, unknown>;
-    updateCtxFromDescriptor(ctx, descriptor);
-    if ('ctxCache' in ctx) {
-      delete (ctx as any).ctxCache;
+    const mx = (variable.mx ?? (variable.mx = {} as any)) as Record<string, unknown>;
+    updateVarMxFromDescriptor(mx, descriptor);
+    if ('mxCache' in mx) {
+      delete (mx as any).mxCache;
     }
   }
 }

@@ -17,7 +17,7 @@ const SOURCE: VariableSource = {
 };
 
 function createVariable(name: string, descriptor?: ReturnType<typeof makeSecurityDescriptor>): Variable {
-  const ctx = {
+  const mx = {
     labels: descriptor?.labels ?? [],
     taint: descriptor?.taint ?? [],
     sources: descriptor?.sources ?? [],
@@ -30,7 +30,7 @@ function createVariable(name: string, descriptor?: ReturnType<typeof makeSecurit
     source: SOURCE,
     createdAt: Date.now(),
     modifiedAt: Date.now(),
-    ctx,
+    mx,
     internal: {}
   };
 }
@@ -43,7 +43,7 @@ describe('parseAndWrapJson', () => {
     expect(wrapped && isStructuredValue(wrapped)).toBe(true);
     expect((wrapped as any).type).toBe('object');
     expect((wrapped as any).data).toEqual({ name: 'Ada' });
-    expect((wrapped as any).ctx.source).toBe('test-helper');
+    expect((wrapped as any).mx.source).toBe('test-helper');
   });
 
   it('returns original value when string is not JSON (non-strict)', () => {

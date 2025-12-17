@@ -92,7 +92,7 @@ export class ImportDirectiveEvaluator {
         source: resolution.resolvedPath,
         resolvedPath: resolution.resolvedPath,
         sourceType: resolution.type,
-        labels: resolution.ctx?.labels
+        labels: resolution.mx?.labels
       });
       const taintDescriptor = makeSecurityDescriptor({
       taint: taintSnapshot.taint,
@@ -379,14 +379,14 @@ export class ImportDirectiveEvaluator {
     });
 
     if (resolverResult.contentType === 'module') {
-      const ref = resolverResult.ctx?.source ?? `@${resolverName}`;
+      const ref = resolverResult.mx?.source ?? `@${resolverName}`;
       const taintDescriptor = deriveImportTaint({
         importType: 'module',
         resolverName,
         source: ref,
         resolvedPath: ref,
         sourceType: 'resolver',
-        labels: resolverResult.ctx?.labels
+        labels: resolverResult.mx?.labels
       });
       env.recordSecurityDescriptor(
         makeSecurityDescriptor({
@@ -455,10 +455,10 @@ export class ImportDirectiveEvaluator {
         const importDescriptor = deriveImportTaint({
           importType: resolution.importType ?? 'module',
           resolverName: resolverContent.resolverName,
-          source: resolverContent.ctx?.source ?? resolution.resolvedPath,
-          resolvedPath: resolverContent.ctx?.source ?? resolution.resolvedPath,
+          source: resolverContent.mx?.source ?? resolution.resolvedPath,
+          resolvedPath: resolverContent.mx?.source ?? resolution.resolvedPath,
           sourceType: 'module',
-          labels: resolverContent.ctx?.labels
+          labels: resolverContent.mx?.labels
         });
         env.recordSecurityDescriptor(
           makeSecurityDescriptor({
@@ -542,7 +542,7 @@ export class ImportDirectiveEvaluator {
         processingRef,
         directive,
         resolverContent.contentType,
-        resolverContent.ctx?.labels
+        resolverContent.mx?.labels
       );
 
       this.validateModuleResult(processingResult, directive, processingRef);
@@ -560,7 +560,7 @@ export class ImportDirectiveEvaluator {
       await this.variableImporter.importVariables(processingResult, directive, env);
       this.applyPolicyImportContext(directive, env, processingRef);
 
-      const dynamicSource = resolverContent.ctx?.source;
+      const dynamicSource = resolverContent.mx?.source;
       if (dynamicSource && typeof dynamicSource === 'string' && dynamicSource.startsWith('dynamic://')) {
         const childVariables = processingResult.childEnvironment.getAllVariables?.();
         const parentVariables = env.getAllVariables?.();

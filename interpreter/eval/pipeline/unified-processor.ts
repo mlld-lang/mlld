@@ -24,7 +24,7 @@ import {
   type StructuredValue,
   type StructuredValueMetadata
 } from '../../utils/structured-value';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
@@ -172,7 +172,7 @@ export async function processPipeline(
     logger.debug('[processPipeline] Checking for synthetic source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
-      hasMetadata: !!(value && typeof value === 'object' && ('ctx' in value || 'internal' in value) && ((value as any).ctx || (value as any).internal)),
+      hasMetadata: !!(value && typeof value === 'object' && ('mx' in value || 'internal' in value) && ((value as any).mx || (value as any).internal)),
       hasSourceFunction: !!sourceNode,
       valueType: value && typeof value === 'object' && 'type' in value ? value.type : typeof value
     });
@@ -272,9 +272,9 @@ let executionResult: StructuredValue;
       : undefined;
 
   if (errorsMeta && errorsMeta.length > 0) {
-    const ctxManager = env.getContextManager?.();
-    ctxManager?.setLatestErrors(errorsMeta);
-    ctxManager?.pushGenericContext('parallel', { errors: errorsMeta, timestamp: Date.now() });
+    const mxManager = env.getContextManager?.();
+    mxManager?.setLatestErrors(errorsMeta);
+    mxManager?.pushGenericContext('parallel', { errors: errorsMeta, timestamp: Date.now() });
   }
 
   if (pipelineDescriptor && isStructuredValue(executionResult)) {
@@ -457,7 +457,7 @@ async function prepareStructuredInput(
     );
   }
 
-  if (value && typeof value === 'object' && 'value' in value && ('ctx' in value || 'internal' in value)) {
+  if (value && typeof value === 'object' && 'value' in value && ('mx' in value || 'internal' in value)) {
     const metadata = mergedMetadata(undefined);
     const nested = await prepareStructuredInput(value.value, env, metadata, providedDescriptor);
     return finalizeWrapper(nested);
@@ -528,8 +528,8 @@ function extractDescriptorFromAst(node: any, env: Environment): SecurityDescript
     }
     if (typeof node.commandRef.identifier === 'string') {
       const variable = env.getVariable(node.commandRef.identifier);
-      if (variable?.ctx) {
-        return ctxToSecurityDescriptor(variable.ctx);
+      if (variable?.mx) {
+        return varMxToSecurityDescriptor(variable.mx);
       }
     } else if (Array.isArray(node.commandRef.identifier)) {
       for (const identifierNode of node.commandRef.identifier) {
@@ -543,8 +543,8 @@ function extractDescriptorFromAst(node: any, env: Environment): SecurityDescript
 
   if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
     const variable = env.getVariable(node.identifier);
-    if (variable?.ctx) {
-      return ctxToSecurityDescriptor(variable.ctx);
+    if (variable?.mx) {
+      return varMxToSecurityDescriptor(variable.mx);
     }
   }
 

@@ -81,7 +81,7 @@ npm install -g mlld
 # Retry until valid
 /exe @validate(input) = when first [
   @input.valid => @input
-  @ctx.try < 3 => retry "needs more detail"
+  @mx.try < 3 => retry "needs more detail"
   * => "fallback"
 ]
 
@@ -139,7 +139,7 @@ npm install -g mlld
 # Retry with hints
 /exe @validate(input) = when [
   @input.valid => @input
-  @ctx.try < 3 => retry "needs more detail"
+  @mx.try < 3 => retry "needs more detail"
   * => "fallback"
 ]
 ```
@@ -153,7 +153,7 @@ npm install -g mlld
 
 # Field access
 /var @version = <package.json>.version
-/var @title = <post.md>.ctx.fm.title          # Frontmatter access
+/var @title = <post.md>.mx.fm.title          # Frontmatter access
 
 # AST selectors (extract code definitions)
 /var @func = <src/api.ts { createUser }>      # Specific function
@@ -192,8 +192,8 @@ Label data at creation. Labels propagate through all transformations - templates
 
 ```mlld
 /guard before secret = when [
-  @ctx.op.type == "run" => deny "Secrets cannot be passed to shell"
-  @ctx.op.type == "show" => deny "Secrets cannot be displayed"
+  @mx.op.type == "run" => deny "Secrets cannot be passed to shell"
+  @mx.op.type == "show" => deny "Secrets cannot be displayed"
   * => allow
 ]
 
@@ -210,7 +210,7 @@ Labels survive transformations. No bypass possible:
 /var untrusted @email = <inbox/message.txt>
 
 /guard before untrusted = when [
-  @ctx.op.type == "run" => deny "Untrusted data blocked from shell"
+  @mx.op.type == "run" => deny "Untrusted data blocked from shell"
   * => allow
 ]
 
@@ -224,7 +224,7 @@ Use `allow @value` to sanitize instead of blocking:
 
 ```mlld
 /guard before secret = when [
-  @ctx.op.type == "show" => allow @input.slice(0, 4) + "****"
+  @mx.op.type == "show" => allow @input.slice(0, 4) + "****"
   * => allow
 ]
 
@@ -239,7 +239,7 @@ Validate and retry LLM responses:
 ```mlld
 /guard after llmjson = when [
   @isValidJson(@output) => allow
-  @ctx.guard.try < 3 => retry "Response must be valid JSON"
+  @mx.guard.try < 3 => retry "Response must be valid JSON"
   * => deny "Invalid JSON after 3 attempts"
 ]
 
@@ -254,7 +254,7 @@ Chain an LLM call through a review function that can retry with feedback:
 /exe @review(response, original) = when first [
   let @chat = "<user>@original</user><response>@response</response>"
   @claude("Is this response appropriate? YES or NO: @chat").includes("YES") => @response
-  @ctx.try < 3 => retry @claude("Provide feedback for improvement: @chat")
+  @mx.try < 3 => retry @claude("Provide feedback for improvement: @chat")
   * => "Response blocked by review"
 ]
 
@@ -268,7 +268,7 @@ Handle blocked operations gracefully instead of crashing:
 
 ```mlld
 /exe @process(input) = when [
-  denied => output "Blocked: @ctx.guard.reason" to "audit.log"
+  denied => output "Blocked: @mx.guard.reason" to "audit.log"
   denied => show "Operation blocked by policy"
   * => run cmd {process @input}
 ]

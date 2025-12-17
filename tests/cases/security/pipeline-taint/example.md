@@ -8,7 +8,7 @@
 
 /var @pipelineOutput = @token | @emitToken | @echoValue | @markDone
 
-/var @pipelineCtx = @pipelineOutput.ctx
+/var @pipelineCtx = @pipelineOutput.mx
 /show `Pipeline taint: @pipelineCtx.taint`
 /show `Pipeline labels: @pipelineCtx.labels`
 
@@ -16,6 +16,6 @@
 
 /var @result = @emitTokenOne(@token)
 
-/var @resultCtx = @result.ctx
+/var @resultCtx = @result.mx
 /show `Result taint: @resultCtx.taint`
 /show `Result labels: @resultCtx.labels`

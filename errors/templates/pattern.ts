@@ -4,16 +4,16 @@ import { MlldParseError } from '@core/errors/MlldParseError';
 export const pattern: ErrorPattern = {
   name: 'TODO-name-this',
   
-  test(error, ctx) {
+  test(error, mx) {
     // TODO: Add detection logic
     // Examples:
     // - error.found === '?'
-    // - ctx.line.includes('?')
+    // - mx.line.includes('?')
     // - error.expected.some(e => e.text === 'something')
     return false;
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // TODO: Write helpful message
     return new MlldParseError(
       'TODO: Helpful error message here',

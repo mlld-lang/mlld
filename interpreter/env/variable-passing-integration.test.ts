@@ -56,7 +56,7 @@ describe('Variable Passing Integration Tests', () => {
     it('should pass Variables with type information to JavaScript', async () => {
       // Create test data
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {
-        ctx: {},
+        mx: {},
         internal: { arrayType: 'test-array' }
       });
       env.setVariable('data', arrayVar);
@@ -71,7 +71,7 @@ describe('Variable Passing Integration Tests', () => {
         'javascript',
         mockSource,
         {
-          ctx: {},
+          mx: {},
           internal: {
             executableDef: {
               type: 'code',
@@ -122,7 +122,7 @@ describe('Variable Passing Integration Tests', () => {
         false,
         mockSource,
         {
-          ctx: {},
+          mx: {},
           internal: { configType: 'server' }
         }
       );
@@ -138,7 +138,7 @@ describe('Variable Passing Integration Tests', () => {
         'node',
         mockSource,
         {
-          ctx: {},
+          mx: {},
           internal: {
             executableDef: {
               type: 'code',
@@ -183,7 +183,7 @@ describe('Variable Passing Integration Tests', () => {
   });
 
   describe('Context injection', () => {
-    it('injects ambient @ctx into JS executors via ContextManager', async () => {
+    it('injects ambient @mx into JS executors via ContextManager', async () => {
       env.setPipelineContext({
         stage: 2,
         totalStages: 3,
@@ -207,7 +207,7 @@ describe('Variable Passing Integration Tests', () => {
         params?: Record<string, any>
       ) => {
         if (language === 'js' || language === 'javascript') {
-          capturedCtx = params?.ctx;
+          capturedCtx = params?.mx;
           return '';
         }
         return originalExecuteCode.call(commandExecutorFactory, code, language, params);
@@ -229,7 +229,7 @@ describe('Variable Passing Integration Tests', () => {
     it('should pass Variables with type information to Python', async () => {
       // Create test data
       const arrayVar = createArrayVariable('items', ['apple', 'banana'], false, mockSource, {
-        ctx: {},
+        mx: {},
         internal: { itemType: 'fruit' }
       });
       env.setVariable('items', arrayVar);
@@ -244,7 +244,7 @@ describe('Variable Passing Integration Tests', () => {
         'python',
         mockSource,
         {
-          ctx: {},
+          mx: {},
           internal: {
             executableDef: {
               type: 'code',
@@ -334,7 +334,7 @@ print(json.dumps(result))
     it('should pass Variables with type information to Bash', async () => {
       // Create test data
       const arrayVar = createArrayVariable('files', ['file1.txt', 'file2.txt'], false, mockSource, {
-        ctx: {},
+        mx: {},
         internal: { fileType: 'text' }
       });
       env.setVariable('files', arrayVar);
@@ -349,7 +349,7 @@ print(json.dumps(result))
         'bash',
         mockSource,
         {
-          ctx: {},
+          mx: {},
           internal: {
             executableDef: {
               type: 'code',
@@ -397,7 +397,7 @@ echo "value:$files"
             'has_helpers:true',
             'is_variable:true',
             'type:array',
-            'metadata:{"ctx":{"fileType":"text"},"internal":{}}',
+            'metadata:{"mx":{"fileType":"text"},"internal":{}}',
             'value:["file1.txt","file2.txt"]'
           ].join('\n');
         }
@@ -444,7 +444,7 @@ echo "value:$files"
       expect(parsed.is_variable).toBe('true');
       expect(parsed.type).toBe('array');
       const parsedMetadata = JSON.parse(parsed.metadata);
-      expect(parsedMetadata.ctx).toEqual({ fileType: 'text' });
+      expect(parsedMetadata.mx).toEqual({ fileType: 'text' });
       expect(JSON.parse(parsed.value)).toEqual(['file1.txt', 'file2.txt']);
       
       // Restore original
@@ -457,7 +457,7 @@ echo "value:$files"
       
       // Create test data
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {
-        ctx: {},
+        mx: {},
         internal: { arrayType: 'test' }
       });
       env.setVariable('data', arrayVar);
@@ -472,7 +472,7 @@ echo "value:$files"
         'javascript',
         mockSource,
         {
-          ctx: {},
+          mx: {},
           internal: {
             executableDef: {
               type: 'code',

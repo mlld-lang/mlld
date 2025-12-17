@@ -70,13 +70,13 @@ describe('Import Directive Syntax Tests', () => {
     });
 
     it('should parse a module reference with explicit extension', async () => {
-      const input = '/import @context/agents.mld as @ctx';
+      const input = '/import @context/agents.mld as @mx';
       const result = (await parse(input)).ast[0];
 
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('import');
       expect(result.subtype).toBe('importNamespace');
-      expect(result.values.namespace[0].content).toBe('ctx');
+      expect(result.values.namespace[0].content).toBe('mx');
       expect(result.raw.path).toBe('@context/agents.mld');
       expect(result.meta?.path?.extension).toBe('.mld');
       expect(result.meta?.path?.name).toBe('agents');

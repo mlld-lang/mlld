@@ -9,24 +9,24 @@ export class ContextBuilder {
    * Update context based on current node
    */
   updateContext(node: any, parentContext: ValidationContext): ValidationContext {
-    const ctx = { ...parentContext };
+    const mx = { ...parentContext };
 
     // Template context
     if (this.isTemplateNode(node)) {
-      ctx.inTemplate = true;
-      ctx.templateType = this.getTemplateType(node);
+      mx.inTemplate = true;
+      mx.templateType = this.getTemplateType(node);
     }
 
     // Command context
     if (this.isCommandNode(node)) {
-      ctx.inCommand = true;
-      ctx.commandLanguage = this.getCommandLanguage(node);
+      mx.inCommand = true;
+      mx.commandLanguage = this.getCommandLanguage(node);
     }
 
     // Track parent node type
-    ctx.parentNodeType = node.type;
+    mx.parentNodeType = node.type;
 
-    return ctx;
+    return mx;
   }
 
   /**

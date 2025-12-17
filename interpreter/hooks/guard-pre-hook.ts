@@ -28,7 +28,7 @@ import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
@@ -238,7 +238,7 @@ function buildVariableIdentity(variable?: Variable): string {
   if (!variable) {
     return 'operation';
   }
-  const definedAt = variable.ctx?.definedAt;
+  const definedAt = variable.mx?.definedAt;
   const location =
     definedAt && typeof definedAt === 'object'
       ? `${definedAt.filePath ?? ''}:${definedAt.line ?? ''}:${definedAt.column ?? ''}`
@@ -625,7 +625,7 @@ export const guardPreHook: PreHook = async (
                   ? {
                       name: (entry as any).name,
                       text: (entry as any).value?.text ?? (entry as any).text ?? (entry as any).value,
-                      labels: (entry as any).ctx?.labels
+                      labels: (entry as any).mx?.labels
                     }
                   : entry
               )
@@ -721,8 +721,8 @@ function buildPerInputCandidates(
 
   for (let index = 0; index < inputs.length; index++) {
     const variable = inputs[index]!;
-    const labels = Array.isArray(variable.ctx?.labels) ? variable.ctx.labels : [];
-    const sources = Array.isArray(variable.ctx?.sources) ? variable.ctx.sources : [];
+    const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
+    const sources = Array.isArray(variable.mx?.sources) ? variable.mx.sources : [];
 
     const seen = new Set<string>();
     const guards: GuardDefinition[] = [];
@@ -1089,8 +1089,8 @@ async function evaluateGuardReplacement(
   const { evaluate } = await import('../core/interpreter');
   const result = await evaluate(action.value, guardEnv);
   const descriptor =
-    inputVariable.ctx && inputVariable.ctx.labels
-      ? ctxToSecurityDescriptor(inputVariable.ctx)
+    inputVariable.mx && inputVariable.mx.labels
+      ? varMxToSecurityDescriptor(inputVariable.mx)
       : makeSecurityDescriptor();
   const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
   return materializeGuardTransform(result?.value ?? result, guardLabel, descriptor);
@@ -1181,8 +1181,8 @@ function cloneVariableForGuard(variable: Variable): Variable {
   const clone: Variable = {
     ...variable,
     name: 'input',
-    ctx: {
-      ...(variable.ctx ?? {})
+    mx: {
+      ...(variable.mx ?? {})
     },
     internal: {
       ...(variable.internal ?? {}),
@@ -1190,8 +1190,8 @@ function cloneVariableForGuard(variable: Variable): Variable {
       isSystem: true
     }
   };
-  if (clone.ctx?.ctxCache) {
-    delete clone.ctx.ctxCache;
+  if (clone.mx?.mxCache) {
+    delete clone.mx.mxCache;
   }
   return clone;
 }
@@ -1278,7 +1278,7 @@ function createGuardHelperExecutable(
     'javascript',
     GUARD_HELPER_SOURCE,
     {
-      ctx: {},
+      mx: {},
       internal: { isSystem: true }
     }
   );

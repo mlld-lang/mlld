@@ -31,7 +31,7 @@ import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/
 import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
-import { updateCtxFromDescriptor, ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -199,10 +199,10 @@ export async function prepareVarAssignment(
     return env.mergeSecurityDescriptors(...resolved);
   };
   const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
-    if (!variable?.ctx) {
+    if (!variable?.mx) {
       return undefined;
     }
-    return ctxToSecurityDescriptor(variable.ctx);
+    return varMxToSecurityDescriptor(variable.mx);
   };
   const interpolateWithSecurity = (
     nodes: any,
@@ -216,17 +216,17 @@ export async function prepareVarAssignment(
    */
   const extractSecurityFromValue = (value: any): SecurityDescriptor | undefined => {
     if (!value) return undefined;
-    // Check if it's a Variable with .ctx
-    if (typeof value === 'object' && 'ctx' in value && value.ctx) {
-      const ctx = value.ctx;
-      const hasLabels = Array.isArray(ctx.labels) && ctx.labels.length > 0;
-      const hasTaint = Array.isArray(ctx.taint) && ctx.taint.length > 0;
+    // Check if it's a Variable with .mx
+    if (typeof value === 'object' && 'mx' in value && value.mx) {
+      const mx = value.mx;
+      const hasLabels = Array.isArray(mx.labels) && mx.labels.length > 0;
+      const hasTaint = Array.isArray(mx.taint) && mx.taint.length > 0;
       if (hasLabels || hasTaint) {
         return {
-          labels: ctx.labels,
-          taint: ctx.taint,
-          sources: ctx.sources,
-          policyContext: ctx.policy ?? undefined
+          labels: mx.labels,
+          taint: mx.taint,
+          sources: mx.sources,
+          policyContext: mx.policy ?? undefined
         } as SecurityDescriptor;
       }
     }
@@ -243,18 +243,18 @@ export async function prepareVarAssignment(
       metadata: { identifier },
       operation: operationMetadata
     });
-    // Extract existing security from variable's ctx
+    // Extract existing security from variable's mx
     const existingSecurity = extractSecurityFromValue(variable);
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(existingSecurity ? { security: existingSecurity } : undefined, {
       existingDescriptor: descriptor,
       capability: capabilityContext
     });
-    // Update ctx from the final security descriptor
-    if (!variable.ctx) {
-      variable.ctx = {};
+    // Update mx from the final security descriptor
+    if (!variable.mx) {
+      variable.mx = {};
     }
     if (finalMetadata.security) {
-      updateCtxFromDescriptor(variable.ctx, finalMetadata.security);
+      updateVarMxFromDescriptor(variable.mx, finalMetadata.security);
     }
     return VariableMetadataUtils.attachContext(variable);
   };
@@ -863,7 +863,7 @@ export async function prepareVarAssignment(
   const cloneFactoryOptions = (
     overrides?: Partial<VariableFactoryInitOptions>
   ): VariableFactoryInitOptions => ({
-    ctx: { ...baseCtx, ...(overrides?.ctx ?? {}) },
+    mx: { ...baseCtx, ...(overrides?.mx ?? {}) },
     internal: { ...baseInternal, ...(overrides?.internal ?? {}) }
   });
 
@@ -877,9 +877,9 @@ export async function prepareVarAssignment(
       labels: securityLabels,
       existingDescriptor: existing ?? resolvedValueDescriptor
     });
-    // Update ctx from security descriptor
+    // Update mx from security descriptor
     if (finalMetadata?.security) {
-      updateCtxFromDescriptor(options.ctx ?? (options.ctx = {}), finalMetadata.security);
+      updateVarMxFromDescriptor(options.mx ?? (options.mx = {}), finalMetadata.security);
     }
     if (finalMetadata) {
       options.metadata = {
@@ -947,7 +947,7 @@ export async function prepareVarAssignment(
       });
     }
     const overrides: Partial<VariableFactoryInitOptions> = {
-      ctx: { ...(resolvedValue.ctx ?? {}), ...baseCtx },
+      mx: { ...(resolvedValue.mx ?? {}), ...baseCtx },
       internal: { ...(resolvedValue.internal ?? {}), ...baseInternal }
     };
     // Preserve security from existing variable
@@ -957,7 +957,7 @@ export async function prepareVarAssignment(
       ...resolvedValue,
       name: identifier,
       definedAt: location,
-      ctx: options.ctx,
+      mx: options.mx,
       internal: options.internal
     };
     VariableMetadataUtils.attachContext(variable);
@@ -1216,7 +1216,7 @@ export async function prepareVarAssignment(
       console.error('[var.ts] Calling processPipeline:', {
         identifier,
         variableType: variable.type,
-        hasCtx: !!variable.ctx,
+        hasCtx: !!variable.mx,
         hasInternal: !!variable.internal,
         isRetryable: variable.internal?.isRetryable || false,
         hasSourceFunction: !!(variable.internal?.sourceFunction),
@@ -1241,7 +1241,7 @@ export async function prepareVarAssignment(
       const existingSecurity = extractSecurityFromValue(variable);
       const options = applySecurityOptions(
         {
-          ctx: { ...(variable.ctx ?? {}), ...baseCtx },
+          mx: { ...(variable.mx ?? {}), ...baseCtx },
           internal: { ...(variable.internal ?? {}), ...baseInternal }
         },
         existingSecurity
@@ -1251,7 +1251,7 @@ export async function prepareVarAssignment(
     const existingSecurity = extractSecurityFromValue(variable);
     const options = applySecurityOptions(
       {
-        ctx: { ...(variable.ctx ?? {}), ...baseCtx },
+        mx: { ...(variable.mx ?? {}), ...baseCtx },
         internal: { ...(variable.internal ?? {}), ...baseInternal, isPipelineResult: true }
       },
       existingSecurity

@@ -15,10 +15,10 @@ describe('keepStructured helper', () => {
     expect(again).toBe(original);
   });
 
-  it('keeps ctx when present on StructuredValue', () => {
+  it('keeps mx when present on StructuredValue', () => {
     const wrapped = keepStructured('hi');
     const again = keepStructured(wrapped);
-    expect(again.ctx).toBeDefined();
+    expect(again.mx).toBeDefined();
     expect(again.text).toBe('hi');
   });
 });

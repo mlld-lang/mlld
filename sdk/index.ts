@@ -140,7 +140,7 @@ export interface ProcessOptions {
    * });
    *
    * // In your script, guards can check:
-   * // @guard(not(@input.ctx.labels.includes("src:user-upload"))) { ... }
+   * // @guard(not(@input.mx.labels.includes("src:user-upload"))) { ... }
    * ```
    */
   dynamicModuleSource?: string;

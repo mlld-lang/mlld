@@ -1,7 +1,7 @@
 # After guard retry with mixed guards (retry then deny)
 
 /guard after @retryThenDeny for retryable = when [
-  @output != "ok" && @ctx.guard.try < 2 => retry "retry first"
+  @output != "ok" && @mx.guard.try < 2 => retry "retry first"
   @output != "ok" => deny "deny second"
   * => allow
 ]

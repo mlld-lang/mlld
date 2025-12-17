@@ -18,7 +18,7 @@ This test verifies that glob patterns concatenate content by default, consistent
 
 /var @allFiles = <glob-concat-file*.md>
 /show @allFiles.content
-/show `First file title: @allFiles[0].ctx.fm.title`
+/show `First file title: @allFiles[0].mx.fm.title`
 /show @allFiles[0].content
 
 ## Template Interpolation

@@ -79,7 +79,7 @@ export class DynamicModuleResolver implements Resolver {
     return {
       content,
       contentType: 'module',
-      ctx: {
+      mx: {
         source: `dynamic://${ref}`,
         taint: labels,
         labels: labels,

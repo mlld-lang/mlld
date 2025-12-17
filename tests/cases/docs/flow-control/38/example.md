@@ -1,5 +1,5 @@
 /exe @process(state) = when [
-  @ctx.while.iteration > 5 => done @state
-  @ctx.while.iteration == @ctx.while.limit => done "hit cap"
+  @mx.while.iteration > 5 => done @state
+  @mx.while.iteration == @mx.while.limit => done "hit cap"
   * => continue @state
 ]

@@ -1,5 +1,5 @@
 /guard before secret = when [
-  @ctx.op.type == "pipeline-stage" && @ctx.guard.try == 1 => retry "Try again"
+  @mx.op.type == "pipeline-stage" && @mx.guard.try == 1 => retry "Try again"
   * => allow
 ]
 

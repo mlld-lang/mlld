@@ -1,7 +1,7 @@
 # Operation guard blocks specific /run subtype
 
 /guard @blockNode before op:run = when [
-  @ctx.op.subtype == "node" => deny "No node commands"
+  @mx.op.subtype == "node" => deny "No node commands"
   * => allow
 ]
 

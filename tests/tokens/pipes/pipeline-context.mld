@@ -4,4 +4,4 @@
   * => "fallback"
 ]
 /var @result = @data | @transform(@p) | @format(@p[-1])
-/exe @process() = @ctx.input | @filter(@ctx.stage)
+/exe @process() = @mx.input | @filter(@mx.stage)

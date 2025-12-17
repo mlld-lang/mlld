@@ -4,7 +4,7 @@ This test verifies URL content conversion features.
 
 ## Load an HTML page
 
-## Access different content formats via .ctx
+## Access different content formats via .mx
 
 ### Raw HTML
 Has HTML: false

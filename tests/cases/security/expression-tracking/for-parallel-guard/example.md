@@ -1,10 +1,10 @@
 /guard @parallelDisplayBlock for secret = when [
-  @ctx.op.type == "exe" && @ctx.op.name == "displayParallel" => deny "Parallel secret output blocked"
+  @mx.op.type == "exe" && @mx.op.name == "displayParallel" => deny "Parallel secret output blocked"
   * => allow
 ]
 
 /exe @displayParallel(value) = when [
-  denied => show `blocked: @ctx.guard.reason`
+  denied => show `blocked: @mx.guard.reason`
   * => show `value: @value`
 ]
 

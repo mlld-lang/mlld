@@ -46,7 +46,7 @@ export class NowResolver implements Resolver {
       return {
         content: currentTime.toISOString(),
         contentType: 'text',
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }
@@ -87,7 +87,7 @@ export class NowResolver implements Resolver {
       return {
         content: JSON.stringify(exports),
         contentType: 'data',
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }

@@ -1,5 +1,5 @@
 /guard @noSecretLog before op:log = when [
-  @input.ctx.labels.includes("secret") => deny "No secrets in log effects"
+  @input.mx.labels.includes("secret") => deny "No secrets in log effects"
   * => allow
 ]
 

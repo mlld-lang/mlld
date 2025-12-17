@@ -9,6 +9,6 @@
   let @x = @maybeFail(@item)
 ]
 
-/show `errors:@ctx.errors.length`
-/show `firstMessage:@ctx.errors[0].message`
-/show `firstIndex:@ctx.errors[0].index`
+/show `errors:@mx.errors.length`
+/show `firstMessage:@mx.errors[0].message`
+/show `firstIndex:@mx.errors[0].index`

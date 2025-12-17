@@ -7,5 +7,5 @@
 ]
 
 /guard @checkBoth always op:exe = when [
-  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+  * => allow @tagValue(@mx.guard.timing, @output, @input)
 ]

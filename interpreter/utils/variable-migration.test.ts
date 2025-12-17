@@ -26,7 +26,7 @@ describe('Variable Migration Utils', () => {
         },
         createdAt: Date.now(),
         modifiedAt: Date.now(),
-        ctx: {},
+        mx: {},
         internal: {
           customToString
         }
@@ -57,7 +57,7 @@ describe('Variable Migration Utils', () => {
         },
         createdAt: Date.now(),
         modifiedAt: Date.now(),
-        ctx: {},
+        mx: {},
         internal: {
           customToJSON
         }
@@ -87,7 +87,7 @@ describe('Variable Migration Utils', () => {
         },
         createdAt: Date.now(),
         modifiedAt: Date.now(),
-        ctx: {},
+        mx: {},
         internal: {
           contentGetter: contentGetterFunc
         }
@@ -114,7 +114,7 @@ describe('Variable Migration Utils', () => {
         },
         createdAt: Date.now(),
         modifiedAt: Date.now(),
-        ctx: {},
+        mx: {},
         internal: {
           arrayType: 'test-type'
         }

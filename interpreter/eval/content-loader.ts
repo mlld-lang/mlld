@@ -1161,9 +1161,9 @@ async function applyTransformToResults(
           for (const field of part.fields) {
             if (value && typeof value === 'object') {
               const fieldName = field.value;
-              // Handle .ctx accessor - use the ctx getter on LoadContentResult
-              if (fieldName === 'ctx' && typeof value.ctx === 'object') {
-                value = value.ctx;
+              // Handle .mx accessor - use the mx getter on LoadContentResult
+              if (fieldName === 'mx' && typeof value.mx === 'object') {
+                value = value.mx;
               } else {
                 value = value[fieldName];
               }

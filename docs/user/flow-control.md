@@ -324,11 +324,11 @@ Parallel loops support block bodies as well:
   let @result = @runTask(@task)
   show `done:@task.id`
 ]
-show `errors:@ctx.errors.length`
+show `errors:@mx.errors.length`
 ```
 - Directive form keeps streaming effects as iterations finish (order may vary).
 - Expression form preserves input order; failed iterations add error markers `{ index, key?, message, error, value }` in the results array.
-- `@ctx.errors` resets at the start of each parallel loop and records any failures; outer-scope variables cannot be mutated inside a parallel block body.
+- `@mx.errors` resets at the start of each parallel loop and records any failures; outer-scope variables cannot be mutated inside a parallel block body.
 
 **Error handling with repair pattern:**
 
@@ -336,9 +336,9 @@ show `errors:@ctx.errors.length`
 /exe @invokeAll(agents, msg) = [
   let @results = for parallel @a in @agents => @invoke(@a, @msg)
   => when [
-    @ctx.errors.length == 0 => @results
+    @mx.errors.length == 0 => @results
     @results.length >= 2 => @results  << 2/3 succeeded is acceptable
-    * => @repair(@results, @ctx.errors, @msg)  << AI-driven repair
+    * => @repair(@results, @mx.errors, @msg)  << AI-driven repair
   ]
 ]
 ```
@@ -545,12 +545,12 @@ Alice
 
 ### Pipeline Context
 
-Access pipeline context with `@ctx` and pipeline history with `@p` (alias for `@pipeline`):
+Access pipeline context with `@mx` and pipeline history with `@p` (alias for `@pipeline`):
 
 ```mlld
 /exe @validator(input) = when first [
   @input.valid => @input.value
-  @ctx.try < 3 => retry "validation failed"
+  @mx.try < 3 => retry "validation failed"
   none => "fallback value"
 ]
 
@@ -558,7 +558,7 @@ Access pipeline context with `@ctx` and pipeline history with `@p` (alias for `@
 /show @result
 ```
 
-Context object (`@ctx`) contains:
+Context object (`@mx`) contains:
 - `try` - current attempt number in the context of the active retry
 - `tries` - array containing history of attempts
 - `stage` - current pipeline stage
@@ -575,8 +575,8 @@ Pipeline array (`@p`) contains:
 - Pipeline stage outputs are `StructuredValue` wrappers with `.text` (string view) and `.data` (structured payload) properties. Templates and display automatically use `.text`; use `.data` when you need structured information.
 
 Gotchas:
-- `@ctx.try` and `@ctx.tries` are local to the active retry context. Stages that are not the requester or the retried stage will see `try: 1` and `tries: []`.
-- `@ctx.input` is the current stage input, not the original. Use `@p[0]` for the original pipeline input.
+- `@mx.try` and `@mx.tries` are local to the active retry context. Stages that are not the requester or the retried stage will see `try: 1` and `tries: []`.
+- `@mx.input` is the current stage input, not the original. Use `@p[0]` for the original pipeline input.
 - A synthetic internal stage may be created for retryable sources; stage numbers and `@p` indices shown above hide this internal stage.
 
 ### Retry with Hints
@@ -585,13 +585,13 @@ Use `retry` with hints to guide subsequent attempts:
 
 ```mlld
 /exe @source() = when first [
-  @ctx.try == 1 => "draft"
+  @mx.try == 1 => "draft"
   * => "final"
 ]
 
 /exe @validator() = when first [
-  @ctx.input == "draft" => retry "missing title"
-  * => `Used hint: @ctx.hint`
+  @mx.input == "draft" => retry "missing title"
+  * => `Used hint: @mx.hint`
 ]
 
 /var @result = @source() | @validator
@@ -628,20 +628,20 @@ The `while(cap)` stage invokes a processor repeatedly until it returns `done`:
 - `continue @value` - Continue with new state for next iteration
 - `continue` - Continue with current state (implicit if no control keyword)
 
-Access iteration context with `@ctx.while`:
+Access iteration context with `@mx.while`:
 
 ```mlld
 /exe @process(state) = when [
-  @ctx.while.iteration > 5 => done @state
-  @ctx.while.iteration == @ctx.while.limit => done "hit cap"
+  @mx.while.iteration > 5 => done @state
+  @mx.while.iteration == @mx.while.limit => done "hit cap"
   * => continue @state
 ]
 ```
 
 Context variables:
-- `@ctx.while.iteration` - Current iteration (1-based)
-- `@ctx.while.limit` - Configured cap
-- `@ctx.while.active` - true when inside while loop
+- `@mx.while.iteration` - Current iteration (1-based)
+- `@mx.while.limit` - Configured cap
+- `@mx.while.active` - true when inside while loop
 
 Optional pacing with `while(cap, delay)`:
 
@@ -710,7 +710,7 @@ Notes:
 - Leading `||` syntax avoids ambiguity with boolean OR expressions.
 - Use `(n, wait)` after the pipeline to override concurrency cap and add pacing between starts.
 - Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
-- Errors inside a parallel group are collected as `{ index, key?, message, error, value }` elements and exposed via `@ctx.errors`; the pipeline continues so downstream stages can repair or decide whether to retry.
+- Errors inside a parallel group are collected as `{ index, key?, message, error, value }` elements and exposed via `@mx.errors`; the pipeline continues so downstream stages can repair or decide whether to retry.
 - Inline effects attached to grouped commands run after each command completes.
 
 **Error handling with graceful degradation:**
@@ -720,14 +720,14 @@ Notes:
 /exe @aggregate(sources) = [
   let @data = || @fetch(@sources[0]) || @fetch(@sources[1]) || @fetch(@sources[2])
   => when [
-    @ctx.errors.length == 0 => @data
+    @mx.errors.length == 0 => @data
     @data.length >= 2 => @data  << 2/3 is good enough
-    * => retry `Need at least 2 sources. Failed: @ctx.errors`
+    * => retry `Need at least 2 sources. Failed: @mx.errors`
   ]
 ]
 ```
 
-This enables best-effort parallel execution where partial success is acceptable. The `@ctx.errors` array provides details on what failed, and `@data` contains results from successful operations plus error markers for failed ones.
+This enables best-effort parallel execution where partial success is acceptable. The `@mx.errors` array provides details on what failed, and `@data` contains results from successful operations plus error markers for failed ones.
 
 ### Complex Retry Patterns
 
@@ -736,13 +736,13 @@ Multi-stage pipelines with retry and fallback:
 ```mlld
 /exe @randomQuality(input) = js {
   const values = [0.3, 0.7, 0.95, 0.2, 0.85];
-  return values[ctx.try - 1] || 0.1;
+  return values[mx.try - 1] || 0.1;
 }
 
 /exe @validateQuality(score) = when first [
   @score > 0.9 => `excellent: @score`
   @score > 0.8 => `good: @score`
-  @ctx.try < 5 => retry
+  @mx.try < 5 => retry
   none => `failed: best was @score`
 ]
 

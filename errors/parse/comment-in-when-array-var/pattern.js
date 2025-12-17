@@ -1,17 +1,17 @@
 export const pattern = {
   name: 'comment-in-when-array-var',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if error is in a when array inside a var directive
-    return (ctx.line.includes('<<') || ctx.line.includes('>>')) &&
-           ctx.lines.some(line => line.includes('/var')) &&
-           ctx.lines.some(line => line.includes('when:')) &&
+    return (mx.line.includes('<<') || mx.line.includes('>>')) &&
+           mx.lines.some(line => line.includes('/var')) &&
+           mx.lines.some(line => line.includes('when:')) &&
            (error.message.includes('Unclosed array in when expression') || 
             error.message.includes('Expected'));
   },
   
-  enhance(error, ctx) {
-    const commentMarker = ctx.line.includes('<<') ? '<<' : '>>';
+  enhance(error, mx) {
+    const commentMarker = mx.line.includes('<<') ? '<<' : '>>';
     
     return {
       MARKER: commentMarker,

@@ -1,15 +1,15 @@
 /guard @secretAllow for secret = when [
-  @ctx.op.name == "stackedSend" => allow
+  @mx.op.name == "stackedSend" => allow
   * => allow
 ]
 
 /guard @opExecBlock for op:exe = when [
-  @ctx.op.name == "stackedSend" && @input.any.ctx.labels.includes("secret") => deny "Op guard blocked secret exe"
+  @mx.op.name == "stackedSend" && @input.any.mx.labels.includes("secret") => deny "Op guard blocked secret exe"
   * => allow
 ]
 
 /exe network @stackedSend(value) = when [
-  denied => show `stacked guard: @ctx.guard.reason`
+  denied => show `stacked guard: @mx.guard.reason`
   * => `sent:@value`
 ]
 

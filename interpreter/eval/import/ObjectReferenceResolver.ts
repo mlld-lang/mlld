@@ -102,7 +102,7 @@ export class ObjectReferenceResolver {
       const execVar = referencedVar as ExecutableVariable;
       
       // Serialize shadow environments if present (Maps don't serialize to JSON)
-      let serializedCtx = { ...execVar.ctx };
+      let serializedCtx = { ...execVar.mx };
       let serializedInternal = { ...execVar.internal };
 
       if (execVar.internal?.capturedShadowEnvs) {
@@ -124,7 +124,7 @@ export class ObjectReferenceResolver {
         value: execVar.value,
         paramNames: execVar.paramNames,
         executableDef: execVar.internal?.executableDef,
-        ctx: serializedCtx,
+        mx: serializedCtx,
         internal: serializedInternal
       };
       return result;
@@ -133,7 +133,7 @@ export class ObjectReferenceResolver {
         return {
           __arraySnapshot: true,
           value: referencedVar.value,
-          ctx: referencedVar.ctx,
+          mx: referencedVar.mx,
           internal: referencedVar.internal,
           isComplex: (referencedVar as any).isComplex === true,
           name: referencedVar.name
@@ -176,7 +176,7 @@ export class ObjectReferenceResolver {
     for (const [name, variable] of moduleEnv) {
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
-        let serializedCtx = { ...execVar.ctx };
+        let serializedCtx = { ...execVar.mx };
         let serializedInternal = { ...execVar.internal };
 
         if (serializedInternal.capturedShadowEnvs) {
@@ -193,7 +193,7 @@ export class ObjectReferenceResolver {
           value: execVar.value,
           paramNames: execVar.paramNames,
           executableDef: execVar.internal?.executableDef,
-          ctx: serializedCtx,
+          mx: serializedCtx,
           internal: serializedInternal
         };
       } else {

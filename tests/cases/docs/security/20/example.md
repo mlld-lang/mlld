@@ -6,4 +6,4 @@
   * => deny "hard stop"
 ]
 
-# deny wins, but retry hint preserved in @ctx.guard.hints
+# deny wins, but retry hint preserved in @mx.guard.hints

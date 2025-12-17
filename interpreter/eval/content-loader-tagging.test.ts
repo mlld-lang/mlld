@@ -93,8 +93,8 @@ describe('Content Loader StructuredValue Tagging', () => {
     // Check metadata source
     expect(result.metadata?.source).toBe('load-content');
 
-    // Check ctx.source
-    expect(result.ctx.source).toBe('load-content');
+    // Check mx.source
+    expect(result.mx.source).toBe('load-content');
 
     // Check that data is an array with 2 items (LoadContentResult objects)
     expect(Array.isArray(result.data)).toBe(true);

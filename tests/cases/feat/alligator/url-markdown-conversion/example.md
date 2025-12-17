@@ -6,19 +6,19 @@ This test verifies URL content conversion features.
 
 /var @html_page = <https://example.com>
 
-## Access different content formats via .ctx
+## Access different content formats via .mx
 
 ### Raw HTML
-/show `Has HTML: @html_page.ctx.html.isDefined()`
+/show `Has HTML: @html_page.mx.html.isDefined()`
 
 ### Plain text (HTML stripped)
-/show `Has text: @html_page.ctx.text.isDefined()`
+/show `Has text: @html_page.mx.text.isDefined()`
 
 ### Markdown conversion
-/show `Has md: @html_page.ctx.md.isDefined()`
+/show `Has md: @html_page.mx.md.isDefined()`
 
 ## Show URL metadata
 
-/show `URL: @html_page.ctx.url`
-/show `Domain: @html_page.ctx.domain`
-/show `Title: @html_page.ctx.title`
+/show `URL: @html_page.mx.url`
+/show `Domain: @html_page.mx.domain`
+/show `Title: @html_page.mx.title`

@@ -9,7 +9,7 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { normalizeIterableValue } from './for-utils';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
@@ -95,7 +95,7 @@ export async function evaluateForeachCommand(
       }
       const referencedVar = referencedName ? env.getVariable(referencedName) : undefined;
       sourceDescriptor =
-        (referencedVar?.ctx ? ctxToSecurityDescriptor(referencedVar.ctx) : undefined);
+        (referencedVar?.mx ? varMxToSecurityDescriptor(referencedVar.mx) : undefined);
     }
     if (isStructuredValue(arrayValue)) {
       let structuredData = asData(arrayValue) as unknown;

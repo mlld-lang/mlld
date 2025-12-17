@@ -286,7 +286,7 @@ export class CommandVisitor extends BaseVisitor {
           this.mainVisitor.visitNode(value, newContext);
         }
       } else {
-        this.visitChildren(node, newContext, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+        this.visitChildren(node, newContext, (child, mx) => this.mainVisitor.visitNode(child, mx));
       }
     }
   }

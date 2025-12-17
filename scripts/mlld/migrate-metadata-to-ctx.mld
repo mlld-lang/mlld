@@ -1,11 +1,11 @@
 ---
-description: Migrate .metadata references to .ctx/.internal across TypeScript codebase
+description: Migrate .metadata references to .mx/.internal across TypeScript codebase
 author: adam
 version: 1.0.0
 ---
 
 >> Load migration guide
-/var @migrationGuide = <@base/todo/plan-ctx-internal.md>
+/var @migrationGuide = <@base/todo/plan-mx-internal.md>
 
 >> Get all TypeScript files with .metadata references
 /show @base
@@ -27,18 +27,18 @@ version: 1.0.0
 
 >> Build migration request template
 /exe @buildRequest(filepath, fileContent) = `
-You are migrating a TypeScript file from legacy .metadata API to new .ctx/.internal API.
+You are migrating a TypeScript file from legacy .metadata API to new .mx/.internal API.
 
 <migration_guide>
-Migration patterns from plan-ctx-internal.md:
+Migration patterns from plan-mx-internal.md:
 
 ## Simple Mechanical Replacements (89% of changes):
 
 1. Security metadata:
-   - .metadata.security.labels → .ctx.labels
-   - .metadata.security.taintLevel → .ctx.taint
-   - .metadata.security.sources → .ctx.sources
-   - .metadata.security.policyContext → .ctx.policy
+   - .metadata.security.labels → .mx.labels
+   - .metadata.security.taintLevel → .mx.taint
+   - .metadata.security.sources → .mx.sources
+   - .metadata.security.policyContext → .mx.policy
 
 2. Load content metadata (USE SHORTHAND - cleaner):
    - .metadata.loadResult.filename → .filename (shorthand preferred)
@@ -51,11 +51,11 @@ Migration patterns from plan-ctx-internal.md:
    - .metadata.loadResult.fm → .fm (shorthand preferred)
    - .metadata.loadResult.json → .json (shorthand preferred)
 
-   Note: .ctx.filename also works but shorthand is cleaner. Both are equivalent.
+   Note: .mx.filename also works but shorthand is cleaner. Both are equivalent.
 
 3. Execution metadata:
-   - .metadata.retries → .ctx.retries
-   - .metadata.source → .ctx.source
+   - .metadata.retries → .mx.retries
+   - .metadata.source → .mx.source
 
 4. Internal implementation:
    - .metadata.executableDef → .internal.executableDef
@@ -79,43 +79,43 @@ Migration patterns from plan-ctx-internal.md:
 
 1. Security descriptor extraction (use helper):
    - OLD: variable.metadata.security
-   - NEW: ctxToSecurityDescriptor(variable.ctx)
-   - Import: import { ctxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
+   - NEW: mxToSecurityDescriptor(variable.mx)
+   - Import: import { mxToSecurityDescriptor } from '@interpreter/utils/metadata-migration';
 
 2. Security descriptor updates (use helper):
    - OLD: variable.metadata.security = descriptor
-   - NEW: updateCtxFromDescriptor(variable.ctx, descriptor)
+   - NEW: updateCtxFromDescriptor(variable.mx, descriptor)
    - Import: import { updateCtxFromDescriptor } from '@interpreter/utils/metadata-migration';
 
 3. Check if has security context:
    - OLD: if (metadata?.security)
-   - NEW: if (hasSecurityContext(ctx)) OR if (ctx.labels.length > 0)
+   - NEW: if (hasSecurityContext(mx)) OR if (mx.labels.length > 0)
    - Import: import { hasSecurityContext } from '@interpreter/utils/metadata-migration';
 
 4. Conditional checks - simplify chains:
    - OLD: if (metadata?.security?.labels?.includes(...))
-   - NEW: if (ctx.labels.includes(...))
+   - NEW: if (mx.labels.includes(...))
    - OLD: if (metadata?.loadResult?.filename)
-   - NEW: if (ctx.filename)
+   - NEW: if (mx.filename)
 
 5. LoadContentResult flattening:
    - OLD: value.metadata.loadResult = { filename: '...', ... }
-   - NEW: Flatten into ctx: flattenLoadResultToCtx(value.ctx, loadResult)
+   - NEW: Flatten into mx: flattenLoadResultToCtx(value.mx, loadResult)
    - Import: import { flattenLoadResultToCtx } from '@interpreter/utils/metadata-migration';
 
 ## Available Helper Functions:
 
 Import from '@interpreter/utils/metadata-migration':
-- ctxToSecurityDescriptor(ctx): VariableContext → SecurityDescriptor
-- updateCtxFromDescriptor(ctx, descriptor): void (updates ctx fields)
-- hasSecurityContext(ctx): boolean
-- serializeSecurityContext(ctx): object
-- flattenLoadResultToCtx(ctx, loadResult): void
+- mxToSecurityDescriptor(mx): VariableContext → SecurityDescriptor
+- updateCtxFromDescriptor(mx, descriptor): void (updates mx fields)
+- hasSecurityContext(mx): boolean
+- serializeSecurityContext(mx): object
+- flattenLoadResultToCtx(mx, loadResult): void
 </migration_guide>
 
 <file_to_migrate>
 File: @filepath
-Estimated tokens: @fileContent.ctx.tokest
+Estimated tokens: @fileContent.mx.tokest
 
 Content:
 @fileContent
@@ -124,12 +124,12 @@ Content:
 <critical_instructions>
 1. ONLY modify the file at: @filepath
 2. Use the Write tool to write the migrated version to @filepath
-3. Migrate ALL .metadata references to .ctx or .internal following the patterns above
+3. Migrate ALL .metadata references to .mx or .internal following the patterns above
 4. **IMPORTANT - Shorthand vs Explicit**:
    - LoadContentResult fields: Use SHORTHAND (.filename, .relative, .url, .tokens, .fm, etc.) - cleaner
-   - Security fields: Use EXPLICIT .ctx (.ctx.labels, .ctx.taint, .ctx.sources) - clearer
+   - Security fields: Use EXPLICIT .mx (.mx.labels, .mx.taint, .mx.sources) - clearer
    - Internal fields: Always .internal (.internal.executableDef, .internal.arrayType, etc.)
-5. Add imports if using helper functions (ctxToSecurityDescriptor, updateCtxFromDescriptor, etc.)
+5. Add imports if using helper functions (mxToSecurityDescriptor, updateCtxFromDescriptor, etc.)
 6. Preserve all other code unchanged (logic, formatting, comments)
 7. DO NOT touch any other files besides @filepath
 8. After writing the file, return an empty response (the Write tool handles the output)
@@ -138,7 +138,7 @@ Content:
 <verification>
 After migration, the file should:
 - Have zero .metadata references (except in comments/strings)
-- Use .ctx for user-facing metadata (labels, taint, filename, tokens, etc.)
+- Use .mx for user-facing metadata (labels, taint, filename, tokens, etc.)
 - Use .internal for implementation details (executableDef, capturedModuleEnv, etc.)
 - Import helper functions if needed for security descriptor conversion
 - Compile without TypeScript errors
@@ -149,7 +149,7 @@ After migration, the file should:
 >> Migrate one file (load, route to model, execute)
 /exe @migrate(filepath) = when [
   * => @content = <@filepath>
-  * => @tokest = @content.ctx.tokest
+  * => @tokest = @content.mx.tokest
   * => @request = @buildRequest(@filepath, @content)
   @tokest > 2000 => @sonnet(@request)
   * => @haiku(@request)

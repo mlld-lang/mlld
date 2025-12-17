@@ -117,7 +117,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     'source',
     'metadata',
     'internal',
-    'ctx',
+    'mx',
     'any',
     'all',
     'none',
@@ -132,19 +132,19 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // Extract the raw value if we have a Variable (do this BEFORE metadata check)
   let rawValue = isVariable(value) ? value.value : value;
   const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
-  const structuredCtx = (structuredWrapper?.ctx ?? undefined) as Record<string, unknown> | undefined;
+  const structuredCtx = (structuredWrapper?.mx ?? undefined) as Record<string, unknown> | undefined;
   if (structuredWrapper) {
     rawValue = structuredWrapper.data;
   }
 
   // Special handling for Variable metadata properties
-  // IMPORTANT: Check metadata for core properties (.type, .ctx, etc.),
+  // IMPORTANT: Check metadata for core properties (.type, .mx, etc.),
   // but allow data precedence for guard quantifiers (.all, .any, .none)
   if (isVariable(value) && field.type === 'field') {
     const fieldName = String(field.value);
 
     // Core metadata properties always come from Variable, never from data
-    const CORE_METADATA = ['type', 'isComplex', 'source', 'metadata', 'internal', 'ctx', 'raw', 'totalTokens', 'maxTokens'];
+    const CORE_METADATA = ['type', 'isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
 
     if (CORE_METADATA.includes(fieldName)) {
       const metadataValue = value[fieldName as keyof typeof value];
@@ -242,7 +242,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             rawValue &&
             typeof rawValue === 'object' &&
             name in (rawValue as any) &&
-            structuredWrapper.ctx?.source !== 'load-content'
+            structuredWrapper.mx?.source !== 'load-content'
           ) {
             accessedValue = (rawValue as any)[name];
           } else {
@@ -284,8 +284,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredWrapper.metadata;
           break;
         }
-        if (name === 'ctx') {
-          accessedValue = structuredWrapper.ctx;
+        if (name === 'mx') {
+          accessedValue = structuredWrapper.mx;
           break;
         }
         if (

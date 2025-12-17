@@ -1,17 +1,17 @@
 export const pattern = {
   name: 'output-missing-to-hint',
 
-  test(error, ctx) {
+  test(error, mx) {
     // Trigger on the specific grammar error for missing 'to' in /output
     if (!error || !error.message) return false;
     if (!error.message.includes("Missing 'to' keyword in /output directive")) return false;
     // Extra guard: line context contains '/output'
-    return typeof ctx.line === 'string' && ctx.line.includes('/output');
+    return typeof mx.line === 'string' && mx.line.includes('/output');
   },
 
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Try to extract the current line after /output
-    const line = ctx.line || '';
+    const line = mx.line || '';
     // Provide a minimal example using quoted paths
     return {
       LINE: line.trim(),

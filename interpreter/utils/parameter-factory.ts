@@ -37,7 +37,7 @@ export function createParameterVariable(
     return {
       ...originalVariable,
       name,
-      ctx: { ...(originalVariable.ctx ?? {}) },
+      mx: { ...(originalVariable.mx ?? {}) },
       internal: {
         ...(originalVariable.internal ?? {}),
         isSystem: true,
@@ -155,7 +155,7 @@ export function createPipelineParameterVariable(
     return {
       ...originalVariable,
       name,
-      ctx: { ...(originalVariable.ctx ?? {}) },
+      mx: { ...(originalVariable.mx ?? {}) },
       internal: {
         ...(originalVariable.internal ?? {}),
         isSystem: true,

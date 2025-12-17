@@ -591,7 +591,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
               isMultiLine: false
             },
             {
-              ctx: {
+              mx: {
                 definedAt: { line: 0, column: 0, filePath: '<prefix-config>' }
               },
               internal: {
@@ -1046,9 +1046,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       }
     );
     if (root.stateLabels.length > 0) {
-      stateVar.ctx.labels = [...root.stateLabels];
-      stateVar.ctx.taint = [...root.stateLabels];
-      stateVar.ctx.sources = [...root.stateLabels];
+      stateVar.mx.labels = [...root.stateLabels];
+      stateVar.mx.taint = [...root.stateLabels];
+      stateVar.mx.sources = [...root.stateLabels];
     }
     stateVar.internal = {
       ...(stateVar.internal ?? {}),
@@ -1287,7 +1287,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         false, // Not complex, it's just a string
         debugSource,
         {
-          ctx: {
+          mx: {
             definedAt: { line: 0, column: 0, filePath: '<reserved>' }
           },
           internal: {
@@ -1343,7 +1343,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       };
       const resolvedVar = varType === 'data'
         ? createObjectVariable(name, varValue, true, resolverSource, {
-            ctx: {
+            mx: {
               definedAt: { line: 0, column: 0, filePath: '<resolver>' }
             },
             internal: {
@@ -1354,7 +1354,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
             }
           })
         : createSimpleTextVariable(name, varValue, resolverSource, {
-            ctx: {
+            mx: {
               definedAt: { line: 0, column: 0, filePath: '<resolver>' }
             },
             internal: {
@@ -1419,7 +1419,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       true, // Frontmatter can be complex
       frontmatterSource,
       {
-        ctx: {
+        mx: {
           source: 'frontmatter',
           definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
         },
@@ -1999,7 +1999,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Resolve a module reference using the ResolverManager
    * This handles @prefix/ patterns and registry lookups for @user/module
    */
-  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; ctx?: any; resolverName?: string }> {
+  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; mx?: any; resolverName?: string }> {
     return this.importResolver.resolveModule(reference, context);
   }
   
@@ -2101,8 +2101,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Merge with instance defaults and delegate to command executor factory
     const finalOptions = { ...this.outputOptions, ...options };
     const bus = this.getStreamingBus();
-    const ctxWithBus = { ...context, bus };
-    return this.commandExecutorFactory.executeCommand(command, finalOptions, ctxWithBus);
+    const mxWithBus = { ...context, bus };
+    return this.commandExecutorFactory.executeCommand(command, finalOptions, mxWithBus);
   }
   
   async executeCode(
@@ -2124,31 +2124,31 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       metadata = undefined;
     }
     
-    // Optionally inject ambient ctx for JS/Node execution only
+    // Optionally inject ambient mx for JS/Node execution only
     let finalParams = params || {};
     const lang = (language || '').toLowerCase();
     const shouldInjectCtx = (lang === 'js' || lang === 'javascript' || lang === 'node' || lang === 'nodejs');
     if (shouldInjectCtx) {
       try {
-        // Prefer explicit @test_ctx override for deterministic tests
-        const testCtxVar = this.getVariable('test_ctx');
-        const ctxValue = testCtxVar
+        // Prefer explicit @test_mx override for deterministic tests
+        const testCtxVar = this.getVariable('test_mx');
+        const mxValue = testCtxVar
           ? (testCtxVar.value as any)
           : this.contextManager.buildAmbientContext({
               pipelineContext: this.getPipelineContext(),
               securitySnapshot: this.getSecuritySnapshot()
             });
-        if (!('ctx' in finalParams)) {
-          finalParams = { ...finalParams, ctx: Object.freeze(ctxValue) };
+        if (!('mx' in finalParams)) {
+          finalParams = { ...finalParams, mx: Object.freeze(mxValue) };
         }
       } catch {
-        // Best-effort; ignore ctx injection errors
+        // Best-effort; ignore mx injection errors
       }
     }
 
     // Delegate to command executor factory
     const bus = this.getStreamingBus();
-    const ctxWithBus = { ...context, bus };
+    const mxWithBus = { ...context, bus };
     const mergedOptions = { ...this.outputOptions, ...options };
     return this.commandExecutorFactory.executeCode(
       code,
@@ -2156,7 +2156,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       finalParams,
       metadata as Record<string, any> | undefined,
       mergedOptions,
-      ctxWithBus
+      mxWithBus
     );
   }
 

@@ -1,11 +1,11 @@
 export const pattern = {
   name: 'comment-in-object-literal',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if error is inside an object literal
-    return (ctx.line.includes('<<') || ctx.line.includes('>>')) &&
-           ctx.lines.some(line => line.includes('{')) &&
-           ctx.lines.some((line, idx) => {
+    return (mx.line.includes('<<') || mx.line.includes('>>')) &&
+           mx.lines.some(line => line.includes('{')) &&
+           mx.lines.some((line, idx) => {
              // Look for object property pattern
              return line.includes(':') && !line.includes('when:');
            }) &&
@@ -13,8 +13,8 @@ export const pattern = {
             error.message.includes('Expected'));
   },
   
-  enhance(error, ctx) {
-    const commentMarker = ctx.line.includes('<<') ? '<<' : '>>';
+  enhance(error, mx) {
+    const commentMarker = mx.line.includes('<<') ? '<<' : '>>';
     
     return {
       MARKER: commentMarker,

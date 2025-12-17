@@ -138,7 +138,7 @@ export class TemplateVisitor extends BaseVisitor {
         wrapperType: 'doubleQuote' as const
       };
 
-      this.visitChildren(node, newContext, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+      this.visitChildren(node, newContext, (child, mx) => this.mainVisitor.visitNode(child, mx));
     }
   }
   
@@ -200,7 +200,7 @@ export class TemplateVisitor extends BaseVisitor {
         wrapperType: templateType
       };
 
-      this.visitChildren(node, newContext, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+      this.visitChildren(node, newContext, (child, mx) => this.mainVisitor.visitNode(child, mx));
     }
   }
 
@@ -256,6 +256,6 @@ export class TemplateVisitor extends BaseVisitor {
     }
 
     // Visit children within inline show payloads
-    this.visitChildren(node, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+    this.visitChildren(node, context, (child, mx) => this.mainVisitor.visitNode(child, mx));
   }
 }

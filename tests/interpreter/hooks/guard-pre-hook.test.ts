@@ -338,7 +338,7 @@ describe('guard pre-hook integration', () => {
   it('tracks guard retry attempts across pipeline retries', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard for op:show = when [ @ctx.guard.try < 2 => retry "try-again" \n * => deny "finished" ]'
+      '/guard for op:show = when [ @mx.guard.try < 2 => retry "try-again" \n * => deny "finished" ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
@@ -397,7 +397,7 @@ describe('guard pre-hook integration', () => {
     });
   });
 
-  it('sets @ctx.guard to null when no guards fire', async () => {
+  it('sets @mx.guard to null when no guards fire', async () => {
     const env = createEnv();
     env.setVariable(
       'plainVar',
@@ -418,14 +418,14 @@ describe('guard pre-hook integration', () => {
 
     const directive = parseSync('/show @plainVar')[0] as DirectiveNode;
     await evaluateDirective(directive, env);
-    const ctx = env.getContextManager().buildAmbientContext();
-    expect(ctx.guard).toBeNull();
+    const mx = env.getContextManager().buildAmbientContext();
+    expect(mx.guard).toBeNull();
   });
 
 it('denies /run commands that interpolate expression-derived secrets', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard for secret = when [ @ctx.op.type == "run" => deny "blocked secret run" \n * => allow ]'
+      '/guard for secret = when [ @mx.op.type == "run" => deny "blocked secret run" \n * => allow ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
@@ -451,7 +451,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
   it('populates guard context snapshots during evaluation', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard @secretProtector for secret = when [ @ctx.op.type == "show" => deny "blocked secret" \n * => allow ]'
+      '/guard @secretProtector for secret = when [ @mx.op.type == "show" => deny "blocked secret" \n * => allow ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
@@ -472,14 +472,14 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       )
     );
 
-    const ctxManager = env.getContextManager();
+    const mxManager = env.getContextManager();
     const snapshots: Record<string, unknown>[] = [];
-    const originalWithGuardContext = ctxManager.withGuardContext.bind(ctxManager);
+    const originalWithGuardContext = mxManager.withGuardContext.bind(mxManager);
     const guardCtxSpy = vi
-      .spyOn(ctxManager, 'withGuardContext')
+      .spyOn(mxManager, 'withGuardContext')
       .mockImplementation(async (context, fn) => {
         return await originalWithGuardContext(context, async () => {
-          snapshots.push(ctxManager.buildAmbientContext());
+          snapshots.push(mxManager.buildAmbientContext());
           return await fn();
         });
       });
@@ -498,7 +498,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
   it('guards expression arguments passed into exe parameters', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard for secret = when [ @ctx.op.type == "exe" => deny "expressions blocked" \n * => allow ]'
+      '/guard for secret = when [ @mx.op.type == "exe" => deny "expressions blocked" \n * => allow ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
@@ -533,10 +533,10 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateExecInvocation(sendInvocation, env)).rejects.toThrow('expressions blocked');
   });
 
-  it('increments @ctx.guard.try across retries', async () => {
+  it('increments @mx.guard.try across retries', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard @retryTracker for op:show = when [ @ctx.guard.try < 2 => retry "again" \n * => deny "done" ]'
+      '/guard @retryTracker for op:show = when [ @mx.guard.try < 2 => retry "again" \n * => deny "done" ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
@@ -557,14 +557,14 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       )
     );
 
-    const ctxManager = env.getContextManager();
+    const mxManager = env.getContextManager();
     const attempts: number[] = [];
-    const originalWithGuardContext = ctxManager.withGuardContext.bind(ctxManager);
+    const originalWithGuardContext = mxManager.withGuardContext.bind(mxManager);
     const guardCtxSpy = vi
-      .spyOn(ctxManager, 'withGuardContext')
+      .spyOn(mxManager, 'withGuardContext')
       .mockImplementation(async (context, fn) => {
         return await originalWithGuardContext(context, async () => {
-          const snapshot = ctxManager.buildAmbientContext();
+          const snapshot = mxManager.buildAmbientContext();
           const guardState = snapshot.guard as any;
           if (guardState?.try) {
             attempts.push(guardState.try as number);
@@ -603,7 +603,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
   it('blocks secrets passed into exe invocations', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard for secret = when [ @ctx.op.type == "exe" => deny "blocked secret" \n * => allow ]'
+      '/guard for secret = when [ @mx.op.type == "exe" => deny "blocked secret" \n * => allow ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
@@ -634,7 +634,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
   it('allows exe invocations when inputs lack guarded labels', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard for secret = when [ @ctx.op.type == "exe" => deny "blocked secret" \n * => allow ]'
+      '/guard for secret = when [ @mx.op.type == "exe" => deny "blocked secret" \n * => allow ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 
@@ -660,11 +660,11 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
     const directive = parseSync('/show @renderSecret(@plain)')[0] as DirectiveNode;
     await evaluateDirective(directive, env);
-    const ctx = env.getContextManager().buildAmbientContext();
-    expect(ctx.guard).toBeNull();
+    const mx = env.getContextManager().buildAmbientContext();
+    expect(mx.guard).toBeNull();
   });
 
-  it('sets @ctx.denied when guard denial is handled inside exec when-blocks', async () => {
+  it('sets @mx.denied when guard denial is handled inside exec when-blocks', async () => {
     const env = createEnv();
     const execEnv = env.createChild();
     const effects = new TestEffectHandler();
@@ -672,7 +672,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     execEnv.setEffectHandler(effects);
 
     const execDirective = parseSync(
-      '/exe @processSecret(secretValue) = when [ denied => "Denied flag: @ctx.denied" \n * => @secretValue ]'
+      '/exe @processSecret(secretValue) = when [ denied => "Denied flag: @mx.denied" \n * => @secretValue ]'
     )[0] as DirectiveNode;
     const whenExpr = execDirective.values?.content?.[0] as WhenExpressionNode;
 
@@ -697,7 +697,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
   it('denies inline exec values surfaced through /show directives', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
-      '/guard for secret = when [\n        @ctx.op.type == "show" => deny "blocked inline secret"\n        * => allow\n      ]'
+      '/guard for secret = when [\n        @mx.op.type == "show" => deny "blocked inline secret"\n        * => allow\n      ]'
     )[0] as DirectiveNode;
     await evaluateDirective(guardDirective, env);
 

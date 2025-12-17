@@ -76,7 +76,7 @@ Key characteristics:
 ### Plain Value Contract
 
 - `/for` and `foreach` call `normalizeIterableValue` (`interpreter/eval/for-utils.ts`) on every collection before iteration. The helper unwraps StructuredValues and Variables into plain JavaScript arrays/objects while attaching provenance via `ExpressionProvenance`. User-visible data (loop bodies, `/for` expression results, foreach tuples, batch inputs) therefore contains raw values without `.data` detours.
-- Provenance-aware consumers materialize labels on demand. Guard hooks run `materializeGuardInputs()` to build Variables from the provenance registry, and ArrayHelpers/when-conditions continue to see `.ctx.labels` even though the loop returned primitives.
+- Provenance-aware consumers materialize labels on demand. Guard hooks run `materializeGuardInputs()` to build Variables from the provenance registry, and ArrayHelpers/when-conditions continue to see `.mx.labels` even though the loop returned primitives.
 - Normalization stops at executable Variables so higher-order helpers receive callable objects. Keep function arrays in executable form when assembling operation lists; the helper preserves them automatically.
 
 ### Evaluation Patterns
@@ -190,8 +190,8 @@ Syntax options:
 Semantics:
 - Concurrency cap: defaults to `MLLD_PARALLEL_LIMIT` (env), overridable per loop; cap never exceeds collection length.
 - Pacing: optional minimum delay between iteration starts; `parallel(n, 1s)` adds ~1 second between starts across the loop.
-- Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff; block bodies run in isolated iteration scopes and aggregate errors into `@ctx.errors` instead of failing the loop.
-- Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is an error marker `{ index, key?, message, error, value }`; `@ctx.errors` is reset at loop start and populated for parallel loops.
+- Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff; block bodies run in isolated iteration scopes and aggregate errors into `@mx.errors` instead of failing the loop.
+- Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is an error marker `{ index, key?, message, error, value }`; `@mx.errors` is reset at loop start and populated for parallel loops.
 - Parallel block bodies are supported; augmented assignments to variables defined outside the iteration scope fail and record an error marker. Each iteration shares read-only access to outer values but cannot mutate them.
 - Nested loops: inner loops inherit outer `forOptions` unless overridden.
 

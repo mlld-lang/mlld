@@ -39,7 +39,7 @@ import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import type { SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
@@ -95,11 +95,11 @@ function cloneVariableWithNewValue(
   const cloned: Variable = {
     ...source,
     value: value ?? fallback,
-    ctx: source.ctx ? { ...source.ctx } : undefined,
+    mx: source.mx ? { ...source.mx } : undefined,
     internal: { ...(source.internal ?? {}) }
   };
-  if (cloned.ctx?.ctxCache) {
-    delete cloned.ctx.ctxCache;
+  if (cloned.mx?.mxCache) {
+    delete cloned.mx.mxCache;
   }
   return cloned;
 }
@@ -114,15 +114,15 @@ function cloneGuardCandidateForParameter(
     ...candidate,
     name,
     value: argValue ?? fallback ?? candidate.value,
-    ctx: candidate.ctx ? { ...candidate.ctx } : undefined,
+    mx: candidate.mx ? { ...candidate.mx } : undefined,
     internal: {
       ...(candidate.internal ?? {}),
       isSystem: true,
       isParameter: true
     }
   };
-  if (cloned.ctx?.ctxCache) {
-    delete cloned.ctx.ctxCache;
+  if (cloned.mx?.mxCache) {
+    delete cloned.mx.mxCache;
   }
   return cloned;
 }
@@ -779,7 +779,7 @@ async function evaluateExecInvocationInternal(
 
       const targetDescriptor =
         sourceDescriptor ||
-        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) ||
+        (objectVar && varMxToSecurityDescriptor(objectVar.mx)) ||
         extractSecurityDescriptor(objectValue);
       mergeResultDescriptor(targetDescriptor);
 
@@ -822,7 +822,7 @@ async function evaluateExecInvocationInternal(
     const propagateResult = (output: unknown): void => {
       inheritExpressionProvenance(output, objectVar ?? objectValue);
       const sourceDescriptor =
-        (objectVar && ctxToSecurityDescriptor(objectVar.ctx)) || extractSecurityDescriptor(objectValue);
+        (objectVar && varMxToSecurityDescriptor(objectVar.mx)) || extractSecurityDescriptor(objectValue);
       if (sourceDescriptor) {
         resultSecurityDescriptor = resultSecurityDescriptor
           ? env.mergeSecurityDescriptors(resultSecurityDescriptor, sourceDescriptor)
@@ -1688,7 +1688,7 @@ async function evaluateExecInvocationInternal(
             const clonedInput: Variable = {
               ...(guardInputVariable as Variable),
               name: 'input',
-              ctx: { ...(guardInputVariable as Variable).ctx },
+              mx: { ...(guardInputVariable as Variable).mx },
               internal: {
                 ...((guardInputVariable as Variable).internal ?? {}),
                 isSystem: true,
@@ -2049,7 +2049,7 @@ async function evaluateExecInvocationInternal(
           format: definition.withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandName,
-          location: variable.ctx?.definedAt || node.location,
+          location: variable.mx?.definedAt || node.location,
           descriptorHint: resultSecurityDescriptor
         });
 
@@ -2229,7 +2229,7 @@ async function evaluateExecInvocationInternal(
           variableMetadata[paramName] = {
             type: paramVar.type,
             subtype: subtype,
-            ctx: paramVar.ctx,
+            mx: paramVar.mx,
             internal: paramVar.internal,
             isVariable: true
           };
@@ -2297,7 +2297,7 @@ async function evaluateExecInvocationInternal(
           variableMetadata[capturedName] = {
             type: capturedVar.type,
             subtype,
-            ctx: capturedVar.ctx,
+            mx: capturedVar.mx,
             isVariable: true
           };
         }
@@ -2842,24 +2842,24 @@ async function evaluateExecInvocationInternal(
 }
 
 type SecurityCarrier = {
-  ctx?: VariableContext | StructuredValueContext;
+  mx?: VariableContext | StructuredValueContext;
 };
 
 function getVariableSecurityDescriptor(variable?: Variable): SecurityDescriptor | undefined {
   if (!variable) {
     return undefined;
   }
-  return getSecurityDescriptorFromCarrier({ ctx: variable.ctx });
+  return getSecurityDescriptorFromCarrier({ mx: variable.mx });
 }
 
 function getStructuredSecurityDescriptor(
-  value?: { ctx?: StructuredValueContext; metadata?: { security?: SecurityDescriptor } }
+  value?: { mx?: StructuredValueContext; metadata?: { security?: SecurityDescriptor } }
 ): SecurityDescriptor | undefined {
   return getSecurityDescriptorFromCarrier(value);
 }
 
 function setStructuredSecurityDescriptor(
-  value: { ctx?: StructuredValueContext },
+  value: { mx?: StructuredValueContext },
   descriptor?: SecurityDescriptor
 ): void {
   if (!descriptor || !value || typeof value !== 'object') {
@@ -2872,22 +2872,22 @@ function getSecurityDescriptorFromCarrier(carrier?: SecurityCarrier): SecurityDe
   if (!carrier) {
     return undefined;
   }
-  return descriptorFromCtx(carrier.ctx);
+  return descriptorFromVarMx(carrier.mx);
 }
 
-function descriptorFromCtx(
-  ctx?: VariableContext | StructuredValueContext
+function descriptorFromVarMx(
+  mx?: VariableContext | StructuredValueContext
 ): SecurityDescriptor | undefined {
-  if (!ctx) {
+  if (!mx) {
     return undefined;
   }
-  const labels = Array.isArray(ctx.labels) ? ctx.labels : [];
-  const sources = Array.isArray(ctx.sources) ? ctx.sources : [];
-  const taint = (ctx as any).taint ?? 'unknown';
+  const labels = Array.isArray(mx.labels) ? mx.labels : [];
+  const sources = Array.isArray(mx.sources) ? mx.sources : [];
+  const taint = (mx as any).taint ?? 'unknown';
   if (labels.length === 0 && sources.length === 0 && taint === 'unknown') {
     return undefined;
   }
-  return ctxToSecurityDescriptor(ctx as VariableContext);
+  return varMxToSecurityDescriptor(mx as VariableContext);
 }
 
 /**

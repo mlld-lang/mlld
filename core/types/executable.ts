@@ -129,7 +129,7 @@ export interface ExecutableVariable {
   type: 'executable';
   name: string;
   value: ExecutableDefinition;
-  ctx: VariableContext;
+  mx: VariableContext;
   internal?: VariableInternal;
 }
 
@@ -188,14 +188,14 @@ export function isTextSourced(def: ExecutableDefinition): boolean {
 export function createExecutableVariable(
   name: string,
   definition: ExecutableDefinition,
-  options?: { ctx?: Partial<VariableContext>; internal?: Partial<VariableInternal> }
+  options?: { mx?: Partial<VariableContext>; internal?: Partial<VariableInternal> }
 ): ExecutableVariable {
   return {
     type: 'executable',
     name,
     value: definition,
-    ctx: {
-      ...options?.ctx
+    mx: {
+      ...options?.mx
     },
     internal: {
       ...options?.internal

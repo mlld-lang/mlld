@@ -633,7 +633,7 @@ function extractRubyDefinitions(content: string): Definition[] {
     if (defMatch) {
       const endLine = blockEnd(i);
       const name = defMatch[1];
-      const insideClass = contextStack.some(ctx => ctx.kind === 'class');
+      const insideClass = contextStack.some(mx => mx.kind === 'class');
       const type = insideClass ? 'method' : 'function';
       makeDefinition(name, type, i, endLine);
       i = endLine - 1;

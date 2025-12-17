@@ -4,9 +4,9 @@ import { interpret } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 
-describe('Pipeline @ctx/@p and retry behavior', () => {
-  it('exposes current-stage input via @ctx.input and original input via @p[0]; retry increments @pipeline.try', async () => {
-    const input = `/exe @source() = \"seed\"\n\n/exe @validator(input, pipeline) = when first [\n  @pipeline.try < 3 => retry \"hint!\"\n  * => \`ok try=@pipeline.try base=@p[0] input=@ctx.input last=@p[-1] hint=@ctx.hint\`\n]\n\n/var @result = @source() with { pipeline: [@validator(@p)] }\n/show @result`;
+describe('Pipeline @mx/@p and retry behavior', () => {
+  it('exposes current-stage input via @mx.input and original input via @p[0]; retry increments @pipeline.try', async () => {
+    const input = `/exe @source() = \"seed\"\n\n/exe @validator(input, pipeline) = when first [\n  @pipeline.try < 3 => retry \"hint!\"\n  * => \`ok try=@pipeline.try base=@p[0] input=@mx.input last=@p[-1] hint=@mx.hint\`\n]\n\n/var @result = @source() with { pipeline: [@validator(@p)] }\n/show @result`;
 
     const { output } = await testWithEffects(input);
     // Expect the validator to run until try=3, then report values

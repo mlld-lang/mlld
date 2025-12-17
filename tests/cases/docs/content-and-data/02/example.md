@@ -2,4 +2,4 @@
 
 @file.text                               # String content
 @file.data                               # Parsed payload (JSON object)
-@file.ctx                                # Metadata (filename, tokens, labels, etc.)
+@file.mx                                # Metadata (filename, tokens, labels, etc.)

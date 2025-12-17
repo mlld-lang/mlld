@@ -212,7 +212,7 @@ Pipeline stages automatically preserve LoadContentResult metadata through JavaSc
 ```mlld
 # Metadata (filename, frontmatter) preserved even after transformation
 /var @result = <doc.md> | @uppercase | @addFooter
-# @result still has .ctx.filename, .ctx.fm properties available
+# @result still has .mx.filename, .mx.fm properties available
 ```
 
 **Implementation**: Pipeline execution wraps JS functions with `AutoUnwrapManager.executeWithPreservation()` - arrays use exact content matching, single files get metadata auto-reattached to transformed content.
@@ -232,7 +232,7 @@ Pipeline stages run in parallel when grouped with `||`.
 - Leading `||` syntax: The double-bar prefix explicitly enters pipeline mode with parallel execution, avoiding ambiguity with boolean OR (`||`) expressions. Only matches when followed by function calls (with parentheses), not plain variables.
 - Equivalence: `|| @a() || @b() | @c` produces same AST as `"" with { pipeline: [[@a, @b], @c] }`
 - Output: The next stage receives a StructuredValue array; `.data` preserves branch outputs in declaration order and `.text` is the JSON string form. The same wrapper is stored in `@p` for that stage.
-- Error handling: Branch failures are best-effort. Errors are captured as markers `{ index, key?, message, error, value }` in the array and accumulated in `@ctx.errors` (cleared per parallel group). Pipelines do not abort on a single branch failure; downstream stages decide how to repair or retry.
+- Error handling: Branch failures are best-effort. Errors are captured as markers `{ index, key?, message, error, value }` in the array and accumulated in `@mx.errors` (cleared per parallel group). Pipelines do not abort on a single branch failure; downstream stages decide how to repair or retry.
 - Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
 - Caps and pacing: `(n, wait)` after the pipeline sets a per-pipeline concurrency cap and delay between starts, equivalent to `with { parallel: n, delay: wait }`.
 - Effects: Inline effects attached before a parallel group run once per branch after that branch succeeds; effect failures abort the pipeline.
@@ -327,10 +327,10 @@ This grouping aligns with shorthand `||` and with‑clause nested array syntax: 
 #### Input Semantics
 
 - `@p[0]` (and alias `@p[0]`) is the original/base input to the pipeline.
-- The stage execution context exposes the current stage input via `@ctx.input` (user-facing) and as the first bound parameter for executables where applicable.
-- There is no `@pipeline.input` field; references to "pipeline input" in code refer to `@ctx.input` for the current stage or `@p[0]` for the original/base input.
+- The stage execution context exposes the current stage input via `@mx.input` (user-facing) and as the first bound parameter for executables where applicable.
+- There is no `@pipeline.input` field; references to "pipeline input" in code refer to `@mx.input` for the current stage or `@p[0]` for the original/base input.
 
-These semantics ensure that validators can reason about the current stage's input (`@ctx.input`) while selection/aggregation patterns can reach back to the original input using `@p[0]`.
+These semantics ensure that validators can reason about the current stage's input (`@mx.input`) while selection/aggregation patterns can reach back to the original input using `@p[0]`.
 
 #### Structured Outputs and Helpers
 
@@ -348,8 +348,8 @@ These semantics ensure that validators can reason about the current stage's inpu
 /var @result = "data"|@checker(@p.try)
 
 # Pass entire context to JavaScript functions:
-/exe @analyzer(input, ctx) = js {
-  return `Stage ${ctx.stage}: ${input} (attempt ${ctx.try})`;
+/exe @analyzer(input, mx) = js {
+  return `Stage ${mx.stage}: ${input} (attempt ${mx.try})`;
 }
 /var @result = "data"|@analyzer(@p)
 ```
@@ -576,7 +576,7 @@ export function buildPipelineStructuredValue(
 }
 ```
 
-`buildPipelineStructuredValue()` centralizes format-aware parsing and always returns the result of `wrapStructured()`. The helper attaches extra metadata (format, parsed csv/xml payloads, structured type hints) and `wrapStructured()` now materializes `.ctx` immediately, so provenance and security labels are available without lazy getters. The function eagerly parses when a structured representation exists, so stage code always receives a regular `StructuredValue`.
+`buildPipelineStructuredValue()` centralizes format-aware parsing and always returns the result of `wrapStructured()`. The helper attaches extra metadata (format, parsed csv/xml payloads, structured type hints) and `wrapStructured()` now materializes `.mx` immediately, so provenance and security labels are available without lazy getters. The function eagerly parses when a structured representation exists, so stage code always receives a regular `StructuredValue`.
 
 ### Format Handling
 
@@ -598,7 +598,7 @@ export function buildPipelineStructuredValue(
 
 3. **JavaScript/Node Execution**:
    - `AutoUnwrapManager` passes `.data` into user functions (arrays/objects for structured formats, strings otherwise)
-   - `.ctx` remains available via the environment if functions need provenance or security metadata
+   - `.mx` remains available via the environment if functions need provenance or security metadata
 
 ### Format Implementations
 
@@ -783,7 +783,7 @@ Pipeline inputs rely on StructuredValue helpers:
 const input = buildPipelineStructuredValue(text, format);
 console.log(input.text);             // Raw string view
 console.log(input.data);             // Parsed JSON/CSV/XML when available
-console.log(input.ctx.filename);     // Metadata view (filename, provenance, tokens, etc.)
+console.log(input.mx.filename);     // Metadata view (filename, provenance, tokens, etc.)
 ```
 
 ### String Interpolation Edge Case
@@ -1018,8 +1018,8 @@ Examples:
 Shorthand pipe syntax:
 
 ```mlld
-/exe @source() = js { return "v" + ctx.try }
-/exe @validator(input) = js { if (ctx.try < 3) return "retry"; return input }
+/exe @source() = js { return "v" + mx.try }
+/exe @validator(input) = js { if (mx.try < 3) return "retry"; return input }
 
 # Emits v1, v2, v3 (one per attempt), then final value
 /show @source() | show | @validator
@@ -1106,9 +1106,9 @@ interpreter/
 - Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
   - `@pipeline.tries` exposes the recorded outputs for the current retry scope. When downstream stages consume it, they receive an array of attempt outputs; outside the active scope, the value is grouped by retry context so later stages (or aggregators) can inspect the full history.
   - Stage: `@pipeline.stage`, `@pipeline.length`
-- Ambient `@ctx` is available during pipeline evaluation with per-stage info:
-  - `@ctx.try`, `@ctx.tries`, `@ctx.stage`, `@ctx.input`, `@ctx.lastOutput`, `@ctx.isPipeline`
-  - Retry hints: `retry "hint"` or `retry { ... }` make `@ctx.hint` available to the next attempt
+- Ambient `@mx` is available during pipeline evaluation with per-stage info:
+  - `@mx.try`, `@mx.tries`, `@mx.stage`, `@mx.input`, `@mx.lastOutput`, `@mx.isPipeline`
+  - Retry hints: `retry "hint"` or `retry { ... }` make `@mx.hint` available to the next attempt
 
 ### Error Hierarchy
 
@@ -1236,21 +1236,21 @@ mlld's pipeline architecture provides a cohesive system for data processing thro
 - **Validation** with dependency checking
 
 These features share common patterns while maintaining distinct responsibilities, creating a powerful yet understandable system for building complex data pipelines in a declarative way.
-### Hint Scoping (@ctx.hint)
+### Hint Scoping (@mx.hint)
 
-mlld treats `@ctx` as ambient and amnesiac — it reflects only the truth about “this stage right now.” To keep retry payloads contained and to avoid leaking cross-stage state, hint visibility is precisely scoped:
+mlld treats `@mx` as ambient and amnesiac — it reflects only the truth about “this stage right now.” To keep retry payloads contained and to avoid leaking cross-stage state, hint visibility is precisely scoped:
 
 - Visible only inside the retried stage body during its execution.
-- Cleared before inline pipeline effects attached to the retried stage (e.g., `with { pipeline: [ show ... ] }`). Those effects see `@ctx.hint == null`.
-- Cleared before re-executing the requesting stage. The requester sees `@ctx.hint == null`.
-- Downstream stages and effects after the retried stage also see `@ctx.hint == null`.
+- Cleared before inline pipeline effects attached to the retried stage (e.g., `with { pipeline: [ show ... ] }`). Those effects see `@mx.hint == null`.
+- Cleared before re-executing the requesting stage. The requester sees `@mx.hint == null`.
+- Downstream stages and effects after the retried stage also see `@mx.hint == null`.
 
 Examples:
 
 ```
-/show @retriedStage() with { pipeline: [ show `hint in effect: @ctx.hint` ] } | @requester
+/show @retriedStage() with { pipeline: [ show `hint in effect: @mx.hint` ] } | @requester
 ```
 
-- Inside `@retriedStage` body: `@ctx.hint` is available.
-- In the inline `show` effect: `@ctx.hint == null`.
-- In `@requester`: `@ctx.hint == null`.
+- Inside `@retriedStage` body: `@mx.hint` is available.
+- In the inline `show` effect: `@mx.hint == null`.
+- In `@requester`: `@mx.hint == null`.

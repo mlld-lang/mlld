@@ -8,7 +8,7 @@ import type {
 import type { LoadContentResult } from '@core/types/load-content';
 import type { SecurityDescriptor } from '@core/types/security';
 import { asText, assertStructuredValue, isStructuredValue } from '@interpreter/utils/structured-value';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { Environment } from '../env/Environment';
 import type { VarAssignmentResult } from '../eval/var';
 import type { OperationContext } from '../env/ContextManager';
@@ -189,7 +189,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           pushPart(`{{${varName}}}`); // Keep unresolved with {{}} syntax
           continue;
         }
-        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
+        collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
         
         /**
          * Extract Variable value for string interpolation
@@ -247,7 +247,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           continue;
         }
         
-        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
+        collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
         
         // Template variable content needs template escaping context
         if (variable.internal?.templateAst) {
@@ -284,7 +284,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           continue;
         }
 
-        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
+        collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
 
         // Extract value based on variable type using new type guards
         let value: unknown = '';
@@ -402,7 +402,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             env,
             node,
             identifier: node.identifier,
-            descriptorHint: variable?.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+            descriptorHint: variable?.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
           });
           if (typeof value === 'string') {
             const strategy = EscapingStrategyFactory.getStrategy(context);
@@ -677,11 +677,11 @@ export function extractInterpolationDescriptor(value: unknown): SecurityDescript
     return undefined;
   }
   if (isStructuredValue(value)) {
-    return ctxToSecurityDescriptor(value.ctx as any);
+    return varMxToSecurityDescriptor(value.mx as any);
   }
   if (typeof value === 'object') {
-    const ctx = (value as { ctx?: Record<string, unknown> }).ctx;
-    return ctx ? ctxToSecurityDescriptor(ctx as any) : undefined;
+    const mx = (value as { mx?: Record<string, unknown> }).mx;
+    return mx ? varMxToSecurityDescriptor(mx as any) : undefined;
   }
   return undefined;
 }
@@ -795,7 +795,7 @@ export async function interpolateFileReference(
           console.error('');
           console.error('Workaround: Use a variable instead:');
           console.error('  /var @file = <file.md>.keep');
-          console.error('  /show `<@file.ctx.filename>@file</@file.ctx.filename>`');
+          console.error('  /show `<@file.mx.filename>@file</@file.mx.filename>`');
           console.error('');
           return '';
         }

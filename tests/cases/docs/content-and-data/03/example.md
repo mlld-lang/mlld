@@ -1,6 +1,6 @@
 /var @file = <README.md>.keep
 
-/show @file.ctx.filename                 # "README.md"
-/show @file.ctx.tokens                   # Token count
-/show @file.ctx.labels                   # Security labels
-/show @file.ctx.absolute                 # Full path
+/show @file.mx.filename                 # "README.md"
+/show @file.mx.tokens                   # Token count
+/show @file.mx.labels                   # Security labels
+/show @file.mx.absolute                 # Full path

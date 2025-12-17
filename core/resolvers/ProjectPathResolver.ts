@@ -87,7 +87,7 @@ export class ProjectPathResolver implements Resolver {
         return {
           content: basePath,
           contentType: 'text',
-          ctx: metadata,
+          mx: metadata,
           metadata
         };
       }
@@ -120,7 +120,7 @@ export class ProjectPathResolver implements Resolver {
         return {
           content: basePath,
           contentType: 'text',
-          ctx: metadata,
+          mx: metadata,
           metadata
         };
       }
@@ -155,7 +155,7 @@ export class ProjectPathResolver implements Resolver {
             return {
               content,
               contentType,
-              ctx: metadata,
+              mx: metadata,
               metadata
             };
           }
@@ -180,7 +180,7 @@ export class ProjectPathResolver implements Resolver {
         return {
           content,
           contentType,
-          ctx: metadata,
+          mx: metadata,
           metadata
         };
       } catch (error) {

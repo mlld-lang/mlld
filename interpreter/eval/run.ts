@@ -28,7 +28,7 @@ import {
   extractSecurityDescriptor
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
-import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor, hasSecurityVarMx } from '@core/types/variable/VarMxHelpers';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
 import { resolveWorkingDirectory } from '../utils/working-directory';
@@ -151,7 +151,7 @@ export async function evaluateRun(
     const wrapped = wrapExecResult(value);
     if (pendingOutputDescriptor) {
       const existingDescriptor =
-        wrapped.ctx && hasSecurityContext(wrapped.ctx) ? ctxToSecurityDescriptor(wrapped.ctx) : undefined;
+        wrapped.mx && hasSecurityVarMx(wrapped.mx) ? varMxToSecurityDescriptor(wrapped.mx) : undefined;
       const descriptor = existingDescriptor
         ? env.mergeSecurityDescriptors(existingDescriptor, pendingOutputDescriptor)
         : pendingOutputDescriptor;
@@ -591,8 +591,8 @@ export async function evaluateRun(
           },
           createdAt: Date.now(),
           modifiedAt: Date.now(),
-          ctx: {
-            ...(value.ctx || {})
+          mx: {
+            ...(value.mx || {})
           },
           internal: {
             ...(value.internal || {}),
@@ -920,7 +920,7 @@ export async function evaluateRun(
       const enableStage0 = !!sourceNodeForPipeline;
       const pipelineInput = outputValue;
       const valueForPipeline = enableStage0
-        ? { value: pipelineInput, ctx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
+        ? { value: pipelineInput, mx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;
       const outputDescriptor = lastOutputDescriptor ?? extractSecurityDescriptor(pipelineInput, {
         recursive: true,

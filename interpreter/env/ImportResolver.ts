@@ -75,7 +75,7 @@ export interface IImportResolver {
     content: string; 
     contentType: 'module' | 'data' | 'text'; 
     metadata?: any;
-    ctx?: any;
+    mx?: any;
     resolverName?: string;
   }>;
   
@@ -135,7 +135,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
    * Resolve a module reference using the ResolverManager
    * This handles @prefix/ patterns and registry lookups for @user/module
    */
-  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; ctx?: any; resolverName?: string }> {
+  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; mx?: any; resolverName?: string }> {
     const resolverManager = this.dependencies.getResolverManager();
     if (!resolverManager) {
       throw new Error('ResolverManager not available');
@@ -158,7 +158,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       content: result.content.content,
       contentType: result.content.contentType,
       metadata: result.content.metadata,
-      ctx: result.content.ctx,
+      mx: result.content.mx,
       resolverName: result.resolverName
     };
   }

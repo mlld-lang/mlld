@@ -1,16 +1,16 @@
 export const pattern = {
   name: 'comment-in-array-literal',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if error is inside an array literal with object-like syntax
-    return (ctx.line.includes('<<') || ctx.line.includes('>>')) &&
-           ctx.lines.some(line => line.includes('[')) &&
-           ctx.line.includes(':') &&
+    return (mx.line.includes('<<') || mx.line.includes('>>')) &&
+           mx.lines.some(line => line.includes('[')) &&
+           mx.line.includes(':') &&
            error.message.includes('Expected');
   },
   
-  enhance(error, ctx) {
-    const commentMarker = ctx.line.includes('<<') ? '<<' : '>>';
+  enhance(error, mx) {
+    const commentMarker = mx.line.includes('<<') ? '<<' : '>>';
     
     return {
       MARKER: commentMarker,

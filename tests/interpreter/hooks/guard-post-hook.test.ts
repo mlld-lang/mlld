@@ -120,9 +120,9 @@ describe('guard post-hook integration', () => {
     expect((finalVar?.value ?? (isStructuredValue(finalValue) && finalValue.text) ?? finalValue)).toContain(
       'step2'
     );
-    const ctx = (finalVar ?? (isStructuredValue(finalValue) ? (finalValue as any) : undefined))?.ctx;
-  expect(ctx?.labels).toContain('secret');
-  expect(Array.isArray(ctx?.sources) && ctx.sources.some((source: string) => source.includes('guard:first'))).toBe(
+    const mx = (finalVar ?? (isStructuredValue(finalValue) ? (finalValue as any) : undefined))?.mx;
+  expect(mx?.labels).toContain('secret');
+  expect(Array.isArray(mx?.sources) && mx.sources.some((source: string) => source.includes('guard:first'))).toBe(
     true
   );
   });

@@ -28,7 +28,7 @@ export interface BaseVariable {
   modifiedAt: number;
   definedAt?: SourceLocation;
   source: VariableSource;
-  ctx?: VariableContextSnapshot;
+  mx?: VariableContextSnapshot;
   internal?: VariableInternalMetadata;
 }
 
@@ -89,7 +89,7 @@ export interface VariableMetadata extends Record<string, any> {
   security?: SecurityDescriptor;
   capability?: CapabilityContext;
   metrics?: VariableMetrics;
-  ctxCache?: VariableContextSnapshot;
+  mxCache?: VariableContextSnapshot;
 }
 
 export interface VariableMetrics {

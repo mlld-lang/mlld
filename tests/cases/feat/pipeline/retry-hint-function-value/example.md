@@ -3,13 +3,13 @@
 /exe @buildHint(n) = "attempt-@n is insufficient"
 
 /exe @source() = when first [
-  @ctx.try == 1 => "draft"
+  @mx.try == 1 => "draft"
   * => "final"
 ]
 
 /exe @validator() = when first [
-  @ctx.input == "draft" => retry @buildHint(@ctx.try)
-  * => "Hint: @ctx.hint"
+  @mx.input == "draft" => retry @buildHint(@mx.try)
+  * => "Hint: @mx.hint"
 ]
 
 /var @result = @source() | @validator

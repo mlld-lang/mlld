@@ -11,8 +11,8 @@
 /var secret @payload = "hidden"
 
 /exe @useSecret(value) = when [
-  denied => show `reasons: @ctx.guard.reasons`
-  denied => show `trace-count: @ctx.guard.trace.length`
+  denied => show `reasons: @mx.guard.reasons`
+  denied => show `trace-count: @mx.guard.trace.length`
   * => show "allowed"
 ]
 

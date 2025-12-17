@@ -1,21 +1,21 @@
 export const pattern = {
   name: 'var-with-parens',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if this is a /var directive with parentheses (trying to define a function)
     // The error typically occurs when parsing expects '=' but finds '(' after a variable name
-    return ctx.line.startsWith('/var') && 
-           ctx.line.includes('(') && 
+    return mx.line.startsWith('/var') && 
+           mx.line.includes('(') && 
            error.message.includes("Expected '='");
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the attempted function name
-    const match = ctx.line.match(/@(\w+)\s*\(/);
+    const match = mx.line.match(/@(\w+)\s*\(/);
     const functionName = match ? match[1] : 'function';
     
     // Extract the full attempted definition for context
-    const attemptedDefinition = ctx.line.trim();
+    const attemptedDefinition = mx.line.trim();
     
     return {
       FUNCTION_NAME: functionName,

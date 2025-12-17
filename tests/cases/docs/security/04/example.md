@@ -1,2 +1,2 @@
 /var secret @data = "sensitive"
-/show @data.ctx.labels                     # ["secret"]
+/show @data.mx.labels                     # ["secret"]

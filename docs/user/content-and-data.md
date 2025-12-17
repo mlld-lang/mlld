@@ -8,10 +8,10 @@ Load files with `<file.txt>` "alligators", work with data structures using dot n
 /var @config = <config.json>             >> Load and parse JSON
 /show @config.database.host              >> Access nested fields
 /var @files = <docs/*.md>                >> Load multiple files
-/show @files[0].ctx.filename             >> Access file metadata via .ctx
+/show @files[0].mx.filename             >> Access file metadata via .mx
 ```
 
-## .ctx has all the metadata
+## .mx has all the metadata
 
 Loaded files and data are objects with three key parts:
 
@@ -20,18 +20,18 @@ Loaded files and data are objects with three key parts:
 
 @file.text                               # String content
 @file.data                               # Parsed payload (JSON object)
-@file.ctx                                # Metadata (filename, tokens, labels, etc.)
+@file.mx                                # Metadata (filename, tokens, labels, etc.)
 ```
 
-The `.ctx` namespace is where all metadata lives:
+The `.mx` namespace is where all metadata lives:
 
 ```mlld
 /var @file = <README.md>.keep
 
-/show @file.ctx.filename                 # "README.md"
-/show @file.ctx.tokens                   # Token count
-/show @file.ctx.labels                   # Security labels
-/show @file.ctx.absolute                 # Full path
+/show @file.mx.filename                 # "README.md"
+/show @file.mx.tokens                   # Token count
+/show @file.mx.labels                   # Security labels
+/show @file.mx.absolute                 # Full path
 ```
 
 **Auto-unwrapping**: Display and templates automatically use `.text`:
@@ -44,23 +44,23 @@ The `.ctx` namespace is where all metadata lives:
 **Explicit access** when you need metadata:
 
 ```mlld
-/when @file.ctx.tokest > 2000 => show "File is large"
-/var @name = @file.ctx.filename
+/when @file.mx.tokest > 2000 => show "File is large"
+/var @name = @file.mx.filename
 ```
 
 ### `.keep` alligator metadata
 
-If you set a variable to the value of a single-file load like `<file.md>` it will lose the rich metadata like `<file.md>.ctx.relative` when passing the value.
+If you set a variable to the value of a single-file load like `<file.md>` it will lose the rich metadata like `<file.md>.mx.relative` when passing the value.
 
 Use `<file.md>.keep` when setting as the value of a variable to preserve the structure.
 
 ```mlld
 /var @file = <file.md>
-/show @file.ctx.relative
+/show @file.mx.relative
 >> No value here
 
 /var @file = <file.md>.keep
-/show @file.ctx.relative
+/show @file.mx.relative
 >> Returns a path
 ```
 
@@ -79,7 +79,7 @@ Combine objects with left-to-right overrides using spread entries inside object 
 Rules:
 - Each `...@var` must resolve to an object (spreading arrays or primitives throws).
 - Later entries override earlier spreads and pairs.
-- Spreads work with field access on the reference, e.g. `{ ...@config.ctx }`.
+- Spreads work with field access on the reference, e.g. `{ ...@config.mx }`.
 
 ## File Loading
 
@@ -114,7 +114,7 @@ Use standard glob patterns to load multiple files:
 
 >> Access individual files
 /show @docs[0].text                       >> First file's content
-/show @docs[0].ctx.filename               >> First file's name
+/show @docs[0].mx.filename               >> First file's name
 ```
 
 ### Section Extraction
@@ -129,10 +129,10 @@ Extract specific sections from markdown files:
 /var @apis = <docs/*.md # API Reference>
 
 >> Rename sections with 'as'
-/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"
+/var @modules = <*.md # Overview> as "## <>.mx.filename Overview"
 ```
 
-The `<>` placeholder in `as` templates represents each file's structured value; use `.ctx` to read metadata.
+The `<>` placeholder in `as` templates represents each file's structured value; use `.mx` to read metadata.
 
 ### AST-Based Code Selection
 
@@ -261,19 +261,19 @@ Wrap any selector in parentheses to find functions that USE the matched symbols:
 
 ## File Metadata
 
-Every loaded file exposes metadata through its `.ctx` namespace:
+Every loaded file exposes metadata through its `.mx` namespace:
 
 ```mlld
 /var @file = <package.json>
 
 >> Basic metadata
-/show @file.ctx.filename                 >> "package.json"
-/show @file.ctx.relative                 >> "./package.json" 
-/show @file.ctx.absolute                 >> Full path
+/show @file.mx.filename                 >> "package.json"
+/show @file.mx.relative                 >> "./package.json" 
+/show @file.mx.absolute                 >> Full path
 
 >> Token counting
-/show @file.ctx.tokest                   >> Estimated tokens (fast)
-/show @file.ctx.tokens                   >> Exact tokens
+/show @file.mx.tokest                   >> Estimated tokens (fast)
+/show @file.mx.tokens                   >> Exact tokens
 
 >> Content access
 /show @file.content                      >> File contents (explicit)
@@ -283,9 +283,9 @@ Every loaded file exposes metadata through its `.ctx` namespace:
 **Properties:**
 - `.text` - String content (used by display/templates)
 - `.data` - Parsed payload (JSON objects, arrays, etc.)
-- `.ctx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
+- `.mx` - Metadata namespace (filename, tokens, labels, frontmatter, etc.)
 
-Always use `.ctx` for metadata access - it's the canonical namespace.
+Always use `.mx` for metadata access - it's the canonical namespace.
 
 ### JSON File Metadata
 
@@ -309,12 +309,12 @@ Access YAML frontmatter from markdown files:
 ```mlld
 /var @post = <blog/post.md>
 
-/show @post.ctx.fm.title                 >> Post title
-/show @post.ctx.fm.author                >> Author name
-/show @post.ctx.fm.tags                  >> Array of tags
+/show @post.mx.fm.title                 >> Post title
+/show @post.mx.fm.author                >> Author name
+/show @post.mx.fm.tags                  >> Array of tags
 
 >> Conditional processing
-/when @post.ctx.fm.published => show @post.content
+/when @post.mx.fm.published => show @post.content
 ```
 
 ## URL Loading
@@ -325,14 +325,14 @@ Load content directly from URLs:
 /var @page = <https://example.com/data.json>
 
 >> URL-specific metadata
-/show @page.ctx.url                      >> Full URL
-/show @page.ctx.domain                   >> "example.com"
-/show @page.ctx.status                   >> HTTP status code
-/show @page.ctx.title                    >> Page title (if HTML)
+/show @page.mx.url                      >> Full URL
+/show @page.mx.domain                   >> "example.com"
+/show @page.mx.status                   >> HTTP status code
+/show @page.mx.title                    >> Page title (if HTML)
 
 >> HTML is converted to markdown
 /show @page.content                      >> Markdown version
-/show @page.ctx.html                     >> Original HTML
+/show @page.mx.html                     >> Original HTML
 ```
 
 ## Variables and Data Structures
@@ -745,12 +745,12 @@ Load entire directories of templates that share a parameter signature. Currently
 /import templates from "@base/agents" as @agents(message, context)
 
 >> All templates accept (message, context)
-/show @agents["alice"](@msg, @ctx)
-/show @agents["bob"](@msg, @ctx)
+/show @agents["alice"](@msg, @mx)
+/show @agents["bob"](@msg, @mx)
 
 >> Dynamic selection in loops
 /for @name in ["alice", "bob", "charlie"] [
-  show @agents[@name](@msg, @ctx)
+  show @agents[@name](@msg, @mx)
 ]
 ```
 
@@ -758,13 +758,13 @@ For registry modules, use individual template exports:
 
 ```mlld
 >> In the published module
-/exe @alice(msg, ctx) = template "alice.att"
-/exe @bob(msg, ctx) = template "bob.att"
+/exe @alice(msg, mx) = template "alice.att"
+/exe @bob(msg, mx) = template "bob.att"
 /export { @alice, @bob }
 
 >> Import and use
 /import { @alice, @bob } from @author/templates
-/show @alice(@msg, @ctx)
+/show @alice(@msg, @mx)
 ```
 
 **Directory structure:**
@@ -808,7 +808,7 @@ Templates don't have to use all parameters, but can't reference any undeclared o
 /import templates from "@base/agents" as @agents(message, context)
 /import templates from "@base/formatters" as @fmt(data)
 
-/show @agents["alice"](@msg, @ctx)    >> (message, context)
+/show @agents["alice"](@msg, @mx)    >> (message, context)
 /show @fmt["json"](@result)           >> (data)
 ```
 
@@ -1008,19 +1008,19 @@ Each append writes one compact JSON object followed by a newline. Use `.jsonl` w
 
 ### Metadata Access in Loops
 
-Auto-unwrapping in iterations drops direct `.ctx` access:
+Auto-unwrapping in iterations drops direct `.mx` access:
 
 ```mlld
 /var @files = <docs/*.md>
 
 # ✗ This won't work - loop variable is unwrapped text
-/for @file in @files => show @file.ctx.filename   # Error: .ctx on string
+/for @file in @files => show @file.mx.filename   # Error: .mx on string
 
 # ✓ Access via array index
-/for @i in [0, 1, 2] => show @files[@i].ctx.filename
+/for @i in [0, 1, 2] => show @files[@i].mx.filename
 
 # ✓ Or use @keep helper to preserve structure
-/for @file in @files.keep => show @file.ctx.filename
+/for @file in @files.keep => show @file.mx.filename
 ```
 
 ### Metadata in Pipelines
@@ -1031,10 +1031,10 @@ Pipeline stages receive string input by default:
 /var @file = <config.json>
 
 # ✗ This loses metadata
-/var @result = @file | @process          # @process gets string, no .ctx
+/var @result = @file | @process          # @process gets string, no .mx
 
 # ✓ Keep structured form
-/exe @process(file) = `Name: @file.ctx.filename, Tokens: @file.ctx.tokens`
+/exe @process(file) = `Name: @file.mx.filename, Tokens: @file.mx.tokens`
 /var @result = @file.keep | @process
 ```
 
@@ -1043,7 +1043,7 @@ Pipeline stages receive string input by default:
 **File Loading:**
 - Use globs for multiple files: `<docs/*.md>`
 - Check existence: `/when @config => show "Found config"`
-- Access metadata via `.ctx`: `@file.ctx.tokest`
+- Access metadata via `.mx`: `@file.mx.tokest`
 
 **Data Access:**
 - Prefer dot notation: `@user.name` over complex expressions

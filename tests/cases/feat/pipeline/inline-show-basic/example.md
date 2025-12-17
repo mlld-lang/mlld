@@ -2,4 +2,4 @@
 
 /exe @gen() = js { return "Howdy"; }
 
-/var @out = @gen() with { pipeline: [ show @ctx.input ] }
+/var @out = @gen() with { pipeline: [ show @mx.input ] }

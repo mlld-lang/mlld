@@ -27,7 +27,7 @@ import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
 import type { SourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -365,7 +365,7 @@ export class VariableImporter {
         moduleObject[name] = variable.value;
       }
 
-      const descriptor = variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined;
+      const descriptor = variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined;
       const mergedDescriptor = descriptor && envDescriptor
         ? mergeDescriptors(descriptor, envDescriptor)
         : descriptor ?? envDescriptor;

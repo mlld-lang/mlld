@@ -1,13 +1,13 @@
 export const pattern = {
   name: 'js-mutation-attempt',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check for syntax error in JS context
     if (!error.message || !error.message.includes('Invalid or unexpected token')) {
       return false;
     }
     
-    if (!ctx.code) {
+    if (!mx.code) {
       return false;
     }
     
@@ -21,12 +21,12 @@ export const pattern = {
       /@\w+\s*\/=/       // @var /=
     ];
     
-    return mutationPatterns.some(pattern => pattern.test(ctx.code));
+    return mutationPatterns.some(pattern => pattern.test(mx.code));
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the variable and operation
-    const varMatch = ctx.code.match(/@(\w+)(\+\+|--|[+\-*/]=)/);
+    const varMatch = mx.code.match(/@(\w+)(\+\+|--|[+\-*/]=)/);
     const varName = varMatch ? varMatch[1] : 'variable';
     const operation = varMatch ? varMatch[2] : '++';
     

@@ -5,9 +5,9 @@ export const pattern = {
     return /Use cmd \{ .* \} for commands or data \{ .* \} for objects\./i.test(error.message || error);
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     return {
-      LINE: ctx?.line?.trim() || '{...}'
+      LINE: mx?.line?.trim() || '{...}'
     };
   }
 };

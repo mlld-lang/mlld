@@ -2,14 +2,14 @@
 export const pattern = {
   name: 'var-nested-fields',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check for /var with nested field syntax
-    return ctx.line.match(/^\/var\s+@\w+\./);
+    return mx.line.match(/^\/var\s+@\w+\./);
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the variable and field names
-    const match = ctx.line.match(/^\/var\s+@(\w+)((?:\.\w+)+)/);
+    const match = mx.line.match(/^\/var\s+@(\w+)((?:\.\w+)+)/);
     const baseVar = match?.[1] || 'object';
     const fields = match?.[2] || '.field';
     

@@ -116,7 +116,7 @@ export interface ImportTaintOptions {
   importType: ImportType;
   resolverName?: string;
   source?: string;
-  labels?: readonly DataLabel[];  // From resolver ctx
+  labels?: readonly DataLabel[];  // From resolver mx
   resolvedPath?: string;
   sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input';
 }

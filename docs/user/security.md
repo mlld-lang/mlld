@@ -8,7 +8,7 @@ Guards protect data and operations. Label sensitive data, define guards to contr
 /var secret @apiKey = "sk-live-12345"
 
 /guard @noShellSecrets before secret = when [
-  @ctx.op.type == "run" => deny "Secrets cannot appear in shell commands"
+  @mx.op.type == "run" => deny "Secrets cannot appear in shell commands"
   * => allow
 ]
 
@@ -36,21 +36,21 @@ Labels track through operations:
 /var @upper = @token.toUpperCase()         # Still labeled 'secret'
 ```
 
-Check labels with `.ctx.labels`:
+Check labels with `.mx.labels`:
 
 ```mlld
 /var secret @data = "sensitive"
-/show @data.ctx.labels                     # ["secret"]
+/show @data.mx.labels                     # ["secret"]
 ```
 
 ## Taint Tracking
 
-Taint is the accumulated label set on a value. It includes explicit labels plus automatic source labels. Check it with `.ctx.taint`:
+Taint is the accumulated label set on a value. It includes explicit labels plus automatic source labels. Check it with `.mx.taint`:
 
 ```mlld
 /var secret @token = "sk-123"
 /var @header = `Bearer @token`
-/show @header.ctx.taint                    # ["secret"]
+/show @header.mx.taint                    # ["secret"]
 ```
 
 Automatic taint labels:
@@ -62,8 +62,8 @@ Use taint in guards to block risky sources:
 
 ```mlld
 /guard @noUploads before op:run = when [
-  @input.any.ctx.taint.includes("dir:/tmp/uploads") => deny "Cannot execute uploads"
-  @input.any.ctx.taint.includes("src:exec") => deny "No nesting command output"
+  @input.any.mx.taint.includes("dir:/tmp/uploads") => deny "Cannot execute uploads"
+  @input.any.mx.taint.includes("src:exec") => deny "No nesting command output"
   * => allow
 ]
 ```
@@ -100,7 +100,7 @@ Block secrets from shell commands:
 
 ```mlld
 /guard @noShellSecrets before secret = when [
-  @ctx.op.type == "run" => deny "Secrets cannot appear in shell"
+  @mx.op.type == "run" => deny "Secrets cannot appear in shell"
   * => allow
 ]
 
@@ -124,7 +124,7 @@ Filter by operation name:
 
 ```mlld
 /guard @blockSend before op:exe = when [
-  @ctx.op.name == "sendData" => deny "Network calls blocked"
+  @mx.op.name == "sendData" => deny "Network calls blocked"
   * => allow
 ]
 
@@ -138,14 +138,14 @@ Handle guard denials gracefully with `denied =>` branches:
 
 ```mlld
 /guard @secretBlock before secret = when [
-  @ctx.op.type == "show" => deny "Cannot display secrets"
+  @mx.op.type == "show" => deny "Cannot display secrets"
   * => allow
 ]
 
 /var secret @key = "sk-12345"
 
 /exe @display(value) = when [
-  denied => `[REDACTED] - @ctx.guard.reason`
+  denied => `[REDACTED] - @mx.guard.reason`
   * => `Value: @value`
 ]
 
@@ -156,9 +156,9 @@ Access guard context in denied handlers:
 
 ```mlld
 /exe @handler(value) = when [
-  denied => show "Blocked: @ctx.guard.reason"
-  denied => show "Guard: @ctx.guard.name"
-  denied => show "Labels: @ctx.labels.join(', ')"
+  denied => show "Blocked: @mx.guard.reason"
+  denied => show "Guard: @mx.guard.name"
+  denied => show "Labels: @mx.labels.join(', ')"
   * => show @value
 ]
 ```
@@ -241,11 +241,11 @@ Guards can run before, after, or both:
 ]
 
 /guard @checkBoth always op:exe = when [
-  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+  * => allow @tagValue(@mx.guard.timing, @output, @input)
 ]
 ```
 
-Use `@ctx.guard.timing` to differentiate:
+Use `@mx.guard.timing` to differentiate:
 
 ```mlld
 /exe @tagValue(timing, out, inp) = js {
@@ -288,7 +288,7 @@ Decision precedence: deny > retry > allow @value > allow
   * => deny "hard stop"
 ]
 
-# deny wins, but retry hint preserved in @ctx.guard.hints
+# deny wins, but retry hint preserved in @mx.guard.hints
 ```
 
 ## Guard Transforms
@@ -299,7 +299,7 @@ Guards can transform data with `allow @value`:
 /exe @redact(text) = js { return text.replace(/./g, '*'); }
 
 /guard @redactSecrets before secret = when [
-  @ctx.op.type == "show" => allow @redact(@input)
+  @mx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
 
@@ -324,14 +324,14 @@ Transforms chain across multiple guards:
 
 ## Guard Context
 
-Access guard evaluation context with `@ctx.guard.*`:
+Access guard evaluation context with `@mx.guard.*`:
 
 ### In Guard Expressions
 
 ```mlld
 /guard @retryOnce before op:exe = when [
-  @ctx.guard.try == 1 => retry "first attempt failed"
-  @ctx.guard.try == 2 => retry "second attempt failed"
+  @mx.guard.try == 1 => retry "first attempt failed"
+  @mx.guard.try == 2 => retry "second attempt failed"
   * => allow
 ]
 ```
@@ -340,27 +340,27 @@ Access guard evaluation context with `@ctx.guard.*`:
 
 ```mlld
 /exe @process(value) = when [
-  denied => show "Blocked by: @ctx.guard.name"
-  denied => show "Reason: @ctx.guard.reason"
-  denied => show "Decision: @ctx.guard.decision"
-  denied => show "All reasons: @ctx.guard.reasons.join(', ')"
+  denied => show "Blocked by: @mx.guard.name"
+  denied => show "Reason: @mx.guard.reason"
+  denied => show "Decision: @mx.guard.decision"
+  denied => show "All reasons: @mx.guard.reasons.join(', ')"
   * => show @value
 ]
 ```
 
 ### Common Properties
 
-- `@ctx.guard.try` - Current attempt number (1, 2, 3...)
-- `@ctx.guard.max` - Max attempts allowed (default 3)
-- `@ctx.guard.reason` - Primary denial/retry reason
-- `@ctx.guard.reasons` - All reasons from guard chain
-- `@ctx.guard.hints` - Retry hints from guards
-- `@ctx.guard.trace` - Full guard evaluation trace
-- `@ctx.guard.timing` - "before" or "after"
-- `@ctx.guard.name` - Guard name
-- `@ctx.labels` - Data labels on input
+- `@mx.guard.try` - Current attempt number (1, 2, 3...)
+- `@mx.guard.max` - Max attempts allowed (default 3)
+- `@mx.guard.reason` - Primary denial/retry reason
+- `@mx.guard.reasons` - All reasons from guard chain
+- `@mx.guard.hints` - Retry hints from guards
+- `@mx.guard.trace` - Full guard evaluation trace
+- `@mx.guard.timing` - "before" or "after"
+- `@mx.guard.name` - Guard name
+- `@mx.labels` - Data labels on input
 
-See full reference in `@ctx.guard` section below.
+See full reference in `@mx.guard` section below.
 
 ## Guard Overrides
 
@@ -405,7 +405,7 @@ Define guards in modules:
 ```mlld
 # guards/secrets.mld
 /guard @secretProtection before secret = when [
-  @ctx.op.type == "run" => deny "Secrets blocked from shell"
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
   * => allow
 ]
 
@@ -427,7 +427,7 @@ Guards see labels through all transformations:
 
 ```mlld
 /guard @secretBlock before secret = when [
-  @ctx.op.type == "show" => deny "No secrets"
+  @mx.op.type == "show" => deny "No secrets"
   * => allow
 ]
 
@@ -456,7 +456,7 @@ Labels track through:
 /exe @redact(text) = js { return text.slice(0, 4) + '****'; }
 
 /guard @redactSecrets before secret = when [
-  @ctx.op.type == "show" => allow @redact(@input)
+  @mx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
 
@@ -473,7 +473,7 @@ Labels track through:
 }
 
 /guard @validateJson after op:exe = when [
-  @ctx.op.name == "llmCall" && !@isValidJson(@output) => deny "Invalid JSON from LLM"
+  @mx.op.name == "llmCall" && !@isValidJson(@output) => deny "Invalid JSON from LLM"
   * => allow
 ]
 ```
@@ -482,12 +482,12 @@ Labels track through:
 
 ```mlld
 /guard @noNetwork before op:run = when [
-  @ctx.op.subtype == "sh" => deny "Shell access blocked"
+  @mx.op.subtype == "sh" => deny "Shell access blocked"
   * => allow
 ]
 
 /guard @noExecNetwork before op:exe = when [
-  @input.any.ctx.labels.includes("network") => deny "Network calls blocked"
+  @input.any.mx.labels.includes("network") => deny "Network calls blocked"
   * => allow
 ]
 ```
@@ -514,43 +514,43 @@ Labels track through:
 
 ```mlld
 /guard @fileWritePolicy before secret = when [
-  @ctx.op.type == "output" => deny "Cannot write secrets to files"
+  @mx.op.type == "output" => deny "Cannot write secrets to files"
   * => allow
 ]
 
 /guard @displayPolicy before secret = when [
-  @ctx.op.type == "show" => allow @redact(@input)
+  @mx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
 ```
 
-## @ctx.guard Reference
+## @mx.guard Reference
 
 Properties available in guard expressions and denied handlers:
 
 ### Attempt Tracking
-- `@ctx.guard.try` - Current attempt (1, 2, 3...)
-- `@ctx.guard.max` - Max attempts (default 3)
-- `@ctx.guard.tries` - Previous attempt history
+- `@mx.guard.try` - Current attempt (1, 2, 3...)
+- `@mx.guard.max` - Max attempts (default 3)
+- `@mx.guard.tries` - Previous attempt history
 
 ### Guard Identity
-- `@ctx.guard.name` - Guard name (or null for anonymous)
-- `@ctx.guard.timing` - "before" or "after"
+- `@mx.guard.name` - Guard name (or null for anonymous)
+- `@mx.guard.timing` - "before" or "after"
 
 ### Input/Output
-- `@input` - Input value being guarded (also `@ctx.guard.input`)
-- `@output` - Output value (after guards only, also `@ctx.guard.output`)
+- `@input` - Input value being guarded (also `@mx.guard.input`)
+- `@output` - Output value (after guards only, also `@mx.guard.output`)
 
 ### Decision Info (Denied Handlers Only)
-- `@ctx.guard.decision` - Final decision ("allow", "deny", "retry")
-- `@ctx.guard.reason` - Primary denial/retry reason
-- `@ctx.guard.reasons` - All reasons from guard chain
-- `@ctx.guard.hints` - Retry hints from guards
-- `@ctx.guard.trace` - Full guard evaluation results
+- `@mx.guard.decision` - Final decision ("allow", "deny", "retry")
+- `@mx.guard.reason` - Primary denial/retry reason
+- `@mx.guard.reasons` - All reasons from guard chain
+- `@mx.guard.hints` - Retry hints from guards
+- `@mx.guard.trace` - Full guard evaluation results
 
 ### Data Context
-- `@ctx.labels` - Data labels on input
-- `@ctx.sources` - Source provenance
+- `@mx.labels` - Data labels on input
+- `@mx.sources` - Source provenance
 
 ## Guard Retry
 
@@ -558,7 +558,7 @@ Guards can retry operations in pipeline contexts:
 
 ```mlld
 /guard before secret = when [
-  @ctx.op.type == "pipeline-stage" && @ctx.guard.try == 1 => retry "Try again"
+  @mx.op.type == "pipeline-stage" && @mx.guard.try == 1 => retry "Try again"
   * => allow
 ]
 
@@ -589,8 +589,8 @@ Retry budget is shared across guard chain (max 3 attempts).
 **Use data-level guards for specific protections:**
 ```mlld
 /guard @secretProtection before secret = when [
-  @ctx.op.type == "run" => deny "No secrets in shell"
-  @ctx.op.type == "output" => deny "No secrets to files"
+  @mx.op.type == "run" => deny "No secrets in shell"
+  @mx.op.type == "output" => deny "No secrets to files"
   * => allow
 ]
 ```
@@ -598,7 +598,7 @@ Retry budget is shared across guard chain (max 3 attempts).
 **Always handle denials in production code:**
 ```mlld
 /exe @handler(value) = when [
-  denied => show "Operation blocked: @ctx.guard.reason"
+  denied => show "Operation blocked: @mx.guard.reason"
   denied => "fallback-value"
   * => @value
 ]
@@ -607,7 +607,7 @@ Retry budget is shared across guard chain (max 3 attempts).
 **Transform instead of deny when possible:**
 ```mlld
 /guard @redactSecrets before secret = when [
-  @ctx.op.type == "show" => allow @redact(@input)
+  @mx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
 ```
@@ -630,7 +630,7 @@ Tag based on guard timing:
 
 ```mlld
 /guard @tag always op:exe = when [
-  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+  * => allow @tagValue(@mx.guard.timing, @output, @input)
 ]
 ```
 
@@ -639,9 +639,9 @@ Array quantifiers for per-operation guards:
 
 ```mlld
 /guard @blockSecretsInRun before op:run = when [
-  @input.any.ctx.labels.includes("secret") => deny "Shell cannot access secrets"
-  @input.all.ctx.tokest < 1000 => allow
-  @input.none.ctx.labels.includes("pii") => allow
+  @input.any.mx.labels.includes("secret") => deny "Shell cannot access secrets"
+  @input.all.mx.tokest < 1000 => allow
+  @input.none.mx.labels.includes("pii") => allow
   * => deny "Input validation failed"
 ]
 ```
@@ -658,16 +658,16 @@ mlld's security is based on three pillars:
 **Guards** - Enforce policies
 ```mlld
 /guard before secret = when [
-  @ctx.op.type == "run" => deny "No shell access"
+  @mx.op.type == "run" => deny "No shell access"
   * => allow
 ]
 ```
 
 **Context** - Access metadata
 ```mlld
-@ctx.labels                                # Data labels
-@ctx.guard.reason                          # Guard decisions
-@ctx.op.type                               # Operation type
+@mx.labels                                # Data labels
+@mx.guard.reason                          # Guard decisions
+@mx.op.type                               # Operation type
 ```
 
 Guards are:

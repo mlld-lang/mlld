@@ -1,12 +1,12 @@
 /guard @cartesianSecretBlock for secret = when [
-  @ctx.op.name == "emitPair" => deny "No secret cartesian display"
+  @mx.op.name == "emitPair" => deny "No secret cartesian display"
   * => allow
 ]
 
 /exe @pair(first, second) = `pair:@first-@second`
 
 /exe @emitPair(value) = when [
-  denied => show `blocked: @ctx.guard.reason`
+  denied => show `blocked: @mx.guard.reason`
   * => show @value
 ]
 

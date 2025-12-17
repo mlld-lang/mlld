@@ -3,7 +3,7 @@
 Labels: ["secret"]
 
 {
-  "ctxLabels": [
+  "mxLabels": [
     "secret"
   ],
   "dataType": "string"

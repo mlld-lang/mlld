@@ -1,1 +1,1 @@
-From security.md line 282: deny wins, but retry hint preserved in @ctx.guard.hints
+From security.md line 282: deny wins, but retry hint preserved in @mx.guard.hints

@@ -3,7 +3,7 @@
 Tests the `as` transform pattern on glob patterns without section extraction.
 Regression test for issue #368.
 
-## ctx.filename
+## mx.filename
 
 - glob-test-alpha.md
 - glob-test-beta.md

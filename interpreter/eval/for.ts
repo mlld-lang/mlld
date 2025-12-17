@@ -169,13 +169,13 @@ function formatIterationError(error: unknown): string {
 }
 
 function resetForErrorsContext(env: Environment, errors: ForIterationError[]): void {
-  const ctxManager = env.getContextManager?.();
-  if (!ctxManager) return;
-  while (ctxManager.popGenericContext('for')) {
+  const mxManager = env.getContextManager?.();
+  if (!mxManager) return;
+  while (mxManager.popGenericContext('for')) {
     // clear previous loop context
   }
-  ctxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
-  ctxManager.setLatestErrors(errors);
+  mxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
+  mxManager.setLatestErrors(errors);
 }
 
 function findVariableOwner(env: Environment, name: string): Environment | undefined {
@@ -653,7 +653,7 @@ export async function evaluateForExpression(
       'for-result',
       null,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -666,7 +666,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults as number | boolean | null,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -675,7 +675,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -685,7 +685,7 @@ export async function evaluateForExpression(
       finalResults,
       false,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -693,6 +693,6 @@ export async function evaluateForExpression(
     'for-result',
     String(finalResults),
     variableSource,
-    { ctx: metadata }
+    { mx: metadata }
   );
 }

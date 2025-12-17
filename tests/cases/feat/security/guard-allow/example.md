@@ -1,7 +1,7 @@
 # Guard Allow
 
 /guard @secretShowBlock for secret = when [
-  @ctx.op.type == "show" => deny "Secrets cannot be shown"
+  @mx.op.type == "show" => deny "Secrets cannot be shown"
   * => allow
 ]
 

@@ -1,8 +1,8 @@
-/exe @gen(input) = `gen-@ctx.try:@input`
+/exe @gen(input) = `gen-@mx.try:@input`
 
  /exe @retryPrev(input) = when first [
-  @ctx.try < 3 => retry
-  * => `done try=@ctx.try`
+  @mx.try < 3 => retry
+  * => `done try=@mx.try`
 ]
 
 /exe @seed() = "seed"

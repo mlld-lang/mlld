@@ -58,7 +58,7 @@ describe('Variable Proxy Integration', () => {
     it('should pass Variables as proxies to JavaScript shadow environments', async () => {
       // Create a variable with metadata
       const arrayVar = createArrayVariable('testData', ['a', 'b', 'c'], false, mockSource, {
-        ctx: {},
+        mx: {},
         internal: {
           arrayType: 'load-content',
           customToString: () => 'a|b|c'
@@ -148,7 +148,7 @@ describe('Variable Proxy Integration', () => {
         false,
         mockSource,
         {
-          ctx: { source: 'api' },
+          mx: { source: 'api' },
           internal: {}
         }
       );
@@ -208,7 +208,7 @@ describe('Variable Proxy Integration', () => {
       expect(output.active).toBe(true);
       expect(output.type).toBe('object');
       expect(output.metadata).toMatchObject({
-        ctx: {
+        mx: {
           source: 'api'
         },
         internal: {
@@ -278,7 +278,7 @@ describe('Variable Proxy Integration', () => {
     it('should preserve custom toString in proxies', async () => {
       // Create array with custom toString
       const arrayVar = createArrayVariable('paths', ['/home', '/usr', '/var'], false, mockSource, {
-        ctx: {},
+        mx: {},
         internal: {
           customToString: function() { return this.join(':'); }
         }
@@ -336,7 +336,7 @@ describe('Variable Proxy Integration', () => {
       
       // Create a variable
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {
-        ctx: {},
+        mx: {},
         internal: {
           arrayType: 'special'
         }

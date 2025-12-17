@@ -41,9 +41,9 @@ describe('Policy config integration', () => {
     await fs.writeFile(
       path.join(root, 'main.mld'),
       [
-        '/show @ctx.policy.activePolicies[0]',
-        '/show @ctx.policy.environment',
-        '/show @ctx.policy.configs.allow.cmd'
+        '/show @mx.policy.activePolicies[0]',
+        '/show @mx.policy.environment',
+        '/show @mx.policy.configs.allow.cmd'
       ].join('\n'),
       'utf8'
     );
@@ -71,7 +71,7 @@ describe('Policy config integration', () => {
       }),
       'utf8'
     );
-    await fs.writeFile(path.join(root, 'main.mld'), '/show @ctx.policy.environment', 'utf8');
+    await fs.writeFile(path.join(root, 'main.mld'), '/show @mx.policy.environment', 'utf8');
 
     const output = await interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
       filePath: path.join(root, 'main.mld'),

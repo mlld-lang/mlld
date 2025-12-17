@@ -121,7 +121,7 @@ export class AdvancedTypeDetection {
       source: imported.source,
       createdAt: imported.createdAt,
       modifiedAt: imported.modifiedAt,
-      ctx: { ...imported.ctx },
+      mx: { ...imported.mx },
       internal: { ...imported.internal }
     } as Variable;
   }
@@ -387,7 +387,7 @@ export class AdvancedTypeDetection {
     // Additional complexity factors
     if (this.hasInterpolation(variable)) score += 1;
     if (this.detectComplexVariable(variable)) score += 2;
-    if (variable.ctx?.isImported) score += 1;
+    if (variable.mx?.isImported) score += 1;
     
     const dependencies = this.getVariableDependencies(variable);
     score += dependencies.length * 0.5;

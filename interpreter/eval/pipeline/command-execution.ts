@@ -875,7 +875,7 @@ export async function executeCommandVariable(
           const clonedInput: Variable = {
             ...(guardInputVariable as Variable),
             name: 'input',
-            ctx: { ...(guardInputVariable as Variable).ctx },
+            mx: { ...(guardInputVariable as Variable).mx },
             internal: {
               ...((guardInputVariable as Variable).internal ?? {}),
               isSystem: true,
@@ -903,7 +903,7 @@ export async function executeCommandVariable(
   let workingDirectory: string | undefined;
   if (execDef?.workingDir) {
     workingDirectory = await resolveWorkingDirectory(execDef.workingDir as any, execEnv, {
-      sourceLocation: commandVar?.ctx?.definedAt,
+      sourceLocation: commandVar?.mx?.definedAt,
       directiveType: hookOptions?.executionContext?.directiveType || 'exec'
     });
   }
@@ -936,7 +936,7 @@ export async function executeCommandVariable(
           format: withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandVar?.name,
-          location: commandVar.ctx?.definedAt
+          location: commandVar.mx?.definedAt
         });
         if (processed === 'retry') {
           return 'retry';
@@ -979,9 +979,9 @@ export async function executeCommandVariable(
       if (inPipeline && normalized.hadShowEffect) {
         // If this is the last stage, suppress echo to avoid showing seed text.
         // If there are more stages, propagate input forward to keep pipeline alive.
-        const pctx = env.getPipelineContext?.();
-        const isLastStage = pctx && typeof pctx.stage === 'number' && typeof pctx.totalStages === 'number'
-          ? pctx.stage >= pctx.totalStages
+        const pmx = env.getPipelineContext?.();
+        const isLastStage = pmx && typeof pmx.stage === 'number' && typeof pmx.totalStages === 'number'
+          ? pmx.stage >= pmx.totalStages
           : false;
         return finalizeResult(isLastStage ? '' : (stdinInput || ''));
       }

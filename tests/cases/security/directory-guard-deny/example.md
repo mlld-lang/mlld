@@ -1,12 +1,12 @@
 /guard before op:exe = when [
-  @input.any.ctx.taint.includes('dir:/blocked-dir') => deny "blocked directory"
+  @input.any.mx.taint.includes('dir:/blocked-dir') => deny "blocked directory"
   * => allow
 ]
 
 /exe @runBlocked(value) = cmd {echo @value}
 
 /exe @safeEcho(value) = when [
-  denied => show "Guard blocked operation: @ctx.guard.reason"
+  denied => show "Guard blocked operation: @mx.guard.reason"
   * => @runBlocked(@value)
 ]
 

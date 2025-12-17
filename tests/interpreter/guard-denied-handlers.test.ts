@@ -117,8 +117,8 @@ describe('handleExecGuardDenial', () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process(value) = when [
-  denied => show "Guard input: @ctx.guard.input"
-  denied => show "Guard output: @ctx.guard.output"
+  denied => show "Guard input: @mx.guard.input"
+  denied => show "Guard output: @mx.guard.output"
   denied => show "Param value: @value"
   * => show "Process"
 ]
@@ -132,10 +132,10 @@ describe('handleExecGuardDenial', () => {
     };
     const guardInput = createSimpleTextVariable(
       'value',
-      'sk-live-ctx',
+      'sk-live-mx',
       source,
       {
-        ctx: {},
+        mx: {},
         internal: { isSystem: true, isReserved: true }
       }
     );
@@ -168,16 +168,16 @@ describe('handleExecGuardDenial', () => {
       .getAll()
       .filter(effect => effect.type === 'both')
       .map(effect => effect.content.trim());
-    expect(outputs).toContain('Guard input: sk-live-ctx');
-    expect(outputs).toContain('Guard output: sk-live-ctx');
-    expect(outputs).toContain('Param value: sk-live-ctx');
+    expect(outputs).toContain('Guard input: sk-live-mx');
+    expect(outputs).toContain('Guard output: sk-live-mx');
+    expect(outputs).toContain('Param value: sk-live-mx');
   });
 
   it('materializes provenance-only guard inputs for denied handlers', async () => {
     const { env, execEnv, effects } = createEnv();
     const whenExpr = parseWhenExpression(`
 /exe @process() = when [
-  denied => "Guard input seen: @ctx.guard.input"
+  denied => "Guard input seen: @mx.guard.input"
   * => "Process"
 ]
     `);
@@ -203,7 +203,7 @@ describe('handleExecGuardDenial', () => {
     const result = await handleExecGuardDenial(error, { execEnv, env, whenExprNode: whenExpr });
     expect(result).not.toBeNull();
     const injectedInput = execEnv.getVariable('input');
-    expect(injectedInput?.ctx?.labels).toEqual(['secret']);
+    expect(injectedInput?.mx?.labels).toEqual(['secret']);
     expect(String(injectedInput?.value)).toContain('trimmed-secret');
   });
 

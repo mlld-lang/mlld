@@ -9,8 +9,8 @@
 /exe @jsKeep(f) = js {
   return JSON.stringify({
     type: typeof f,
-    hasCtx: !!f.ctx,
-    filename: f.ctx?.filename,
+    hasCtx: !!f.mx,
+    filename: f.mx?.filename,
     data: f.data
   });
 }
@@ -20,4 +20,4 @@
 /show `Text: @file.text.trim()`
 /show @jsDefault(@file)
 /show @jsKeep(@file.keep)
-/show `Ctx filename: @file.ctx.filename`
+/show `Ctx filename: @file.mx.filename`

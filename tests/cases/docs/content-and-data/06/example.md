@@ -1,7 +1,7 @@
 /var @file = <file.md>
-/show @file.ctx.relative
+/show @file.mx.relative
 >> No value here
 
 /var @file = <file.md>.keep
-/show @file.ctx.relative
+/show @file.mx.relative
 >> Returns a path

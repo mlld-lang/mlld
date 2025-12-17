@@ -1,10 +1,10 @@
 /guard @trimChainBlock for secret = when [
-  @ctx.op.name == "emitTrimmed" => deny "No secrets via chained helpers"
+  @mx.op.name == "emitTrimmed" => deny "No secrets via chained helpers"
   * => allow
 ]
 
 /exe @emitTrimmed(value) = when [
-  denied => show `guard result: @ctx.guard.reason`
+  denied => show `guard result: @mx.guard.reason`
   * => show `allowed: @value`
 ]
 

@@ -15,7 +15,7 @@ import { interpolate } from '../../core/interpreter';
 import { accessField, accessFields } from '../../utils/field-access';
 import { logger } from '@core/utils/logger';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
 
@@ -312,7 +312,7 @@ export class VariableReferenceEvaluator {
         env,
         node: value,
         identifier: varRef.identifier,
-        descriptorHint: variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+        descriptorHint: variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
       });
     }
     

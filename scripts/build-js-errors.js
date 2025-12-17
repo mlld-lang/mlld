@@ -120,7 +120,7 @@ function interpolateTemplate(template, variables) {
  * Enhance JavaScript execution error with pattern matching
  */
 export function enhanceJSError(error, code, params, metadata) {
-  const ctx = {
+  const mx = {
     code: code || '',
     error: error,
     params: params || {},
@@ -130,8 +130,8 @@ export function enhanceJSError(error, code, params, metadata) {
   // Try each pattern
   for (const pattern of patterns) {
     try {
-      if (pattern.test(error, ctx)) {
-        const variables = pattern.enhance(error, ctx);
+      if (pattern.test(error, mx)) {
+        const variables = pattern.enhance(error, mx);
         const message = interpolateTemplate(pattern.template, variables);
         
         // Return enhanced error details

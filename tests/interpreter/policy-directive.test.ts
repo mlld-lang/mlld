@@ -67,7 +67,7 @@ describe('/policy directive', () => {
     };
     await fileSystem.writeFile(
       '/project/policy-target.mld',
-      '/var @policyConfig = @ctx.policy.configs\n/export { @policyConfig }'
+      '/var @policyConfig = @mx.policy.configs\n/export { @policyConfig }'
     );
 
     const env = new Environment(fileSystem, pathService, pathContext);

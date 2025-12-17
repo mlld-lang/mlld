@@ -1,5 +1,5 @@
 ---
-description: Migrate .metadata to .ctx/.internal using Edit tool (v3.0)
+description: Migrate .metadata to .mx/.internal using Edit tool (v3.0)
 author: adam
 version: 3.0.0
 ---
@@ -14,7 +14,7 @@ version: 3.0.0
 /exe @countByType(files) = js {
   let tests = 0, code = 0;
   for (const f of files) {
-    const path = f.ctx?.relative || '';
+    const path = f.mx?.relative || '';
     if (path.includes('.test.ts')) tests++;
     else code++;
   }
@@ -30,14 +30,14 @@ version: 3.0.0
 
 >> Build migration request
 /exe @buildMigrationRequest(filepath) = `
-You are migrating a TypeScript file from .metadata API to .ctx/.internal API.
+You are migrating a TypeScript file from .metadata API to .mx/.internal API.
 
 You have access to the Edit tool. Use it to make ALL necessary changes to migrate this file.
 
 <critical_semantic_mapping>
 SEMANTIC FIELD CLASSIFICATION - Each field has ONE correct namespace:
 
-.ctx (USER-FACING runtime metadata):
+.mx (USER-FACING runtime metadata):
 - labels, taint, sources, policy (security/taint tracking)
 - filename, relative, absolute, url, domain, title, description (file/URL provenance)
 - tokens, tokest, fm, json (content metrics)
@@ -45,7 +45,7 @@ SEMANTIC FIELD CLASSIFICATION - Each field has ONE correct namespace:
 - isImported (import tracking)
 
 .internal (IMPLEMENTATION DETAILS - runtime only):
-- isSystem, isReserved, isParameter (system flags) ← CRITICAL: These are .internal NOT .ctx
+- isSystem, isReserved, isParameter (system flags) ← CRITICAL: These are .internal NOT .mx
 - isBuiltinTransformer, isGuardHelper (type flags)
 - arrayType, configType, itemType (type hints)
 - executableDef, capturedModuleEnv, capturedShadowEnvs (executable system)
@@ -65,24 +65,24 @@ OLD: variable.metadata.arrayType
 NEW: variable.internal?.arrayType
 
 OLD: variable.metadata.security.labels
-NEW: variable.ctx.labels
+NEW: variable.mx.labels
 
 OLD: variable.metadata?.isSystem
-NEW: variable.internal?.isSystem  ← NOT .ctx!
+NEW: variable.internal?.isSystem  ← NOT .mx!
 
 ## Pattern 2: Object spreads (SPLIT into two properties)
 OLD:
 metadata: { ...var.metadata, isSystem: true }
 
 NEW:
-ctx: { ...var.ctx },
+mx: { ...var.mx },
 internal: { ...var.internal, isSystem: true }
 
 OLD:
 metadata: { ...existingVar.metadata, ...baseMetadata }
 
 NEW:
-ctx: { ...existingVar.ctx, ...baseMetadata },  // if baseMetadata has .ctx fields
+mx: { ...existingVar.mx, ...baseMetadata },  // if baseMetadata has .mx fields
 internal: { ...existingVar.internal }
 
 ## Pattern 3: Conditional checks
@@ -90,7 +90,7 @@ OLD: if (variable.metadata?.isReserved && !variable.metadata?.isSystem)
 NEW: if (variable.internal?.isReserved && !variable.internal?.isSystem)
 
 OLD: if (metadata?.security?.labels)
-NEW: if (ctx.labels?.length > 0)
+NEW: if (mx.labels?.length > 0)
 
 ## Pattern 4: Variable creation
 OLD:
@@ -100,14 +100,14 @@ createSimpleTextVariable('name', 'value', {
 
 NEW:
 createSimpleTextVariable('name', 'value', {
-  ctx: {},
+  mx: {},
   internal: { isSystem: true }
 })
 
 ## Pattern 5: Null safety (CRITICAL)
 ALWAYS use ?. when accessing:
 - variable.internal?.arrayType  (not variable.internal.arrayType)
-- variable.ctx?.labels (not variable.ctx.labels)
+- variable.mx?.labels (not variable.mx.labels)
 - variable.internal?.isSystem (not variable.internal.isSystem)
 
 Exception: When you KNOW it exists from prior check
@@ -120,7 +120,7 @@ if (reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metad
 
 // AFTER:
 if (reservedNames.has(name) && !variable.internal?.isReserved && !variable.internal?.isSystem)
-// isReserved and isSystem are .internal (implementation), NOT .ctx (user-facing)
+// isReserved and isSystem are .internal (implementation), NOT .mx (user-facing)
 
 Example 2 - Object spread split:
 // BEFORE:
@@ -136,7 +136,7 @@ Example 2 - Object spread split:
   name: 'test',
   type: 'text',
   value: 'x',
-  ctx: { ...originalVar.ctx },
+  mx: { ...originalVar.mx },
   internal: { ...originalVar.internal, isParameter: true }
 }
 
@@ -163,11 +163,11 @@ File: @filepath.relative
 2. Do NOT use the Write tool
 3. Do NOT create any new files (Edit tool cannot create files anyway)
 4. Migrate ALL .metadata references in the file
-5. Use semantic mapping above to choose .ctx vs .internal for each field
+5. Use semantic mapping above to choose .mx vs .internal for each field
 6. ALWAYS use optional chaining (?.) for nested access
-7. Split all object spreads into separate ctx and internal properties
+7. Split all object spreads into separate mx and internal properties
 8. If you need to import helpers, use existing ones:
-   - import { ctxToSecurityDescriptor, updateCtxFromDescriptor } from '@interpreter/utils/metadata-migration'
+   - import { mxToSecurityDescriptor, updateCtxFromDescriptor } from '@interpreter/utils/metadata-migration'
 9. Make multiple Edit calls if needed (one per distinct change)
 10. After all edits, file should have ZERO .metadata references
 
@@ -185,7 +185,7 @@ new_string: "variable.internal?.isSystem"
 For object spreads, replace the entire object literal:
 
 old_string: "metadata: { ...var.metadata, isSystem: true }"
-new_string: "ctx: { ...var.ctx },\n  internal: { ...var.internal, isSystem: true }"
+new_string: "mx: { ...var.mx },\n  internal: { ...var.internal, isSystem: true }"
 
 Make as many Edit calls as needed to migrate the entire file.
 </edit_tool_usage>
