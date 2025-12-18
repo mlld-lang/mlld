@@ -387,6 +387,11 @@ Module imports and path imports. Import type keywords control resolution behavio
 /import templates from "@base/agents" as @agents(message, context)
 /show @agents["alice"](@msg, @mx)              # invokes agents/alice.att
 /show @agents.support["helper"](@msg, @mx)     # invokes agents/support/helper.att
+
+# Directory module imports (auto-load */index.mld; default skipDirs: ["_*", ".*"])
+/import "./agents" as @agentModules
+/show @agentModules.party.who
+/import "./agents" as @agentModules with { skipDirs: [] }
 ```
 
 - Prefix identifiers in the braces with `@` so imported names match runtime variable syntax (e.g., `{ @helper }`).
@@ -1337,6 +1342,11 @@ license: CC0
 /show @agents.alice(@msg, @mx)                  # dot notation (if valid identifier)
 /show @agents.support["helper"](@msg, @mx)      # nested dirs
 /show @agents["json_pretty"](@data)              # json-pretty.att sanitized to json_pretty
+
+# Directory module imports (auto-load */index.mld; default skipDirs: ["_*", ".*"])
+/import "./agents" as @agentModules
+/show @agentModules.party.who
+/import "./agents" as @agentModules with { skipDirs: [] }
 ```
 
 Template collections: local directories only. Filenames sanitized (hyphens/special chars → underscores). For registry modules, use individual template exports.

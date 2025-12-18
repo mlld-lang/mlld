@@ -814,6 +814,21 @@ Templates don't have to use all parameters, but can't reference any undeclared o
 /show @fmt["json"](@result)           >> (data)
 ```
 
+### Directory Module Imports
+
+Import a directory of modules by loading each immediate subdirectory `index.mld` and collecting its exports into an object.
+
+```mlld
+/import "./agents" as @agents
+/show @agents.party.who
+
+>> Default skipDirs: ["_*", ".*"]
+/import "./agents" as @agents with { skipDirs: [] }
+/show @agents._private.who
+```
+
+Directory names are sanitized (hyphens and special chars become underscores).
+
 #### Interpolation Contexts
 
 Variable interpolation works in specific contexts:

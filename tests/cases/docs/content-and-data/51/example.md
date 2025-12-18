@@ -1,8 +1,10 @@
-/var @file = <config.json>
+/var @files = <docs/*.md>
 
-# ✗ This loses metadata
-/var @result = @file | @process          # @process gets string, no .mx
+# ✗ This won't work - loop variable is unwrapped text
+/for @file in @files => show @file.mx.filename   # Error: .mx on string
 
-# ✓ Keep structured form
-/exe @process(file) = `Name: @file.mx.filename, Tokens: @file.mx.tokens`
-/var @result = @file.keep | @process
+# ✓ Access via array index
+/for @i in [0, 1, 2] => show @files[@i].mx.filename
+
+# ✓ Or use @keep helper to preserve structure
+/for @file in @files.keep => show @file.mx.filename

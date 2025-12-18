@@ -326,6 +326,16 @@ Import types help declare how a source is resolved. You can prefix the directive
 
 When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@base`/`@project` as `static`, and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
 
+Directory imports load each immediate subdirectory `index.mld` and return an object keyed by sanitized directory names. Directories matching `_*` or `.*` are skipped by default.
+
+```mlld
+/import "./agents" as @agents
+/show @agents.party.who
+
+/import "./agents" as @agents with { skipDirs: [] }
+/show @agents._private.who
+```
+
 TTL durations use suffixes like 30s, 5m, 1h, 1d, or 1w (seconds, minutes, hours, days, weeks).
 
 ### Output (`/output`)

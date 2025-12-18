@@ -1,14 +1,6 @@
->> In directives
-/show @name
+/import "./agents" as @agents
+/show @agents.party.who
 
->> In double quotes
-/var @greeting = "Hello @name"
-
->> In command braces
-/run cmd {echo "Welcome @name"}
-
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
-
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Default skipDirs: ["_*", ".*"]
+/import "./agents" as @agents with { skipDirs: [] }
+/show @agents._private.who

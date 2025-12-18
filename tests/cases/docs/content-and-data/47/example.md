@@ -1,22 +1,17 @@
->> Process API data
-/var @users = run {curl -s api.example.com/users}
-/var @parsed = @users | @json
+>> Load files and check context limits
+/var @files = <src/**/*.ts>
 
->> Define filter function for active users
-/exe @filterActive(users) = js {
-  return users.filter(u => u.status === "active")
+>> Define filter for large files (over 2000 tokens)
+/exe @filterLarge(files) = js {
+  return files.filter(f => f.tokest > 2000)
 }
-/var @active = @filterActive(@parsed)
+/var @large = @filterLarge(@files)
 
->> Generate report
-/var @report = `# User Report
+>> Calculate total tokens
+/exe @sumTokens(files) = js {
+  return files.reduce((sum, f) => sum + (f.tokest || 0), 0)
+}
+/var @totalTokens = @sumTokens(@files)
 
-Active users: @active.length
-Generated: @now
-
-## Users
-@active
-
-`
-
-/output @report to "user-report.md"
+/show `Found @large.length files over 2000 tokens`
+/show `Total estimated tokens: @totalTokens`
