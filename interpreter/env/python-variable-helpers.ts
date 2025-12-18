@@ -108,7 +108,7 @@ class ${varName}_MlldArray(list):
         self.__mlld_type__ = ${JSON.stringify(variable.type)}
         self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
         self.__mlld_metadata__ = ${JSON.stringify({
-            ctx: variable.ctx,
+            mx: variable.mx,
             internal: variable.internal
           })}
         self.__mlld_is_variable__ = True
@@ -130,7 +130,7 @@ class ${varName}_MlldObject(dict):
         self.__mlld_type__ = ${JSON.stringify(variable.type)}
         self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
         self.__mlld_metadata__ = ${JSON.stringify({
-            ctx: variable.ctx,
+            mx: variable.mx,
             internal: variable.internal
           })}
         self.__mlld_is_variable__ = True
@@ -156,7 +156,7 @@ class ${varName}_MlldValue:
         self.__mlld_type__ = ${JSON.stringify(variable.type)}
         self.__mlld_subtype__ = ${JSON.stringify(variable.subtype || null)}
         self.__mlld_metadata__ = ${JSON.stringify({
-            ctx: variable.ctx,
+            mx: variable.mx,
             internal: variable.internal
           })}
         self.__mlld_is_variable__ = True

@@ -900,7 +900,7 @@ export class FileReferenceVisitor extends BaseVisitor {
       tokenType: 'comment',
       modifiers: []
     });
-    this.visitChildren(node, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+    this.visitChildren(node, context, (child, mx) => this.mainVisitor.visitNode(child, mx));
     if (node.closeLocation) {
       this.tokenBuilder.addToken({
         line: node.closeLocation.start.line - 1,

@@ -35,7 +35,7 @@ export enum ResolutionContext {
   ObjectProperty = 'object-property',            // WHY: Objects can store Variables with types
   FunctionArgument = 'function-argument',        // WHY: Shadow envs need type introspection (mlld.isVariable)
   DataStructure = 'data-structure',              // WHY: Data structures preserve Variable types
-  FieldAccess = 'field-access',                  // WHY: Metadata property access (@var.ctx, @var.type, @items.any)
+  FieldAccess = 'field-access',                  // WHY: Metadata property access (@var.mx, @var.type, @items.any)
   ImportResult = 'import-result',                // WHY: Imports preserve module Variable types
   
   // Contexts where we must extract values
@@ -148,7 +148,7 @@ export async function resolveVariable(
         return {
           ...variable,
           value: evaluatedValue,
-          ctx: { ...variable.ctx },
+          mx: { ...variable.mx },
           internal: {
             ...(variable.internal ?? {}),
             wasEvaluated: true,

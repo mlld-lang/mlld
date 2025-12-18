@@ -1,9 +1,9 @@
 # Pipeline Inline Show (Retry Replay)
 
-/exe @source() = js { return "v" + ctx.try; }
+/exe @source() = js { return "v" + mx.try; }
 
 /exe @validator(input) = js {
-  if (ctx.try < 3) return "retry";
+  if (mx.try < 3) return "retry";
   return input;
 }
 

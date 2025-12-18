@@ -158,7 +158,7 @@ export class GitHubResolver implements Resolver {
       return {
         content: cached.content,
         contentType,
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }
@@ -188,7 +188,7 @@ export class GitHubResolver implements Resolver {
       return {
         content,
         contentType,
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     } catch (error) {

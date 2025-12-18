@@ -1,10 +1,10 @@
 export const pattern = {
   name: 'rhs-slash',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if the error is about a slash in an action context
     // This happens when someone tries to use /show, /run, etc. after =>
-    const line = ctx.line || '';
+    const line = mx.line || '';
     
     // Check for patterns like "=> /show" or "=> /run" or "=> /output" or "=> /var"
     if (line.includes('=>') && line.includes('/')) {
@@ -35,8 +35,8 @@ export const pattern = {
     return false;
   },
   
-  enhance(error, ctx) {
-    const line = ctx.line || '';
+  enhance(error, mx) {
+    const line = mx.line || '';
     
     // Extract the directive that was incorrectly prefixed
     let directive = 'unknown';

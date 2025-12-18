@@ -14,7 +14,7 @@ import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 
 export interface IVariableManager {
   // Core variable operations
@@ -48,7 +48,7 @@ export interface VariableManagerDependencies {
   getPathService(): any; // Will be typed more specifically when needed
   getSecurityManager(): any; // Will be typed more specifically when needed
   getBasePath(): string;
-  // Provide access to current pipeline context for ambient @ctx
+  // Provide access to current pipeline context for ambient @mx
   getPipelineContext?(): PipelineContextSnapshot | undefined;
   getSecuritySnapshot?(): {
     labels: readonly DataLabel[];
@@ -135,7 +135,7 @@ export class VariableManager implements IVariableManager {
       }
     };
 
-    const ctxValue = {
+    const mxValue = {
       try: pipelineContext.attemptCount || 1,
       tries,
       stage: typeof pipelineContext.stage === 'number' ? pipelineContext.stage : 0,
@@ -154,13 +154,13 @@ export class VariableManager implements IVariableManager {
       op: securitySnapshot?.operation ?? null
     };
 
-    return ctxValue;
+    return mxValue;
   }
   
   setVariable(name: string, variable: Variable): void {
-    // Prevent @ctx from being redefined by user code
-    if (name === 'ctx') {
-      throw new Error(`Cannot create variable '@ctx': this name is reserved for the execution context`);
+    // Prevent @mx from being redefined by user code
+    if (name === 'mx') {
+      throw new Error(`Cannot create variable '@mx': this name is reserved for the execution context`);
     }
     // Check if the name is reserved (but allow system variables to be set)
     const reservedNames = this.deps.getReservedNames();
@@ -187,19 +187,19 @@ export class VariableManager implements IVariableManager {
       // Only throw collision errors if both variables are legitimate mlld types
       if (isLegitimateVariable && existingIsLegitimate) {
         // Check if this is an import conflict (one imported, one local)
-        const existingIsImported = Boolean(existing.ctx?.isImported);
-        const newIsImported = Boolean(variable.ctx?.isImported);
+        const existingIsImported = Boolean(existing.mx?.isImported);
+        const newIsImported = Boolean(variable.mx?.isImported);
         
         if (existingIsImported !== newIsImported) {
           if (process.env.MLLD_DEBUG === 'true') {
             console.error(`[setVariable] import conflict name=${name}, existingIsImported=${existingIsImported}, newIsImported=${newIsImported}`);
           }
           // Import vs local conflict
-          const importPath = existingIsImported ? existing.ctx?.importPath : variable.ctx?.importPath;
+          const importPath = existingIsImported ? existing.mx?.importPath : variable.mx?.importPath;
           throw VariableRedefinitionError.forImportConflict(
             name,
-            existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            existing.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
             importPath,
             existingIsImported
           );
@@ -207,8 +207,8 @@ export class VariableManager implements IVariableManager {
           // Same-file redefinition
           throw VariableRedefinitionError.forSameFile(
             name,
-            existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-            variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+            existing.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
           );
         }
       }
@@ -222,13 +222,13 @@ export class VariableManager implements IVariableManager {
       
       // Only throw collision errors if both variables are legitimate mlld types
       if (isLegitimateVariable && existingIsLegitimate) {
-        const isExistingImported = existing.ctx?.isImported || false;
-        const importPath = existing.ctx?.importPath;
+        const isExistingImported = existing.mx?.isImported || false;
+        const importPath = existing.mx?.importPath;
 
         throw VariableRedefinitionError.forImportConflict(
           name,
-          existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          existing.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          variable.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
           importPath,
           isExistingImported
         );
@@ -248,8 +248,8 @@ export class VariableManager implements IVariableManager {
       const existing = this.variables.get(name)!;
       throw VariableRedefinitionError.forSameFile(
         name,
-        existing.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-        variable.ctx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+        existing.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+        variable.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
       );
     }
 
@@ -270,13 +270,13 @@ export class VariableManager implements IVariableManager {
   }
 
   getVariable(name: string): Variable | undefined {
-    // Ambient, read-only @ctx support (calculated on access)
-    if (name === 'ctx') {
-      // Allow tests to override via @test_ctx
-      const testCtxVar = this.variables.get('test_ctx') || this.deps.getParent()?.getVariable('test_ctx');
+    // Ambient, read-only @mx support (calculated on access)
+    if (name === 'mx') {
+      // Allow tests to override via @test_mx
+      const testCtxVar = this.variables.get('test_mx') || this.deps.getParent()?.getVariable('test_mx');
       if (testCtxVar) {
-        return createObjectVariable('ctx', testCtxVar.value, false, undefined, {
-          ctx: {
+        return createObjectVariable('mx', testCtxVar.value, false, undefined, {
+          mx: {
             definedAt: { line: 0, column: 0, filePath: '<context>' }
           },
           internal: {
@@ -289,12 +289,12 @@ export class VariableManager implements IVariableManager {
       const contextManager = this.deps.getContextManager?.();
       const pipelineContext = this.deps.getPipelineContext?.();
       const securitySnapshot = this.deps.getSecuritySnapshot?.();
-      const ctxValue = contextManager
+      const mxValue = contextManager
         ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot })
         : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
-      return createObjectVariable('ctx', ctxValue, false, undefined, {
-        ctx: {
+      return createObjectVariable('mx', mxValue, false, undefined, {
+        mx: {
           definedAt: { line: 0, column: 0, filePath: '<context>' }
         },
         internal: {
@@ -312,7 +312,7 @@ export class VariableManager implements IVariableManager {
     
     if (variable) {
       this.deps.recordSecurityDescriptor?.(
-        variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+        variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
       );
       // Special handling for lazy variables like @debug
       if (variable.internal && 'isLazy' in variable.internal && variable.internal.isLazy && variable.value === null) {
@@ -335,7 +335,7 @@ export class VariableManager implements IVariableManager {
         variable = capturedEnv.get(name);
         if (variable) {
           this.deps.recordSecurityDescriptor?.(
-            variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+            variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
           );
           return variable;
         }
@@ -346,7 +346,7 @@ export class VariableManager implements IVariableManager {
     const parentVar = parent?.getVariable(name);
     if (parentVar) {
       this.deps.recordSecurityDescriptor?.(
-        parentVar.ctx ? ctxToSecurityDescriptor(parentVar.ctx) : undefined
+        parentVar.mx ? varMxToSecurityDescriptor(parentVar.mx) : undefined
       );
       return parentVar;
     }
@@ -420,7 +420,7 @@ export class VariableManager implements IVariableManager {
       `@${resolverName}`, // Placeholder value
       placeholderSource,
       {
-        ctx: {
+        mx: {
           definedAt: { line: 0, column: 0, filePath: '<resolver>' }
         },
         internal: {
@@ -519,7 +519,7 @@ export class VariableManager implements IVariableManager {
       getTimeValue(),
       nowSource,
       {
-        ctx: {
+        mx: {
           definedAt: { line: 0, column: 0, filePath: '<reserved>' }
         },
         internal: {
@@ -544,7 +544,7 @@ export class VariableManager implements IVariableManager {
       false, // Not complex
       debugSource,
       {
-        ctx: {
+        mx: {
           definedAt: { line: 0, column: 0, filePath: '<reserved>' }
         },
         internal: {
@@ -572,7 +572,7 @@ export class VariableManager implements IVariableManager {
       true, // Is absolute
       baseSource,
       {
-        ctx: {
+        mx: {
           definedAt: { line: 0, column: 0, filePath: '<reserved>' }
         },
         internal: {
@@ -619,7 +619,7 @@ export class VariableManager implements IVariableManager {
       isMultiLine: false
     };
     
-    const ctxData = {
+    const mxData = {
       definedAt: { line: 0, column: 0, filePath: '<reserved>' }
     };
     const internalData = {
@@ -630,28 +630,28 @@ export class VariableManager implements IVariableManager {
     if (stdinData !== null && Object.keys(envVars).length > 0) {
       if (typeof stdinData === 'object' && stdinData !== null && !Array.isArray(stdinData)) {
         // Merge objects (env vars take precedence)
-        return createObjectVariable('input', { ...stdinData, ...envVars }, true, inputSource, { ctx: ctxData, internal: internalData });
+        return createObjectVariable('input', { ...stdinData, ...envVars }, true, inputSource, { mx: mxData, internal: internalData });
       } else {
         // Stdin is not an object, create object with separate fields
         return createObjectVariable('input', {
           stdin: stdinData,
           ...envVars
-        }, true, inputSource, { ctx: ctxData, internal: internalData });
+        }, true, inputSource, { mx: mxData, internal: internalData });
       }
     }
 
     // If we only have env vars
     if (Object.keys(envVars).length > 0) {
-      return createObjectVariable('input', envVars, true, inputSource, { ctx: ctxData, internal: internalData });
+      return createObjectVariable('input', envVars, true, inputSource, { mx: mxData, internal: internalData });
     }
 
     // If we only have stdin
     if (stdinData !== null) {
       if (typeof stdinData === 'object' && stdinData !== null) {
-        return createObjectVariable('input', stdinData, true, inputSource, { ctx: ctxData, internal: internalData });
+        return createObjectVariable('input', stdinData, true, inputSource, { mx: mxData, internal: internalData });
       } else {
         // Simple text
-        return createSimpleTextVariable('input', stdinData, textSource, { ctx: ctxData, internal: internalData });
+        return createSimpleTextVariable('input', stdinData, textSource, { mx: mxData, internal: internalData });
       }
     }
     

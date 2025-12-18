@@ -6,5 +6,5 @@
 
 /var @results = foreach @echoValue(@tokens)
 
-/show `Foreach taint: @results[0].ctx.taint`
-/show `Foreach labels: @results[0].ctx.labels`
+/show `Foreach taint: @results[0].mx.taint`
+/show `Foreach labels: @results[0].mx.labels`

@@ -25,7 +25,7 @@ export abstract class BaseVisitor implements INodeVisitor {
     return this.textCache.get(key)!;
   }
   
-  protected visitChildren(node: any, context: VisitorContext, childVisitor: (child: any, ctx: VisitorContext) => void): void {
+  protected visitChildren(node: any, context: VisitorContext, childVisitor: (child: any, mx: VisitorContext) => void): void {
     const childProps = ['values', 'children', 'body', 'content', 'nodes', 'elements'];
     
     for (const prop of childProps) {

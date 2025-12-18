@@ -11,9 +11,9 @@ describe('DynamicModuleResolver', () => {
 
     expect(result.content).toContain('@name = "Ada"');
     expect(result.contentType).toBe('module');
-    expect(result.ctx?.source).toBe('dynamic://@user/context');
-    expect(result.ctx?.taint).toContain('src:dynamic');
-    expect(result.ctx?.labels).toContain('src:dynamic');
+    expect(result.mx?.source).toBe('dynamic://@user/context');
+    expect(result.mx?.taint).toContain('src:dynamic');
+    expect(result.mx?.labels).toContain('src:dynamic');
   });
 
   it('serializes object modules deterministically', async () => {
@@ -107,10 +107,10 @@ describe('DynamicModuleResolver', () => {
 
     const result = await resolver.resolve('@user/data');
 
-    expect(result.ctx?.labels).toContain('src:dynamic');
-    expect(result.ctx?.labels).toContain('src:user-upload');
-    expect(result.ctx?.taint).toContain('src:dynamic');
-    expect(result.ctx?.taint).toContain('src:user-upload');
+    expect(result.mx?.labels).toContain('src:dynamic');
+    expect(result.mx?.labels).toContain('src:user-upload');
+    expect(result.mx?.taint).toContain('src:dynamic');
+    expect(result.mx?.taint).toContain('src:user-upload');
   });
 
   it('uses only src:dynamic label when no source provided', async () => {
@@ -120,7 +120,7 @@ describe('DynamicModuleResolver', () => {
 
     const result = await resolver.resolve('@user/data');
 
-    expect(result.ctx?.labels).toEqual(['src:dynamic']);
-    expect(result.ctx?.taint).toEqual(['src:dynamic']);
+    expect(result.mx?.labels).toEqual(['src:dynamic']);
+    expect(result.mx?.taint).toEqual(['src:dynamic']);
   });
 });

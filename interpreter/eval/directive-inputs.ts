@@ -10,7 +10,7 @@ import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { replayInlineExecInvocations } from './directive-replay';
 
@@ -224,7 +224,7 @@ async function extractRunInputs(
     });
     const referencedVariables = collectVariablesFromNodes(commandArray, env);
     const referencedDescriptors = referencedVariables
-      .map(variable => (variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined))
+      .map(variable => (variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined))
       .filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
     const interpolationDescriptor =
       interpolatedDescriptors.length === 1
@@ -247,7 +247,7 @@ async function extractRunInputs(
         commandNodes.some((node: any) => node?.type === 'Newline')
     };
     const variable = createSimpleTextVariable('__run_command__', commandText, source, {
-      ctx: mergedDescriptor || {},
+      mx: mergedDescriptor || {},
       internal: { isSystem: true }
     });
     if (mergedDescriptor) {

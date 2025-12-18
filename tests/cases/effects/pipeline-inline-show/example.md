@@ -3,5 +3,5 @@
 Inline pipeline show should append to the document.
 
 /var @a = "textA" | show
-/var @b = "textB" | show "X: @ctx.try"
+/var @b = "textB" | show "X: @mx.try"
 

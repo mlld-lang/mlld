@@ -8,7 +8,7 @@ import { isStructuredValue } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { PostHook } from './HookManager';
 import type { OperationContext } from '../env/ContextManager';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { StructuredValueContext } from '@interpreter/utils/structured-value';
 
 export const taintPostHook: PostHook = async (
@@ -109,42 +109,42 @@ function collectValueDescriptors(
 }
 
 function pushVariableDescriptor(variable: Variable, target: SecurityDescriptor[]): void {
-  const descriptor = descriptorFromCtx(variable.ctx);
+  const descriptor = descriptorFromVarMx(variable.mx);
   if (descriptor) {
     target.push(descriptor);
   }
 }
 
 function pushStructuredDescriptor(
-  value: { ctx?: VariableContext | StructuredValueContext },
+  value: { mx?: VariableContext | StructuredValueContext },
   target: SecurityDescriptor[]
 ): void {
-  const descriptor = descriptorFromCtx(value.ctx);
+  const descriptor = descriptorFromVarMx(value.mx);
   if (descriptor) {
     target.push(descriptor);
   }
 }
 
 function extractDescriptorFromObject(value: Record<string, unknown>): SecurityDescriptor | undefined {
-  const ctx = value.ctx as VariableContext | undefined;
-  const descriptorFromContext = descriptorFromCtx(ctx);
+  const mx = value.mx as VariableContext | undefined;
+  const descriptorFromContext = descriptorFromVarMx(mx);
   if (descriptorFromContext) {
     return descriptorFromContext;
   }
   return undefined;
 }
 
-function descriptorFromCtx(
-  ctx?: VariableContext | StructuredValueContext
+function descriptorFromVarMx(
+  mx?: VariableContext | StructuredValueContext
 ): SecurityDescriptor | undefined {
-  if (!ctx) {
+  if (!mx) {
     return undefined;
   }
-  const hasLabels = Array.isArray(ctx.labels) && ctx.labels.length > 0;
-  const hasSources = Array.isArray(ctx.sources) && ctx.sources.length > 0;
-  const hasTaint = Array.isArray(ctx.taint) && ctx.taint.length > 0;
+  const hasLabels = Array.isArray(mx.labels) && mx.labels.length > 0;
+  const hasSources = Array.isArray(mx.sources) && mx.sources.length > 0;
+  const hasTaint = Array.isArray(mx.taint) && mx.taint.length > 0;
   if (!hasLabels && !hasSources && !hasTaint) {
     return undefined;
   }
-  return ctxToSecurityDescriptor(ctx);
+  return varMxToSecurityDescriptor(mx);
 }

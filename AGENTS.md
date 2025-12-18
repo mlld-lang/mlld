@@ -93,7 +93,7 @@ Architecture (docs/dev/INTERPRETER.md):
 <PIPELINES>
 Semantics (docs/dev/PIPELINE.md):
 - Two syntaxes: `a | @t1 | @t2` and `a with { pipeline: [@t1, @t2] }` (identical AST/behavior).
-- Context vars: `@ctx` (stage-local) and `@p`/`@pipeline` (array of stage I/O, retry history).
+- Context vars: `@mx` (stage-local) and `@p`/`@pipeline` (array of stage I/O, retry history).
 - Retry: a stage may request retry of the previous stage; no nested retries; Stage 0 only retryable if its source is a function.
 - Format: with { format: "json|csv|xml|text" } wraps inputs for lazy parsing.
 - Parallel groups: `A || B` is one stage executed concurrently with ordered results (JSON array string to next stage). Concurrency limited by MLLD_PARALLEL_LIMIT. Retry is not supported inside the group; design post-group validation to request upstream retry.
@@ -185,7 +185,7 @@ Workflow and releases:
 <DEBUGGING>
 Tips and flags:
 - Grammar: npm run ast, DEBUG_MLLD_GRAMMAR=1, grammar/docs/DEBUG.md.
-- Interpreter: DEBUG_EXEC, DEBUG_PIPELINE, DEBUG_WHEN; print @ctx/@p judiciously.
+- Interpreter: DEBUG_EXEC, DEBUG_PIPELINE, DEBUG_WHEN; print @mx/@p judiciously.
 - Tests: run specific fixtures; inspect *.generated-fixture.json; disable formatter in tests by default.
 - Performance: vitest.config.perf.mts and scripts/measure-performance.js.
 </DEBUGGING>

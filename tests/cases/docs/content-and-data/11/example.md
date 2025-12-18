@@ -5,4 +5,4 @@
 /var @apis = <docs/*.md # API Reference>
 
 >> Rename sections with 'as'
-/var @modules = <*.md # Overview> as "## <>.ctx.filename Overview"
+/var @modules = <*.md # Overview> as "## <>.mx.filename Overview"

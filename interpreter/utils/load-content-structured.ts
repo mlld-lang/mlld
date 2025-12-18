@@ -222,8 +222,8 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
     const metadata = buildMetadata(
       baseMetadata,
-      variableMetadata?.ctx
-        ? { variableMetadata: variableMetadata.ctx }
+      variableMetadata?.mx
+        ? { variableMetadata: variableMetadata.mx }
         : undefined
     );
     const finalMetadata = mergedSecurity
@@ -249,14 +249,14 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
 export function isFileLoadedValue(value: unknown): boolean {
   if (isStructuredValue(value)) {
-    return Boolean(value.ctx?.filename || value.ctx?.url);
+    return Boolean(value.mx?.filename || value.mx?.url);
   }
   return isLoadContentResult(value);
 }
 
 export function isURLLoadedValue(value: unknown): boolean {
   if (isStructuredValue(value)) {
-    return Boolean(value.ctx?.url);
+    return Boolean(value.mx?.url);
   }
   if (isLoadContentResult(value)) {
     return Boolean((value as any).url);

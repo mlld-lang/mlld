@@ -9,7 +9,7 @@ describe('Guard Minimal Reproduction', () => {
   it('should show what guards actually receive', async () => {
     const script = `
 /guard for secret = when [
-  @ctx.op.type == "exe" => deny "blocked secret"
+  @mx.op.type == "exe" => deny "blocked secret"
   * => allow
 ]
 
@@ -42,11 +42,11 @@ describe('Guard Minimal Reproduction', () => {
             console.error('.type:', input?.type);
             console.error('.name:', input?.name);
             console.error('.value:', input?.value);
-            console.error('.ctx:', safeStringify(input?.ctx));
-            console.error('.ctx exists?:', input?.ctx !== undefined);
-            if (input?.ctx) {
-              console.error('.ctx.labels:', input.ctx.labels);
-              console.error('.ctx.taint:', input.ctx.taint);
+            console.error('.mx:', safeStringify(input?.mx));
+            console.error('.mx exists?:', input?.mx !== undefined);
+            if (input?.mx) {
+              console.error('.mx.labels:', input.mx.labels);
+              console.error('.mx.taint:', input.mx.taint);
             }
           }
         } else {

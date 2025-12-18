@@ -6,7 +6,7 @@ import type { GuardDirectiveNode } from '@core/types/guard';
 describe('Guard directive', () => {
   test('parses data-label guard', async () => {
     const content = `/guard for secret = when [
-      @ctx.op.type == "op:cmd" => deny "No secrets in shell"
+      @mx.op.type == "op:cmd" => deny "No secrets in shell"
       * => allow
     ]`;
 
@@ -36,7 +36,7 @@ describe('Guard directive', () => {
 
   test('parses named operation guard', async () => {
     const content = `/guard @shellRestrictions for op:run = when first [
-      @input.any.ctx.labels.includes("secret") => deny "No secrets in run directives"
+      @input.any.mx.labels.includes("secret") => deny "No secrets in run directives"
       * => allow
     ]`;
 

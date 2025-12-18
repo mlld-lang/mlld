@@ -45,7 +45,7 @@ import {
 } from '@interpreter/utils/structured-value';
 
 import { wrapExecResult } from '../utils/structured-exec';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 // Template normalization now handled in grammar - no longer needed here
 import { resolveDirectiveExecInvocation } from './directive-replay';
 
@@ -99,10 +99,10 @@ export async function evaluateShow(
     return env.mergeSecurityDescriptors(...descriptors);
   };
   const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
-    if (!variable?.ctx) {
+    if (!variable?.mx) {
       return undefined;
     }
-    return ctxToSecurityDescriptor(variable.ctx);
+    return varMxToSecurityDescriptor(variable.mx);
   };
   
   const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());

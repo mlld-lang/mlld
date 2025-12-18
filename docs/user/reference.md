@@ -283,18 +283,18 @@ Load file contents with angle brackets:
 File metadata access:
 
 ```mlld
-/var @filename = <package.json>.ctx.filename
-/var @tokens = <large-file.md>.ctx.tokens
-/var @frontmatter = <doc.md>.ctx.fm.title
+/var @filename = <package.json>.mx.filename
+/var @tokens = <large-file.md>.mx.tokens
+/var @frontmatter = <doc.md>.mx.fm.title
 ```
 
-Aliases like `<doc.md>.filename` still resolve to `.ctx.filename`, but `.ctx` is the preferred namespace.
+Aliases like `<doc.md>.filename` still resolve to `.mx.filename`, but `.mx` is the preferred namespace.
 
 Glob patterns:
 
 ```mlld
 /var @allDocs = <docs/*.md>
-/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
+/var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
 
 ### Imports (`/import`)
@@ -325,6 +325,16 @@ Import types help declare how a source is resolved. You can prefix the directive
 ```
 
 When omitted, mlld infers the safest option: registry references behave as `module`, files as `static`, URLs as `cached`, `@input` as `live`, `@base`/`@project` as `static`, and `@local` as `local`. The identifier after `as` uses an `@` prefix in source code; mlld strips the prefix internally when referring to the namespace. If the keyword and source disagree (for example, `cached` on a relative path), the interpreter raises an error before evaluation.
+
+Directory imports load each immediate subdirectory `index.mld` and return an object keyed by sanitized directory names. Directories matching `_*` or `.*` are skipped by default.
+
+```mlld
+/import "./agents" as @agents
+/show @agents.party.who
+
+/import "./agents" as @agents with { skipDirs: [] }
+/show @agents._private.who
+```
 
 TTL durations use suffixes like 30s, 5m, 1h, 1d, or 1w (seconds, minutes, hours, days, weeks).
 
@@ -462,9 +472,9 @@ Built-in transformers:
 - `@md`: format as Markdown
 
 Pipeline context variables:
-- `@ctx.try`: current attempt number
-- `@ctx.stage`: current pipeline stage
-- `@ctx.errors`: array of errors from parallel operations (for loops or pipeline groups); error markers: `{ index, key?, message, error, value }`
+- `@mx.try`: current attempt number
+- `@mx.stage`: current pipeline stage
+- `@mx.errors`: array of errors from parallel operations (for loops or pipeline groups); error markers: `{ index, key?, message, error, value }`
 - `@p[0]`: pipeline input (original/base value)
 - `@p[1]` … `@p[n]`: outputs from completed stages (as `StructuredValue` wrappers)
 - `@p[-1]`: previous stage output; `@p[-2]` two stages back
@@ -476,7 +486,7 @@ Retry with hints:
 ```mlld
 /exe @validator(input) = when [
   @input.valid => @input
-  @ctx.try < 3 => retry "need more validation"
+  @mx.try < 3 => retry "need more validation"
   * => "fallback"
 ]
 ```
@@ -495,7 +505,7 @@ Control keywords:
 - `done @value` - Terminate and return value
 - `continue @value` - Next iteration with new state
 
-While context (`@ctx.while`):
+While context (`@mx.while`):
 - `iteration` - Current iteration (1-based)
 - `limit` - Configured cap
 - `active` - true when inside while loop

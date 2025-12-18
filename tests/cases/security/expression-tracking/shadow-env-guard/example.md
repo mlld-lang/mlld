@@ -1,5 +1,5 @@
 /guard @shadowSecretBlock for secret = when [
-  @ctx.op.name == "processShadow" => deny "Shadow env secret blocked"
+  @mx.op.name == "processShadow" => deny "Shadow env secret blocked"
   * => allow
 ]
 
@@ -8,7 +8,7 @@
 }
 
 /exe network @processShadow(value) = when [
-  denied => `blocked: @ctx.guard.reason`
+  denied => `blocked: @mx.guard.reason`
   * => `sent:@value`
 ]
 

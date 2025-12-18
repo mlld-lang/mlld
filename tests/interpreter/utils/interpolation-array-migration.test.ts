@@ -161,7 +161,7 @@ describe('Array Interpolation Migration - Comparison Tests', () => {
       expect(isLoadContentResult(item.data)).toBe(false); // .data is the parsed content
 
       // For wrapped values, check the context instead
-      expect(item.ctx.filename).toBe('test.md');
+      expect(item.mx.filename).toBe('test.md');
 
       const array = [item];
       // Arrays of StructuredValue items should be wrapped as array type

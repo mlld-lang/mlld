@@ -69,7 +69,7 @@ export function createVariableProxy(variable: Variable): any {
           
         case VARIABLE_PROXY_PROPS.METADATA:
           return {
-            ctx: variable.ctx,
+            mx: variable.mx,
             internal: variable.internal
           };
           
@@ -162,7 +162,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
           isVariable: true,
           type: value.type,
           subtype: (value as any).primitiveType,
-          ctx: value.ctx,
+          mx: value.mx,
           internal: value.internal
         });
       }
@@ -179,7 +179,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
         recordPrimitiveMetadata(target, key, {
           isVariable: false,
           type: 'load-content',
-          ctx: value.ctx,
+          mx: value.mx,
           internal: value.internal,
           text: value.text
         });
@@ -191,7 +191,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
         recordPrimitiveMetadata(target, key, {
           isVariable: false,
           type: 'load-content',
-          ctx: undefined,
+          mx: undefined,
           internal: undefined
         });
       }
@@ -203,7 +203,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
   if (isStructuredValue(value)) {
     // For load-content arrays, use .text (concatenated content)
     if (value.type === 'array') {
-      const isLoadContentArray = value.ctx?.source === 'load-content' ||
+      const isLoadContentArray = value.mx?.source === 'load-content' ||
                                    value.metadata?.source === 'load-content';
 
       if (isLoadContentArray) {
@@ -212,7 +212,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
           recordPrimitiveMetadata(target, key, {
             isVariable: false,
             type: value.type,
-            ctx: value.ctx,
+            mx: value.mx,
             internal: value.internal,
             text: value.text
           });
@@ -227,7 +227,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       recordPrimitiveMetadata(target, key, {
         isVariable: false,
         type: value.type,
-        ctx: value.ctx,
+        mx: value.mx,
         internal: value.internal,
         text: value.text
       });
@@ -335,10 +335,10 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
     getCtx: (value: any, name?: string) => {
       const proxyVariable = getProxyVariable(value);
       if (proxyVariable) {
-        return cloneValue(proxyVariable.ctx);
+        return cloneValue(proxyVariable.mx);
       }
       if (name && primitiveMetadata && primitiveMetadata[name]) {
-        return cloneValue(primitiveMetadata[name].ctx);
+        return cloneValue(primitiveMetadata[name].mx);
       }
       return undefined;
     },
@@ -355,12 +355,12 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
     },
 
     getMetadata: (value: any, name?: string) => {
-      const ctx = helpers.getCtx(value, name);
+      const mx = helpers.getCtx(value, name);
       const internal = helpers.getInternal(value, name);
-      if (!ctx && !internal) {
+      if (!mx && !internal) {
         return undefined;
       }
-      return { ctx, internal };
+      return { mx, internal };
     },
     
     // Get subtype - also check primitive metadata
@@ -392,7 +392,7 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
           value,
           type: meta.type,
           subtype: meta.subtype,
-          ctx: meta.ctx || {},
+          mx: meta.mx || {},
           internal: meta.internal || {},
           isVariable: true
         };
@@ -403,6 +403,6 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
 
   return {
     ...helpers,
-    ctx: helpers.getCtx
+    mx: helpers.getCtx
   };
 }

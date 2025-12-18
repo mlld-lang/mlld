@@ -1,16 +1,16 @@
 export const pattern = {
   name: 'when-slash-rhs',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if it's related to /when with slashes on RHS
-    return ctx.line.includes('/when') && 
-           ctx.line.includes('=>') &&
-           ctx.line.includes('=> /');
+    return mx.line.includes('/when') && 
+           mx.line.includes('=>') &&
+           mx.line.includes('=> /');
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the when condition and action
-    const whenMatch = ctx.line.match(/\/when\s+(.+?)\s+=>\s+(.+)/);
+    const whenMatch = mx.line.match(/\/when\s+(.+?)\s+=>\s+(.+)/);
     const condition = whenMatch ? whenMatch[1] : '@condition';
     const action = whenMatch ? whenMatch[2].trim() : '/show "text"';
     

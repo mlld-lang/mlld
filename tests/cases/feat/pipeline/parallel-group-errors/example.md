@@ -7,5 +7,5 @@
 /var @out = @seed() | || @ok(@input) || @fail(@input)
 
 /show @out
-/show `errors:@ctx.errors.length`
-/show `firstMessage:@ctx.errors[0].message`
+/show `errors:@mx.errors.length`
+/show `firstMessage:@mx.errors[0].message`

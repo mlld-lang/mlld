@@ -1,5 +1,5 @@
-/output @content to "output.txt"
-/output @data to "config.json"
-/output @message to stdout
-/output @error to stderr
-/output @config to "settings.yaml" as yaml
+/import "./agents" as @agents
+/show @agents.party.who
+
+/import "./agents" as @agents with { skipDirs: [] }
+/show @agents._private.who

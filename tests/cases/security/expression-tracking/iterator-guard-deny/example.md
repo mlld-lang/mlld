@@ -1,10 +1,10 @@
 /guard @loopSecretBlock for secret = when [
-  @ctx.op.name == "emitIterItem" => deny "Secret iteration blocked"
+  @mx.op.name == "emitIterItem" => deny "Secret iteration blocked"
   * => allow
 ]
 
 /exe @emitIterItem(value) = when [
-  denied => show `blocked iteration: @ctx.guard.reason`
+  denied => show `blocked iteration: @mx.guard.reason`
   * => show `value: @value`
 ]
 

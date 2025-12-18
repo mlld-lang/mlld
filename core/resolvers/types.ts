@@ -111,12 +111,12 @@ export interface ResolverContent {
   content: string;
   contentType: ContentType;
   /**
-   * User-facing runtime context (mirrors Variable.ctx semantics)
+   * User-facing runtime context (mirrors Variable.mx semantics)
    */
-  ctx?: ResolverContentContext;
+  mx?: ResolverContentContext;
   /**
    * @deprecated Legacy metadata field kept for transitional compatibility.
-   * Prefer the `ctx` object above.
+   * Prefer the `mx` object above.
    */
   metadata?: {
     source: string;

@@ -5,4 +5,4 @@
 
 >> Access individual files
 /show @docs[0].text                       >> First file's content
-/show @docs[0].ctx.filename               >> First file's name
+/show @docs[0].mx.filename               >> First file's name

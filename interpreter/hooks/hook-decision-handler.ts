@@ -285,11 +285,11 @@ function alignTransformedInputs(
       const cloned: Variable = {
         ...replacement,
         name: original.name,
-        ctx: replacement.ctx ? { ...replacement.ctx } : undefined,
+        mx: replacement.mx ? { ...replacement.mx } : undefined,
         internal: replacement.internal ? { ...replacement.internal } : undefined
       };
-      if (cloned.ctx?.ctxCache) {
-        delete cloned.ctx.ctxCache;
+      if (cloned.mx?.mxCache) {
+        delete cloned.mx.mxCache;
       }
       aligned.push(cloned);
     } else {

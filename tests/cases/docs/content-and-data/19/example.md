@@ -1,13 +1,13 @@
 /var @file = <package.json>
 
 >> Basic metadata
-/show @file.ctx.filename                 >> "package.json"
-/show @file.ctx.relative                 >> "./package.json" 
-/show @file.ctx.absolute                 >> Full path
+/show @file.mx.filename                 >> "package.json"
+/show @file.mx.relative                 >> "./package.json" 
+/show @file.mx.absolute                 >> Full path
 
 >> Token counting
-/show @file.ctx.tokest                   >> Estimated tokens (fast)
-/show @file.ctx.tokens                   >> Exact tokens
+/show @file.mx.tokest                   >> Estimated tokens (fast)
+/show @file.mx.tokens                   >> Exact tokens
 
 >> Content access
 /show @file.content                      >> File contents (explicit)

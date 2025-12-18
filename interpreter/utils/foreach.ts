@@ -92,9 +92,9 @@ export async function evaluateForeachAsText(
         };
         
         // Add template variables using new Variable types
-        childEnv.setVariable('result', createSimpleTextVariable('result', result, templateSource, { ctx: templateSource }));
-        childEnv.setVariable('index', createObjectVariable('index', index, false, templateSource, { ctx: templateSource }));
-        childEnv.setVariable('item', createSimpleTextVariable('item', result, templateSource, { ctx: templateSource }));
+        childEnv.setVariable('result', createSimpleTextVariable('result', result, templateSource, { mx: templateSource }));
+        childEnv.setVariable('index', createObjectVariable('index', index, false, templateSource, { mx: templateSource }));
+        childEnv.setVariable('item', createSimpleTextVariable('item', result, templateSource, { mx: templateSource }));
         
         // Parse and interpolate the template
         const templateNodes = parseTemplateString(finalOptions.template!);

@@ -14,13 +14,13 @@ describe('ExpressionProvenance', () => {
     expect(getExpressionProvenance(value)).toEqual(descriptor);
   });
 
-  it('materializes variables with ctx labels', () => {
+  it('materializes variables with mx labels', () => {
     const value = {};
     const descriptor = makeSecurityDescriptor({ labels: ['secret'], sources: ['expr'] });
     setExpressionProvenance(value, descriptor);
     const variable = materializeExpressionValue(value, { name: 'testExpr' });
     expect(variable).toBeDefined();
     expect(variable?.name).toBe('testExpr');
-    expect(variable?.ctx?.labels).toContain('secret');
+    expect(variable?.mx?.labels).toContain('secret');
   });
 });

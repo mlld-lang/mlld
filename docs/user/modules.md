@@ -385,7 +385,7 @@ Dynamic modules are automatically labeled `src:dynamic` for guard enforcement:
 
 ```mlld
 /guard before secret = when [
-  @input.ctx.taint.includes('src:dynamic') =>
+  @input.mx.taint.includes('src:dynamic') =>
     deny "Cannot use dynamic data as secrets"
   * => allow
 ]

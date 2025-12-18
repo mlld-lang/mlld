@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `@input | while(100, 1s) @processor` - pipeline stage with optional pacing
   - `done @value` terminates iteration and returns value
   - `continue @newState` advances to next iteration with new state
-  - `@ctx.while.iteration` (1-based) and `@ctx.while.limit` available in processor
+  - `@mx.while.iteration` (1-based) and `@mx.while.limit` available in processor
 - **Streaming format adapters**: NDJSON streaming parsed via configurable adapters
   - `with { streamFormat: "claude-code" }` for Claude SDK-specific parsing
   - Default `ndjson` adapter handles generic JSON streaming
@@ -39,15 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Template collection imports**: Load entire directories of templates with shared parameter signatures
   - `/import templates from "@base/agents" as @agents(message, context)` imports all `.att`/`.mtt` files
   - Access by filename: `@agents["alice"](@msg, @ctx)` or nested: `@agents.support["helper"]`
+- **Directory module imports**: Import a directory that loads each immediate subdirectory `index.mld`
+  - Returns an object keyed by sanitized directory name with each `index.mld` export set as the value
+  - Skips `_*` and `.*` directories by default, override with `with { skipDirs: [] }`
+- **@exists() builtin**: Returns true when an expression evaluates without error (string args check paths; glob args require at least one match)
 - **When separators**: Semicolons separate when arms in directives and expressions
 - **For-when filter sugar**: `for ... when ...` drops non-matches without null placeholders via implicit `none => skip` branch
-- **Parallel execution error accumulation**: Errors accumulate in `@ctx.errors` array instead of failing fast
+- **Parallel execution error accumulation**: Errors accumulate in `@mx.errors` array instead of failing fast
   - `/for parallel @x in @xs [complex-block]` supported with block-scoped `let` only
   - Failed iterations produce error markers `{ index, key?, message, error, value }` in results
   - Parallel pipeline groups (`|| @a || @b || @c`) also accumulate errors
 - **Comments in block bodies**: `>>` (start-of-line) and `<<` (end-of-line) comments work inside `[...]` blocks
 
 ### Changed
+- **Renamed `@ctx` to `@mx`**: The execution context variable is now `@mx` ("mlld execution"). Access retry count via `@mx.try`, hints via `@mx.hint`, stage info via `@mx.stage`, etc. The `.ctx` metadata namespace on variables is now `.mx` ("metadata")—use `@file.mx.filename`, `@file.mx.tokens`, etc.
 - `/exe` RHS pipe sugar accepts direct `@value | cmd { ... }` pipelines (legacy `run` form still works); identity definitions keep with-clause pipelines when evaluating parameters
 - **Mode-aware parsing**: Environment variable `MLLD_STRICT=1` forces strict mode, `MLLD_STRICT=0` forces markdown mode, overriding file extension inference
   - FormatAdapterSink and TerminalSink are mutually exclusive
@@ -57,13 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables explicit, auditable access to runtime-injected data
   - Similar pattern to `/import { USER } from @input` for environment variables
 - **Live @state and literal payload strings**: `@state` reads stay fresh after state writes, and `@payload/@state` dynamic modules emit literal strings so @mentions and user data do not interpolate.
-- **LoadContentResult implements StructuredValue surface**: File loading now returns values with `.text`, `.data`, and `.ctx` surfaces. Access metadata via `.ctx.filename`, `.ctx.tokens`, `.ctx.fm` etc. Direct property access (`.content`, `.filename`) remains for backward compatibility but `.ctx` is recommended for new code.
-- **Simplified .keep usage**: Metadata now accessible in mlld contexts without `.keep` (e.g., `@file.ctx.filename` works directly). `.keep` only needed when passing to JS/Node to preserve StructuredValue wrapper. Apply `.keep` at call site (`@process(@file.keep)`) rather than variable creation.
+- **LoadContentResult implements StructuredValue surface**: File loading now returns values with `.text`, `.data`, and `.mx` surfaces. Access metadata via `.mx.filename`, `.mx.tokens`, `.mx.fm` etc. Direct property access (`.content`, `.filename`) remains for backward compatibility but `.mx` is recommended for new code.
+- **Simplified .keep usage**: Metadata now accessible in mlld contexts without `.keep` (e.g., `@file.mx.filename` works directly). `.keep` only needed when passing to JS/Node to preserve StructuredValue wrapper. Apply `.keep` at call site (`@process(@file.keep)`) rather than variable creation.
 
 ### Fixed
 - **Arithmetic operators in exe blocks**: Math operators (`+`, `-`, `*`, `/`, `%`) work in exe blocks, let assignments, and return values
-- **Universal StructuredValue model**: All runtime values flow as StructuredValues with `.text`, `.data`, and `.ctx` surfaces. Boundaries use `asData()`/`asText()` for extraction. Fixes when-expressions returning numbers, object serialization, and numeric comparisons.
-- **Field access precedence**: User data properties take precedence over guard quantifiers (`.all`, `.any`, `.none`). Core metadata (`.type`, `.ctx`) always from Variable.
+- **Universal StructuredValue model**: All runtime values flow as StructuredValues with `.text`, `.data`, and `.mx` surfaces. Boundaries use `asData()`/`asText()` for extraction. Fixes when-expressions returning numbers, object serialization, and numeric comparisons.
+- **Field access precedence**: User data properties take precedence over guard quantifiers (`.all`, `.any`, `.none`). Core metadata (`.type`, `.mx`) always from Variable.
 - **Standalone @ in double-quoted strings**: `@` not followed by identifier treated as literal character (`.startsWith("@")` now works)
 - **Setup in nested directories**: `mlld setup` detects parent config and prompts to update parent or create new local config
 - Effect actions (`show`, `log`, `output`, `append`) work uniformly in all RHS contexts

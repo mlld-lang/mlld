@@ -148,6 +148,14 @@ export const builtinTransformers: TransformerDefinition[] = [
     }
   },
   {
+    name: 'exists',
+    uppercase: 'EXISTS',
+    description: 'Return true when an expression evaluates without error',
+    implementation: async (input: string) => {
+      return input.trim().length > 0;
+    }
+  },
+  {
     name: 'xml',
     uppercase: 'XML',
     description: 'Convert content to SCREAMING_SNAKE_CASE XML',

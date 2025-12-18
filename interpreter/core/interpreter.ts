@@ -526,8 +526,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     if (hasZeroOffset &&
         node.valueType !== 'commandRef' &&
         node.valueType !== 'varIdentifier' &&
-        // Allow ambient @ctx to resolve even if parser produced zero offsets
-        node.identifier !== 'ctx') {
+        // Allow ambient @mx to resolve even if parser produced zero offsets
+        node.identifier !== 'mx') {
       // Skip orphaned parameter references from grammar bug
       // Note: varIdentifier is excluded because when conditions create these
       // See issue #217 - this workaround prevents when conditions from working

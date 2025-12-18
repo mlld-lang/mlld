@@ -1043,7 +1043,7 @@ export async function startLanguageServer(): Promise<void> {
       { name: '.', desc: 'Shorthand for @PROJECTPATH' },
       // Lowercase/context variables
       { name: 'projectpath', desc: 'Project root (lowercase variant)' },
-      { name: 'ctx', desc: 'Stage-local context' },
+      { name: 'mx', desc: 'Stage-local context' },
       { name: 'pipeline', desc: 'Pipeline history and I/O' },
       { name: 'p', desc: 'Pipeline history and I/O (alias)' },
       { name: 'now', desc: 'Current timestamp' },
@@ -1379,7 +1379,7 @@ export async function startLanguageServer(): Promise<void> {
         PROJECTPATH: 'Project root directory path',
         projectpath: 'Project root directory path',
         '.': 'Shorthand for @PROJECTPATH',
-        ctx: 'Stage-local context with execution metadata',
+        mx: 'Stage-local context with execution metadata',
         pipeline: 'Pipeline history and I/O array for stages',
         p: 'Alias of @pipeline',
         now: 'Current timestamp (string)',

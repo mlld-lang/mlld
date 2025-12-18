@@ -1,5 +1,5 @@
 /guard @noShellSecrets before secret = when [
-  @ctx.op.type == "run" => deny "Secrets cannot appear in shell"
+  @mx.op.type == "run" => deny "Secrets cannot appear in shell"
   * => allow
 ]
 

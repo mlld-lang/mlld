@@ -570,7 +570,7 @@ export class DirectiveVisitor extends BaseVisitor {
       this.visitWithClause(values.withClause, directive, context);
     }
 
-    this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+    this.visitChildren(values, context, (child, mx) => this.mainVisitor.visitNode(child, mx));
 
     // Tokenize security labels if present (for /var, /exe, /path, etc.)
     this.tokenizeSecurityLabels(directive);
@@ -1104,7 +1104,7 @@ export class DirectiveVisitor extends BaseVisitor {
         this.mainVisitor.visitNode(part, newContext);
       }
     } else {
-      this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+      this.visitChildren(values, context, (child, mx) => this.mainVisitor.visitNode(child, mx));
     }
 
     // Handle withClause if present (for /run with { pipeline: [...] })

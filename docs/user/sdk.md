@@ -247,7 +247,7 @@ Guards can enforce policies on dynamic data:
 
 ```mlld
 /guard before secret = when [
-  @input.ctx.taint.includes('src:dynamic') =>
+  @input.mx.taint.includes('src:dynamic') =>
     deny "Cannot use dynamic data as secrets"
   * => allow
 ]
@@ -273,16 +273,16 @@ This enables fine-grained guard policies:
 ```mlld
 // Block user-uploaded data from dangerous operations
 /guard before fileWrite = when [
-  @input.ctx.labels.includes('src:user-upload') =>
+  @input.mx.labels.includes('src:user-upload') =>
     deny "User uploads cannot be written to filesystem"
   * => allow
 ]
 
 // Allow trusted database content through
 /guard before apiCall = when [
-  @input.ctx.labels.includes('src:user-upload') =>
+  @input.mx.labels.includes('src:user-upload') =>
     deny "User data cannot call external APIs"
-  @input.ctx.labels.includes('src:dynamic') =>
+  @input.mx.labels.includes('src:dynamic') =>
     allow
   * => allow
 ]
@@ -371,8 +371,8 @@ Use guards to prevent sensitive data in state:
 
 ```mlld
 /guard before op:output = when [
-  @ctx.op.target.startsWith('state://') &&
-  @input.ctx.labels.includes('secret') =>
+  @mx.op.target.startsWith('state://') &&
+  @input.mx.labels.includes('secret') =>
     deny "Secrets cannot be persisted to state"
   * => allow
 ]

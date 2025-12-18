@@ -1,7 +1,7 @@
 # After guard retry non-pipeline success
 
 /guard after @retryFlaky for retryable = when [
-  @output != "ok" && @ctx.guard.try < 3 => retry "need ok"
+  @output != "ok" && @mx.guard.try < 3 => retry "need ok"
   @output != "ok" => deny "still bad"
   * => allow
 ]

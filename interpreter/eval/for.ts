@@ -169,13 +169,13 @@ function formatIterationError(error: unknown): string {
 }
 
 function resetForErrorsContext(env: Environment, errors: ForIterationError[]): void {
-  const ctxManager = env.getContextManager?.();
-  if (!ctxManager) return;
-  while (ctxManager.popGenericContext('for')) {
+  const mxManager = env.getContextManager?.();
+  if (!mxManager) return;
+  while (mxManager.popGenericContext('for')) {
     // clear previous loop context
   }
-  ctxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
-  ctxManager.setLatestErrors(errors);
+  mxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
+  mxManager.setLatestErrors(errors);
 }
 
 function findVariableOwner(env: Environment, name: string): Environment | undefined {
@@ -489,20 +489,41 @@ export async function evaluateForExpression(
           nodesToEvaluate = (expr.expression[0] as any).content;
         }
 
-        let result: EvalResult;
-        if (
-          nodesToEvaluate.length === 1 &&
-          (nodesToEvaluate[0] as any).type === 'WhenExpression' &&
-          (nodesToEvaluate[0] as any).meta?.modifier !== 'first'
-        ) {
-          const nodeWithFirst = {
-            ...(nodesToEvaluate[0] as any),
-            meta: { ...((nodesToEvaluate[0] as any).meta || {}), modifier: 'first' as const }
-          };
-          result = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
-        } else {
-          result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
-        }
+        const evaluateSequence = async (nodes: unknown[], startEnv: Environment): Promise<EvalResult> => {
+          let currentEnv = startEnv;
+          let lastResult: EvalResult = { value: undefined, env: currentEnv };
+
+          for (const node of nodes) {
+            if (isLetAssignment(node as any)) {
+              currentEnv = await evaluateLetAssignment(node as any, currentEnv);
+              lastResult = { value: undefined, env: currentEnv };
+              continue;
+            }
+
+            if (isAugmentedAssignment(node as any)) {
+              currentEnv = await evaluateAugmentedAssignment(node as any, currentEnv);
+              lastResult = { value: undefined, env: currentEnv };
+              continue;
+            }
+
+            if ((node as any)?.type === 'WhenExpression' && (node as any).meta?.modifier !== 'first') {
+              const nodeWithFirst = {
+                ...(node as any),
+                meta: { ...(((node as any).meta || {}) as Record<string, unknown>), modifier: 'first' as const }
+              };
+              lastResult = await evaluateWhenExpression(nodeWithFirst as any, currentEnv);
+              currentEnv = lastResult.env || currentEnv;
+              continue;
+            }
+
+            lastResult = await evaluate(node as any, currentEnv, { isExpression: true });
+            currentEnv = lastResult.env || currentEnv;
+          }
+
+          return { value: lastResult.value, env: currentEnv };
+        };
+
+        const result = await evaluateSequence(nodesToEvaluate, childEnv);
 
         if (result.env) childEnv = result.env;
         let branchValue = result?.value;
@@ -653,7 +674,7 @@ export async function evaluateForExpression(
       'for-result',
       null,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -666,7 +687,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults as number | boolean | null,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -675,7 +696,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -685,7 +706,7 @@ export async function evaluateForExpression(
       finalResults,
       false,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -693,6 +714,6 @@ export async function evaluateForExpression(
     'for-result',
     String(finalResults),
     variableSource,
-    { ctx: metadata }
+    { mx: metadata }
   );
 }

@@ -39,7 +39,7 @@ export interface LoadContentResult {
   readonly type?: 'text' | 'object' | 'array' | 'html' | (string & {});
   readonly text?: string;
   readonly data?: unknown;
-  readonly ctx?: {
+  readonly mx?: {
     filename?: string;
     relative?: string;
     absolute?: string;

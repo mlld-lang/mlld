@@ -1,5 +1,5 @@
 /guard @noSecretOutputs before op:output = when [
-  @input.ctx.labels.includes("secret") => deny "No secrets in output effects"
+  @input.mx.labels.includes("secret") => deny "No secrets in output effects"
   * => allow
 ]
 

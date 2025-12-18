@@ -56,7 +56,7 @@ A test is RELEVANT if it involves ANY of:
 - Pipelines with data transformations using pipe operator
 - File loading with structured formats (JSON, YAML, CSV files)
 - foreach iteration or /for loops over collections
-- .ctx property access or metadata handling
+- .mx property access or metadata handling
 - Display/output of structured data
 - Variable assignments from structured data sources
 

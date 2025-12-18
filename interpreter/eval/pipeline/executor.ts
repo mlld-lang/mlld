@@ -25,7 +25,7 @@ import {
 } from '../../utils/structured-value';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import { isPipelineInput } from '@core/types/variable/TypeGuards';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import type { CommandExecutionHookOptions } from './command-execution';
@@ -86,13 +86,13 @@ function formatParallelStageError(error: unknown): string {
 }
 
 function resetParallelErrorsContext(env: Environment, errors: ParallelStageError[]): void {
-  const ctxManager = env.getContextManager?.();
-  if (!ctxManager) return;
-  while (ctxManager.popGenericContext('parallel')) {
+  const mxManager = env.getContextManager?.();
+  if (!mxManager) return;
+  while (mxManager.popGenericContext('parallel')) {
     // clear previous parallel context
   }
-  ctxManager.pushGenericContext('parallel', { errors, timestamp: Date.now() });
-  ctxManager.setLatestErrors(errors);
+  mxManager.pushGenericContext('parallel', { errors, timestamp: Date.now() });
+  mxManager.setLatestErrors(errors);
 }
 
 /**
@@ -407,7 +407,7 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     let stageEnv: Environment | undefined;
-    let ctxManager: ReturnType<Environment['getContextManager']> | undefined;
+    let mxManager: ReturnType<Environment['getContextManager']> | undefined;
     let pipelineSnapshot: PipelineContextSnapshot | undefined;
     let stageDescriptor: SecurityDescriptor | undefined;
     let parentPipelineContextPushed = false;
@@ -456,7 +456,7 @@ export class PipelineExecutor {
         throw new Error('Pipeline context snapshot unavailable for pipeline stage');
       }
       stageDescriptor = this.buildStageDescriptor(command, stageIndex, context, structuredInput);
-      ctxManager = stageEnv.getContextManager();
+      mxManager = stageEnv.getContextManager();
       const stageOpContext = this.createPipelineOperationContext(command, stageIndex, context);
 
       const stageHookNode = this.createStageHookNode(command);
@@ -594,7 +594,7 @@ export class PipelineExecutor {
             console.error('[PipelineExecutor][finalized-output]', {
               stage: command.rawIdentifier,
               stageIndex,
-              labels: normalized?.ctx?.labels ?? null,
+              labels: normalized?.mx?.labels ?? null,
               metadataLabels: normalized?.metadata?.security?.labels ?? null
             });
           } catch {}
@@ -610,10 +610,10 @@ export class PipelineExecutor {
         }
 
         try {
-          const pctx = this.env.getPipelineContext?.();
-          if (pctx) {
+          const pmx = this.env.getPipelineContext?.();
+          if (pmx) {
             this.env.updatePipelineContext({
-              ...pctx,
+              ...pmx,
               hint: null
             });
           }
@@ -624,8 +624,8 @@ export class PipelineExecutor {
       };
 
       const runWithinPipeline = async (): Promise<StageResult> => {
-        if (ctxManager) {
-          return await ctxManager.withOperation(stageOpContext, executeStage);
+        if (mxManager) {
+          return await mxManager.withOperation(stageOpContext, executeStage);
         }
         return await executeStage();
       };
@@ -750,7 +750,7 @@ export class PipelineExecutor {
     stageContext: StageContext,
     parallelIndex?: number
   ): Promise<StageExecutionResult> {
-    const ctxManager = stageEnv.getContextManager();
+    const mxManager = stageEnv.getContextManager();
     const runInline = async (): Promise<StageExecutionResult> => {
       const { interpolate } = await import('../../core/interpreter');
       const descriptors: SecurityDescriptor[] = [];
@@ -775,8 +775,8 @@ export class PipelineExecutor {
         descriptors.length > 1 ? stageEnv.mergeSecurityDescriptors(...descriptors) : descriptors[0];
       return { result: normalizedResult, labelDescriptor };
     };
-    if (ctxManager && operationContext) {
-      return await ctxManager.withOperation(operationContext, runInline);
+    if (mxManager && operationContext) {
+      return await mxManager.withOperation(operationContext, runInline);
     }
     return await runInline();
   }
@@ -919,7 +919,7 @@ export class PipelineExecutor {
     if (inlineLabels && inlineLabels.length > 0) {
       descriptors.push(makeSecurityDescriptor({ labels: inlineLabels }));
     }
-    const variableLabels = Array.isArray(commandVar?.ctx?.labels) ? (commandVar.ctx.labels as DataLabel[]) : undefined;
+    const variableLabels = Array.isArray(commandVar?.mx?.labels) ? (commandVar.mx.labels as DataLabel[]) : undefined;
     if (variableLabels && variableLabels.length > 0) {
       descriptors.push(makeSecurityDescriptor({ labels: variableLabels }));
     }
@@ -1379,7 +1379,7 @@ export class PipelineExecutor {
           rawLabels: rawDescriptor?.labels ?? null,
           existingLabels: existingDescriptor?.labels ?? null,
           hintLabels: descriptorHints.map(hint => hint?.labels ?? null),
-          normalizedLabels: normalizedValue?.ctx?.labels ?? null,
+          normalizedLabels: normalizedValue?.mx?.labels ?? null,
           normalizedText: normalizedValue?.text
         });
       } catch {}
@@ -1518,8 +1518,8 @@ export class PipelineExecutor {
         stage: stageName,
         stageIndex,
         parallel: isParallelBranch,
-        labels: value?.ctx?.labels ?? null,
-        taint: value?.ctx?.taint ?? null,
+        labels: value?.mx?.labels ?? null,
+        taint: value?.mx?.taint ?? null,
         metadataLabels: value?.metadata?.security?.labels ?? null
       });
       console.error('[PipelineExecutor][detail-start]', {
@@ -1559,8 +1559,8 @@ export class PipelineExecutor {
         if ((value as any).data !== undefined && typeof (value as any).data !== 'object') {
           base.data = (value as any).data;
         }
-        if (Array.isArray((value as any).ctx?.labels)) {
-          base.labels = (value as any).ctx.labels;
+        if (Array.isArray((value as any).mx?.labels)) {
+          base.labels = (value as any).mx.labels;
         }
         return base;
       }
@@ -1653,8 +1653,8 @@ function getStructuredSecurityDescriptor(value: StructuredValue | undefined): Se
   if (!value) {
     return undefined;
   }
-  if (value.ctx) {
-    return ctxToSecurityDescriptor(value.ctx as StructuredValueContext);
+  if (value.mx) {
+    return varMxToSecurityDescriptor(value.mx as StructuredValueContext);
   }
   return undefined;
 }

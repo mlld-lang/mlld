@@ -112,7 +112,7 @@ export class LocalResolver implements Resolver {
         return {
           content,
           contentType: 'module',
-          ctx: metadata,
+          mx: metadata,
           metadata
         };
       }
@@ -273,7 +273,7 @@ export class LocalResolver implements Resolver {
       return {
         content,
         contentType,
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     } catch (error) {

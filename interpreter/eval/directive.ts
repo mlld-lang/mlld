@@ -26,7 +26,7 @@ import { evaluateNeeds, evaluateWants } from './needs';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
-import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluatePolicy } from './policy';
 
 /**
@@ -185,9 +185,9 @@ export async function evaluateDirective(
           if (isVariable(result.value)) {
             const replacement = result.value as Variable;
             targetVar.value = (replacement as any).value ?? replacement;
-            targetVar.ctx = {
-              ...(targetVar.ctx ?? {}),
-              ...(replacement.ctx ?? {})
+            targetVar.mx = {
+              ...(targetVar.mx ?? {}),
+              ...(replacement.mx ?? {})
             };
           } else {
             targetVar.value = result.value;
@@ -196,10 +196,10 @@ export async function evaluateDirective(
               mergeArrayElements: true
             });
             if (descriptor) {
-              const ctx = (targetVar.ctx ?? (targetVar.ctx = {} as any)) as Record<string, unknown>;
-              updateCtxFromDescriptor(ctx, descriptor);
-              if ('ctxCache' in ctx) {
-                delete (ctx as any).ctxCache;
+              const mx = (targetVar.mx ?? (targetVar.mx = {} as any)) as Record<string, unknown>;
+              updateVarMxFromDescriptor(mx, descriptor);
+              if ('mxCache' in mx) {
+                delete (mx as any).mxCache;
               }
             }
           }

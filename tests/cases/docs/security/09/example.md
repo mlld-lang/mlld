@@ -1,5 +1,5 @@
 /guard @blockSend before op:exe = when [
-  @ctx.op.name == "sendData" => deny "Network calls blocked"
+  @mx.op.name == "sendData" => deny "Network calls blocked"
   * => allow
 ]
 

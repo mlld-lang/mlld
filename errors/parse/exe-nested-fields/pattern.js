@@ -1,19 +1,19 @@
 export const pattern = {
   name: 'exe-nested-fields',
   
-  test(error, ctx) {
+  test(error, mx) {
     // The parser expects = but finds . after /exe @identifier
     // Or it may show generic /exe syntax error
     return (
-      ctx.line.match(/^\/exe\s+@\w+\./) &&
+      mx.line.match(/^\/exe\s+@\w+\./) &&
       (error.expected?.some(e => e.text === '=') || 
        error.message?.includes('Invalid /exe syntax'))
     );
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the attempted nested field declaration
-    const match = ctx.line.match(/^\/exe\s+@(\w+)((?:\.\w+)+)(\([^)]*\))?/);
+    const match = mx.line.match(/^\/exe\s+@(\w+)((?:\.\w+)+)(\([^)]*\))?/);
     const baseVar = match?.[1] || 'object';
     const fields = match?.[2] || '.method';
     const params = match?.[3] || '()';

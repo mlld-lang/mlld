@@ -1,12 +1,12 @@
 /guard @secretBlock before secret = when [
-  @ctx.op.type == "show" => deny "Cannot display secrets"
+  @mx.op.type == "show" => deny "Cannot display secrets"
   * => allow
 ]
 
 /var secret @key = "sk-12345"
 
 /exe @display(value) = when [
-  denied => `[REDACTED] - @ctx.guard.reason`
+  denied => `[REDACTED] - @mx.guard.reason`
   * => `Value: @value`
 ]
 

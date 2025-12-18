@@ -202,7 +202,7 @@ The array is wrapped as StructuredValue with metadata:
   type: 'array',
   data: ['content1', 'content2'],
   text: 'content1\n\ncontent2',  // Custom join separator
-  ctx: {
+  mx: {
     source: 'load-content',
     // Additional metadata preserved here
   }
@@ -213,10 +213,10 @@ The array is wrapped as StructuredValue with metadata:
 Arrays of file metadata objects from glob patterns:
 ```mlld
 /var @files = <*.json>
-/show @files[0].filename  # Access metadata from ctx
+/show @files[0].filename  # Access metadata from mx
 ```
 
-Each item in the array is a StructuredValue with file metadata in `ctx`.
+Each item in the array is a StructuredValue with file metadata in `mx`.
 
 ## Complex vs Simple Variables
 
@@ -274,13 +274,13 @@ const value = await resolveVariableValue(variable, env);
 - Primary type guard for values in the evaluation pipeline
 - All values from evaluate() are now StructuredValue
 - Check `.type` property to determine content type: 'text', 'array', 'object', etc.
-- Use `.ctx` to access metadata (filename, url, tokens, etc.)
+- Use `.mx` to access metadata (filename, url, tokens, etc.)
 - Use `.data` to access the underlying content/parsed data
 
 **isFileLoadedValue(value)**
 - Helper function for backward compatibility
 - Handles both StructuredValue and LoadContentResult formats
-- Returns true if value has file/URL metadata (`.ctx.filename` or `.ctx.url`)
+- Returns true if value has file/URL metadata (`.mx.filename` or `.mx.url`)
 - Use when code might receive either format during migration
 - Defined in: `interpreter/utils/load-content-structured.ts`
 
@@ -309,9 +309,9 @@ if (isStructuredValue(value)) {
     // Handle array
     const items = value.data;
   }
-  if (value.ctx?.filename) {
+  if (value.mx?.filename) {
     // Has file metadata
-    console.log('Loaded from:', value.ctx.filename);
+    console.log('Loaded from:', value.mx.filename);
   }
 }
 
@@ -319,7 +319,7 @@ if (isStructuredValue(value)) {
 if (isFileLoadedValue(value)) {
   // Works for both StructuredValue and LoadContentResult
   const filename = isStructuredValue(value)
-    ? value.ctx?.filename
+    ? value.mx?.filename
     : value.filename;
 }
 

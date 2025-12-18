@@ -132,7 +132,7 @@ export class LoadContentResultImpl implements LoadContentResult {
     return this.content;
   }
   
-  get ctx() {
+  get mx() {
     const self = this;
     return {
       filename: this.filename,
@@ -254,8 +254,8 @@ export class LoadContentResultURLImpl extends LoadContentResultImpl implements L
     return 'text';
   }
   
-  get ctx() {
-    const base = super.ctx;
+  get mx() {
+    const base = super.mx;
     return {
       ...base,
       url: this.url,
@@ -377,8 +377,8 @@ export class LoadContentResultHTMLImpl extends LoadContentResultImpl implements 
     return 'html';
   }
   
-  get ctx() {
-    const base = super.ctx;
+  get mx() {
+    const base = super.mx;
     return {
       ...base,
       html: this.html

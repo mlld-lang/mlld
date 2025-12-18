@@ -45,7 +45,7 @@ Your response should contain APPROVE or DENY in all caps.
   let @check = @claude(@reviewPrompt(@input))
   @hasApproval(@check) => show "Approved: @check"
   @hasApproval(@check) => @input
-  !@hasApproval(@check) && @ctx.retries < 3 => retry
+  !@hasApproval(@check) && @mx.retries < 3 => retry
   none => show "No definitive answer: @input"
 ]
 

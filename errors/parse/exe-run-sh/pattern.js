@@ -1,23 +1,23 @@
 export const pattern = {
   name: 'exe-run-sh',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if this is an /exe error with "run sh" in the line
     return error.message && 
            error.message.includes('Invalid /exe syntax') &&
-           ctx.line && 
-           ctx.line.includes('/exe') && 
-           ctx.line.includes('run sh');
+           mx.line && 
+           mx.line.includes('/exe') && 
+           mx.line.includes('run sh');
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the function name if possible
-    const funcMatch = ctx.line.match(/@(\w+)\s*\(/);
+    const funcMatch = mx.line.match(/@(\w+)\s*\(/);
     const funcName = funcMatch ? funcMatch[1] : 'func';
     
     return {
       FUNCNAME: funcName,
-      LINE: ctx.line.trim()
+      LINE: mx.line.trim()
     };
   }
 };

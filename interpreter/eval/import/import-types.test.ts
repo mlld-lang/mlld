@@ -222,6 +222,57 @@ describe('Import type handling', () => {
     expect((output as string).trim()).toBe('Agent: hello (world)');
   });
 
+  it('imports directories by loading each subdirectory index.mld', async () => {
+    await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
+    await fileSystem.writeFile('/project/agents/mllddev/index.mld', '/var @who = "mllddev"');
+    await fileSystem.writeFile('/project/agents/_private/index.mld', '/var @who = "private"');
+    await fileSystem.writeFile('/project/agents/.hidden/index.mld', '/var @who = "hidden"');
+
+    const source = `/import "./agents" as @agents
+/show @agents.party.who
+/show @agents.mllddev.who`;
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    expect(lines).toEqual(['party', 'mllddev']);
+
+    const missingSource = `/import "./agents" as @agents
+/show @agents._private.who`;
+    await expect(
+      interpret(missingSource, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow(/_private/);
+  });
+
+  it('allows overriding directory skip patterns via with { skipDirs: [] }', async () => {
+    await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
+    await fileSystem.writeFile('/project/agents/_private/index.mld', '/var @who = "private"');
+    await fileSystem.writeFile('/project/agents/.hidden/index.mld', '/var @who = "hidden"');
+
+    const source = `/import "./agents" as @agents with { skipDirs: [] }
+/show @agents.party.who
+/show @agents._private.who
+/show @agents._hidden.who`;
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    expect(lines).toEqual(['party', 'private', 'hidden']);
+  });
+
   it('rejects template collection imports with undeclared variables', async () => {
     await fileSystem.writeFile(
       '/project/templates/bad.att',

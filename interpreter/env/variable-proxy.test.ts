@@ -47,7 +47,7 @@ describe('Variable Proxy System', () => {
       // Special properties work
       expect(proxy[VARIABLE_PROXY_PROPS.TYPE]).toBe('object');
       const metadata = proxy[VARIABLE_PROXY_PROPS.METADATA];
-      expect(metadata?.ctx).toEqual(
+      expect(metadata?.mx).toEqual(
         expect.objectContaining({
           name: 'obj',
           type: 'object'
@@ -137,7 +137,7 @@ describe('Variable Proxy System', () => {
       expect(proxyMetadata?.internal).toMatchObject({ arrayType: 'load-content' });
     });
 
-    it('exposes ctx metadata for primitive parameters', () => {
+    it('exposes mx metadata for primitive parameters', () => {
       const variable = createSimpleTextVariable(
         'secret',
         'value',
@@ -150,8 +150,8 @@ describe('Variable Proxy System', () => {
       delete (prepared as any).__mlldPrimitiveMetadata;
 
       const helpers = createMlldHelpers(metadata);
-      const ctx = helpers.ctx(prepared.secret, 'secret');
-      expect(ctx?.labels).toContain('secret');
+      const mx = helpers.mx(prepared.secret, 'secret');
+      expect(mx?.labels).toContain('secret');
     });
   });
 });

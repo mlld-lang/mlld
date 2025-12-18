@@ -91,8 +91,8 @@ interface BuildContextOptions {
 }
 
 /**
- * Lightweight context manager that owns the @ctx namespace stacks.
- * Tracks operation/guard scopes and builds the ambient @ctx object on demand.
+ * Lightweight context manager that owns the @mx namespace stacks.
+ * Tracks operation/guard scopes and builds the ambient @mx object on demand.
  */
 export class ContextManager {
   private readonly opStack: OperationContext[] = [];
@@ -238,7 +238,7 @@ export class ContextManager {
         ? (errorsContext as any).errors
         : this.latestErrors;
 
-    const ctxValue: Record<string, unknown> = {
+    const mxValue: Record<string, unknown> = {
       ...pipelineFields.root,
       labels: guardContext?.labels
         ? Array.from(guardContext.labels)
@@ -260,29 +260,29 @@ export class ContextManager {
     };
 
     if (deniedContext) {
-      ctxValue.denied = true;
+      mxValue.denied = true;
     } else {
-      ctxValue.denied = false;
+      mxValue.denied = false;
     }
 
     if (guardContext?.input !== undefined) {
-      ctxValue.input = guardContext.input;
+      mxValue.input = guardContext.input;
     }
     if (guardContext?.output !== undefined) {
-      ctxValue.output = guardContext.output;
+      mxValue.output = guardContext.output;
     }
 
-    if (ctxValue.guard) {
-      ctxValue.guard = this.normalizeGuardContext(guardContext, deniedContext);
+    if (mxValue.guard) {
+      mxValue.guard = this.normalizeGuardContext(guardContext, deniedContext);
     } else if (deniedContext) {
-      ctxValue.guard = this.normalizeGuardContext(undefined, deniedContext);
+      mxValue.guard = this.normalizeGuardContext(undefined, deniedContext);
     }
 
     if (pipelineFields.pipe) {
-      ctxValue.pipe = pipelineFields.pipe;
+      mxValue.pipe = pipelineFields.pipe;
     }
 
-    return ctxValue;
+    return mxValue;
   }
 
   pushGenericContext(type: string, context: unknown): void {

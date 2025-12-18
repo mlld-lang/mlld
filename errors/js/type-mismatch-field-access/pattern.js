@@ -1,12 +1,12 @@
 export const pattern = {
   name: 'type-mismatch-field-access',
 
-  test(error, ctx) {
+  test(error, mx) {
     if (!error || !error.message) return false;
     return error.message.includes('Cannot access field') && error.message.includes('non-object value');
   },
 
-  enhance(error, ctx) {
+  enhance(error, mx) {
     const field = (error.message.match(/field \"([^\"]+)\"/) || [])[1] || 'unknown';
     const type = (error.message.match(/non-object value \(([^)]+)\)/) || [])[1] || 'unknown';
 
@@ -20,7 +20,7 @@ export const pattern = {
     };
     const hint = suggestions[type] || 'Ensure the value is an object before accessing fields.';
 
-    const firstLine = (ctx.code || '').split('\n')[0]?.trim() || '';
+    const firstLine = (mx.code || '').split('\n')[0]?.trim() || '';
 
     return {
       FIELD: field,

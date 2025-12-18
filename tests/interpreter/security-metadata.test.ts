@@ -31,8 +31,8 @@ describe('Security metadata propagation', () => {
     await evaluateVar(directive, env);
 
     const variable = env.getVariable('foo');
-    expect(variable?.ctx).toBeDefined();
-    expect(variable?.ctx.labels).toEqual(['secret', 'untrusted']);
+    expect(variable?.mx).toBeDefined();
+    expect(variable?.mx.labels).toEqual(['secret', 'untrusted']);
   });
 
   it('restores serialized metadata during import reconstruction', () => {
@@ -46,7 +46,7 @@ describe('Security metadata propagation', () => {
       securityLabels: ['secret']
     });
 
-    expect(variable.ctx.labels).toEqual(['secret']);
+    expect(variable.mx.labels).toEqual(['secret']);
   });
 
   it('propagates descriptors through pipeline stages', async () => {
@@ -76,7 +76,7 @@ describe('Security metadata propagation', () => {
       identifier: 'input'
     });
 
-    expect(result.ctx?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(result.mx?.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
   it('wraps /show output and effects with capability metadata', async () => {
@@ -101,7 +101,7 @@ describe('Security metadata propagation', () => {
 
     expect(result.value).toBeDefined();
     const showValue = result.value as any;
-    expect(showValue.ctx?.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(showValue.mx?.labels).toEqual(expect.arrayContaining(['secret']));
     expect(handler.collected[0]?.capability?.security.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
@@ -173,13 +173,13 @@ describe('Security metadata propagation', () => {
     await evaluateExe(exeDirective, env);
 
     const execVar = env.getVariable('emit');
-    expect(execVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(execVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
 
     const invocationDirective = parseSync('/var @result = @emit()')[0] as DirectiveNode;
     await evaluateVar(invocationDirective, env);
 
     const resultVar = env.getVariable('result');
-    expect(resultVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
   it('merges descriptors during template interpolation', async () => {
@@ -191,7 +191,7 @@ describe('Security metadata propagation', () => {
     await evaluateVar(templateDirective, env);
 
     const messageVar = env.getVariable('message');
-    expect(messageVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(messageVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
   });
 
   it('propagates pipeline taint and labels into structured outputs and downstream results', async () => {
@@ -209,14 +209,14 @@ describe('Security metadata propagation', () => {
     const pipelineDirective = parseSync('/var @pipelineOutput = @token | @emitToken | @echoValue | @markDone')[0] as DirectiveNode;
     await evaluateDirective(pipelineDirective, env);
     const pipelineVar = env.getVariable('pipelineOutput');
-    expect(pipelineVar?.ctx.labels).toEqual(expect.arrayContaining(['secret']));
-    expect(pipelineVar?.ctx.taint).toEqual(expect.arrayContaining(['secret']));
+    expect(pipelineVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
+    expect(pipelineVar?.mx.taint).toEqual(expect.arrayContaining(['secret']));
 
     const resultDirective = parseSync('/run { printf "Token: @token" }')[0] as DirectiveNode;
     const result = await evaluateDirective(resultDirective, env);
     const structuredResult = result.value as any;
-    expect(structuredResult?.ctx?.labels ?? []).toEqual([]);
-    expect(structuredResult?.ctx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+    expect(structuredResult?.mx?.labels ?? []).toEqual([]);
+    expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
   });
 
   it('applies src:file and directory labels to loaded file content', async () => {
@@ -235,7 +235,7 @@ describe('Security metadata propagation', () => {
       const variable = env.getVariable('config');
       const expectedDirs = getAllDirsInPath(filePath).map(dir => `dir:${dir}`);
 
-      expect(variable?.ctx.taint).toEqual(expect.arrayContaining(['src:file', ...expectedDirs]));
+      expect(variable?.mx.taint).toEqual(expect.arrayContaining(['src:file', ...expectedDirs]));
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }

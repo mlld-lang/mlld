@@ -1,7 +1,7 @@
 # Before guard retry on pipeline stage succeeds
 
 /guard @retryBefore before retryable = when [
-  @input != "ok" && @ctx.guard.try < 2 => retry "retry before stage"
+  @input != "ok" && @mx.guard.try < 2 => retry "retry before stage"
   @input != "ok" => deny "still bad"
   * => allow
 ]

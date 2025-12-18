@@ -1,7 +1,7 @@
 /exe @process(value) = when [
-  denied => show "Blocked by: @ctx.guard.name"
-  denied => show "Reason: @ctx.guard.reason"
-  denied => show "Decision: @ctx.guard.decision"
-  denied => show "All reasons: @ctx.guard.reasons.join(', ')"
+  denied => show "Blocked by: @mx.guard.name"
+  denied => show "Reason: @mx.guard.reason"
+  denied => show "Decision: @mx.guard.decision"
+  denied => show "All reasons: @mx.guard.reasons.join(', ')"
   * => show @value
 ]

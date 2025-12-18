@@ -185,7 +185,7 @@ Use namespace imports to avoid collisions: import @alice/utils as @alice
 **Interface** (`core/resolvers/types.ts:29-71`)
 ```typescript
 interface IResolver {
-  resolve(spec: string, ctx: ResolverContext): Promise<ResolverResult>;
+  resolve(spec: string, mx: ResolverContext): Promise<ResolverResult>;
   shouldHandle(spec: string): boolean;
   priority: number;
 }

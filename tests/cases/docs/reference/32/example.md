@@ -1,1 +1,2 @@
-/stream @claude("Write a story")
+/append @payload to "events.jsonl"
+/append "raw text entry" to "events.log"

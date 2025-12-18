@@ -1,5 +1,5 @@
 /guard @secretBlock before secret = when [
-  @ctx.op.type == "show" => deny "No secrets"
+  @mx.op.type == "show" => deny "No secrets"
   * => allow
 ]
 

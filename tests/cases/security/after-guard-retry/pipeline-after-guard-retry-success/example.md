@@ -1,7 +1,7 @@
 # After guard retry pipeline success
 
 /guard after @pipelineRetry for retryable = when [
-  @output != "ok" && @ctx.guard.try < 3 => retry "need ok from pipeline"
+  @output != "ok" && @mx.guard.try < 3 => retry "need ok from pipeline"
   @output != "ok" => deny "still invalid"
   * => allow
 ]

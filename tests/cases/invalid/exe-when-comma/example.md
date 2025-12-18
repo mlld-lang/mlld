@@ -1,4 +1,4 @@
 /exe @handler(prompt) = when [
-  @ctx.try == 1 => "a",
+  @mx.try == 1 => "a",
   * => "b"
 ]

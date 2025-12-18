@@ -30,28 +30,28 @@ import {
 } from './VariableTypes';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 import { ensureStructuredValue, applySecurityDescriptorToStructuredValue } from '@interpreter/utils/structured-value';
-import { legacyMetadataToCtx, legacyMetadataToInternal } from './CtxHelpers';
+import { legacyMetadataToVarMx, legacyMetadataToInternal } from './VarMxHelpers';
 import { VariableMetadataUtils } from './VariableMetadata';
 import { attachArrayHelpers } from './ArrayHelpers';
 import type { TokenEstimationOptions } from '@core/utils/token-metrics';
 
 export interface VariableFactoryInitOptions {
-  ctx?: Partial<VariableContext>;
+  mx?: Partial<VariableContext>;
   internal?: Partial<VariableInternalMetadata>;
   metadata?: VariableMetadata;
 }
 
 interface NormalizedFactoryState {
   metadata?: VariableMetadata;
-  ctx: VariableContext;
+  mx: VariableContext;
   internal: VariableInternalMetadata;
 }
 
 function finalizeVariable<T extends Variable>(variable: T & { metadata?: VariableMetadata }): T {
   const legacyMetadata = variable.metadata;
-  if (!variable.ctx) {
-    variable.ctx = legacyMetadata
-      ? legacyMetadataToCtx(legacyMetadata)
+  if (!variable.mx) {
+    variable.mx = legacyMetadata
+      ? legacyMetadataToVarMx(legacyMetadata)
       : {
           labels: [],
           taint: [],
@@ -59,11 +59,11 @@ function finalizeVariable<T extends Variable>(variable: T & { metadata?: Variabl
           policy: null
         };
   }
-  if (variable.ctx) {
-    variable.ctx.name = variable.name;
-    variable.ctx.type = variable.type;
+  if (variable.mx) {
+    variable.mx.name = variable.name;
+    variable.mx.type = variable.type;
     if (variable.definedAt) {
-      variable.ctx.definedAt = variable.definedAt;
+      variable.mx.definedAt = variable.definedAt;
     }
   }
   if (!variable.internal) {
@@ -88,19 +88,19 @@ function normalizeFactoryOptions(
   text?: string,
   tokenOptions?: TokenEstimationOptions
 ): NormalizedFactoryState {
-  const { legacyMetadata, ctxOverrides, internalOverrides } = extractFactoryInput(metadataOrOptions);
+  const { legacyMetadata, mxOverrides, internalOverrides } = extractFactoryInput(metadataOrOptions);
   const metadata = applyTextMetrics(legacyMetadata, text, tokenOptions);
-  const ctx = Object.assign(
-    metadata ? legacyMetadataToCtx(metadata) : {
+  const mx = Object.assign(
+    metadata ? legacyMetadataToVarMx(metadata) : {
       labels: [],
       taint: [],
       sources: [],
       policy: null
     },
-    ctxOverrides
+    mxOverrides
   );
   const internal = Object.assign(metadata ? legacyMetadataToInternal(metadata) : {}, internalOverrides);
-  return { metadata, ctx, internal };
+  return { metadata, mx, internal };
 }
 
 function enrichStructuredMetadata(
@@ -136,7 +136,7 @@ function extractFactoryInput(
   metadataOrOptions: VariableMetadata | VariableFactoryInitOptions | undefined
 ): {
   legacyMetadata?: VariableMetadata;
-  ctxOverrides?: Partial<VariableContext>;
+  mxOverrides?: Partial<VariableContext>;
   internalOverrides?: Partial<VariableInternalMetadata>;
 } {
   if (!metadataOrOptions) {
@@ -146,7 +146,7 @@ function extractFactoryInput(
   if (isFactoryInitOptions(metadataOrOptions)) {
     return {
       legacyMetadata: metadataOrOptions.metadata,
-      ctxOverrides: metadataOrOptions.ctx,
+      mxOverrides: metadataOrOptions.mx,
       internalOverrides: metadataOrOptions.internal
     };
   }
@@ -158,7 +158,7 @@ function isFactoryInitOptions(value: unknown): value is VariableFactoryInitOptio
   if (!value || typeof value !== 'object') {
     return false;
   }
-  return 'ctx' in value || 'internal' in value || 'metadata' in value;
+  return 'mx' in value || 'internal' in value || 'metadata' in value;
 }
 
 // =========================================================================
@@ -470,7 +470,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -494,7 +494,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -521,7 +521,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -553,7 +553,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -583,7 +583,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -611,7 +611,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -635,7 +635,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     }) as ArrayVariable;
     attachArrayHelpers(arrayVariable);
@@ -668,7 +668,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -696,7 +696,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -730,7 +730,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -762,7 +762,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }
@@ -793,7 +793,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
     if (init.internal?.executableDef === undefined) {
@@ -830,7 +830,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal ?? baseMetadata
     });
   }
@@ -873,7 +873,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal ?? securityAwareMetadata
     });
   }
@@ -896,7 +896,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      ctx: init.ctx,
+      mx: init.mx,
       internal: init.internal
     });
   }

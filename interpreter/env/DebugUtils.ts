@@ -86,7 +86,7 @@ export class DebugUtils {
                 type: variable.type,
                 value: variable.value,
                 source: variable.source,
-                ctx: variable.ctx,
+                mx: variable.mx,
                 internal: variable.internal
               }
             ])

@@ -872,7 +872,7 @@ async function evaluateAnyMatch(
         // Create a variable from the condition value
         const variable = typeof conditionValue === 'string' ?
           createSimpleTextVariable(variableName, conditionValue, {
-            ctx: {
+            mx: {
               source: {
                 directive: 'var',
                 syntax: 'quoted',
@@ -882,7 +882,7 @@ async function evaluateAnyMatch(
             }
           }) :
           createObjectVariable(variableName, conditionValue, {
-            ctx: {
+            mx: {
               source: {
                 directive: 'var',
                 syntax: 'object',
@@ -1256,7 +1256,7 @@ export function conditionTargetsDenied(condition: BaseMlldNode[]): boolean {
         return true;
       }
       if (
-        identifier === 'ctx' &&
+        identifier === 'mx' &&
         Array.isArray((node as any).fields) &&
         (node as any).fields.some(isDeniedField)
       ) {

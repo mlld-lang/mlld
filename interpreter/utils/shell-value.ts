@@ -53,7 +53,7 @@ export function classifyShellValue(value: unknown): ShellValueClassification {
 
   if (isStructuredValue(value) && value.type === 'array') {
     // Check if this is a renamed-content array (array-simple) or load-content-result array (complex)
-    const arrayType = value.ctx?.arrayType;
+    const arrayType = value.mx?.arrayType;
     if (arrayType === 'renamed-content') {
       const data = value.data as any[];
       const elements = data.map(item => String(item ?? ''));

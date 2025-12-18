@@ -40,8 +40,8 @@ describe('LocalResolver', () => {
       const result = await resolver.resolve('modules/utils.mld', config);
       
       expect(result.content).toBe('/text @greeting = "Hello from utils"');
-      expect(result.ctx?.source).toBe('file:///project/modules/utils.mld');
-      expect(result.ctx?.mimeType).toBe('text/x-mlld');
+      expect(result.mx?.source).toBe('file:///project/modules/utils.mld');
+      expect(result.mx?.mimeType).toBe('text/x-mlld');
     });
     
     it('should handle absolute paths within basePath', async () => {
@@ -50,7 +50,7 @@ describe('LocalResolver', () => {
       const result = await resolver.resolve('/project/README.md', config);
       
       expect(result.content).toBe('# Test Project');
-      expect(result.ctx?.mimeType).toBe('text/markdown');
+      expect(result.mx?.mimeType).toBe('text/markdown');
     });
     
     it('should prevent path traversal attacks', async () => {
@@ -213,13 +213,13 @@ describe('LocalResolver', () => {
       const config = { basePath: '/project' };
       
       const pyResult = await resolver.resolve('test.py', config);
-      expect(pyResult.ctx?.mimeType).toBe('text/x-python');
+      expect(pyResult.mx?.mimeType).toBe('text/x-python');
 
       const jsResult = await resolver.resolve('test.js', config);
-      expect(jsResult.ctx?.mimeType).toBe('text/javascript');
+      expect(jsResult.mx?.mimeType).toBe('text/javascript');
 
       const unknownResult = await resolver.resolve('test.unknown', config);
-      expect(unknownResult.ctx?.mimeType).toBe('text/plain');
+      expect(unknownResult.mx?.mimeType).toBe('text/plain');
     });
   });
 });

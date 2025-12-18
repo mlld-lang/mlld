@@ -81,7 +81,7 @@ DynamicModuleResolver (priority 1)
         ├─ String input → parse → AST
         ├─ Object input → serialize → parse → AST
         │
-        └─ Add ctx: { taint: ['src:dynamic'], labels: ['src:dynamic'] }
+        └─ Add mx: { taint: ['src:dynamic'], labels: ['src:dynamic'] }
                 │
                 ▼
         deriveImportTaint()

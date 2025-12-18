@@ -56,7 +56,7 @@ export type PipelineEvent =
  */
 /**
  * Pipeline State
- * WHY: Centralize stage progression, retry limits, and history needed to build @p/@ctx.
+ * WHY: Centralize stage progression, retry limits, and history needed to build @p/@mx.
  * GOTCHA: We store a single activeRetryContext by design; nested retries are not supported.
  */
 export interface PipelineState {
@@ -617,7 +617,7 @@ export class PipelineStateMachine {
    */
   /**
    * Build a user-facing context snapshot for a given stage.
-   * WHY: The executor uses this to construct @ctx and @p variables in stage environments.
+   * WHY: The executor uses this to construct @mx and @p variables in stage environments.
    * GOTCHA: Attempt counts are context-local; downstream stages outside a retry context see try=1.
    */
   private buildStageContext(stage: number): StageContext {
@@ -730,7 +730,7 @@ export class PipelineStateMachine {
    * Helper methods
    */
   private generateContextId(): string {
-    return `ctx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `mx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   private getInputForStage(stage: number): string {

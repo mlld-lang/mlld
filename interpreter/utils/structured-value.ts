@@ -63,7 +63,7 @@ export interface StructuredValue<T = unknown> {
   data: T;
   metadata?: StructuredValueMetadata;
   internal?: StructuredValueInternal;
-  ctx: StructuredValueContext;
+  mx: StructuredValueContext;
   toString(): string;
   valueOf(): string;
   [Symbol.toPrimitive](hint?: string): string;
@@ -101,12 +101,12 @@ const DEV_ENV = typeof process !== 'undefined' ? process.env : undefined;
 const SHOULD_ASSERT_STRUCTURED =
   DEV_ENV?.MLLD_DEV_ASSERTIONS === 'true' || DEV_ENV?.MLLD_DEBUG_STRUCTURED === 'true';
 
-function ctxToSecurityDescriptor(ctx: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null }): SecurityDescriptor {
+function varMxToSecurityDescriptor(mx: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null }): SecurityDescriptor {
   return makeSecurityDescriptor({
-    labels: ctx.labels ? [...ctx.labels] : [],
-    taint: Array.isArray(ctx.taint) ? [...ctx.taint] : [],
-    sources: ctx.sources ? [...ctx.sources] : [],
-    policyContext: ctx.policy ?? undefined
+    labels: mx.labels ? [...mx.labels] : [],
+    taint: Array.isArray(mx.taint) ? [...mx.taint] : [],
+    sources: mx.sources ? [...mx.sources] : [],
+    policyContext: mx.policy ?? undefined
   });
 }
 
@@ -384,10 +384,10 @@ export function applySecurityDescriptorToStructuredValue(
     ...(value.metadata ?? {}),
     security: normalized
   };
-  value.ctx.labels = normalized.labels ? [...normalized.labels] : [];
-  value.ctx.taint = normalized.taint ? [...normalized.taint] : [];
-  value.ctx.sources = normalized.sources ? [...normalized.sources] : [];
-  value.ctx.policy = normalized.policyContext ?? null;
+  value.mx.labels = normalized.labels ? [...normalized.labels] : [];
+  value.mx.taint = normalized.taint ? [...normalized.taint] : [];
+  value.mx.sources = normalized.sources ? [...normalized.sources] : [];
+  value.mx.policy = normalized.policyContext ?? null;
 }
 
 function ensureStructuredValueState<T>(value: StructuredValue<T>): StructuredValue<T> {
@@ -405,7 +405,7 @@ function defineStructuredCtx<T>(
   if ((value as any)[STRUCTURED_VALUE_CTX_INITIALIZED]) {
     return;
   }
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'ctx');
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'mx');
   if (descriptor?.get) {
     const derived = descriptor.get.call(value) as StructuredValueContext;
     setCtx(value, derived);
@@ -419,16 +419,16 @@ function defineStructuredCtx<T>(
     setCtx(value, descriptor.value as StructuredValueContext);
     return;
   }
-  setCtx(value, buildCtxFromMetadata(metadata, type));
+  setCtx(value, buildVarMxFromMetadata(metadata, type));
 }
 
-function setCtx<T>(value: StructuredValue<T>, ctx: StructuredValueContext | undefined): void {
+function setCtx<T>(value: StructuredValue<T>, mx: StructuredValueContext | undefined): void {
   const resolvedCtx: StructuredValueContext =
-    ctx ?? buildCtxFromMetadata(value.metadata, value.type);
+    mx ?? buildVarMxFromMetadata(value.metadata, value.type);
   if (!resolvedCtx.type) {
     resolvedCtx.type = value.type;
   }
-  Object.defineProperty(value, 'ctx', {
+  Object.defineProperty(value, 'mx', {
     value: resolvedCtx,
     enumerable: false,
     configurable: true,
@@ -473,14 +473,14 @@ function setInternal<T>(value: StructuredValue<T>, internal: StructuredValueInte
 
 function markStructuredValueInitialized<T>(value: StructuredValue<T>): void {
   if (!(value as any)[STRUCTURED_VALUE_CTX_INITIALIZED]) {
-    setCtx(value, buildCtxFromMetadata(value.metadata, value.type));
+    setCtx(value, buildVarMxFromMetadata(value.metadata, value.type));
   }
   if (!(value as any)[STRUCTURED_VALUE_INTERNAL_INITIALIZED]) {
     setInternal(value, value.internal ?? {});
   }
 }
 
-function buildCtxFromMetadata(
+function buildVarMxFromMetadata(
   metadata: StructuredValueMetadata | undefined,
   type: StructuredValueType
 ): StructuredValueContext {
@@ -573,9 +573,9 @@ export function collectParameterDescriptors(
   const descriptors: SecurityDescriptor[] = [];
   for (const name of params) {
     const variable = env.getVariable(name);
-    const ctxDescriptor = variable?.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined;
-    if (ctxDescriptor) {
-      descriptors.push(ctxDescriptor);
+    const mxDescriptor = variable?.mx ? varMxToSecurityDescriptor(variable.mx) : undefined;
+    if (mxDescriptor) {
+      descriptors.push(mxDescriptor);
     }
   }
   return descriptors;
@@ -629,12 +629,12 @@ function extractDescriptorInternal(
   }
 
   if (isStructuredValue(value)) {
-    const descriptor = ctxToSecurityDescriptor(value.ctx);
+    const descriptor = varMxToSecurityDescriptor(value.mx);
     return normalizeIfNeeded(descriptor, options.normalize);
   }
 
   if (isVariableLike(value)) {
-    const descriptor = value.ctx ? ctxToSecurityDescriptor(value.ctx) : undefined;
+    const descriptor = value.mx ? varMxToSecurityDescriptor(value.mx) : undefined;
     return normalizeIfNeeded(descriptor, options.normalize);
   }
 
@@ -660,9 +660,9 @@ function extractDescriptorInternal(
     return descriptors[0];
   }
 
-  const candidate = value as { metadata?: { security?: SecurityDescriptor }; ctx?: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null } };
-  const metadataDescriptor = candidate.ctx
-    ? normalizeIfNeeded(ctxToSecurityDescriptor(candidate.ctx as any), options.normalize)
+  const candidate = value as { metadata?: { security?: SecurityDescriptor }; mx?: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null } };
+  const metadataDescriptor = candidate.mx
+    ? normalizeIfNeeded(varMxToSecurityDescriptor(candidate.mx as any), options.normalize)
     : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, options.normalize);
   const nestedDescriptors = Object.values(value as Record<string, unknown>)
     .map(item => extractDescriptorInternal(item, options, seen))

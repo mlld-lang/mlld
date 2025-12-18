@@ -35,6 +35,9 @@ WithProperty
   = "pipeline" _ ":" _ pipeline:PipelineArray {
       return ["pipeline", pipeline];
     }
+  / "skipDirs" _ ":" _ skipDirs:ArrayLiteral {
+      return ["skipDirs", skipDirs];
+    }
   / "guards" _ ":" _ guards:GuardOverrides {
       return ["guards", guards];
     }

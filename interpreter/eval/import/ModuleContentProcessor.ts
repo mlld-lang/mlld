@@ -415,7 +415,7 @@ export class ModuleContentProcessor {
     this.collectTemplateReferences(templateNodes, references);
     const allowed = new Set<string>([
       ...paramNames,
-      'ctx',
+      'mx',
       'pipeline',
       'p',
       'state',

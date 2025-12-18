@@ -1,7 +1,7 @@
 # Guard context is visible inside guard evaluation
 
 /guard @captureContext before retryable = when [
-  * => allow `guard-try:@ctx.guard.try hints:@ctx.guard.hintHistory.length`
+  * => allow `guard-try:@mx.guard.try hints:@mx.guard.hintHistory.length`
 ]
 
 /exe retryable @seed() = js { return "anything"; }

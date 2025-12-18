@@ -1,7 +1,7 @@
 # Guard Always
 
 /guard always @tagOutput for op:exe = when [
-  * => allow @tagValue(@ctx.guard.timing, @output, @input)
+  * => allow @tagValue(@mx.guard.timing, @output, @input)
 ]
 
 /exe @tagValue(timing, value, input) = js {

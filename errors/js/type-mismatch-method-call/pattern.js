@@ -1,13 +1,13 @@
 export const pattern = {
   name: 'type-mismatch-method-call',
 
-  test(error, ctx) {
+  test(error, mx) {
     if (!error || !error.message) return false;
     // Match common shape: Cannot call .<method>() on <type>
     return /Cannot call \.\w+\(\) on \w+/.test(error.message);
   },
 
-  enhance(error, ctx) {
+  enhance(error, mx) {
     const method = (error.message.match(/Cannot call \.([\w$]+)\(\)/) || [])[1] || 'method';
     const type = (error.message.match(/on (\w+)$/) || [])[1] || 'unknown';
 
@@ -20,7 +20,7 @@ export const pattern = {
     };
     const hint = alt[type] || 'Ensure the value is of the correct type for this method.';
 
-    const firstLine = (ctx.code || '').split('\n')[0]?.trim() || '';
+    const firstLine = (mx.code || '').split('\n')[0]?.trim() || '';
     return {
       METHOD: method,
       TYPE: type,

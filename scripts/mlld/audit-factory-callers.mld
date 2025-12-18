@@ -25,7 +25,7 @@ Path: @filepath
 <factory_signatures>
 Modern factories accept either:
 1. OLD FORMAT (VariableMetadata): { security: {...}, isSystem: true, arrayType: '...' }
-2. NEW FORMAT (VariableFactoryInitOptions): { ctx: {...}, internal: {...} }
+2. NEW FORMAT (VariableFactoryInitOptions): { mx: {...}, internal: {...} }
 
 Factory functions to look for:
 - createSimpleTextVariable(name, value, source, metadataOrOptions?)
@@ -41,7 +41,7 @@ The 4th parameter is metadataOrOptions.
 
 <analysis_task>
 For each factory call in the file:
-1. Identify which format is used (old metadata object vs new { ctx, internal })
+1. Identify which format is used (old metadata object vs new { mx, internal })
 2. Note complexity (simple metadata vs complex nested)
 3. Estimate effort to migrate (trivial/easy/medium/hard)
 

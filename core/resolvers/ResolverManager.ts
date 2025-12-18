@@ -366,7 +366,7 @@ export class ResolverManager {
                 content: {
                   content: cached.content,
                   contentType: cached.contentType || 'module', // Default to module if not stored
-                  ctx: metadata,
+                  mx: metadata,
                   metadata
                 },
                 resolverName: 'cache',
@@ -487,8 +487,8 @@ export class ResolverManager {
             ...content.metadata,
             hash: cacheEntry.hash
           };
-          content.ctx = {
-            ...(content.ctx ?? content.metadata ?? {}),
+          content.mx = {
+            ...(content.mx ?? content.metadata ?? {}),
             hash: cacheEntry.hash
           };
           

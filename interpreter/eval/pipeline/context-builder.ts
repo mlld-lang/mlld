@@ -43,7 +43,7 @@ export interface SimplifiedPipelineContext {
  */
 /**
  * Create execution environment for a pipeline stage.
- * WHY: Constructs @input (with format), @pipeline/@p, and seeds the ambient @ctx data.
+ * WHY: Constructs @input (with format), @pipeline/@p, and seeds the ambient @mx data.
  * CONTEXT: Hides the synthetic source stage from user-visible indices and stage numbers.
  */
 interface StageEnvironmentOptions {
@@ -124,13 +124,13 @@ export async function createStageEnvironment(
       ? context.previousStructuredOutputs
       : context.previousOutputs,
     format: format,
-    // Use context-local attempt for ambient @ctx.try
+    // Use context-local attempt for ambient @mx.try
     attemptCount: context.contextAttempt,
-    // Preserve attempts history for @ctx.tries
+    // Preserve attempts history for @mx.tries
     attemptHistory: context.historyStructured && context.historyStructured.length > 0
       ? context.historyStructured
       : context.history,
-    // Provide hint info for ambient @ctx.hint
+    // Provide hint info for ambient @mx.hint
     hint: normalizedHint,
     hintHistory: context.hintHistory || [],
     sourceRetryable: options?.sourceRetryable ?? false,
@@ -204,7 +204,7 @@ async function setSimplifiedInputVariable(
       structuredInput,
       inputSource,
       {
-        ctx: {},
+        mx: {},
         internal: { isSystem: true, isPipelineParameter: true }
       }
     );
@@ -217,7 +217,7 @@ async function setSimplifiedInputVariable(
       input,
       inputSource,
       {
-        ctx: {},
+        mx: {},
         internal: { isSystem: true, isPipelineParameter: true }
       }
     );
@@ -260,7 +260,7 @@ function setSimplifiedPipelineVariable(
     false,
     inputSource,
     {
-      ctx: {},
+      mx: {},
       internal: { isSystem: true, isPipelineContext: true }
     }
   );

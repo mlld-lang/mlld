@@ -22,7 +22,7 @@
   <FILE_LOADING> ................... Angle brackets, AST selectors (wildcards/types/names), metadata, glob behavior.
   <FILE_LOADING_GLOBS> ............. Glob patterns, array access, "as" templates, common patterns.
   <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
-  <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects, parallel groups with ||.
+  <PIPELINES> ...................... Operator |, transformers, @mx/@p context, retry/hints, inline effects, parallel groups with ||.
   <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
   <RESERVED_VARIABLES> ............. @now, @input, @base, @debug.
 </SYNTAX>
@@ -69,7 +69,7 @@
   <MISTAKE_NO_EARLY_EXIT> .......... Model flows via /when rather than exits.
 </COMMON_MISTAKES>
 <REFERENCE> ........................ Execution context table, syntax summary, quick transforms list.
-<SECURITY> ......................... Guards, data labels, expression tracking, @ctx.guard context.
+<SECURITY> ......................... Guards, data labels, expression tracking, @mx.guard context.
 <STREAMING> ........................ Live chunks with stream keyword or /stream; suppress via flags.
 <SEE_ALSO> ......................... Documentation, examples repository, source code.
 </TOC>
@@ -341,7 +341,7 @@ Angle brackets load file contents (not filenames). Works in variables, templates
 /var @authorEmail = <package.json>.author.email
 
 # Globs + "as" templates
-/var @toc = <docs/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
+/var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
 
 Data flows as native types:
@@ -385,8 +385,13 @@ Module imports and path imports. Import type keywords control resolution behavio
 
 # Template collections (directory of templates with shared signature)
 /import templates from "@base/agents" as @agents(message, context)
-/show @agents["alice"](@msg, @ctx)              # invokes agents/alice.att
-/show @agents.support["helper"](@msg, @ctx)     # invokes agents/support/helper.att
+/show @agents["alice"](@msg, @mx)              # invokes agents/alice.att
+/show @agents.support["helper"](@msg, @mx)     # invokes agents/support/helper.att
+
+# Directory module imports (auto-load */index.mld; default skipDirs: ["_*", ".*"])
+/import "./agents" as @agentModules
+/show @agentModules.party.who
+/import "./agents" as @agentModules with { skipDirs: [] }
 ```
 
 - Prefix identifiers in the braces with `@` so imported names match runtime variable syntax (e.g., `{ @helper }`).
@@ -433,7 +438,7 @@ Use `foreach` to transform collections; use `/for` to execute/collect. Batch pip
   let @result = @runTask(@task)
   show `done:@task.id`
 ]
-# Errors accumulate in @ctx.errors (not thrown); outer-scope writes blocked
+# Errors accumulate in @mx.errors (not thrown); outer-scope writes blocked
 # Failed iterations add error markers: { index, key?, message, error, value }
 ```
 
@@ -573,7 +578,7 @@ Angle brackets load, quotes store literal paths. Field access and globs are supp
 ```mlld
 /var @author = <package.json>.author
 /var @firstEmail = <data.json>.users[0].email
-/var @md = <docs/*.md> as "# <>.ctx.filename"
+/var @md = <docs/*.md> as "# <>.mx.filename"
 ```
 
 AST selection: add `{ ... }` inside the angle brackets to pull specific definitions or usages.
@@ -624,11 +629,11 @@ Missing patterns return `null` preserving request order. Cannot mix content sele
 
 Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
 
-Metadata lives under `.ctx` (e.g., `@file.ctx.filename`); shorthand like `@file.filename` still maps to the same fields for backward compatibility.
+Metadata lives under `.mx` (e.g., `@file.mx.filename`); shorthand like `@file.filename` still maps to the same fields for backward compatibility.
 
-File metadata fields: `.ctx.content` (default), `.ctx.filename`, `.ctx.relative`, `.ctx.absolute`, `.ctx.tokens`, `.ctx.tokest`, `.ctx.fm` (frontmatter), `.ctx.json` (for .json files)
+File metadata fields: `.mx.content` (default), `.mx.filename`, `.mx.relative`, `.mx.absolute`, `.mx.tokens`, `.mx.tokest`, `.mx.fm` (frontmatter), `.mx.json` (for .json files)
 
-URL metadata fields: All file fields plus `.ctx.url`, `.ctx.domain`, `.ctx.title`, `.ctx.description`, `.ctx.html`, `.ctx.text`, `.ctx.md`, `.ctx.headers`, `.ctx.status`, `.ctx.contentType`
+URL metadata fields: All file fields plus `.mx.url`, `.mx.domain`, `.mx.title`, `.mx.description`, `.mx.html`, `.mx.text`, `.mx.md`, `.mx.headers`, `.mx.status`, `.mx.contentType`
 </FILE_LOADING>
 
 <FILE_LOADING_GLOBS>
@@ -638,18 +643,18 @@ Glob patterns load multiple files at once. Use `<path/**/*.ext>` to match recurs
 # Load all markdown files
 /var @docs = <docs/**/*.md>
 /show @docs.length                    # number of files loaded
-/show @docs[0].ctx.filename           # first file's name
+/show @docs[0].mx.filename           # first file's name
 /show @docs[0].content                # first file's content
 
 # Generate table of contents
-/var @toc = <docs/**/*.md> as "- [<>.ctx.fm.title](<>.ctx.relative)"
+/var @toc = <docs/**/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 
 # Find specific test directories
 /var @tests = <tests/**/example.md>   # all example.md files
-/var @dirs = @tests.map(t => t.ctx.relative.replace("/example.md", ""))
+/var @dirs = @tests.map(t => t.mx.relative.replace("/example.md", ""))
 
 # Field access on each file
-/for @doc in @docs => show @doc.ctx.fm.title
+/for @doc in @docs => show @doc.mx.fm.title
 ```
 
 Glob metadata (each matched file has):
@@ -714,7 +719,7 @@ Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and
 </BUILTIN_METHODS>
 
 <PIPELINES>
-Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). All `/exe` functions work in pipelines (native mlld, JS, shell). Stages access context via `@ctx` and pipeline history via `@p`.
+Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). All `/exe` functions work in pipelines (native mlld, JS, shell). Stages access context via `@mx` and pipeline history via `@p`.
 
 JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict JSON), `@json.loose` (explicit relaxed parsing with single quotes, trailing commas, comments), `@json.llm` (extract JSON from LLM responses with code fences/prose, returns false if none found).
 
@@ -740,7 +745,7 @@ JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict J
 # Retry with hints
 /exe @validator(input) = when [
   @input.valid => @input
-  @ctx.try < 3 => retry "need more detail"
+  @mx.try < 3 => retry "need more detail"
   * => "fallback"
 ]
 /var @res = @raw | @validator
@@ -748,12 +753,12 @@ JSON parsing modes: `@json` (loose by default), `@json.strict` (enforce strict J
 # Best-of-N pattern
 /exe @selectBest(response) = when [
   @response.score > 8 => @response
-  @ctx.try < 5 => retry { temperature: 0.9 }
+  @mx.try < 5 => retry { temperature: 0.9 }
   * => @selectHighestScore(@p.retries.all)
 ]
 ```
 
-Context object (@ctx): `try` (attempt #), `tries` (array), `stage`, `input`, `hint` (from retry), `lastOutput`, `isPipeline`
+Context object (@mx): `try` (attempt #), `tries` (array), `stage`, `input`, `hint` (from retry), `lastOutput`, `isPipeline`
 
 Pipeline array (@p): `@p[0]` (input), `@p[-1]` (previous output), `@p.retries.all` (full history)
 
@@ -797,7 +802,7 @@ Semantics:
 * Equivalence: `|| @a() || @b()` produces same AST as `"" with { pipeline: [[@a, @b]] }`
 * Ordering: Results preserve command order; next stage receives native array/object.
 * Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
-* Error accumulation: Failures accumulate in `@ctx.errors` (array of `{ index, key?, message, error, value }`); failed operations add error markers to results at same index. Pipeline continues for graceful degradation. Example: `|| @a || @b || @c | when [ @ctx.errors.length > 0 => @repair(@p[-1], @ctx.errors) ]`
+* Error accumulation: Failures accumulate in `@mx.errors` (array of `{ index, key?, message, error, value }`); failed operations add error markers to results at same index. Pipeline continues for graceful degradation. Example: `|| @a || @b || @c | when [ @mx.errors.length > 0 => @repair(@p[-1], @mx.errors) ]`
 * Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.
 * Rate limits: 429/"rate limit" errors trigger per-command exponential backoff.
 * Inline effects: Effects attached to commands in the group run after each command succeeds.
@@ -1051,7 +1056,7 @@ Forms:
 # Basic handler with fallback
 /exe @handler(input) = when [
   @input.valid => @input.value
-  @ctx.try < 3 => retry "validation failed"
+  @mx.try < 3 => retry "validation failed"
   none => "default"
 ]
 
@@ -1216,7 +1221,7 @@ While control keywords:
 - `continue @value` - Next iteration with new state
 - `continue` - Next iteration with current state (implicit)
 
-While context (`@ctx.while`):
+While context (`@mx.while`):
 - `iteration` - Current iteration (1-based)
 - `limit` - Configured cap
 - `active` - true when inside while
@@ -1245,12 +1250,12 @@ Parallel /for (optional):
   let @result = @runTask(@task)
   show `done:@task.id`
 ]
-# Errors accumulate in @ctx.errors; caller decides repair
+# Errors accumulate in @mx.errors; caller decides repair
 /exe @process(tasks) = [
   let @results = for parallel @t in @tasks => @run(@t)
   => when [
-    @ctx.errors.length == 0 => @results
-    * => @repair(@results, @ctx.errors)
+    @mx.errors.length == 0 => @results
+    * => @repair(@results, @mx.errors)
   ]
 ]
 ```
@@ -1258,8 +1263,8 @@ Parallel /for (optional):
 Notes:
 - Directive form streams results as iterations finish (order not guaranteed); expression form returns results in input order.
 - Block bodies supported; outer-scope writes blocked (block-scoped `let` only).
-- Errors accumulate in `@ctx.errors` (array of `{ index, key?, message, error, value }`); failed iterations add error markers to results array at same index.
-- `@ctx.errors` clears at start of each parallel operation.
+- Errors accumulate in `@mx.errors` (array of `{ index, key?, message, error, value }`); failed iterations add error markers to results array at same index.
+- `@mx.errors` clears at start of each parallel operation.
 - Concurrency capped by `MLLD_PARALLEL_LIMIT` unless overridden per loop.
 - Pacing: optional minimum delay between iteration starts via `/for parallel(n, interval) ...` (units: ms, s, m, h).
 - Rate limits: per‑iteration 429/"rate limit" errors use exponential backoff.
@@ -1333,10 +1338,15 @@ license: CC0
 
 # Template collections (local directories with shared params)
 /import templates from "@base/agents" as @agents(message, context)
-/show @agents["alice"](@msg, @ctx)               # bracket notation
-/show @agents.alice(@msg, @ctx)                  # dot notation (if valid identifier)
-/show @agents.support["helper"](@msg, @ctx)      # nested dirs
+/show @agents["alice"](@msg, @mx)               # bracket notation
+/show @agents.alice(@msg, @mx)                  # dot notation (if valid identifier)
+/show @agents.support["helper"](@msg, @mx)      # nested dirs
 /show @agents["json_pretty"](@data)              # json-pretty.att sanitized to json_pretty
+
+# Directory module imports (auto-load */index.mld; default skipDirs: ["_*", ".*"])
+/import "./agents" as @agentModules
+/show @agentModules.party.who
+/import "./agents" as @agentModules with { skipDirs: [] }
 ```
 
 Template collections: local directories only. Filenames sanitized (hyphens/special chars → underscores). For registry modules, use individual template exports.
@@ -1669,7 +1679,7 @@ In script:
 Security: All dynamic imports labeled `src:dynamic`, marked untrusted. Guards can check:
 ```mlld
 /guard before secret = when [
-  @input.ctx.taint.includes('src:dynamic') =>
+  @input.mx.taint.includes('src:dynamic') =>
     deny "Cannot use dynamic data as secrets"
   * => allow
 ]
@@ -1831,7 +1841,7 @@ Know when to use angle brackets for resolver paths; modules don't use them.
 
 ✅ /exe @tpl(x) = template "./file.att"         # single file
 ✅ /import templates from "./agents" as @agents(message, context)
-✅ /show @agents["alice"](@msg, @ctx)
+✅ /show @agents["alice"](@msg, @mx)
 ```
 
 Template collections require parameters and target directories, not single files.
@@ -1867,7 +1877,7 @@ Guards protect data and operations. Label sensitive data, define policies:
 /var pii @email = "user@example.com"     # Label as 'pii'
 
 /guard @noShellSecrets before secret = when [
-  @ctx.op.type == "run" => deny "Secrets blocked from shell"
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
   * => allow
 ]
 
@@ -1890,13 +1900,13 @@ After guards (output validation):
 
 Transform with allow @value:
 /guard @redact before secret = when [
-  @ctx.op.type == "show" => allow @redact(@input)
+  @mx.op.type == "show" => allow @redact(@input)
   * => allow
 ]
 
 Denied handlers:
 /exe @handler(value) = when [
-  denied => `Blocked: @ctx.guard.reason`
+  denied => `Blocked: @mx.guard.reason`
   * => @value
 ]
 
@@ -1911,13 +1921,13 @@ Labels track through: methods (@secret.trim()), templates, field access, iterato
 Example directory guards:
 ```mlld
 /guard before op:run = when [
-  @input.any.ctx.taint.includes('dir:/tmp/uploads') =>
+  @input.any.mx.taint.includes('dir:/tmp/uploads') =>
     deny "Cannot execute uploaded files"
   * => allow
 ]
 
 /guard before secret = when [
-  @input.ctx.taint.some(t => t.startsWith('dir:/app/config')) =>
+  @input.mx.taint.some(t => t.startsWith('dir:/app/config')) =>
     deny "Config directory may contain secrets"
   * => allow
 ]

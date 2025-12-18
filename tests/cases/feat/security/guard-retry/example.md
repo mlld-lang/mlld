@@ -1,7 +1,7 @@
 # Guard Retry
 
 /guard for secret = when [
-  @ctx.op.type == "pipeline-stage" && @ctx.op.subtype == "maskSecret" && @ctx.guard.try == 1 => retry "Run mask stage again"
+  @mx.op.type == "pipeline-stage" && @mx.op.subtype == "maskSecret" && @mx.guard.try == 1 => retry "Run mask stage again"
   * => allow
 ]
 

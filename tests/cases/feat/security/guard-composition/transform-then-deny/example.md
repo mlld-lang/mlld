@@ -11,8 +11,8 @@
 /var secret @word = "clean"
 
 /exe @blocked(value) = when [
-  denied => show `replacement: @ctx.guard.trace[0].replacement.value`
-  denied => show `reason: @ctx.guard.reason`
+  denied => show `replacement: @mx.guard.trace[0].replacement.value`
+  denied => show `reason: @mx.guard.reason`
   * => show "should not run"
 ]
 

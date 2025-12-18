@@ -1,24 +1,24 @@
 export const pattern = {
   name: 'when-comma-separated',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Check if this is a when expression parsing error
     // Look for patterns like "condition => action, condition => action"
-    if (!ctx.line) return false;
+    if (!mx.line) return false;
     
     // Check if we're in a when context
-    const prevLines = ctx.lines.slice(Math.max(0, ctx.lineNumber - 3), ctx.lineNumber).join('\n');
-    const hasWhenContext = /when\s*\[/.test(prevLines) || /when\s*\[/.test(ctx.line);
+    const prevLines = mx.lines.slice(Math.max(0, mx.lineNumber - 3), mx.lineNumber).join('\n');
+    const hasWhenContext = /when\s*\[/.test(prevLines) || /when\s*\[/.test(mx.line);
     
     // Check if the line has the comma-separated pattern
-    const hasCommaSeparatedConditions = /=>\s*[^,]+,\s*[@*]/.test(ctx.line);
+    const hasCommaSeparatedConditions = /=>\s*[^,]+,\s*[@*]/.test(mx.line);
     
     return hasWhenContext && hasCommaSeparatedConditions;
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the conditions from the line
-    const matches = ctx.line.match(/(.+?)\s*=>\s*(.+?),\s*(.+?)\s*=>\s*(.+)/);
+    const matches = mx.line.match(/(.+?)\s*=>\s*(.+?),\s*(.+?)\s*=>\s*(.+)/);
     
     if (matches) {
       const firstCondition = matches[1].trim();
@@ -31,13 +31,13 @@ export const pattern = {
         FIRST_ACTION: firstAction,
         SECOND_CONDITION: secondCondition,
         SECOND_ACTION: secondAction,
-        LINE: ctx.line.trim()
+        LINE: mx.line.trim()
       };
     }
     
     // Fallback if we can't parse the exact structure
     return {
-      LINE: ctx.line.trim(),
+      LINE: mx.line.trim(),
       FIRST_CONDITION: '@condition1',
       FIRST_ACTION: 'action1',
       SECOND_CONDITION: '@condition2',

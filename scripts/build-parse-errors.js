@@ -142,13 +142,13 @@ function createErrorContext(error, source) {
  * Enhance a parse error using compiled patterns
  */
 export function enhanceParseError(error, source, filePath) {
-  const ctx = createErrorContext(error, source);
+  const mx = createErrorContext(error, source);
   
   // Try each pattern
   for (const pattern of patterns) {
     try {
-      if (pattern.test(error, ctx)) {
-        const variables = pattern.enhance(error, ctx);
+      if (pattern.test(error, mx)) {
+        const variables = pattern.enhance(error, mx);
         const message = interpolateTemplate(pattern.template, variables);
         
         const location = error.location;

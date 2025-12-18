@@ -56,7 +56,7 @@ Return JSON:
   "usages": [
     {
       "line": number,
-      "helper": "metadataToCtx" | "metadataToInternal" | "ctxToSecurityDescriptor" | "etc",
+      "helper": "metadataToCtx" | "metadataToInternal" | "mxToSecurityDescriptor" | "etc",
       "context": "brief description of where it's used",
       "purpose": "why it exists",
       "canRemove": boolean,

@@ -1,6 +1,6 @@
 /exe @improve() = when [
   @quality > 0.8 => @input
-  @ctx.try < 3 => retry
+  @mx.try < 3 => retry
   * => retry "hint text"
 ]
 /exe @enhance() = when [

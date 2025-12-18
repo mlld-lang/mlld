@@ -80,7 +80,7 @@ describe('extractDirectiveInputs', () => {
 
     const inputs = await extractDirectiveInputs(directive, env);
     expect(inputs).toHaveLength(1);
-    expect(inputs[0].ctx?.labels).toContain('secret');
+    expect(inputs[0].mx?.labels).toContain('secret');
   });
 
   it('surfaces descriptors for /run commands referencing expression variables', async () => {
@@ -106,6 +106,6 @@ describe('extractDirectiveInputs', () => {
 
     const inputs = await extractDirectiveInputs(directive, env);
     expect(inputs).toHaveLength(1);
-    expect(inputs[0].ctx?.labels).toContain('secret');
+    expect(inputs[0].mx?.labels).toContain('secret');
   });
 });

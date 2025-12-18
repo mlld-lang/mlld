@@ -27,7 +27,7 @@ version: 1.0.0
 
 >> Build migration request for each file
 /exe @buildMigrationRequest(fileAnalysis) = `
-You are migrating Variable factory calls from old metadata format to new { ctx, internal } format.
+You are migrating Variable factory calls from old metadata format to new { mx, internal } format.
 
 <file_context>
 File: @fileAnalysis.filepath
@@ -58,7 +58,7 @@ OLD FORMAT (what you're migrating FROM):
 
 NEW FORMAT (what you're migrating TO):
 All become: { internal: { ...all the flags } }
-OR: { ctx: { ...user-facing }, internal: { ...implementation } }
+OR: { mx: { ...user-facing }, internal: { ...implementation } }
 
 SEMANTIC CLASSIFICATION:
 .internal (implementation flags):
@@ -68,15 +68,15 @@ SEMANTIC CLASSIFICATION:
 - customToString, customToJSON
 - isFullyEvaluated, transformedBy
 
-.ctx (user-facing metadata):
+.mx (user-facing metadata):
 - definedAt, source, importPath
 - labels, taint, sources (security)
 - filename, url, tokens (content)
 
 MIGRATION RULES:
 1. Simple flags (isSystem, isParameter, etc.) → { internal: { flag: value } }
-2. Source only (no metadata) → { ctx: { source: sourceObj } } (if source has metadata)
-3. Complex objects → split into ctx + internal based on field semantics
+2. Source only (no metadata) → { mx: { source: sourceObj } } (if source has metadata)
+3. Complex objects → split into mx + internal based on field semantics
 4. Existing 'internal' variable → { internal: internalObj }
 
 EXAMPLES:
@@ -87,13 +87,13 @@ EXAMPLES:
 // NEW: { internal: { isPipelineInput: true, pipelineStage: 0 } }
 
 // OLD: source (when passed as 4th param where metadata should be)
-// NEW: No change OR { ctx: sourceObj } if source has definedAt/etc
+// NEW: No change OR { mx: sourceObj } if source has definedAt/etc
 
 // OLD: internal (variable named 'internal' with object)
 // NEW: { internal: internalObj }
 
 // OLD: { definedAt: location }
-// NEW: { ctx: { definedAt: location } }
+// NEW: { mx: { definedAt: location } }
 </migration_patterns>
 
 <file_content>
@@ -112,9 +112,9 @@ EXAMPLES:
 
 <verification>
 After each edit:
-- Verify the factory call now uses { internal: {...} } or { ctx: {...}, internal: {...} }
+- Verify the factory call now uses { internal: {...} } or { mx: {...}, internal: {...} }
 - Verify no new 'metadata:' keys introduced
-- Verify flags go to correct namespace (implementation → internal, user-facing → ctx)
+- Verify flags go to correct namespace (implementation → internal, user-facing → mx)
 - Do not build or attempt to run tests -- other Claudes are working on this in parallel
 </verification>
 `

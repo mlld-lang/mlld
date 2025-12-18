@@ -19,7 +19,7 @@ function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
 }
 
-describe('variable .ctx namespace', () => {
+describe('variable .mx namespace', () => {
   it('exposes token metrics for simple text variables', async () => {
     const env = createEnv();
     const directive = parseSync('/var @foo = "hello world"')[0] as DirectiveNode;
@@ -27,9 +27,9 @@ describe('variable .ctx namespace', () => {
 
     const foo = env.getVariable('foo');
     expect(foo).toBeDefined();
-    expect(foo?.ctx?.tokest).toBeGreaterThan(0);
-    expect(foo?.ctx?.tokens).toBe(foo?.ctx?.tokest);
-    expect(foo?.ctx?.length).toBe(11);
+    expect(foo?.mx?.tokest).toBeGreaterThan(0);
+    expect(foo?.mx?.tokens).toBe(foo?.mx?.tokest);
+    expect(foo?.mx?.length).toBe(11);
   });
 
   it('attaches metrics to pipeline input variables', () => {
@@ -44,16 +44,16 @@ describe('variable .ctx namespace', () => {
       1
     );
 
-    expect(variable.ctx?.tokest).toBeGreaterThan(0);
+    expect(variable.mx?.tokest).toBeGreaterThan(0);
   });
 
-  it('preserves ctx on derived variables', () => {
+  it('preserves mx on derived variables', () => {
     const source = VariableMetadataUtils.createSource('array', false, false);
     const arrVar = createArrayVariable('items', ['alpha', 'beta'], false, source);
     const textVar = createSimpleTextVariable('message', 'alpha beta', source);
 
-    expect(arrVar.ctx).toBeDefined();
-    expect(textVar.ctx?.length).toBe(10);
+    expect(arrVar.mx).toBeDefined();
+    expect(textVar.mx?.length).toBe(10);
   });
 });
 
@@ -68,11 +68,11 @@ describe('guard input helper', () => {
     });
 
     const helper = createGuardInputHelper([secretVar, piiVar]);
-    expect(helper.ctx.labels).toEqual(['secret', 'pii']);
+    expect(helper.mx.labels).toEqual(['secret', 'pii']);
     expect(helper.totalTokens()).toBeGreaterThan(0);
-    expect(helper.any.ctx.labels.includes('secret')).toBe(true);
-    expect(helper.all.ctx.labels.includes('secret')).toBe(false);
-    expect(helper.none.ctx.labels.includes('public')).toBe(true);
+    expect(helper.any.mx.labels.includes('secret')).toBe(true);
+    expect(helper.all.mx.labels.includes('secret')).toBe(false);
+    expect(helper.none.mx.labels.includes('public')).toBe(true);
   });
 
   it('prefers exact token counts when available', () => {
@@ -86,7 +86,7 @@ describe('guard input helper', () => {
     });
 
     const helper = createGuardInputHelper([variable]);
-    expect(helper.ctx.tokens[0]).toBe(3);
+    expect(helper.mx.tokens[0]).toBe(3);
     expect(helper.totalTokens()).toBe(3);
     expect(helper.maxTokens()).toBe(3);
   });

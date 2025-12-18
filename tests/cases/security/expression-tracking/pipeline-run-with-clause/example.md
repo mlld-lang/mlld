@@ -1,10 +1,10 @@
 /guard for secret = when [
-  @ctx.op.subtype == "process" => deny "Guard blocked"
+  @mx.op.subtype == "process" => deny "Guard blocked"
   * => allow
 ]
 
 /exe network @process(value) = when [
-  denied => `blocked: @ctx.guard.reason`
+  denied => `blocked: @mx.guard.reason`
   * => `sent:@value`
 ]
 

@@ -72,7 +72,7 @@ I've carefully reviewed Prior Claude's patterns.md output against the MLLD synta
 **Problem**: Some template examples mix syntaxes incorrectly
 
 ### 9. Invalid pipeline context usage
-**Problem**: Using `@ctx` and `@p` in contexts where they're not available
+**Problem**: Using `@mx` and `@p` in contexts where they're not available
 
 ## RECOMMENDATIONS
 

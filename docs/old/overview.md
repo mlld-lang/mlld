@@ -134,7 +134,7 @@ Chain transformations with the pipeline operator `|`:
 - Outside templates: spaced/stacked pipes are allowed; inside templates: condensed `|@transform`.
 - Inline effects do not create stages and re-run on retries (`| log`, `| show`, `| output`).
 - Access pipeline state with `@pipeline` (alias `@p`): `@p[-1]` previous output, `@pipeline.try` attempt number.
-- Inside stages, ambient `@ctx` exposes `try`, `tries`, `input`, and optional retry `hint` passed between attempts.
+- Inside stages, ambient `@mx` exposes `try`, `tries`, `input`, and optional retry `hint` passed between attempts.
 
 See: [Pipelines](./pipeline.md)
 

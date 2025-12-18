@@ -15,4 +15,4 @@
   }
 ]
 
-/show @ctx.policy.tier
+/show @mx.policy.tier

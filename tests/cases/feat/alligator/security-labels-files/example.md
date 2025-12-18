@@ -2,11 +2,11 @@
 
 /var secret @file = <secret.txt>
 
-/show `Labels: @file.ctx.labels`
+/show `Labels: @file.mx.labels`
 
 /exe @jsCheck(value) = js {
   return JSON.stringify({
-    ctxLabels: value.ctx?.labels,
+    mxLabels: value.mx?.labels,
     dataType: typeof value.data
   });
 }
