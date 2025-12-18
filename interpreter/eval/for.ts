@@ -489,20 +489,41 @@ export async function evaluateForExpression(
           nodesToEvaluate = (expr.expression[0] as any).content;
         }
 
-        let result: EvalResult;
-        if (
-          nodesToEvaluate.length === 1 &&
-          (nodesToEvaluate[0] as any).type === 'WhenExpression' &&
-          (nodesToEvaluate[0] as any).meta?.modifier !== 'first'
-        ) {
-          const nodeWithFirst = {
-            ...(nodesToEvaluate[0] as any),
-            meta: { ...((nodesToEvaluate[0] as any).meta || {}), modifier: 'first' as const }
-          };
-          result = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
-        } else {
-          result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
-        }
+        const evaluateSequence = async (nodes: unknown[], startEnv: Environment): Promise<EvalResult> => {
+          let currentEnv = startEnv;
+          let lastResult: EvalResult = { value: undefined, env: currentEnv };
+
+          for (const node of nodes) {
+            if (isLetAssignment(node as any)) {
+              currentEnv = await evaluateLetAssignment(node as any, currentEnv);
+              lastResult = { value: undefined, env: currentEnv };
+              continue;
+            }
+
+            if (isAugmentedAssignment(node as any)) {
+              currentEnv = await evaluateAugmentedAssignment(node as any, currentEnv);
+              lastResult = { value: undefined, env: currentEnv };
+              continue;
+            }
+
+            if ((node as any)?.type === 'WhenExpression' && (node as any).meta?.modifier !== 'first') {
+              const nodeWithFirst = {
+                ...(node as any),
+                meta: { ...(((node as any).meta || {}) as Record<string, unknown>), modifier: 'first' as const }
+              };
+              lastResult = await evaluateWhenExpression(nodeWithFirst as any, currentEnv);
+              currentEnv = lastResult.env || currentEnv;
+              continue;
+            }
+
+            lastResult = await evaluate(node as any, currentEnv, { isExpression: true });
+            currentEnv = lastResult.env || currentEnv;
+          }
+
+          return { value: lastResult.value, env: currentEnv };
+        };
+
+        const result = await evaluateSequence(nodesToEvaluate, childEnv);
 
         if (result.env) childEnv = result.env;
         let branchValue = result?.value;

@@ -144,14 +144,58 @@ ForBlockStatement "for block statement"
   / ForNestedDirective
   / ForSingleAction
 
+ForBlockReturnStatement "for block return statement"
+  = "=>" _ value:WhenRHSAction noise:BlockComments* {
+      const normalized = Array.isArray(value) ? value.flat() : [value];
+      return normalized;
+    }
+
+ForBlockBody "for block body"
+  = statements:ForBlockStatementList firstReturn:(
+      BlockStatementSeparator ret:ForBlockReturnStatement { return ret; }
+    / _ ret:ForBlockReturnStatement { return ret; }
+    )
+    extraReturn:(BlockStatementSeparator ForBlockReturnStatement { return true; })?
+    trailing:(BlockStatementSeparator ForBlockStatement { return true; })? {
+      if (extraReturn) {
+        helpers.mlldError(
+          'Multiple return statements in for block. Only one return allowed as last statement.',
+          'single return',
+          location()
+        );
+      }
+      if (trailing) {
+        helpers.mlldError(
+          'Return must be the last statement in a block.',
+          'end of block',
+          location()
+        );
+      }
+      return {
+        statements,
+        returnStmt: firstReturn
+      };
+    }
+  / statements:ForBlockStatementList {
+      return {
+        statements,
+        returnStmt: null
+      };
+    }
+
 // Block action for /for directives and for-expressions
 ForBlockAction "for block action"
-  = "[" _ statements:ForBlockStatementList _ "]" {
+  = "[" _ body:ForBlockBody _ "]" {
+      const statements = body.statements || [];
+      const returnStmt = body.returnStmt;
+      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
+      const mergedStatements = hasReturn ? [...statements, ...returnStmt] : statements;
       return {
         type: 'ForBlock',
-        statements,
+        statements: mergedStatements,
         meta: {
-          statementCount: statements.length
+          statementCount: statements.length,
+          hasReturn
         }
       };
     }
@@ -163,7 +207,7 @@ ForBlockAction "for block action"
         parse: peg$parse,
         SyntaxErrorClass: peg$SyntaxError,
         text: captured.content,
-        startRule: 'ForBlockStatementList',
+        startRule: 'ForBlockBody',
         baseLocation: peg$computeLocation(blockStart, blockStart),
         grammarSource: options.grammarSource,
         mode: options.mode

@@ -128,6 +128,7 @@ if (process.argv.includes('--debug')) {
 const allowedStartRules = [
   'Start',
   'ExeBlockBody',
+  'ForBlockBody',
   'ForBlockStatementList',
   'WhenConditionList',
   'WhenExpressionConditionList',
