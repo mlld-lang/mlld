@@ -628,7 +628,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     
     // Check if we're in an expression context that needs raw values
     const isInExpression = context && context.isExpression;
-    const resolutionContext = isInExpression ? ResolutionContext.Equality : ResolutionContext.FieldAccess;
+    const hasFieldAccess = Array.isArray(node.fields) && node.fields.length > 0;
+    const resolutionContext =
+      hasFieldAccess ? ResolutionContext.FieldAccess
+      : isInExpression ? ResolutionContext.Equality
+      : ResolutionContext.FieldAccess;
     
     let resolvedValue = await resolveVariable(variable, env, resolutionContext);
     

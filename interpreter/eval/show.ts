@@ -357,8 +357,12 @@ export async function evaluateShow(
       ? (variableNode as any).variable?.fields
       : variableNode?.fields;
 
-    if (fieldsToProcess && fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
+    if (fieldsToProcess && fieldsToProcess.length > 0) {
       const { accessField } = await import('../utils/field-access');
+      const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+      let fieldTarget: any = variable
+        ? await resolveVariable(variable, env, ResolutionContext.FieldAccess)
+        : value;
       for (const field of fieldsToProcess) {
         // Handle variableIndex type - need to resolve the variable first
         if (field.type === 'variableIndex') {
@@ -373,20 +377,21 @@ export async function evaluateShow(
                 };
           const indexValue = await evaluateDataValue(indexNode as any, env);
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = await accessField(value, resolvedField, {
+          const fieldResult = await accessField(fieldTarget, resolvedField, {
             preserveContext: true,
             env,
             sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         } else {
-          const fieldResult = await accessField(value, field, {
+          const fieldResult = await accessField(fieldTarget, field, {
             preserveContext: true,
             env,
             sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         }
+        fieldTarget = value;
         if (value === undefined) break;
       }
     }

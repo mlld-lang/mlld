@@ -75,6 +75,9 @@ export interface StructuredValueContext {
   taint: readonly DataLabel[];
   sources: readonly string[];
   policy: Readonly<Record<string, unknown>> | null;
+  keys?: readonly string[];
+  values?: readonly unknown[];
+  entries?: readonly (readonly [string, unknown])[];
   filename?: string;
   relative?: string;
   absolute?: string;

@@ -59,10 +59,70 @@ function hasObjectField(obj: any, fieldName: string): boolean {
  * Helper to check if a value is an object AST node.
  */
 function isObjectAST(value: any): boolean {
-  return value &&
-         typeof value === 'object' &&
-         value.type === 'object' &&
-         (value.entries || value.properties);
+  if (!value || typeof value !== 'object' || value.type !== 'object') {
+    return false;
+  }
+
+  if (Array.isArray(value.entries)) {
+    return value.entries.every(
+      (entry: any) =>
+        entry &&
+        typeof entry === 'object' &&
+        ((entry.type === 'pair' && typeof entry.key === 'string' && 'value' in entry) ||
+          (entry.type === 'spread' && 'value' in entry))
+    );
+  }
+
+  return Boolean(value.properties && typeof value.properties === 'object');
+}
+
+function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return false;
+  }
+  if (isObjectAST(value)) {
+    return false;
+  }
+  if (isLoadContentResult(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function createObjectUtilityMxView(
+  mx: unknown,
+  data: unknown
+): unknown {
+  if (!mx || typeof mx !== 'object') {
+    return mx;
+  }
+  if (!isPlainObjectValue(data)) {
+    return mx;
+  }
+
+  const obj = data as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  const view = Object.create(mx as object) as Record<string, unknown>;
+  Object.defineProperty(view, 'keys', {
+    value: keys,
+    enumerable: true,
+    configurable: true
+  });
+  Object.defineProperty(view, 'values', {
+    value: keys.map(key => obj[key]),
+    enumerable: true,
+    configurable: true
+  });
+  Object.defineProperty(view, 'entries', {
+    value: keys.map(key => [key, obj[key]]),
+    enumerable: true,
+    configurable: true
+  });
+  return view;
 }
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
@@ -147,7 +207,9 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const CORE_METADATA = ['type', 'isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
 
     if (CORE_METADATA.includes(fieldName)) {
-      const metadataValue = value[fieldName as keyof typeof value];
+      const metadataValue = fieldName === 'mx'
+        ? createObjectUtilityMxView(value[fieldName as keyof typeof value], rawValue)
+        : value[fieldName as keyof typeof value];
 
       if (options?.preserveContext) {
         return {
@@ -285,7 +347,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         if (name === 'mx') {
-          accessedValue = structuredWrapper.mx;
+          accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue);
           break;
         }
         if (

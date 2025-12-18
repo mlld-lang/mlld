@@ -40,3 +40,32 @@ describe('field access provenance', () => {
     expect(materialized?.mx?.labels).toContain('secret');
   });
 });
+
+describe('object mx utilities', () => {
+  it('exposes keys, values, and entries on .mx', async () => {
+    const variable = createObjectVariable(
+      'obj',
+      { a: 1, b: 2, c: 3 },
+      false,
+      source
+    );
+
+    const keys = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'keys' } as const
+    ], { preserveContext: false });
+    expect(keys).toEqual(['a', 'b', 'c']);
+
+    const values = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'values' } as const
+    ], { preserveContext: false });
+    expect(values).toEqual([1, 2, 3]);
+
+    const entries = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'entries' } as const
+    ], { preserveContext: false });
+    expect(entries).toEqual([['a', 1], ['b', 2], ['c', 3]]);
+  });
+});
