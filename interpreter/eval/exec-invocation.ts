@@ -1132,7 +1132,7 @@ async function evaluateExecInvocationInternal(
               }
             } else if (varObj.type === 'executable') {
               // Get executable type from metadata
-      const execDef = varObj.internal?.executableDef;
+              const execDef = varObj.internal?.executableDef;
               if (execDef && 'type' in execDef) {
                 typeInfo = `executable (${execDef.type})`;
               }
@@ -1180,6 +1180,202 @@ async function evaluateExecInvocationInternal(
       }
     }
     
+    // Special handling for @exists - return true when argument evaluation succeeds
+    if (commandName === 'exists' || commandName === 'EXISTS') {
+      const arg = args[0];
+      const isGlobPattern = (value: string): boolean => /[\*\?\{\}\[\]]/.test(value);
+      const isEmptyLoadArray = (value: unknown): boolean => {
+        if (isStructuredValue(value)) {
+          return (
+            value.type === 'array' &&
+            Array.isArray(value.data) &&
+            value.data.length === 0
+          );
+        }
+        return Array.isArray(value) && value.length === 0;
+      };
+
+      const resolveLoadContentSource = async (loadNode: any): Promise<string | undefined> => {
+        const source = loadNode?.source;
+        if (!source || typeof source !== 'object') {
+          return undefined;
+        }
+        const actualSource =
+          source.type === 'path' || source.type === 'url'
+            ? source
+            : source.segments && source.raw !== undefined
+              ? { ...source, type: 'path' }
+              : source;
+
+        if (actualSource.type === 'path') {
+          if (actualSource.meta?.hasVariables && Array.isArray(actualSource.segments)) {
+            try {
+              return (await interpolateWithResultDescriptor(actualSource.segments, env)).trim();
+            } catch {
+              return typeof actualSource.raw === 'string' ? actualSource.raw.trim() : undefined;
+            }
+          }
+          if (typeof actualSource.raw === 'string') {
+            return actualSource.raw.trim();
+          }
+        }
+
+        if (actualSource.type === 'url') {
+          if (typeof actualSource.raw === 'string') {
+            return actualSource.raw.trim();
+          }
+          if (typeof actualSource.protocol === 'string' && typeof actualSource.host === 'string') {
+            return `${actualSource.protocol}://${actualSource.host}${actualSource.path || ''}`;
+          }
+        }
+
+        return undefined;
+      };
+
+      const isStringPathArgument = (value: unknown): boolean => {
+        if (Array.isArray(value)) {
+          return true;
+        }
+        if (!value || typeof value !== 'object') {
+          return false;
+        }
+        if ('wrapperType' in value && Array.isArray((value as any).content)) {
+          return true;
+        }
+        if ((value as any).type === 'Text') {
+          return true;
+        }
+        if ((value as any).type === 'Literal' && (value as any).valueType === 'string') {
+          return true;
+        }
+        return false;
+      };
+
+      const finalizeExistsResult = async (existsResult: boolean): Promise<EvalResult> => {
+        if (commandName && shouldTrackResolution) {
+          env.endResolving(commandName);
+        }
+
+        if (node.withClause) {
+          if (node.withClause.pipeline) {
+            const { processPipeline } = await import('./pipeline/unified-processor');
+            const pipelineInputValue = toPipelineInput(existsResult);
+            const pipelineResult = await processPipeline({
+              value: pipelineInputValue,
+              env,
+              node,
+              identifier: node.identifier,
+              descriptorHint: resultSecurityDescriptor
+            });
+            return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+          }
+          return applyWithClause(existsResult, node.withClause, env);
+        }
+
+        return createEvalResult(existsResult, env);
+      };
+
+      if (!arg) {
+        return finalizeExistsResult(false);
+      }
+
+      try {
+        if (isStringPathArgument(arg)) {
+          const resolvePathString = async (): Promise<string> => {
+            if (Array.isArray(arg)) {
+              return interpolateWithResultDescriptor(arg, env, InterpolationContext.Default);
+            }
+            if (arg && typeof arg === 'object' && (arg as any).type === 'Text') {
+              return String((arg as any).content ?? '');
+            }
+            if (arg && typeof arg === 'object' && (arg as any).type === 'Literal') {
+              return String((arg as any).value ?? '');
+            }
+            if (arg && typeof arg === 'object' && 'wrapperType' in arg && Array.isArray((arg as any).content)) {
+              return interpolateWithResultDescriptor((arg as any).content, env, InterpolationContext.Default);
+            }
+            return String(arg ?? '');
+          };
+
+          const trimmedPath = (await resolvePathString()).trim();
+          if (!trimmedPath) {
+            return finalizeExistsResult(false);
+          }
+
+          const { processContentLoader } = await import('./content-loader');
+          const loadNode = {
+            type: 'load-content',
+            source: { type: 'path', raw: trimmedPath }
+          };
+          const loadResult = await processContentLoader(loadNode as any, env);
+          if (isGlobPattern(trimmedPath) && isEmptyLoadArray(loadResult)) {
+            return finalizeExistsResult(false);
+          }
+          return finalizeExistsResult(true);
+        }
+
+        if (arg && typeof arg === 'object' && (arg as any).type === 'load-content') {
+          const { processContentLoader } = await import('./content-loader');
+          const loadResult = await processContentLoader(arg as any, env);
+          const sourceString = await resolveLoadContentSource(arg);
+          if (sourceString && isGlobPattern(sourceString) && isEmptyLoadArray(loadResult)) {
+            return finalizeExistsResult(false);
+          }
+          return finalizeExistsResult(true);
+        }
+
+        if (arg && typeof arg === 'object' && (arg as any).type === 'ExecInvocation') {
+          await evaluateExecInvocation(arg as any, env);
+          return finalizeExistsResult(true);
+        }
+
+        if (arg && typeof arg === 'object' && (arg as any).type === 'VariableReference') {
+          const varRef = arg as any;
+          let targetVar = env.getVariable(varRef.identifier);
+          if (!targetVar && env.hasVariable(varRef.identifier)) {
+            targetVar = await env.getResolverVariable(varRef.identifier);
+          }
+          if (!targetVar) {
+            return finalizeExistsResult(false);
+          }
+
+          const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+          let resolvedValue = await resolveVariable(targetVar, env, ResolutionContext.FieldAccess);
+          if (varRef.fields && varRef.fields.length > 0) {
+            const { accessField } = await import('../utils/field-access');
+            const normalized = normalizeFields(varRef.fields);
+            for (const field of normalized) {
+              const fieldResult = await accessField(resolvedValue, field, {
+                preserveContext: true,
+                env,
+                sourceLocation: nodeSourceLocation
+              });
+              resolvedValue = (fieldResult as any).value;
+              if (resolvedValue === undefined) {
+                break;
+              }
+            }
+          }
+
+          if (varRef.pipes && varRef.pipes.length > 0) {
+            const { processPipeline } = await import('./pipeline/unified-processor');
+            await processPipeline({
+              value: resolvedValue,
+              env,
+              node: varRef,
+              identifier: varRef.identifier
+            });
+          }
+
+          return finalizeExistsResult(true);
+        }
+
+        return finalizeExistsResult(true);
+      } catch {
+        return finalizeExistsResult(false);
+      }
+    }
+
     // Regular transformer handling
     let inputValue = '';
     if (args.length > 0) {

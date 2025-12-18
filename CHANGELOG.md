@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Template collection imports**: Load entire directories of templates with shared parameter signatures
   - `/import templates from "@base/agents" as @agents(message, context)` imports all `.att`/`.mtt` files
   - Access by filename: `@agents["alice"](@msg, @ctx)` or nested: `@agents.support["helper"]`
+- **@exists() builtin**: Returns true when an expression evaluates without error (string args check paths; glob args require at least one match)
 - **When separators**: Semicolons separate when arms in directives and expressions
 - **For-when filter sugar**: `for ... when ...` drops non-matches without null placeholders via implicit `none => skip` branch
 - **Parallel execution error accumulation**: Errors accumulate in `@mx.errors` array instead of failing fast
