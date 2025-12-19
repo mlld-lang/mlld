@@ -37,9 +37,10 @@ export function getEvaluatorStats(): Record<string, any> {
  */
 export async function evaluateDataValue(
   value: DataValue,
-  env: Environment
+  env: Environment,
+  options?: { suppressErrors?: boolean }
 ): Promise<any> {
-  return await dataValueEvaluator.evaluate(value, env);
+  return await dataValueEvaluator.evaluate(value, env, options);
 }
 
 /**
@@ -152,4 +153,3 @@ export function collectEvaluationErrors(
   
   return errors;
 }
-

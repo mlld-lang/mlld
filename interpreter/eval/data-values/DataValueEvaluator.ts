@@ -54,7 +54,11 @@ export class DataValueEvaluator {
    * @param env The evaluation environment
    * @returns The evaluated result
    */
-  async evaluate(value: DataValue, env: Environment): Promise<any> {
+  async evaluate(
+    value: DataValue,
+    env: Environment,
+    options?: { suppressErrors?: boolean }
+  ): Promise<any> {
     
     try {
       // Route to appropriate evaluator based on type
@@ -99,8 +103,10 @@ export class DataValueEvaluator {
         errorMessage: error instanceof Error ? error.message : String(error),
         errorStack: error instanceof Error ? error.stack : undefined
       };
-      
-      logger.error('DataValueEvaluator error:', errorContext);
+
+      if (!options?.suppressErrors) {
+        logger.error('DataValueEvaluator error:', errorContext);
+      }
       throw error;
     }
   }

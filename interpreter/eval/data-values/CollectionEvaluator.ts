@@ -39,7 +39,13 @@ async function interpolateAndRecord(
  * - Error isolation for individual properties/elements
  */
 export class CollectionEvaluator {
-  constructor(private evaluateDataValue: (value: DataValue, env: Environment) => Promise<any>) {}
+  constructor(
+    private evaluateDataValue: (
+      value: DataValue,
+      env: Environment,
+      options?: { suppressErrors?: boolean }
+    ) => Promise<any>
+  ) {}
 
   /**
    * Checks if this evaluator can handle the given data value
@@ -151,7 +157,7 @@ export class CollectionEvaluator {
         if (entry.type === 'pair') {
           // Regular key-value pair
           try {
-            let evaluated = await this.evaluateDataValue(entry.value, env);
+            let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
             if (isStructuredValue(evaluated)) {
               evaluated = unwrapStructuredPrimitive(evaluated);
             }
@@ -209,7 +215,7 @@ export class CollectionEvaluator {
     if ((value as any).properties && typeof (value as any).properties === 'object') {
       for (const [key, propValue] of Object.entries((value as any).properties)) {
         try {
-          let evaluated = await this.evaluateDataValue(propValue, env);
+          let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
           if (isStructuredValue(evaluated)) {
             evaluated = unwrapStructuredPrimitive(evaluated);
           }
@@ -269,7 +275,7 @@ export class CollectionEvaluator {
           }
         }
 
-        let evaluatedItem = await this.evaluateDataValue(items[i], env);
+        let evaluatedItem = await this.evaluateDataValue(items[i], env, { suppressErrors: true });
         if (isStructuredValue(evaluatedItem)) {
           evaluatedItem = unwrapStructuredPrimitive(evaluatedItem);
         }
@@ -318,7 +324,7 @@ export class CollectionEvaluator {
       }
       
       try {
-        let evaluated = await this.evaluateDataValue(propValue, env);
+        let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
         if (isStructuredValue(evaluated)) {
           evaluated = unwrapStructuredPrimitive(evaluated);
         }
