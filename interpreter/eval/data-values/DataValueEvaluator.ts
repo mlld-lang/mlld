@@ -90,9 +90,14 @@ export class DataValueEvaluator {
     } catch (error) {
       // Provide better error context
       const errorContext = {
-        value: typeof value === 'object' ? { type: value?.type, keys: Object.keys(value || {}) } : value,
+        valueType: typeof value,
+        valueTypeField: typeof value === 'object' ? (value as any)?.type : undefined,
+        valueKeys:
+          typeof value === 'object' && value !== null ? Object.keys(value as Record<string, unknown>).slice(0, 12) : undefined,
         environment: env.getExecutionDirectory(),
-        error: error instanceof Error ? error.message : String(error)
+        errorName: error instanceof Error ? error.name : undefined,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined
       };
       
       logger.error('DataValueEvaluator error:', errorContext);
