@@ -27,7 +27,7 @@ export class MemoryAstCache {
     }
 
     const parseStart = performance.now();
-    const ast = await this.parseSource(source, filePath);
+    const ast = await this.parseSource(source, filePath, mode);
     const entry = { ast, source, parseDurationMs: performance.now() - parseStart };
     this.cache.set(cacheKey, entry);
     return { ...entry, cacheHit: false };
@@ -42,9 +42,9 @@ export class MemoryAstCache {
     this.cache.clear();
   }
 
-  private async parseSource(source: string, filePath: string): Promise<any> {
+  private async parseSource(source: string, filePath: string, mode: MlldMode): Promise<any> {
     await initializePatterns();
-    const parseResult = await parse(source);
+    const parseResult = await parse(source, { mode });
 
     if (!parseResult.success || parseResult.error) {
       const parseError = parseResult.error || new Error('Unknown parse error');
