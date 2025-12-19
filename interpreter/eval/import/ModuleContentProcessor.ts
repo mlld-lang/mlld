@@ -584,12 +584,14 @@ export class ModuleContentProcessor {
     // External template detection now uses .att and .mtt extensions.
 
     // Infer mode from the imported file's extension
-    // For virtual/test files (starting with /), use markdown mode for backward compatibility
-    // unless isDynamicModule explicitly requests otherwise
-    const isVirtualFile = resolvedPath.startsWith('/') && !resolvedPath.startsWith('//');
+    // Virtual filesystems (tests) use markdown mode for backward compatibility
+    // Real filesystems use extension-based mode inference
+    const fsService = this.env.getFileSystemService();
+    const hasIsVirtual = typeof fsService?.isVirtual === 'function';
+    const isVirtualFS = hasIsVirtual ? fsService.isVirtual() : false;
     const mode = isDynamicModule
       ? this.env.getDynamicModuleMode()
-      : isVirtualFile
+      : isVirtualFS
         ? 'markdown'
         : inferMlldMode(resolvedPath);
 

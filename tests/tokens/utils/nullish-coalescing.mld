@@ -1,0 +1,7 @@
+/var @a = null
+/var @b = @a ?? "fallback"
+
+=== START PARTIAL TOKENS ===
+?? --> operator
+=== END PARTIAL TOKENS ===
+

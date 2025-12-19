@@ -116,21 +116,25 @@ export class MemoryFileSystem implements IFileSystemService {
     const normalizedPath = this.normalizePath(filePath);
     const isDir = await this.isDirectory(normalizedPath);
     const isFile = this.files.has(normalizedPath) && !normalizedPath.endsWith('/.dir');
-    
+
     if (!isDir && !isFile) {
       const error = new Error(`ENOENT: no such file or directory, stat '${filePath}'`) as any;
       error.code = 'ENOENT';
       error.path = filePath;
       throw error;
     }
-    
+
     const content = isFile ? this.files.get(normalizedPath) : '';
-    
+
     return {
       isDirectory: () => isDir,
       isFile: () => isFile,
       size: content ? Buffer.byteLength(content, 'utf8') : 0
     };
+  }
+
+  isVirtual(): boolean {
+    return true;
   }
   
   // Add execute method for command execution (needed by Environment)

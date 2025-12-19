@@ -162,12 +162,17 @@ export interface TailModifiers {
 export interface WhenExpressionNode extends BaseMlldNode {
   type: 'WhenExpression';
   conditions: WhenEntry[];  // Mixed let assignments and condition pairs
-  withClause?: TailModifiers;
+  withClause?: TailModifiers | null;
+  boundValue?: BaseMlldNode;
+  boundIdentifier?: string;
   meta: {
     conditionCount: number;
     isValueReturning: true;
     evaluationType: 'expression';
     hasTailModifiers: boolean;
+    modifier?: WhenModifier | null;
+    hasBoundValue?: boolean;
+    boundIdentifier?: string;
   };
 }
 

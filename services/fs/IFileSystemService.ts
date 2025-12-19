@@ -10,4 +10,5 @@ export interface IFileSystemService {
   readdir(dirPath: string): Promise<string[]>;
   isDirectory(filePath: string): Promise<boolean>;
   stat(filePath: string): Promise<{ isDirectory(): boolean; isFile(): boolean }>;
+  isVirtual?(): boolean;
 }

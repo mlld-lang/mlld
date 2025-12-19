@@ -579,8 +579,47 @@ ExecAsNewTitle
 // Purpose: Allow when: [...] expressions that return values based on first matching condition
 
 WhenExpression "when expression"
+  // Bound-value: when <expr> [patterns] or when <expr> first [patterns]
+  = "when" _ boundValue:Expression _ modifier:WhenExprModifier? _ "[" _ entries:WhenBoundExpressionConditionList _ "]" tail:TailModifiers? {
+      const boundOffset =
+        boundValue && typeof boundValue === 'object' && boundValue.location && boundValue.location.start
+          ? boundValue.location.start.offset
+          : location().start.offset;
+      const boundIdentifier = `__when_bound_${boundOffset}`;
+
+      const conditions = entries.map((entry) => {
+        if (entry && typeof entry === 'object' && 'pattern' in entry) {
+          const conditionExpr = helpers.buildWhenBoundPatternExpression(boundIdentifier, entry.pattern);
+          return { condition: [conditionExpr], action: entry.action };
+        }
+        return entry;
+      });
+
+      helpers.debug('WhenExpression matched', { 
+        conditionCount: conditions.length,
+        hasTailModifiers: !!tail,
+        modifier: modifier,
+        hasBoundValue: true
+      });
+      
+      return helpers.createWhenExpression(conditions, tail, location(), modifier, { boundIdentifier, boundValue });
+    }
+  / "when" _ boundValue:Expression _ modifier:WhenExprModifier? _ "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenBoundExpressionConditionList',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
   // Standard: when [ ... ] or when first [ ... ]
-  = "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
+  / "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
         hasTailModifiers: !!tail,
@@ -604,6 +643,13 @@ WhenExpression "when expression"
       });
     }
   // Error recovery: Missing bracket after when
+  / "when" _ Expression _ WhenExprModifier? _ !"[" {
+      helpers.mlldError(
+        `Missing condition list in when expression. Expected: when @value [pattern => value, ...]`,
+        "[",
+        location()
+      );
+    }
   / "when" _ WhenExprModifier? _ !"[" {
       helpers.mlldError(
         `Missing condition list in when expression. Expected: when [condition => value, ...]`,
@@ -637,6 +683,45 @@ WhenExpression "when expression"
         location()
       );
     }
+
+// Bound pattern list for when expressions
+WhenBoundExpressionConditionList
+  = BlockComments* first:WhenBoundExpressionEntry rest:(WhenConditionSeparator entry:WhenBoundExpressionEntry { return entry; })* trailing:BlockComments* {
+      return [first, ...rest];
+    }
+  / BlockComments+ { return []; }
+
+WhenBoundExpressionEntry
+  = LetAssignment
+  / AugmentedAssignment
+  / WhenBoundExpressionConditionPair
+
+WhenBoundExpressionConditionPair
+  = pattern:WhenBoundPatternExpression _ "=>" _ action:WhenExpressionAction {
+      const act = Array.isArray(action) ? action : [action];
+      return { pattern, action: act };
+    }
+
+WhenBoundPatternExpression
+  = WhenBoundPatternOr
+
+WhenBoundPatternOr
+  = first:WhenBoundPatternAnd rest:(_ "||" _ right:WhenBoundPatternAnd { return { op: "||", right }; })* {
+      if (!rest || rest.length === 0) return first;
+      return { kind: 'logical', first, rest, location: location() };
+    }
+
+WhenBoundPatternAnd
+  = first:WhenBoundPatternAtom rest:(_ "&&" _ right:WhenBoundPatternAtom { return { op: "&&", right }; })* {
+      if (!rest || rest.length === 0) return first;
+      return { kind: 'logical', first, rest, location: location() };
+    }
+
+WhenBoundPatternAtom
+  = "(" _ inner:WhenBoundPatternExpression _ ")" { return inner; }
+  / wc:WildcardLiteral { return { kind: 'wildcard', node: wc, location: location() }; }
+  / op:UnifiedComparisonOp _ right:Expression { return { kind: 'compare', op, right, location: location() }; }
+  / value:Expression { return { kind: 'equals', value, location: location() }; }
 
 // Optional modifier for when-expression in /exe RHS (currently supports 'first')
 WhenExprModifier = mod:("first") { return mod; }

@@ -173,6 +173,28 @@ export async function evaluateWhenExpression(
   
   // Check if we have a "first" modifier (stop after first match)
   const isFirstMode = node.meta?.modifier === 'first';
+
+  const boundIdentifier = (node as any).boundIdentifier || node.meta?.boundIdentifier;
+  const hasBoundValue = Boolean((node as any).boundValue && typeof boundIdentifier === 'string' && boundIdentifier.length > 0);
+  let boundValue: unknown;
+
+  if (hasBoundValue) {
+    const boundResult = await evaluate((node as any).boundValue, env, context);
+    boundValue = boundResult.value;
+  }
+
+  const setBoundValue = (targetEnv: Environment) => {
+    if (!hasBoundValue) return;
+    const importer = new VariableImporter();
+    const variable = importer.createVariableFromValue(
+      boundIdentifier,
+      boundValue,
+      'let',
+      undefined,
+      { env: targetEnv }
+    );
+    targetEnv.setVariable(boundIdentifier, variable);
+  };
   
   // Track results from all matching conditions (for bare when)
   let lastMatchValue: any = null;
@@ -319,7 +341,9 @@ export async function evaluateWhenExpression(
 
     try {
       // Evaluate the condition
-      const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
+      const conditionEnv = hasBoundValue ? accumulatedEnv.createChild() : accumulatedEnv;
+      if (hasBoundValue) setBoundValue(conditionEnv);
+      const conditionResult = await evaluateCondition(pair.condition, conditionEnv);
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 

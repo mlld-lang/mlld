@@ -34,7 +34,7 @@ describe('Import runtime validation', () => {
 
   it('rejects imports when requested export is missing', async () => {
     const fileSystem = new MemoryFileSystem();
-    await fileSystem.writeFile('/project/empty.mld', '# nothing exported\n');
+    await fileSystem.writeFile('/project/empty.mld', '/var @something = "value"\n');
 
     const source = '/import { missing } from "./empty.mld"\n/show @missing';
 

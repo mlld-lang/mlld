@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Skips `_*` and `.*` directories by default, override with `with { skipDirs: [] }`
 - **@exists() builtin**: Returns true when an expression evaluates without error (string args check paths; glob args require at least one match)
 - **When separators**: Semicolons separate when arms in directives and expressions
+- **Bound-value when-expressions**: `when @value first [...]` and `when @value [...]` support pattern arms like `>= 0.7`, `>= 0.3 && < 0.7`, and `*`
+- **Nullish coalescing operator**: `??` returns the left operand when it is not nullish, otherwise returns the right operand
 - **For-when filter sugar**: `for ... when ...` drops non-matches without null placeholders via implicit `none => skip` branch
 - **Object mx helpers**: `@obj.mx.keys`, `@obj.mx.values`, and `@obj.mx.entries` expose object utilities
 - **For-loop item keys**: `@item.mx.key` exposes the current object key (alongside `@item_key`)

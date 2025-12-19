@@ -2,11 +2,11 @@
 // Unified system for all expression evaluation across mlld
 // Provides infix operators for logical and comparison operations
 // Used by: when directive conditions, var assignments, array filters, etc.
-// Precedence (lowest to highest): Ternary → OR → AND → Comparison → Unary → Primary
+// Precedence (lowest to highest): Ternary → Nullish → OR → AND → Comparison → Unary → Primary
 
 // Top-level unified expression with ternary operator (lowest precedence)
 UnifiedExpression
-  = condition:UnifiedLogicalOr _ "?" _ trueBranch:UnifiedExpression _ ":" _ falseBranch:UnifiedExpression {
+  = condition:UnifiedNullish _ "?" _ trueBranch:UnifiedExpression _ ":" _ falseBranch:UnifiedExpression {
       return helpers.createNode('TernaryExpression', {
         condition,
         trueBranch,
@@ -14,7 +14,13 @@ UnifiedExpression
         location: location()
       });
     }
-  / UnifiedLogicalOr
+  / UnifiedNullish
+
+// Nullish coalescing (left-associative)
+UnifiedNullish
+  = first:UnifiedLogicalOr rest:(_ "??" _ right:UnifiedLogicalOr { return { op: "??", right }; })* {
+      return helpers.createBinaryExpression(first, rest, location());
+    }
 
 // Logical OR (left-associative)
 UnifiedLogicalOr

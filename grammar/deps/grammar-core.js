@@ -1178,6 +1178,53 @@ export const helpers = {
             location
         }), first);
     },
+    buildWhenBoundPatternExpression(boundIdentifier, pattern) {
+        const anchorLocation = (loc) => {
+            if (!loc || !loc.start)
+                return loc;
+            return {
+                start: loc.start,
+                end: loc.start
+            };
+        };
+        const boundRef = (loc) => this.createVariableReferenceNode('identifier', { identifier: boundIdentifier }, anchorLocation(loc));
+        const build = (p) => {
+            if (!p)
+                return p;
+            if (p.kind === 'logical') {
+                const first = build(p.first);
+                const rest = Array.isArray(p.rest)
+                    ? p.rest.map((r) => ({ op: r.op, right: build(r.right) }))
+                    : [];
+                return this.createBinaryExpression(first, rest, p.location);
+            }
+            if (p.kind === 'wildcard')
+                return p.node;
+            if (p.kind === 'compare') {
+                return this.createNode('BinaryExpression', {
+                    operator: p.op,
+                    left: boundRef(p.location),
+                    right: p.right,
+                    location: p.location
+                });
+            }
+            if (p.kind === 'equals') {
+                const value = p.value;
+                if (value && typeof value === 'object' && 'type' in value && value.type === 'Literal') {
+                    if (value.valueType === 'none' || value.valueType === 'wildcard')
+                        return value;
+                }
+                return this.createNode('BinaryExpression', {
+                    operator: '==',
+                    left: boundRef(p.location),
+                    right: value,
+                    location: p.location
+                });
+            }
+            return p;
+        };
+        return build(pattern);
+    },
     // Check if nodes contain newlines
     containsNewline(nodes) {
         if (!Array.isArray(nodes))
@@ -1189,16 +1236,21 @@ export const helpers = {
     /**
      * Creates a WhenExpression node for when expressions (used in /var assignments)
      */
-    createWhenExpression(conditions, withClause, location, modifier = null) {
+    createWhenExpression(conditions, withClause, location, modifier = null, bound = null) {
         return this.createNode(NodeType.WhenExpression, {
             conditions: conditions,
             withClause: withClause || null,
+            ...(bound
+                ? { boundIdentifier: bound.boundIdentifier, boundValue: bound.boundValue }
+                : {}),
             meta: {
                 conditionCount: conditions.length,
                 isValueReturning: true,
                 evaluationType: 'expression',
                 hasTailModifiers: !!withClause,
-                modifier: modifier
+                modifier: modifier,
+                hasBoundValue: !!bound,
+                ...(bound ? { boundIdentifier: bound.boundIdentifier } : {})
             },
             location
         });

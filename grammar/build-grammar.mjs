@@ -132,6 +132,7 @@ const allowedStartRules = [
   'ForBlockStatementList',
   'WhenConditionList',
   'WhenExpressionConditionList',
+  'WhenBoundExpressionConditionList',
   'GuardRuleList',
   'WhenActionBlockContent',
   'TemplateBodyAtt',
