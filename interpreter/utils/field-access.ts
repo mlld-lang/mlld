@@ -207,9 +207,18 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const CORE_METADATA = ['type', 'isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
 
     if (CORE_METADATA.includes(fieldName)) {
-      const metadataValue = fieldName === 'mx'
-        ? createObjectUtilityMxView(value[fieldName as keyof typeof value], rawValue)
-        : value[fieldName as keyof typeof value];
+      const metadataValue = (() => {
+        if (fieldName !== 'mx') {
+          return value[fieldName as keyof typeof value];
+        }
+
+        const baseMx =
+          structuredCtx ??
+          (isLoadContentResult(rawValue) ? (rawValue as any).mx : undefined) ??
+          (value as any).mx;
+
+        return createObjectUtilityMxView(baseMx, rawValue);
+      })();
 
       if (options?.preserveContext) {
         return {

@@ -61,7 +61,7 @@
     "prepare-main": "node prepare-main.js",
     "pretest": "node scripts/build-incremental.js",
     "test": "node scripts/test-runner.js",
-    "test:full": "NODE_ENV=test vitest run --reporter=dot --silent",
+    "test:full": "NODE_ENV=test MLLD_NO_STREAMING=true MLLD_STRICT=${MLLD_STRICT:-0} vitest run --reporter=dot --silent",
     "test:force": "FORCE_BUILD=1 npm test",
     "test:verbose": "vitest run",
     "test:failures": "NODE_ENV=test vitest run --reporter=dot --silent passed-only",

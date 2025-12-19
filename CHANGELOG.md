@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **When separators**: Semicolons separate when arms in directives and expressions
 - **For-when filter sugar**: `for ... when ...` drops non-matches without null placeholders via implicit `none => skip` branch
 - **Object mx helpers**: `@obj.mx.keys`, `@obj.mx.values`, and `@obj.mx.entries` expose object utilities
+- **For-loop item keys**: `@item.mx.key` exposes the current object key (alongside `@item_key`)
 - **Parallel execution error accumulation**: Errors accumulate in `@mx.errors` array instead of failing fast
   - `/for parallel @x in @xs [complex-block]` supported with block-scoped `let` only
   - Failed iterations produce error markers `{ index, key?, message, error, value }` in results

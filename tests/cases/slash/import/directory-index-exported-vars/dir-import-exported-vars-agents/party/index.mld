@@ -1,0 +1,9 @@
+---
+name: Party
+---
+
+/var @meta = { "name": "Party" }
+/var @tldr = "Party tl;dr"
+
+/export { @meta, @tldr }
+

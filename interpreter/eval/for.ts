@@ -144,6 +144,19 @@ function enhanceFieldAccessError(
   });
 }
 
+function withIterationMxKey(variable: Variable, key: unknown): Variable {
+  if (key === null || typeof key === 'undefined') {
+    return variable;
+  }
+  if (typeof key !== 'string' && typeof key !== 'number') {
+    return variable;
+  }
+  return {
+    ...variable,
+    mx: { ...(variable.mx ?? {}), key }
+  };
+}
+
 function formatIterationError(error: unknown): string {
   if (error instanceof Error) {
     let message = error.message;
@@ -278,7 +291,7 @@ export async function evaluateForDirective(
         }
       }
       const iterationVar = ensureVariable(varName, value, env);
-      childEnv.setVariable(varName, iterationVar);
+      childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
       if (typeof derivedValue !== 'undefined' && fieldPathString) {
         const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
         childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
@@ -467,7 +480,7 @@ export async function evaluateForExpression(
       }
     }
     const iterationVar = ensureVariable(varName, value, env);
-    childEnv.setVariable(varName, iterationVar);
+    childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
     if (typeof derivedValue !== 'undefined' && fieldPathString) {
       const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
       childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
