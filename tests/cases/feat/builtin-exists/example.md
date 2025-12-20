@@ -4,7 +4,7 @@
 
 /show @exists("existing.md")
 /show @exists("missing.md")
-/show @exists("@base/tmp/file.md")
+/show @exists("@base/subdir/file.md")
 /show @exists(<existing.md>)
 /show @exists(<missing.md>)
 /show @exists(<dir/*.md>)

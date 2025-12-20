@@ -2,6 +2,7 @@ import * as vm from 'vm';
 import * as path from 'path';
 import * as fs from 'fs';
 import Module, { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 
 /**
  * Node.js shadow environment using VM module for module-level isolation.
@@ -294,12 +295,26 @@ export class NodeShadowEnvironment {
     
     // Determine mlld's node_modules path
     let mlldNodeModules: string | undefined;
-    
+
     // First check if we're in development (mlld source directory)
     const devNodeModules = path.join(process.cwd(), 'node_modules');
-    if (fs.existsSync(devNodeModules) && fs.existsSync(path.join(process.cwd(), 'package.json'))) {
+    const devPackageJson = path.join(process.cwd(), 'package.json');
+    const devNodeModulesExists = fs.existsSync(devNodeModules);
+    const devPackageJsonExists = fs.existsSync(devPackageJson);
+
+    const debugShadow = process.env.DEBUG_NODE_SHADOW || process.env.CI;
+    if (debugShadow) {
+      console.error('[NodeShadowEnv] cwd:', process.cwd());
+      console.error('[NodeShadowEnv] devNodeModules:', devNodeModules, 'exists:', devNodeModulesExists);
+      console.error('[NodeShadowEnv] devPackageJson:', devPackageJson, 'exists:', devPackageJsonExists);
+    }
+
+    if (devNodeModulesExists && devPackageJsonExists) {
       try {
-        const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+        const packageJson = JSON.parse(fs.readFileSync(devPackageJson, 'utf8'));
+        if (debugShadow) {
+          console.error('[NodeShadowEnv] package.json name:', packageJson.name);
+        }
         if (packageJson.name === 'mlld') {
           mlldNodeModules = devNodeModules;
         }
@@ -309,6 +324,39 @@ export class NodeShadowEnvironment {
     }
     
     // If not in dev, try to find mlld's installation directory
+    if (!mlldNodeModules) {
+      // First, try to find node_modules relative to this file's location
+      // This works in both bundled (dist/) and source (interpreter/) scenarios
+      try {
+        const thisFile = fileURLToPath(import.meta.url);
+        let searchDir = path.dirname(thisFile);
+
+        // Walk up looking for node_modules with a package.json named "mlld"
+        while (searchDir !== path.dirname(searchDir)) {
+          const candidateNodeModules = path.join(searchDir, 'node_modules');
+          const candidatePackageJson = path.join(searchDir, 'package.json');
+
+          if (fs.existsSync(candidateNodeModules) && fs.existsSync(candidatePackageJson)) {
+            try {
+              const pkg = JSON.parse(fs.readFileSync(candidatePackageJson, 'utf8'));
+              if (pkg.name === 'mlld') {
+                mlldNodeModules = candidateNodeModules;
+                if (debugShadow) {
+                  console.error('[NodeShadowEnv] Found mlld via import.meta.url:', mlldNodeModules);
+                }
+                break;
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+          searchDir = path.dirname(searchDir);
+        }
+      } catch {
+        // import.meta.url approach failed, continue to fallbacks
+      }
+    }
+
     if (!mlldNodeModules) {
       try {
         // Try to resolve mlld's package.json location using createRequire for ESM compatibility
@@ -359,7 +407,12 @@ export class NodeShadowEnvironment {
         }
       }
     }
-    
+
+    if (process.env.DEBUG_NODE_SHADOW || process.env.CI) {
+      console.error('[NodeShadowEnv] Final module paths:', paths);
+      console.error('[NodeShadowEnv] mlldNodeModules:', mlldNodeModules);
+    }
+
     return paths;
   }
 }
