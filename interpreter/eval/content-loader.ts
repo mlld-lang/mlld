@@ -478,7 +478,15 @@ export async function processContentLoader(node: any, env: Environment): Promise
     if (error.message && error.message.includes('Unknown transform:')) {
       throw error;
     }
-    
+
+    // If this is a security/access denial, preserve the clear error message
+    if (error.message && error.message.includes('Access denied:')) {
+      throw new MlldError(error.message, {
+        path: pathOrUrl,
+        error: error.message
+      });
+    }
+
     // Otherwise, treat it as a file loading error
     let errorMessage = `Failed to load content: ${pathOrUrl}`;
 
