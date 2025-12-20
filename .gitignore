@@ -149,3 +149,6 @@ scripts/mlld
 tmp
 
 .mm
+
+# Local checkout of modules repo (not a submodule)
+modules/
