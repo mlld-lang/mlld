@@ -243,6 +243,18 @@ export class ASTSemanticVisitor {
           case 'VariableReferenceWithTail':
             this.visitVariableReferenceWithTail(node, actualContext);
             break;
+          case 'ExeBlock':
+            this.visitExeBlock(node, actualContext);
+            break;
+          case 'LetAssignment':
+            this.visitLetAssignment(node, actualContext);
+            break;
+          case 'AugmentedAssignment':
+            this.visitAugmentedAssignment(node, actualContext);
+            break;
+          case 'ExeReturn':
+            this.visitExeReturn(node, actualContext);
+            break;
           default:
             console.warn(`Unknown node type: ${node.type}`);
             this.visitChildren(node, actualContext);
@@ -529,6 +541,199 @@ export class ASTSemanticVisitor {
             }
           }
         }
+      }
+    }
+  }
+
+  /**
+   * Visit an ExeBlock node (statement block with let/+=/=> return)
+   * Used in both /exe definitions and /var blocks
+   */
+  private visitExeBlock(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const blockText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize opening bracket '['
+    const openBracketIndex = blockText.indexOf('[');
+    if (openBracketIndex !== -1) {
+      const bracketOffset = node.location.start.offset + openBracketIndex;
+      const bracketPos = this.document.positionAt(bracketOffset);
+      this.tokenBuilder.addToken({
+        line: bracketPos.line,
+        char: bracketPos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+
+    // Process statements
+    if (node.values?.statements && Array.isArray(node.values.statements)) {
+      for (const statement of node.values.statements) {
+        this.visitNode(statement, context);
+      }
+    }
+
+    // Process return statement
+    if (node.values?.return) {
+      this.visitNode(node.values.return, context);
+    }
+
+    // Tokenize closing bracket ']'
+    const closeBracketIndex = blockText.lastIndexOf(']');
+    if (closeBracketIndex !== -1) {
+      const bracketOffset = node.location.start.offset + closeBracketIndex;
+      const bracketPos = this.document.positionAt(bracketOffset);
+      this.tokenBuilder.addToken({
+        line: bracketPos.line,
+        char: bracketPos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+  }
+
+  /**
+   * Visit a LetAssignment node (let @var = value)
+   */
+  private visitLetAssignment(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const letText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize 'let' keyword
+    const letMatch = letText.match(/^let\b/);
+    if (letMatch) {
+      const letPos = this.document.positionAt(node.location.start.offset);
+      this.tokenBuilder.addToken({
+        line: letPos.line,
+        char: letPos.character,
+        length: 3,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize the variable being assigned (@identifier)
+    if (node.identifier) {
+      const atIndex = letText.indexOf(`@${node.identifier}`);
+      if (atIndex !== -1) {
+        const atOffset = node.location.start.offset + atIndex;
+        const atPos = this.document.positionAt(atOffset);
+        this.tokenBuilder.addToken({
+          line: atPos.line,
+          char: atPos.character,
+          length: node.identifier.length + 1,
+          tokenType: 'variable',
+          modifiers: ['declaration']
+        });
+      }
+    }
+
+    // Tokenize '=' operator
+    const eqMatch = letText.match(/\s*(=)\s*/);
+    if (eqMatch && eqMatch.index !== undefined) {
+      const eqOffset = node.location.start.offset + letText.indexOf('=', eqMatch.index);
+      const eqPos = this.document.positionAt(eqOffset);
+      this.tokenBuilder.addToken({
+        line: eqPos.line,
+        char: eqPos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+
+    // Process value expression
+    if (node.value) {
+      const valueNodes = Array.isArray(node.value) ? node.value : [node.value];
+      for (const valueNode of valueNodes) {
+        this.visitNode(valueNode, context);
+      }
+    }
+  }
+
+  /**
+   * Visit an AugmentedAssignment node (@var += value)
+   */
+  private visitAugmentedAssignment(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const augText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize the variable being assigned (@identifier)
+    if (node.identifier) {
+      const atIndex = augText.indexOf(`@${node.identifier}`);
+      if (atIndex !== -1) {
+        const atOffset = node.location.start.offset + atIndex;
+        const atPos = this.document.positionAt(atOffset);
+        this.tokenBuilder.addToken({
+          line: atPos.line,
+          char: atPos.character,
+          length: node.identifier.length + 1,
+          tokenType: 'variable',
+          modifiers: ['modification']
+        });
+      }
+    }
+
+    // Tokenize the augmented operator (+=)
+    if (node.operator) {
+      const opMatch = augText.match(/\+=/);
+      if (opMatch && opMatch.index !== undefined) {
+        const opOffset = node.location.start.offset + opMatch.index;
+        const opPos = this.document.positionAt(opOffset);
+        this.tokenBuilder.addToken({
+          line: opPos.line,
+          char: opPos.character,
+          length: 2,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      }
+    }
+
+    // Process value expression
+    if (node.value) {
+      const valueNodes = Array.isArray(node.value) ? node.value : [node.value];
+      for (const valueNode of valueNodes) {
+        this.visitNode(valueNode, context);
+      }
+    }
+  }
+
+  /**
+   * Visit an ExeReturn node (=> value)
+   */
+  private visitExeReturn(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const returnText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize '=>' operator
+    const arrowMatch = returnText.match(/^=>/);
+    if (arrowMatch) {
+      const arrowPos = this.document.positionAt(node.location.start.offset);
+      this.tokenBuilder.addToken({
+        line: arrowPos.line,
+        char: arrowPos.character,
+        length: 2,
+        tokenType: 'modifier',
+        modifiers: []
+      });
+    }
+
+    // Process return values
+    if (node.values) {
+      const valueNodes = Array.isArray(node.values) ? node.values : [node.values];
+      for (const valueNode of valueNodes) {
+        this.visitNode(valueNode, context);
       }
     }
   }

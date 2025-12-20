@@ -275,7 +275,7 @@ AugmentedAssignment "augmented assignment"
     }
 
 ComplexAugmentedLHS
-  = "@" BaseIdentifier _? ("." / "[") (!"+=" .)*
+  = "@" BaseIdentifier _? ("." / "[") (!("+=" / "=>") .)* &"+="
 
 // Combined pattern for when entries that need local assignment
 LocalAssignment "local assignment"
