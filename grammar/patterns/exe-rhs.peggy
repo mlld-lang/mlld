@@ -497,7 +497,7 @@ ExeBlockBody
     }
 
 ExeBlockStatementList
-  = BlockComments* first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* trailing:BlockComments* {
+  = BlockComments* _ first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* trailing:BlockComments* {
       const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
       return [...normalize(first), ...rest.flatMap(normalize)];
     }
@@ -686,7 +686,7 @@ WhenExpression "when expression"
 
 // Bound pattern list for when expressions
 WhenBoundExpressionConditionList
-  = BlockComments* first:WhenBoundExpressionEntry rest:(WhenConditionSeparator entry:WhenBoundExpressionEntry { return entry; })* trailing:BlockComments* {
+  = BlockComments* _ first:WhenBoundExpressionEntry rest:(WhenConditionSeparator entry:WhenBoundExpressionEntry { return entry; })* trailing:BlockComments* {
       return [first, ...rest];
     }
   / BlockComments+ { return []; }
@@ -729,7 +729,7 @@ WhenExprModifier = mod:("first") { return mod; }
 // Value-oriented condition list for when expressions
 // Reuses WhenConditionSeparator from when.peggy (shared abstraction)
 WhenExpressionConditionList
-  = BlockComments* first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* trailing:BlockComments* {
+  = BlockComments* _ first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* trailing:BlockComments* {
       return [first, ...rest];
     }
   / BlockComments+ { return []; }

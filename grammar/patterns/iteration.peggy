@@ -130,7 +130,7 @@ BlockStatementSeparator
 
 // Statement list for for-block bodies
 ForBlockStatementList "for block statement list"
-  = BlockComments* first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* trailing:BlockComments* {
+  = BlockComments* _ first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* trailing:BlockComments* {
       const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
       return [...normalize(first), ...rest.flatMap(normalize)];
     }

@@ -472,7 +472,7 @@ WhenConditionBlock
     }
 
 WhenConditionList
-  = BlockComments* first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* trailing:BlockComments* {
+  = BlockComments* _ first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* trailing:BlockComments* {
       return [first, ...rest];
     }
   / BlockComments+ { return []; }
@@ -566,7 +566,7 @@ WhenActionBlock
     }
 
 WhenActionBlockContent
-  = BlockComments* first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
+  = BlockComments* _ first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
       return [first, ...rest].flat();
     }
   / BlockComments+ { return []; }
