@@ -538,8 +538,12 @@ export class DirectiveVisitor extends BaseVisitor {
         this.visitInlineCode(directive, context);
       } else {
         for (const node of values.value) {
-          if (typeof node === 'object' && node !== null) {
-            this.mainVisitor.visitNode(node, context);
+          if (node && typeof node === 'object') {
+            if (node.type === 'ExeBlock') {
+              this.visitExeBlock(node, context);
+            } else {
+              this.mainVisitor.visitNode(node, context);
+            }
           } else if (directive.location) {
             this.handlePrimitiveValue(node, directive);
           }
@@ -2907,13 +2911,15 @@ export class DirectiveVisitor extends BaseVisitor {
     }
 
     // Tokenize the variable being assigned
-    if (letNode.variable) {
-      const varNode = Array.isArray(letNode.variable) ? letNode.variable[0] : letNode.variable;
-      if (varNode?.location) {
+    if (letNode.identifier) {
+      const atIndex = letText.indexOf(`@${letNode.identifier}`);
+      if (atIndex !== -1) {
+        const atOffset = letNode.location.start.offset + atIndex;
+        const atPosition = this.document.positionAt(atOffset);
         this.tokenBuilder.addToken({
-          line: varNode.location.start.line - 1,
-          char: varNode.location.start.column - 1,
-          length: (varNode.identifier?.length || 0) + 1, // +1 for @
+          line: atPosition.line,
+          char: atPosition.character,
+          length: letNode.identifier.length + 1,
           tokenType: 'variable',
           modifiers: ['declaration']
         });
@@ -2946,6 +2952,7 @@ export class DirectiveVisitor extends BaseVisitor {
     if (!augNode.location) return;
 
     const sourceText = this.document.getText();
+    const augText = sourceText.substring(augNode.location.start.offset, augNode.location.end.offset);
 
     // Look backwards up to 4 characters for 'let ' keyword
     const searchStart = Math.max(0, augNode.location.start.offset - 4);
@@ -2965,13 +2972,15 @@ export class DirectiveVisitor extends BaseVisitor {
     }
 
     // Tokenize the variable being assigned
-    if (augNode.variable) {
-      const varNode = Array.isArray(augNode.variable) ? augNode.variable[0] : augNode.variable;
-      if (varNode?.location) {
+    if (augNode.identifier) {
+      const atIndex = augText.indexOf(`@${augNode.identifier}`);
+      if (atIndex !== -1) {
+        const atOffset = augNode.location.start.offset + atIndex;
+        const atPosition = this.document.positionAt(atOffset);
         this.tokenBuilder.addToken({
-          line: varNode.location.start.line - 1,
-          char: varNode.location.start.column - 1,
-          length: (varNode.identifier?.length || 0) + 1, // +1 for @
+          line: atPosition.line,
+          char: atPosition.character,
+          length: augNode.identifier.length + 1,
           tokenType: 'variable',
           modifiers: ['declaration']
         });
@@ -2980,7 +2989,6 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Tokenize the augmented operator (+=, -=, etc.)
     if (augNode.operator) {
-      const augText = sourceText.substring(augNode.location.start.offset, augNode.location.end.offset);
       const operatorMatch = augText.match(/\s*(\+\=|\-\=|\*\=|\/\=)\s*/);
       if (operatorMatch && operatorMatch.index !== undefined) {
         const operatorText = operatorMatch[1];

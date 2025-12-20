@@ -263,7 +263,10 @@ export async function evaluateWhenExpression(
         value = entry.value.length === 1 ? firstValue : entry.value;
       } else {
         // For nodes, evaluate them
-        const valueResult = await evaluate(entry.value, accumulatedEnv, context);
+        const valueResult = await evaluate(entry.value, accumulatedEnv, {
+          ...(context || {}),
+          isExpression: true
+        });
         value = valueResult.value;
       }
 
@@ -303,7 +306,10 @@ export async function evaluateWhenExpression(
       if (isRawPrimitive) {
         rhsValue = entry.value.length === 1 ? firstValue : entry.value;
       } else {
-        const rhsResult = await evaluate(entry.value, accumulatedEnv, context);
+        const rhsResult = await evaluate(entry.value, accumulatedEnv, {
+          ...(context || {}),
+          isExpression: true
+        });
         rhsValue = rhsResult.value;
       }
 

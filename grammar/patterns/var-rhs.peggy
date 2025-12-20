@@ -14,6 +14,7 @@ VarRHSContent "var assignment value"
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
+  / VarBlock                    // Statement block for var evaluation
   / ArrayLiteral                // Arrays: [1, 2, 3] - MUST come before templates to handle [[nested]]
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / UnifiedQuoteOrTemplate      // Unified quotes and templates (moved after arrays)
@@ -25,6 +26,36 @@ VarRHSContent "var assignment value"
   / NestedDirective             // Nested directives @run, etc.
   / InlineShowDirective         // show actions used inline (for expressions)
   / PrimitiveValue              // Direct primitives: 42, true, false, null, and strings WITHOUT pipes
+
+VarBlock "var block"
+  = &{
+      let i = peg$currPos;
+      if (input[i] !== '[') return false;
+      i += 1;
+      while (i < input.length) {
+        const ch = input[i];
+        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+          i += 1;
+          continue;
+        }
+        if (input[i] === '>' && input[i + 1] === '>') {
+          i += 2;
+          while (i < input.length && input[i] !== '\n') i += 1;
+          continue;
+        }
+        if (input[i] === '<' && input[i + 1] === '<') {
+          i += 2;
+          while (i < input.length && input[i] !== '\n') i += 1;
+          continue;
+        }
+        break;
+      }
+      const rest = input.substring(i);
+      if (rest.startsWith('let')) return true;
+      if (rest.startsWith('=>')) return true;
+      if (/^@[_a-zA-Z]\w*\s*\+=/.test(rest)) return true;
+      return false;
+    } block:ExeStatementBlock { return block; }
 
 // Expression that definitely has an operator (to avoid matching simple variables)
 ExpressionWithOperator

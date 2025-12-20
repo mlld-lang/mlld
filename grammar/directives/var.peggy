@@ -179,6 +179,15 @@ SlashVar "var directive"
         location()
       );
     }
+
+  // Error: Augmented assignment inside /var
+  / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "@" augId:BaseIdentifier _ "+=" _ {
+      helpers.mlldError(
+        `Augmented assignment is not valid in /var directive. Use let @${augId} += value inside a block.`,
+        "+=",
+        location()
+      );
+    }
     
   // Error: Unclosed array literal
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ "[" &{

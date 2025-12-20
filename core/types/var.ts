@@ -8,6 +8,7 @@
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
 import { DirectiveNode, ExecInvocation } from './nodes';
+import type { ExeBlockNode } from './exe';
 import type { PipelineStage } from './run';
 import type { DataLabel } from './security';
 
@@ -133,6 +134,7 @@ export type VarValue =
   | DataArrayValue // Arrays
   | DirectiveNode // Nested directives (@run, @add, etc.)
   | ExecInvocation // Exec invocations
+  | ExeBlockNode // Block expressions
   | ForeachCommandExpression // Foreach command expressions
   | ForeachSectionExpression // Foreach section expressions
   | VarExecDefinition; // Exec definitions (parameterized commands)

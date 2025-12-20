@@ -109,7 +109,7 @@ async function evaluateAssignmentValue(
     if (isRawPrimitive) {
       value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
     } else {
-      const valueResult = await evaluate(entry.value, env);
+      const valueResult = await evaluate(entry.value, env, { isExpression: true });
       value = valueResult.value;
     }
   }

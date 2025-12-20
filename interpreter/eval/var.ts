@@ -745,6 +745,12 @@ export async function prepareVarAssignment(
     const whenResult = await evaluateWhenExpression(valueNode as any, env);
     resolvedValue = whenResult.value;
     
+  } else if (valueNode && valueNode.type === 'ExeBlock') {
+    const { evaluateExeBlock } = await import('./exe');
+    const blockEnv = env.createChild();
+    const blockResult = await evaluateExeBlock(valueNode as any, blockEnv);
+    resolvedValue = blockResult.value;
+
   } else if (valueNode && valueNode.type === 'ExecInvocation') {
     // Handle exec function invocations: @getConfig(), @transform(@data)
     if (process.env.MLLD_DEBUG === 'true') {
@@ -1089,8 +1095,8 @@ export async function prepareVarAssignment(
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
     }
 
-  } else if (valueNode.type === 'ExecInvocation') {
-    // Exec invocations can return any type
+  } else if (valueNode.type === 'ExecInvocation' || valueNode.type === 'ExeBlock') {
+    // Exec invocations and blocks can return any type
     if (isStructuredValue(resolvedValue)) {
       const options = applySecurityOptions(undefined, resolvedValueDescriptor);
       variable = createStructuredValueVariable(identifier, resolvedValue, source, options);

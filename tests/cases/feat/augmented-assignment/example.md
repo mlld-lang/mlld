@@ -22,3 +22,10 @@
   * => @obj
 ]
 /show @mergeObjects() | @json
+
+/exe @concat(a, b) = [
+  let @result = @a
+  @result += @b
+  => @result
+]
+/show @concat([1, 2], [3, 4]) | @json

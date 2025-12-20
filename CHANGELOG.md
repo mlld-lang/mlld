@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `=> @value` optional return must be the last statement when present in exe blocks
   - Nested for/when inside blocks supported; inner directives are slashless
   - Blocks use `[...]` (not `{...}`) to distinguish mlld control flow from code/command/data
+- **Block syntax for var**: `/var @value = [let @x = ...; => @x]` evaluates a local statement block and returns its value
 - **Block comments in bracket bodies**: `>>`/`<<` comments inside `[...]` blocks (exe, for, when, guard, when-expressions) are consumed as whitespace
 - **While loops**: Bounded iteration with `done`/`continue` control flow
   - `/while (100) @processor` - directive form with iteration cap
@@ -88,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI `--payload` alias for `--inject`
 - **ESM bundle compatibility**: MJS bundle fixed for Node 24+ ESM projects (converted `require()` calls to ESM imports)
 - **LSP: Mode-aware highlighting**: Language server detects `.mld` (strict) vs `.mld.md` (markdown) and highlights bare directives correctly; text content in strict mode shows diagnostics; completions adapt to mode
+- **/var augmented assignment errors**: Invalid `@x = @y += @z` errors stop at the `+=` instead of earlier lines in LSP diagnostics
+- **Exe block += evaluation**: `let @result = @a; @result += @b` concatenates arrays instead of replacing them
 - `run` statements work inside `[...]` blocks for `/exe` and `/for` bodies
 - Fixed `/run @value | cmd { ... }` parsing so `@value` becomes `with { stdin: ... }` (matches `/exe` RHS pipe sugar)
 - **LSP: rc78 syntax support**: Semantic tokens for block syntax `[...]`, `let` keyword, `+=` augmented assignment, `while`/`done`/`continue`, `stream` directive, working directories `cmd:/path`, when semicolons
