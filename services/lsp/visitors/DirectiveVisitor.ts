@@ -324,9 +324,17 @@ export class DirectiveVisitor extends BaseVisitor {
 
   /**
    * Handle end-of-line comments attached to directives via meta.comment
+   * and leading comments via meta.leadingComments
    * Call this before early returns to ensure comments are tokenized
    */
   private handleDirectiveComment(node: any): void {
+    // Handle leading comments (comments that appear before a statement on their own line)
+    if (node.meta?.leadingComments && Array.isArray(node.meta.leadingComments)) {
+      for (const comment of node.meta.leadingComments) {
+        this.visitEndOfLineComment(comment);
+      }
+    }
+    // Handle end-of-line comment
     if (node.meta?.comment) {
       this.visitEndOfLineComment(node.meta.comment);
     }
@@ -2016,13 +2024,52 @@ export class DirectiveVisitor extends BaseVisitor {
       for (let i = 0; i < values.imports.length; i++) {
         const importItem = values.imports[i];
         if (importItem?.identifier && importItem?.location) {
-          this.tokenBuilder.addToken({
-            line: importItem.location.start.line - 1,
-            char: importItem.location.start.column - 1,
-            length: (importItem.identifier.length || 0) + 1,
-            tokenType: 'variable',
-            modifiers: []
-          });
+          // Tokenize the original identifier (@router)
+          const itemText = sourceText.substring(importItem.location.start.offset, importItem.location.end.offset);
+          const atIndex = itemText.indexOf('@');
+          if (atIndex !== -1) {
+            const identOffset = importItem.location.start.offset + atIndex;
+            const identPos = this.document.positionAt(identOffset);
+            this.tokenBuilder.addToken({
+              line: identPos.line,
+              char: identPos.character,
+              length: importItem.identifier.length + 1, // +1 for @
+              tokenType: 'variable',
+              modifiers: []
+            });
+          }
+          
+          // Tokenize alias if present (@router as @responseRequired)
+          if (importItem.alias) {
+            // Find and tokenize "as" keyword
+            const asMatch = itemText.match(/\s+as\s+/);
+            if (asMatch && asMatch.index !== undefined) {
+              const asOffset = importItem.location.start.offset + asMatch.index + asMatch[0].indexOf('as');
+              const asPos = this.document.positionAt(asOffset);
+              this.tokenBuilder.addToken({
+                line: asPos.line,
+                char: asPos.character,
+                length: 2,
+                tokenType: 'keyword',
+                modifiers: []
+              });
+              
+              // Find and tokenize the alias variable
+              const afterAs = itemText.substring(asMatch.index + asMatch[0].length);
+              const aliasAtIndex = afterAs.indexOf('@');
+              if (aliasAtIndex !== -1) {
+                const aliasOffset = importItem.location.start.offset + asMatch.index + asMatch[0].length + aliasAtIndex;
+                const aliasPos = this.document.positionAt(aliasOffset);
+                this.tokenBuilder.addToken({
+                  line: aliasPos.line,
+                  char: aliasPos.character,
+                  length: importItem.alias.length + 1, // +1 for @
+                  tokenType: 'variable',
+                  modifiers: []
+                });
+              }
+            }
+          }
         }
         
         // Tokenize comma between items
@@ -2942,6 +2989,12 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     }
 
+    // Handle leading comments (comments on their own line before this statement)
+    if (letNode.meta?.leadingComments && Array.isArray(letNode.meta.leadingComments)) {
+      for (const comment of letNode.meta.leadingComments) {
+        this.visitEndOfLineComment(comment);
+      }
+    }
     // Handle end-of-line comment if present
     if (letNode.meta?.comment) {
       this.visitEndOfLineComment(letNode.meta.comment);

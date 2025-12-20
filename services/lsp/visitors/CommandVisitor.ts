@@ -725,10 +725,78 @@ export class CommandVisitor extends BaseVisitor {
           if (lastField?.type === 'variableIndex') {
             // COMPUTED PROPERTY CALL: @obj[@key](args)
             // Visit identifier[0] which contains the variableIndex field with nested VariableReference
-            this.mainVisitor.visitNode(identifier, context);
+            // Visit with a regular context (not interpolation) so fields get proper tokenization
+            const varContext = {
+              ...context,
+              interpolationAllowed: false,
+              inCommand: false
+            };
+            this.mainVisitor.visitNode(identifier, varContext);
 
             if (lastField.location) {
               methodEndOffset = lastField.location.end.offset;
+            }
+            
+            // Handle args for computed property calls
+            if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
+              // Find and tokenize opening paren
+              const openParenOffset = source.indexOf('(', methodEndOffset);
+              if (openParenOffset !== -1) {
+                const openParenPos = this.document.positionAt(openParenOffset);
+                this.tokenBuilder.addToken({
+                  line: openParenPos.line,
+                  char: openParenPos.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+              
+              const newContext = {
+                ...context,
+                inCommand: true,
+                interpolationAllowed: true,
+                variableStyle: '@var' as const,
+                inFunctionArgs: true
+              };
+              
+              // Visit each argument
+              for (let i = 0; i < node.commandRef.args.length; i++) {
+                const arg = node.commandRef.args[i];
+                if (typeof arg === 'object' && arg !== null && arg.type) {
+                  this.mainVisitor.visitNode(arg, newContext);
+                }
+                
+                // Add comma between args
+                if (i < node.commandRef.args.length - 1) {
+                  if (arg.location && typeof arg === 'object' && arg.type) {
+                    const nextArg = node.commandRef.args[i + 1];
+                    if (nextArg.location && typeof nextArg === 'object' && nextArg.type) {
+                      this.operatorHelper.tokenizeOperatorBetween(
+                        arg.location.end.offset,
+                        nextArg.location.start.offset,
+                        ','
+                      );
+                    }
+                  }
+                }
+              }
+              
+              // Find and tokenize closing paren
+              const lastArg = node.commandRef.args[node.commandRef.args.length - 1];
+              if (lastArg?.location) {
+                const closeParenOffset = source.indexOf(')', lastArg.location.end.offset);
+                if (closeParenOffset !== -1) {
+                  const closeParenPos = this.document.positionAt(closeParenOffset);
+                  this.tokenBuilder.addToken({
+                    line: closeParenPos.line,
+                    char: closeParenPos.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
+              }
             }
           } else if (lastField?.type === 'field' && lastField.location && lastField.value) {
             // REGULAR METHOD CALL: @obj.method(args)

@@ -51,10 +51,12 @@ export class VariableVisitor extends BaseVisitor {
 
     // Skip exe function identifiers that have broken AST locations spanning entire directive
     // These are already tokenized as 'function' by handleVariableDeclaration
+    // Note: computed property calls like @obj.field[@key](args) can have spans up to ~100 chars
+    // So we use 150 as threshold to avoid false positives while still catching truly broken spans
     if (valueType === 'varIdentifier' && node.location) {
       const locationSpan = node.location.end.offset - node.location.start.offset;
-      // If location spans more than 50 chars, it's likely a broken identifier location
-      if (locationSpan > 50) {
+      // If location spans more than 150 chars, it's likely a broken identifier location
+      if (locationSpan > 150) {
         return;
       }
     }
@@ -96,6 +98,13 @@ export class VariableVisitor extends BaseVisitor {
           });
         }
         this.operatorHelper.tokenizePropertyAccess(node);
+        
+        // Visit nested VariableReferences inside variableIndex fields (e.g., @obj[@key])
+        for (const field of node.fields) {
+          if (field.type === 'variableIndex' && field.value?.type === 'VariableReference') {
+            this.mainVisitor.visitNode(field.value, context);
+          }
+        }
       }
     } else if (context.variableStyle === '{{var}}' && valueType === 'varInterpolation') {
       this.tokenBuilder.addToken({

@@ -696,8 +696,16 @@ async function evaluateExecInvocationInternal(
           throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
         }
         // Extract the value from the variable reference
-        const { extractVariableValue } = await import('../utils/variable-resolution');
+        const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
         objectValue = await extractVariableValue(objectVar, env);
+
+        // If the extracted value is itself a Variable (e.g., from a for expression stored via let),
+        // unwrap it to get the raw value for builtin method invocation
+        // WHY: For expressions return ArrayVariables, and when stored via let they may be wrapped
+        // in an ObjectVariable. We need the raw array for .join() etc. to work.
+        if (isVariable(objectValue)) {
+          objectValue = await extractVariableValue(objectValue, env);
+        }
 
         // Navigate through fields if present
         if (objectRef.fields && objectRef.fields.length > 0) {

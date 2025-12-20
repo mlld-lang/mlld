@@ -468,7 +468,7 @@ export class VariableImporter {
         })
       );
     }
-    
+
     // Check if this is an executable export
     if (value && typeof value === 'object' && '__executable' in value && value.__executable) {
       return this.createExecutableFromImport(name, value, source, buildMetadata(), options?.securityLabels);
