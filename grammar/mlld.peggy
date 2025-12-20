@@ -169,6 +169,10 @@ BlockComments
   = Comment { return null; }
   / InlineComment { return null; }
 
+// Leading block comment - captures the comment for attachment to first statement
+LeadingBlockComment
+  = comment:Comment { return comment; }
+
 // -------------------------------------------------------------------------
 // TEXT BLOCKS
 // -------------------------------------------------------------------------

@@ -472,8 +472,24 @@ WhenConditionBlock
     }
 
 WhenConditionList
-  = BlockComments* _ first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* trailing:BlockComments* {
-      return [first, ...rest];
+  = leadingComments:LeadingBlockComment* _ first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      // Attach leading comments to first entry's meta (immutable update)
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return entries;
     }
   / BlockComments+ { return []; }
 
@@ -566,8 +582,24 @@ WhenActionBlock
     }
 
 WhenActionBlockContent
-  = BlockComments* _ first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
-      return [first, ...rest].flat();
+  = leadingComments:LeadingBlockComment* _ first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
+      const actions = [first, ...rest].flat();
+      // Attach leading comments to first action's meta (immutable update)
+      if (leadingComments.length > 0 && actions.length > 0) {
+        const firstAction = actions[0];
+        if (firstAction && typeof firstAction === 'object') {
+          const existingMeta = firstAction.meta || {};
+          actions[0] = {
+            ...firstAction,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return actions;
     }
   / BlockComments+ { return []; }
 

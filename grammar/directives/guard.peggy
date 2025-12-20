@@ -203,8 +203,24 @@ GuardModifier
   = WhenModifier
 
 GuardRuleList
-  = BlockComments* _ first:GuardEntry rest:(GuardRuleSeparator entry:GuardEntry { return entry; })* trailing:BlockComments* {
-      return [first, ...rest];
+  = leadingComments:LeadingBlockComment* _ first:GuardEntry rest:(GuardRuleSeparator entry:GuardEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      // Attach leading comments to first entry's meta (immutable update)
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return entries;
     }
   / BlockComments+ { return []; }
 

@@ -130,9 +130,25 @@ BlockStatementSeparator
 
 // Statement list for for-block bodies
 ForBlockStatementList "for block statement list"
-  = BlockComments* _ first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* trailing:BlockComments* {
+  = leadingComments:LeadingBlockComment* _ first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* trailing:BlockComments* {
       const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
-      return [...normalize(first), ...rest.flatMap(normalize)];
+      const stmts = [...normalize(first), ...rest.flatMap(normalize)];
+      // Attach leading comments to first statement's meta (immutable update)
+      if (leadingComments.length > 0 && stmts.length > 0) {
+        const firstStmt = stmts[0];
+        if (firstStmt && typeof firstStmt === 'object') {
+          const existingMeta = firstStmt.meta || {};
+          stmts[0] = {
+            ...firstStmt,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return stmts;
     }
   / BlockComments+ { return []; }
 

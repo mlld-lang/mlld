@@ -497,9 +497,25 @@ ExeBlockBody
     }
 
 ExeBlockStatementList
-  = BlockComments* _ first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* trailing:BlockComments* {
+  = leadingComments:LeadingBlockComment* _ first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* trailing:BlockComments* {
       const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
-      return [...normalize(first), ...rest.flatMap(normalize)];
+      const stmts = [...normalize(first), ...rest.flatMap(normalize)];
+      // Attach leading comments to first statement's meta (immutable update)
+      if (leadingComments.length > 0 && stmts.length > 0) {
+        const firstStmt = stmts[0];
+        if (firstStmt && typeof firstStmt === 'object') {
+          const existingMeta = firstStmt.meta || {};
+          stmts[0] = {
+            ...firstStmt,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return stmts;
     }
   / BlockComments+ { return []; }
 
@@ -686,8 +702,23 @@ WhenExpression "when expression"
 
 // Bound pattern list for when expressions
 WhenBoundExpressionConditionList
-  = BlockComments* _ first:WhenBoundExpressionEntry rest:(WhenConditionSeparator entry:WhenBoundExpressionEntry { return entry; })* trailing:BlockComments* {
-      return [first, ...rest];
+  = leadingComments:LeadingBlockComment* _ first:WhenBoundExpressionEntry rest:(WhenConditionSeparator entry:WhenBoundExpressionEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return entries;
     }
   / BlockComments+ { return []; }
 
@@ -729,8 +760,23 @@ WhenExprModifier = mod:("first") { return mod; }
 // Value-oriented condition list for when expressions
 // Reuses WhenConditionSeparator from when.peggy (shared abstraction)
 WhenExpressionConditionList
-  = BlockComments* _ first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* trailing:BlockComments* {
-      return [first, ...rest];
+  = leadingComments:LeadingBlockComment* _ first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return entries;
     }
   / BlockComments+ { return []; }
 
