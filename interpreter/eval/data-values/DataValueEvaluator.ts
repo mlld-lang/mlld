@@ -92,22 +92,33 @@ export class DataValueEvaluator {
       return value;
       
     } catch (error) {
-      // Provide better error context
-      const errorContext = {
-        valueType: typeof value,
-        valueTypeField: typeof value === 'object' ? (value as any)?.type : undefined,
-        valueKeys:
-          typeof value === 'object' && value !== null ? Object.keys(value as Record<string, unknown>).slice(0, 12) : undefined,
-        environment: env.getExecutionDirectory(),
-        errorName: error instanceof Error ? error.name : undefined,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined
-      };
+      // Build context string for better error messages
+      const valueTypeField = typeof value === 'object' ? (value as any)?.type : undefined;
+      const identifier = typeof value === 'object' ? (value as any)?.identifier : undefined;
 
-      if (!options?.suppressErrors) {
-        logger.error('DataValueEvaluator error:', errorContext);
+      let contextHint = '';
+      if (identifier) {
+        contextHint = ` (evaluating @${identifier})`;
+      } else if (valueTypeField) {
+        contextHint = ` (evaluating ${valueTypeField})`;
       }
-      throw error;
+
+      // If the original error already has a good message, just re-throw it
+      // Only wrap if the error message is missing or generic
+      const originalMessage = error instanceof Error ? error.message : String(error);
+      if (originalMessage && originalMessage.length > 0 && !originalMessage.includes('undefined')) {
+        throw error;
+      }
+
+      // Wrap with context for generic/empty errors
+      const wrappedError = new Error(
+        `Data evaluation failed${contextHint}: ${originalMessage || 'unknown error'}`
+      );
+      if (error instanceof Error) {
+        wrappedError.stack = error.stack;
+        wrappedError.cause = error;
+      }
+      throw wrappedError;
     }
   }
 

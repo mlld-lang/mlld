@@ -468,7 +468,8 @@ export class ModuleContentProcessor {
 
   private sanitizeKey(name: string): string {
     const withoutExt = name.replace(/\.[^.]+$/, '');
-    const sanitized = withoutExt.replace(/[^a-zA-Z0-9_]/g, '_');
+    // Preserve hyphens in file names - they're valid in mlld identifiers
+    const sanitized = withoutExt.replace(/[^a-zA-Z0-9_-]/g, '_');
     return sanitized.length > 0 ? sanitized : 'template';
   }
 

@@ -237,6 +237,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Captured module environment used during imported executable invocation
   private capturedModuleEnv?: Map<string, Variable>;
 
+  // Module isolation flag: when true, this environment is running an exe block from
+  // an imported module and should NOT inherit variable visibility from the caller's scope.
+  // This prevents collision errors when a module's internal variables have the same name
+  // as variables in the caller. See mlld-1e23.
+  private moduleIsolated: boolean = false;
+
   // Export manifest populated by /export directives within this environment
   private exportManifest?: ExportManifest;
 
@@ -417,6 +423,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getReservedNames: () => this.reservedNames,
       getParent: () => this.parent,
       getCapturedModuleEnv: () => this.capturedModuleEnv,
+      isModuleIsolated: () => this.moduleIsolated,
       getResolverManager: () => this.getResolverManager(),
       createDebugObject: (format: number) => this.createDebugObject(format),
       getEnvironmentVariables: () => this.getEnvironmentVariables(),
@@ -779,6 +786,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   setCapturedModuleEnv(env: Map<string, Variable> | undefined): void {
     this.capturedModuleEnv = env;
+    // When a captured module env is set, this environment is module-isolated
+    // This means it should NOT check the caller's scope for variable collisions
+    this.moduleIsolated = env !== undefined;
+  }
+
+  isModuleIsolated(): boolean {
+    return this.moduleIsolated;
   }
 
   setExportManifest(manifest: ExportManifest | null | undefined): void {
@@ -2211,6 +2225,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     child.initialNodeCount = this.nodes.length;
     child.streamingOptions = { ...this.streamingOptions };
     child.provenanceEnabled = this.provenanceEnabled;
+    // Inherit module isolation flag - children of isolated environments are also isolated
+    child.moduleIsolated = this.moduleIsolated;
 
     // Create child import resolver
     child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);

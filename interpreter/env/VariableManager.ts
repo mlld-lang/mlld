@@ -40,6 +40,7 @@ export interface VariableManagerDependencies {
   getReservedNames(): Set<string>;
   getParent(): VariableManagerContext | undefined;
   getCapturedModuleEnv(): Map<string, Variable> | undefined;
+  isModuleIsolated?(): boolean;
   getResolverManager(): ResolverManager | undefined;
   createDebugObject(format: number): string;
   getEnvironmentVariables(): Record<string, string>;
@@ -172,7 +173,7 @@ export class VariableManager implements IVariableManager {
     // System variables like frontmatter (@fm) shouldn't cause collision errors
     // since they can't actually be accessed in import contexts
     const isLegitimateVariable = this.isLegitimateVariableType(variable);
-    
+
     // Check if variable already exists in this scope
     if (this.variables.has(name)) {
       const existing = this.variables.get(name)!;
@@ -215,23 +216,29 @@ export class VariableManager implements IVariableManager {
     }
     
     // Check if variable exists in parent scope (true parent-child import conflict)
-    const parent = this.deps.getParent();
-    if (parent?.hasVariable(name)) {
-      const existing = parent.getVariable(name)!;
-      const existingIsLegitimate = this.isLegitimateVariableType(existing);
-      
-      // Only throw collision errors if both variables are legitimate mlld types
-      if (isLegitimateVariable && existingIsLegitimate) {
-        const isExistingImported = existing.mx?.isImported || false;
-        const importPath = existing.mx?.importPath;
+    // IMPORTANT: Skip this check for module-isolated environments (imported module exe blocks)
+    // These should only see their captured module environment, not the caller's scope.
+    // See mlld-1e23 for the original bug report.
+    const isModuleIsolated = this.deps.isModuleIsolated?.() ?? false;
+    if (!isModuleIsolated) {
+      const parent = this.deps.getParent();
+      if (parent?.hasVariable(name)) {
+        const existing = parent.getVariable(name)!;
+        const existingIsLegitimate = this.isLegitimateVariableType(existing);
 
-        throw VariableRedefinitionError.forImportConflict(
-          name,
-          existing.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          variable.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          importPath,
-          isExistingImported
-        );
+        // Only throw collision errors if both variables are legitimate mlld types
+        if (isLegitimateVariable && existingIsLegitimate) {
+          const isExistingImported = existing.mx?.isImported || false;
+          const importPath = existing.mx?.importPath;
+
+          throw VariableRedefinitionError.forImportConflict(
+            name,
+            existing.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.mx?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            importPath,
+            isExistingImported
+          );
+        }
       }
     }
     

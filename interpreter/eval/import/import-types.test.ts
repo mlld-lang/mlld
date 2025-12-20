@@ -292,7 +292,7 @@ describe('Import type handling', () => {
     ).rejects.toThrow(/undeclared/i);
   });
 
-  it('imports nested template directories with sanitized keys', async () => {
+  it('imports nested template directories preserving hyphens in keys', async () => {
     await fileSystem.writeFile(
       '/project/templates/agents/alice.att',
       'Agent: @message'
@@ -308,7 +308,7 @@ describe('Import type handling', () => {
 
     const source = `/import templates from "./templates" as @tpl(message)
 /show @tpl.agents.finance.bob("numbers")
-/show @tpl.finance.quarterly_report("q1")
+/show @tpl.finance["quarterly-report"]("q1")
 /show @tpl.agents.alice("hi")`;
 
     const output = await interpret(source, {

@@ -4,9 +4,9 @@ description: template collection access with both dot and bracket notation
 
 /import templates from "./tpl-bracket" as @tpl(msg)
 
->> Bracket notation (hyphens sanitized to underscores)
+>> Bracket notation (hyphens preserved)
 /show @tpl.agents["alice"]("hello")
-/show @tpl.formats["json_pretty"]("data")
+/show @tpl.formats["json-pretty"]("data")
 
 >> Full bracket notation
 /show @tpl["agents"]["alice"]("world")

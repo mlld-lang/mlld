@@ -716,7 +716,8 @@ export class ImportDirectiveEvaluator {
   }
 
   private sanitizeDirectoryKey(name: string): string {
-    const sanitized = name.replace(/[^a-zA-Z0-9_]/g, '_');
+    // Preserve hyphens in directory names - they're valid in mlld identifiers
+    const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
     return sanitized.length > 0 ? sanitized : 'module';
   }
 
