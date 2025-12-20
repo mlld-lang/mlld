@@ -60,7 +60,7 @@ export class VariableVisitor extends BaseVisitor {
     }
     
     const baseLength = identifier.length + 1;
-    
+
     if (context.interpolationAllowed && (context.templateType || context.inCommand)) {
       this.handleInterpolation(node, context, identifier, valueType, baseLength);
     } else {

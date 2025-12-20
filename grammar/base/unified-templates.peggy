@@ -286,14 +286,22 @@ TemplateInlineShow "inline show (template)"
 // -------------------------------------------------------------
 
 // ATT-style templates (@var interpolation, slash blocks, inline show)
+// Uses UnifiedAttTextSegment which allows :: as literal text (unlike double-colon templates)
 TemplateBodyAtt "template body for .att files"
   = parts:(
       TemplateSlashForBlockDouble
       / TemplateInlineShow
       / UnifiedAtInterpolation
       / FileReferenceInterpolation
-      / UnifiedDoubleColonTextSegment
+      / UnifiedAttTextSegment
     )* { return parts; }
+
+// Text for standalone .att files - allows :: as literal text
+// Only excludes @, \@, < (for file refs), and /for, /end at line start
+UnifiedAttTextSegment "ATT text segment"
+  = chars:(!((LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
 
 // MTT-style templates ({{var}} interpolation, inline show)
 TemplateBodyMtt "template body for .mtt files"

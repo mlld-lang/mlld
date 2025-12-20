@@ -37,13 +37,14 @@ export class TokenCoverageValidator {
     const mode = this.inferMode(fixture);
 
     // Generate semantic tokens with diagnostics
-    const { tokens, diagnostics } = await this.generateSemanticTokens(fixture.ast, fixture.input);
+    const { tokens, diagnostics } = await this.generateSemanticTokens(fixture.ast, fixture.input, fixture.name, fixture.templateType);
 
     // Build node expectations
     const expectations = this.expectationBuilder.buildExpectations(
       fixture.ast,
       mode,
-      fixture.input
+      fixture.input,
+      fixture.templateType
     );
 
     // Find gaps with diagnostic enrichment
@@ -76,7 +77,9 @@ export class TokenCoverageValidator {
    */
   private async generateSemanticTokens(
     ast: any[],
-    input: string
+    input: string,
+    fixtureName?: string,
+    templateType?: 'att' | 'mtt'
   ): Promise<{ tokens: SemanticToken[]; diagnostics: DiagnosticContext }> {
     const { SemanticTokensBuilder } = await import('vscode-languageserver/node.js');
     const { TextDocument } = await import('vscode-languageserver-textdocument');
@@ -149,8 +152,19 @@ export class TokenCoverageValidator {
       'enum': 'enum'
     };
 
-    // Create document
-    const document = TextDocument.create('test.mld', 'mlld', 1, input);
+    // Create document with appropriate URI for template type detection
+    let documentUri = 'test.mld';
+    if (templateType === 'att') {
+      documentUri = 'test.att';
+    } else if (templateType === 'mtt') {
+      documentUri = 'test.mtt';
+    } else if (fixtureName) {
+      // Use fixture name if it has an extension we recognize
+      if (fixtureName.endsWith('.att') || fixtureName.endsWith('.mtt') || fixtureName.endsWith('.mld') || fixtureName.endsWith('.mld.md')) {
+        documentUri = fixtureName;
+      }
+    }
+    const document = TextDocument.create(documentUri, 'mlld', 1, input);
 
     // Create builder that tracks tokens
     const tokens: SemanticToken[] = [];

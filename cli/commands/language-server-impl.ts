@@ -37,7 +37,7 @@ import { PathService } from '@services/fs/PathService';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { logger } from '@core/utils/logger';
-import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis, DocumentState } from './language-server';
+import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis, DocumentState, TemplateType } from './language-server';
 import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import type { MlldMode } from '@core/types/mode';
@@ -55,13 +55,45 @@ import {
  * @returns The parsing mode ('strict' for .mld, 'markdown' for .mld.md)
  */
 function getModeFromUri(uri: string): MlldMode {
-  const path = uri.replace('file://', '');
-  return inferMlldMode(path);
+  const filePath = uri.replace('file://', '');
+  return inferMlldMode(filePath);
+}
+
+/**
+ * Determine if a file is a template file and which type
+ * @param uri File URI
+ * @returns Template type ('att' or 'mtt') or undefined for non-template files
+ */
+function getTemplateTypeFromUri(uri: string): TemplateType | undefined {
+  const filePath = uri.replace('file://', '').toLowerCase();
+  if (filePath.endsWith('.att')) return 'att';
+  if (filePath.endsWith('.mtt')) return 'mtt';
+  return undefined;
+}
+
+/**
+ * Get the parser start rule for a document
+ * @param uri File URI
+ * @returns Start rule name for the parser
+ */
+function getStartRuleFromUri(uri: string): string {
+  const templateType = getTemplateTypeFromUri(uri);
+  if (templateType === 'att') return 'TemplateBodyAtt';
+  if (templateType === 'mtt') return 'TemplateBodyMtt';
+  return 'Start';
 }
 
 function isMlldDocument(uri: string): boolean {
-  const path = uri.replace('file://', '').toLowerCase();
-  return path.endsWith('.mld') || path.endsWith('.mld.md');
+  const filePath = uri.replace('file://', '').toLowerCase();
+  return filePath.endsWith('.mld') || filePath.endsWith('.mld.md');
+}
+
+function isTemplateDocument(uri: string): boolean {
+  return getTemplateTypeFromUri(uri) !== undefined;
+}
+
+function isSupportedDocument(uri: string): boolean {
+  return isMlldDocument(uri) || isTemplateDocument(uri);
 }
 
 function looksLikeMlldContent(text: string): boolean {
@@ -286,7 +318,8 @@ export async function startLanguageServer(): Promise<void> {
         version: 0,
         content: '',
         lastEditTime: Date.now(),
-        mode: getModeFromUri(uri)
+        mode: getModeFromUri(uri),
+        templateType: getTemplateTypeFromUri(uri)
       };
       documentStates.set(uri, state);
     }
@@ -465,6 +498,13 @@ export async function startLanguageServer(): Promise<void> {
     const document = event.document;
     const settings = await getDocumentSettings(document.uri) || defaultSettings;
 
+    // Log document info for debugging
+    const templateType = getTemplateTypeFromUri(document.uri);
+    const startRule = getStartRuleFromUri(document.uri);
+    const isSupported = isSupportedDocument(document.uri);
+    console.error(`[LSP] Document opened: ${document.uri}`);
+    console.error(`[LSP]   templateType: ${templateType}, startRule: ${startRule}, isSupported: ${isSupported}`);
+
     // Trigger immediate validation and semantic token generation
     debouncedProcessor.scheduleValidation(document, 0);
     debouncedProcessor.scheduleTokenGeneration(document, 0);
@@ -548,8 +588,9 @@ export async function startLanguageServer(): Promise<void> {
   );
 
   async function analyzeDocument(document: TextDocument): Promise<DocumentAnalysis> {
-    // Skip non-mlld documents (plain .md without .mld.md suffix)
-    if (!isMlldDocument(document.uri)) {
+    console.error(`[LSP] analyzeDocument called for: ${document.uri}`);
+    // Skip non-mlld documents (plain .md without .mld.md suffix, or non-template files)
+    if (!isSupportedDocument(document.uri)) {
       const empty: DocumentAnalysis = {
         ast: [],
         errors: [],
@@ -592,7 +633,8 @@ export async function startLanguageServer(): Promise<void> {
       }
 
       const mode = getModeFromUri(document.uri);
-      const result = await parse(text, { mode });
+      const startRule = getStartRuleFromUri(document.uri);
+      const result = await parse(text, { mode, startRule });
 
       if (!result.success) {
         // Convert parse error to diagnostic
@@ -665,9 +707,16 @@ export async function startLanguageServer(): Promise<void> {
         errors.push(diagnostic);
         
         // Attempt fault-tolerant parsing using chunk-based strategy
-        const partialResult = await parseWithChunks(text, error, mode);
-        ast = partialResult.nodes;
-        errors.push(...partialResult.errors);
+        // For template files, skip chunk parsing since the AST structure is different
+        const templateType = getTemplateTypeFromUri(document.uri);
+        if (templateType) {
+          // Template files have simpler structure - just use what we parsed
+          logger.debug('[TEMPLATE] Skipping chunk parsing for template file');
+        } else {
+          const partialResult = await parseWithChunks(text, error, mode);
+          ast = partialResult.nodes;
+          errors.push(...partialResult.errors);
+        }
         // Note: partialResult.failedRanges available for downstream handling if needed
         
         // Analyze whatever we could parse
@@ -677,9 +726,11 @@ export async function startLanguageServer(): Promise<void> {
       } else {
         // Full parse succeeded
         let parsedAst = result.ast;
+        const templateType = getTemplateTypeFromUri(document.uri);
 
         // Heuristic: if markdown mode returns only Text nodes but content looks mlld-like, retry in strict mode
-        if (mode === 'markdown' && parsedAst.length > 0 && parsedAst.every(node => node?.type === 'Text') && looksLikeMlldContent(text)) {
+        // Skip this for template files which are expected to have mostly text
+        if (!templateType && mode === 'markdown' && parsedAst.length > 0 && parsedAst.every(node => node?.type === 'Text') && looksLikeMlldContent(text)) {
           logger.debug('[CHUNK] Markdown parse returned only Text; retrying in strict mode');
           const strictResult = await parse(text, { mode: 'strict' });
           if (strictResult.success) {
@@ -691,7 +742,8 @@ export async function startLanguageServer(): Promise<void> {
         analyzeAST(ast, document, variables, imports, exports);
 
         // In strict mode, check for text nodes that shouldn't be there
-        if (mode === 'strict') {
+        // Skip this for template files which are expected to have text content
+        if (!templateType && mode === 'strict') {
           checkStrictModeTextNodes(ast, errors);
         }
       }

@@ -22,12 +22,14 @@ export class NodeExpectationBuilder {
   buildExpectations(
     ast: any[] | any,
     mode: 'strict' | 'markdown',
-    input: string
+    input: string,
+    templateType?: 'att' | 'mtt'
   ): NodeExpectation[] {
     this.expectations = [];
 
     const rootContext: ValidationContext = {
-      inTemplate: false,
+      inTemplate: !!templateType,
+      templateType,
       inCommand: false,
       mode
     };

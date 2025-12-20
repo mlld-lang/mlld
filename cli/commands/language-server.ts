@@ -107,6 +107,8 @@ export interface DocumentAnalysis {
   lastAnalyzed: number;
 }
 
+export type TemplateType = 'att' | 'mtt';
+
 export interface DocumentState {
   uri: string;
   version: number;
@@ -116,4 +118,5 @@ export interface DocumentState {
   currentEditLine?: number;
   lastEditTime: number;
   mode?: import('@core/types/mode').MlldMode;
+  templateType?: TemplateType;
 }

@@ -58,7 +58,7 @@ export class TemplateVisitor extends BaseVisitor {
         tokenType: 'string',
         modifiers: []
       });
-    } else if (wrapperType === 'backtick' || wrapperType === 'doubleColon' || wrapperType === 'tripleColon') {
+    } else if (wrapperType === 'backtick' || wrapperType === 'doubleColon' || wrapperType === 'tripleColon' || wrapperType === 'att') {
       // Backtick/colon templates: check for /for, /end, {{for}}, {{end}} keywords
       const content = node.content || '';
 
@@ -107,6 +107,26 @@ export class TemplateVisitor extends BaseVisitor {
         }
       }
       // Don't tokenize rest of Text - let it be default/white color
+    } else if (wrapperType === 'mtt') {
+      // MTT templates: only {{for}}, {{end}} keywords (no slash syntax)
+      const content = node.content || '';
+      const forMatch = content.match(/\{\{\s*(for|end)\b/);
+
+      if (forMatch && forMatch.index !== undefined) {
+        const keywordName = forMatch[1];
+        const keywordIndex = forMatch[0].indexOf(keywordName);
+        const keywordOffset = node.location.start.offset + forMatch.index + keywordIndex;
+        const keywordPos = this.document.positionAt(keywordOffset);
+
+        this.tokenBuilder.addToken({
+          line: keywordPos.line,
+          char: keywordPos.character,
+          length: keywordName.length,
+          tokenType: 'property',
+          modifiers: []
+        });
+      }
+      // Don't tokenize rest of Text - let it be default color
     }
   }
 
@@ -230,6 +250,28 @@ export class TemplateVisitor extends BaseVisitor {
         // Use 'property' for teal color (italic will be added in nvim config)
         this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length: m[1].length, tokenType: 'property', modifiers: [] });
         break;
+      }
+    }
+
+    // Visit loop variable
+    if (node.variable) {
+      this.mainVisitor.visitNode(node.variable, context);
+    }
+
+    // Visit source (the iterable)
+    if (node.source) {
+      if (process.env.DEBUG_LSP) {
+        console.log('[TEMPLATE-FOR] Visiting source:', Array.isArray(node.source) ? node.source.length + ' items' : 'single');
+      }
+      if (Array.isArray(node.source)) {
+        for (const sourceNode of node.source) {
+          if (process.env.DEBUG_LSP) {
+            console.log('[TEMPLATE-FOR] Source node:', sourceNode.type, sourceNode.identifier);
+          }
+          this.mainVisitor.visitNode(sourceNode, context);
+        }
+      } else {
+        this.mainVisitor.visitNode(node.source, context);
       }
     }
 

@@ -41,7 +41,25 @@ export class ASTSemanticVisitor {
     this.contextStack = new ContextStack();
     this.tokenBuilder = new TokenBuilder(builder, tokenTypes, tokenModifiers, document, tokenTypeMap);
     this.visitors = new Map();
-    
+
+    // Initialize template context from document URI for .att/.mtt files
+    const uri = document.uri.toLowerCase();
+    if (uri.endsWith('.att')) {
+      this.contextStack.push({
+        templateType: 'att',
+        wrapperType: 'att',
+        interpolationAllowed: true,
+        variableStyle: '@var'
+      });
+    } else if (uri.endsWith('.mtt')) {
+      this.contextStack.push({
+        templateType: 'mtt',
+        wrapperType: 'mtt',
+        interpolationAllowed: true,
+        variableStyle: '{{var}}'
+      });
+    }
+
     this.initializeVisitors();
   }
   

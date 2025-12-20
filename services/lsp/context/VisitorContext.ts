@@ -1,11 +1,11 @@
 export interface VisitorContext {
-  templateType?: 'backtick' | 'doubleColon' | 'tripleColon' | null;
+  templateType?: 'backtick' | 'doubleColon' | 'tripleColon' | 'att' | 'mtt' | null;
   inCommand?: boolean;
   commandLanguage?: string;
   interpolationAllowed?: boolean;
   variableStyle?: '@var' | '{{var}}';
   inSingleQuotes?: boolean;
-  wrapperType?: 'doubleQuote' | 'singleQuote' | 'backtick' | 'doubleColon' | 'tripleColon';
+  wrapperType?: 'doubleQuote' | 'singleQuote' | 'backtick' | 'doubleColon' | 'tripleColon' | 'att' | 'mtt';
 }
 
 export class ContextStack {

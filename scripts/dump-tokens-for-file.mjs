@@ -18,13 +18,27 @@ import parser from '../grammar/generated/parser/parser.js';
 const validatorModule = await import('../tests/utils/token-validator/index.ts');
 const { TokenCoverageValidator, NodeExpectationBuilder, createNodeTokenRuleMap } = validatorModule;
 
-// Detect mode from filename
-const mode = filePath.endsWith('.mld') ? 'strict' : 'markdown';
-console.log(`\n=== Parsing ${filePath} (mode: ${mode}) ===\n`);
+// Detect mode and start rule from filename
+function getParseOptions(path) {
+  const lowerPath = path.toLowerCase();
+  if (lowerPath.endsWith('.att')) {
+    return { mode: 'strict', startRule: 'TemplateBodyAtt', templateType: 'att' };
+  }
+  if (lowerPath.endsWith('.mtt')) {
+    return { mode: 'strict', startRule: 'TemplateBodyMtt', templateType: 'mtt' };
+  }
+  if (lowerPath.endsWith('.mld')) {
+    return { mode: 'strict', startRule: 'Start', templateType: null };
+  }
+  return { mode: 'markdown', startRule: 'Start', templateType: null };
+}
+
+const parseOptions = getParseOptions(filePath);
+console.log(`\n=== Parsing ${filePath} (mode: ${parseOptions.mode}, startRule: ${parseOptions.startRule}) ===\n`);
 
 let ast;
 try {
-  ast = parser.parse(content, { mode });
+  ast = parser.parse(content, { mode: parseOptions.mode, startRule: parseOptions.startRule });
 } catch (err) {
   console.log('Parse failed:', err.message);
   process.exit(1);
@@ -41,7 +55,8 @@ const fixture = {
   name: filePath,
   input: content,
   ast: ast,
-  mlldMode: mode
+  mlldMode: parseOptions.mode,
+  templateType: parseOptions.templateType
 };
 
 // Hack: call generateSemanticTokens directly by validating

@@ -37,14 +37,32 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 /**
- * Determine parse mode from file path
+ * Determine parse options from file path
  * .mld.md -> markdown mode
  * .mld -> strict mode
+ * .att -> at-template (TemplateBodyAtt start rule)
+ * .mtt -> mustache-template (TemplateBodyMtt start rule)
  */
+function getParseOptionsFromPath(path) {
+  const lowerPath = path.toLowerCase();
+  if (lowerPath.endsWith('.att')) {
+    return { mode: 'strict', startRule: 'TemplateBodyAtt' };
+  }
+  if (lowerPath.endsWith('.mtt')) {
+    return { mode: 'strict', startRule: 'TemplateBodyMtt' };
+  }
+  if (lowerPath.endsWith('.mld.md')) {
+    return { mode: 'markdown', startRule: 'Start' };
+  }
+  if (lowerPath.endsWith('.mld')) {
+    return { mode: 'strict', startRule: 'Start' };
+  }
+  return { mode: 'strict', startRule: 'Start' }; // default
+}
+
+// Legacy function for compatibility
 function getModeFromPath(path) {
-  if (path.endsWith('.mld.md')) return 'markdown';
-  if (path.endsWith('.mld')) return 'strict';
-  return 'strict'; // default
+  return getParseOptionsFromPath(path).mode;
 }
 
 // ---------- source acquisition ----------
@@ -142,15 +160,15 @@ function detectShellEscapingIssues(source, error) {
       process.exit(1);
     }
 
-    // Determine mode: CLI flag > file extension > default (strict)
-    let mode = 'strict';
+    // Determine parse options: CLI flag > file extension > default (strict)
+    let parseOptions = { mode: 'strict', startRule: 'Start' };
     if (markdownMode) {
-      mode = 'markdown';
+      parseOptions.mode = 'markdown';
     } else if (detectedFile) {
-      mode = getModeFromPath(detectedFile);
+      parseOptions = getParseOptionsFromPath(detectedFile);
     }
 
-    const ast = parse(source, { mode });
+    const ast = parse(source, parseOptions);
     console.dir(ast, { depth: null, colors: true });
   } catch (err) {
     // Check if this might be a shell escaping issue

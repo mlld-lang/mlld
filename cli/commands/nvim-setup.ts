@@ -6,11 +6,13 @@ import chalk from 'chalk';
 
 // Config version - bump when making breaking changes
 // nvim-doctor uses this to detect outdated configs
-export const NVIM_CONFIG_VERSION = 13;
+export const NVIM_CONFIG_VERSION = 15;
 
 // File extension semantics:
 // - .mld files → strict mode (bare directives like `var @x = 1`)
 // - .mld.md files → markdown mode (slash directives like `/var @x = 1`)
+// - .att files → "at template" (@var interpolation, /for loops, <file.md> refs)
+// - .mtt files → "mustache template" ({{var}} interpolation only)
 
 export function createNvimSetupCommand() {
   return {
@@ -33,11 +35,22 @@ export function createNvimSetupCommand() {
 -- File extensions:
 --   .mld    → strict mode (bare directives: var, show, exe)
 --   .mld.md → markdown mode (slash directives: /var, /show, /exe)
+--   .att    → at-template (@var interpolation, /for loops, <file.md> refs)
+--   .mtt    → mustache-template ({{var}} interpolation only)
 
 -- Register file types first
 vim.filetype.add({
-  extension = { mld = 'mld' },
+  extension = { mld = 'mld', att = 'mld', mtt = 'mld' },
   pattern = { ['.*%.mld%.md'] = 'mld' }
+})
+
+-- Enable word wrap for template files (like markdown)
+vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
+  pattern = { '*.att', '*.mtt' },
+  callback = function()
+    vim.opt_local.wrap = true
+    vim.opt_local.linebreak = true
+  end
 })
 
 -- Detect Neovim version and use appropriate API
@@ -147,16 +160,27 @@ end, {})`;
 -- File extensions:
 --   .mld    → strict mode (bare directives: var, show, exe)
 --   .mld.md → markdown mode (slash directives: /var, /show, /exe)
+--   .att    → at-template (@var interpolation, /for loops, <file.md> refs)
+--   .mtt    → mustache-template ({{var}} interpolation only)
 
 return {
   "neovim/nvim-lspconfig",
-  ft = { "mld" },  -- Load when opening .mld files
-  event = { "BufReadPre *.mld", "BufNewFile *.mld", "BufReadPre *.mld.md", "BufNewFile *.mld.md" },
+  ft = { "mld" },  -- Load when opening .mld/.att/.mtt files
+  event = { "BufReadPre *.mld", "BufNewFile *.mld", "BufReadPre *.mld.md", "BufNewFile *.mld.md", "BufReadPre *.att", "BufNewFile *.att", "BufReadPre *.mtt", "BufNewFile *.mtt" },
   config = function()
     -- Register filetypes first
     vim.filetype.add({
-      extension = { mld = "mld" },
+      extension = { mld = "mld", att = "mld", mtt = "mld" },
       pattern = { [".*%.mld%.md"] = "mld" }
+    })
+
+    -- Enable word wrap for template files (like markdown)
+    vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+      pattern = { "*.att", "*.mtt" },
+      callback = function()
+        vim.opt_local.wrap = true
+        vim.opt_local.linebreak = true
+      end
     })
 
     -- Detect Neovim version and use appropriate API
@@ -337,7 +361,9 @@ return {
 
       console.log(chalk.dim('File types:'));
       console.log(chalk.dim('  .mld    → strict mode (bare directives)'));
-      console.log(chalk.dim('  .mld.md → markdown mode (slash directives)\n'));
+      console.log(chalk.dim('  .mld.md → markdown mode (slash directives)'));
+      console.log(chalk.dim('  .att    → at-template (@var, /for, <file.md>)'));
+      console.log(chalk.dim('  .mtt    → mustache-template ({{var}} only)\n'));
 
       console.log(chalk.dim('Commands:'));
       console.log(chalk.dim('  :MlldLspInfo     Check mlld LSP status'));

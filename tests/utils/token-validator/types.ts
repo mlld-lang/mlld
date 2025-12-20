@@ -16,7 +16,7 @@ export interface NodeExpectation {
 
 export interface ValidationContext {
   inTemplate: boolean;
-  templateType?: 'backtick' | 'doubleColon' | 'tripleColon';
+  templateType?: 'backtick' | 'doubleColon' | 'tripleColon' | 'att' | 'mtt';
   inCommand: boolean;
   commandLanguage?: string;
   parentNodeType?: string;
@@ -121,4 +121,5 @@ export interface FixtureData {
   mlldMode?: 'strict' | 'markdown';
   expected?: string;
   expectedError?: string;
+  templateType?: 'att' | 'mtt';
 }
