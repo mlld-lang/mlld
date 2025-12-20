@@ -145,9 +145,11 @@ export class ExpressionVisitor extends BaseVisitor {
       const whenIndex = nodeText.indexOf('when');
       
       if (whenIndex !== -1) {
+        const whenOffset = node.location.start.offset + whenIndex;
+        const whenPos = this.document.positionAt(whenOffset);
         this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: node.location.start.column + whenIndex - 1,
+          line: whenPos.line,
+          char: whenPos.character,
           length: 4,
           tokenType: 'keyword',
           modifiers: []
@@ -162,9 +164,11 @@ export class ExpressionVisitor extends BaseVisitor {
       const firstIndex = nodeText.indexOf('first');
 
       if (firstIndex !== -1) {
+        const firstOffset = node.location.start.offset + firstIndex;
+        const firstPos = this.document.positionAt(firstOffset);
         this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: node.location.start.column + firstIndex - 1,
+          line: firstPos.line,
+          char: firstPos.character,
           length: 5,
           tokenType: 'keyword',
           modifiers: []
@@ -178,9 +182,11 @@ export class ExpressionVisitor extends BaseVisitor {
     const colonIndex = nodeText.indexOf(':');
     
     if (colonIndex !== -1) {
+      const colonOffset = node.location.start.offset + colonIndex;
+      const colonPos = this.document.positionAt(colonOffset);
       this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column + colonIndex - 1,
+        line: colonPos.line,
+        char: colonPos.character,
         length: 1,
         tokenType: 'operator',
         modifiers: []
@@ -308,9 +314,11 @@ export class ExpressionVisitor extends BaseVisitor {
     const forIndex = nodeText.indexOf('for');
     
     if (forIndex !== -1) {
+      const forOffset = node.location.start.offset + forIndex;
+      const forPos = this.document.positionAt(forOffset);
       this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column + forIndex - 1,
+        line: forPos.line,
+        char: forPos.character,
         length: 3,
         tokenType: 'keyword',
         modifiers: []
@@ -431,9 +439,11 @@ export class ExpressionVisitor extends BaseVisitor {
     const letIndex = nodeText.indexOf('let');
 
     if (letIndex !== -1) {
+      const letOffset = node.location.start.offset + letIndex;
+      const letPos = this.document.positionAt(letOffset);
       this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column + letIndex - 1,
+        line: letPos.line,
+        char: letPos.character,
         length: 3,
         tokenType: 'keyword',
         modifiers: []
@@ -445,9 +455,11 @@ export class ExpressionVisitor extends BaseVisitor {
       // Find @ position after "let "
       const atIndex = nodeText.indexOf('@', letIndex);
       if (atIndex !== -1) {
+        const atOffset = node.location.start.offset + atIndex;
+        const atPos = this.document.positionAt(atOffset);
         this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: node.location.start.column + atIndex - 1,
+          line: atPos.line,
+          char: atPos.character,
           length: node.identifier.length + 1, // +1 for @
           tokenType: 'variable',
           modifiers: ['declaration']
