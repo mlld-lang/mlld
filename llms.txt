@@ -682,13 +682,13 @@ Variables support builtin methods for common operations. Methods are called with
 **Array Methods:**
 - `@array.includes(value)` - Returns true if array contains value
 - `@array.indexOf(value)` - Returns index of value, or -1 if not found
-- `@array.length()` - Returns array length
+- `@array.length` - Returns array length (also works as `@array.length()`)
 - `@array.join(separator)` - Joins array elements into string
 
 **String Methods:**
 - `@string.includes(substring)` - Returns true if string contains substring
 - `@string.indexOf(substring)` - Returns index of substring, or -1
-- `@string.length()` - Returns string length
+- `@string.length` - Returns string length (also works as `@string.length()`)
 - `@string.toLowerCase()` - Converts to lowercase
 - `@string.toUpperCase()` - Converts to uppercase
 - `@string.trim()` - Removes leading/trailing whitespace

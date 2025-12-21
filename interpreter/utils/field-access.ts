@@ -404,6 +404,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
 
+        // Support .length on strings (like JavaScript)
+        if (name === 'length') {
+          accessedValue = rawValue.length;
+          break;
+        }
+
         // Check if this looks like a JSON string - provide helpful error
         const trimmed = rawValue.trim();
         if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
