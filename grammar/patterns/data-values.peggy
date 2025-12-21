@@ -50,9 +50,9 @@ DataSpreadProperty "spread property"
 
 // DATA OBJECT PAIR - Key-value pair
 DataObjectPair
-  = key:PropertyKey _ ":" _ value:DataPropertyValue {
+  = key:PropertyKey optional:"?"? _ ":" _ value:DataPropertyValue {
       return {
-        type: 'pair',
+        type: optional ? 'conditionalPair' : 'pair',
         key: key,
         value: value
       };

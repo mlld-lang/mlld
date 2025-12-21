@@ -5,6 +5,7 @@ import { interpolate } from '../../core/interpreter';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { accessFields } from '@interpreter/utils/field-access';
+import { FieldAccessError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
 
@@ -164,6 +165,22 @@ export class CollectionEvaluator {
             evaluatedObj[entry.key] = evaluated;
           } catch (error) {
             // Store error information but continue evaluating other properties
+            evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
+          }
+        } else if (entry.type === 'conditionalPair') {
+          try {
+            let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
+            if (isStructuredValue(evaluated)) {
+              evaluated = unwrapStructuredPrimitive(evaluated);
+            }
+            const { isTruthy } = await import('../expression');
+            if (isTruthy(evaluated)) {
+              evaluatedObj[entry.key] = evaluated;
+            }
+          } catch (error) {
+            if (this.isConditionalOmissionError(error)) {
+              continue;
+            }
             evaluatedObj[entry.key] = this.createPropertyError(entry.key, error);
           }
         } else if (entry.type === 'spread') {
@@ -352,6 +369,16 @@ export class CollectionEvaluator {
     }
     
     return evaluatedObject;
+  }
+
+  private isConditionalOmissionError(error: unknown): boolean {
+    if (error instanceof FieldAccessError) {
+      return true;
+    }
+    if (error instanceof Error) {
+      return error.message.includes('Variable not found');
+    }
+    return false;
   }
 }
 
