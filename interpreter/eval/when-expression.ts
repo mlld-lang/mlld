@@ -350,7 +350,7 @@ export async function evaluateWhenExpression(
       const conditionEnv = hasBoundValue ? accumulatedEnv.createChild() : accumulatedEnv;
       if (hasBoundValue) setBoundValue(conditionEnv);
       const conditionResult = await evaluateCondition(pair.condition, conditionEnv);
-      
+
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
           index: i, 

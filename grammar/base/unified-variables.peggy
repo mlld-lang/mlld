@@ -130,7 +130,7 @@ UnifiedVariableReferenceWithTail "variable reference with tail modifiers"
       if (tail) {
         // Wrap in a structure similar to ExecInvocation for consistency
         return {
-          type: 'UnifiedVariableReferenceWithTail',
+          type: 'VariableReferenceWithTail',
           variable: varRef,
           withClause: tail
         };

@@ -676,7 +676,15 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     const { evaluateExecInvocation } = await import('../eval/exec-invocation');
     return evaluateExecInvocation(node, env);
   }
-  
+
+  // Handle VariableReferenceWithTail (variable with pipeline from when-expression actions)
+  if (node.type === 'VariableReferenceWithTail') {
+    const { VariableReferenceEvaluator } = await import('../eval/data-values/VariableReferenceEvaluator');
+    const evaluator = new VariableReferenceEvaluator();
+    const result = await evaluator.evaluate(node, env);
+    return { value: result, env };
+  }
+
   // Handle expression nodes
   if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
     const { evaluateUnifiedExpression } = await import('../eval/expressions');

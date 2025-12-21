@@ -94,6 +94,13 @@ export interface VariableReferenceNode extends BaseMlldNode {
   pipes?: CondensedPipe[]; // NEW: Condensed pipe transformations
 }
 
+// Variable reference with tail modifiers (pipelines, with clauses)
+export interface VariableReferenceWithTailNode extends BaseMlldNode {
+  type: 'VariableReferenceWithTail';
+  variable: VariableReferenceNode;
+  withClause?: WithClause;
+}
+
 // Literal value node
 export interface LiteralNode extends BaseMlldNode {
   type: 'Literal';
@@ -338,11 +345,12 @@ export interface UnaryExpression extends BaseMlldNode {
 }
 
 // Union type for all expression nodes
-export type Expression = 
-  | BinaryExpression 
-  | TernaryExpression 
-  | UnaryExpression 
-  | VariableReferenceNode 
-  | LiteralNode 
+export type Expression =
+  | BinaryExpression
+  | TernaryExpression
+  | UnaryExpression
+  | VariableReferenceNode
+  | VariableReferenceWithTailNode
+  | LiteralNode
   | ExecInvocation
   | NegationNode;
