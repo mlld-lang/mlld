@@ -241,6 +241,22 @@ export class CollectionEvaluator {
       try {
         const item = items[i] as any;
 
+        if (item?.type === 'ConditionalArrayElement') {
+          const { evaluateConditionalInclusion } = await import('../conditional-inclusion');
+          const { shouldInclude, value } = await evaluateConditionalInclusion(item.condition, env, {
+            valueNode: item.value
+          });
+
+          if (shouldInclude) {
+            let evaluatedValue = value;
+            if (isStructuredValue(evaluatedValue)) {
+              evaluatedValue = unwrapStructuredPrimitive(evaluatedValue);
+            }
+            evaluatedElements.push(evaluatedValue);
+          }
+          continue;
+        }
+
         // Fast-path literal/text wrappers so nested arrays keep their string content
         if (item && typeof item === 'object' && 'content' in item && Array.isArray(item.content)) {
           const hasOnlyLiteralsOrText = (item.content as any[]).every(

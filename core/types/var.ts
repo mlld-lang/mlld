@@ -7,7 +7,7 @@
 
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
-import { DirectiveNode, ExecInvocation } from './nodes';
+import { DirectiveNode, ExecInvocation, ConditionalArrayElementNode } from './nodes';
 import type { ExeBlockNode } from './exe';
 import type { PipelineStage } from './run';
 import type { DataLabel } from './security';
@@ -93,6 +93,7 @@ export type DataValue =
   | DataArrayValue
   | DirectiveNode // Nested directive
   | ExecInvocation // Exec invocation
+  | ConditionalArrayElementNode
   | ForeachCommandExpression
   | ForeachSectionExpression;
 

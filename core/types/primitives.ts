@@ -197,6 +197,24 @@ export interface TemplateInlineShowNode extends BaseMlldNode {
   meta?: { [key: string]: unknown };
 }
 
+export interface ConditionalTemplateSnippetNode extends BaseMlldNode {
+  type: 'ConditionalTemplateSnippet';
+  condition: VariableReferenceNode;
+  content: BaseMlldNode[];
+}
+
+export interface ConditionalStringFragmentNode extends BaseMlldNode {
+  type: 'ConditionalStringFragment';
+  condition: VariableReferenceNode;
+  content: BaseMlldNode[];
+}
+
+export interface ConditionalArrayElementNode extends BaseMlldNode {
+  type: 'ConditionalArrayElement';
+  condition: VariableReferenceNode;
+  value: VariableReferenceNode;
+}
+
 
 // Formatting metadata for text nodes
 export interface FormattingMetadata {

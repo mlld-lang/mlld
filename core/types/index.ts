@@ -63,7 +63,10 @@ import {
   TernaryExpression,
   UnaryExpression,
   TemplateForBlockNode,
-  TemplateInlineShowNode
+  TemplateInlineShowNode,
+  ConditionalTemplateSnippetNode,
+  ConditionalStringFragmentNode,
+  ConditionalArrayElementNode
 } from './nodes';
 
 // Import WhenExpressionNode
@@ -104,6 +107,9 @@ export type MlldNode =
   | UnaryExpression
   | TemplateForBlockNode
   | TemplateInlineShowNode
+  | ConditionalTemplateSnippetNode
+  | ConditionalStringFragmentNode
+  | ConditionalArrayElementNode
   | WhenExpressionNode
   | ForExpression
   | ExeBlockNode
