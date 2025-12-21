@@ -261,7 +261,12 @@ export function ensureStructuredValue(
     return ensureStructuredValueState(value);
   }
 
-  if (value === null || value === undefined) {
+  if (value === null) {
+    // Preserve null as a distinct value (not empty string)
+    return wrapStructured(null as any, typeHint ?? 'null' as any, 'null', metadata);
+  }
+
+  if (value === undefined) {
     return wrapStructured('', typeHint ?? 'text', '', metadata);
   }
 
