@@ -1,10 +1,10 @@
->> Import specific variables
-/import { API_KEY, NODE_ENV } from @input
-/show `Deploying to @NODE_ENV with key @API_KEY`
+/import templates from "@base/agents" as @agents(message, context)
 
->> Import and use in objects
-/var @config = {
-  "apiKey": @API_KEY,
-  "environment": @NODE_ENV,
-  "timestamp": @now
-}
+>> All templates accept (message, context)
+/show @agents["alice"](@msg, @mx)
+/show @agents["bob"](@msg, @mx)
+
+>> Dynamic selection in loops
+/for @name in ["alice", "bob", "charlie"] [
+  show @agents[@name](@msg, @mx)
+]

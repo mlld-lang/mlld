@@ -1,5 +1,18 @@
-/import templates from "@base/agents" as @agents(message, context)
-/import templates from "@base/formatters" as @fmt(data)
+>> .att files (default for 5+ lines)
+>> file: templates/deploy.att
+# Deployment: @env
+Status: @status
+Config: <@base/config/@env.json>
 
-/show @agents["alice"](@msg, @mx)    >> (message, context)
-/show @fmt["json"](@result)           >> (data)
+>> usage
+/exe @deploy(env, status) = template "./templates/deploy.att"
+/show @deploy("prod", "success")
+
+>> .mtt files (Discord/social only)
+>> file: templates/discord.mtt
+🚨 Alert <@{{adminId}}>!
+Reporter: <@{{reporterId}}>
+Severity: {{severity}}
+
+>> usage
+/exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"

@@ -1,15 +1,7 @@
-/var @users = '[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]'
+/var @title = "Dr."
+/var @nickname = ""
 
->> Parse inside function
-/exe @filter1(users) = js {
-  const data = JSON.parse(users);
-  return data.filter(u => u.age > 25);
-}
-/run @filter1(@users)
-
->> Parse before passing
-/exe @filter2(users) = js {
-  return users.filter(u => u.age > 25);
-}
-/run @filter2(@users.data)   >> .data parses JSON
-/run @filter2(@users.json)   >> .json is alias
+/var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
+/show @greeting
+>> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
+>> With @nickname="Ace": "Hello Ada (Ace)"

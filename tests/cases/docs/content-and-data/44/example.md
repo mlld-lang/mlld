@@ -1,7 +1,8 @@
->> Access piped JSON data
-/import { version, author } from @input
-/show `Release @version by @author`
+>> In the published module
+/exe @alice(msg, mx) = template "alice.att"
+/exe @bob(msg, mx) = template "bob.att"
+/export { @alice, @bob }
 
->> Access piped text (becomes 'content' field)
-/import { content } from @input
-/show `Received: @content`
+>> Import and use
+/import { @alice, @bob } from @author/templates
+/show @alice(@msg, @mx)

@@ -1,9 +1,7 @@
-/var @jsonStr = '{"name": "Alice", "active": true}'
+/var @a = "first"
+/var @b = ""
+/var @c = "third"
 
-/exe @length(str) = js {
-  return str.length;
-}
-
-/run @length(@jsonStr)          >> Default: string
-/run @length(@jsonStr.text)     >> Explicit string
-/run @length(@jsonStr.content)  >> Alias for .text
+/var @list = [@a, @b?, @c]
+/show @list
+>> ["first", "third"] - @b was omitted because it's falsy

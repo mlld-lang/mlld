@@ -1,16 +1,9 @@
->> ✗ Using {{}} in ::...::
-/var @msg = ::Hello {{name}}::        >> {{name}} is literal
-/var @msg = ::Hello @name::           >> ✓
+>> Load and transform files
+/var @config = <config.json> | @json
+/var @uppercase = <readme.txt> | @upper
 
->> ✗ Using @var in :::...:::
-/var @msg = :::Hello @name:::         >> @name is literal
-/var @msg = :::Hello {{name}}:::      >> ✓
-
->> ✗ Using ::: without Discord/social need
-/var @msg = :::Status: {{status}}:::  >> Loses all features
-/var @msg = ::Status: @status::       >> ✓ Full features
-
->> ✗ Importing template files
-/import { @tpl } from "./file.att"    >> Error
-/exe @tpl(x) = template "./file.att"  >> ✓
-/import templates from "./templates" as @tpl(x, y)  >> Use this for template directories
+>> Chain transformations
+/exe @first(text, n) = js { 
+  return text.split('\n').slice(0, n).join('\n');
+}
+/var @summary = <docs.md> | @first(3) | @upper

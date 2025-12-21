@@ -1,10 +1,14 @@
-/var @files = <docs/*.md>
+>> Collect all module documentation
+/var @modules = <modules/**/*.md>
 
-# ✗ This won't work - loop variable is unwrapped text
-/for @file in @files => show @file.mx.filename   # Error: .mx on string
+>> Build README with metadata
+/var @readme = `# Project Modules
 
-# ✓ Access via array index
-/for @i in [0, 1, 2] => show @files[@i].mx.filename
+Total modules: @modules.length
+Last updated: @now
 
-# ✓ Or use @keep helper to preserve structure
-/for @file in @files.keep => show @file.mx.filename
+@modules
+
+`
+
+/output @readme to "README.md"
