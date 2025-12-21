@@ -381,6 +381,81 @@ Access object properties and array elements with dot notation:
 /show @config.db.users[1]                 >> "guest"
 ```
 
+### Conditional Inclusion (`@var?`)
+
+Include content only when a variable is truthy. The `?` suffix checks the variable and omits the following content if falsy.
+
+**Truthiness rules** (same as `when`): Falsy values are `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`.
+
+#### In Commands and Templates
+
+Use `@var?`...`` to conditionally include a backtick template:
+
+```mlld
+/var @tools = "json"
+/var @model = ""
+
+>> @tools is truthy, so --tools is included
+>> @model is falsy (empty string), so --model is omitted
+/run cmd { echo @tools?`--tools "@tools"` @model?`--model "@model"` done }
+>> Output: --tools "json" done
+```
+
+#### In Strings
+
+Use `@var?"..."` to conditionally include a quoted fragment:
+
+```mlld
+/var @title = "Dr."
+/var @nickname = ""
+
+/var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
+/show @greeting
+>> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
+>> With @nickname="Ace": "Hello Ada (Ace)"
+```
+
+#### In Arrays
+
+Use `@var?` to omit falsy elements:
+
+```mlld
+/var @a = "first"
+/var @b = ""
+/var @c = "third"
+
+/var @list = [@a, @b?, @c]
+/show @list
+>> ["first", "third"] - @b was omitted because it's falsy
+```
+
+#### In Objects
+
+Use `key?:` to omit pairs when the value is falsy:
+
+```mlld
+/var @name = "Ada"
+/var @title = ""
+
+/var @person = {
+  "name": @name,
+  "title"?: @title
+}
+/show @person
+>> {"name": "Ada"} - title was omitted because @title is falsy
+```
+
+#### With Field Access
+
+The entire field path is evaluated before the truthiness check:
+
+```mlld
+/var @config = {"tools": "json", "model": ""}
+
+/run cmd { echo @config.tools?`--tools` @config.model?`--model` }
+>> Output: --tools
+```
+
 ### Array Slicing
 
 Extract subsets of arrays using `[start:end]` syntax:

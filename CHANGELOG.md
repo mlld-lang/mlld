@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bound-value when-expressions**: `when @value first [...]` and `when @value [...]` support pattern arms like `>= 0.7`, `>= 0.3 && < 0.7`, and `*`
 - **Nullish coalescing operator**: `??` returns the left operand when it is not nullish, otherwise returns the right operand
 - **For-when filter sugar**: `for ... when ...` drops non-matches without null placeholders via implicit `none => skip` branch
+- **Conditional inclusion (`@var?`)**: Universal pattern for conditionally including content based on truthiness
+  - Commands/Templates: `@var?`...`` - include backtick template if truthy (e.g., `cmd { echo @tools?`--tools` }`)
+  - Strings: `@var?"..."` - include quoted fragment if truthy (e.g., `"Hello @title?"@title "`)
+  - Arrays: `[@a, @b?, @c]` - omit element if falsy
+  - Objects: `{key?: @val}` - omit pair if value is falsy
+  - Field access supported: `@obj.field?`...`` evaluates full path before truthiness check
 - **Object mx helpers**: `@obj.mx.keys`, `@obj.mx.values`, and `@obj.mx.entries` expose object utilities
 - **For-loop item keys**: `@item.mx.key` exposes the current object key (alongside `@item_key`)
 - **Parallel execution error accumulation**: Errors accumulate in `@mx.errors` array instead of failing fast
