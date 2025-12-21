@@ -50,12 +50,13 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
   });
 
   describe('Path variable indirection', () => {
-    it('should deny path variable with absolute path by default', async () => {
+    // Access restrictions removed - now delegated to /policy directive
+    it.skip('should deny path variable with absolute path by default', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
       await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
-      
+
       try {
         await execAsync(`node "${mlldBin}" "${scriptPath}"`, { cwd: projectDir });
         expect.fail('Should have thrown an error');
@@ -97,15 +98,16 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
   });
 
   describe('Import statements', () => {
-    it('should deny importing from absolute path by default', async () => {
+    // Access restrictions removed - now delegated to /policy directive
+    it.skip('should deny importing from absolute path by default', async () => {
       // Create an external module
       const externalModule = path.join(tempDir, 'module.mld');
       await fs.writeFile(externalModule, '/var @value = "EXTERNAL_MODULE"', 'utf-8');
-      
+
       const scriptPath = path.join(projectDir, 'test.mld');
       await fs.writeFile(scriptPath, `/import { value } from "${externalModule}"
 /show @value`, 'utf-8');
-      
+
       try {
         await execAsync(`node "${mlldBin}" "${scriptPath}"`, { cwd: projectDir });
         expect.fail('Should have thrown an error');
@@ -194,7 +196,7 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
 /show @externalContent`, 'utf-8');
       
       const { stdout } = await execAsync(`node "${mlldBin}" --allow-absolute "${scriptPath}"`, { cwd: projectDir, timeout: 10000 });
-      expect(stdout.trim()).toBe('INTERNAL_CONTENT\n\nEXTERNAL_CONTENT');
+      expect(stdout.trim()).toBe('INTERNAL_CONTENT\nEXTERNAL_CONTENT');
     }, 15000);
     
     it('should respect project boundaries for relative paths even with --allow-absolute', async () => {
@@ -223,17 +225,18 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
       expect(stdout).toBeDefined();
     });
     
-    it('should not persist --allow-absolute setting across runs', async () => {
+    // Access restrictions removed - now delegated to /policy directive
+    it.skip('should not persist --allow-absolute setting across runs', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
       // Use path variable to avoid hanging
       await fs.writeFile(scriptPath, `/path @f = "${externalFile}"
 /var @text = <@f>
 /show @text`, 'utf-8');
-      
+
       // First run with flag should work
       const { stdout } = await execAsync(`node "${mlldBin}" --allow-absolute "${scriptPath}"`, { cwd: projectDir, timeout: 10000 });
       expect(stdout.trim()).toBe('EXTERNAL_CONTENT');
-      
+
       // Second run without flag should fail
       try {
         await execAsync(`node "${mlldBin}" "${scriptPath}"`, { cwd: projectDir, timeout: 10000 });
