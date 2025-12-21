@@ -15,7 +15,9 @@ import {
   PathSeparatorNode,
   BaseMlldNode,
   TimeDurationNode,
-  ExecInvocation
+  ExecInvocation,
+  ConditionalTemplateSnippetNode,
+  ConditionalStringFragmentNode
 } from './primitives';
 import { WithClause } from './run';
 
@@ -35,7 +37,13 @@ export type PathNodeArray = Array<
 export type VariableNodeArray = Array<VariableReferenceNode>;
 
 // Array of content nodes (text, variables, and exec invocations)
-export type ContentNodeArray = Array<TextNode | VariableReferenceNode | ExecInvocation>;
+export type ContentNodeArray = Array<
+  TextNode |
+  VariableReferenceNode |
+  ExecInvocation |
+  ConditionalTemplateSnippetNode |
+  ConditionalStringFragmentNode
+>;
 
 /**
  * Import directive values

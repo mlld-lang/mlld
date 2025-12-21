@@ -25,7 +25,7 @@ UnifiedQuote "Unified quote pattern"
 
 // Double quotes with @var and @func() interpolation
 UnifiedDoubleQuote "Double quoted string with interpolation"
-  = '"' parts:(SpecialVariable / UnifiedInterpolationContent / UnifiedAtLiteral / UnifiedDoubleQuotedText)* '"' {
+  = '"' parts:(ConditionalStringFragment / SpecialVariable / UnifiedInterpolationContent / UnifiedAtLiteral / UnifiedDoubleQuotedText)* '"' {
       helpers.debug('UnifiedQuote: DoubleQuote matched', { parts });
       
       // If it's a plain string (no interpolation), create a Literal node for directive contexts
@@ -121,10 +121,38 @@ UnifiedInterpolationContent "Shared interpolation content"
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
 
+ConditionalTemplateSnippet "conditional template snippet"
+  = condition:ConditionalVariableReference "`" content:UnifiedBacktickInterpolation* "`" {
+      return {
+        type: 'ConditionalTemplateSnippet',
+        condition: condition.variable,
+        content: content,
+        location: location()
+      };
+    }
+
+ConditionalStringFragment "conditional string fragment"
+  = condition:ConditionalVariableReference '"' parts:ConditionalStringFragmentContent* '"' {
+      return {
+        type: 'ConditionalStringFragment',
+        condition: condition.variable,
+        content: parts,
+        location: location()
+      };
+    }
+
+ConditionalStringFragmentContent
+  = ConditionalStringFragment
+  / SpecialVariable
+  / UnifiedInterpolationContent
+  / UnifiedAtLiteral
+  / UnifiedDoubleQuotedText
+
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 UnifiedBacktickInterpolation "Backtick interpolation content"
   = TemplateSlashForBlockBacktick    // Inline for-block
   / TemplateInlineShow               // Inline /show
+  / ConditionalTemplateSnippet
   / UnifiedInterpolationContent      // Use shared interpolation
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });

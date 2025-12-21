@@ -323,6 +323,16 @@ export const helpers = {
                         return `{{${varId}${fieldPath}}}`;
                     }
                 }
+                if (nodes.type === 'ConditionalStringFragment') {
+                    const conditionRaw = this.reconstructRawString(nodes.condition);
+                    const contentRaw = this.reconstructRawString(nodes.content || []);
+                    return `${conditionRaw}?"${contentRaw}"`;
+                }
+                if (nodes.type === 'ConditionalTemplateSnippet') {
+                    const conditionRaw = this.reconstructRawString(nodes.condition);
+                    const contentRaw = this.reconstructRawString(nodes.content || []);
+                    return `${conditionRaw}?\`${contentRaw}\``;
+                }
             }
             return String(nodes || ''); // Fallback
         }
@@ -370,6 +380,16 @@ export const helpers = {
                 // Handle string literals properly - avoids adding extra quotes
                 raw += node.value || '';
             }
+            else if (node.type === 'ConditionalStringFragment') {
+                const conditionRaw = this.reconstructRawString(node.condition);
+                const contentRaw = this.reconstructRawString(node.content || []);
+                raw += `${conditionRaw}?"${contentRaw}"`;
+            }
+            else if (node.type === 'ConditionalTemplateSnippet') {
+                const conditionRaw = this.reconstructRawString(node.condition);
+                const contentRaw = this.reconstructRawString(node.content || []);
+                raw += `${conditionRaw}?\`${contentRaw}\``;
+            }
             else if (typeof node === 'string') {
                 // Handle potential raw string segments passed directly
                 raw += node;
@@ -397,7 +417,10 @@ export const helpers = {
     },
     createTemplateMetadata(parts, wrapperType) {
         return {
-            hasVariables: parts.some(p => p && (p.type === NodeType.VariableReference || p.type === NodeType.ExecInvocation)),
+            hasVariables: parts.some(p => p && (p.type === NodeType.VariableReference ||
+                p.type === NodeType.ExecInvocation ||
+                p.type === 'ConditionalTemplateSnippet' ||
+                p.type === 'ConditionalStringFragment')),
             isTemplateContent: wrapperType === 'doubleBracket'
         };
     },

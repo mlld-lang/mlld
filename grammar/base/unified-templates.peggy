@@ -140,7 +140,8 @@ UnifiedBraceInterpolation "Brace interpolation"
 
 // @var style interpolation for double colons
 UnifiedAtInterpolation "At-sign interpolation"
-  = ExecResultMethodCall         // @func(args).method(args)
+  = ConditionalTemplateSnippet   // @var?`...`
+  / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
   / UnifiedAngleBracketContent   // <file.md> or literal <xml> - USE UNIFIED PATTERN

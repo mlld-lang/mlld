@@ -15,6 +15,7 @@ import type { OperationContext } from '../env/ContextManager';
 import { EscapingStrategyFactory, InterpolationContext } from '../core/interpolation-context';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
+import { evaluateConditionalInclusion } from '../eval/conditional-inclusion';
 import { classifyShellValue } from '../utils/shell-value';
 import * as shellQuote from 'shell-quote';
 
@@ -160,6 +161,15 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         pushPart(node.content || '');
       } else if (node.type === 'PathSeparator') {
         pushPart(node.value || '/');
+      } else if (node.type === 'ConditionalTemplateSnippet' || node.type === 'ConditionalStringFragment') {
+        const conditionNode = (node as any).condition;
+        const contentNodes = (node as any).content;
+        const { shouldInclude } = await evaluateConditionalInclusion(conditionNode, env);
+        if (!shouldInclude) {
+          continue;
+        }
+        const snippet = await interpolateImpl(Array.isArray(contentNodes) ? contentNodes : [], env, context, options);
+        pushPart(snippet);
       } else if (node.type === 'ExecInvocation') {
         // Handle function calls in templates
         const { evaluateExecInvocation } = await import('../eval/exec-invocation');

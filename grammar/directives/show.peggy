@@ -30,7 +30,7 @@ SlashShow
       helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
     }
   // Error: Multiple quoted strings
-  / DirectiveContext ShowKeyword (HWS DataLabelList)? _ ("\"" [^"]* "\"" / "'" [^']* "'") _ ("\"" / "'" / "@") {
+  / DirectiveContext ShowKeyword (HWS DataLabelList)? _ (UnifiedDoubleQuote / UnifiedSingleQuote) _ ("\"" / "'" / "@") {
       helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
     }
   // Command execution syntax: /show {echo "test"}

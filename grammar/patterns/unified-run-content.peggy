@@ -274,7 +274,8 @@ UnifiedCommandParts
 
 // Command tokens - complete units (quoted strings, variables, words)
 UnifiedCommandToken
-  = UnifiedVariableNoTail               // Variables first (unified pattern)
+  = ConditionalTemplateSnippet   // @var?`...`
+  / UnifiedVariableNoTail               // Variables first (unified pattern)
   / UnifiedCommandQuotedString   // Complete quoted strings
   / UnifiedCommandWord           // Unquoted words with spaces
   / UnifiedCommandSpace          // Explicit spaces between tokens

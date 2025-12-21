@@ -338,7 +338,7 @@ export const helpers = {
     // this.debug('TRACE', `Reject @${pos}: ${reason}`);
   },
 
-  reconstructRawString(nodes: any[] | any) {
+  reconstructRawString(nodes: any[] | any): string {
     // Basic implementation - iterates nodes and concatenates
     if (!Array.isArray(nodes)) {
       // Handle cases where a single node might be passed (though likely expects array)
@@ -371,6 +371,16 @@ export const helpers = {
             // Default case - should not happen with consistent valueTypes
             return `{{${varId}${fieldPath}}}`;
           }
+        }
+        if (nodes.type === 'ConditionalStringFragment') {
+          const conditionRaw = this.reconstructRawString(nodes.condition);
+          const contentRaw = this.reconstructRawString(nodes.content || []);
+          return `${conditionRaw}?"${contentRaw}"`;
+        }
+        if (nodes.type === 'ConditionalTemplateSnippet') {
+          const conditionRaw = this.reconstructRawString(nodes.condition);
+          const contentRaw = this.reconstructRawString(nodes.content || []);
+          return `${conditionRaw}?\`${contentRaw}\``;
         }
       }
       return String(nodes || ''); // Fallback
@@ -414,6 +424,14 @@ export const helpers = {
       } else if (node.type === NodeType.StringLiteral) {
         // Handle string literals properly - avoids adding extra quotes
         raw += node.value || '';
+      } else if (node.type === 'ConditionalStringFragment') {
+        const conditionRaw = this.reconstructRawString(node.condition);
+        const contentRaw = this.reconstructRawString(node.content || []);
+        raw += `${conditionRaw}?"${contentRaw}"`;
+      } else if (node.type === 'ConditionalTemplateSnippet') {
+        const conditionRaw = this.reconstructRawString(node.condition);
+        const contentRaw = this.reconstructRawString(node.content || []);
+        raw += `${conditionRaw}?\`${contentRaw}\``;
       } else if (typeof node === 'string') {
         // Handle potential raw string segments passed directly
         raw += node;
@@ -444,7 +462,12 @@ export const helpers = {
   createTemplateMetadata(parts: any[], wrapperType: string) {
     return {
       hasVariables: parts.some(p => 
-        p && (p.type === NodeType.VariableReference || p.type === NodeType.ExecInvocation)
+        p && (
+          p.type === NodeType.VariableReference ||
+          p.type === NodeType.ExecInvocation ||
+          p.type === 'ConditionalTemplateSnippet' ||
+          p.type === 'ConditionalStringFragment'
+        )
       ),
       isTemplateContent: wrapperType === 'doubleBracket'
     };

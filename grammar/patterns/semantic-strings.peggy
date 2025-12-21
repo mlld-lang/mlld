@@ -5,7 +5,7 @@
 // DataString - For data contexts that need raw JavaScript strings
 DataString "Data Context String"
   = "'" content:EscapedSingleStringContent "'" { return content; }
-  / '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DataStringAtLiteral / DoubleQuotedText)* '"' {
+  / '"' parts:(ConditionalStringFragment / SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DataStringAtLiteral / DoubleQuotedText)* '"' {
       // In data context, we need to evaluate interpolation immediately
       if (parts.length === 0) {
         return "";  // Empty string
@@ -36,7 +36,7 @@ ExpressionString "Expression Context String"
   = "'" content:EscapedSingleStringContent "'" {
       return helpers.createNode('Literal', { value: content, valueType: 'string', location: location() });
     }
-  / '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DataStringAtLiteral / DoubleQuotedText)* '"' {
+  / '"' parts:(ConditionalStringFragment / SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DataStringAtLiteral / DoubleQuotedText)* '"' {
       if (parts.length === 0) {
         return helpers.createNode('Literal', { value: "", valueType: 'string', location: location() });
       }
