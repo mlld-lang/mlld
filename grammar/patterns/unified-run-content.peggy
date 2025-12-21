@@ -306,9 +306,9 @@ UnifiedCommandQuotedString
       
       // Add closing quote and flush remaining text
       currentText += '"';
-      if (currentText !== '""') {
-        nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
-      }
+      // Always add the text node - even for empty strings ""
+      // Empty strings are valid shell arguments and must be preserved
+      nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
       
       // If only one text node, return it directly
       if (nodes.length === 1 && nodes[0].type === NodeType.Text) {

@@ -43,8 +43,11 @@ export async function resolveWorkingDirectory(
       : await interpolate(workingDir, env, InterpolationContext.FilePath);
 
   const candidate = rawPath.trim();
-  if (!candidate) {
-    throw createWorkingDirError('Working directory cannot be empty.', candidate, env, options);
+
+  // Empty string or "." means "use current working directory"
+  // This allows reusable functions where dir is optional
+  if (!candidate || candidate === '.') {
+    return undefined;
   }
 
   if (candidate.startsWith('~')) {
