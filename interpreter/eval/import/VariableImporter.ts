@@ -150,8 +150,9 @@ export class VariableImporter {
    */
   private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
     // Create a temporary childVars map and reuse processModuleExports logic
-    // Skip module env serialization to prevent infinite recursion
-    const tempResult = this.processModuleExports(moduleEnv, {}, true);
+    // Skip module env serialization to prevent infinite recursion, but pass the
+    // current target so we can detect circular references within the env.
+    const tempResult = this.processModuleExports(moduleEnv, {}, true, null, undefined, undefined, moduleEnv);
     return tempResult.moduleObject;
   }
 
@@ -210,7 +211,8 @@ export class VariableImporter {
     skipModuleEnvSerialization?: boolean,
     manifest?: ExportManifest | null,
     childEnv?: Environment,
-    options?: { resolveStrings?: boolean }
+    options?: { resolveStrings?: boolean },
+    currentSerializationTarget?: Map<string, Variable>
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
@@ -331,7 +333,32 @@ export class VariableImporter {
             capturedModuleEnv: this.serializeModuleEnv(capturedEnv)
           };
         } else {
-          delete serializedInternal.capturedModuleEnv;
+          // When not adding fresh module env captures (to avoid recursion),
+          // preserve existing capturedModuleEnv from prior imports.
+          //
+          // Key insight: An exe's capturedModuleEnv is circular (and should be deleted)
+          // only if it points to the same env we're currently serializing.
+          // If it's from a different module (e.g., imported exe), preserve it.
+          //
+          // We use currentSerializationTarget (passed from serializeModuleEnv) to detect
+          // circular references, since after deserialization all exes in a module env
+          // point to that same Map.
+          const existingCapture = serializedInternal.capturedModuleEnv;
+          if (existingCapture instanceof Map) {
+            // Check if this is a circular reference
+            if (currentSerializationTarget && existingCapture === currentSerializationTarget) {
+              // Circular - delete to prevent infinite recursion
+              delete serializedInternal.capturedModuleEnv;
+            } else {
+              // Different module's env - serialize and preserve
+              serializedInternal = {
+                ...serializedInternal,
+                capturedModuleEnv: this.serializeModuleEnv(existingCapture)
+              };
+            }
+          }
+          // If already serialized (object), keep it as-is
+          // If undefined, leave it undefined (don't capture new)
         }
         
         // Export executable with all necessary metadata
@@ -916,13 +943,18 @@ export class VariableImporter {
       const deserializedEnv = this.deserializeModuleEnv(originalInternal.capturedModuleEnv);
 
       // IMPORTANT: Each executable in the module env needs to have access to the full env
-      // This allows command-refs to find their siblings
+      // This allows command-refs to find their siblings.
+      // BUT: Only set capturedModuleEnv if the exe doesn't already have one from a prior import.
+      // Imported exes preserve their original scope chain.
       for (const [_, variable] of deserializedEnv) {
         if (variable.type === 'executable') {
-          variable.internal = {
-            ...(variable.internal ?? {}),
-            capturedModuleEnv: deserializedEnv
-          };
+          const existingEnv = variable.internal?.capturedModuleEnv;
+          if (!existingEnv || !(existingEnv instanceof Map)) {
+            variable.internal = {
+              ...(variable.internal ?? {}),
+              capturedModuleEnv: deserializedEnv
+            };
+          }
         }
       }
 

@@ -1,0 +1,3 @@
+/exe @innerHelper() = `inner result`
+/exe @outerHelper() = `Outer calls: @innerHelper()`
+/export { @outerHelper }
