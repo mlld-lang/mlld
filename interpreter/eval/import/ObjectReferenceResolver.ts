@@ -28,7 +28,14 @@ export class ObjectReferenceResolver {
     
     // Check if this is a VariableReference AST node
     if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
-      return this.resolveVariableReference(value.identifier, variableMap);
+      if (process.env.MLLD_DEBUG_FIX === 'true') {
+        console.error('[ObjectReferenceResolver] Found VariableReference AST node:', {
+          identifier: value.identifier,
+          hasFields: !!(value as any).fields,
+          fields: (value as any).fields
+        });
+      }
+      return this.resolveVariableReference(value.identifier, variableMap, (value as any).fields);
     }
     
     if (typeof value === 'object') {
@@ -71,14 +78,37 @@ export class ObjectReferenceResolver {
   }
 
   /**
-   * Resolve a single variable reference by name
+   * Resolve a single variable reference by name, optionally applying field access
    */
-  private resolveVariableReference(varName: string, variableMap: Map<string, Variable>): any {
+  private resolveVariableReference(varName: string, variableMap: Map<string, Variable>, fields?: any[]): any {
     const referencedVar = variableMap.get(varName);
-    
+
     if (referencedVar) {
-      const result = this.resolveExecutableReference(referencedVar);
-      
+      let result = this.resolveExecutableReference(referencedVar);
+
+      // Apply field access if present (e.g., @fm.id -> access 'id' field on frontmatter)
+      if (fields && fields.length > 0 && result && typeof result === 'object') {
+        for (const field of fields) {
+          if (field.type === 'field' && typeof field.value === 'string') {
+            if (result && typeof result === 'object' && field.value in result) {
+              result = result[field.value];
+            } else {
+              // Field not found - return undefined to match normal field access behavior
+              return undefined;
+            }
+          } else if (field.type === 'bracketAccess') {
+            const key = field.value;
+            if (result && typeof result === 'object' && key in result) {
+              result = result[key];
+            } else if (Array.isArray(result) && typeof key === 'number') {
+              result = result[key];
+            } else {
+              return undefined;
+            }
+          }
+        }
+      }
+
       // If the result is an object that might contain more AST nodes, recursively resolve it
       if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result) && !(result as any).__arraySnapshot) {
         return this.resolveObjectReferences(result, variableMap);

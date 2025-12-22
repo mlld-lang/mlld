@@ -718,6 +718,11 @@ export class ModuleContentProcessor {
     // Create child environment for evaluation
     const childEnv = this.createChildEnvironment(resolvedPath, isURL);
 
+    // Set frontmatter on child environment so @fm is available during evaluation
+    if (frontmatterData) {
+      childEnv.setFrontmatter(frontmatterData);
+    }
+
     if (this.containsExportDirective(ast)) {
       // Seed the child environment with an empty manifest so subsequent
       // /export directives can accumulate entries during evaluation.
