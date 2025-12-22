@@ -66,6 +66,11 @@ export class PrimitiveEvaluator {
     if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
       return true;
     }
+
+    // Handle needsInterpolation marker (from DataString with @references)
+    if (value && typeof value === 'object' && 'needsInterpolation' in value && 'parts' in value && Array.isArray((value as any).parts)) {
+      return true;
+    }
     
     // Handle command objects (from run directives in objects)
     if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
@@ -134,7 +139,12 @@ export class PrimitiveEvaluator {
       }
       return await interpolateAndRecord(value.content, env);
     }
-    
+
+    // Handle needsInterpolation marker (from DataString with @references in object literals)
+    if (value && typeof value === 'object' && 'needsInterpolation' in value && 'parts' in value && Array.isArray((value as any).parts)) {
+      return await interpolateAndRecord((value as any).parts, env);
+    }
+
     // Handle command objects (from run directives in objects)
     if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
       return await this.evaluateCommandObject(value, env);

@@ -429,6 +429,9 @@ export async function prepareVarAssignment(
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
             processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
+          } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray(propValue.parts)) {
+            // Handle strings with @references that need interpolation
+            processedObject[key] = await interpolateWithSecurity(propValue.parts);
           } else {
             // For primitive types (numbers, booleans, null, strings), use as-is
             processedObject[key] = propValue;
@@ -473,6 +476,9 @@ export async function prepareVarAssignment(
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
             processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
+          } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray((propValue as any).parts)) {
+            // Handle strings with @references that need interpolation
+            processedObject[key] = await interpolateWithSecurity((propValue as any).parts);
           } else {
             // For primitive types (numbers, booleans, null, strings), use as-is
             processedObject[key] = propValue;
@@ -1497,6 +1503,11 @@ async function evaluateArrayItem(
   // Handle Literal nodes from grammar (numbers, booleans, null)
   if (item.type === 'Literal' && 'value' in item) {
     return item.value;
+  }
+
+  // Handle needsInterpolation marker (from DataString with @references)
+  if ('needsInterpolation' in item && Array.isArray(item.parts)) {
+    return await interpolateAndCollect(item.parts, env, collectDescriptor);
   }
 
   // Handle objects without explicit type property (plain objects from parser)
