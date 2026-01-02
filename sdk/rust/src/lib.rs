@@ -86,22 +86,19 @@ impl Client {
 
     /// Execute an mlld script string and return the output.
     pub fn process(&self, script: &str, opts: Option<ProcessOptions>) -> Result<String> {
-        let opts = opts.unwrap_or_default();
+        let _opts = opts.unwrap_or_default();
 
-        let mut args = vec!["--stdin".to_string()];
+        // Write script to temp file since mlld doesn't support stdin
+        let mut temp_file = tempfile::Builder::new()
+            .suffix(".mld")
+            .tempfile()?;
+        temp_file.write_all(script.as_bytes())?;
+        let temp_path = temp_file.path().to_string_lossy().to_string();
 
-        if let Some(ref file_path) = opts.file_path {
-            args.push("--file".to_string());
-            args.push(file_path.clone());
-        }
-
-        let format = opts.format.as_deref().unwrap_or("text");
-        args.push("--format".to_string());
-        args.push(format.to_string());
+        let args = vec![temp_path];
 
         let mut cmd = Command::new(&self.command);
         cmd.args(&args)
-            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -109,13 +106,7 @@ impl Client {
             cmd.current_dir(dir);
         }
 
-        let mut child = cmd.spawn()?;
-
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(script.as_bytes())?;
-        }
-
-        let output = child.wait_with_output()?;
+        let output = cmd.output()?;
 
         if !output.status.success() {
             return Err(Error::Mlld {
@@ -137,25 +128,28 @@ impl Client {
         let opts = opts.unwrap_or_default();
 
         let mut args = vec![
-            "run".to_string(),
             filepath.to_string(),
-            "--format".to_string(),
-            "json".to_string(),
+            "--structured".to_string(),
         ];
 
         if let Some(ref p) = payload {
-            args.push("--payload".to_string());
-            args.push(serde_json::to_string(p)?);
+            let payload_json = serde_json::to_string(p)?;
+            args.push("--inject".to_string());
+            args.push(format!("@payload={}", payload_json));
         }
 
         if let Some(ref state) = opts.state {
-            args.push("--state".to_string());
-            args.push(serde_json::to_string(state)?);
+            let state_json = serde_json::to_string(state)?;
+            args.push("--inject".to_string());
+            args.push(format!("@state={}", state_json));
         }
 
         if let Some(ref modules) = opts.dynamic_modules {
-            args.push("--dynamic-modules".to_string());
-            args.push(serde_json::to_string(modules)?);
+            for (key, value) in modules {
+                let module_json = serde_json::to_string(value)?;
+                args.push("--inject".to_string());
+                args.push(format!("{}={}", key, module_json));
+            }
         }
 
         let mut cmd = Command::new(&self.command);
@@ -222,11 +216,8 @@ impl Client {
 /// Options for process().
 #[derive(Debug, Default, Clone)]
 pub struct ProcessOptions {
-    /// Provides context for relative imports.
+    /// Provides context for relative imports (not currently used).
     pub file_path: Option<String>,
-
-    /// Output format ("text" or "json").
-    pub format: Option<String>,
 
     /// Override the client default timeout.
     pub timeout: Option<Duration>,
@@ -255,9 +246,21 @@ pub struct ExecuteResult {
     pub state_writes: Vec<StateWrite>,
 
     #[serde(default)]
-    pub exports: HashMap<String, serde_json::Value>,
+    pub exports: serde_json::Value, // Can be array or object depending on mlld output
+
+    #[serde(default)]
+    pub effects: Vec<Effect>,
 
     pub metrics: Option<Metrics>,
+}
+
+/// An output effect from execution.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Effect {
+    #[serde(rename = "type")]
+    pub effect_type: String,
+    pub content: Option<String>,
+    pub security: Option<serde_json::Value>,
 }
 
 /// A write to the state:// protocol.

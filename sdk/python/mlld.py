@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,11 +36,20 @@ class Metrics:
 
 
 @dataclass
+class Effect:
+    """An output effect from execution."""
+    type: str
+    content: str | None = None
+    security: dict[str, Any] | None = None
+
+
+@dataclass
 class ExecuteResult:
     """Structured output from execute()."""
     output: str
     state_writes: list[StateWrite] = field(default_factory=list)
-    exports: dict[str, Any] = field(default_factory=dict)
+    exports: Any = field(default_factory=list)  # Can be list or dict depending on mlld output
+    effects: list[Effect] = field(default_factory=list)
     metrics: Metrics | None = None
 
 
@@ -127,7 +138,6 @@ class Client:
         script: str,
         *,
         file_path: str | None = None,
-        format: str = "text",
         timeout: float | None = None,
     ) -> str:
         """
@@ -135,8 +145,7 @@ class Client:
 
         Args:
             script: The mlld script to execute.
-            file_path: Provides context for relative imports.
-            format: Output format ("text" or "json").
+            file_path: Provides context for relative imports (not currently used).
             timeout: Override the client default timeout.
 
         Returns:
@@ -145,24 +154,30 @@ class Client:
         Raises:
             MlldError: If execution fails.
         """
-        args = [self.command, "--stdin", "--format", format]
+        # Write script to temp file since mlld doesn't support stdin
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.mld', delete=False
+        ) as f:
+            f.write(script)
+            temp_path = f.name
 
-        if file_path:
-            args.extend(["--file", file_path])
+        try:
+            args = [self.command, temp_path]
 
-        result = subprocess.run(
-            args,
-            input=script,
-            capture_output=True,
-            text=True,
-            timeout=timeout or self.timeout,
-            cwd=self.working_dir,
-        )
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=timeout or self.timeout,
+                cwd=self.working_dir,
+            )
 
-        if result.returncode != 0:
-            raise MlldError(result.stderr, result.returncode)
+            if result.returncode != 0:
+                raise MlldError(result.stderr, result.returncode)
 
-        return result.stdout
+            return result.stdout
+        finally:
+            os.unlink(temp_path)
 
     def execute(
         self,
@@ -189,16 +204,17 @@ class Client:
         Raises:
             MlldError: If execution fails.
         """
-        args = [self.command, "run", filepath, "--format", "json"]
+        args = [self.command, filepath, "--structured"]
 
         if payload is not None:
-            args.extend(["--payload", json.dumps(payload)])
+            args.extend(["--inject", f"@payload={json.dumps(payload)}"])
 
         if state is not None:
-            args.extend(["--state", json.dumps(state)])
+            args.extend(["--inject", f"@state={json.dumps(state)}"])
 
         if dynamic_modules is not None:
-            args.extend(["--dynamic-modules", json.dumps(dynamic_modules)])
+            for key, value in dynamic_modules.items():
+                args.extend(["--inject", f"{key}={json.dumps(value)}"])
 
         result = subprocess.run(
             args,
@@ -234,10 +250,20 @@ class Client:
                 evaluate_ms=m.get("evaluateMs", 0),
             )
 
+        effects = [
+            Effect(
+                type=e.get("type", ""),
+                content=e.get("content"),
+                security=e.get("security"),
+            )
+            for e in data.get("effects", [])
+        ]
+
         return ExecuteResult(
             output=data.get("output", ""),
             state_writes=state_writes,
-            exports=data.get("exports", {}),
+            exports=data.get("exports", []),
+            effects=effects,
             metrics=metrics,
         )
 

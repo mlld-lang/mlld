@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -42,9 +43,6 @@ type ProcessOptions struct {
 	// FilePath provides context for relative imports.
 	FilePath string
 
-	// Format: "text" (default) or "json".
-	Format string
-
 	// Timeout overrides the client default.
 	Timeout time.Duration
 }
@@ -55,17 +53,20 @@ func (c *Client) Process(script string, opts *ProcessOptions) (string, error) {
 		opts = &ProcessOptions{}
 	}
 
-	args := []string{"--stdin"}
-
-	if opts.FilePath != "" {
-		args = append(args, "--file", opts.FilePath)
+	// Write script to temp file since mlld doesn't support stdin
+	tmpFile, err := os.CreateTemp("", "mlld-*.mld")
+	if err != nil {
+		return "", fmt.Errorf("create temp file: %w", err)
 	}
+	defer os.Remove(tmpFile.Name())
 
-	format := opts.Format
-	if format == "" {
-		format = "text"
+	if _, err := tmpFile.WriteString(script); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("write temp file: %w", err)
 	}
-	args = append(args, "--format", format)
+	tmpFile.Close()
+
+	args := []string{tmpFile.Name()}
 
 	timeout := opts.Timeout
 	if timeout == 0 {
@@ -80,7 +81,6 @@ func (c *Client) Process(script string, opts *ProcessOptions) (string, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, c.Command, args...)
-	cmd.Stdin = bytes.NewReader([]byte(script))
 	if c.WorkingDir != "" {
 		cmd.Dir = c.WorkingDir
 	}
@@ -115,8 +115,16 @@ type ExecuteOptions struct {
 type ExecuteResult struct {
 	Output      string       `json:"output"`
 	StateWrites []StateWrite `json:"stateWrites,omitempty"`
-	Exports     map[string]any `json:"exports,omitempty"`
+	Exports     any          `json:"exports,omitempty"` // Can be array or object depending on mlld output
+	Effects     []Effect     `json:"effects,omitempty"`
 	Metrics     *Metrics     `json:"metrics,omitempty"`
+}
+
+// Effect represents an output effect from execution.
+type Effect struct {
+	Type     string         `json:"type"`
+	Content  string         `json:"content,omitempty"`
+	Security map[string]any `json:"security,omitempty"`
 }
 
 // StateWrite represents a write to the state:// protocol.
@@ -139,14 +147,14 @@ func (c *Client) Execute(filepath string, payload any, opts *ExecuteOptions) (*E
 		opts = &ExecuteOptions{}
 	}
 
-	args := []string{"run", filepath, "--format", "json"}
+	args := []string{filepath, "--structured"}
 
 	if payload != nil {
 		payloadJSON, err := json.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("marshal payload: %w", err)
 		}
-		args = append(args, "--payload", string(payloadJSON))
+		args = append(args, "--inject", fmt.Sprintf("@payload=%s", payloadJSON))
 	}
 
 	if opts.State != nil {
@@ -154,15 +162,17 @@ func (c *Client) Execute(filepath string, payload any, opts *ExecuteOptions) (*E
 		if err != nil {
 			return nil, fmt.Errorf("marshal state: %w", err)
 		}
-		args = append(args, "--state", string(stateJSON))
+		args = append(args, "--inject", fmt.Sprintf("@state=%s", stateJSON))
 	}
 
 	if opts.DynamicModules != nil {
-		modulesJSON, err := json.Marshal(opts.DynamicModules)
-		if err != nil {
-			return nil, fmt.Errorf("marshal dynamic modules: %w", err)
+		for key, value := range opts.DynamicModules {
+			moduleJSON, err := json.Marshal(value)
+			if err != nil {
+				return nil, fmt.Errorf("marshal dynamic module %s: %w", key, err)
+			}
+			args = append(args, "--inject", fmt.Sprintf("%s=%s", key, moduleJSON))
 		}
-		args = append(args, "--dynamic-modules", string(modulesJSON))
 	}
 
 	timeout := opts.Timeout
@@ -215,9 +225,9 @@ type AnalyzeResult struct {
 }
 
 type AnalysisError struct {
-	Message  string `json:"message"`
-	Line     int    `json:"line,omitempty"`
-	Column   int    `json:"column,omitempty"`
+	Message string `json:"message"`
+	Line    int    `json:"line,omitempty"`
+	Column  int    `json:"column,omitempty"`
 }
 
 type Executable struct {
