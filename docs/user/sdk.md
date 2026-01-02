@@ -646,6 +646,16 @@ For direct `interpret()` calls, additional options:
 | `streaming` | StreamingOptions | Streaming configuration |
 | `emitter` | ExecutionEmitter | Custom event emitter |
 
+## Other Languages
+
+Experimental SDK wrappers are available for Go, Python, and Rust. These are thin wrappers around the mlld CLI that provide idiomatic APIs for each language.
+
+- [Go SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/go)
+- [Python SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/python)
+- [Rust SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/rust)
+
+These wrappers require the mlld CLI to be installed (`npm install -g mlld`).
+
 ## See Also
 
 - [CLI Usage](cli.md) - Command line interface

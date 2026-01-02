@@ -1,7 +1,7 @@
 ---
 updated: 2025-01-27
 tags: #docs, #style, #user-docs
-related-docs: docs/dev/DOCS.md, docs/*.md
+related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/*.md
 ---
 
 # User Documentation Guide

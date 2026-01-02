@@ -1,82 +1,74 @@
 ---
-updated: 2025-07-28
-tags: #docs, #style
-related-docs: docs/*.md, docs/slash/*.md, docs/dev/*.md
+updated: 2026-01-02
+tags: #docs, #meta
+related-docs: docs/dev/DOCS-DEV.md, docs/dev/DOCS-USER.md, docs/dev/DOCS-LLM.md
 ---
 
 # Documentation
 
 ## tldr
 
-Use this guide to writing both developer-facing and user-facing docs for mlld
+When updating docs, ensure coverage for all audiences. "Update the docs" means checking all three: dev, user, LLM.
 
-## Principles
+## Audiences
 
-- Dev-facing doc filenames are ALL CAPS. User-facing docs filenames are lowercase (except README.md files which are always capitalized)
-- Use unix `man` pages voice.
-- In user-facing docs: show, don't tell: focus on examples. In dev-facing docs, skip examples: they're just hidden code to maintain.
-- Be terse and extremely pragmatic about what is included based on what will be useful and relevant for the specific audience. 
-- Simple pointers are much better than exhaustive explanations. 
-- Respect others' context windows and cognitive load. Add nothing that isn't *critical* or fundamental. No empty-value bulleted lists.
-- No backwards-looking "this used to do x, now it does y". No future promises. Docs reflect the present. Not the future or the past.
-- No marketingese or self-congratulatory editorializing.
-- In dev-facing docs, crystallize key learnings from debugging sessions. Add details to GitHub issues and reference those rather than filling up the codebase with debug lore.
+| Audience | Location | Guide |
+|----------|----------|-------|
+| Developers | `docs/dev/` | [DOCS-DEV.md](DOCS-DEV.md) |
+| Users | `docs/user/` → website | [DOCS-USER.md](DOCS-USER.md) |
+| LLMs | `docs/llm/` → llms.txt | [DOCS-LLM.md](DOCS-LLM.md) |
 
-## Details
+## When to Update What
 
-### Structure
+| Change Type | Dev Docs | User Docs | LLM Docs |
+|-------------|----------|-----------|----------|
+| Architecture change | ✅ | ❌ | ❌ |
+| New directive/feature | ✅ | ✅ | ✅ |
+| New SDK method | ✅ | ✅ | ✅ |
+| Bug fix | ❌ | ❌ | ❌ |
+| Behavior change | Maybe | ✅ | ✅ |
+| Performance optimization | ✅ | ❌ | ❌ |
+| Internal refactor | Maybe | ❌ | ❌ |
 
-- README.md - Main entrypoint from GitHub and npm
-- @llms.txt - Terse LLM explanation of mlld and current syntax
-- docs/ - User-facing website docs
-- docs/slash/ - Detailed guide to each mlld directive
-- docs/dev/ - Developer facing architectural docs
+## Checklist
 
-### Template for dev-facing docs
-
-The more closely we adhere to this structure the more useful mlld will be able to be in assembling context programmatically. 
-
-```md
----
-updated: YYYY-MM-DD
-tags: #arch, #interpreter
-related-docs: docs/filename.md, docs/otherfile.md, docs/dev/FILE.md
-related-code: interpreter/eval/*.ts, security/something.ts
-related-types: core/types { Type, OtherType }
----
-
-# Document Name
-
-## tldr
-
-One paragraph or ~5 bullets max. What is this and when do I care? If it's user-facing, is there a way to understand 80% of it in one quick commented example in under 8 lines?
-
-## Principles
-
-- Single-pass evaluation (no separate resolution phase)
-- Evaluators are autonomous (no orchestration layer)
-- Fail fast with specific errors (MlldDirectiveError)
-
-## Details
-
-- Key components/concepts
-- Entry points: `interpreter/eval/index.ts`
-
-## Gotchas (optional)
-
-- NEVER call evaluate() without Environment
-- File paths must be absolute in production
-
-## Debugging (optional)
-
-Key algorithms, critical dependencies, debugging approach.
+After making changes, run through this:
 
 ```
+[ ] Dev docs needed?
+    - Architecture, internals, gotchas → docs/dev/
+    - See DOCS-DEV.md for style
 
-## Template for user-facing docs
+[ ] User docs needed?
+    - User-facing features → docs/user/
+    - See DOCS-USER.md for style
+    - Rebuild website: cd website && npm run build
 
-No template. 
+[ ] LLM docs needed?
+    - Syntax, directives, patterns → docs/llm/
+    - See DOCS-LLM.md for style
+    - Regenerate: mlld run llmstxt
+```
 
-Frontmatter is not used in user-facing docs. 
+## Build Commands
 
-User-facing docs should have a ## tldr and the rest of the doc should be an inverted pyramid organized by ipmortance.
+```bash
+# Website (from docs/user/)
+cd website && npm run build
+
+# LLM combined docs
+mlld run llmstxt
+```
+
+## Principles (All Docs)
+
+- **Present tense only** - No "this used to..." or "will soon..."
+- **No marketing** - Skip buzzwords and self-congratulation
+- **Terse** - Pointers beat prose; respect cognitive load
+- **Tested examples** - Every code block must be runnable
+
+## Quick Reference
+
+- **Dev docs**: ALL CAPS filenames, architecture focus, no examples
+- **User docs**: lowercase filenames, example-first, show output
+- **LLM docs**: strict mode examples, pseudo-XML structure, modular files

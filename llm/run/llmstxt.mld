@@ -15,6 +15,7 @@ var @modules = [
   "llms-modules.txt",
   "llms-patterns.txt",
   "llms-configuration.txt",
+  "llms-sdk.txt",
   "llms-mistakes.txt",
   "llms-security.txt",
   "llms-reference.txt",

@@ -1,7 +1,7 @@
 ---
 updated: 2026-01-01
 tags: #docs, #llm, #llms-txt
-related-docs: docs/dev/DOCS.md, docs/dev/USERDOCS.md
+related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-USER.md
 related-code: llms.txt, docs/llm/, llm/run/llmstxt.mld
 ---
 
@@ -26,6 +26,7 @@ docs/llm/
 ├── llms-modules.txt        # Import/export, registry, local dev
 ├── llms-patterns.txt       # Common workflow patterns
 ├── llms-configuration.txt  # SDK modes, resolvers, env vars
+├── llms-sdk.txt            # SDK usage, execution modes, dynamic modules
 ├── llms-mistakes.txt       # Common mistakes and fixes
 ├── llms-security.txt       # Guards, labels, capabilities
 ├── llms-reference.txt      # Quick reference tables, escape hatches
@@ -250,10 +251,11 @@ The script:
 6. modules
 7. patterns
 8. configuration
-9. mistakes
-10. security
-11. reference
-12. cookbook
+9. sdk
+10. mistakes
+11. security
+12. reference
+13. cookbook
 
 ## Testing Changes
 
@@ -290,7 +292,8 @@ Version should match mlld release version.
 
 ## Related Documentation
 
-- **docs/dev/DOCS.md** - General documentation principles
-- **docs/dev/USERDOCS.md** - User-facing documentation guide
+- **docs/dev/DOCS.md** - Unified documentation guide (entrypoint)
+- **docs/dev/DOCS-DEV.md** - Developer-facing documentation principles
+- **docs/dev/DOCS-USER.md** - User-facing documentation guide
 - **docs/user/** - Detailed user documentation
 - **tests/cases/valid/feat/** - Comprehensive test cases

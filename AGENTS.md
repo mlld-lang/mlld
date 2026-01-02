@@ -167,7 +167,7 @@ Hard rule: keep code comments and documentation timeless and present‑tense.
 </TIMELESS_WRITING>
 
 <DOCS>
-Conventions (docs/dev/DOCS.md, docs/dev/USERDOCS.md):
+Conventions (docs/dev/DOCS.md):
 - Dev-facing docs: ALL CAPS titles; concise, architectural; pointers > prose.
 - User-facing: example-first, runnable snippets with outputs; inverted pyramid structure.
 - Keep llms.txt in sync with user-facing syntax/semantics; AGENTS.md complements it for repo development.
@@ -221,7 +221,7 @@ Iterator changes (/for, foreach):
 - docs/dev/EFFECTS.md — Effects and streaming
 - docs/dev/ERRORS.md — Error pattern system
 - docs/dev/TESTS.md — Fixture system, tokens, coverage
-- docs/dev/DOCS.md, docs/dev/USERDOCS.md — Documentation conventions
+- docs/dev/DOCS.md — Documentation conventions
 - CLAUDE.md — Repo guidelines (style, git, module system)
 - CHANGELOG.md — Version history and notable changes
 </SEE_ALSO>

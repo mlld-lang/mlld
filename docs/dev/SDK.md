@@ -239,3 +239,21 @@ if (!analysis.valid) {
   console.error('Parse errors:', analysis.errors);
 }
 ```
+
+## Language Wrappers
+
+Thin CLI wrappers exist for Go, Python, and Rust in `sdk/`. These call the mlld CLI via subprocess and provide idiomatic APIs for each language.
+
+**Design decisions**:
+- Wrap CLI rather than reimplement (full feature parity, zero maintenance)
+- Each wrapper is ~200-300 LOC
+- All provide: `process()`, `execute()`, `analyze()`
+- Require Node.js + mlld CLI at runtime
+
+**When to use wrappers vs native rewrite**:
+- Wrappers: Almost always. Full compatibility, works today.
+- Native: Embedded systems without Node, extreme performance needs, WASM targets.
+
+Even a native rewrite would need to embed a JS runtime (QuickJS, Deno core) to support `/run js` and `/run node` - the JavaScript ecosystem access is a feature.
+
+**Location**: `sdk/go/`, `sdk/python/`, `sdk/rust/`

@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-02T02:39:51.128Z
+Generated: 2026-01-02T22:02:29.124Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -1626,6 +1626,194 @@ Use cases: MCP proxy, module validation, IDE/LSP, security auditing.
 </ANALYZE_MODULE>
 
 </MLLD_CONFIGURATION>
+
+
+<MLLD_SDK>
+
+<SDK_OVERVIEW>
+The mlld SDK enables programmatic execution of mlld scripts from application code.
+
+**Entry points:**
+- `processMlld(script)` - Simple: script in, string out
+- `interpret(script, opts)` - Full control with execution modes
+- `execute(filepath, payload, opts)` - File-based with state management
+- `analyzeModule(filepath)` - Static analysis without execution
+</SDK_OVERVIEW>
+
+<BASIC_USAGE>
+```typescript
+import { processMlld } from 'mlld';
+
+const output = await processMlld(`
+var @name = "World"
+show \`Hello @name!\`
+`);
+// output: "Hello, World!"
+```
+
+With file context for imports:
+
+```typescript
+const output = await processMlld(script, {
+  filePath: './scripts/my-script.mld'
+});
+```
+</BASIC_USAGE>
+
+<EXECUTION_MODES>
+Four modes control what `interpret()` returns:
+
+**document** (default): Plain text output
+```typescript
+const output = await processMlld(script);
+```
+
+**structured**: Output + effects + exports + metrics
+```typescript
+const result = await interpret(script, { mode: 'structured' });
+console.log(result.output);
+console.log(result.effects);
+console.log(result.stateWrites);
+```
+
+**stream**: Real-time event consumption
+```typescript
+const handle = interpret(script, { mode: 'stream' });
+handle.on('stream:chunk', e => process.stdout.write(e.text));
+handle.on('effect', e => console.log('Effect:', e.type));
+await handle.done();
+```
+
+**debug**: Full execution trace
+```typescript
+const result = await interpret(script, { mode: 'debug' });
+console.log(result.ast);
+console.log(result.trace);
+```
+</EXECUTION_MODES>
+
+<DYNAMIC_MODULES>
+Inject runtime data without filesystem I/O. Enables multi-tenant apps with per-user context.
+
+```typescript
+const result = await processMlld(template, {
+  dynamicModules: {
+    '@state': { count: 0, messages: [] },
+    '@payload': { text: userInput, userId: session.id }
+  }
+});
+```
+
+In your script:
+```mlld
+import { @count, @messages } from @state
+import { @text, @userId } from @payload
+
+var @newCount = @count + 1
+show `User @userId said: @text`
+```
+
+Dynamic modules are auto-labeled `src:dynamic` for security tracking.
+</DYNAMIC_MODULES>
+
+<STATE_MANAGEMENT>
+Track state changes via `state://` protocol instead of filesystem writes.
+
+```mlld
+var @count = @state.count + 1
+output @count to "state://count"
+
+var @prefs = { theme: "dark" }
+output @prefs to "state://preferences"
+```
+
+Application handles persistence:
+
+```typescript
+const result = await execute('./agent.mld', payload, {
+  state: { count: 0 }
+});
+
+for (const write of result.stateWrites) {
+  await database.setState(write.path, write.value);
+}
+```
+</STATE_MANAGEMENT>
+
+<FILE_EXECUTION>
+`execute()` provides file-based execution with caching and state.
+
+```typescript
+const result = await execute('./agent.mld',
+  { text: 'user input', userId: '123' },  // payload
+  {
+    state: { count: 0, messages: [] },
+    timeout: 30000
+  }
+);
+
+console.log(result.output);
+console.log(result.stateWrites);
+console.log(result.metrics);
+```
+
+Features:
+- AST caching with mtime invalidation
+- `@payload` and `@state` auto-injected
+- Timeout and cancellation support
+</FILE_EXECUTION>
+
+<STATIC_ANALYSIS>
+`analyzeModule()` extracts metadata without execution.
+
+```typescript
+const analysis = await analyzeModule('./tools.mld');
+
+if (!analysis.valid) {
+  console.error('Parse errors:', analysis.errors);
+  return;
+}
+
+// Discover exported functions
+const tools = analysis.executables
+  .filter(e => analysis.exports.includes(e.name));
+
+// Check capabilities
+console.log('Needs:', analysis.needs);
+console.log('Guards:', analysis.guards);
+```
+
+Use cases: MCP proxy tool discovery, module validation, IDE/LSP, security auditing.
+</STATIC_ANALYSIS>
+
+<LANGUAGE_WRAPPERS>
+Thin wrappers exist for Go, Python, and Rust. These call the mlld CLI and provide idiomatic APIs.
+
+**Go:**
+```go
+client := mlld.New()
+output, _ := client.Process(`var @x = 1
+show @x`, nil)
+```
+
+**Python:**
+```python
+from mlld import Client
+client = Client()
+output = client.process('var @x = 1\nshow @x')
+```
+
+**Rust:**
+```rust
+let client = Client::new();
+let output = client.process("var @x = 1\nshow @x", None)?;
+```
+
+All wrappers provide: `process()`, `execute()`, `analyze()`
+All require: Node.js + mlld CLI at runtime
+</LANGUAGE_WRAPPERS>
+
+</MLLD_SDK>
 
 
 <MLLD_COMMON_MISTAKES>
