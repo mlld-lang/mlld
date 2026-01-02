@@ -1,493 +1,296 @@
 ---
-updated: 2025-12-01
+updated: 2026-01-01
 tags: #docs, #llm, #llms-txt
 related-docs: docs/dev/DOCS.md, docs/dev/USERDOCS.md
-related-code: llms.txt
+related-code: llms.txt, docs/llm/, llm/run/llmstxt.mld
 ---
 
 # llms.txt Maintenance Guide
 
 ## tldr
 
-llms.txt is the canonical reference for LLMs writing mlld syntax. It uses a pseudo-XML structure with markdown content for optimal LLM comprehension - tags provide navigation while examples remain scannable. Update when syntax changes, new features ship, or common LLM mistakes are identified.
+llms.txt is a modular reference for LLMs writing mlld syntax. The documentation lives in `docs/llm/` as separate topic modules, with `llms.txt` as a brief entry point and `llms-combined.txt` as the full concatenation. All examples use **strict mode** (bare directives). Run `mlld run llmstxt` to regenerate the combined file.
+
+## File Structure
+
+```
+llms.txt                    # Brief entry point with TOC + essential patterns
+llms-combined.txt           # Generated: all modules concatenated (run `mlld run llmstxt`)
+
+docs/llm/
+├── llms-overview.txt       # Purpose, mental model, two syntax modes
+├── llms-core-rules.txt     # The 13 core rules
+├── llms-syntax.txt         # Variables, templates, file loading, methods, pipelines
+├── llms-commands.txt       # run, exe, output, log, append, stream
+├── llms-control-flow.txt   # when, for, foreach, while, parallel, skip
+├── llms-modules.txt        # Import/export, registry, local dev
+├── llms-patterns.txt       # Common workflow patterns
+├── llms-configuration.txt  # SDK modes, resolvers, env vars
+├── llms-mistakes.txt       # Common mistakes and fixes
+├── llms-security.txt       # Guards, labels, capabilities
+├── llms-reference.txt      # Quick reference tables, escape hatches
+└── llms-cookbook.txt       # Annotated real-world examples (5 recipes)
+
+llm/run/llmstxt.mld         # Build script to generate llms-combined.txt
+```
+
+### When to Use Each
+
+| File | Use Case |
+|------|----------|
+| `llms.txt` | Quick context, points to modules |
+| `llms-combined.txt` | Full context injection for comprehensive tasks |
+| Individual modules | Focused help on specific topics |
+| `llms-cookbook.txt` | Learning by example, real patterns |
 
 ## Principles
 
-- **Optimize for LLM comprehension** - Structure that LLMs can navigate via tags while keeping examples scannable
-- **Example-driven** - Every feature needs working code with ❌/✅ patterns
-- **Present tense only** - No "this used to" or future promises, document current syntax
-- **Deduplication is critical** - Consolidate similar concepts to avoid conflicting guidance
-- **Ordering matters** - Most common/important patterns first within each section
-- **Cross-reference explicitly** - Link related sections clearly (e.g., "Full details in <CONTROL_FLOW>")
-- **Terse and pragmatic** - Include only what's critical; respect LLM context windows
-- **Tested examples** - Every code block must be valid, tested mlld syntax
+- **Strict mode everywhere** - All examples use bare directives (`.mld` syntax), not slash-prefixed markdown mode
+- **Optimize for LLM comprehension** - Pseudo-XML tags for navigation, markdown for scannability
+- **Example-driven** - Every feature needs working code
+- **Modular** - Each topic standalone, can be loaded independently
+- **Present tense only** - Document current syntax, not history or roadmap
+- **Tested examples** - Every code block must be valid mlld syntax
+- **Cookbook for composition** - Reference docs show features; cookbook shows them working together
 
-## Structure
+## Strict Mode vs Markdown Mode
 
-### Pseudo-XML Framework
+All documentation uses **strict mode** (bare directives):
 
-llms.txt uses lightweight pseudo-XML tags as section markers while keeping markdown content format.
+```mlld
+>> Strict mode (.mld files) - what we document
+var @name = "Alice"
+show `Hello @name!`
 
-**Tag naming:** ALL_CAPS_UNDERSCORES for clear visual distinction
-- Section tags: `<COMMANDS>`, `<SYNTAX>`, `<CONTROL_FLOW>`
-- Rule tags: `<RULE_1_DIRECTIVES_START_LINES>`, `<RULE_2_VARIABLE_SYNTAX>`
-- Mistake tags: `<MISTAKE_FILE_VS_STRING>`, `<MISTAKE_NESTED_FUNC_CALLS>`
+>> Markdown mode (.mld.md files) - mentioned but not used in examples
+/var @name = "Alice"
+/show `Hello @name!`
+```
 
-**Content format:**
-- Simple opening/closing tags like `<SECTION_NAME>...</SECTION_NAME>`
-- Markdown content inside (headers, lists, code blocks)
-- Maximum 2 levels of nesting for readability
-- Code blocks remain as markdown fenced blocks (```mlld)
-- No attributes needed - tag names are self-documenting
+The overview module explains both modes, but examples throughout use strict mode to match what LLMs should generate for `.mld` files.
 
-**Detection rule:** Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references in mlld. XML-like `<TAG>` is safe as plain text. This allows pseudo-XML structure without conflicting with mlld syntax.
+## Deprecated Syntax
 
-### Section Organization
+**Do not use in examples:**
 
-The TOC at the top provides structure overview. Main sections:
+| Deprecated | Use Instead |
+|------------|-------------|
+| `run { ... }` | `run cmd { ... }` |
+| `@var_key` in iteration | `@var.mx.key` |
 
-- **`<OVERVIEW>`** - Purpose, execution modes, "What mlld IS/ISN'T," mental model shift
-- **`<CORE_RULES>`** - Fundamental rules (12 numbered rules covering directives, variables, commands, output, interpolation, field access, parameterized content, file loading, imports, when, iteration, operators)
-- **`<SYNTAX>`** - Detailed syntax for variables, templates, file loading, pipelines, comments, reserved variables
-- **`<COMMANDS>`** - Command directives: run vs run sh, /exe, /output, /log, /append, streaming
-- **`<CONTROL_FLOW>`** - /when decisions, iteration (foreach, /for), no early exit pattern
-- **`<MODULES>`** - Module philosophy, imports, exports, shadow environments, local dev
-- **`<PATTERNS>`** - Tool orchestration, data pipelines, conditional workflows, guarded execution
-- **`<CONFIGURATION>`** - Environment variables, frontmatter, paths, resolvers, registry, publishing
-- **`<COMMON_MISTAKES>`** - Individual mistake tags with ❌/✅ examples
-- **`<REFERENCE>`** - Quick lookup tables, execution context, syntax summary
-- **`<SECURITY>`** - Guards, data labels, policies
-- **`<STREAMING>`** - Streaming execution patterns
-- **`<SEE_ALSO>`** - External documentation links
+## The Cookbook
 
-### When to Update Each Section
+`llms-cookbook.txt` contains annotated real-world examples showing feature composition. Each recipe is 30-80 lines with heavy comments explaining patterns.
 
-**OVERVIEW** - Rarely. Only when core philosophy or mental model changes.
+**Current recipes:**
+1. **LLM Library** - Clean utility module (pipelines, when-first, cmd:dir)
+2. **Gate Pattern** - Validation with blocks and structured returns
+3. **Agent Definition** - Config module with frontmatter and templates
+4. **Router** - Complex scoring and decision logic
+5. **Orchestrator** - Parallel execution with routing
 
-**CORE_RULES** - When adding truly fundamental syntax that's required for basic understanding. High bar for additions.
+**Why a cookbook?**
+LLMs learn better from composed examples than isolated feature docs. The cookbook shows how patterns combine in real code, leading to faster comprehension.
 
-**SYNTAX** - When adding new syntax features (operators, field access patterns, etc.)
+**Adding recipes:**
+- Base on real working code (anonymize if needed)
+- Show multiple features working together
+- Heavy `>>` comments explaining the "why"
+- Keep to 30-80 lines
+- Include a summary of demonstrated features
 
-**COMMANDS** - When adding new directives or significantly changing existing ones.
+## Pseudo-XML Structure
 
-**CONTROL_FLOW** - When changing /when, /for, foreach behavior.
-
-**MODULES** - When changing import/export syntax or module resolution.
-
-**PATTERNS** - When identifying new best-practice patterns from user code.
-
-**CONFIGURATION** - When adding config options, resolver types, or registry features.
-
-**COMMON_MISTAKES** - Frequently. Add whenever you identify repeated LLM errors.
-
-**REFERENCE** - When syntax tables need updates for new features.
-
-## Adding New Content
-
-### New Features
-
-**Decision tree for placement:**
-
-1. Is it fundamental to basic understanding? → `<CORE_RULES>` (brief) + detailed section
-2. Is it a directive? → `<COMMANDS>` or `<CONTROL_FLOW>`
-3. Is it syntax? → `<SYNTAX>` with appropriate subsection
-4. Is it a pattern/practice? → `<PATTERNS>`
-5. Is it configuration? → `<CONFIGURATION>`
-
-**Example structure template:**
+Each module uses lightweight pseudo-XML tags for LLM navigation:
 
 ```markdown
-<FEATURE_NAME>
-Brief 1-2 sentence description.
+<MLLD_SECTION_NAME>
+
+Content here with markdown formatting.
 
 ```mlld
-# Basic example
-/show "Hello"
-
-# With options
-/show "Hello" with { format: "json" }
+var @example = "code"
 ```
 
-Notes/caveats if needed.
-</FEATURE_NAME>
+</MLLD_SECTION_NAME>
 ```
 
-**Core rules threshold:** Only add to CORE_RULES if the feature is:
-- Used in >50% of mlld scripts
-- Required for basic comprehension
-- Fundamentally changes how LLMs should think about mlld
+**Tag naming:** `ALL_CAPS_UNDERSCORES` for clear visual distinction
 
-Otherwise, put overview in appropriate section and detailed coverage in subsections.
+**Detection rule:** Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references. XML-like `<TAG>` is safe as plain text.
 
-**Versioning:** Update the version in `<MLLD_GUIDE version="X.Y.Z">` at the top when making significant additions.
-
-### Common LLM Mistakes
-
-**Identifying patterns:**
-- Monitor GitHub issues for syntax errors
-- Review error logs for repeated patterns
-- Watch for questions in discussions/support
-- Test LLM outputs for systematic errors
-
-**MISTAKE tag naming:**
-- Descriptive: `<MISTAKE_MISSING_AT>`, not `<MISTAKE_1>`
-- Action-focused: What they're doing wrong
-- Examples: `<MISTAKE_USING_AT_FOR>`, `<MISTAKE_INTERPOLATION>`, `<MISTAKE_FILE_VS_STRING>`
-
-**Required elements:**
-```markdown
-<MISTAKE_DESCRIPTIVE_NAME>
-Brief explanation of the mistake.
+**Gotcha:** Tags with `@` or `.` in attributes trigger file load detection. Use `:::...:::` escape hatch for XML with interpolated attributes:
 
 ```mlld
-❌ /var greeting = "Hello"    # wrong
-✅ /var @greeting = "Hello"   # correct
+>> This fails - @ triggers file detection
+var @doc = ::<GUIDE version="@version">::
+
+>> Use triple-colon escape hatch
+var @doc = :::<GUIDE version="{{version}}">:::
 ```
 
-Optional: why this is wrong or additional context.
-</MISTAKE_DESCRIPTIVE_NAME>
+## Module Organization
+
+### llms-overview.txt
+- What mlld is/isn't
+- Mental model shift
+- Two syntax modes explained
+- Key concepts summary
+
+### llms-core-rules.txt
+The 13 fundamental rules. High bar for additions - only truly essential syntax.
+
+### llms-syntax.txt
+Detailed syntax coverage:
+- Variables and conditional inclusion
+- Templates (backticks, `::...::`)
+- File loading with globs and AST selectors
+- `.data/.text` JSON string accessors
+- Builtin methods
+- Pipelines and transforms
+- Comments and reserved variables
+
+### llms-commands.txt
+All command directives:
+- `run cmd/sh/js` with decision tree
+- `exe` with blocks and when-first
+- `output`, `log`, `append`
+- `stream`
+
+### llms-control-flow.txt
+- `when` (simple, bare, first)
+- `for` (arrow, block, collection, parallel)
+- `skip` keyword for filtering
+- `foreach`
+- `while` loops
+
+### llms-modules.txt
+- Creating modules with frontmatter
+- Import types and patterns
+- Exports
+- Registry and local dev
+
+### llms-patterns.txt
+Common workflows:
+- Tool orchestration
+- Data pipelines
+- Router/gate patterns
+- Parallel execution
+- LLM integration
+
+### llms-configuration.txt
+- Environment variables
+- SDK execution modes
+- Dynamic module injection
+- Resolvers
+
+### llms-mistakes.txt
+Common errors with ❌/✅ patterns. Add here when you identify repeated LLM mistakes.
+
+### llms-security.txt
+- Guards and policies
+- Data labels
+- Automatic labels
+
+### llms-reference.txt
+Quick lookup tables:
+- Execution contexts
+- Directives
+- Operators
+- Metadata fields
+- Escape hatch templates
+
+### llms-cookbook.txt
+Real-world annotated examples.
+
+## Updating Content
+
+### Adding a New Feature
+
+1. Determine primary module (syntax, commands, control-flow, etc.)
+2. Add with strict mode examples
+3. Update llms-reference.txt tables if applicable
+4. Consider adding to cookbook if it composes well
+5. Regenerate combined: `mlld run llmstxt`
+
+### Adding a Common Mistake
+
+1. Add to llms-mistakes.txt with descriptive tag name
+2. Show ❌ wrong and ✅ correct
+3. Keep explanation brief
+4. Regenerate combined
+
+### Fixing Examples
+
+1. Find the source module in docs/llm/
+2. Update with correct strict mode syntax
+3. Test example parses: `npm run ast -- 'code'`
+4. Regenerate combined
+
+## Build Script
+
+`llm/run/llmstxt.mld` generates `llms-combined.txt`:
+
+```bash
+mlld run llmstxt
 ```
 
-**Ordering:** Place most common mistakes first in the section. Reorder as patterns shift.
+The script:
+1. Reads version from package.json
+2. Loads all modules from docs/llm/ in logical order
+3. Wraps in `<MLLD_COMPLETE_GUIDE>` with version and timestamp
+4. Writes to llms-combined.txt
 
-### Syntax Additions
-
-**Progressive disclosure pattern:**
-- Brief mention in CORE_RULES (if fundamental)
-- Detailed coverage in dedicated section
-- Full reference in REFERENCE tables
-
-**Example:** Field access
-- CORE_RULES: "Objects/arrays use dot+index"
-- SYNTAX/FIELD_ACCESS: Full examples with slicing, builtin methods, edge cases
-- REFERENCE: Quick lookup table
-
-**Balancing completeness vs conciseness:**
-- Include common cases (80% usage)
-- Use "Advanced:" or subsections for edge cases
-- Link to docs/user/* for exhaustive coverage
-- Avoid redundant explanations across sections
-
-## Updating Existing Content
-
-### Deduplication
-
-**Strategy:**
-1. Identify redundant explanations (grep for duplicated examples)
-2. Choose canonical location (most specific section)
-3. Keep brief overview in general section
-4. Add cross-reference to detailed section
-
-**Example - run vs run sh guidance:**
-- Before: Explained in multiple places with conflicting advice
-- After: All guidance in `<RUN_VS_RUN_SH>` with decision tree
-- Brief mention in CORE_RULES: "Every command needs braces"
-
-**Cross-reference format:**
-```markdown
-/when drives decisions. Full details in <CONTROL_FLOW>.
-```
-
-### Improving Examples
-
-**Replace generic with realistic:**
-
-❌ Bad:
-```mlld
-/var @foo = "bar"
-/var @baz = @foo
-```
-
-✅ Good:
-```mlld
-/var @userName = "Alice"
-/var @greeting = `Hello @userName`
-```
-
-**Add output when helpful:**
-
-```mlld
-/var @result = run {echo "hello"} | @upper
-/show @result
-# Output: HELLO
-```
-
-**Test all examples:**
-- Use `npm run ast -- 'code'` to verify parsing
-- Create temp test files for multi-line examples
-- Ensure examples match current syntax (not deprecated)
-
-**Balance brevity with clarity:**
-- Simplest case first
-- Add complexity incrementally within same feature
-- Use comments (`>>`, `<<`) for non-obvious behavior
-- Don't over-explain what's visible in the code
-
-### Clarifying Ambiguity
-
-**Decision trees for "X vs Y" questions:**
-
-```markdown
-Decision tree:
-* Single line + pipes only (`|`) → `run { … }`
-* Needs `&&`, `||`, control flow → `run sh { … }`
-* JavaScript (no shell) → `js { … }`
-```
-
-**Comparison tables:**
-
-```markdown
-| Syntax | Interpolation | Pipes | Use For |
-|--------|---------------|-------|---------|
-| `::...::` | `@var` | ✓ | **Default** |
-| `:::...:::` | `{{var}}` | ✗ | Discord only |
-```
-
-**When LLMs generate incorrect syntax:**
-1. Add to COMMON_MISTAKES with correct pattern
-2. Strengthen the correct pattern in main section
-3. Add decision tree if choice is ambiguous
-4. Consider if naming/syntax itself is confusing (file issue)
-
-## Best Practices
-
-### Writing Examples
-
-**Build complexity gradually:**
-
-```markdown
-## Basic Usage
-
-```mlld
-/var @greeting = "Hello"
-/show @greeting
-```
-
-## Adding Variables
-
-Now let's add interpolation:
-
-```mlld
-/var @name = "World"
-/var @greeting = "Hello, @name!"
-/show @greeting
-```
-```
-
-**Show correct first, then mistakes:**
-
-```mlld
-✅ /var @result = run {echo "hello"}
-❌ /var @result = @run {echo "hello"}
-```
-
-**Use inline comments for non-obvious behavior:**
-
-```mlld
-/var @arr = [1,2,3,4,5]
-/show @arr[-2:]             # [4,5] - last 2 elements
-/show @arr[:-1]             # [1,2,3,4] - all except last
-```
-
-**Keep examples self-contained:**
-- Don't reference variables defined elsewhere
-- Include necessary setup in the example
-- Exception: CORE_RULES can assume earlier rules understood
-
-### Cross-Referencing
-
-**Make navigation explicit:**
-
-```markdown
-Full details in <CONTROL_FLOW>.
-This builds on <RULE_2_VARIABLE_SYNTAX>.
-See <FILE_LOADING> for glob patterns.
-```
-
-**Not:**
-```markdown
-As discussed elsewhere...
-See other documentation...
-Refer to the control flow section...
-```
-
-**Create learning paths for common flows:**
-- Variables → Templates → Commands → Patterns
-- File loading → Globs → AST selectors
-- Basic /when → /exe...when → Complex patterns
-
-### Maintaining Consistency
-
-**Terminology standards:**
-- "directive" not "command" for `/show`, `/var`, etc.
-- "command" for shell commands in `run {}`
-- "executable" for `/exe` definitions
-- "template" for backticks/double-colon/triple-colon
-- "module" not "library" or "package"
-
-**Variable naming in examples:**
-- Realistic: `@userName`, `@items`, `@config`
-- Not: `@foo`, `@bar`, `@test`, `@x` (unless showing iteration)
-- Arrays: plural (`@items`, `@users`, `@files`)
-- Objects: singular (`@user`, `@config`, `@response`)
-
-**Code block language tags:**
-- Always use ```mlld for mlld code
-- Use ```bash for shell examples
-- Use ```json for config examples
-- Use ```yaml for frontmatter examples
-
-**Comment style:**
-- `>>` for start-of-line explanatory comments
-- `<<` or `>>` at end of line for inline notes
-- `# Output:` for showing command output
-- Don't overuse - prefer self-explanatory code
-
-## Structure Benefits
-
-Why pseudo-XML + markdown works for LLMs:
-
-- **LLM navigation** - Can jump to specific sections via tags (`<COMMANDS>`, `<SYNTAX>`)
-- **Scannable examples** - Markdown code blocks with syntax highlighting
-- **Clear boundaries** - Tags mark semantic sections without verbose XML
-- **Minimal overhead** - No CDATA, no attributes, no deep nesting
-- **Grep-friendly** - Maintainers can quickly find sections
-- **No conflicts** - Detection rule prevents mlld file syntax from triggering XML parsing
-- **Progressive disclosure** - TOC shows structure, LLMs can dive into needed sections only
-
-This hybrid provides optimal comprehension while preserving clarity of markdown examples.
+**Module order** (defined in script):
+1. overview
+2. core-rules
+3. syntax
+4. commands
+5. control-flow
+6. modules
+7. patterns
+8. configuration
+9. mistakes
+10. security
+11. reference
+12. cookbook
 
 ## Testing Changes
 
-**Before committing llms.txt updates:**
-
 1. **Validate syntax:**
    ```bash
-   # Test all code examples parse correctly
-   npm run ast -- '/var @test = "hello"'
-   npm run ast -- path/to/temp-test.mld
+   npm run ast -- 'var @test = "hello"'
    ```
 
-2. **Test with LLM queries:**
-   - Copy relevant section
-   - Ask LLM: "Write an example showing X"
-   - Verify output matches expected syntax
-   - Test edge cases and common variations
-
-3. **Check for conflicts:**
+2. **Regenerate and check:**
    ```bash
-   # Search for duplicate guidance
-   grep -n "run sh" llms.txt
-   grep -n "/when" llms.txt
-
-   # Look for contradictory advice
-   grep -A5 -B5 "pattern" llms.txt
+   mlld run llmstxt
+   head -20 llms-combined.txt
    ```
 
-4. **Verify all examples:**
-   - Create temp directory: `tmp/llmstxt-test/`
-   - Extract multi-line examples
-   - Run: `mlld run temp-script.mld`
-   - Check output matches expectations
+3. **Test with LLM:**
+   - Feed relevant module
+   - Ask LLM to write example code
+   - Verify output uses strict mode and correct patterns
 
-5. **Keep TOC in sync:**
-   - Verify all top-level `<SECTION>` tags listed in TOC
-   - Update descriptions if section purpose changed
-   - Check line numbers/references are approximate but reasonable
-
-6. **Cross-references work:**
-   - Search for all `<SECTION_NAME>` references
-   - Verify target sections exist
-   - Ensure no typos in tag names
-
-## Gotchas
-
-**Avoid these common issues when updating llms.txt:**
-
-- **Nested function examples requiring too much context** - Keep examples self-contained
-- **Using deprecated syntax** - Check current grammar before adding examples
-- **Tag name collisions** - Don't use tags that could be valid mlld file refs (no `<file.txt>` style tags)
-- **Inconsistent terminology** - Stick to established terms (directive, executable, template, etc.)
-- **Over-explaining obvious code** - Let examples speak for themselves
-- **Forgetting to update version** - Bump `<MLLD_GUIDE version="">` for significant changes
-- **Breaking change without marking** - Add note if syntax changed incompatibly
-- **Adding features before they ship** - Only document released features
-- **Copying examples without testing** - Always validate code runs
-- **Cross-referencing with wrong tag names** - Double-check section exists
-
-## Current Improvement Opportunities
-
-Actionable suggestions for enhancing llms.txt:
-
-### High Priority
-
-1. **Add "First 5 Minutes" quick reference** - Absolute minimum to write working mlld:
-   ```markdown
-   <QUICK_START>
-   Essential syntax to get started:
-   - Variables: /var @name = "value"
-   - Output: /show @name
-   - Commands: /run cmd {echo "hello"}
-   - Templates: `Hello @name`
-   - Files: <README.md>
-   </QUICK_START>
+4. **Check for deprecated syntax:**
+   ```bash
+   grep -n "run {" docs/llm/*.txt  # should use run cmd {}
+   grep -n "/var\|/show\|/for" docs/llm/*.txt  # should be bare directives
    ```
 
-2. **Add more common mistakes** from recent patterns:
-   - `<MISTAKE_WHEN_WITHOUT_ARROW>` - Using `/when @cond show` instead of `/when @cond => show`
-   - `<MISTAKE_FOREACH_VS_FOR>` - Confusion between `foreach` (transform) and `/for` (execute)
-   - `<MISTAKE_VAR_IN_COMMAND_POSITION>` - Using `/@var` instead of in value position
+## Version Management
 
-3. **Improve cross-referencing** - Add more "See <SECTION>" pointers:
-   - CORE_RULES → detailed sections
-   - SYNTAX → PATTERNS for usage examples
-   - COMMANDS → CONTROL_FLOW for decision logic
+Update version in:
+1. `llms.txt` header: `<MLLD_GUIDE version="X.Y.Z">`
+2. `llms-overview.txt` header
+3. Regenerate combined (picks up version from package.json)
 
-### Medium Priority
-
-4. **Standardize example realism** - Some use real-world names, others generic:
-   - Audit all examples for `@foo`, `@x`, `@test`
-   - Replace with realistic: `@userName`, `@config`, `@items`
-   - Exception: iteration variables (`@x`, `@n`) are fine
-
-5. **Add TOC priority indicators:**
-   ```markdown
-   <TOC>
-   🔥 <CORE_RULES> ............... Essential fundamentals
-   🔥 <SYNTAX> ................... Common syntax patterns
-   ⚡ <COMMANDS> .................. Directive reference
-   ⚡ <CONTROL_FLOW> .............. Decisions and iteration
-   📚 <MODULES> ................... Advanced modularity
-   ```
-
-6. **Consolidate decision trees** - Standardize format across all "X vs Y" sections:
-   ```markdown
-   Decision tree:
-   * Condition 1 → Use X
-   * Condition 2 → Use Y
-   * Condition 3 → Use Z
-   ```
-
-### Low Priority
-
-7. **Add output annotations** - More examples showing expected output:
-   ```mlld
-   /show `2 + 2 = @{run js {return 2+2}}`
-   # Output: 2 + 2 = 4
-   ```
-
-8. **Create visual separators** for long sections - Help LLMs parse boundaries in dense content
-
-9. **Performance notes** where relevant - When to use foreach vs /for, parallel patterns, etc.
-
-10. **Link to test cases** - Reference specific test files for complex examples:
-    ```markdown
-    See tests/cases/valid/feat/foreach/ for comprehensive examples.
-    ```
+Version should match mlld release version.
 
 ## Related Documentation
 
 - **docs/dev/DOCS.md** - General documentation principles
 - **docs/dev/USERDOCS.md** - User-facing documentation guide
-- **docs/user/** - Detailed user documentation (reference from llms.txt for exhaustive coverage)
-- **tests/cases/valid/feat/** - Comprehensive test cases demonstrating features
+- **docs/user/** - Detailed user documentation
+- **tests/cases/valid/feat/** - Comprehensive test cases

@@ -1,0 +1,2465 @@
+<MLLD_COMPLETE_GUIDE version="2.0.0-rc78">
+
+This is the complete mlld reference guide, combining all documentation modules.
+For modular access, see individual files in docs/llm/.
+
+Generated: 2026-01-02T00:44:04.528Z
+
+<MLLD_OVERVIEW version="2.0.0-rc78">
+
+mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps.
+
+<TWO_MODES>
+mlld has two syntax modes based on file extension:
+
+**.mld files (strict mode)** - Default for scripts
+- Bare directives: `var @x = 1` (no slash prefix)
+- Text lines are errors (catches accidental output)
+- Blank lines ignored (formatting whitespace)
+
+**.mld.md files (markdown mode)** - For documentation/literate scripts
+- Slash prefix required: `/var @x = 1`
+- Text lines become content output
+- Designed for mixing prose with executable code
+
+This guide uses **strict mode** (bare directives) in all examples. To use markdown mode, add `/` prefix to each directive.
+
+```mlld
+>> Strict mode (.mld)
+var @name = "Alice"
+show `Hello @name!`
+
+>> Markdown mode (.mld.md) - same code with slashes
+/var @name = "Alice"
+/show `Hello @name!`
+```
+</TWO_MODES>
+
+<MENTAL_MODEL>
+What mlld IS:
+
+* A workflow orchestrator (like Make + npm for the AI era)
+* A conductor's baton (you conduct, tools play)
+* Executable documentation (reads like a guide, runs like a script)
+* A logical router (route data and actions based on conditions)
+
+What mlld ISN'T:
+
+* A template engine (not Jinja/Handlebars)
+* A shell script replacement (it orchestrates shells; doesn't replace them)
+
+Mental model shift:
+
+* "How do I implement this?" → "What tool/module handles this?"
+* "I need an if-statement" → "I need a decision point"
+* "Let me concatenate strings" → "Let me create a template"
+
+Think Docker Compose or GitHub Actions: declare what happens, don't program how.
+</MENTAL_MODEL>
+
+<KEY_CONCEPTS>
+**Directives** - Commands that do things: `var`, `show`, `run`, `for`, `when`, `import`, `export`
+
+**Variables** - Always prefixed with `@`: `@name`, `@data`, `@result`
+
+**Templates** - Backticks or `::...::` for interpolation: `` `Hello @name` ``
+
+**File loading** - Angle brackets load content: `<README.md>`, `<src/*.ts>`
+
+**Pipelines** - Chain transformations: `@data | @json | @validate`
+
+**Executables** - Reusable functions: `exe @greet(name) = `Hello @name!``
+
+**Modules** - Import/export for code reuse: `import { @helper } from @corp/utils`
+</KEY_CONCEPTS>
+
+</MLLD_OVERVIEW>
+
+
+<MLLD_CORE_RULES>
+
+<RULE_1_DIRECTIVES>
+In strict mode (.mld), directives are bare keywords. In markdown mode (.mld.md), prefix with `/`.
+
+```mlld
+>> Strict mode
+var @greeting = `Hello @name!`
+show @greeting
+
+>> What NOT to do
+Hello @name! Let me show something.   >> This is an error in strict mode
+```
+</RULE_1_DIRECTIVES>
+
+<RULE_2_VARIABLE_SYNTAX>
+Create with `var @name = value`. Reference with `@name` in templates/commands.
+
+```mlld
+var @name = "Alice"
+show `Hello @name!`
+run cmd {echo "User: @name"}
+run js (@name) { console.log("Hi", name) }
+```
+</RULE_2_VARIABLE_SYNTAX>
+
+<RULE_3_COMMANDS_NEED_BRACES>
+Every command needs braces. Use language specifiers: `cmd {}` for simple commands, `sh {}` for shell scripts, `js {}` for code.
+
+```mlld
+>> Language specifiers
+run cmd {echo "hello"}       >> simple commands (pipes only)
+run sh {npm test && build}   >> shell scripts (&&, ||, multi-line)
+run js {console.log("hi")}   >> JavaScript code
+
+>> Executables
+exe @hi() = cmd {echo hi}
+exe @script() = sh { echo "multi"; ls -la }
+exe @calc(x) = js { return x * 2 }
+```
+</RULE_3_COMMANDS_NEED_BRACES>
+
+<RULE_4_OUTPUT_SOURCES>
+Only these produce output: `show`, `run`, `output`. Everything else mutates state.
+
+```mlld
+var @secret = "hidden"      >> no output
+show `Visible`
+run cmd {echo "Also visible"}
+```
+</RULE_4_OUTPUT_SOURCES>
+
+<RULE_5_INTERPOLATION_CONTEXTS>
+Default to `::...::` or backticks for templates. Use `@var` for interpolation.
+
+| Syntax | Interpolation | Use For |
+|--------|---------------|---------|
+| `` `...` `` | `@var` `<file>` | Default inline |
+| `::...::` | `@var` `<file>` | When backticks in text |
+| `"..."` | `@var` `<file>` | Single-line only |
+| `'...'` | None (literal) | Literal text |
+| `{...}` | `@var` `<file>` | Commands/code |
+
+```mlld
+>> Backticks (default)
+var @msg = `Hello @name!`
+
+>> Double-colon (when text has backticks)
+var @doc = ::Use `npm test` before @env::
+
+>> Double quotes (single-line)
+var @path = "@base/files/@filename"
+
+>> Single quotes (literal - no interpolation)
+var @literal = '@name stays literal'
+```
+
+Loops work inside templates:
+
+```mlld
+var @list = `
+for @item in @items
+- @item.name: @item.value
+end
+`
+```
+</RULE_5_INTERPOLATION_CONTEXTS>
+
+<RULE_6_FIELD_ACCESS>
+Objects/arrays use dot notation. Arrays support slicing. Methods available on values.
+
+```mlld
+var @user = {"name":"Alice","scores":[10,20,30]}
+show @user.name            >> Alice
+show @user.scores.1        >> 20
+
+>> Array slicing
+var @arr = [1,2,3,4,5]
+show @arr[0:3]             >> [1,2,3]
+show @arr[-2:]             >> [4,5] - last 2
+
+>> Builtin methods
+var @list = ["apple", "banana"]
+show @list.includes("banana")      >> true
+show @list.join(", ")              >> "apple, banana"
+
+var @text = "Hello World"
+show @text.toLowerCase()           >> "hello world"
+show @text.split(" ")              >> ["Hello", "World"]
+show @text.trim().startsWith("H")  >> true (chained)
+```
+</RULE_6_FIELD_ACCESS>
+
+<RULE_7_PARAMETERIZED_CONTENT>
+Use `exe` for reusable templates, commands, or complex logic with blocks.
+
+```mlld
+>> Simple template
+exe @greet(name) = `Hello @name!`
+show @greet("Bob")
+
+>> Command
+exe @list(dir) = cmd {ls -la @dir | head -5}
+
+>> Block syntax for multi-statement bodies
+exe @process(data) = [
+  let @validated = @validate(@data)
+  let @transformed = @transform(@validated)
+  => @transformed
+]
+```
+</RULE_7_PARAMETERIZED_CONTENT>
+
+<RULE_8_FILE_LOADING>
+Angle brackets load file contents. Works with globs and AST selectors.
+
+```mlld
+var @content = <README.md>              >> file contents
+var @config = <config.json>             >> parsed as object
+var @author = <package.json>.author     >> field access
+
+>> Globs
+var @docs = <docs/**/*.md>
+show @docs.length                       >> number of files
+for @doc in @docs => show @doc.mx.filename
+
+>> AST selectors (code extraction)
+var @funcs = <src/api.ts { *fn }>       >> all functions
+var @handler = <api.ts { handleRequest }> >> specific function
+```
+
+Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are file refs. XML-like `<TAG>` is plain text.
+</RULE_8_FILE_LOADING>
+
+<RULE_9_IMPORTS>
+Module imports for code reuse. Namespace imports avoid collisions.
+
+```mlld
+>> Registry modules
+import { @parallel, @retry } from @mlld/core
+import @corp/utils as @corp
+
+>> Local files
+import { @helper } from "./utils.mld"
+import { @config } from <@base/config.mld>
+
+>> Import types
+import module { @api } from @corp/tools       >> cached
+import static { @prompt } from "./prompt.md"  >> embedded at parse
+import live <https://status.io> as @status    >> always fresh
+
+>> Directory imports
+import "@agents" as @agentRegistry
+show @agentRegistry.alice.tldr
+```
+</RULE_9_IMPORTS>
+
+<RULE_10_WHEN_DECISIONS>
+`when` for conditionals. Use `first` for switch-style (stops at first match).
+
+```mlld
+>> Simple condition
+when @isProd => show "Production mode"
+
+>> Switch-style (first match wins)
+when first [
+  @role == "admin" => show "Admin"
+  @role == "user"  => show "User"
+  * => show "Guest"
+]
+
+>> Bare when (evaluates all matches)
+when [
+  @score > 90 => show "Excellent!"
+  @hasBonus => show "Bonus earned!"
+  none => show "No matches"
+]
+```
+</RULE_10_WHEN_DECISIONS>
+
+<RULE_11_ITERATION>
+`foreach` transforms collections. `for` executes or collects.
+
+```mlld
+>> foreach (transform array)
+var @names = ["alice", "bob"]
+exe @greet(name) = `Hi @name!`
+var @greetings = foreach @greet(@names)
+
+>> for (execute per item)
+for @n in @names => show `Name: @n`
+
+>> for (collect results)
+var @doubled = for @x in [1,2,3] => @x * 2
+
+>> for with block syntax
+for @item in @items [
+  let @processed = @transform(@item)
+  show `Done: @processed`
+]
+
+>> Parallel execution
+for parallel(3) @task in @tasks => @runTask(@task)
+
+>> For with inline filter
+var @valid = for @x in @items when @x != null => @x
+```
+</RULE_11_ITERATION>
+
+<RULE_12_OPERATORS>
+Logical, comparison, and ternary operators.
+
+```mlld
+>> Comparison: <, >, <=, >=, ==, !=
+>> Logical: &&, ||, !
+>> Ternary: condition ? trueVal : falseVal
+
+var @isValid = @score > 80 && @submitted
+var @status = @isPro ? "premium" : "basic"
+var @canEdit = @isOwner || (@role == "editor" && !@isLocked)
+
+>> In conditions
+when @tokens > 1000 && @mode == "production" => show "High usage"
+```
+</RULE_12_OPERATORS>
+
+<RULE_13_STATE_MANAGEMENT>
+State updates via `state://` protocol. SDK captures writes without filesystem I/O.
+
+```mlld
+var @count = @state.count + 1
+output @count to "state://count"
+```
+
+```typescript
+// SDK provides state, captures writes
+execute(file, payload, { state: { count: 0 } });
+// Returns: { stateWrites: [{ path: 'count', value: 1 }] }
+```
+</RULE_13_STATE_MANAGEMENT>
+
+</MLLD_CORE_RULES>
+
+
+<MLLD_SYNTAX>
+
+<VARIABLES>
+Create primitives, arrays, objects, or assign from command/code results.
+
+```mlld
+var @n = 42
+var @price = 19.99
+var @ok = true
+var @arr = [1, 2, 3]
+var @obj = {"key": "value"}
+var @merged = { ...@obj, "extra": 1 }    >> object spread
+
+exe @add(a, b) = js { return a + b }
+var @sum = @add(@n, 8)         >> 50 (number preserved)
+
+var @date = cmd {date}         >> command result
+var @readme = <README.md>      >> file contents
+```
+
+**Conditional inclusion** (`@var?`): omit content when variable is falsy.
+
+```mlld
+var @tools = "json"
+var @empty = ""
+
+>> In commands: @var?`...`
+run cmd { echo @tools?`--tools "@tools"` @empty?`--empty` }
+>> Output: --tools "json" (--empty omitted)
+
+>> In arrays
+var @list = [@a, @b?, @c]   >> @b omitted if falsy
+
+>> In objects
+var @obj = {"name": @n, "title"?: @t}   >> title omitted if @t falsy
+```
+
+Truthiness: falsy = `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`
+</VARIABLES>
+
+<TEMPLATES>
+Prefer backticks; use `::` for backticks-in-text.
+
+```mlld
+var @message = `Hello @name, welcome!`
+var @doc = ::Use `mlld` to orchestrate::
+
+>> Multi-line
+var @report = `
+Status: @status
+Config: <@base/config.json>
+Data: @data|@json
+`
+```
+
+**When-expressions in templates:**
+
+```mlld
+var @status = when [ @score > 90 => "A" * => "F" ]
+var @arr = [ 1, when [ @flag => 2 ], 3 ]
+```
+
+**Loops in templates:**
+
+```mlld
+var @toc = `
+for @item in @items
+- @item.name
+end
+`
+```
+
+Note: `for` and `end` must be at line start inside template body.
+</TEMPLATES>
+
+<FILE_LOADING>
+Angle brackets load file contents. Supports field access, globs, and AST selection.
+
+```mlld
+>> Basic loading
+var @content = <README.md>
+var @config = <config.json>          >> auto-parsed as object
+var @author = <package.json>.author  >> field access
+
+>> Globs (returns array)
+var @docs = <docs/**/*.md>
+show @docs.length
+for @doc in @docs => show @doc.mx.filename
+
+>> With "as" template
+var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
+```
+
+**AST Selection** (extract code from files):
+
+```mlld
+>> Exact names
+var @handler = <src/api.ts { createUser }>
+
+>> Wildcards
+var @handlers = <api.ts { handle* }>         >> prefix match
+var @validators = <api.ts { *Validator }>    >> suffix match
+
+>> Type filters
+var @funcs = <service.ts { *fn }>            >> all functions
+var @classes = <service.ts { *class }>       >> all classes
+
+>> Name listing (returns string arrays)
+var @names = <api.ts { ?? }>                 >> all definition names
+var @funcNames = <api.ts { fn?? }>           >> function names only
+```
+
+Supported: `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.go`, `.rs`, `.java`, `.rb`
+Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
+
+**Metadata fields** (via `.mx`):
+
+```mlld
+var @file = <README.md>
+show @file.mx.filename     >> "README.md"
+show @file.mx.relative     >> relative path
+show @file.mx.tokens       >> token count estimate
+show @file.mx.fm.title     >> frontmatter field
+```
+
+**JSON string accessors** (`.data` and `.text`):
+
+```mlld
+>> When you have a JSON string and need to parse it
+var @jsonStr = '[{"name":"Alice"},{"name":"Bob"}]'
+var @parsed = @jsonStr.data          >> parses JSON string to array/object
+show @parsed.0.name                  >> "Alice"
+
+>> When you have an object and need the JSON string
+var @obj = {"name": "Alice"}
+var @str = @obj.text                 >> stringified JSON
+show @str                            >> '{"name":"Alice"}'
+
+>> Common in pipelines with LLM responses
+var @response = @llm("return JSON") | @json.llm
+var @items = @response.data          >> if response is JSON string
+```
+</FILE_LOADING>
+
+<BUILTIN_METHODS>
+Arrays and strings have builtin methods.
+
+**Array methods:**
+- `@arr.includes(value)` - true if contains value
+- `@arr.indexOf(value)` - index or -1
+- `@arr.length` - array length
+- `@arr.join(separator)` - join to string
+
+**String methods:**
+- `@str.includes(sub)` - true if contains substring
+- `@str.indexOf(sub)` - index or -1
+- `@str.length` - string length
+- `@str.toLowerCase()` / `toUpperCase()`
+- `@str.trim()` - remove whitespace
+- `@str.startsWith(prefix)` / `endsWith(suffix)`
+- `@str.split(separator)` - split to array
+
+```mlld
+var @fruits = ["apple", "banana", "cherry"]
+var @message = "Hello World"
+
+show @fruits.includes("banana")    >> true
+show @fruits.join(" and ")         >> "apple and banana and cherry"
+show @message.toLowerCase()        >> "hello world"
+show @message.split(" ")           >> ["Hello", "World"]
+
+>> Method chaining
+show @message.trim().toLowerCase().startsWith("hello")  >> true
+```
+</BUILTIN_METHODS>
+
+<PIPELINES>
+Chain stages with `|`. Built-ins: `@json`, `@xml`, `@csv`, `@md`.
+
+```mlld
+var @users = cmd {cat users.json} | @json | @csv
+
+>> Custom functions in pipelines
+exe @double(n) = js { return n * 2 }
+var @x = cmd {echo "5"} | @double
+
+>> JSON parsing modes
+var @relaxed = @input | @json.loose   >> single quotes, trailing commas
+var @strict = @input | @json.strict   >> strict JSON only
+var @extracted = @llmResponse | @json.llm  >> extract from LLM response
+```
+
+**Pipeline context:**
+- `@mx.try` - current attempt number
+- `@mx.stage` - current stage name
+- `@p[-1]` - previous stage output
+
+**Retry in pipelines:**
+
+```mlld
+exe @validator(input) = when [
+  @input.valid => @input
+  @mx.try < 3 => retry "need more detail"
+  * => "fallback"
+]
+var @result = @raw | @validator
+```
+
+**Parallel groups:**
+
+```mlld
+>> Two transforms run concurrently
+var @results = || @fetchA() || @fetchB() || @fetchC()
+
+>> With concurrency cap
+var @capped = || @a() || @b() || @c() (2, 100ms)  >> cap=2, 100ms pacing
+```
+</PIPELINES>
+
+<COMMENTS>
+Use `>>` at start of line or `<<` at end.
+
+```mlld
+>> This is a comment
+var @x = 5    << end-of-line comment
+show @x       >> also works here
+```
+</COMMENTS>
+
+<RESERVED_VARIABLES>
+- `@now` - current timestamp
+- `@input` - stdin/env (must be allowed in config)
+- `@base` - project root path
+- `@debug` - environment info
+- `@fm` - current file's frontmatter (in modules)
+</RESERVED_VARIABLES>
+
+</MLLD_SYNTAX>
+
+
+<MLLD_COMMANDS>
+
+<RUN_COMMAND>
+Execute shell commands or code. Language specifier determines execution context.
+
+**Decision tree:**
+- Single line + pipes only → `cmd { ... }` (safe, recommended)
+- Needs `&&`, `||`, control flow → `sh { ... }` (full shell)
+- JavaScript/Python code → `js { ... }` / `python { ... }`
+
+```mlld
+>> cmd (pipes only, safe)
+run cmd {echo Hello | tr '[:lower:]' '[:upper:]'}
+var @date = cmd {date}
+
+>> sh (full shell scripts)
+run sh {
+  npm test && npm run build || echo "Build failed"
+}
+
+>> js/python (code execution)
+run js {console.log("hello")}
+var @result = js {return 42}
+```
+
+**Working directory override:**
+
+```mlld
+run cmd:/ {pwd}                    >> runs in /
+run sh:/tmp {pwd}                  >> runs in /tmp
+run js:/tmp {console.log(process.cwd())}
+```
+
+**Stdin support:**
+
+```mlld
+var @data = '[{"name":"Alice"}]'
+run cmd { cat | jq '.[]' } with { stdin: @data }
+
+>> Pipe sugar (equivalent)
+run @data | { cat | jq '.[]' }
+```
+
+**Parameter syntax by language:**
+- `cmd`: interpolate with `@param`
+- `sh`: use shell variables as `$param`
+- `js/python`: parameters passed as variables
+</RUN_COMMAND>
+
+<EXE_EXECUTABLES>
+Define reusable commands, code, templates, or multi-statement blocks.
+
+**Simple forms:**
+
+```mlld
+>> Command
+exe @list(dir) = cmd {ls -la @dir | head -5}
+
+>> JavaScript
+exe @add(a, b) = js { return a + b }
+
+>> Template
+exe @greet(name) = `Hello @name!`
+
+>> External template file
+exe @welcome(name, role) = template "./prompts/welcome.att"
+```
+
+**Block syntax** (multi-statement bodies):
+
+```mlld
+exe @process(data) = [
+  let @validated = @validate(@data)
+  let @transformed = @transform(@validated)
+  => @transformed
+]
+
+>> With accumulation
+exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]
+```
+
+Block rules:
+- Use `[...]` for multi-statement bodies
+- `let @var = value` for block-scoped variables
+- `let @var += value` for accumulation (arrays/strings/objects)
+- `=> value` required as last statement for return
+
+**When-first in exe** (value-returning):
+
+```mlld
+exe @classify(score) = when first [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  @score >= 70 => "C"
+  * => "F"
+]
+
+>> With blocks for side effects
+exe @handler(input) = when first [
+  @input.valid => [
+    show "Processing..."
+    let @result = @transform(@input)
+    => @result
+  ]
+  * => { error: "Invalid input" }
+]
+```
+
+**Shadow environments** (expose JS helpers):
+
+```mlld
+exe @double(n) = js { return n * 2 }
+exe @cap(s) = js { return s[0].toUpperCase() + s.slice(1) }
+exe js = { double, cap }  >> expose to all js blocks
+
+var @out = js { cap("hello") + ": " + double(5) }  >> "Hello: 10"
+```
+</EXE_EXECUTABLES>
+
+<OUTPUT_DIRECTIVE>
+Write data to files or streams.
+
+```mlld
+output @content to "out.txt"
+output @data to "config.json"
+output @message to stdout
+output @error to stderr
+output @config to "settings.yaml" as yaml
+```
+</OUTPUT_DIRECTIVE>
+
+<LOG_DIRECTIVE>
+Syntactic sugar for `output to stdout`. Works in action contexts.
+
+```mlld
+log @message                        >> same as output @message to stdout
+log `Processing: @item`
+
+>> In action contexts
+for @item in @items => log @item
+when @debug => log "Debug info"
+```
+</LOG_DIRECTIVE>
+
+<APPEND_DIRECTIVE>
+Append newline-delimited records.
+
+```mlld
+append @record to "events.jsonl"        >> JSON object per line
+append "raw line" to "events.log"
+
+>> In pipelines
+var @_ = @data | append "audit.jsonl"
+
+>> In loops
+for @name in @runs => append @name to "pipeline.log"
+```
+
+`.jsonl` enforces JSON serialization. Other extensions write text. `.json` blocked.
+</APPEND_DIRECTIVE>
+
+<STREAMING>
+Stream output during execution.
+
+```mlld
+stream @claude("prompt")           >> keyword form
+stream @generateReport()           >> directive form
+
+>> Parallel streams
+stream @a() || stream @b()         >> concurrent, buffered results
+```
+
+Suppress: `--no-stream` flag or `MLLD_NO_STREAM=true`
+</STREAMING>
+
+</MLLD_COMMANDS>
+
+
+<MLLD_CONTROL_FLOW>
+
+<WHEN_DECISIONS>
+`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).
+
+**Simple form:**
+
+```mlld
+when @isProd => show "Production mode"
+when @score > 90 => show "Excellent!"
+```
+
+**Bare form** (evaluates all matching conditions):
+
+```mlld
+when [
+  @score > 90 => show "Excellent!"
+  @hasBonus => show "Bonus earned!"
+  none => show "No matches"        >> runs only if nothing matched
+]
+```
+
+**First form** (stops at first match, like switch):
+
+```mlld
+when first [
+  @role == "admin" => show "Admin panel"
+  @role == "user"  => show "User dashboard"
+  * => show "Guest view"           >> wildcard catches all
+]
+```
+
+**Value-returning when** (in exe):
+
+```mlld
+exe @classify(score) = when first [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "F"
+]
+
+var @grade = @classify(85)  >> "B"
+```
+
+**Block actions** (side effects + return):
+
+```mlld
+var @result = when first [
+  @needsProcessing => [
+    show "Processing..."
+    let @processed = @transform(@data)
+    => @processed
+  ]
+  * => @data
+]
+```
+
+**Local variables in when:**
+
+```mlld
+when @mode: [
+  let @prefix = "Status:"
+  "active" => show "@prefix Active"
+  "pending" => show "@prefix Pending"
+  * => show "@prefix Unknown"
+]
+```
+
+**Augmented assignment:**
+
+```mlld
+exe @collect() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  * => @items  >> ["a", "b"]
+]
+```
+
+`+=` works with arrays (concat), strings (append), objects (merge).
+
+**Operators in conditions:**
+- Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+- Logical: `&&`, `||`, `!`
+- Parentheses: `(@a || @b) && @c`
+
+```mlld
+when first [
+  @role == "admin" || @role == "mod" => show "Privileged"
+  @active && @verified => show "Active user"
+  !@banned => show "Allowed"
+  * => show "Blocked"
+]
+```
+</WHEN_DECISIONS>
+
+<FOR_ITERATION>
+`for` iterates over collections. Arrow form for single actions, block form for multiple.
+
+**Arrow form:**
+
+```mlld
+for @item in @items => show `Processing @item`
+for @n in [1,2,3] => log @n
+```
+
+**Collection form** (returns results):
+
+```mlld
+var @doubled = for @x in [1,2,3] => @x * 2     >> [2, 4, 6]
+var @names = for @user in @users => @user.name
+```
+
+**Block form:**
+
+```mlld
+for @item in @items [
+  let @processed = @transform(@item)
+  show `Done: @processed`
+]
+
+>> Collection with block
+var @results = for @item in @items [
+  let @step1 = @validate(@item)
+  let @step2 = @transform(@step1)
+  => @step2
+]
+```
+
+**For with inline filter:**
+
+```mlld
+var @valid = for @x in @items when @x != null => @x
+var @admins = for @u in @users when @u.role == "admin" => @u.name
+```
+
+**Skip keyword** (drop items from results):
+
+```mlld
+var @filtered = for @x in @items => when [
+  @x.valid => @x
+  none => skip      >> omit this item from results
+]
+
+>> Equivalent to inline filter, but allows complex logic
+var @processed = for @item in @data => when first [
+  @item.type == "a" => @transformA(@item)
+  @item.type == "b" => @transformB(@item)
+  * => skip         >> unknown types dropped
+]
+```
+
+**Object iteration:**
+
+```mlld
+var @cfg = {"host": "localhost", "port": 3000}
+for @v in @cfg => show `@v.mx.key: @v`
+>> Output: host: localhost, port: 3000
+```
+
+**Nested for:**
+
+```mlld
+for @x in ["A","B"] => for @y in [1,2] => show `@x-@y`
+>> Output: A-1, A-2, B-1, B-2
+```
+
+**Batch pipelines** (process collected results):
+
+```mlld
+var @total = for @n in [1,2,3,4] => @n => | @sum
+var @sorted = for @item in @items => @process(@item) => | @sortBy("priority")
+```
+</FOR_ITERATION>
+
+<PARALLEL_FOR>
+Run iterations concurrently with `for parallel`.
+
+```mlld
+>> Default concurrency (MLLD_PARALLEL_LIMIT, default 4)
+for parallel @x in @items => show @x
+
+>> Custom concurrency cap
+for parallel(3) @task in @tasks => @runTask(@task)
+
+>> With pacing (delay between starts)
+for parallel(2, 1s) @x in @items => @process(@x)
+```
+
+**Parallel blocks:**
+
+```mlld
+for parallel(3) @task in @tasks [
+  let @result = @runTask(@task)
+  show `Done: @task.id`
+]
+```
+
+**Error handling:**
+- Errors accumulate in `@mx.errors`
+- Failed iterations add error markers to results
+- Outer-scope writes blocked (use block-scoped `let` only)
+
+```mlld
+exe @process(tasks) = [
+  let @results = for parallel @t in @tasks => @run(@t)
+  => when [
+    @mx.errors.length == 0 => @results
+    * => @repair(@results, @mx.errors)
+  ]
+]
+```
+</PARALLEL_FOR>
+
+<FOREACH>
+`foreach` applies a function to each element, returning transformed array.
+
+```mlld
+var @names = ["alice", "bob", "charlie"]
+exe @greet(name) = `Hi @name!`
+
+var @greetings = foreach @greet(@names)
+>> ["Hi alice!", "Hi bob!", "Hi charlie!"]
+```
+
+**In exe:**
+
+```mlld
+exe @wrapAll(items) = foreach @wrap(@items)
+show @wrapAll(["a", "b"])  >> ["[a]", "[b]"]
+```
+
+**With options:**
+
+```mlld
+show foreach @greet(@names) with { separator: " | " }
+>> "Hi alice! | Hi bob! | Hi charlie!"
+```
+</FOREACH>
+
+<WHILE_LOOPS>
+Bounded iteration with `while`.
+
+```mlld
+exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+
+var @result = 5 | while(10) @countdown
+```
+
+**Control keywords:**
+- `done @value` - Terminate, return value
+- `done` - Terminate, return current state
+- `continue @value` - Next iteration with new state
+- `continue` - Next iteration with current state
+
+**While context** (`@mx.while`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap
+- `active` - true when inside while
+
+**With pacing:**
+
+```mlld
+var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
+```
+</WHILE_LOOPS>
+
+<NO_EARLY_EXIT>
+mlld has no `return` or `exit`. Model outcomes with `when` and flags.
+
+```mlld
+>> Instead of early return, use conditional flow
+var @check = @validate(@input)
+when [
+  @check.valid => @process(@input)
+  !@check.valid => show `Error: @check.message`
+]
+```
+</NO_EARLY_EXIT>
+
+</MLLD_CONTROL_FLOW>
+
+
+<MLLD_MODULES>
+
+<PHILOSOPHY>
+Module-first design: keep `.mld` files readable; move complexity into focused modules. Avoid "kitchen sink" modules or side effects on import.
+</PHILOSOPHY>
+
+<CREATING_MODULES>
+Modules require frontmatter and explicit exports.
+
+```mlld
+---
+name: text-utils
+author: alice
+version: 1.0.0
+about: String helpers
+license: CC0
+---
+
+needs {
+  js: []
+}
+
+exe @upper(s) = js { return s.toUpperCase() }
+exe @trim(s) = js { return s.trim() }
+
+export { @upper, @trim }
+```
+
+**Frontmatter fields:**
+- `name` - Module name (required for registry)
+- `author` - Your username (required for registry)
+- `version` - Semver version
+- `about` - Brief description
+- `license` - License (CC0 recommended)
+
+**Accessing frontmatter in module:**
+
+```mlld
+var @meta = {
+  id: @fm.id,
+  name: @fm.name,
+  version: @fm.version
+}
+```
+</CREATING_MODULES>
+
+<IMPORTING>
+Import from registry, local files, or URLs.
+
+**Registry modules:**
+
+```mlld
+import { @parallel, @retry } from @mlld/core
+import @corp/utils as @corp
+
+>> With version
+import { @helper } from @alice/utils@1.0.0
+import { @helper } from @alice/utils@^1.0.0   >> semver range
+```
+
+**Local files:**
+
+```mlld
+import { @helper } from "./utils.mld"
+import { @config } from <@base/config.mld>
+import { @prompt } from "../prompts/main.mld"
+```
+
+**Namespace imports:**
+
+```mlld
+import @alice/utils as @alice
+import @bob/utils as @bob
+
+show @alice.format(@data)
+show @bob.format(@data)   >> no collision
+```
+
+**Directory imports:**
+
+```mlld
+import "@agents" as @agentRegistry
+show @agentRegistry.alice.tldr
+show @agentRegistry.support.helper.name
+
+>> With options
+import "./agents" as @agents with { skipDirs: [] }
+```
+
+Directories auto-load `*/index.mld`. Default `skipDirs: ["_*", ".*"]`.
+</IMPORTING>
+
+<IMPORT_TYPES>
+Control caching and resolution behavior.
+
+| Type | Behavior | Use Case |
+|------|----------|----------|
+| `module` | Content-addressed cache | Registry modules (default) |
+| `static` | Embedded at parse time | Prompts, templates |
+| `live` | Always fresh | Status APIs |
+| `cached(TTL)` | Time-based cache | Feeds, configs |
+| `local` | Dev modules (llm/modules/) | Development |
+| `templates` | Directory of .att files | Template collections |
+
+```mlld
+import module { @api } from @corp/tools
+import static { @prompt } from "./prompt.md"
+import live <https://status.io> as @status
+import cached(1h) <https://feed.xml> as @feed
+import local { @dev } from @alice/experimental
+```
+
+**Template collections:**
+
+```mlld
+import templates from "@base/agents" as @agents(message, context)
+
+show @agents["alice"](@msg, @ctx)           >> agents/alice.att
+show @agents.support["helper"](@msg, @ctx)  >> agents/support/helper.att
+```
+
+Template collections require parameters. All templates in directory share the signature.
+</IMPORT_TYPES>
+
+<EXPORTING>
+Explicit exports required (auto-export is legacy).
+
+```mlld
+>> Export specific items
+export { @upper, @trim, @format }
+
+>> Common pattern: export config object
+var @meta = { id: @fm.id, name: @fm.name }
+exe @process(data) = [...]
+
+export { @meta, @process }
+```
+
+**Module patterns:**
+
+```mlld
+>> Library module
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku }
+exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet }
+export { @haiku, @sonnet }
+
+>> Config/agent module
+var @meta = { id: @fm.id, name: @fm.name }
+var @prompts = { primary: @primaryPrompt, optional: @optionalPrompt }
+export { @meta, @prompts }
+
+>> Gate module
+exe @gate(response, instruction, message) = [...]
+export { @gate }
+```
+</EXPORTING>
+
+<LOCAL_DEVELOPMENT>
+Dev modules live in `llm/modules/` (flat structure).
+
+```
+llm/modules/
+├── my-utils.mld.md    # author: alice, name: experimental
+└── helpers.mld        # author: bob, name: tools
+```
+
+```mlld
+import local { @helper } from @alice/experimental
+```
+
+Matched by frontmatter `author` and `name` fields.
+</LOCAL_DEVELOPMENT>
+
+<REGISTRY>
+Public registry at github.com/mlld-lang/registry.
+
+**Publishing:**
+
+```bash
+mlld publish my-tool.mld.md             # first time creates PR
+mlld publish my-tool.mld.md             # updates publish directly
+mlld publish --tag beta my-tool.mld.md  # with tag
+```
+
+**Installing:**
+
+```bash
+mlld install @alice/utils
+mlld install @alice/utils@1.0.0
+mlld update @alice/utils
+mlld ls                                  # list installed
+```
+
+**Lock files:**
+- `mlld-lock.json` auto-generated
+- Commit to version control
+- Only registry modules validated
+</REGISTRY>
+
+<RESOLVERS>
+Prefixes map `@` references to content sources.
+
+**Built-in:**
+- `@author/module` → Registry
+- `@base/file` → Project root
+- `./file.mld` → Local (with fuzzy extension matching)
+
+**Custom prefixes** (mlld-config.json):
+
+```json
+{
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@lib/",
+        "resolver": "LOCAL",
+        "config": { "basePath": "./src/lib" }
+      },
+      {
+        "prefix": "@company/",
+        "resolver": "GITHUB",
+        "config": {
+          "repository": "company/private-modules",
+          "branch": "main"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Quick setup:**
+
+```bash
+mlld alias --name notes --path ~/notes
+mlld alias --name shared --path ../shared --global
+mlld setup --github   # private repo wizard
+```
+</RESOLVERS>
+
+</MLLD_MODULES>
+
+
+<MLLD_PATTERNS>
+
+<TOOL_ORCHESTRATION>
+Coordinate multiple tools with data flow.
+
+```mlld
+var @areas = [
+  {"name": "auth", "files": ["auth/*.ts"], "tests": ["test/auth/*"]},
+  {"name": "api", "files": ["api/*.ts"], "tests": ["test/api/*"]}
+]
+
+exe @runQA(area) = cmd {echo "Testing @area.name" | cat}
+var @results = foreach @runQA(@areas)
+```
+</TOOL_ORCHESTRATION>
+
+<DATA_PIPELINES>
+Chain transformations with validation.
+
+```mlld
+import { @fetchData, @validate, @transform } from @data/pipeline
+
+var @raw = @fetchData("https://api.example.com/users")
+var @valid = @validate(@raw, { schema: "user" })
+var @report = @transform(@valid, { format: "report" })
+show `Processed @report.count users`
+```
+
+**With built-in transforms:**
+
+```mlld
+var @data = cmd {curl -s https://api.example.com/data}
+var @processed = @data | @json | @validate | @transform | @csv
+output @processed to "report.csv"
+```
+</DATA_PIPELINES>
+
+<CONDITIONAL_WORKFLOWS>
+Route execution based on conditions.
+
+```mlld
+import { @getPR, @commentOnPR } from @company/github
+
+var @pr = @getPR(@MLLD_PR_NUMBER)
+var @status = when first [
+  @pr.mergeable => "ready"
+  * => "blocked"
+]
+
+when [
+  @status == "ready" => @commentOnPR(@MLLD_PR_NUMBER, "Ready to merge")
+  @status == "blocked" => show "Needs attention"
+]
+```
+</CONDITIONAL_WORKFLOWS>
+
+<GUARDED_EXECUTION>
+Validate at each step before proceeding.
+
+```mlld
+var @processed = @data | @validate | @normalize | @analyze
+
+when [
+  @processed.ok => @emitReport(@processed)
+  !@processed.ok => show "Validation failed"
+]
+```
+</GUARDED_EXECUTION>
+
+<ROUTER_PATTERN>
+Score and route to different handlers.
+
+```mlld
+exe @router(message, handlers) = [
+  let @scores = for @h in @handlers => {
+    handler: @h.name,
+    score: @h.scorer(@message)
+  }
+  let @best = @scores | @sortBy("score") | @first
+  => when first [
+    @best.score > 0.7 => @handlers[@best.handler].handle(@message)
+    * => null
+  ]
+]
+```
+</ROUTER_PATTERN>
+
+<GATE_PATTERN>
+Validate or filter before proceeding.
+
+```mlld
+exe @gate(response, config) = [
+  let @check = @validate(@response)
+  => when first [
+    !@config.required => { pass: true }
+    @check.valid => { pass: true }
+    * => { pass: false, reason: @check.error }
+  ]
+]
+```
+</GATE_PATTERN>
+
+<PARALLEL_EXECUTION>
+Run independent tasks concurrently.
+
+```mlld
+>> Parallel for
+for parallel(3) @task in @tasks [
+  let @result = @runTask(@task)
+  show `Done: @task.id`
+]
+
+>> Parallel pipeline groups
+var @results = || @fetchA() || @fetchB() || @fetchC()
+
+>> With error handling
+exe @runAll(tasks) = [
+  let @results = for parallel @t in @tasks => @run(@t)
+  => when [
+    @mx.errors.length == 0 => @results
+    * => @repair(@results, @mx.errors)
+  ]
+]
+```
+</PARALLEL_EXECUTION>
+
+<LLM_INTEGRATION>
+Call LLMs with structured prompts.
+
+```mlld
+import { @haiku, @sonnet } from "@lib/claude.mld"
+
+exe @classify(text) = [
+  let @prompt = `Classify this text as positive/negative/neutral: @text`
+  let @response = @haiku(@prompt)
+  => @response.trim().toLowerCase()
+]
+
+exe @analyze(data) = [
+  let @prompt = `Analyze this data and return JSON: @data|@json`
+  let @response = @sonnet(@prompt)
+  => @response | @json.llm
+]
+```
+</LLM_INTEGRATION>
+
+<AGENT_DEFINITION>
+Define agent configuration modules.
+
+```mlld
+---
+id: my-agent
+name: My Agent
+---
+
+var @meta = {
+  id: @fm.id,
+  name: @fm.name,
+  workDir: "/path/to/work"
+}
+
+exe @systemPrompt(context) = template "./prompts/system.att"
+exe @primaryPrompt(msg, ctx) = template "./prompts/primary.att"
+
+var @prompts = {
+  primary: @primaryPrompt
+}
+
+export { @meta, @prompts, @systemPrompt }
+```
+</AGENT_DEFINITION>
+
+</MLLD_PATTERNS>
+
+
+<MLLD_CONFIGURATION>
+
+<CONFIG_FILES>
+mlld uses dual configuration:
+- `mlld-config.json` - Your project settings (edit manually)
+- `mlld-lock.json` - Auto-generated locks (don't edit)
+</CONFIG_FILES>
+
+<ENVIRONMENT_VARIABLES>
+Allow env vars in config, then import via `@input`.
+
+**mlld-lock.json:**
+
+```json
+{
+  "security": {
+    "allowedEnv": ["MLLD_NODE_ENV", "MLLD_API_KEY", "MLLD_GITHUB_TOKEN"]
+  }
+}
+```
+
+**Usage:**
+
+```mlld
+import { @MLLD_NODE_ENV, @MLLD_API_KEY } from @input
+show `Running in @MLLD_NODE_ENV`
+```
+
+All env vars must be prefixed with `MLLD_`.
+</ENVIRONMENT_VARIABLES>
+
+<FRONTMATTER>
+Document metadata at file start.
+
+```yaml
+---
+name: my-module
+author: alice
+version: 1.0.0
+about: Brief description
+license: CC0
+---
+```
+
+Access via `@fm`:
+
+```mlld
+var @id = @fm.id
+var @version = @fm.version
+```
+</FRONTMATTER>
+
+<PATHS_AND_URLS>
+Paths can be literal, interpolated, or resolver-based.
+
+```mlld
+var @dir = "./docs"
+var @userFile = "data/@username/profile.json"
+var @template = 'templates/@var.html'  >> literal '@'
+
+>> URLs as sources
+show <https://raw.githubusercontent.com/org/repo/main/README.md>
+var @remote = <https://example.com/README.md>
+```
+</PATHS_AND_URLS>
+
+<SDK_EXECUTION_MODES>
+Four modes for SDK consumers:
+
+**document** (default): Returns string
+
+```typescript
+const output = await processMlld(script);
+```
+
+**structured**: Returns full result object
+
+```typescript
+const result = await interpret(script, { mode: 'structured' });
+console.log(result.effects);
+console.log(result.stateWrites);
+```
+
+**stream**: Real-time events
+
+```typescript
+const handle = interpret(script, { mode: 'stream' });
+handle.on('stream:chunk', e => process.stdout.write(e.text));
+await handle.done();
+```
+
+**debug**: Full trace
+
+```typescript
+const result = await interpret(script, { mode: 'debug' });
+console.log(result.trace);
+```
+</SDK_EXECUTION_MODES>
+
+<DYNAMIC_MODULE_INJECTION>
+Inject runtime context without filesystem I/O.
+
+```typescript
+processMlld(template, {
+  dynamicModules: {
+    '@state': { count: 0, messages: [...] },
+    '@payload': { text: 'user input', userId: '123' }
+  }
+});
+```
+
+```mlld
+var @count = @state.count + 1
+var @input = @payload.text
+```
+
+Dynamic imports are labeled `src:dynamic` and marked untrusted.
+</DYNAMIC_MODULE_INJECTION>
+
+<EXECUTE_FUNCTION>
+File-based execution with state management.
+
+```typescript
+const result = await execute('./agent.mld', payload, {
+  state: { conversationId: '123', messages: [...] },
+  timeout: 30000
+});
+
+for (const write of result.stateWrites) {
+  await updateState(write.path, write.value);
+}
+```
+
+Features:
+- In-memory AST caching (mtime-based invalidation)
+- State hydration via `@state` module
+- Payload injection via `@payload`
+- State writes via `state://` protocol
+</EXECUTE_FUNCTION>
+
+<ANALYZE_MODULE>
+Static analysis without execution.
+
+```typescript
+const analysis = await analyzeModule('./tools.mld');
+
+if (!analysis.valid) {
+  console.error('Errors:', analysis.errors);
+}
+
+const tools = analysis.executables
+  .filter(e => analysis.exports.includes(e.name));
+```
+
+Use cases: MCP proxy, module validation, IDE/LSP, security auditing.
+</ANALYZE_MODULE>
+
+</MLLD_CONFIGURATION>
+
+
+<MLLD_COMMON_MISTAKES>
+
+<MISTAKE_MISSING_AT>
+Variables always need `@` prefix.
+
+```mlld
+>> Wrong
+var greeting = "Hello"
+
+>> Correct
+var @greeting = "Hello"
+```
+</MISTAKE_MISSING_AT>
+
+<MISTAKE_SLASH_IN_STRICT_MODE>
+Strict mode (.mld) uses bare directives. Markdown mode (.mld.md) uses slashes.
+
+```mlld
+>> Wrong (in .mld file)
+/var @x = 1
+/show @x
+
+>> Correct (in .mld file)
+var @x = 1
+show @x
+```
+</MISTAKE_SLASH_IN_STRICT_MODE>
+
+<MISTAKE_USING_AT_FOR_DIRECTIVES>
+Directives don't use `@` prefix.
+
+```mlld
+>> Wrong
+@run cmd {echo "hello"}
+var @result = @run cmd {echo "hello"}
+
+>> Correct
+run cmd {echo "hello"}
+var @result = cmd {echo "hello"}
+```
+</MISTAKE_USING_AT_FOR_DIRECTIVES>
+
+<MISTAKE_JS_TEMPLATE_SYNTAX>
+Use `@var` not `${var}`. mlld is not JavaScript.
+
+```mlld
+>> Wrong
+var @msg = "Hello ${name}"
+show `Result: ${count}`
+
+>> Correct
+var @msg = "Hello @name"
+show `Result: @count`
+```
+</MISTAKE_JS_TEMPLATE_SYNTAX>
+
+<MISTAKE_INTERPOLATION_IN_TEXT>
+In strict mode, plain text is an error. Use `show` or templates.
+
+```mlld
+>> Wrong (strict mode)
+Hello @name!
+
+>> Correct
+show `Hello @name!`
+```
+</MISTAKE_INTERPOLATION_IN_TEXT>
+
+<MISTAKE_FILE_VS_STRING>
+Angle brackets load content; quotes are literal strings.
+
+```mlld
+var @content = <README.md>     >> loads file contents
+var @path = "README.md"        >> literal string
+```
+</MISTAKE_FILE_VS_STRING>
+
+<MISTAKE_XML_VS_FILE_TAGS>
+`<thinking>` is plain text. `<file.txt>` (has `.`) is a file ref.
+
+```mlld
+>> These are plain text (no . / * @)
+<OVERVIEW>
+<thinking>
+</OVERVIEW>
+
+>> These are file references
+<README.md>
+<src/*.ts>
+<@base/config.json>
+```
+</MISTAKE_XML_VS_FILE_TAGS>
+
+<MISTAKE_NESTED_FUNC_IN_SHELL>
+Don't call mlld functions inside shell commands.
+
+```mlld
+>> Wrong
+run cmd {
+  RESULT=$(@helper("x"))
+  echo $RESULT
+}
+
+>> Correct
+var @r = @helper("x")
+run @r | { cat }
+```
+</MISTAKE_NESTED_FUNC_IN_SHELL>
+
+<MISTAKE_TEMPLATE_COLLECTION_IMPORT>
+Template collections need parameters and directories.
+
+```mlld
+>> Wrong
+import { @tpl } from "./file.att"           >> single file
+import templates from "./agents" as @agents  >> missing params
+
+>> Correct
+exe @tpl(x) = template "./file.att"          >> single file
+import templates from "./agents" as @agents(message, context)
+```
+</MISTAKE_TEMPLATE_COLLECTION_IMPORT>
+
+<MISTAKE_VAR_IN_PARALLEL_BLOCK>
+Parallel blocks can't write to outer scope. Use `let`.
+
+```mlld
+>> Wrong
+var @total = 0
+for parallel @x in @items [
+  var @total += 1   >> outer scope write blocked
+]
+
+>> Correct
+exe @countItems(items) = [
+  let @results = for parallel @x in @items => 1
+  => @results.length
+]
+```
+</MISTAKE_VAR_IN_PARALLEL_BLOCK>
+
+<MISTAKE_RETURN_STATEMENT>
+mlld has no `return`. Use `=> value` in blocks.
+
+```mlld
+>> Wrong
+exe @calc(x) = [
+  let @result = @x * 2
+  return @result
+]
+
+>> Correct
+exe @calc(x) = [
+  let @result = @x * 2
+  => @result
+]
+```
+</MISTAKE_RETURN_STATEMENT>
+
+<MISTAKE_MISSING_BRACES>
+Commands always need braces.
+
+```mlld
+>> Wrong
+run cmd echo "hello"
+
+>> Correct
+run cmd {echo "hello"}
+```
+</MISTAKE_MISSING_BRACES>
+
+<MISTAKE_COMPLEX_LOGIC>
+Move heavy logic to helpers or modules. Keep orchestration simple.
+
+```mlld
+>> Wrong (too much logic inline)
+var @result = for @item in @items => when first [
+  @item.type == "a" && @item.status == "active" => [
+    let @x = @item.value * 2
+    let @y = @transform(@x)
+    let @z = @validate(@y)
+    => when [ @z.ok => @z.value * => null ]
+  ]
+  * => null
+]
+
+>> Correct (extract to helper)
+exe @processItem(item) = [
+  let @x = @item.value * 2
+  let @y = @transform(@x)
+  let @z = @validate(@y)
+  => when [ @z.ok => @z.value * => null ]
+]
+
+var @result = for @item in @items when @item.type == "a" => @processItem(@item)
+```
+</MISTAKE_COMPLEX_LOGIC>
+
+</MLLD_COMMON_MISTAKES>
+
+
+<MLLD_SECURITY>
+
+<GUARDS>
+Guards protect data and operations. Label sensitive data, define policies.
+
+**Labeling data:**
+
+```mlld
+var secret @apiKey = "sk-12345"
+var pii @email = "user@example.com"
+```
+
+**Defining guards:**
+
+```mlld
+guard @noShellSecrets before secret = when [
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
+  * => allow
+]
+
+run cmd { echo @apiKey }   >> Blocked by guard
+```
+
+**Guard syntax:**
+
+```
+guard [@name] TIMING LABEL = when [...]
+```
+
+- `TIMING`: `before`, `after`, or `always`
+- Shorthand: `for` equals `before`
+</GUARDS>
+
+<BEFORE_GUARDS>
+Validate or transform input before operations.
+
+```mlld
+guard @sanitize before untrusted = when [
+  * => allow @input.trim().slice(0, 100)
+]
+```
+</BEFORE_GUARDS>
+
+<AFTER_GUARDS>
+Validate output after operations.
+
+```mlld
+guard @validateJson after op:exe = when [
+  @isValidJson(@output) => allow
+  * => deny "Invalid JSON"
+]
+```
+</AFTER_GUARDS>
+
+<TRANSFORM_WITH_ALLOW>
+Transform data during guard evaluation.
+
+```mlld
+guard @redact before secret = when [
+  @mx.op.type == "show" => allow @redact(@input)
+  * => allow
+]
+```
+</TRANSFORM_WITH_ALLOW>
+
+<DENIED_HANDLERS>
+Handle denied operations gracefully.
+
+```mlld
+exe @handler(value) = when [
+  denied => `Blocked: @mx.guard.reason`
+  * => @value
+]
+```
+</DENIED_HANDLERS>
+
+<AUTOMATIC_LABELS>
+System-assigned labels for tracking:
+
+| Label | Applied To |
+|-------|------------|
+| `src:exec` | Results from `/run` and `/exe` |
+| `src:file` | File loads |
+| `src:dynamic` | Dynamic module imports |
+| `dir:/path` | File directories (all parents) |
+
+**Example directory guards:**
+
+```mlld
+guard before op:run = when [
+  @input.any.mx.taint.includes('dir:/tmp/uploads') =>
+    deny "Cannot execute uploaded files"
+  * => allow
+]
+```
+</AUTOMATIC_LABELS>
+
+<LABEL_TRACKING>
+Labels flow through operations:
+
+- Method calls: `@secret.trim()` preserves labels
+- Templates: interpolated values carry labels
+- Field access: `@user.email` inherits from `@user`
+- Iterators: each item inherits collection labels
+- Pipelines: labels flow through stages
+</LABEL_TRACKING>
+
+<GUARD_COMPOSITION>
+Multiple guards can apply. Resolution order:
+
+1. All applicable guards run (file top-to-bottom)
+2. `deny` takes precedence over all
+3. `retry` next
+4. `allow @value` (transformed)
+5. `allow` (unchanged)
+
+Guards are non-reentrant (won't trigger on their own operations).
+</GUARD_COMPOSITION>
+
+<NEEDS_DECLARATION>
+Declare required capabilities in modules.
+
+```mlld
+---
+name: my-tool
+---
+
+needs {
+  js: []
+  sh
+}
+```
+
+Capabilities: `js`, `sh`, `cmd`, `node`, `python`, `network`, `filesystem`
+</NEEDS_DECLARATION>
+
+</MLLD_SECURITY>
+
+
+<MLLD_REFERENCE>
+
+<EXECUTION_CONTEXTS>
+Where interpolation applies:
+
+| Context | Syntax | Example | Notes |
+|---------|--------|---------|-------|
+| Backticks | `@var` | `` `Hello @name` `` | Primary template |
+| `::...::` | `@var` | `::Use `cmd` for @name::` | Backticks in text |
+| Commands `{...}` | `@var` | `{echo "@msg"}` | Interpolates |
+| Double quotes | `@var` | `"Hi @name"` | Interpolates |
+| Single quotes | literal | `'Hi @name'` | No interpolation |
+| Directive level | `@var` | `show @greeting` | Direct reference |
+</EXECUTION_CONTEXTS>
+
+<DIRECTIVES_QUICK_REFERENCE>
+
+| Directive | Purpose | Example |
+|-----------|---------|---------|
+| `var` | Create variable | `var @x = 1` |
+| `show` | Output content | `show @message` |
+| `run` | Execute command | `run cmd {echo hi}` |
+| `exe` | Define executable | `exe @f(x) = ...` |
+| `when` | Conditional | `when @x => show "yes"` |
+| `for` | Iteration | `for @x in @arr => ...` |
+| `import` | Import module | `import { @f } from @m/m` |
+| `export` | Export items | `export { @f, @g }` |
+| `output` | Write to file | `output @x to "f.txt"` |
+| `log` | Output to stdout | `log @message` |
+| `append` | Append to file | `append @x to "f.jsonl"` |
+| `guard` | Security policy | `guard before secret = ...` |
+| `stream` | Stream output | `stream @f()` |
+| `needs` | Declare capabilities | `needs { js: [] }` |
+</DIRECTIVES_QUICK_REFERENCE>
+
+<LANGUAGE_SPECIFIERS>
+
+| Specifier | Use Case | Features |
+|-----------|----------|----------|
+| `cmd` | Simple commands | Pipes only, safe |
+| `sh` | Shell scripts | `&&`, `\|\|`, multi-line |
+| `js` | JavaScript | Full JS, return values |
+| `node` | Node.js | npm packages available |
+| `python` | Python | Python code |
+</LANGUAGE_SPECIFIERS>
+
+<BUILTIN_TRANSFORMS>
+
+| Transform | Purpose |
+|-----------|---------|
+| `@json` | Parse JSON (loose mode) |
+| `@json.strict` | Parse strict JSON |
+| `@json.loose` | Parse JSON5 |
+| `@json.llm` | Extract JSON from LLM response |
+| `@xml` | Format as XML |
+| `@csv` | Format as CSV |
+| `@md` | Format as Markdown |
+</BUILTIN_TRANSFORMS>
+
+<OPERATORS>
+
+**Comparison:** `<`, `>`, `<=`, `>=`, `==`, `!=`
+
+**Logical:** `&&`, `||`, `!`
+
+**Ternary:** `@cond ? @trueVal : @falseVal`
+
+**Precedence:** `!` → comparison → `&&` → `||` → `?:`
+</OPERATORS>
+
+<ARRAY_SLICING>
+
+| Syntax | Result |
+|--------|--------|
+| `@arr[0:3]` | First 3 elements |
+| `@arr[-2:]` | Last 2 elements |
+| `@arr[:-1]` | All except last |
+| `@arr[2:]` | From index 2 to end |
+</ARRAY_SLICING>
+
+<METADATA_FIELDS>
+
+| Field | Description |
+|-------|-------------|
+| `.mx.content` | File content (default) |
+| `.mx.filename` | Filename only |
+| `.mx.relative` | Relative path |
+| `.mx.absolute` | Absolute path |
+| `.mx.tokens` | Token count estimate |
+| `.mx.fm` | Frontmatter object |
+| `.mx.key` | Object key (in iteration) |
+| `.mx.keys` | All keys (for objects) |
+</METADATA_FIELDS>
+
+<FILE_EXTENSIONS>
+
+| Extension | Mode | Behavior |
+|-----------|------|----------|
+| `.mld` | Strict | Bare directives, text errors |
+| `.mld.md` | Markdown | Slash prefix, text as content |
+| `.att` | Template | `@var` interpolation |
+| `.mtt` | Template | `{{var}}` interpolation (escape hatch) |
+</FILE_EXTENSIONS>
+
+<ESCAPE_HATCH_TEMPLATES>
+When standard templates cause parsing issues (e.g., XML tags with `@` in attributes trigger file load detection), use `:::...:::` or `.mtt` files:
+
+```mlld
+>> Problem: <TAG version="@version"> triggers file load detection
+var @doc = ::<GUIDE version="@version">::     >> fails - @ in angle brackets
+
+>> Solution: triple-colon uses {{var}} interpolation, ignores @ and <>
+var @doc = :::<GUIDE version="{{version}}">:::   >> works
+
+>> Or use .mtt external template
+exe @header(version) = template "./header.mtt"
+```
+
+Trade-offs: `:::...:::` only supports `{{var}}` interpolation - no `@var`, `<file>`, `@exe()`, pipes, or loops. Use only when needed.
+</ESCAPE_HATCH_TEMPLATES>
+
+<ENVIRONMENT_VARIABLES>
+
+| Variable | Purpose |
+|----------|---------|
+| `MLLD_PARALLEL_LIMIT` | Max concurrent operations (default 4) |
+| `MLLD_NO_STREAM` | Disable streaming output |
+| `MLLD_DEBUG` | Enable debug output |
+| `MLLD_BASH_HEREDOC` | Use heredocs for large vars |
+</ENVIRONMENT_VARIABLES>
+
+<SEE_ALSO>
+- Documentation: https://mlld.ai/docs
+- Examples: https://github.com/mlld-lang/mlld/tree/main/tests/cases/valid/feat
+- Source: https://github.com/mlld-lang/mlld
+</SEE_ALSO>
+
+</MLLD_REFERENCE>
+
+
+<MLLD_COOKBOOK version="2.0.0-rc78">
+
+This cookbook shows real-world mlld patterns through annotated examples. Each recipe demonstrates
+multiple features working together. All examples use strict mode (bare directives).
+
+<TOC>
+1. LLM Library - Clean utility module for calling Claude models
+2. Gate Pattern - Validation/filtering with structured returns
+3. Agent Definition - Configuration module with frontmatter and templates
+4. Router - Complex decision logic with scoring
+5. Orchestrator - Parallel execution with routing and gating
+</TOC>
+
+<RECIPE_1_LLM_LIBRARY>
+A clean utility module for calling Claude models. Demonstrates:
+- Simple executable definitions
+- when-first for conditional logic
+- Pipeline + cmd with working directory
+- Clean exports
+
+```mlld
+>> Claude model primitives
+>> Pure invocation - no agent/variant logic
+
+>> Model-specific helpers (no tools for pure text tasks)
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet --tools "" }
+exe @opus(prompt) = @prompt | cmd { claude -p --model opus --tools "" }
+
+>> Generic invocation with working directory and tools
+>> - tools="" => disable all tools (--tools "")
+>> - tools="Read,Grep,..." => specific tools (--allowedTools "...")
+>> - tools=null/omitted => use Claude defaults (no flag)
+exe @claude(prompt, model, dir, tools) = when first [
+  @tools == "" => @prompt | cmd:@dir { claude -p --model @model --tools "" }
+  @tools => @prompt | cmd:@dir { claude -p --model @model --allowedTools "@tools" }
+  * => @prompt | cmd:@dir { claude -p --model @model }
+]
+
+>> With system prompt (appends to preserve tool guidance)
+exe @claudeWithSystem(prompt, system, model, dir, tools) = when first [
+  @tools == "" => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --tools "" }
+  @tools => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --allowedTools "@tools" }
+  * => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" }
+]
+
+export { @haiku, @sonnet, @opus, @claude, @claudeWithSystem }
+```
+
+**Key patterns:**
+- `@prompt | cmd { ... }` - Pipeline input to command via stdin
+- `cmd:@dir { ... }` - Execute in specific working directory
+- `when first [ ... ]` - Switch-style matching for argument handling
+- Clean function signature with sensible defaults
+</RECIPE_1_LLM_LIBRARY>
+
+<RECIPE_2_GATE_PATTERN>
+A gate validates or filters before proceeding. Demonstrates:
+- Block syntax with let and return
+- Nested function calls
+- Method chaining
+- Structured returns
+
+```mlld
+>> Substance Gate
+>> Filters responses that just acknowledge without adding value
+>> Only applies to optional responses - required ones always pass
+
+import { @haiku } from "@lib/claude.mld"
+
+>> Build the evaluation prompt
+exe @prompt(res) = `
+Does this response add value to the conversation, or does it just acknowledge/decline?
+
+Response to evaluate:
+---
+@res
+---
+
+Answer with just "yes" (adds value) or "no" (just acknowledging/declining).
+`
+
+>> Check if response has substantive content
+exe @hasSubstance(response) = [
+  let @result = @haiku(@prompt(@response))
+  => @result.trim().toLowerCase().startsWith("yes")
+]
+
+>> Gate entry point
+>> Returns: { pass: bool, reason?: string }
+exe @gate(response, instruction, message) = [
+  >> Required responses always pass
+  let @isOptional = @instruction.promptKey == "optional"
+
+  => when first [
+    !@isOptional => { pass: true }
+    @hasSubstance(@response) => { pass: true }
+    * => { pass: false, reason: "Response lacks substance" }
+  ]
+]
+
+export { @gate }
+```
+
+**Key patterns:**
+- `exe @f(x) = [ ... ]` - Block syntax for multi-statement bodies
+- `let @var = ...` - Block-scoped variable
+- `=> value` - Return value from block
+- `@result.trim().toLowerCase().startsWith(...)` - Method chaining
+- `@haiku(@prompt(@response))` - Nested function calls
+- `{ pass: true, reason: "..." }` - Structured return objects
+</RECIPE_2_GATE_PATTERN>
+
+<RECIPE_3_AGENT_DEFINITION>
+An agent configuration module. Demonstrates:
+- Frontmatter with @fm access
+- Template executables loading external files
+- Object literals with function references
+- Directory-relative imports
+- Clean export structure
+
+```mlld
+---
+id: support-agent
+name: Support Agent
+---
+
+>> Import shared variant configurations
+import { @standard as @variants } from "@shared/agent-variants.mld"
+
+>> Agent metadata using frontmatter
+var @meta = {
+  id: @fm.id,
+  name: @fm.name,
+  workDir: "/path/to/project",
+  defaultVariant: "readonly",
+  variants: @variants
+}
+
+>> System prompt template (takes context parameter)
+exe @systemPrompt(teammates) = template "./prompts/system.att"
+
+>> Routing description for quick classification
+var @tldr = <./prompts/routing-tldr.att>
+
+>> Prompt templates (exported as callable functions)
+exe @primaryPrompt(msg, ctx) = template "./prompts/primary.att"
+exe @optionalPrompt(msg, ctx) = template "./prompts/optional.att"
+
+>> Prompts as object for dynamic access
+var @prompts = {
+  primary: @primaryPrompt,
+  optional: @optionalPrompt
+}
+
+>> Context assembly
+import { @assemble } from "./context/assemble.mld"
+var @ctx = { assemble: @assemble }
+
+export { @meta, @tldr, @prompts, @ctx, @systemPrompt }
+```
+
+**Key patterns:**
+- `@fm.id`, `@fm.name` - Access frontmatter fields
+- `exe @f(x) = template "./file.att"` - External template as executable
+- `var @tldr = <./prompts/file.att>` - Load file content directly
+- `{ primary: @primaryPrompt }` - Functions as object values
+- Relative imports with `"./path"` syntax
+</RECIPE_3_AGENT_DEFINITION>
+
+<RECIPE_4_ROUTER>
+A router that scores and routes messages to agents. Demonstrates:
+- Complex scoring logic with block syntax
+- for with inline filtering
+- Object spread in results
+- when-first for classification
+- Nested executables for clean organization
+
+```mlld
+>> Response-Required Router
+>> Scores agents, applies thresholds, returns execution-ready instructions
+
+import { @haiku } from "@lib/claude.mld"
+
+>> Policy thresholds
+var @THRESHOLD_REQUIRED = 0.7
+var @THRESHOLD_OPTIONAL = 0.3
+
+>> Build routing context from agent descriptions
+exe @buildRoutingContext(agentRegistry) = [
+  let @lines = for @agent in @agentRegistry => `- **@agent.mx.key**: @agent.tldr`
+  => @lines.join("\n")
+]
+
+>> Calculate reply pressure based on message mentions
+>> - Own message: 0 (never respond to yourself)
+>> - Starts with @all: 0.8 (everyone should respond)
+>> - First in mention list: 1.0
+>> - Others in mention list: 0.6
+>> - Mentioned elsewhere: 0.2
+>> - Not mentioned: 0
+exe @getReplyPressure(agent, msg) = [
+  let @isOwnMessage = @msg.from_agent == @agent
+  let @startsWithAll = @msg.body.trim().startsWith("@all")
+  let @hasAll = @msg.mentions.indexOf("all") >= 0
+  let @idx = @msg.mentions.indexOf(@agent)
+  let @startsAt = @msg.body.trim().startsWith("@")
+
+  => when first [
+    @isOwnMessage => 0
+    @startsWithAll => 0.8
+    @hasAll => 0.2
+    @idx == -1 => 0
+    @startsAt && @idx == 0 => 1.0
+    @startsAt && @idx > 0 => 0.6
+    * => 0.2
+  ]
+]
+
+>> Evaluate a single agent (scoring only)
+exe @evaluateAgent(agentId, msg, turnPressure) = [
+  let @replyP = @getReplyPressure(@agentId, @msg)
+  let @turnP = @turnPressure[@agentId]
+
+  >> Turn pressure only applies if agent has some reply pressure
+  let @effectiveTurnP = when first [
+    @replyP > 0 => @turnP
+    * => 0
+  ]
+  let @total = @replyP + @effectiveTurnP
+
+  => {
+    agent: @agentId,
+    replyPressure: @replyP,
+    turnPressure: @effectiveTurnP,
+    responseRequired: @total
+  }
+]
+
+>> Classify evaluation into execution instructions
+exe @classifyForExecution(eval) = [
+  let @score = @eval.responseRequired
+
+  => when first [
+    @score >= @THRESHOLD_REQUIRED => { ...@eval, promptKey: "primary", variant: null }
+    @score >= @THRESHOLD_OPTIONAL => { ...@eval, promptKey: "optional", variant: "readonly" }
+    * => null
+  ]
+]
+
+>> Main router entry point
+exe @router(message, agentRegistry, turnPressure) = [
+  >> Build routing context
+  let @routingContext = @buildRoutingContext(@agentRegistry)
+  let @agentKeys = @agentRegistry.mx.keys
+
+  >> Initial deterministic evaluation
+  let @evaluations = for @agentId in @agentKeys [@evaluateAgent(@agentId, @message, @turnPressure)]
+
+  >> Apply thresholds and classify
+  let @classified = for @eval in @evaluations => @classifyForExecution(@eval)
+
+  >> Filter results
+  let @toInvoke = for @c in @classified when @c != null => @c
+  let @skipped = for @eval in @evaluations when @eval.responseRequired < @THRESHOLD_OPTIONAL => @eval
+
+  => { toInvoke: @toInvoke, skipped: @skipped }
+]
+
+export { @router }
+```
+
+**Key patterns:**
+- `for @agentId in @agentKeys [...]` - For with block body
+- `for @c in @classified when @c != null => @c` - For with inline filter
+- `{ ...@eval, promptKey: "primary" }` - Object spread in result
+- `@agentRegistry.mx.keys` - Get all keys from object
+- `@msg.body.trim().startsWith("@")` - Method chaining on fields
+- Nested when-first in block for decision trees
+</RECIPE_4_ROUTER>
+
+<RECIPE_5_ORCHESTRATOR>
+An orchestrator that routes and executes in parallel. Demonstrates:
+- Multiple imports from different sources
+- Parallel for blocks
+- Chained execution (route → invoke → gate → post)
+- when-first inside parallel iteration
+
+```mlld
+>> Orchestrator: executes what router tells it
+
+import { @message, @agentIds, @turnPressure } from @payload
+import { @invoke } from "@lib/invoke.mld"
+import { @stripToolMarkup } from "@lib/strip-tool-markup.mld"
+import { @router as @responseRequired } from "@routers/response-required.router.mld"
+import { @gate as @substanceGate } from "@gates/substance.gate.mld"
+
+>> Load agents from directory
+import "@agents" as @agentRegistry
+
+>> Run router to get instructions
+var @routing = @responseRequired(@message, @agentRegistry, @turnPressure)
+
+>> Invoke a single agent based on routing instruction
+exe @invokeAgent(instruction, msg) = [
+  let @agent = @agentRegistry[@instruction.agent]
+  let @msgCtx = @agent.ctx.assemble(@msg)
+  let @prompt = @agent.prompts[@instruction.promptKey](@msg, @msgCtx)
+  let @rawResponse = @invoke(@prompt, @agent, @agentRegistry, @instruction.variant)
+  let @response = @stripToolMarkup(@rawResponse)
+  => { agent: @instruction.agent, response: @response }
+]
+
+>> Route → Invoke → Gate → Post
+>> Execute up to 3 agents concurrently
+for parallel(3) @instruction in @routing.toInvoke [
+  let @result = @invokeAgent(@instruction, @message)
+  let @check = @substanceGate(@result.response, @instruction, @message)
+
+  => when first [
+    @check.pass => run cmd { mm post --as @result.agent "@result.response" }
+    * => null
+  ]
+]
+
+export { @routing }
+```
+
+**Key patterns:**
+- `import "@agents" as @agentRegistry` - Directory import
+- `import { @router as @responseRequired }` - Aliased import
+- `for parallel(3) @instruction in [...] [...]` - Parallel for with block
+- `@agentRegistry[@instruction.agent]` - Dynamic field access
+- `@agent.prompts[@instruction.promptKey](@msg, @ctx)` - Dynamic function call
+- Chained processing: route → invoke → gate → post
+</RECIPE_5_ORCHESTRATOR>
+
+<SUMMARY>
+These five recipes cover the most common mlld patterns:
+
+| Recipe | Features Demonstrated |
+|--------|----------------------|
+| LLM Library | Pipelines, when-first, cmd:dir, exports |
+| Gate | Blocks, let/return, method chaining, structured returns |
+| Agent Definition | Frontmatter, templates, function objects |
+| Router | Complex scoring, for-filter, object spread, nested when |
+| Orchestrator | Parallel for, directory imports, dynamic access |
+
+For reference documentation, see the other llms-*.txt modules.
+</SUMMARY>
+
+</MLLD_COOKBOOK>
+
+
+</MLLD_COMPLETE_GUIDE>

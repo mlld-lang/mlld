@@ -1,0 +1,158 @@
+<MLLD_CONFIGURATION>
+
+<CONFIG_FILES>
+mlld uses dual configuration:
+- `mlld-config.json` - Your project settings (edit manually)
+- `mlld-lock.json` - Auto-generated locks (don't edit)
+</CONFIG_FILES>
+
+<ENVIRONMENT_VARIABLES>
+Allow env vars in config, then import via `@input`.
+
+**mlld-lock.json:**
+
+```json
+{
+  "security": {
+    "allowedEnv": ["MLLD_NODE_ENV", "MLLD_API_KEY", "MLLD_GITHUB_TOKEN"]
+  }
+}
+```
+
+**Usage:**
+
+```mlld
+import { @MLLD_NODE_ENV, @MLLD_API_KEY } from @input
+show `Running in @MLLD_NODE_ENV`
+```
+
+All env vars must be prefixed with `MLLD_`.
+</ENVIRONMENT_VARIABLES>
+
+<FRONTMATTER>
+Document metadata at file start.
+
+```yaml
+---
+name: my-module
+author: alice
+version: 1.0.0
+about: Brief description
+license: CC0
+---
+```
+
+Access via `@fm`:
+
+```mlld
+var @id = @fm.id
+var @version = @fm.version
+```
+</FRONTMATTER>
+
+<PATHS_AND_URLS>
+Paths can be literal, interpolated, or resolver-based.
+
+```mlld
+var @dir = "./docs"
+var @userFile = "data/@username/profile.json"
+var @template = 'templates/@var.html'  >> literal '@'
+
+>> URLs as sources
+show <https://raw.githubusercontent.com/org/repo/main/README.md>
+var @remote = <https://example.com/README.md>
+```
+</PATHS_AND_URLS>
+
+<SDK_EXECUTION_MODES>
+Four modes for SDK consumers:
+
+**document** (default): Returns string
+
+```typescript
+const output = await processMlld(script);
+```
+
+**structured**: Returns full result object
+
+```typescript
+const result = await interpret(script, { mode: 'structured' });
+console.log(result.effects);
+console.log(result.stateWrites);
+```
+
+**stream**: Real-time events
+
+```typescript
+const handle = interpret(script, { mode: 'stream' });
+handle.on('stream:chunk', e => process.stdout.write(e.text));
+await handle.done();
+```
+
+**debug**: Full trace
+
+```typescript
+const result = await interpret(script, { mode: 'debug' });
+console.log(result.trace);
+```
+</SDK_EXECUTION_MODES>
+
+<DYNAMIC_MODULE_INJECTION>
+Inject runtime context without filesystem I/O.
+
+```typescript
+processMlld(template, {
+  dynamicModules: {
+    '@state': { count: 0, messages: [...] },
+    '@payload': { text: 'user input', userId: '123' }
+  }
+});
+```
+
+```mlld
+var @count = @state.count + 1
+var @input = @payload.text
+```
+
+Dynamic imports are labeled `src:dynamic` and marked untrusted.
+</DYNAMIC_MODULE_INJECTION>
+
+<EXECUTE_FUNCTION>
+File-based execution with state management.
+
+```typescript
+const result = await execute('./agent.mld', payload, {
+  state: { conversationId: '123', messages: [...] },
+  timeout: 30000
+});
+
+for (const write of result.stateWrites) {
+  await updateState(write.path, write.value);
+}
+```
+
+Features:
+- In-memory AST caching (mtime-based invalidation)
+- State hydration via `@state` module
+- Payload injection via `@payload`
+- State writes via `state://` protocol
+</EXECUTE_FUNCTION>
+
+<ANALYZE_MODULE>
+Static analysis without execution.
+
+```typescript
+const analysis = await analyzeModule('./tools.mld');
+
+if (!analysis.valid) {
+  console.error('Errors:', analysis.errors);
+}
+
+const tools = analysis.executables
+  .filter(e => analysis.exports.includes(e.name));
+```
+
+Use cases: MCP proxy, module validation, IDE/LSP, security auditing.
+</ANALYZE_MODULE>
+
+</MLLD_CONFIGURATION>

@@ -1,0 +1,352 @@
+<MLLD_COOKBOOK version="2.0.0-rc78">
+
+This cookbook shows real-world mlld patterns through annotated examples. Each recipe demonstrates
+multiple features working together. All examples use strict mode (bare directives).
+
+<TOC>
+1. LLM Library - Clean utility module for calling Claude models
+2. Gate Pattern - Validation/filtering with structured returns
+3. Agent Definition - Configuration module with frontmatter and templates
+4. Router - Complex decision logic with scoring
+5. Orchestrator - Parallel execution with routing and gating
+</TOC>
+
+<RECIPE_1_LLM_LIBRARY>
+A clean utility module for calling Claude models. Demonstrates:
+- Simple executable definitions
+- when-first for conditional logic
+- Pipeline + cmd with working directory
+- Clean exports
+
+```mlld
+>> Claude model primitives
+>> Pure invocation - no agent/variant logic
+
+>> Model-specific helpers (no tools for pure text tasks)
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet --tools "" }
+exe @opus(prompt) = @prompt | cmd { claude -p --model opus --tools "" }
+
+>> Generic invocation with working directory and tools
+>> - tools="" => disable all tools (--tools "")
+>> - tools="Read,Grep,..." => specific tools (--allowedTools "...")
+>> - tools=null/omitted => use Claude defaults (no flag)
+exe @claude(prompt, model, dir, tools) = when first [
+  @tools == "" => @prompt | cmd:@dir { claude -p --model @model --tools "" }
+  @tools => @prompt | cmd:@dir { claude -p --model @model --allowedTools "@tools" }
+  * => @prompt | cmd:@dir { claude -p --model @model }
+]
+
+>> With system prompt (appends to preserve tool guidance)
+exe @claudeWithSystem(prompt, system, model, dir, tools) = when first [
+  @tools == "" => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --tools "" }
+  @tools => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" --allowedTools "@tools" }
+  * => @prompt | cmd:@dir { claude -p --model @model --append-system-prompt "@system" }
+]
+
+export { @haiku, @sonnet, @opus, @claude, @claudeWithSystem }
+```
+
+**Key patterns:**
+- `@prompt | cmd { ... }` - Pipeline input to command via stdin
+- `cmd:@dir { ... }` - Execute in specific working directory
+- `when first [ ... ]` - Switch-style matching for argument handling
+- Clean function signature with sensible defaults
+</RECIPE_1_LLM_LIBRARY>
+
+<RECIPE_2_GATE_PATTERN>
+A gate validates or filters before proceeding. Demonstrates:
+- Block syntax with let and return
+- Nested function calls
+- Method chaining
+- Structured returns
+
+```mlld
+>> Substance Gate
+>> Filters responses that just acknowledge without adding value
+>> Only applies to optional responses - required ones always pass
+
+import { @haiku } from "@lib/claude.mld"
+
+>> Build the evaluation prompt
+exe @prompt(res) = `
+Does this response add value to the conversation, or does it just acknowledge/decline?
+
+Response to evaluate:
+---
+@res
+---
+
+Answer with just "yes" (adds value) or "no" (just acknowledging/declining).
+`
+
+>> Check if response has substantive content
+exe @hasSubstance(response) = [
+  let @result = @haiku(@prompt(@response))
+  => @result.trim().toLowerCase().startsWith("yes")
+]
+
+>> Gate entry point
+>> Returns: { pass: bool, reason?: string }
+exe @gate(response, instruction, message) = [
+  >> Required responses always pass
+  let @isOptional = @instruction.promptKey == "optional"
+
+  => when first [
+    !@isOptional => { pass: true }
+    @hasSubstance(@response) => { pass: true }
+    * => { pass: false, reason: "Response lacks substance" }
+  ]
+]
+
+export { @gate }
+```
+
+**Key patterns:**
+- `exe @f(x) = [ ... ]` - Block syntax for multi-statement bodies
+- `let @var = ...` - Block-scoped variable
+- `=> value` - Return value from block
+- `@result.trim().toLowerCase().startsWith(...)` - Method chaining
+- `@haiku(@prompt(@response))` - Nested function calls
+- `{ pass: true, reason: "..." }` - Structured return objects
+</RECIPE_2_GATE_PATTERN>
+
+<RECIPE_3_AGENT_DEFINITION>
+An agent configuration module. Demonstrates:
+- Frontmatter with @fm access
+- Template executables loading external files
+- Object literals with function references
+- Directory-relative imports
+- Clean export structure
+
+```mlld
+---
+id: support-agent
+name: Support Agent
+---
+
+>> Import shared variant configurations
+import { @standard as @variants } from "@shared/agent-variants.mld"
+
+>> Agent metadata using frontmatter
+var @meta = {
+  id: @fm.id,
+  name: @fm.name,
+  workDir: "/path/to/project",
+  defaultVariant: "readonly",
+  variants: @variants
+}
+
+>> System prompt template (takes context parameter)
+exe @systemPrompt(teammates) = template "./prompts/system.att"
+
+>> Routing description for quick classification
+var @tldr = <./prompts/routing-tldr.att>
+
+>> Prompt templates (exported as callable functions)
+exe @primaryPrompt(msg, ctx) = template "./prompts/primary.att"
+exe @optionalPrompt(msg, ctx) = template "./prompts/optional.att"
+
+>> Prompts as object for dynamic access
+var @prompts = {
+  primary: @primaryPrompt,
+  optional: @optionalPrompt
+}
+
+>> Context assembly
+import { @assemble } from "./context/assemble.mld"
+var @ctx = { assemble: @assemble }
+
+export { @meta, @tldr, @prompts, @ctx, @systemPrompt }
+```
+
+**Key patterns:**
+- `@fm.id`, `@fm.name` - Access frontmatter fields
+- `exe @f(x) = template "./file.att"` - External template as executable
+- `var @tldr = <./prompts/file.att>` - Load file content directly
+- `{ primary: @primaryPrompt }` - Functions as object values
+- Relative imports with `"./path"` syntax
+</RECIPE_3_AGENT_DEFINITION>
+
+<RECIPE_4_ROUTER>
+A router that scores and routes messages to agents. Demonstrates:
+- Complex scoring logic with block syntax
+- for with inline filtering
+- Object spread in results
+- when-first for classification
+- Nested executables for clean organization
+
+```mlld
+>> Response-Required Router
+>> Scores agents, applies thresholds, returns execution-ready instructions
+
+import { @haiku } from "@lib/claude.mld"
+
+>> Policy thresholds
+var @THRESHOLD_REQUIRED = 0.7
+var @THRESHOLD_OPTIONAL = 0.3
+
+>> Build routing context from agent descriptions
+exe @buildRoutingContext(agentRegistry) = [
+  let @lines = for @agent in @agentRegistry => `- **@agent.mx.key**: @agent.tldr`
+  => @lines.join("\n")
+]
+
+>> Calculate reply pressure based on message mentions
+>> - Own message: 0 (never respond to yourself)
+>> - Starts with @all: 0.8 (everyone should respond)
+>> - First in mention list: 1.0
+>> - Others in mention list: 0.6
+>> - Mentioned elsewhere: 0.2
+>> - Not mentioned: 0
+exe @getReplyPressure(agent, msg) = [
+  let @isOwnMessage = @msg.from_agent == @agent
+  let @startsWithAll = @msg.body.trim().startsWith("@all")
+  let @hasAll = @msg.mentions.indexOf("all") >= 0
+  let @idx = @msg.mentions.indexOf(@agent)
+  let @startsAt = @msg.body.trim().startsWith("@")
+
+  => when first [
+    @isOwnMessage => 0
+    @startsWithAll => 0.8
+    @hasAll => 0.2
+    @idx == -1 => 0
+    @startsAt && @idx == 0 => 1.0
+    @startsAt && @idx > 0 => 0.6
+    * => 0.2
+  ]
+]
+
+>> Evaluate a single agent (scoring only)
+exe @evaluateAgent(agentId, msg, turnPressure) = [
+  let @replyP = @getReplyPressure(@agentId, @msg)
+  let @turnP = @turnPressure[@agentId]
+
+  >> Turn pressure only applies if agent has some reply pressure
+  let @effectiveTurnP = when first [
+    @replyP > 0 => @turnP
+    * => 0
+  ]
+  let @total = @replyP + @effectiveTurnP
+
+  => {
+    agent: @agentId,
+    replyPressure: @replyP,
+    turnPressure: @effectiveTurnP,
+    responseRequired: @total
+  }
+]
+
+>> Classify evaluation into execution instructions
+exe @classifyForExecution(eval) = [
+  let @score = @eval.responseRequired
+
+  => when first [
+    @score >= @THRESHOLD_REQUIRED => { ...@eval, promptKey: "primary", variant: null }
+    @score >= @THRESHOLD_OPTIONAL => { ...@eval, promptKey: "optional", variant: "readonly" }
+    * => null
+  ]
+]
+
+>> Main router entry point
+exe @router(message, agentRegistry, turnPressure) = [
+  >> Build routing context
+  let @routingContext = @buildRoutingContext(@agentRegistry)
+  let @agentKeys = @agentRegistry.mx.keys
+
+  >> Initial deterministic evaluation
+  let @evaluations = for @agentId in @agentKeys [@evaluateAgent(@agentId, @message, @turnPressure)]
+
+  >> Apply thresholds and classify
+  let @classified = for @eval in @evaluations => @classifyForExecution(@eval)
+
+  >> Filter results
+  let @toInvoke = for @c in @classified when @c != null => @c
+  let @skipped = for @eval in @evaluations when @eval.responseRequired < @THRESHOLD_OPTIONAL => @eval
+
+  => { toInvoke: @toInvoke, skipped: @skipped }
+]
+
+export { @router }
+```
+
+**Key patterns:**
+- `for @agentId in @agentKeys [...]` - For with block body
+- `for @c in @classified when @c != null => @c` - For with inline filter
+- `{ ...@eval, promptKey: "primary" }` - Object spread in result
+- `@agentRegistry.mx.keys` - Get all keys from object
+- `@msg.body.trim().startsWith("@")` - Method chaining on fields
+- Nested when-first in block for decision trees
+</RECIPE_4_ROUTER>
+
+<RECIPE_5_ORCHESTRATOR>
+An orchestrator that routes and executes in parallel. Demonstrates:
+- Multiple imports from different sources
+- Parallel for blocks
+- Chained execution (route → invoke → gate → post)
+- when-first inside parallel iteration
+
+```mlld
+>> Orchestrator: executes what router tells it
+
+import { @message, @agentIds, @turnPressure } from @payload
+import { @invoke } from "@lib/invoke.mld"
+import { @stripToolMarkup } from "@lib/strip-tool-markup.mld"
+import { @router as @responseRequired } from "@routers/response-required.router.mld"
+import { @gate as @substanceGate } from "@gates/substance.gate.mld"
+
+>> Load agents from directory
+import "@agents" as @agentRegistry
+
+>> Run router to get instructions
+var @routing = @responseRequired(@message, @agentRegistry, @turnPressure)
+
+>> Invoke a single agent based on routing instruction
+exe @invokeAgent(instruction, msg) = [
+  let @agent = @agentRegistry[@instruction.agent]
+  let @msgCtx = @agent.ctx.assemble(@msg)
+  let @prompt = @agent.prompts[@instruction.promptKey](@msg, @msgCtx)
+  let @rawResponse = @invoke(@prompt, @agent, @agentRegistry, @instruction.variant)
+  let @response = @stripToolMarkup(@rawResponse)
+  => { agent: @instruction.agent, response: @response }
+]
+
+>> Route → Invoke → Gate → Post
+>> Execute up to 3 agents concurrently
+for parallel(3) @instruction in @routing.toInvoke [
+  let @result = @invokeAgent(@instruction, @message)
+  let @check = @substanceGate(@result.response, @instruction, @message)
+
+  => when first [
+    @check.pass => run cmd { mm post --as @result.agent "@result.response" }
+    * => null
+  ]
+]
+
+export { @routing }
+```
+
+**Key patterns:**
+- `import "@agents" as @agentRegistry` - Directory import
+- `import { @router as @responseRequired }` - Aliased import
+- `for parallel(3) @instruction in [...] [...]` - Parallel for with block
+- `@agentRegistry[@instruction.agent]` - Dynamic field access
+- `@agent.prompts[@instruction.promptKey](@msg, @ctx)` - Dynamic function call
+- Chained processing: route → invoke → gate → post
+</RECIPE_5_ORCHESTRATOR>
+
+<SUMMARY>
+These five recipes cover the most common mlld patterns:
+
+| Recipe | Features Demonstrated |
+|--------|----------------------|
+| LLM Library | Pipelines, when-first, cmd:dir, exports |
+| Gate | Blocks, let/return, method chaining, structured returns |
+| Agent Definition | Frontmatter, templates, function objects |
+| Router | Complex scoring, for-filter, object spread, nested when |
+| Orchestrator | Parallel for, directory imports, dynamic access |
+
+For reference documentation, see the other llms-*.txt modules.
+</SUMMARY>
+
+</MLLD_COOKBOOK>

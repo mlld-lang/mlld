@@ -1,0 +1,69 @@
+<MLLD_OVERVIEW version="2.0.0-rc78">
+
+mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps.
+
+<TWO_MODES>
+mlld has two syntax modes based on file extension:
+
+**.mld files (strict mode)** - Default for scripts
+- Bare directives: `var @x = 1` (no slash prefix)
+- Text lines are errors (catches accidental output)
+- Blank lines ignored (formatting whitespace)
+
+**.mld.md files (markdown mode)** - For documentation/literate scripts
+- Slash prefix required: `/var @x = 1`
+- Text lines become content output
+- Designed for mixing prose with executable code
+
+This guide uses **strict mode** (bare directives) in all examples. To use markdown mode, add `/` prefix to each directive.
+
+```mlld
+>> Strict mode (.mld)
+var @name = "Alice"
+show `Hello @name!`
+
+>> Markdown mode (.mld.md) - same code with slashes
+/var @name = "Alice"
+/show `Hello @name!`
+```
+</TWO_MODES>
+
+<MENTAL_MODEL>
+What mlld IS:
+
+* A workflow orchestrator (like Make + npm for the AI era)
+* A conductor's baton (you conduct, tools play)
+* Executable documentation (reads like a guide, runs like a script)
+* A logical router (route data and actions based on conditions)
+
+What mlld ISN'T:
+
+* A template engine (not Jinja/Handlebars)
+* A shell script replacement (it orchestrates shells; doesn't replace them)
+
+Mental model shift:
+
+* "How do I implement this?" → "What tool/module handles this?"
+* "I need an if-statement" → "I need a decision point"
+* "Let me concatenate strings" → "Let me create a template"
+
+Think Docker Compose or GitHub Actions: declare what happens, don't program how.
+</MENTAL_MODEL>
+
+<KEY_CONCEPTS>
+**Directives** - Commands that do things: `var`, `show`, `run`, `for`, `when`, `import`, `export`
+
+**Variables** - Always prefixed with `@`: `@name`, `@data`, `@result`
+
+**Templates** - Backticks or `::...::` for interpolation: `` `Hello @name` ``
+
+**File loading** - Angle brackets load content: `<README.md>`, `<src/*.ts>`
+
+**Pipelines** - Chain transformations: `@data | @json | @validate`
+
+**Executables** - Reusable functions: `exe @greet(name) = `Hello @name!``
+
+**Modules** - Import/export for code reuse: `import { @helper } from @corp/utils`
+</KEY_CONCEPTS>
+
+</MLLD_OVERVIEW>

@@ -1,0 +1,262 @@
+<MLLD_CORE_RULES>
+
+<RULE_1_DIRECTIVES>
+In strict mode (.mld), directives are bare keywords. In markdown mode (.mld.md), prefix with `/`.
+
+```mlld
+>> Strict mode
+var @greeting = `Hello @name!`
+show @greeting
+
+>> What NOT to do
+Hello @name! Let me show something.   >> This is an error in strict mode
+```
+</RULE_1_DIRECTIVES>
+
+<RULE_2_VARIABLE_SYNTAX>
+Create with `var @name = value`. Reference with `@name` in templates/commands.
+
+```mlld
+var @name = "Alice"
+show `Hello @name!`
+run cmd {echo "User: @name"}
+run js (@name) { console.log("Hi", name) }
+```
+</RULE_2_VARIABLE_SYNTAX>
+
+<RULE_3_COMMANDS_NEED_BRACES>
+Every command needs braces. Use language specifiers: `cmd {}` for simple commands, `sh {}` for shell scripts, `js {}` for code.
+
+```mlld
+>> Language specifiers
+run cmd {echo "hello"}       >> simple commands (pipes only)
+run sh {npm test && build}   >> shell scripts (&&, ||, multi-line)
+run js {console.log("hi")}   >> JavaScript code
+
+>> Executables
+exe @hi() = cmd {echo hi}
+exe @script() = sh { echo "multi"; ls -la }
+exe @calc(x) = js { return x * 2 }
+```
+</RULE_3_COMMANDS_NEED_BRACES>
+
+<RULE_4_OUTPUT_SOURCES>
+Only these produce output: `show`, `run`, `output`. Everything else mutates state.
+
+```mlld
+var @secret = "hidden"      >> no output
+show `Visible`
+run cmd {echo "Also visible"}
+```
+</RULE_4_OUTPUT_SOURCES>
+
+<RULE_5_INTERPOLATION_CONTEXTS>
+Default to `::...::` or backticks for templates. Use `@var` for interpolation.
+
+| Syntax | Interpolation | Use For |
+|--------|---------------|---------|
+| `` `...` `` | `@var` `<file>` | Default inline |
+| `::...::` | `@var` `<file>` | When backticks in text |
+| `"..."` | `@var` `<file>` | Single-line only |
+| `'...'` | None (literal) | Literal text |
+| `{...}` | `@var` `<file>` | Commands/code |
+
+```mlld
+>> Backticks (default)
+var @msg = `Hello @name!`
+
+>> Double-colon (when text has backticks)
+var @doc = ::Use `npm test` before @env::
+
+>> Double quotes (single-line)
+var @path = "@base/files/@filename"
+
+>> Single quotes (literal - no interpolation)
+var @literal = '@name stays literal'
+```
+
+Loops work inside templates:
+
+```mlld
+var @list = `
+for @item in @items
+- @item.name: @item.value
+end
+`
+```
+</RULE_5_INTERPOLATION_CONTEXTS>
+
+<RULE_6_FIELD_ACCESS>
+Objects/arrays use dot notation. Arrays support slicing. Methods available on values.
+
+```mlld
+var @user = {"name":"Alice","scores":[10,20,30]}
+show @user.name            >> Alice
+show @user.scores.1        >> 20
+
+>> Array slicing
+var @arr = [1,2,3,4,5]
+show @arr[0:3]             >> [1,2,3]
+show @arr[-2:]             >> [4,5] - last 2
+
+>> Builtin methods
+var @list = ["apple", "banana"]
+show @list.includes("banana")      >> true
+show @list.join(", ")              >> "apple, banana"
+
+var @text = "Hello World"
+show @text.toLowerCase()           >> "hello world"
+show @text.split(" ")              >> ["Hello", "World"]
+show @text.trim().startsWith("H")  >> true (chained)
+```
+</RULE_6_FIELD_ACCESS>
+
+<RULE_7_PARAMETERIZED_CONTENT>
+Use `exe` for reusable templates, commands, or complex logic with blocks.
+
+```mlld
+>> Simple template
+exe @greet(name) = `Hello @name!`
+show @greet("Bob")
+
+>> Command
+exe @list(dir) = cmd {ls -la @dir | head -5}
+
+>> Block syntax for multi-statement bodies
+exe @process(data) = [
+  let @validated = @validate(@data)
+  let @transformed = @transform(@validated)
+  => @transformed
+]
+```
+</RULE_7_PARAMETERIZED_CONTENT>
+
+<RULE_8_FILE_LOADING>
+Angle brackets load file contents. Works with globs and AST selectors.
+
+```mlld
+var @content = <README.md>              >> file contents
+var @config = <config.json>             >> parsed as object
+var @author = <package.json>.author     >> field access
+
+>> Globs
+var @docs = <docs/**/*.md>
+show @docs.length                       >> number of files
+for @doc in @docs => show @doc.mx.filename
+
+>> AST selectors (code extraction)
+var @funcs = <src/api.ts { *fn }>       >> all functions
+var @handler = <api.ts { handleRequest }> >> specific function
+```
+
+Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are file refs. XML-like `<TAG>` is plain text.
+</RULE_8_FILE_LOADING>
+
+<RULE_9_IMPORTS>
+Module imports for code reuse. Namespace imports avoid collisions.
+
+```mlld
+>> Registry modules
+import { @parallel, @retry } from @mlld/core
+import @corp/utils as @corp
+
+>> Local files
+import { @helper } from "./utils.mld"
+import { @config } from <@base/config.mld>
+
+>> Import types
+import module { @api } from @corp/tools       >> cached
+import static { @prompt } from "./prompt.md"  >> embedded at parse
+import live <https://status.io> as @status    >> always fresh
+
+>> Directory imports
+import "@agents" as @agentRegistry
+show @agentRegistry.alice.tldr
+```
+</RULE_9_IMPORTS>
+
+<RULE_10_WHEN_DECISIONS>
+`when` for conditionals. Use `first` for switch-style (stops at first match).
+
+```mlld
+>> Simple condition
+when @isProd => show "Production mode"
+
+>> Switch-style (first match wins)
+when first [
+  @role == "admin" => show "Admin"
+  @role == "user"  => show "User"
+  * => show "Guest"
+]
+
+>> Bare when (evaluates all matches)
+when [
+  @score > 90 => show "Excellent!"
+  @hasBonus => show "Bonus earned!"
+  none => show "No matches"
+]
+```
+</RULE_10_WHEN_DECISIONS>
+
+<RULE_11_ITERATION>
+`foreach` transforms collections. `for` executes or collects.
+
+```mlld
+>> foreach (transform array)
+var @names = ["alice", "bob"]
+exe @greet(name) = `Hi @name!`
+var @greetings = foreach @greet(@names)
+
+>> for (execute per item)
+for @n in @names => show `Name: @n`
+
+>> for (collect results)
+var @doubled = for @x in [1,2,3] => @x * 2
+
+>> for with block syntax
+for @item in @items [
+  let @processed = @transform(@item)
+  show `Done: @processed`
+]
+
+>> Parallel execution
+for parallel(3) @task in @tasks => @runTask(@task)
+
+>> For with inline filter
+var @valid = for @x in @items when @x != null => @x
+```
+</RULE_11_ITERATION>
+
+<RULE_12_OPERATORS>
+Logical, comparison, and ternary operators.
+
+```mlld
+>> Comparison: <, >, <=, >=, ==, !=
+>> Logical: &&, ||, !
+>> Ternary: condition ? trueVal : falseVal
+
+var @isValid = @score > 80 && @submitted
+var @status = @isPro ? "premium" : "basic"
+var @canEdit = @isOwner || (@role == "editor" && !@isLocked)
+
+>> In conditions
+when @tokens > 1000 && @mode == "production" => show "High usage"
+```
+</RULE_12_OPERATORS>
+
+<RULE_13_STATE_MANAGEMENT>
+State updates via `state://` protocol. SDK captures writes without filesystem I/O.
+
+```mlld
+var @count = @state.count + 1
+output @count to "state://count"
+```
+
+```typescript
+// SDK provides state, captures writes
+execute(file, payload, { state: { count: 0 } });
+// Returns: { stateWrites: [{ path: 'count', value: 1 }] }
+```
+</RULE_13_STATE_MANAGEMENT>
+
+</MLLD_CORE_RULES>

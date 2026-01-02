@@ -1,0 +1,284 @@
+<MLLD_CONTROL_FLOW>
+
+<WHEN_DECISIONS>
+`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).
+
+**Simple form:**
+
+```mlld
+when @isProd => show "Production mode"
+when @score > 90 => show "Excellent!"
+```
+
+**Bare form** (evaluates all matching conditions):
+
+```mlld
+when [
+  @score > 90 => show "Excellent!"
+  @hasBonus => show "Bonus earned!"
+  none => show "No matches"        >> runs only if nothing matched
+]
+```
+
+**First form** (stops at first match, like switch):
+
+```mlld
+when first [
+  @role == "admin" => show "Admin panel"
+  @role == "user"  => show "User dashboard"
+  * => show "Guest view"           >> wildcard catches all
+]
+```
+
+**Value-returning when** (in exe):
+
+```mlld
+exe @classify(score) = when first [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "F"
+]
+
+var @grade = @classify(85)  >> "B"
+```
+
+**Block actions** (side effects + return):
+
+```mlld
+var @result = when first [
+  @needsProcessing => [
+    show "Processing..."
+    let @processed = @transform(@data)
+    => @processed
+  ]
+  * => @data
+]
+```
+
+**Local variables in when:**
+
+```mlld
+when @mode: [
+  let @prefix = "Status:"
+  "active" => show "@prefix Active"
+  "pending" => show "@prefix Pending"
+  * => show "@prefix Unknown"
+]
+```
+
+**Augmented assignment:**
+
+```mlld
+exe @collect() = when [
+  let @items = []
+  @items += "a"
+  @items += "b"
+  * => @items  >> ["a", "b"]
+]
+```
+
+`+=` works with arrays (concat), strings (append), objects (merge).
+
+**Operators in conditions:**
+- Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+- Logical: `&&`, `||`, `!`
+- Parentheses: `(@a || @b) && @c`
+
+```mlld
+when first [
+  @role == "admin" || @role == "mod" => show "Privileged"
+  @active && @verified => show "Active user"
+  !@banned => show "Allowed"
+  * => show "Blocked"
+]
+```
+</WHEN_DECISIONS>
+
+<FOR_ITERATION>
+`for` iterates over collections. Arrow form for single actions, block form for multiple.
+
+**Arrow form:**
+
+```mlld
+for @item in @items => show `Processing @item`
+for @n in [1,2,3] => log @n
+```
+
+**Collection form** (returns results):
+
+```mlld
+var @doubled = for @x in [1,2,3] => @x * 2     >> [2, 4, 6]
+var @names = for @user in @users => @user.name
+```
+
+**Block form:**
+
+```mlld
+for @item in @items [
+  let @processed = @transform(@item)
+  show `Done: @processed`
+]
+
+>> Collection with block
+var @results = for @item in @items [
+  let @step1 = @validate(@item)
+  let @step2 = @transform(@step1)
+  => @step2
+]
+```
+
+**For with inline filter:**
+
+```mlld
+var @valid = for @x in @items when @x != null => @x
+var @admins = for @u in @users when @u.role == "admin" => @u.name
+```
+
+**Skip keyword** (drop items from results):
+
+```mlld
+var @filtered = for @x in @items => when [
+  @x.valid => @x
+  none => skip      >> omit this item from results
+]
+
+>> Equivalent to inline filter, but allows complex logic
+var @processed = for @item in @data => when first [
+  @item.type == "a" => @transformA(@item)
+  @item.type == "b" => @transformB(@item)
+  * => skip         >> unknown types dropped
+]
+```
+
+**Object iteration:**
+
+```mlld
+var @cfg = {"host": "localhost", "port": 3000}
+for @v in @cfg => show `@v.mx.key: @v`
+>> Output: host: localhost, port: 3000
+```
+
+**Nested for:**
+
+```mlld
+for @x in ["A","B"] => for @y in [1,2] => show `@x-@y`
+>> Output: A-1, A-2, B-1, B-2
+```
+
+**Batch pipelines** (process collected results):
+
+```mlld
+var @total = for @n in [1,2,3,4] => @n => | @sum
+var @sorted = for @item in @items => @process(@item) => | @sortBy("priority")
+```
+</FOR_ITERATION>
+
+<PARALLEL_FOR>
+Run iterations concurrently with `for parallel`.
+
+```mlld
+>> Default concurrency (MLLD_PARALLEL_LIMIT, default 4)
+for parallel @x in @items => show @x
+
+>> Custom concurrency cap
+for parallel(3) @task in @tasks => @runTask(@task)
+
+>> With pacing (delay between starts)
+for parallel(2, 1s) @x in @items => @process(@x)
+```
+
+**Parallel blocks:**
+
+```mlld
+for parallel(3) @task in @tasks [
+  let @result = @runTask(@task)
+  show `Done: @task.id`
+]
+```
+
+**Error handling:**
+- Errors accumulate in `@mx.errors`
+- Failed iterations add error markers to results
+- Outer-scope writes blocked (use block-scoped `let` only)
+
+```mlld
+exe @process(tasks) = [
+  let @results = for parallel @t in @tasks => @run(@t)
+  => when [
+    @mx.errors.length == 0 => @results
+    * => @repair(@results, @mx.errors)
+  ]
+]
+```
+</PARALLEL_FOR>
+
+<FOREACH>
+`foreach` applies a function to each element, returning transformed array.
+
+```mlld
+var @names = ["alice", "bob", "charlie"]
+exe @greet(name) = `Hi @name!`
+
+var @greetings = foreach @greet(@names)
+>> ["Hi alice!", "Hi bob!", "Hi charlie!"]
+```
+
+**In exe:**
+
+```mlld
+exe @wrapAll(items) = foreach @wrap(@items)
+show @wrapAll(["a", "b"])  >> ["[a]", "[b]"]
+```
+
+**With options:**
+
+```mlld
+show foreach @greet(@names) with { separator: " | " }
+>> "Hi alice! | Hi bob! | Hi charlie!"
+```
+</FOREACH>
+
+<WHILE_LOOPS>
+Bounded iteration with `while`.
+
+```mlld
+exe @countdown(n) = when [
+  @n <= 0 => done "finished"
+  * => continue (@n - 1)
+]
+
+var @result = 5 | while(10) @countdown
+```
+
+**Control keywords:**
+- `done @value` - Terminate, return value
+- `done` - Terminate, return current state
+- `continue @value` - Next iteration with new state
+- `continue` - Next iteration with current state
+
+**While context** (`@mx.while`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap
+- `active` - true when inside while
+
+**With pacing:**
+
+```mlld
+var @result = @initial | while(100, 1s) @processor  >> 1s between iterations
+```
+</WHILE_LOOPS>
+
+<NO_EARLY_EXIT>
+mlld has no `return` or `exit`. Model outcomes with `when` and flags.
+
+```mlld
+>> Instead of early return, use conditional flow
+var @check = @validate(@input)
+when [
+  @check.valid => @process(@input)
+  !@check.valid => show `Error: @check.message`
+]
+```
+</NO_EARLY_EXIT>
+
+</MLLD_CONTROL_FLOW>

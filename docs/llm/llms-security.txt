@@ -1,0 +1,137 @@
+<MLLD_SECURITY>
+
+<GUARDS>
+Guards protect data and operations. Label sensitive data, define policies.
+
+**Labeling data:**
+
+```mlld
+var secret @apiKey = "sk-12345"
+var pii @email = "user@example.com"
+```
+
+**Defining guards:**
+
+```mlld
+guard @noShellSecrets before secret = when [
+  @mx.op.type == "run" => deny "Secrets blocked from shell"
+  * => allow
+]
+
+run cmd { echo @apiKey }   >> Blocked by guard
+```
+
+**Guard syntax:**
+
+```
+guard [@name] TIMING LABEL = when [...]
+```
+
+- `TIMING`: `before`, `after`, or `always`
+- Shorthand: `for` equals `before`
+</GUARDS>
+
+<BEFORE_GUARDS>
+Validate or transform input before operations.
+
+```mlld
+guard @sanitize before untrusted = when [
+  * => allow @input.trim().slice(0, 100)
+]
+```
+</BEFORE_GUARDS>
+
+<AFTER_GUARDS>
+Validate output after operations.
+
+```mlld
+guard @validateJson after op:exe = when [
+  @isValidJson(@output) => allow
+  * => deny "Invalid JSON"
+]
+```
+</AFTER_GUARDS>
+
+<TRANSFORM_WITH_ALLOW>
+Transform data during guard evaluation.
+
+```mlld
+guard @redact before secret = when [
+  @mx.op.type == "show" => allow @redact(@input)
+  * => allow
+]
+```
+</TRANSFORM_WITH_ALLOW>
+
+<DENIED_HANDLERS>
+Handle denied operations gracefully.
+
+```mlld
+exe @handler(value) = when [
+  denied => `Blocked: @mx.guard.reason`
+  * => @value
+]
+```
+</DENIED_HANDLERS>
+
+<AUTOMATIC_LABELS>
+System-assigned labels for tracking:
+
+| Label | Applied To |
+|-------|------------|
+| `src:exec` | Results from `/run` and `/exe` |
+| `src:file` | File loads |
+| `src:dynamic` | Dynamic module imports |
+| `dir:/path` | File directories (all parents) |
+
+**Example directory guards:**
+
+```mlld
+guard before op:run = when [
+  @input.any.mx.taint.includes('dir:/tmp/uploads') =>
+    deny "Cannot execute uploaded files"
+  * => allow
+]
+```
+</AUTOMATIC_LABELS>
+
+<LABEL_TRACKING>
+Labels flow through operations:
+
+- Method calls: `@secret.trim()` preserves labels
+- Templates: interpolated values carry labels
+- Field access: `@user.email` inherits from `@user`
+- Iterators: each item inherits collection labels
+- Pipelines: labels flow through stages
+</LABEL_TRACKING>
+
+<GUARD_COMPOSITION>
+Multiple guards can apply. Resolution order:
+
+1. All applicable guards run (file top-to-bottom)
+2. `deny` takes precedence over all
+3. `retry` next
+4. `allow @value` (transformed)
+5. `allow` (unchanged)
+
+Guards are non-reentrant (won't trigger on their own operations).
+</GUARD_COMPOSITION>
+
+<NEEDS_DECLARATION>
+Declare required capabilities in modules.
+
+```mlld
+---
+name: my-tool
+---
+
+needs {
+  js: []
+  sh
+}
+```
+
+Capabilities: `js`, `sh`, `cmd`, `node`, `python`, `network`, `filesystem`
+</NEEDS_DECLARATION>
+
+</MLLD_SECURITY>

@@ -1,0 +1,182 @@
+<MLLD_COMMANDS>
+
+<RUN_COMMAND>
+Execute shell commands or code. Language specifier determines execution context.
+
+**Decision tree:**
+- Single line + pipes only → `cmd { ... }` (safe, recommended)
+- Needs `&&`, `||`, control flow → `sh { ... }` (full shell)
+- JavaScript/Python code → `js { ... }` / `python { ... }`
+
+```mlld
+>> cmd (pipes only, safe)
+run cmd {echo Hello | tr '[:lower:]' '[:upper:]'}
+var @date = cmd {date}
+
+>> sh (full shell scripts)
+run sh {
+  npm test && npm run build || echo "Build failed"
+}
+
+>> js/python (code execution)
+run js {console.log("hello")}
+var @result = js {return 42}
+```
+
+**Working directory override:**
+
+```mlld
+run cmd:/ {pwd}                    >> runs in /
+run sh:/tmp {pwd}                  >> runs in /tmp
+run js:/tmp {console.log(process.cwd())}
+```
+
+**Stdin support:**
+
+```mlld
+var @data = '[{"name":"Alice"}]'
+run cmd { cat | jq '.[]' } with { stdin: @data }
+
+>> Pipe sugar (equivalent)
+run @data | { cat | jq '.[]' }
+```
+
+**Parameter syntax by language:**
+- `cmd`: interpolate with `@param`
+- `sh`: use shell variables as `$param`
+- `js/python`: parameters passed as variables
+</RUN_COMMAND>
+
+<EXE_EXECUTABLES>
+Define reusable commands, code, templates, or multi-statement blocks.
+
+**Simple forms:**
+
+```mlld
+>> Command
+exe @list(dir) = cmd {ls -la @dir | head -5}
+
+>> JavaScript
+exe @add(a, b) = js { return a + b }
+
+>> Template
+exe @greet(name) = `Hello @name!`
+
+>> External template file
+exe @welcome(name, role) = template "./prompts/welcome.att"
+```
+
+**Block syntax** (multi-statement bodies):
+
+```mlld
+exe @process(data) = [
+  let @validated = @validate(@data)
+  let @transformed = @transform(@validated)
+  => @transformed
+]
+
+>> With accumulation
+exe @countItems(items) = [
+  let @count = 0
+  for @item in @items [
+    let @count += 1
+  ]
+  => @count
+]
+```
+
+Block rules:
+- Use `[...]` for multi-statement bodies
+- `let @var = value` for block-scoped variables
+- `let @var += value` for accumulation (arrays/strings/objects)
+- `=> value` required as last statement for return
+
+**When-first in exe** (value-returning):
+
+```mlld
+exe @classify(score) = when first [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  @score >= 70 => "C"
+  * => "F"
+]
+
+>> With blocks for side effects
+exe @handler(input) = when first [
+  @input.valid => [
+    show "Processing..."
+    let @result = @transform(@input)
+    => @result
+  ]
+  * => { error: "Invalid input" }
+]
+```
+
+**Shadow environments** (expose JS helpers):
+
+```mlld
+exe @double(n) = js { return n * 2 }
+exe @cap(s) = js { return s[0].toUpperCase() + s.slice(1) }
+exe js = { double, cap }  >> expose to all js blocks
+
+var @out = js { cap("hello") + ": " + double(5) }  >> "Hello: 10"
+```
+</EXE_EXECUTABLES>
+
+<OUTPUT_DIRECTIVE>
+Write data to files or streams.
+
+```mlld
+output @content to "out.txt"
+output @data to "config.json"
+output @message to stdout
+output @error to stderr
+output @config to "settings.yaml" as yaml
+```
+</OUTPUT_DIRECTIVE>
+
+<LOG_DIRECTIVE>
+Syntactic sugar for `output to stdout`. Works in action contexts.
+
+```mlld
+log @message                        >> same as output @message to stdout
+log `Processing: @item`
+
+>> In action contexts
+for @item in @items => log @item
+when @debug => log "Debug info"
+```
+</LOG_DIRECTIVE>
+
+<APPEND_DIRECTIVE>
+Append newline-delimited records.
+
+```mlld
+append @record to "events.jsonl"        >> JSON object per line
+append "raw line" to "events.log"
+
+>> In pipelines
+var @_ = @data | append "audit.jsonl"
+
+>> In loops
+for @name in @runs => append @name to "pipeline.log"
+```
+
+`.jsonl` enforces JSON serialization. Other extensions write text. `.json` blocked.
+</APPEND_DIRECTIVE>
+
+<STREAMING>
+Stream output during execution.
+
+```mlld
+stream @claude("prompt")           >> keyword form
+stream @generateReport()           >> directive form
+
+>> Parallel streams
+stream @a() || stream @b()         >> concurrent, buffered results
+```
+
+Suppress: `--no-stream` flag or `MLLD_NO_STREAM=true`
+</STREAMING>
+
+</MLLD_COMMANDS>

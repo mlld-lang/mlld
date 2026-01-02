@@ -1,0 +1,138 @@
+<MLLD_REFERENCE>
+
+<EXECUTION_CONTEXTS>
+Where interpolation applies:
+
+| Context | Syntax | Example | Notes |
+|---------|--------|---------|-------|
+| Backticks | `@var` | `` `Hello @name` `` | Primary template |
+| `::...::` | `@var` | `::Use `cmd` for @name::` | Backticks in text |
+| Commands `{...}` | `@var` | `{echo "@msg"}` | Interpolates |
+| Double quotes | `@var` | `"Hi @name"` | Interpolates |
+| Single quotes | literal | `'Hi @name'` | No interpolation |
+| Directive level | `@var` | `show @greeting` | Direct reference |
+</EXECUTION_CONTEXTS>
+
+<DIRECTIVES_QUICK_REFERENCE>
+
+| Directive | Purpose | Example |
+|-----------|---------|---------|
+| `var` | Create variable | `var @x = 1` |
+| `show` | Output content | `show @message` |
+| `run` | Execute command | `run cmd {echo hi}` |
+| `exe` | Define executable | `exe @f(x) = ...` |
+| `when` | Conditional | `when @x => show "yes"` |
+| `for` | Iteration | `for @x in @arr => ...` |
+| `import` | Import module | `import { @f } from @m/m` |
+| `export` | Export items | `export { @f, @g }` |
+| `output` | Write to file | `output @x to "f.txt"` |
+| `log` | Output to stdout | `log @message` |
+| `append` | Append to file | `append @x to "f.jsonl"` |
+| `guard` | Security policy | `guard before secret = ...` |
+| `stream` | Stream output | `stream @f()` |
+| `needs` | Declare capabilities | `needs { js: [] }` |
+</DIRECTIVES_QUICK_REFERENCE>
+
+<LANGUAGE_SPECIFIERS>
+
+| Specifier | Use Case | Features |
+|-----------|----------|----------|
+| `cmd` | Simple commands | Pipes only, safe |
+| `sh` | Shell scripts | `&&`, `\|\|`, multi-line |
+| `js` | JavaScript | Full JS, return values |
+| `node` | Node.js | npm packages available |
+| `python` | Python | Python code |
+</LANGUAGE_SPECIFIERS>
+
+<BUILTIN_TRANSFORMS>
+
+| Transform | Purpose |
+|-----------|---------|
+| `@json` | Parse JSON (loose mode) |
+| `@json.strict` | Parse strict JSON |
+| `@json.loose` | Parse JSON5 |
+| `@json.llm` | Extract JSON from LLM response |
+| `@xml` | Format as XML |
+| `@csv` | Format as CSV |
+| `@md` | Format as Markdown |
+</BUILTIN_TRANSFORMS>
+
+<OPERATORS>
+
+**Comparison:** `<`, `>`, `<=`, `>=`, `==`, `!=`
+
+**Logical:** `&&`, `||`, `!`
+
+**Ternary:** `@cond ? @trueVal : @falseVal`
+
+**Precedence:** `!` → comparison → `&&` → `||` → `?:`
+</OPERATORS>
+
+<ARRAY_SLICING>
+
+| Syntax | Result |
+|--------|--------|
+| `@arr[0:3]` | First 3 elements |
+| `@arr[-2:]` | Last 2 elements |
+| `@arr[:-1]` | All except last |
+| `@arr[2:]` | From index 2 to end |
+</ARRAY_SLICING>
+
+<METADATA_FIELDS>
+
+| Field | Description |
+|-------|-------------|
+| `.mx.content` | File content (default) |
+| `.mx.filename` | Filename only |
+| `.mx.relative` | Relative path |
+| `.mx.absolute` | Absolute path |
+| `.mx.tokens` | Token count estimate |
+| `.mx.fm` | Frontmatter object |
+| `.mx.key` | Object key (in iteration) |
+| `.mx.keys` | All keys (for objects) |
+</METADATA_FIELDS>
+
+<FILE_EXTENSIONS>
+
+| Extension | Mode | Behavior |
+|-----------|------|----------|
+| `.mld` | Strict | Bare directives, text errors |
+| `.mld.md` | Markdown | Slash prefix, text as content |
+| `.att` | Template | `@var` interpolation |
+| `.mtt` | Template | `{{var}}` interpolation (escape hatch) |
+</FILE_EXTENSIONS>
+
+<ESCAPE_HATCH_TEMPLATES>
+When standard templates cause parsing issues (e.g., XML tags with `@` in attributes trigger file load detection), use `:::...:::` or `.mtt` files:
+
+```mlld
+>> Problem: <TAG version="@version"> triggers file load detection
+var @doc = ::<GUIDE version="@version">::     >> fails - @ in angle brackets
+
+>> Solution: triple-colon uses {{var}} interpolation, ignores @ and <>
+var @doc = :::<GUIDE version="{{version}}">:::   >> works
+
+>> Or use .mtt external template
+exe @header(version) = template "./header.mtt"
+```
+
+Trade-offs: `:::...:::` only supports `{{var}}` interpolation - no `@var`, `<file>`, `@exe()`, pipes, or loops. Use only when needed.
+</ESCAPE_HATCH_TEMPLATES>
+
+<ENVIRONMENT_VARIABLES>
+
+| Variable | Purpose |
+|----------|---------|
+| `MLLD_PARALLEL_LIMIT` | Max concurrent operations (default 4) |
+| `MLLD_NO_STREAM` | Disable streaming output |
+| `MLLD_DEBUG` | Enable debug output |
+| `MLLD_BASH_HEREDOC` | Use heredocs for large vars |
+</ENVIRONMENT_VARIABLES>
+
+<SEE_ALSO>
+- Documentation: https://mlld.ai/docs
+- Examples: https://github.com/mlld-lang/mlld/tree/main/tests/cases/valid/feat
+- Source: https://github.com/mlld-lang/mlld
+</SEE_ALSO>
+
+</MLLD_REFERENCE>
