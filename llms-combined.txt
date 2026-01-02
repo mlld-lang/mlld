@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-02T00:44:04.528Z
+Generated: 2026-01-02T02:39:51.128Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -17,7 +17,7 @@ mlld has two syntax modes based on file extension:
 - Text lines are errors (catches accidental output)
 - Blank lines ignored (formatting whitespace)
 
-**.mld.md files (markdown mode)** - For documentation/literate scripts
+**.md or .mld.md files (markdown mode)** - For documentation/literate scripts
 - Slash prefix required: `/var @x = 1`
 - Text lines become content output
 - Designed for mixing prose with executable code

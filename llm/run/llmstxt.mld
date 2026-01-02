@@ -25,6 +25,7 @@ var @modules = [
 var @contents = for @module in @modules => <@base/docs/llm/@module>
 
 >> Build combined document
+>> Note: Using JS because :::...::: with large interpolated content has a bug (see mlld-zigd)
 exe @buildDoc(version, timestamp, body) = js {
   return `<MLLD_COMPLETE_GUIDE version="${version}">
 

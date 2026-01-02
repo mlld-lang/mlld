@@ -6,7 +6,7 @@ mlld is a modular prompt scripting language for dynamically assembling context a
 Two syntax modes based on file extension:
 
 **.mld (strict mode)** - Bare directives, text lines error
-**.mld.md (markdown mode)** - Slash prefix required, text becomes content
+**.md or .mld.md (markdown mode)** - Slash prefix required, text becomes content
 
 ```mlld
 >> Strict mode example (.mld file)
