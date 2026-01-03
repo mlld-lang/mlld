@@ -231,7 +231,6 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 
 - NEVER call builtin array methods directly on wrappers—use `asData()` first
 - Templates ALWAYS stringify—use `asText()` for interpolation, not `.data`
-- `@var.mx.*` relies on Variable wrappers—field access inside object literals or exec args must resolve with `ResolutionContext.FieldAccess` and `accessField(s)`, not `extractVariableValue()`
 - Equality checks unwrap via `asData()` before comparison
 - When-expression actions should convert StructuredValue results to primitives before tail modifiers
 - Shell commands need `asText()` for heredoc byte counts
@@ -252,3 +251,25 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 - Lost metadata → verify wrappers not unwrapped too early (use helpers at stage boundaries only)
 - `"[object Object]"` in logs → apply `asText()` before string concatenation
 - Nested wrappers → normalize exec arguments with `asText()` before template composition
+
+**`.mx` works in some contexts but not others**
+
+Symptom: `@f.mx.relative` works in direct interpolation but fails in object literals
+(`{ file: @f.mx.relative }`) or exe parameters with "Field 'mx' not found".
+
+Root cause: `.mx` is a property of the Variable wrapper, not the underlying data. When
+code extracts the raw value before field access, the Variable wrapper is lost and `.mx`
+becomes inaccessible.
+
+Diagnosis approach:
+1. Add debug logging to trace `typeof value` and `isVariable(value)` at each step
+2. Look for where the value changes from Variable/object to string/primitive
+3. The bug is usually one step BEFORE where the error appears
+
+The fix pattern: When evaluating expressions with field access (`.mx.*`), resolve using
+`ResolutionContext.FieldAccess` which preserves the Variable wrapper, rather than
+extracting raw values first. Key files: `VariableReferenceEvaluator.ts`, `field-access.ts`.
+
+This is tricky because different evaluation paths (direct interpolation vs object literal
+construction vs exe parameter binding) may handle Variables differently. The error points
+to where `.mx` is accessed, but the bug is where the Variable was unwrapped.
