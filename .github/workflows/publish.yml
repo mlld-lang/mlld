@@ -146,3 +146,57 @@ jobs:
             git commit -m "chore: release VS Code extension v${{ steps.check_release.outputs.version }}"
             git push
           fi
+
+      # SDK Publishing
+      - name: Sync SDK versions
+        if: steps.check_release.outputs.skip == 'false'
+        run: node scripts/sync-sdk-versions.js
+
+      - name: Setup Python
+        if: steps.check_release.outputs.skip == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Publish Python SDK to PyPI
+        if: steps.check_release.outputs.skip == 'false'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          set -e
+          cd sdk/python
+          pip install build twine
+          python -m build
+          twine upload dist/*
+
+      - name: Setup Rust
+        if: steps.check_release.outputs.skip == 'false'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish Rust SDK to crates.io
+        if: steps.check_release.outputs.skip == 'false'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          set -e
+          cd sdk/rust
+          cargo publish --allow-dirty
+
+      - name: Tag Go SDK
+        if: steps.check_release.outputs.skip == 'false'
+        run: |
+          set -e
+          VERSION=${{ steps.check_release.outputs.version }}
+          git tag "sdk/go/v${VERSION}"
+          git push origin "sdk/go/v${VERSION}"
+
+      - name: Commit SDK version updates
+        if: steps.check_release.outputs.skip == 'false'
+        run: |
+          set -e
+          if ! git diff --quiet -- sdk/python/pyproject.toml sdk/rust/Cargo.toml; then
+            git add sdk/python/pyproject.toml sdk/rust/Cargo.toml
+            git commit -m "chore: sync SDK versions to v${{ steps.check_release.outputs.version }}"
+            git push
+          fi
