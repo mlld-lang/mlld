@@ -77,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Simplified .keep usage**: Metadata now accessible in mlld contexts without `.keep` (e.g., `@file.mx.filename` works directly). `.keep` only needed when passing to JS/Node to preserve StructuredValue wrapper. Apply `.keep` at call site (`@process(@file.keep)`) rather than variable creation.
 
 ### Fixed
+- **@json error clarity**: `@json` throws clear errors when parsing fails instead of silently mangling input. Detects markdown code fences and suggests `@json.llm`.
+- **Pipeline filter error**: Writing `| json` instead of `| @json` now gives helpful error: "Pipeline filters require the @ prefix"
 - **Arithmetic operators in exe blocks**: Math operators (`+`, `-`, `*`, `/`, `%`) work in exe blocks, let assignments, and return values
 - **Universal StructuredValue model**: All runtime values flow as StructuredValues with `.text`, `.data`, and `.mx` surfaces. Boundaries use `asData()`/`asText()` for extraction. Fixes when-expressions returning numbers, object serialization, and numeric comparisons.
 - **Field access precedence**: User data properties take precedence over guard quantifiers (`.all`, `.any`, `.none`). Core metadata (`.type`, `.mx`) always from Variable.
