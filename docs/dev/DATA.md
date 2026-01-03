@@ -231,6 +231,7 @@ array.data.map(item => (isStructuredValue(item) ? asText(item) : item));
 
 - NEVER call builtin array methods directly on wrappers—use `asData()` first
 - Templates ALWAYS stringify—use `asText()` for interpolation, not `.data`
+- `@var.mx.*` relies on Variable wrappers—field access inside object literals or exec args must resolve with `ResolutionContext.FieldAccess` and `accessField(s)`, not `extractVariableValue()`
 - Equality checks unwrap via `asData()` before comparison
 - When-expression actions should convert StructuredValue results to primitives before tail modifiers
 - Shell commands need `asText()` for heredoc byte counts

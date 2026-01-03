@@ -307,8 +307,9 @@ export async function evaluateExe(
          *      We preserve identity bodies as templates at compile-time to avoid runtime ambiguity.
          */
         let refName: string | undefined;
+        const commandRefNodes = Array.isArray(commandRef) ? commandRef : [commandRef];
         try {
-          const refCandidate = Array.isArray(commandRef) ? commandRef[0] : commandRef;
+          const refCandidate = commandRefNodes[0];
           if (refCandidate && typeof refCandidate === 'object') {
             if ('type' in refCandidate && (refCandidate as any).type === 'VariableReference' && 'identifier' in (refCandidate as any)) {
               refName = (refCandidate as any).identifier as string;
@@ -323,19 +324,35 @@ export async function evaluateExe(
         }
 
         const args = directive.values?.args || [];
+        const refCandidate = commandRefNodes[0];
+        const isVariableRef =
+          refCandidate &&
+          typeof refCandidate === 'object' &&
+          'type' in refCandidate &&
+          ((refCandidate as any).type === 'VariableReference' || (refCandidate as any).type === 'VariableReferenceWithTail');
+        const refFields = isVariableRef ? (refCandidate as any).fields : undefined;
+        const refPipes = isVariableRef ? (refCandidate as any).pipes : undefined;
+        const shouldTemplateFromRef =
+          isVariableRef &&
+          (((refCandidate as any).type === 'VariableReferenceWithTail') ||
+            (Array.isArray(refFields) && refFields.length > 0) ||
+            (Array.isArray(refPipes) && refPipes.length > 0));
         const isIdentity =
+          !shouldTemplateFromRef &&
+          isVariableRef &&
+          commandRefNodes.length === 1 &&
           paramNames.length >= 1 &&
           args.length === 0 &&
           typeof refName === 'string' &&
           refName.length > 0 &&
           refName === paramNames[0];
 
-        if (isIdentity) {
+        if (isIdentity || shouldTemplateFromRef) {
           executableDef = {
             type: 'template',
-            template: [
-              { type: 'VariableReference', identifier: refName }
-            ],
+            template: isIdentity
+              ? [{ type: 'VariableReference', identifier: refName }]
+              : commandRefNodes,
             paramNames,
             sourceDirective: 'exec'
           } satisfies TemplateExecutable;

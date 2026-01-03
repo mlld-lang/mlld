@@ -177,12 +177,19 @@ export class VariableReferenceEvaluator {
       return variable;
     }
     
-    // Extract the actual value
-    let result = await this.extractVariableValue(variable, env);
+    const hasFieldAccess = Array.isArray(value.fields) && value.fields.length > 0;
+    let result: any;
+    if (hasFieldAccess) {
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      result = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
+    } else {
+      // Extract the actual value
+      result = await this.extractVariableValue(variable, env);
+    }
     this.attachProvenance(result, variable as Variable);
     
     // Apply field access if present
-    if (value.fields && value.fields.length > 0) {
+    if (hasFieldAccess) {
       // Apply each field access in sequence
       for (const field of value.fields) {
         // Handle variableIndex type - need to resolve the variable first
@@ -345,8 +352,15 @@ export class VariableReferenceEvaluator {
       return variable;
     }
     
-    // Extract value using new type guards
-    let result = await this.extractVariableValue(variable, env);
+    const hasFieldAccess = Array.isArray(value.fields) && value.fields.length > 0;
+    let result: any;
+    if (hasFieldAccess) {
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      result = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
+    } else {
+      // Extract value using new type guards
+      result = await this.extractVariableValue(variable, env);
+    }
     this.attachProvenance(result, variable);
     
     // DEBUG: Log what we extracted
@@ -361,13 +375,7 @@ export class VariableReferenceEvaluator {
     }
     
     // Apply field access if present
-    if (value.fields && value.fields.length > 0) {
-      // If the variable has complex metadata indicating it needs further evaluation
-      if ((variable as Variable).internal?.isComplex) {
-        // For complex variables, we need to evaluate the raw value
-        result = await this.evaluateDataValue(result, env);
-      }
-      
+    if (hasFieldAccess) {
       // Apply each field access in sequence
       for (const field of value.fields) {
         // Handle variableIndex type - need to resolve the variable first

@@ -282,20 +282,16 @@ List 2-3 issues or "LGTM". Be concise (max 3 lines).
 >> Load TypeScript files
 var @allFiles = <src/**/*.ts>
 
->> Extract file info (name + content) before parallel loop
-var @fileInfo = for @f in @allFiles => { name: @f.relative, content: @f }
-
 >> Review function
-exe @reviewFile(info) = [
-  let @prompt = @buildPrompt(@info.name, @info.content)
+exe @reviewFile(file) = [
+  let @prompt = @buildPrompt(@file.mx.relative, @file)
   let @review = @haiku(@prompt)
-  let @filename = @info.name
   let @trimmed = @review.trim()
-  => { file: @filename, review: @trimmed }
+  => { file: @file.mx.relative, review: @trimmed }
 ]
 
 >> Parallel review - up to 5 concurrent
-var @reviews = for parallel(5) @info in @fileInfo => @reviewFile(@info)
+var @reviews = for parallel(5) @f in @allFiles => @reviewFile(@f)
 
 >> Output results
 for @r in @reviews [
@@ -307,10 +303,9 @@ for @r in @reviews [
 
 **Key patterns:**
 - `<src/**/*.ts>` - Glob pattern loads all matching files
-- `@f.relative` - Access file metadata (relative path)
+- `@f.mx.relative` - Access file metadata (relative path)
 - `@prompt | cmd { claude -p }` - Pipe to Claude CLI via stdin
 - `for parallel(5)` - Process up to 5 files concurrently
-- Extract file info before parallel loop to preserve metadata
 
 ## Common Patterns Summary
 
