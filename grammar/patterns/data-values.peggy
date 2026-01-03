@@ -64,10 +64,12 @@ DataObjectPair
 // 2. Uses StringLiteral directly instead of TemplateStyleInterpolation (for unwrapping)
 DataPropertyValue "data context property value"
   = RunCommandValue              // run {command} - preserve as-is
-  / CodeExecutionValue           // js {code} - preserve as-is  
+  / CodeExecutionValue           // js {code} - preserve as-is
   / DataObjectLiteral            // Nested objects get typed
   / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
   / AlligatorExpression          // File loading: <file.md> - always loading!
+  / ExecResultMethodCall         // @func(args).method(args) - chained method calls
+  / FieldAccessExecPattern       // @obj.method(args) - method calls on variables
   / ExecInvocationPattern        // @func() - preserve as-is
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
@@ -111,10 +113,12 @@ DataArrayContent
 // DATA ARRAY VALUE - Similar to ArrayValue but uses data context patterns
 DataArrayValue
   = RunCommandValue              // run {command} - preserve as-is
-  / CodeExecutionValue           // js {code} - preserve as-is  
+  / CodeExecutionValue           // js {code} - preserve as-is
   / DataObjectLiteral            // Objects get typed
   / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
   / AlligatorExpression          // File loading: <file.md> - always loading!
+  / ExecResultMethodCall         // @func(args).method(args) - chained method calls
+  / FieldAccessExecPattern       // @obj.method(args) - method calls on variables
   / ExecInvocationPattern        // @func() - preserve as-is
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is

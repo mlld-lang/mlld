@@ -495,6 +495,12 @@ ExeBlockBody
         returnStmt: null
       };
     }
+  / leadingComments:LeadingBlockComment* _ ret:ExeReturnStatement {
+      return {
+        statements: [],
+        returnStmt: ret
+      };
+    }
 
 ExeBlockStatementList
   = leadingComments:LeadingBlockComment* _ first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* trailing:BlockComments* {
