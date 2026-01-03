@@ -502,7 +502,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           } else if (nodeValue.type === 'Null') {
             stringValue = 'null';
           } else {
-            const { isPipelineInput } = await import('../utils/pipeline-input');
+            const { isPipelineInput } = await import('@core/types/variable/TypeGuards');
             if (isPipelineInput(value)) {
               stringValue = asText(value);
             } else {

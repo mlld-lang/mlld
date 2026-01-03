@@ -32,17 +32,27 @@ interface ForIterationError {
   value?: unknown;
 }
 
+// Check if an object looks like file content data (e.g., from glob iteration)
+function looksLikeFileData(value: unknown): value is Record<string, unknown> & { content: string; filename?: string; relative?: string; absolute?: string } {
+  if (!value || typeof value !== 'object') return false;
+  const obj = value as Record<string, unknown>;
+  // Must have content (the file's text content)
+  if (typeof obj.content !== 'string') return false;
+  // Should have at least one file path property
+  return typeof obj.filename === 'string' || typeof obj.relative === 'string' || typeof obj.absolute === 'string';
+}
+
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown, env: Environment): Variable {
   // If already a Variable, return as-is
   if (isVariable(value)) {
     return value;
   }
-  
+
   // Special handling for LoadContentResult objects and StructuredValue arrays
   // These need to be preserved as objects with their special metadata
   if (isLoadContentResult(value)) {
-    return createObjectVariable(
+    const variable = createObjectVariable(
       name,
       value,
       false, // Not complex - it's already evaluated
@@ -57,10 +67,23 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
         source: 'for-loop'
       }
     );
+    // Preserve file metadata in .mx so @f.mx.relative etc. works
+    variable.mx = {
+      ...(variable.mx ?? {}),
+      filename: value.filename,
+      relative: value.relative,
+      absolute: value.absolute,
+      ext: (value as any).ext ?? (value as any)._extension,
+      tokest: (value as any).tokest ?? (value as any)._metrics?.tokest,
+      tokens: (value as any).tokens ?? (value as any)._metrics?.tokens
+    };
+    return variable;
   }
 
-  if (isStructuredValue(value) && value.type === 'array') {
-    return createObjectVariable(
+  if (isStructuredValue(value)) {
+    // For StructuredValue items (both arrays and individual items like glob file entries),
+    // preserve the .mx metadata from the StructuredValue
+    const variable = createObjectVariable(
       name,
       value,
       false, // Not complex - it's already evaluated
@@ -71,12 +94,36 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
         isMultiLine: false
       },
       {
-        arrayType: 'structured-value-array',
+        arrayType: value.type === 'array' ? 'structured-value-array' : undefined,
         source: 'for-loop'
       }
     );
+    // Preserve the StructuredValue's .mx metadata on the Variable
+    // This ensures file metadata (relative, absolute, filename, etc.) is accessible
+    if (value.mx) {
+      variable.mx = { ...value.mx };
+    }
+    return variable;
   }
-  
+
+  // Check if this looks like file data (from normalizeIterableValue stripping StructuredValue wrapper)
+  // If so, copy file metadata properties to .mx so @f.mx.relative etc. works
+  if (looksLikeFileData(value)) {
+    const importer = new VariableImporter();
+    const variable = importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
+    // Copy file metadata to .mx
+    variable.mx = {
+      ...(variable.mx ?? {}),
+      filename: value.filename,
+      relative: value.relative,
+      absolute: value.absolute,
+      ext: (value as any).ext,
+      tokest: (value as any).tokest,
+      tokens: (value as any).tokens
+    };
+    return variable;
+  }
+
   // Otherwise, create a Variable from the value
   const importer = new VariableImporter();
   return importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
