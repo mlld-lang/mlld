@@ -1,0 +1,8 @@
+HELLO WORLD
+hello world
+'hello'
+{
+  "a": 1,
+  "b": 2
+}
+[1,2,3]

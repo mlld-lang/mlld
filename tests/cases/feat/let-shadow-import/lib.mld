@@ -1,0 +1,2 @@
+/var @items = ["imported1", "imported2"]
+/export { @items }
