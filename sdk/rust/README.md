@@ -6,7 +6,7 @@ Rust wrapper for the mlld CLI.
 
 ```toml
 [dependencies]
-mlld = "2.0"
+mlld = "0.1"
 ```
 
 **Requires**: Node.js and mlld CLI installed (`npm install -g mlld`)

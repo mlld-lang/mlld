@@ -5,7 +5,7 @@ Python wrapper for the mlld CLI.
 ## Installation
 
 ```bash
-pip install mlld
+pip install mlld-sdk
 ```
 
 **Requires**: Node.js and mlld CLI installed (`npm install -g mlld`)

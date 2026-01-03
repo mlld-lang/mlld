@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Rust wrapper for the mlld CLI"
 license = "MIT"
-repository = "https://github.com/mlld-lang/mlld"
+repository = "https://github.com/mlld-lang/mlld/tree/main/sdk/rust"
+homepage = "https://mlld.dev"
+documentation = "https://docs.rs/mlld"
+readme = "README.md"
 keywords = ["mlld", "scripting", "llm", "ai"]
 categories = ["development-tools", "command-line-utilities"]
 

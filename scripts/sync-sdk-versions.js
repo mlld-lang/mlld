@@ -25,7 +25,8 @@ cargo = cargo.replace(/^version = ".*"$/m, `version = "${version}"`);
 fs.writeFileSync(cargoPath, cargo);
 console.log(`  ✓ Rust: ${cargoPath}`);
 
-// Go: go.mod doesn't need version update (uses git tags)
+// Go: Uses git tags for versioning (sdk/go/vX.Y.Z)
+// pkg.go.dev indexes automatically when tag is pushed
 console.log(`  ✓ Go: Uses git tags (sdk/go/v${version})`);
 
 console.log('Done!');

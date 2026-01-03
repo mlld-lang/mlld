@@ -5,7 +5,7 @@ Go wrapper for the mlld CLI.
 ## Installation
 
 ```bash
-go get github.com/mlld-lang/mlld-go
+go get github.com/mlld-lang/mlld/sdk/go
 ```
 
 **Requires**: Node.js and mlld CLI installed (`npm install -g mlld`)
@@ -17,7 +17,7 @@ package main
 
 import (
     "fmt"
-    mlld "github.com/mlld-lang/mlld-go"
+    mlld "github.com/mlld-lang/mlld/sdk/go"
 )
 
 func main() {

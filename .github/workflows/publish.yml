@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write  # For PyPI trusted publishing
 
 jobs:
   release:
@@ -160,15 +161,17 @@ jobs:
 
       - name: Publish Python SDK to PyPI
         if: steps.check_release.outputs.skip == 'false'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
           set -e
           cd sdk/python
-          pip install build twine
+          pip install build
           python -m build
-          twine upload dist/*
+
+      - name: Publish Python SDK to PyPI (Trusted Publishing)
+        if: steps.check_release.outputs.skip == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist/
 
       - name: Setup Rust
         if: steps.check_release.outputs.skip == 'false'

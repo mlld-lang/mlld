@@ -18,13 +18,13 @@ The tradeoff is requiring Node.js at runtime. For most use cases, this is fine.
 ### Go
 
 ```bash
-go get github.com/mlld-lang/mlld-go
+go get github.com/mlld-lang/mlld/sdk/go
 ```
 
 ### Python
 
 ```bash
-pip install mlld
+pip install mlld-sdk
 ```
 
 ### Rust
@@ -39,7 +39,7 @@ mlld = "0.1"
 ### Go
 
 ```go
-import "github.com/mlld-lang/mlld-go"
+import mlld "github.com/mlld-lang/mlld/sdk/go"
 
 client := mlld.New()
 
