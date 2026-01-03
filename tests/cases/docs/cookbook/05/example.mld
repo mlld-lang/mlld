@@ -1,0 +1,19 @@
+exe @checkLength(text) = when first [
+  @text.length() > 10 => { pass: true }
+  * => { pass: false, reason: "Too short" }
+]
+
+exe @checkFormat(text) = when first [
+  @text.startsWith("Answer:") => { pass: true }
+  * => { pass: false, reason: "Wrong format" }
+]
+
+exe @validate(text) = [
+  let @len = @checkLength(@text)
+  let @fmt = @checkFormat(@text)
+  => when first [
+    !@len.pass => @len
+    !@fmt.pass => @fmt
+    * => { pass: true, value: @text }
+  ]
+]

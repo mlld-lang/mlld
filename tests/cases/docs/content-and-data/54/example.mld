@@ -1,6 +1,2 @@
-var @checks = for @service in ["auth", "payments", "search"] =>
-  {"service": @service, "status": "ok", "timestamp": @now}
-
-for @entry in @checks => append @entry to "health.jsonl"
-
-show <health.jsonl>
+import { API_KEY, config } from @input
+show `Deploying @config with key @API_KEY`

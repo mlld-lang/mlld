@@ -616,6 +616,60 @@ show @text.split(" ")                   >> ["Hello", "World"]
 show @text.split("")                    >> ["H", "e", "l", "l", "o", " ", "W", "o", "r", "l", "d"]
 ```
 
+### Type Checking Methods
+
+Check variable types at runtime:
+
+```mlld
+var @arr = [1, 2, 3]
+var @obj = {"name": "Alice"}
+var @str = "hello"
+var @num = 42
+var @bool = true
+var @nothing = null
+
+show @arr.isArray()      >> true
+show @obj.isObject()     >> true
+show @str.isString()     >> true
+show @num.isNumber()     >> true
+show @bool.isBoolean()   >> true
+show @nothing.isNull()   >> true
+
+>> isDefined() safely returns false for missing variables
+show @missing.isDefined()   >> false
+show @str.isDefined()       >> true
+```
+
+Use type checks in conditionals:
+
+```mlld
+exe @process(input) = when first [
+  @input.isArray() => foreach @handle(@input)
+  @input.isObject() => @handleObject(@input)
+  @input.isString() => @handleString(@input)
+  * => "unknown type"
+]
+```
+
+### @exists() Builtin
+
+Check if a path or glob pattern has matches:
+
+```mlld
+>> Path existence
+when @exists("config.json") => show "Config found"
+
+>> Glob pattern existence (true if at least one match)
+when @exists(<*.md>) => show "Markdown files exist"
+
+>> Use in conditionals
+exe @loadConfig() = when first [
+  @exists("config.local.json") => <config.local.json>
+  @exists("config.json") => <config.json>
+  * => {}
+]
+```
+
 ## Data Transformations
 
 ### Pipeline Transformations
@@ -652,6 +706,7 @@ show @toxml
 var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
 var @tocsv = @users | @CSV
 show @tocsv
+```
 
 `@json` accepts loose JSON syntax (single quotes, trailing commas, comments). Use `@json.loose` when you want to be explicit, or `@json.strict` to require standard JSON and surface a clear error if the input is relaxed:
 
@@ -739,26 +794,30 @@ var @literal = '@name stays literal'
 
 #### External Templates (.att, .mtt)
 
-Keep reusable templates in standalone files and execute them as functions:
+Keep reusable templates in standalone files and execute them as functions.
 
-```mlld
->> .att files (default for 5+ lines)
->> file: templates/deploy.att
->> Deployment: @env
+**.att file** (templates/deploy.att):
+```
+Deployment: @env
 Status: @status
 Config: <@base/config/@env.json>
+```
 
->> usage
+Usage:
+```mlld
 exe @deploy(env, status) = template "./templates/deploy.att"
 show @deploy("prod", "success")
+```
 
->> .mtt files (Discord/social only)
->> file: templates/discord.mtt
+**.mtt file** (templates/discord.mtt) - for Discord/social only:
+```
 🚨 Alert <@{{adminId}}>!
 Reporter: <@{{reporterId}}>
 Severity: {{severity}}
+```
 
->> usage
+Usage:
+```mlld
 exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
 ```
 
@@ -921,9 +980,11 @@ run cmd {echo "Welcome @name"}
 
 >> NOT in single quotes (literal)
 var @literal = 'Hello @name'               >> Outputs: Hello @name
+```
 
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+In markdown mode (`.mld.md` files), plain text lines are not interpolated:
+```
+Hello @name                                 >> Plain text, @name is literal
 ```
 
 ## Environment Variables and Input

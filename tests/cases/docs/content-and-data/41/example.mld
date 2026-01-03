@@ -1,16 +1,3 @@
->> ✗ Using {{}} in ::...::
-var @msg = ::Hello {{name}}::        >> {{name}} is literal
-var @msg = ::Hello @name::           >> ✓
-
->> ✗ Using @var in :::...:::
-var @msg = :::Hello @name:::         >> @name is literal
-var @msg = :::Hello {{name}}:::      >> ✓
-
->> ✗ Using ::: without Discord/social need
-var @msg = :::Status: {{status}}:::  >> Loses all features
-var @msg = ::Status: @status::       >> ✓ Full features
-
->> ✗ Importing template files
-import { @tpl } from "./file.att"    >> Error
-exe @tpl(x) = template "./file.att"  >> ✓
-import templates from "./templates" as @tpl(x, y)  >> Use this for template directories
+/var @loose = "{'name': 'Ada', /* comment */ age: 32,}"
+/var @parsedLoose = @loose | @json              >> Uses relaxed parsing
+/var @parsedStrict = @loose | @json.strict      >> Fails with hint to use @json.loose

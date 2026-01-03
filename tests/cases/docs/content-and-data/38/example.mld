@@ -1,26 +1,12 @@
->> Double-colon (default)
-var @msg = ::Hello @name!::
-var @doc = ::Use `npm test` before @env::
-var @report = ::
-Status: @status
-Config: <@base/config.json>
-Data: @data|@json
-::
+>> Path existence
+when @exists("config.json") => show "Config found"
 
->> Backticks (alternative)
-var @msg = `Hello @name!`
-var @multi = `
-Line 1: @var
-Line 2: @other
-`
+>> Glob pattern existence (true if at least one match)
+when @exists(<*.md>) => show "Markdown files exist"
 
->> Double quotes (single-line only)
-var @path = "@base/files/@filename"
-run cmd {echo "Processing @file"}
-
->> Triple-colon (Discord/social only)
-var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
-
->> Single quotes (literal)
-var @literal = '@name stays literal'
+>> Use in conditionals
+exe @loadConfig() = when first [
+  @exists("config.local.json") => <config.local.json>
+  @exists("config.json") => <config.json>
+  * => {}
+]

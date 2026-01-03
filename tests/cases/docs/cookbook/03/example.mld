@@ -1,0 +1,4 @@
+var @projectDir = "/path/to/project"
+exe @review(prompt) = @prompt | cmd:@projectDir { claude -p }
+
+show @review("Review the code in this directory")

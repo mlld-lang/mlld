@@ -1,18 +1,9 @@
->> .att files (default for 5+ lines)
->> file: templates/deploy.att
->> Deployment: @env
-Status: @status
-Config: <@base/config/@env.json>
+>> Load and transform files
+var @config = <config.json> | @json
+var @uppercase = <readme.txt> | @upper
 
->> usage
-exe @deploy(env, status) = template "./templates/deploy.att"
-show @deploy("prod", "success")
-
->> .mtt files (Discord/social only)
->> file: templates/discord.mtt
-🚨 Alert <@{{adminId}}>!
-Reporter: <@{{reporterId}}>
-Severity: {{severity}}
-
->> usage
-exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
+>> Chain transformations
+exe @first(text, n) = js { 
+  return text.split('\n').slice(0, n).join('\n');
+}
+var @summary = <docs.md> | @first(3) | @upper

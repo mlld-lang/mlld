@@ -98,40 +98,56 @@ But you can't secure something if you don't build it first, so let's get back to
 
 mlld runs top to bottom. You can't redefine variables, and you need to define things before you refer to them.
 
-### Slashes and directives
+### Two Modes: Scripts vs Markdown
 
-Unlike most programming languages, mlld is made to be used within regular text, especially markdown files. In order to direct mlld what to interpret, mlld lines start with a `/` followed by a directive. 
+mlld has two syntax modes based on file extension:
+
+**Strict mode (`.mld` files)** - bare directives, no slashes:
+```mlld
+var @name = "Alice"
+show `Hello @name!`
+```
+
+**Markdown mode (`.mld.md` or `.md` files)** - slash prefixes required:
+```mlld
+/var @name = "Alice"
+/show `Hello @name!`
+```
+
+Most people write `.mld` scripts (strict mode). Use markdown mode when embedding mlld in documentation or other markdown files where you need text content to pass through.
+
+This documentation uses **strict mode** in all examples.
+
+### Directives
 
 These three are your main building blocks:
 
-```mlld
+```
 var     << creates { objects } and "strings of text" to pass around
 exe     << defines executable functions and templates for use later
 show    << shows in both the final output and in the terminal
 ```
 
-There are some others, too: you can `/import` modules, `/output` files, use `/for` loops, and create `/when` condition/action pairs.
+There are some others, too: you can `import` modules, `output` files, use `for` loops, and create `when` condition/action pairs.
 
-Don't use a `/` when you use these directives in other places -- just the start of lines.
+### `var`, `show`, and `run`
 
-### `/var`, `show`, and `run`
+Most anything in mlld can be used to set the value of a `var`, including text strings, functions, objects, for loops, alligators.
 
-Most anything in mlld can be used to set the value of a `/var`, including text strings, functions, objects, for loops, alligators.
+`show` is used to add things to the output of your file and your terminal output. You can `show` just about everything in mlld, **including the results of commands and functions.**
 
-`/show` is used to add things to the output of your file and your terminal output. You can `/show` just about everything in mlld, **including the results of commands and functions.**
+`run` will let you run a `{simple shell command}` or a `@function()` but **it _won't_ produce any output unless its functions `show`**
 
-`/run` will let you run a `{simple shell command}` or a `@function()` but **it _won't_ produce any output unless its functions `/show`**
-
-Just remember: 
-- Anything `/run` can do, `/show` can do louder 
-- `/show` is a Swiss Army knife that can show anything 
-- `/run` runs away, unless its passengers `/show`
+Just remember:
+- Anything `run` can do, `show` can do louder
+- `show` is a Swiss Army knife that can show anything
+- `run` runs away, unless its passengers `show`
 
 But you don't want _everything_ to `run` and `show`.
 
-### `/exe` and `/run` types
+### `exe` and `run` types
 
-You can `/run` all shell command, javascript, and node in mlld:
+You can `run` shell commands, javascript, and node in mlld:
 
 ```mlld
 run cmd {..}       << one-line command (| allowed but no && ; || continuation, no shell scripts)
@@ -140,9 +156,9 @@ run js {..}    << javascript
 run node {..}  << runs node scripts
 ```
 
-Or create them and run them later with `/exe`
+Or create them and run them later with `exe`
 
-`/run cmd {echo @var}` will interpolate `@var` but language commands use their own native variable syntax.
+`run cmd {echo @var}` will interpolate `@var` but language commands use their own native variable syntax.
 
 Any values used in `sh`, `js`, or `node` must be passed in:
 
@@ -172,15 +188,15 @@ Backticks for most, `::` when you need backticks, `:::` when swimming in @-signs
 
 ### Conditional execution
 
-A `/when` is written as **condition => action**:
+A `when` is written as **condition => action**:
 
 ```mlld
 when @score > 90 => show "Excellent!"
 
 ```
-`/when` blocks use `[..]` because that commonly means "list" and a `/when` block is a list of condition/action pairs and _never_ contains nested logic.
+`when` blocks use `[..]` because that commonly means "list" and a `when` block is a list of condition/action pairs and _never_ contains nested logic.
 
-In a simple `/when` block, all matching conditions fire off their actions. 
+In a simple `when` block, all matching conditions fire off their actions. 
 
 ```mlld
 when [
@@ -189,7 +205,7 @@ when [
 ]
 ```
 
-In `/when first`, only the first match fires its action:
+In `when first`, only the first match fires its action:
 
 ```mlld
 when first [
@@ -199,7 +215,7 @@ when first [
 ]
 ```
 
-A pure `/when` like the example above runs immediately, but you can also make an executable when that can take arguments and run later: 
+A pure `when` like the example above runs immediately, but you can also make an executable when that can take arguments and run later: 
 
 ```mlld
 exe @deploy(env) = when first [
@@ -213,7 +229,7 @@ run @deploy("prod")
 
 No if/else, no nesting. mlld wants you to keep it simple.
 
-And you can write `/exe...when first [...]` as well.
+And you can write `exe...when first [...]` as well.
 
 ### Alligators are your friends
 
@@ -261,7 +277,7 @@ var @clean = @raw | @validate | @normalize | @format
 
 Built-in transformers: `@json`, `@xml`, `@csv`, `@md`. 
 
-You can create custom ones with `/exe`.
+You can create custom ones with `exe`.
 
 The magic is that retry logic flows through pipes automatically.
 
@@ -282,10 +298,10 @@ The `@mx` variable ("mlld execution") provides execution context—retry count, 
 
 Your main mlld file should be clean and readable, focused on working like a logical router.
 
-`/import` lets you bring values in other files into this one. Author modules with explicit `/export { ... }` declarations so the public API is clear; the interpreter still auto-exports files that have not adopted manifests yet.
+`import` lets you bring values in other files into this one. Author modules with explicit `export { ... }` declarations so the public API is clear; the interpreter still auto-exports files that have not adopted manifests yet.
 
 ```mlld
-import "file.mld"                             << everything (only for files without `/export`)
+import "file.mld"                             << everything (only for files without `export`)
 import { somevar, somexe } from "file.mld"    << selective (preferred)
 import @author/module                         << public modules
 import @company/module                        << private modules
@@ -295,7 +311,7 @@ import @local/module                          << local modules
 
 
 
-Values defined as `exe` and `var` in other files can be imported with `/import` so you can keep the complexity in separate files and have your main mlld script.
+Values defined as `exe` and `var` in other files can be imported with `import` so you can keep the complexity in separate files and have your main mlld script.
 
 Hide the hard stuff. Expose the simple API by declaring it explicitly:
 
@@ -328,13 +344,13 @@ Any mlld files you put in llm/run can be run with `mlld run file` (extension opt
 
 You can use `mlld setup` to create other prefixes (or configure them in `mlld.lock.json`) so you could have `llm/agents` `llm/context` `llm/docs`.
 
-Tip: keep reusable templates in `llm/templates/` and bind them as executables with `/exe ... = template "path"`.
+Tip: keep reusable templates in `llm/templates/` and bind them as executables with `exe ... = template "path"`.
 
 ## mlld wants to help you write simple, readable code
 
 There are things that Very Serious Programmers will dislike about mlld. Here's one!
 
-This is a `/when` block: conditions on the left, actions on the right. In mlld, if you want to perform multiple actions based on the same condition, you repeat the condition like this:
+This is a `when` block: conditions on the left, actions on the right. In mlld, if you want to perform multiple actions based on the same condition, you repeat the condition like this:
 
 ```mlld
 when [
