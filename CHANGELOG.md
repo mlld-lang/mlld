@@ -77,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Simplified .keep usage**: Metadata now accessible in mlld contexts without `.keep` (e.g., `@file.mx.filename` works directly). `.keep` only needed when passing to JS/Node to preserve StructuredValue wrapper. Apply `.keep` at call site (`@process(@file.keep)`) rather than variable creation.
 
 ### Fixed
+- **`.mx` access in for loops**: File metadata (`@f.mx.relative`, `@f.mx.filename`) now accessible when iterating over glob results in all contexts: direct interpolation, object literals (`{ file: @f.mx.relative }`), and exe function parameters.
 - **@json error clarity**: `@json` throws clear errors when parsing fails instead of silently mangling input. Detects markdown code fences and suggests `@json.llm`.
 - **Pipeline filter error**: Writing `| json` instead of `| @json` now gives helpful error: "Pipeline filters require the @ prefix"
 - **Arithmetic operators in exe blocks**: Math operators (`+`, `-`, `*`, `/`, `%`) work in exe blocks, let assignments, and return values
