@@ -1,0 +1,8 @@
+var secret @apiKey = "sk-live-12345"
+
+guard @noShellSecrets before secret = when [
+  @mx.op.type == "run" => deny "Secrets cannot appear in shell commands"
+  * => allow
+]
+
+run cmd { echo @apiKey }  >> Blocked by guard

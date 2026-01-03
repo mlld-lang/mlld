@@ -1,7 +1,0 @@
-/exe @tagValue(timing, out, inp) = js {
-  const val = out ?? inp ?? '';
-  return `${timing}:${val}`;
-}
-
-/exe @emit(v) = js { return v; }
-/show @emit("test")

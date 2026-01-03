@@ -385,7 +385,7 @@ mlld publish --tag beta my-tool.mld
 
 Users import via tag:
 ```mlld
-/import { @helper } from @alice/my-tool@beta
+import { @helper } from @alice/my-tool@beta
 ```
 
 Common tags:
@@ -589,7 +589,7 @@ mlld publish --dry-run my-tool.mld  # Validate
 
 **Use explicit exports**:
 ```mlld
-/export { @publicAPI }
+export { @publicAPI }
 ```
 
 **Version appropriately**:

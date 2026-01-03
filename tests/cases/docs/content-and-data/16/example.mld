@@ -1,0 +1,7 @@
+>> Dynamic type filtering
+var @targetType = "fn"
+var @definitions = <service.ts { *@targetType }>
+
+>> Dynamic name listing
+var @listType = "class"
+var @classNames = <service.ts { @listType?? }>

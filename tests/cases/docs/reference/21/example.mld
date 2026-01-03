@@ -1,0 +1,3 @@
+var @names = ["Ann","Ben"]
+exe @hello(n) = `Hello @n`
+show foreach @hello(@names) with { separator: " | ", template: "{{index}}={{result}}" }

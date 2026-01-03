@@ -1,1 +1,0 @@
-/for @x in ["A", "B"] => for @y in [1, 2] => show `@x-@y`

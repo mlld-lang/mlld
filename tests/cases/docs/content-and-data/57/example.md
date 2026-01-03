@@ -1,8 +1,0 @@
-/var @file = <config.json>
-
-# ✗ This loses metadata
-/var @result = @file | @process          # @process gets string, no .mx
-
-# ✓ Keep structured form
-/exe @process(file) = `Name: @file.mx.filename, Tokens: @file.mx.tokens`
-/var @result = @file.keep | @process

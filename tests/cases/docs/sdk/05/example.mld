@@ -1,0 +1,1 @@
+output "dark" to "state://prefs.theme"

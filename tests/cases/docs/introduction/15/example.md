@@ -1,4 +1,0 @@
-/exe @getJSON(prompt) = when [
-  @mx.try == 1 => @claude(@prompt)
-  @mx.try > 1 => @claude("@prompt Return ONLY valid JSON. Previous attempt: @mx.hint")
-]

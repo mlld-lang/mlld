@@ -7,10 +7,10 @@ mlld provides a native test system designed for the unique needs of LLM orchestr
 Create a `modulename.test.mld` file:
 
 ```mlld
-/var @data = ["apple", "banana", "cherry"]
-/var @test_array_has_items = @data.length() > 0
-/var @test_includes_banana = @data.includes("banana")
-/var @test_first_item = @data[0] == "apple"
+var @data = ["apple", "banana", "cherry"]
+var @test_array_has_items = @data.length() > 0
+var @test_includes_banana = @data.includes("banana")
+var @test_first_item = @data[0] == "apple"
 ```
 
 Run tests:
@@ -31,14 +31,14 @@ Tests are discovered automatically:
 - Variables evaluated as true pass; false fails
 
 ```mlld
-# This variable is a test
-/var @test_basic_math = 2 + 2 == 4
+>> This variable is a test
+var @test_basic_math = 2 + 2 == 4
 
-# This variable is not a test
-/var @helper_data = [1, 2, 3]
+>> This variable is not a test
+var @helper_data = [1, 2, 3]
 
-# This is also a test
-/var @test_array_length = @helper_data.length() == 3
+>> This is also a test
+var @test_array_length = @helper_data.length() == 3
 ```
 
 ### Test Results
@@ -46,10 +46,10 @@ Tests are discovered automatically:
 Tests pass when the variable evaluates to `true` (or truthy):
 
 ```mlld
-/var @test_passes = true
-/var @test_also_passes = "hello"      # Truthy string
-/var @test_fails = false
-/var @test_also_fails = ""            # Falsy string
+var @test_passes = true
+var @test_also_passes = "hello"  >> Truthy string
+var @test_fails = false
+var @test_also_fails = ""  >> Falsy string
 ```
 
 ## Writing Tests
@@ -80,12 +80,12 @@ The test module provides these assertion functions that return booleans:
 Test `/exe` functions by calling them:
 
 ```mlld
-/exe @greet(name) = `Hello, @name!`
-/exe @double(n) = js { return n * 2 }
+exe @greet(name) = `Hello, @name!`
+exe @double(n) = js { return n * 2 }
 
-/var @test_greet_works = @greet("Alice") == "Hello, Alice!"
-/var @test_double_works = @double(5) == 10
-/var @test_double_zero = @double(0) == 0
+var @test_greet_works = @greet("Alice") == "Hello, Alice!"
+var @test_double_works = @double(5) == 10
+var @test_double_zero = @double(0) == 0
 ```
 
 ### Testing Commands
@@ -93,12 +93,12 @@ Test `/exe` functions by calling them:
 Test command execution by capturing output:
 
 ```mlld
-/var @result = run {echo "test"}
-/var @test_echo_works = @result.trim() == "test"
+var @result = run {echo "test"}
+var @test_echo_works = @result.trim() == "test"
 
-# Test JavaScript execution
-/var @js_result = js { return "computed" }
-/var @test_js_execution = @js_result == "computed"
+>> Test JavaScript execution
+var @js_result = js { return "computed" }
+var @test_js_execution = @js_result == "computed"
 ```
 
 ### Testing with File Operations
@@ -106,13 +106,13 @@ Test command execution by capturing output:
 Test file loading and processing:
 
 ```mlld
-# Assuming test data files exist
-/var @config = <test-config.json>
-/var @readme = <test-readme.md>
+>> Assuming test data files exist
+var @config = <test-config.json>
+var @readme = <test-readme.md>
 
-/var @test_config_loaded = @config != null
-/var @test_has_title = @config.title == "Test Config"
-/var @test_readme_has_content = @readme.length() > 0
+var @test_config_loaded = @config != null
+var @test_has_title = @config.title == "Test Config"
+var @test_readme_has_content = @readme.length() > 0
 ```
 
 ### Testing Conditionals
@@ -120,16 +120,16 @@ Test file loading and processing:
 Test `/when` logic by checking outcomes:
 
 ```mlld
-/var @user = {"role": "admin", "active": true}
-/var @result = ""
+var @user = {"role": "admin", "active": true}
+var @result = ""
 
-/when [
+when [
   @user.role == "admin" && @user.active => var @result = "admin-access"
   @user.role == "user" => var @result = "user-access"
   none => var @result = "no-access"
 ]
 
-/var @test_admin_access = @result == "admin-access"
+var @test_admin_access = @result == "admin-access"
 ```
 
 ### Testing Loops and Iteration
@@ -137,18 +137,18 @@ Test `/when` logic by checking outcomes:
 Test `/for` loops and `foreach`:
 
 ```mlld
-/var @numbers = [1, 2, 3, 4, 5]
-/exe @square(n) = js { return n * n }
+var @numbers = [1, 2, 3, 4, 5]
+exe @square(n) = js { return n * n }
 
-# Test foreach transformation
-/var @squared = foreach @square(@numbers)
-/var @test_foreach_length = @squared.length() == 5
-/var @test_first_square = @squared[0] == 1
-/var @test_last_square = @squared[4] == 25
+>> Test foreach transformation
+var @squared = foreach @square(@numbers)
+var @test_foreach_length = @squared.length() == 5
+var @test_first_square = @squared[0] == 1
+var @test_last_square = @squared[4] == 25
 
-# Test for loop collection
-/var @doubled = for @n in @numbers => js { return @n * 2 }
-/var @test_doubled_sum = @doubled[0] + @doubled[1] == 6  # 2 + 4
+>> Test for loop collection
+var @doubled = for @n in @numbers => js { return @n * 2 }
+var @test_doubled_sum = @doubled[0] + @doubled[1] == 6  >> 2 + 4
 ```
 
 ## Running Tests
@@ -202,9 +202,9 @@ mlld test
 Test files can access allowed environment variables:
 
 ```mlld
-/import { MLLD_API_KEY, MLLD_NODE_ENV } from @input
-/var @test_has_api_key = @MLLD_API_KEY != null
-/var @test_test_environment = @MLLD_NODE_ENV == "test"
+import { MLLD_API_KEY, MLLD_NODE_ENV } from @input
+var @test_has_api_key = @MLLD_API_KEY != null
+var @test_test_environment = @MLLD_NODE_ENV == "test"
 ```
 
 ## Best Practices
@@ -214,15 +214,15 @@ Test files can access allowed environment variables:
 Use descriptive test names:
 
 ```mlld
-# ✅ Good - descriptive names
-/var @test_user_validation_requires_email = @validateEmail(@user.email)
-/var @test_password_must_be_8_characters = @checkPasswordLength(@password)
-/var @test_admin_can_delete_posts = @canDelete(@user, @post)
+>> ✅ Good - descriptive names
+var @test_user_validation_requires_email = @validateEmail(@user.email)
+var @test_password_must_be_8_characters = @checkPasswordLength(@password)
+var @test_admin_can_delete_posts = @canDelete(@user, @post)
 
-# ❌ Bad - unclear names  
-/var @test_validation = @validate()
-/var @test_user = @check(@user)
-/var @test_1 = @test()
+>> ❌ Bad - unclear names  
+var @test_validation = @validate()
+var @test_user = @check(@user)
+var @test_1 = @test()
 ```
 
 ### Keep Tests Focused
@@ -230,13 +230,13 @@ Use descriptive test names:
 Write focused tests that check one thing:
 
 ```mlld
-# ✅ Good - one assertion per test
-/var @test_array_length = @data.length() == 3
-/var @test_first_item = @data[0] == "apple"
-/var @test_includes_banana = @data.includes("banana")
+>> ✅ Good - one assertion per test
+var @test_array_length = @data.length() == 3
+var @test_first_item = @data[0] == "apple"
+var @test_includes_banana = @data.includes("banana")
 
-# ❌ Bad - multiple assertions in one test
-/var @test_array_stuff = @data.length() == 3 && @data[0] == "apple" && @data.includes("banana")
+>> ❌ Bad - multiple assertions in one test
+var @test_array_stuff = @data.length() == 3 && @data[0] == "apple" && @data.includes("banana")
 ```
 
 ### Test Edge Cases
@@ -244,21 +244,21 @@ Write focused tests that check one thing:
 Include boundary conditions and edge cases:
 
 ```mlld
-/exe @calculateDiscount(price, percent) = when [
+exe @calculateDiscount(price, percent) = when [
   @price <= 0 => 0
   @percent < 0 => @price
   @percent > 100 => 0
   * => js { return @price * (100 - @percent) / 100 }
 ]
 
-# Test normal cases
-/var @test_normal_discount = @calculateDiscount(100, 10) == 90
+>> Test normal cases
+var @test_normal_discount = @calculateDiscount(100, 10) == 90
 
-# Test edge cases
-/var @test_zero_price = @calculateDiscount(0, 10) == 0
-/var @test_negative_price = @calculateDiscount(-50, 10) == 0
-/var @test_negative_percent = @calculateDiscount(100, -5) == 100
-/var @test_over_100_percent = @calculateDiscount(100, 150) == 0
+>> Test edge cases
+var @test_zero_price = @calculateDiscount(0, 10) == 0
+var @test_negative_price = @calculateDiscount(-50, 10) == 0
+var @test_negative_percent = @calculateDiscount(100, -5) == 100
+var @test_over_100_percent = @calculateDiscount(100, 150) == 0
 ```
 
 ### Use Helper Functions
@@ -266,14 +266,15 @@ Include boundary conditions and edge cases:
 Create reusable test helpers:
 
 ```mlld
-/exe @assertEq(actual, expected) = @actual == @expected
-/exe @assertContains(container, item) = @container.includes(@item)
-/exe @assertLength(array, expectedLength) = @array.length() == @expectedLength
+exe @assertEq(actual, expected) = js { return actual === expected }
+exe @assertContains(container, item) = js { return container.includes(item) }
+exe @assertLength(array, len) = js { return array.length === len }
 
-# Use helpers in tests
-/var @test_user_name = @assertEq(@user.name, "Alice")
-/var @test_tags_include_admin = @assertContains(@user.tags, "admin")
-/var @test_permissions_count = @assertLength(@user.permissions, 3)
+>> Use helpers in tests
+var @user = { name: "Alice", tags: ["admin", "user"], permissions: [1, 2, 3] }
+var @test_user_name = @assertEq(@user.name, "Alice")
+var @test_tags_include_admin = @assertContains(@user.tags, "admin")
+var @test_permissions_count = @assertLength(@user.permissions, 3)
 ```
 
 ## Integration with CI/CD

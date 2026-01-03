@@ -1,0 +1,3 @@
+run cmd {echo "Hello World"}
+run cmd {ls -la}
+run @data | { cat | jq '.[]' }       >> stdin via pipe

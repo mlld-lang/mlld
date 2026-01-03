@@ -1,0 +1,5 @@
+>> Get all of a specific type
+var @allFunctions = <service.ts { *fn }>  >> All functions and methods
+var @allVariables = <service.ts { *var }>  >> All variables and constants
+var @allClasses = <service.ts { *class }>  >> All classes
+var @everything = <service.ts { * }>  >> All top-level definitions

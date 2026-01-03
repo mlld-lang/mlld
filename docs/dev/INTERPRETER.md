@@ -88,7 +88,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 ### Iteration
 
-- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately (show/output/log); collection form returns array results; supports `_key` pattern for object keys.
+- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately (show/output/log); collection form returns array results; exposes key via `.mx.key` accessor.
 - `foreach`: `eval/data-value-evaluator.ts` (Cartesian product) executes parameterized commands/templates over arrays; lazy complex data until needed; capped combinations for performance.
 
 ### Imports and Resolvers

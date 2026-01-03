@@ -5,38 +5,34 @@
 Enable live output from LLM calls and long-running commands with `stream`:
 
 ```mlld
-stream /exe @chat(prompt) = run { claude "@prompt" }
+exe @chat(prompt) = stream cmd {claude "@prompt"}
 
-/show @chat("Explain mlld in one sentence")
-# Shows chunks as they arrive, not all at once
+show @chat("Explain mlld in one sentence")
+>> Shows chunks as they arrive, not all at once
 ```
 
 ## Enabling Streaming
 
-Three ways to enable streaming:
+Two ways to enable streaming:
 
-### 1. `stream` Keyword (Recommended)
+### 1. In Definition (Recommended)
+
+Define an executable that streams:
 
 ```mlld
-stream /exe @llm(prompt) = run { claude "@prompt" }
+exe @llm(prompt) = stream cmd {claude "@prompt"}
 
-/show @llm("Hello")                        # Streams output
+show @llm("Hello")  >> Streams output
 ```
 
-### 2. `/stream` Directive
+### 2. At Invocation
+
+Stream when calling:
 
 ```mlld
-/exe @llm(prompt) = run { claude "@prompt" }
+exe @llm(prompt) = cmd {claude "@prompt"}
 
-/stream @llm("Hello")                      # Streams output directly
-```
-
-### 3. `with { stream: true }` Clause
-
-```mlld
-/exe @llm(prompt) = run { claude "@prompt" }
-
-/show @llm("Hello") with { stream: true }  # Streams this call only
+stream @llm("Hello")  >> Streams this call
 ```
 
 ## Disable Streaming
@@ -49,25 +45,18 @@ mlld script.mld --no-stream
 MLLD_NO_STREAM=1 mlld script.mld
 ```
 
-Per-operation:
-
-```mlld
-stream /exe @llm(prompt) = run { claude "@prompt" }
-
-/show @llm("Hello") with { stream: false } # Buffer, show when complete
-```
-
 ## Streaming Executors
 
-These executors support streaming:
-- `shell` / `bash` - Shell commands with live output
+These command types support streaming:
+- `sh` / `bash` - Shell commands with live output
+- `cmd` - Single commands with pipes
 - `node` - Node.js scripts
 - LLM clients that output NDJSON (claude, openai, etc.)
 
 ```mlld
-stream /exe @build() = run { npm run build }
+exe @build() = stream sh {npm run build}
 
-/show @build()                             # Shows build output live
+show @build()  >> Shows build output live
 ```
 
 ## NDJSON Auto-Parsing
@@ -75,26 +64,26 @@ stream /exe @build() = run { npm run build }
 Streaming executables that output NDJSON are automatically parsed using format adapters.
 
 ```mlld
-stream /exe @llm(prompt) = run {
+exe @llm(prompt) = stream cmd {
   claude "@prompt" --output-format stream-json
 }
 
-/show @llm("Write a haiku")
-# Parses NDJSON, shows message text as it streams
+show @llm("Write a haiku")
+>> Parses NDJSON, shows message text as it streams
 ```
 
 By default, a generic NDJSON adapter extracts text from common paths like `text`, `content`, `delta.text`, and `message`.
 
 ## Stream Format Adapters
 
-For better parsing of specific LLM output formats, use `streamFormat` with an adapter name or config object.
+For better parsing of specific LLM output formats, use `streamFormat` in a with clause.
 
 **Built-in shorthand:**
 
 ```mlld
-stream /exe @llm(prompt) = run { claude "@prompt" --output-format stream-json }
+exe @llm(prompt) = stream cmd {claude "@prompt" --output-format stream-json}
 
-/run stream @llm("Hello") with { streamFormat: "claude-code" }
+run stream @llm("Hello") with { streamFormat: "claude-code" }
 ```
 
 **Installable adapter config:**
@@ -104,9 +93,9 @@ mlld install @mlld/stream-claude-agent-sdk
 ```
 
 ```mlld
-/import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
+import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
 
-/run stream @chat("Use a tool") with { streamFormat: @claudeAgentSdkAdapter }
+run stream @chat("Use a tool") with { streamFormat: @claudeAgentSdkAdapter }
 ```
 
 **Available Adapters**:
@@ -128,17 +117,17 @@ The `claude-code` adapter understands Claude's NDJSON format including:
 **Example with explicit adapter**:
 
 ```mlld
-/import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
-stream /exe @chat(prompt) = run { claude "@prompt" --output-format stream-json }
+import { @claudeAgentSdkAdapter } from @mlld/stream-claude-agent-sdk
+exe @chat(prompt) = stream cmd {claude "@prompt" --output-format stream-json}
 
-# Default parsing (generic NDJSON)
-/show @chat("Hello")
+>> Default parsing (generic NDJSON)
+show @chat("Hello")
 
-# Claude-specific parsing (string shortcut)
-/run stream @chat("Use a tool") with { streamFormat: "claude-code" }
+>> Claude-specific parsing (string shortcut)
+run stream @chat("Use a tool") with { streamFormat: "claude-code" }
 
-# Claude-specific parsing (imported config)
-/run stream @chat("Use a tool") with { streamFormat: @claudeAgentSdkAdapter }
+>> Claude-specific parsing (imported config)
+run stream @chat("Use a tool") with { streamFormat: @claudeAgentSdkAdapter }
 ```
 
 ## Live Output Formatting
@@ -183,7 +172,7 @@ Shows raw NDJSON events as they arrive (useful for debugging).
 ```bash
 mlld script.mld --append-json output.jsonl
 # or
-mlld script.mld --append-json              # Defaults to YYYY-MM-DD-HH-MM-SS-stream.jsonl
+mlld script.mld --append-json  >> Defaults to YYYY-MM-DD-HH-MM-SS-stream.jsonl
 ```
 
 Writes NDJSON to file while also showing formatted output.
@@ -193,12 +182,12 @@ Writes NDJSON to file while also showing formatted output.
 Pipelines stream through stages:
 
 ```mlld
-stream /exe @analyze(text) = run { claude "Analyze: @text" }
-stream /exe @summarize(analysis) = run { claude "Summarize: @analysis" }
+exe @analyze(text) = stream cmd {claude "Analyze: @text"}
+exe @summarize(analysis) = stream cmd {claude "Summarize: @analysis"}
 
-/var @input = <large-file.md>
-/var @result = @input | @analyze | @summarize
-/show @result                              # Both stages stream
+var @input = <large-file.md>
+var @result = @input | @analyze | @summarize
+show @result  >> Both stages stream
 ```
 
 ## Parallel Streaming
@@ -206,53 +195,53 @@ stream /exe @summarize(analysis) = run { claude "Summarize: @analysis" }
 Parallel groups stream concurrently:
 
 ```mlld
-stream /exe @task1() = run { sleep 2 && echo "Task 1 done" }
-stream /exe @task2() = run { sleep 1 && echo "Task 2 done" }
+exe @task1() = stream sh {sleep 2 && echo "Task 1 done"}
+exe @task2() = stream sh {sleep 1 && echo "Task 2 done"}
 
-/for parallel(2) @i in [1, 2] => @task@i()
-# Both tasks stream output as they complete
+var @results = stream @task1() || stream @task2()
+>> Both tasks stream output as they complete
 ```
 
 Output is buffered per task and shown when each completes.
 
-## Streaming with /show
+## Streaming with show
 
-Streaming `/show` avoids double-printing streamed content:
+Streaming show avoids double-printing streamed content:
 
 ```mlld
-stream /exe @llm(prompt) = run { claude "@prompt" }
+exe @llm(prompt) = stream cmd {claude "@prompt"}
 
-/show @llm("Hello")                        # Content streams once (not duplicated)
+show @llm("Hello")  >> Content streams once (not duplicated)
 ```
 
-Without streaming, content would appear during execution and again when `/show` displays it.
+Without streaming, content would appear during execution and again when show displays it.
 
 ## Common Patterns
 
 ### Stream Long-Running Build
 
 ```mlld
-stream /exe @build() = run { npm run build }
+exe @build() = stream sh {npm run build}
 
-/show @build()                             # See build output live
+show @build()  >> See build output live
 ```
 
 ### Stream Multiple LLM Calls
 
 ```mlld
-stream /exe @chat(prompt) = run { claude "@prompt" }
+exe @chat(prompt) = stream cmd {claude "@prompt"}
 
-/for @question in @questions => @chat(@question)
-# Each question streams as it's answered
+for @question in @questions => @chat(@question)
+>> Each question streams as it's answered
 ```
 
 ### Conditional Streaming
 
 ```mlld
-/exe @llm(prompt) = run { claude "@prompt" }
+exe @llm(prompt) = cmd {claude "@prompt"}
 
-/when @isInteractive => show @llm("Hello") with { stream: true }
-/when !@isInteractive => show @llm("Hello") with { stream: false }
+when @isInteractive => stream @llm("Hello")
+when !@isInteractive => show @llm("Hello")
 ```
 
 ### Debug Streaming Issues
@@ -270,19 +259,20 @@ mlld script.mld --append-json debug.jsonl
 Streaming is disabled when:
 - After-guards are active (output must be fully available for validation)
 - Error: "Cannot run after-guards when streaming is enabled"
-- Solution: Use `with { stream: false }` or change guards to `before`
+- Solution: Disable streaming for that call or change guards to `before`
 
 ```mlld
-/guard @validate after op:exe = when [
+guard @validate after op:exe = when [
   @output.includes("ERROR") => deny "Blocked by after-guard"
   * => allow
 ]
 
-stream /exe @llm(p) = run { claude "@p" }
-/show @llm("test")                         # Error: streaming + after-guards conflict
+exe @llm(p) = stream cmd {claude "@p"}
+show @llm("test")  >> Error: streaming + after-guards conflict
 
-# Fix: disable streaming for this call
-/show @llm("test") with { stream: false }  # Works
+>> Fix: don't use stream for this call
+exe @llm2(p) = cmd {claude "@p"}
+show @llm2("test")  >> Works
 ```
 
 ## Technical Details

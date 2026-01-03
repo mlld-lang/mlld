@@ -13,10 +13,10 @@ mlld includes resolvers for common sources:
 Registry modules from mlld-lang/registry:
 
 ```mlld
-/import { @helper } from @alice/utils
-/import { @helper } from @alice/utils@1.0.0
-/import { @helper } from @alice/utils@beta
-/import { @helper } from @alice/utils@^1.0.0
+import { @helper } from @alice/utils
+import { @helper } from @alice/utils@1.0.0
+import { @helper } from @alice/utils@beta
+import { @helper } from @alice/utils@^1.0.0
 ```
 
 - Requires: `mlld install @alice/utils`
@@ -32,8 +32,8 @@ Registry modules from mlld-lang/registry:
 Project-relative file paths:
 
 ```mlld
-/import { @config } from <./config.mld>
-/import { @helpers } from <../shared/utils.mld>
+import { @config } from <./config.mld>
+import { @helpers } from <../shared/utils.mld>
 ```
 
 - Reads from filesystem
@@ -47,7 +47,7 @@ Project-relative file paths:
 Web resources via HTTPS/HTTP:
 
 ```mlld
-/import cached(1h) <https://example.com/utils.mld> as @remote
+import cached(1h) <https://example.com/utils.mld> as @remote
 ```
 
 - Caches with TTL (time-to-live)
@@ -59,7 +59,7 @@ Web resources via HTTPS/HTTP:
 GitHub repositories and raw URLs:
 
 ```mlld
-/import <https://raw.githubusercontent.com/alice/repo/main/module.mld> as @mod
+import <https://raw.githubusercontent.com/alice/repo/main/module.mld> as @mod
 ```
 
 - Works with public repos
@@ -71,7 +71,7 @@ GitHub repositories and raw URLs:
 **Not a separate resolver** - an import type that uses existing resolvers but embeds content at parse time:
 
 ```mlld
-/import static <./prompt.md> as @systemPrompt
+import static <./prompt.md> as @systemPrompt
 ```
 
 - Content embedded in AST during evaluation
@@ -84,7 +84,7 @@ GitHub repositories and raw URLs:
 **Not a separate resolver** - configuration of LocalResolver for development:
 
 ```mlld
-/import local { @helper } from @alice/dev-module
+import local { @helper } from @alice/dev-module
 ```
 
 - Uses LocalResolver configured to read from `llm/modules/`
@@ -153,8 +153,8 @@ Creates resolver in `mlld-config.json`:
 
 Use it:
 ```mlld
-/import <@notes/ideas.md> as @ideas
-/show @ideas
+import <@notes/ideas.md> as @ideas
+show @ideas
 ```
 
 ### Private GitHub Repo
@@ -193,7 +193,7 @@ Creates resolver:
 
 Use it:
 ```mlld
-/import { @auth } from @company/auth-utils
+import { @auth } from @company/auth-utils
 ```
 
 Requires GitHub auth:
@@ -326,10 +326,10 @@ When multiple resolvers could handle an import, priority determines which wins:
 
 Example:
 ```mlld
-# These all resolve differently
-/import { @x } from @alice/utils          # Registry resolver
-/import local { @x } from @alice/utils    # Local dev resolver
-/import <@notes/utils.mld> as @x          # Custom @notes/ resolver
+>> These all resolve differently
+import { @x } from @alice/utils  >> Registry resolver
+import local { @x } from @alice/utils  >> Local dev resolver
+import <@notes/utils.mld> as @x  >> Custom @notes/ resolver
 ```
 
 ## Resolver Patterns
@@ -344,9 +344,9 @@ mlld alias --name tests --path ./tests
 
 Import cleanly:
 ```mlld
-/import { @api } from @lib/api
-/import { @common } from @shared/utils
-/import { @fixtures } from @tests/fixtures
+import { @api } from @lib/api
+import { @common } from @shared/utils
+import { @fixtures } from @tests/fixtures
 ```
 
 ### Team Modules
@@ -371,8 +371,8 @@ Import cleanly:
 
 Team members import:
 ```mlld
-/import { @logger } from @team/logging
-/import { @db } from @team/database
+import { @logger } from @team/logging
+import { @db } from @team/database
 ```
 
 ### Multi-Environment
@@ -404,9 +404,9 @@ Team members import:
 
 Use appropriate alias:
 ```mlld
-/import <@prod/config.mld> as @config
-# or
-/import <@staging/config.mld> as @config
+import <@prod/config.mld> as @config
+>> or
+import <@staging/config.mld> as @config
 ```
 
 ### Personal Library
@@ -419,8 +419,8 @@ mlld alias --name me --path ~/mlld-modules --global
 
 Available in any project:
 ```mlld
-/import { @snippet } from @me/snippets
-/import <@me/prompts/code-review.md> as @prompt
+import { @snippet } from @me/snippets
+import <@me/prompts/code-review.md> as @prompt
 ```
 
 ## Security Configuration
@@ -516,17 +516,17 @@ Different resolvers cache differently:
 Force specific resolver:
 
 ```mlld
-# Force static (embed)
-/import static <https://example.com/data.json> as @data
+>> Force static (embed)
+import static <https://example.com/data.json> as @data
 
-# Force live (always fresh)
-/import live <./config.mld> as @config
+>> Force live (always fresh)
+import live <./config.mld> as @config
 
-# Force cached with TTL
-/import cached(30m) <@company/utils.mld> as @utils
+>> Force cached with TTL
+import cached(30m) <@company/utils.mld> as @utils
 
-# Force local dev
-/import local { @helper } from @alice/utils
+>> Force local dev
+import local { @helper } from @alice/utils
 ```
 
 Import type takes precedence over resolver configuration.
@@ -591,11 +591,11 @@ mlld auth login
 
 **Fix**: Adjust caching:
 ```mlld
-# Force fresh
-/import live <@resolver/module.mld> as @mod
+>> Force fresh
+import live <@resolver/module.mld> as @mod
 
-# Shorter TTL
-/import cached(1m) <@resolver/module.mld> as @mod
+>> Shorter TTL
+import cached(1m) <@resolver/module.mld> as @mod
 ```
 
 ### Path Not Found
@@ -621,9 +621,9 @@ Include resolver config in README for team projects.
 
 **Separate dev and prod**:
 ```mlld
-/import local { @db } from @team/database  # Dev
-# vs
-/import { @db } from @team/database        # Prod (registry)
+import local { @db } from @team/database  >> Dev
+>> vs
+import { @db } from @team/database  >> Prod (registry)
 ```
 
 **Version control config**:
@@ -697,7 +697,7 @@ mlld setup --check  # Before committing
 
 Use across projects:
 ```mlld
-/import { @helpers } from @shared/utils
-/import { @api } from @project-a/client
-/import { @types } from @project-b/schema
+import { @helpers } from @shared/utils
+import { @api } from @project-a/client
+import { @types } from @project-b/schema
 ```

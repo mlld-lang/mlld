@@ -1,1 +1,1 @@
-From testing.md line 204: Auto-loads .env and .env.test from current directory
+From testing.md line 204: Auto-loads .env and .env.test from current directory (strict mode)

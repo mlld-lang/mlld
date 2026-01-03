@@ -1,5 +1,0 @@
-/import "./agents" as @agents
-/show @agents.party.who
-
-/import "./agents" as @agents with { skipDirs: [] }
-/show @agents._private.who

@@ -1,0 +1,3 @@
+exe @llm(prompt) = cmd {claude "@prompt"}
+
+stream @llm("Hello")  >> Streams this call

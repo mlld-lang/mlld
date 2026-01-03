@@ -1,6 +1,0 @@
-/guard @validateJson after op:exe = when [
-  @isValidJson(@output) => allow
-  * => deny "LLM did not return valid JSON"
-]
-
-/exe @isValidJson(text) = js { try { JSON.parse(text); return true; } catch { return false; } }

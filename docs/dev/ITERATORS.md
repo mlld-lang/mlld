@@ -16,7 +16,7 @@ mlld provides two iteration mechanisms:
 
 Both follow mlld's single-pass evaluation and direct execution principles.
 
-Parallelism also exists in pipelines via `||` groups (see docs/dev/PIPELINE.md). Pipeline parallelism is distinct from iterator parallelism and has different semantics (results are collected as a JSON array and `retry` is not supported inside the group).
+Parallelism also exists in pipelines via `||` groups (see docs/dev/PIPELINE.md). Pipeline parallelism is distinct from iterator parallelism and has different semantics (results are collected as a StructuredValue array and `retry` is not supported inside the group).
 
 ## Principles
 
@@ -45,7 +45,7 @@ The `/for` directive provides simple iteration with two forms:
 Key characteristics:
 - Single action per iteration (no block syntax, but actions can be nested for loops)
 - Child environment per iteration with Variable preservation
-- Object iteration exposes keys via `@var_key` pattern
+- Object iteration exposes keys via `.mx.key` accessor (internal: `@var_key` binding)
 - ForExpression returns ArrayVariable with metadata
 - Error collection continues execution
   
@@ -147,7 +147,7 @@ throw new MlldDirectiveError(
 ## Parallelism: Iterators vs Pipelines
 
 - Iterators (`/for`) run sequentially by default and support parallel execution.
-- Pipelines support parallel groups: `A || B || C` executes a single stage concurrently. Outputs are collected in declaration order and passed as a JSON array string to the next stage. Concurrency is limited by `MLLD_PARALLEL_LIMIT`.
+- Pipelines support parallel groups: `A || B || C` executes a single stage concurrently. Outputs are collected in declaration order as a StructuredValue array (`.data` is the array, `.text` is JSON). Concurrency is limited by `MLLD_PARALLEL_LIMIT`.
 - `retry` is not supported from inside a pipeline parallel group; design validation in the following stage and request an upstream retry if needed. Per‑command rate‑limit errors inside the group use exponential backoff.
 
 See also: `docs/dev/PIPELINE.md` (Parallel Execution) for shorthand rules (no leading `||`), with-clause nested-group syntax, and effect behavior on parallel groups.

@@ -1,0 +1,3 @@
+exe @llm(prompt) = stream cmd {claude "@prompt" --output-format stream-json}
+
+run stream @llm("Hello") with { streamFormat: "claude-code" }

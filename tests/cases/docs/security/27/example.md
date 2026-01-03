@@ -1,1 +1,0 @@
-/show @data with { guards: { only: ["@specific"] } }

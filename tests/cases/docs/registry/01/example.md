@@ -1,4 +1,0 @@
-/needs {
-  node: [],
-  sh: true
-}

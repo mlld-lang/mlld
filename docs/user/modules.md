@@ -19,10 +19,10 @@ license: CC0
 
 /needs {}
 
-/exe @sayHello(name) = `Hello, @name!`
-/exe @sayGoodbye(name) = `Goodbye, @name!`
+exe @sayHello(name) = `Hello, @name!`
+exe @sayGoodbye(name) = `Goodbye, @name!`
 
-/export { @sayHello, @sayGoodbye }
+export { @sayHello, @sayGoodbye }
 ```
 
 Save as `greetings.mld` and it's ready to import.
@@ -32,10 +32,10 @@ Save as `greetings.mld` and it's ready to import.
 `/export` declares what others can import:
 
 ```mlld
-/exe @publicHelper(x) = `Value: @x`
-/exe @_internalHelper(x) = run {echo "@x" | tr a-z A-Z}
+exe @publicHelper(x) = `Value: @x`
+exe @_internalHelper(x) = run {echo "@x" | tr a-z A-Z}
 
-/export { @publicHelper }
+export { @publicHelper }
 ```
 
 Only `@publicHelper` is accessible to importers. Without `/export`, all variables are exported (legacy behavior).
@@ -59,8 +59,8 @@ Declare what your module needs with `/needs`:
 ### Registry Modules
 
 ```mlld
-/import { @helper } from @alice/utils
-/show @helper("data")
+import { @helper } from @alice/utils
+show @helper("data")
 ```
 
 Install first:
@@ -71,15 +71,15 @@ mlld install @alice/utils
 ### Local Files
 
 ```mlld
-/import { @config } from <./config.mld>
-/show @config.apiKey
+import { @config } from <./config.mld>
+show @config.apiKey
 ```
 
 ### URL Imports
 
 ```mlld
-/import cached(1h) <https://example.com/utils.mld> as @remote
-/show @remote.version
+import cached(1h) <https://example.com/utils.mld> as @remote
+show @remote.version
 ```
 
 ### Import Types
@@ -87,41 +87,41 @@ mlld install @alice/utils
 Control when and how imports resolve:
 
 ```mlld
-# Registry module (offline after install)
-/import module { @api } from @company/tools
+>> Registry module (offline after install)
+import module { @api } from @company/tools
 
-# Embedded at parse time
-/import static <./prompts/system.md> as @systemPrompt
+>> Embedded at parse time
+import static <./prompts/system.md> as @systemPrompt
 
-# Always fetch fresh
-/import live <https://api.status.io> as @status
+>> Always fetch fresh
+import live <https://api.status.io> as @status
 
-# Cached with TTL
-/import cached(30m) <https://feed.xml> as @feed
+>> Cached with TTL
+import cached(30m) <https://feed.xml> as @feed
 
-# Local development (llm/modules/)
-/import local { @helper } from @alice/dev-module
+>> Local development (llm/modules/)
+import local { @helper } from @alice/dev-module
 ```
 
 ### Import Patterns
 
 **Selected imports**:
 ```mlld
-/import { @helper, @validator } from @alice/utils
+import { @helper, @validator } from @alice/utils
 ```
 
 **Namespace imports**:
 ```mlld
-/import @alice/utils as @utils
-/show @utils.helper("data")
+import @alice/utils as @utils
+show @utils.helper("data")
 ```
 
 **Avoid collisions**:
 ```mlld
-/import { @helper } from @alice/utils
-/import @bob/tools as @bob  # Use namespace for second import
-/show @helper("x")
-/show @bob.helper("y")
+import { @helper } from @alice/utils
+import @bob/tools as @bob  >> Use namespace for second import
+show @helper("x")
+show @bob.helper("y")
 ```
 
 ## Module Environment
@@ -129,16 +129,16 @@ Control when and how imports resolve:
 Modules capture their defining environment. Executables reference their original variables:
 
 ```mlld
-# In utils.mld
-/var @prefix = "Result: "
-/exe @format(x) = `@prefix @x`
-/export { @format }
+>> In utils.mld
+var @prefix = "Result: "
+exe @format(x) = `@prefix @x`
+export { @format }
 ```
 
 When imported:
 ```mlld
-/import { @format } from <./utils.mld>
-/show @format("success")  # → "Result: success"
+import { @format } from <./utils.mld>
+show @format("success")  >> → "Result: success"
 ```
 
 `@prefix` resolves from the module, not your script.
@@ -155,7 +155,7 @@ mkdir -p llm/modules/@alice
 
 2. Use local import:
 ```mlld
-/import local { @tool } from @alice/my-tool
+import local { @tool } from @alice/my-tool
 ```
 
 3. Test and iterate without registry publishing
@@ -174,11 +174,11 @@ This creates a complete module structure with frontmatter and examples.
 Create test scripts in your project:
 
 ```mlld
-# test-module.mld
-/import { @helper } from <./my-module.mld>
-/var @result = @helper("test")
-/when @result == "expected" => show "✓ Pass"
-/when @result != "expected" => show "✗ Fail"
+>> test-module.mld
+import { @helper } from <./my-module.mld>
+var @result = @helper("test")
+when @result == "expected" => show "✓ Pass"
+when @result != "expected" => show "✗ Fail"
 ```
 
 Run tests:
@@ -257,14 +257,14 @@ See [registry.md](registry.md) for publishing details.
 
 ## Version Resolution
 
-Use semantic versioning:
+Use semantic versioning with `@` suffix:
 
-```mlld
-/import { @helper } from @alice/utils          # latest
-/import { @helper } from @alice/utils@1.0.0    # exact
-/import { @helper } from @alice/utils@^1.0.0   # compatible
-/import { @helper } from @alice/utils@beta     # tag
-```
+| Import | Version |
+|--------|---------|
+| `import ... from @alice/utils` | latest |
+| `import ... from @alice/utils@1.0.0` | exact |
+| `import ... from @alice/utils@^1.0.0` | compatible |
+| `import ... from @alice/utils@beta` | tag |
 
 Lock file pins exact versions for reproducibility.
 
@@ -272,19 +272,19 @@ Lock file pins exact versions for reproducibility.
 
 **Use explicit exports**:
 ```mlld
-/export { @publicAPI, @helper }
+export { @publicAPI, @helper }
 ```
 
 **Prefix internals** (convention):
 ```mlld
-/exe @_internal(name) = "opaque"  # Not in export list
+exe @_internal(name) = "opaque"  >> Not in export list
 ```
 
 **Document exports**:
 ```mlld
-# Public API for data transformation
-/exe @transform(data) = `Processed: @data`
-/export { @transform }
+>> Public API for data transformation
+exe @transform(data) = `Processed: @data`
+export { @transform }
 ```
 
 **Test before publishing**:
@@ -294,7 +294,7 @@ mlld my-module.mld  # Run as script first
 
 **Use local imports for development**:
 ```mlld
-/import local { @tool } from @me/dev-module
+import local { @tool } from @me/dev-module
 ```
 
 ## Common Patterns
@@ -306,9 +306,9 @@ name: config
 about: App configuration
 ---
 
-/var @apiUrl = "https://api.example.com"
-/var @timeout = 30000
-/export { @apiUrl, @timeout }
+var @apiUrl = "https://api.example.com"
+var @timeout = 30000
+export { @apiUrl, @timeout }
 ```
 
 ### Utility Collection
@@ -318,9 +318,9 @@ name: text-utils
 about: String manipulation utilities
 ---
 
-/exe @uppercase(text) = run {echo "@text" | tr a-z A-Z}
-/exe @trim(text) = js { return @text.trim() }
-/export { @uppercase, @trim }
+exe @uppercase(text) = run {echo "@text" | tr a-z A-Z}
+exe @trim(text) = js { return @text.trim() }
+export { @uppercase, @trim }
 ```
 
 ### Template Library
@@ -330,9 +330,9 @@ name: prompts
 about: Reusable prompts
 ---
 
-/exe @systemPrompt(role) = `You are a @role assistant.`
-/exe @userPrompt(task) = `Please help me with: @task`
-/export { @systemPrompt, @userPrompt }
+exe @systemPrompt(role) = `You are a @role assistant.`
+exe @userPrompt(task) = `Please help me with: @task`
+export { @systemPrompt, @userPrompt }
 ```
 
 ## Dynamic Modules (SDK)
@@ -374,9 +374,9 @@ const output = await processMlld(template, {
 Access in your script:
 
 ```mlld
-/var @count = @state.count + 1
-/var @theme = @state.preferences.theme
-/var @input = @payload.text
+var @count = @state.count + 1
+var @theme = @state.preferences.theme
+var @input = @payload.text
 ```
 
 ### Security
@@ -384,7 +384,7 @@ Access in your script:
 Dynamic modules are automatically labeled `src:dynamic` for guard enforcement:
 
 ```mlld
-/guard before secret = when [
+guard before secret = when [
   @input.mx.taint.includes('src:dynamic') =>
     deny "Cannot use dynamic data as secrets"
   * => allow
@@ -418,8 +418,8 @@ Check `/export` directive includes the variable name.
 **Collision error**:
 Use namespace imports:
 ```mlld
-/import @alice/utils as @alice
-/import @bob/utils as @bob
+import @alice/utils as @alice
+import @bob/utils as @bob
 ```
 
 **Module not updating**:

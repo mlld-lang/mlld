@@ -1,6 +1,0 @@
-/var @status = "ok"
-/when @status: [
-  let @msg = "Completed"
-  "ok" => show @msg
-]
-# @msg is not accessible here

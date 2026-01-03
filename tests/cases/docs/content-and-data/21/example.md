@@ -1,8 +1,0 @@
-/var @post = <blog/post.md>
-
-/show @post.mx.fm.title                 >> Post title
-/show @post.mx.fm.author                >> Author name
-/show @post.mx.fm.tags                  >> Array of tags
-
->> Conditional processing
-/when @post.mx.fm.published => show @post.content

@@ -224,9 +224,9 @@ const result = await processMlld(template, {
 In your script:
 
 ```mlld
-/var @count = @state.count + 1
-/var @theme = @state.preferences.theme
-/var @input = @payload.text
+var @count = @state.count + 1
+var @theme = @state.preferences.theme
+var @input = @payload.text
 ```
 
 Notes:
@@ -246,7 +246,7 @@ result.effects.forEach(effect => {
 Guards can enforce policies on dynamic data:
 
 ```mlld
-/guard before secret = when [
+guard before secret = when [
   @input.mx.taint.includes('src:dynamic') =>
     deny "Cannot use dynamic data as secrets"
   * => allow
@@ -272,14 +272,14 @@ This enables fine-grained guard policies:
 
 ```mlld
 // Block user-uploaded data from dangerous operations
-/guard before fileWrite = when [
+guard before fileWrite = when [
   @input.mx.labels.includes('src:user-upload') =>
     deny "User uploads cannot be written to filesystem"
   * => allow
 ]
 
 // Allow trusted database content through
-/guard before apiCall = when [
+guard before apiCall = when [
   @input.mx.labels.includes('src:user-upload') =>
     deny "User data cannot call external APIs"
   @input.mx.labels.includes('src:dynamic') =>
@@ -312,11 +312,11 @@ Track state changes via the `state://` protocol instead of filesystem writes.
 ### State Write Protocol
 
 ```mlld
-/var @count = @state.count + 1
-/output @count to "state://count"
+var @count = @state.count + 1
+output @count to "state://count"
 
-/var @prefs = { theme: "dark", lang: "en" }
-/output @prefs to "state://preferences"
+var @prefs = { theme: "dark", lang: "en" }
+output @prefs to "state://preferences"
 ```
 
 State writes are captured in the result:
@@ -353,7 +353,7 @@ for (const write of result.stateWrites) {
 ### Nested Paths
 
 ```mlld
-/output "dark" to "state://prefs.theme"
+output "dark" to "state://prefs.theme"
 ```
 
 Captured as `{ path: 'prefs.theme', value: 'dark' }`.
@@ -370,7 +370,7 @@ write.security?.taint;   // Accumulated labels including automatic ones
 Use guards to prevent sensitive data in state:
 
 ```mlld
-/guard before op:output = when [
+guard before op:output = when [
   @mx.op.target.startsWith('state://') &&
   @input.mx.labels.includes('secret') =>
     deny "Secrets cannot be persisted to state"
@@ -406,16 +406,16 @@ console.log(result.metrics);      // Performance data
 Import fields from `@payload` and `@state` using destructuring syntax:
 
 ```mlld
-# Import specific fields from payload
-/import { @text, @userId } from @payload
+>> Import specific fields from payload
+import { @text, @userId } from @payload
 
-# Import specific fields from state
-/import { @count, @messages } from @state
+>> Import specific fields from state
+import { @count, @messages } from @state
 
-# Use the imported variables
-/var @newCount = @count + 1
-/var @history = @messages
-/show "User @userId said: @text"
+>> Use the imported variables
+var @newCount = @count + 1
+var @history = @messages
+show "User @userId said: @text"
 ```
 
 The SDK automatically provides `@payload` and `@state` as importable modules when you call `execute()` with payload and state arguments.

@@ -1,4 +1,0 @@
-/var secret @token = "sk-12345"
-/var @trimmed = @token.trim()              # Still labeled 'secret'
-/var @partial = @token.slice(0, 5)         # Still labeled 'secret'
-/var @upper = @token.toUpperCase()         # Still labeled 'secret'
