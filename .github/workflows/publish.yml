@@ -151,7 +151,7 @@ jobs:
       # SDK Publishing
       - name: Sync SDK versions
         if: steps.check_release.outputs.skip == 'false'
-        run: node scripts/sync-sdk-versions.js
+        run: node scripts/sync-sdk-versions.cjs
 
       - name: Setup Python
         if: steps.check_release.outputs.skip == 'false'

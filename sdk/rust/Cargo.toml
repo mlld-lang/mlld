@@ -1,6 +1,6 @@
 [package]
 name = "mlld"
-version = "0.1.0"
+version = "2.0.0-rc78"
 edition = "2021"
 description = "Rust wrapper for the mlld CLI"
 license = "MIT"

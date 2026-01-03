@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mlld-sdk"
-version = "0.1.0"
+version = "2.0.0rc78"
 description = "Python wrapper for the mlld CLI"
 readme = "README.md"
 license = "MIT"
