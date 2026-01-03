@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-import tempfile
-import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -154,30 +152,21 @@ class Client:
         Raises:
             MlldError: If execution fails.
         """
-        # Write script to temp file since mlld doesn't support stdin
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.mld', delete=False
-        ) as f:
-            f.write(script)
-            temp_path = f.name
+        args = [self.command, "/dev/stdin"]
 
-        try:
-            args = [self.command, temp_path]
+        result = subprocess.run(
+            args,
+            input=script,
+            capture_output=True,
+            text=True,
+            timeout=timeout or self.timeout,
+            cwd=self.working_dir,
+        )
 
-            result = subprocess.run(
-                args,
-                capture_output=True,
-                text=True,
-                timeout=timeout or self.timeout,
-                cwd=self.working_dir,
-            )
+        if result.returncode != 0:
+            raise MlldError(result.stderr, result.returncode)
 
-            if result.returncode != 0:
-                raise MlldError(result.stderr, result.returncode)
-
-            return result.stdout
-        finally:
-            os.unlink(temp_path)
+        return result.stdout
 
     def execute(
         self,

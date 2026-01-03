@@ -88,17 +88,9 @@ impl Client {
     pub fn process(&self, script: &str, opts: Option<ProcessOptions>) -> Result<String> {
         let _opts = opts.unwrap_or_default();
 
-        // Write script to temp file since mlld doesn't support stdin
-        let mut temp_file = tempfile::Builder::new()
-            .suffix(".mld")
-            .tempfile()?;
-        temp_file.write_all(script.as_bytes())?;
-        let temp_path = temp_file.path().to_string_lossy().to_string();
-
-        let args = vec![temp_path];
-
         let mut cmd = Command::new(&self.command);
-        cmd.args(&args)
+        cmd.arg("/dev/stdin")
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -106,7 +98,13 @@ impl Client {
             cmd.current_dir(dir);
         }
 
-        let output = cmd.output()?;
+        let mut child = cmd.spawn()?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(script.as_bytes())?;
+        }
+
+        let output = child.wait_with_output()?;
 
         if !output.status.success() {
             return Err(Error::Mlld {

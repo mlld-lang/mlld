@@ -13,7 +13,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"time"
 )
@@ -53,20 +52,7 @@ func (c *Client) Process(script string, opts *ProcessOptions) (string, error) {
 		opts = &ProcessOptions{}
 	}
 
-	// Write script to temp file since mlld doesn't support stdin
-	tmpFile, err := os.CreateTemp("", "mlld-*.mld")
-	if err != nil {
-		return "", fmt.Errorf("create temp file: %w", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	if _, err := tmpFile.WriteString(script); err != nil {
-		tmpFile.Close()
-		return "", fmt.Errorf("write temp file: %w", err)
-	}
-	tmpFile.Close()
-
-	args := []string{tmpFile.Name()}
+	args := []string{"/dev/stdin"}
 
 	timeout := opts.Timeout
 	if timeout == 0 {
@@ -81,6 +67,7 @@ func (c *Client) Process(script string, opts *ProcessOptions) (string, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, c.Command, args...)
+	cmd.Stdin = bytes.NewReader([]byte(script))
 	if c.WorkingDir != "" {
 		cmd.Dir = c.WorkingDir
 	}
