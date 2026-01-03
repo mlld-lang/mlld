@@ -676,9 +676,42 @@ ModuleIdentifierPart "Module Identifier Part"
       return first + rest.join('');
     }
 
-// Short hash (4+ hex characters)
+// Version or hash specifier for module references
+// Supports:
+//   - Semver versions: 1.0.0, 1.2.3-beta.1, 2.0.0-rc.1
+//   - Short hashes: abcd1234 (4+ hex characters)
 ShortHash
-  = chars:[a-f0-9]+ &{ return chars.length >= 4; } {
+  = version:SemverVersion {
+      return version;
+    }
+  / chars:[a-f0-9]+ &{ return chars.length >= 4; } {
+      return chars.join('');
+    }
+
+// Semantic version pattern: major.minor.patch[-prerelease][+metadata]
+SemverVersion
+  = major:[0-9]+ "." minor:[0-9]+ "." patch:[0-9]+ prerelease:("-" pre:SemverPrerelease { return pre; })? metadata:("+" meta:SemverMetadata { return meta; })? {
+      const base = major.join('') + '.' + minor.join('') + '.' + patch.join('');
+      return base + (prerelease ? '-' + prerelease : '') + (metadata ? '+' + metadata : '');
+    }
+
+SemverPrerelease
+  = first:SemverPrereleaseId rest:("." id:SemverPrereleaseId { return id; })* {
+      return [first, ...rest].join('.');
+    }
+
+SemverPrereleaseId
+  = chars:[a-zA-Z0-9-]+ {
+      return chars.join('');
+    }
+
+SemverMetadata
+  = first:SemverMetadataId rest:("." id:SemverMetadataId { return id; })* {
+      return [first, ...rest].join('.');
+    }
+
+SemverMetadataId
+  = chars:[a-zA-Z0-9-]+ {
       return chars.join('');
     }
 

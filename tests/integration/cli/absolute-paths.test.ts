@@ -79,19 +79,19 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
   describe('Dynamic path construction', () => {
     it.skip('should deny constructed absolute path by default', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
-      await fs.writeFile(scriptPath, `/var @root = "${tempDir}"
-/var @file = <@root/external.txt>
+      await fs.writeFile(scriptPath, `/var @basePath = "${tempDir}"
+/var @file = <@basePath/external.txt>
 /show @file`, 'utf-8');
-      
+
       // This also hangs, skip for now
     });
     
     it('should allow constructed absolute path with --allow-absolute flag', async () => {
       const scriptPath = path.join(projectDir, 'test.mld');
-      await fs.writeFile(scriptPath, `/var @root = "${tempDir}"
-/var @file = <@root/external.txt>
+      await fs.writeFile(scriptPath, `/var @basePath = "${tempDir}"
+/var @file = <@basePath/external.txt>
 /show @file`, 'utf-8');
-      
+
       const { stdout } = await execAsync(`node "${mlldBin}" --allow-absolute "${scriptPath}"`, { cwd: projectDir });
       expect(stdout.trim()).toBe('EXTERNAL_CONTENT');
     });
@@ -196,7 +196,9 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
 /show @externalContent`, 'utf-8');
       
       const { stdout } = await execAsync(`node "${mlldBin}" --allow-absolute "${scriptPath}"`, { cwd: projectDir, timeout: 10000 });
-      expect(stdout.trim()).toBe('INTERNAL_CONTENT\nEXTERNAL_CONTENT');
+      // Normalize multiple newlines - output may have blank lines between shows depending on platform/Node version
+      const normalized = stdout.trim().replace(/\n+/g, '\n');
+      expect(normalized).toBe('INTERNAL_CONTENT\nEXTERNAL_CONTENT');
     }, 15000);
     
     it('should respect project boundaries for relative paths even with --allow-absolute', async () => {
