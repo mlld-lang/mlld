@@ -109,30 +109,32 @@ export class FileProcessor {
   }
 
   async processFileWithOptions(cliOptions: CLIOptions, apiOptions: any): Promise<void> {
-    // Check if input is a URL
+    // Check if input is a URL or stdin
     const isURL = URLLoader.isURL(cliOptions.input);
-    
-    // For URLs, we need special handling
+    const isStdinInput = cliOptions.input === '/dev/stdin' || cliOptions.input === '-';
+
+    // Set up environment based on input type
     let environment: ProcessingEnvironment;
     if (isURL) {
-      // For URLs, use current directory for config
       environment = await this.setupEnvironmentForURL();
+    } else if (isStdinInput) {
+      environment = await this.setupEnvironmentForStdin();
     } else {
-      // For files, check existence first
       if (!existsSync(cliOptions.input)) {
         throw new Error(`Input file does not exist: ${cliOptions.input}`);
       }
       environment = await this.setupEnvironment(cliOptions);
     }
-    
-    let interpretEnvironment: Environment | null = null; // Define outside try block for cleanup access
-    let detachLogging: (() => void) | undefined;
-    
-    try {
-      // Read stdin if available
-      const stdinContent = await this.readStdinIfAvailable();
 
-      const interpretation = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL);
+    let interpretEnvironment: Environment | null = null;
+    let detachLogging: (() => void) | undefined;
+
+    try {
+      // Read stdin if available, but NOT if input is /dev/stdin (or - alias) since
+      // fs.readFile('/dev/stdin') will consume stdin directly
+      const stdinContent = isStdinInput ? undefined : await this.readStdinIfAvailable();
+
+      const interpretation = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL, isStdinInput);
       interpretEnvironment = interpretation.interpretEnvironment ?? null;
       detachLogging = interpretation.detachLogging;
 
@@ -231,10 +233,33 @@ export class FileProcessor {
     };
   }
 
+  async setupEnvironmentForStdin(): Promise<ProcessingEnvironment> {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService(fileSystem);
+
+    // For stdin input, use cwd-based PathContext
+    const pathContext = PathContextBuilder.fromDefaults({
+      invocationDirectory: process.cwd()
+    });
+
+    // Use PathContext for config
+    const configLoader = new ConfigLoader(pathContext);
+    const config = configLoader.load();
+    const urlConfig = configLoader.resolveURLConfig(config);
+
+    return {
+      fileSystem,
+      pathService,
+      configLoader,
+      urlConfig,
+      pathContext
+    };
+  }
+
   async setupEnvironmentForURL(): Promise<ProcessingEnvironment> {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService(fileSystem);
-    
+
     // For URLs, create default PathContext
     const pathContext = PathContextBuilder.fromDefaults({
       invocationDirectory: process.cwd()
@@ -259,7 +284,8 @@ export class FileProcessor {
     apiOptions: any,
     environment: ProcessingEnvironment,
     stdinContent?: string,
-    isURL?: boolean
+    isURL?: boolean,
+    isStdinInput?: boolean
   ): Promise<
     | { kind: 'document'; result: string; hasExplicitOutput: boolean; interpretEnvironment?: Environment | null; detachLogging?: () => void }
     | { kind: 'stream'; handle: StreamExecution; interpretEnvironment?: Environment | null; detachLogging?: () => void }
@@ -282,7 +308,14 @@ export class FileProcessor {
     } else {
       // Read the input file
       content = await fs.readFile(cliOptions.input, 'utf8');
-      effectivePath = path.resolve(cliOptions.input);
+      // For stdin input, use cwd as the effective path base for imports
+      // Detect mode from content: if first directive uses / prefix, it's prose mode
+      if (isStdinInput) {
+        const isProseMode = this.detectProseMode(content);
+        effectivePath = path.resolve(process.cwd(), isProseMode ? '<stdin>.mld.md' : '<stdin>.mld');
+      } else {
+        effectivePath = path.resolve(cliOptions.input);
+      }
     }
     
     // Merge CLI URL config with loaded config
@@ -341,7 +374,7 @@ export class FileProcessor {
       streaming: modeConfig.streaming ?? (cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined),
       emitter: modeConfig.emitter
     });
-    
+
     if (modeConfig.mode === 'stream') {
       return {
         kind: 'stream',
@@ -432,7 +465,7 @@ export class FileProcessor {
 
   private normalizeFormat(format?: string): 'markdown' | 'xml' {
     if (!format) return 'markdown';
-    
+
     const normalized = format.toLowerCase();
     if (normalized === 'md' || normalized === 'markdown') {
       return 'markdown';
@@ -441,6 +474,53 @@ export class FileProcessor {
       return 'xml';
     }
     return 'markdown';
+  }
+
+  /**
+   * Detect if content uses prose mode (markdown mode with / prefixed directives).
+   * Looks at the first non-empty, non-comment line to determine mode.
+   */
+  private detectProseMode(content: string): boolean {
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Skip empty lines
+      if (!trimmed) continue;
+
+      // Skip YAML frontmatter start/end
+      if (trimmed === '---') continue;
+
+      // Skip markdown comments (HTML comments)
+      if (trimmed.startsWith('<!--')) continue;
+
+      // Skip mlld comments (>>)
+      if (trimmed.startsWith('>>')) continue;
+
+      // Check if line starts with / followed by a letter (prose mode directive)
+      if (/^\/[a-zA-Z]/.test(trimmed)) {
+        return true;
+      }
+
+      // Check if line starts with a bare directive keyword (strict mode)
+      // Common directives: var, show, run, exe, for, foreach, when, import, export, let, log, output, append
+      if (/^(var|show|run|exe|for|foreach|when|import|export|let|log|output|append|guard|needs|parallel|while|break|continue|return)\b/.test(trimmed)) {
+        return false;
+      }
+
+      // If it's plain text (not a directive), it's likely prose mode
+      // since strict mode would error on plain text
+      if (/^[a-zA-Z#*\-\[]/.test(trimmed)) {
+        return true;
+      }
+
+      // Default to strict mode for other patterns
+      return false;
+    }
+
+    // Empty content or only comments - default to strict mode
+    return false;
   }
 
   private mergeUrlConfig(cliOptions: CLIOptions, loadedUrlConfig?: ResolvedURLConfig): ResolvedURLConfig | undefined {
