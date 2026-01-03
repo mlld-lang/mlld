@@ -9,6 +9,7 @@ multiple features working together. All examples use strict mode (bare directive
 3. Agent Definition - Configuration module with frontmatter and templates
 4. Router - Complex decision logic with scoring
 5. Orchestrator - Parallel execution with routing and gating
+6. Codebase Audit - Parallel file review using Claude
 </TOC>
 
 <RECIPE_1_LLM_LIBRARY>
@@ -335,8 +336,63 @@ export { @routing }
 - Chained processing: route → invoke → gate → post
 </RECIPE_5_ORCHESTRATOR>
 
+<RECIPE_6_CODEBASE_AUDIT>
+A codebase audit tool using Claude for parallel file review. Demonstrates:
+- Glob patterns for file loading
+- File metadata access
+- Claude as a function via pipe + cmd
+- Parallel for loops with structured returns
+
+```mlld
+>> Claude model helper - haiku for fast, cheap reviews
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+
+>> Build review prompt
+exe @buildPrompt(filename, content) = `
+Review this code for issues:
+File: @filename
+---
+@content
+---
+List 2-3 issues or "LGTM". Be concise (max 3 lines).
+`
+
+>> Load files with glob pattern
+var @allFiles = <src/**/*.ts>
+
+>> Extract file info before parallel loop (preserves metadata)
+var @fileInfo = for @f in @allFiles => { name: @f.relative, content: @f }
+
+>> Review function
+exe @reviewFile(info) = [
+  let @prompt = @buildPrompt(@info.name, @info.content)
+  let @review = @haiku(@prompt)
+  let @filename = @info.name
+  let @trimmed = @review.trim()
+  => { file: @filename, review: @trimmed }
+]
+
+>> Parallel review - up to 5 concurrent
+var @reviews = for parallel(5) @info in @fileInfo => @reviewFile(@info)
+
+>> Output results
+for @r in @reviews [
+  show `## @r.file`
+  show @r.review
+  show ""
+]
+```
+
+**Key patterns:**
+- `<src/**/*.ts>` - Glob pattern loads all TypeScript files
+- `@f.relative` - Access file metadata (relative path)
+- `@prompt | cmd { claude -p }` - Pipe prompt to Claude CLI via stdin
+- `for parallel(5)` - Process up to 5 files concurrently
+- Extract file info before parallel loop to preserve metadata access
+</RECIPE_6_CODEBASE_AUDIT>
+
 <SUMMARY>
-These five recipes cover the most common mlld patterns:
+These six recipes cover the most common mlld patterns:
 
 | Recipe | Features Demonstrated |
 |--------|----------------------|
@@ -345,6 +401,7 @@ These five recipes cover the most common mlld patterns:
 | Agent Definition | Frontmatter, templates, function objects |
 | Router | Complex scoring, for-filter, object spread, nested when |
 | Orchestrator | Parallel for, directory imports, dynamic access |
+| Codebase Audit | Globs, file metadata, Claude-as-function, parallel review |
 
 For reference documentation, see the other llms-*.txt modules.
 </SUMMARY>

@@ -261,6 +261,57 @@ show @result
 
 The `retry "hint"` re-runs the previous stage with `@mx.hint` available.
 
+## Recipe 8: Codebase Audit
+
+Review multiple files in parallel using Claude as a function:
+
+```mlld
+>> Claude model helper - haiku for fast, cheap reviews
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+
+>> Build review prompt
+exe @buildPrompt(filename, content) = `
+Review this TypeScript code for issues:
+File: @filename
+---
+@content
+---
+List 2-3 issues or "LGTM". Be concise (max 3 lines).
+`
+
+>> Load TypeScript files
+var @allFiles = <src/**/*.ts>
+
+>> Extract file info (name + content) before parallel loop
+var @fileInfo = for @f in @allFiles => { name: @f.relative, content: @f }
+
+>> Review function
+exe @reviewFile(info) = [
+  let @prompt = @buildPrompt(@info.name, @info.content)
+  let @review = @haiku(@prompt)
+  let @filename = @info.name
+  let @trimmed = @review.trim()
+  => { file: @filename, review: @trimmed }
+]
+
+>> Parallel review - up to 5 concurrent
+var @reviews = for parallel(5) @info in @fileInfo => @reviewFile(@info)
+
+>> Output results
+for @r in @reviews [
+  show `## @r.file`
+  show @r.review
+  show ""
+]
+```
+
+**Key patterns:**
+- `<src/**/*.ts>` - Glob pattern loads all matching files
+- `@f.relative` - Access file metadata (relative path)
+- `@prompt | cmd { claude -p }` - Pipe to Claude CLI via stdin
+- `for parallel(5)` - Process up to 5 files concurrently
+- Extract file info before parallel loop to preserve metadata
+
 ## Common Patterns Summary
 
 | Pattern | Use Case |
