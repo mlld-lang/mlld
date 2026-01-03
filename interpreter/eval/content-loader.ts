@@ -642,6 +642,9 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   if (pattern.startsWith('@base/')) {
     globCwd = relativeBase;
     globPattern = pattern.slice('@base/'.length);
+  } else if (pattern.startsWith('@root/')) {
+    globCwd = relativeBase;
+    globPattern = pattern.slice('@root/'.length);
   } else if (path.isAbsolute(pattern)) {
     globCwd = path.parse(pattern).root || '/';
     globPattern = path.relative(globCwd, pattern);

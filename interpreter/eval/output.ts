@@ -680,10 +680,13 @@ async function outputToFile(
   let targetPath = String(pathResult);
   
   
-  // TODO: This is a hack to handle @base in quoted output paths
+  // TODO: This is a hack to handle @base/@root in quoted output paths
   // The proper fix requires rethinking how @identifier resolution works
   // across variables, resolvers, and paths in a unified way
   if (targetPath.startsWith('@base/')) {
+    const projectRoot = env.getProjectRoot();
+    targetPath = path.join(projectRoot, targetPath.substring(6));
+  } else if (targetPath.startsWith('@root/')) {
     const projectRoot = env.getProjectRoot();
     targetPath = path.join(projectRoot, targetPath.substring(6));
   }

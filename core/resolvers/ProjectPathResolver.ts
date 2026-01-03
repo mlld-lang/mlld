@@ -27,12 +27,13 @@ export interface ProjectPathResolverConfig {
 }
 
 /**
- * Base Path Resolver - handles @base/ references
- * Maps @base to the project root directory
+ * Base Path Resolver - handles @base/ and @root/ references
+ * Maps @base/@root to the project root directory
  */
 export class ProjectPathResolver implements Resolver {
   name = 'base';
-  description = 'Resolves @base references to project root files';
+  aliases = ['root'];
+  description = 'Resolves @base and @root references to project root files';
   type: ResolverType = 'io';
   
   capabilities: ResolverCapabilities = {
@@ -49,9 +50,9 @@ export class ProjectPathResolver implements Resolver {
   }
 
   canResolve(ref: string, config?: ProjectPathResolverConfig): boolean {
-    // Can resolve if reference starts with @base
+    // Can resolve if reference starts with @base or @root
     // OR if we have a config (which means prefix was stripped)
-    return ref.startsWith('@base') || !!config;
+    return ref.startsWith('@base') || ref.startsWith('@root') || !!config;
   }
 
   /**
@@ -78,8 +79,8 @@ export class ProjectPathResolver implements Resolver {
 
     // Variable context - return the project path as text
     if (!config || !config.context || config.context === 'variable') {
-      // If it's just @base, return the base path
-      if (ref === '@base' || ref === 'base') {
+      // If it's just @base or @root, return the base path
+      if (ref === '@base' || ref === 'base' || ref === '@root' || ref === 'root') {
         const metadata = {
           source: 'base',
           timestamp: new Date()
@@ -95,12 +96,16 @@ export class ProjectPathResolver implements Resolver {
 
     // Path context - read the file content
     if (config.context === 'path') {
-      // Extract the path after @base
+      // Extract the path after @base or @root
       let relativePath: string;
       if (ref.startsWith('@base/')) {
         relativePath = ref.substring('@base/'.length);
       } else if (ref.startsWith('@base')) {
         relativePath = ref.substring('@base'.length);
+      } else if (ref.startsWith('@root/')) {
+        relativePath = ref.substring('@root/'.length);
+      } else if (ref.startsWith('@root')) {
+        relativePath = ref.substring('@root'.length);
       } else {
         // With prefix stripping, we might just get the path directly
         relativePath = ref;

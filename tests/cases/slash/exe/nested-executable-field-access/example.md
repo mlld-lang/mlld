@@ -34,7 +34,7 @@ This test verifies that deeply nested executable functions can be accessed and c
   sub: @level2
 }
 
-/var @root = {
+/var @topLevel = {
   top: @level1
 }
 
@@ -44,23 +44,23 @@ This test verifies that deeply nested executable functions can be accessed and c
 
 ## Test 2 levels deep
 /show "2 levels:"
-/run @root.top.func()
+/run @topLevel.top.func()
 
 ## Test 3 levels deep (like github.pr.review)
 /show "3 levels:"
-/run @root.top.sub.func()
+/run @topLevel.top.sub.func()
 
 ## Test 4 levels deep
 /show "4 levels:"
-/run @root.top.sub.child.func()
+/run @topLevel.top.sub.child.func()
 
 ## Test 5 levels deep
 /show "5 levels:"
-/run @root.top.sub.child.nested.func()
+/run @topLevel.top.sub.child.nested.func()
 
 ## Test 6 levels deep
 /show "6 levels:"
-/run @root.top.sub.child.nested.deeper.func()
+/run @topLevel.top.sub.child.nested.deeper.func()
 
 ## Test with parameters
 /exe @paramFunc(@msg) = js {

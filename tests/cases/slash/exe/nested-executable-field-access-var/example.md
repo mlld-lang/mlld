@@ -34,7 +34,7 @@ This test verifies that deeply nested executable functions work with /var assign
   sub: @level2
 }
 
-/var @root = {
+/var @topLevel = {
   top: @level1
 }
 
@@ -45,21 +45,21 @@ This test verifies that deeply nested executable functions work with /var assign
 /show @result1
 
 /show "2 levels with /var:"
-/var @result2 = @root.top.func()
+/var @result2 = @topLevel.top.func()
 /show @result2
 
 /show "3 levels with /var (like github.pr.review):"
-/var @result3 = @root.top.sub.func()
+/var @result3 = @topLevel.top.sub.func()
 /show @result3
 
 /show "4 levels with /var:"
-/var @result4 = @root.top.sub.child.func()
+/var @result4 = @topLevel.top.sub.child.func()
 /show @result4
 
 /show "5 levels with /var:"
-/var @result5 = @root.top.sub.child.nested.func()
+/var @result5 = @topLevel.top.sub.child.nested.func()
 /show @result5
 
 /show "6 levels with /var:"
-/var @result6 = @root.top.sub.child.nested.deeper.func()
+/var @result6 = @topLevel.top.sub.child.nested.deeper.func()
 /show @result6

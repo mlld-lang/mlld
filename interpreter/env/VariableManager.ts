@@ -227,7 +227,9 @@ export class VariableManager implements IVariableManager {
         const existingIsLegitimate = this.isLegitimateVariableType(existing);
 
         // Only throw collision errors if both variables are legitimate mlld types
-        if (isLegitimateVariable && existingIsLegitimate) {
+        // AND the new variable is not a let binding (let bindings can shadow parent scope)
+        const isLetBinding = variable.mx?.importPath === 'let';
+        if (isLegitimateVariable && existingIsLegitimate && !isLetBinding) {
           const isExistingImported = existing.mx?.isImported || false;
           const importPath = existing.mx?.importPath;
 

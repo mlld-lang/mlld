@@ -202,7 +202,7 @@ export class ImportDirectiveEvaluator {
       return 'local';
     }
 
-    if (name === 'base' || name === 'project') {
+    if (name === 'base' || name === 'root' || name === 'project') {
       return 'static';
     }
 
@@ -248,10 +248,10 @@ export class ImportDirectiveEvaluator {
         if (resolution.type === 'file') {
           return;
         }
-        if (resolution.type === 'resolver' && (resolverName === 'base' || resolverName === 'project')) {
+        if (resolution.type === 'resolver' && (resolverName === 'base' || resolverName === 'root' || resolverName === 'project')) {
           return;
         }
-        throw new MlldImportError("Import type 'static' supports local files or @base/@project resolver paths.", {
+        throw new MlldImportError("Import type 'static' supports local files or @base/@root/@project resolver paths.", {
           code: 'IMPORT_TYPE_MISMATCH',
           details: { importType: type, resolvedType: resolution.type }
         });
@@ -268,11 +268,11 @@ export class ImportDirectiveEvaluator {
       case 'templates': {
         const isAllowedResolver =
           resolution.type === 'resolver' &&
-          (resolverName === 'base' || resolverName === 'project' || resolverName === 'local');
+          (resolverName === 'base' || resolverName === 'root' || resolverName === 'project' || resolverName === 'local');
         if (resolution.type === 'file' || isAllowedResolver) {
           return;
         }
-        throw new MlldImportError("Import type 'templates' expects a directory from the local filesystem or @base/@project/@local resolvers.", {
+        throw new MlldImportError("Import type 'templates' expects a directory from the local filesystem or @base/@root/@project/@local resolvers.", {
           code: 'IMPORT_TYPE_MISMATCH',
           details: { importType: type, resolvedType: resolution.type }
         });

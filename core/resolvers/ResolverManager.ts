@@ -94,23 +94,34 @@ export class ResolverManager {
     }
 
     // Validate against security policy
-    if (this.securityPolicy.allowedResolvers && 
+    if (this.securityPolicy.allowedResolvers &&
         !this.securityPolicy.allowedResolvers.includes(resolver.name)) {
       throw new Error(`Resolver '${resolver.name}' is not in the allowed list`);
     }
 
     this.resolvers.set(resolver.name, resolver);
-    
+
+    // Register aliases if any (e.g., @root as alias for @base)
+    const aliases = (resolver as { aliases?: string[] }).aliases || [];
+    for (const alias of aliases) {
+      if (!this.resolvers.has(alias)) {
+        this.resolvers.set(alias, resolver);
+        this.resolverNamesCache.add(alias);
+        this.resolverNamesCache.add(alias.toUpperCase());
+        this.resolverNamesCache.add(alias.toLowerCase());
+      }
+    }
+
     // Add to priority-sorted array
     this.resolversByPriority.push(resolver);
     this.resolversByPriority.sort((a, b) => a.capabilities.priority - b.capabilities.priority);
-    
+
     // Update resolver names cache with all variants
     this.resolverNamesCache.add(resolver.name);
     this.resolverNamesCache.add(resolver.name.toUpperCase());
     this.resolverNamesCache.add(resolver.name.toLowerCase());
-    
-    logger.debug(`Registered resolver: ${resolver.name} (priority: ${resolver.capabilities.priority})`);
+
+    logger.debug(`Registered resolver: ${resolver.name} (priority: ${resolver.capabilities.priority})${aliases.length > 0 ? `, aliases: ${aliases.join(', ')}` : ''}`);
   }
 
   /**

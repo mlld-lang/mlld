@@ -50,7 +50,9 @@ export function legacyMetadataToVarMx(metadata?: VariableMetadata): VariableCont
     policy: descriptor.policyContext ?? null,
     source: metadata?.source,
     retries: metadata?.retries,
-    exported: Boolean(metadata?.isImported)
+    exported: Boolean(metadata?.isImported),
+    isImported: metadata?.isImported,
+    importPath: metadata?.importPath
   };
 
   applyFlattenedLoadMetadata(mx, metadata as Record<string, unknown> | undefined);

@@ -524,7 +524,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Only reserve names for built-in function resolvers (not file/module resolvers)
     // Function resolvers are those that provide computed values like now, debug, etc.
-    const functionResolvers = ['now', 'debug', 'input', 'base'];
+    const functionResolvers = ['now', 'debug', 'input', 'base', 'root'];
     for (const name of functionResolvers) {
       this.reservedNames.add(name);
     }
@@ -641,9 +641,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       );
       this.variableManager.setVariable(transformer.name, lowerVar);
       
-      // Reserve both names
-      this.reservedNames.add(transformer.uppercase);
-      this.reservedNames.add(transformer.name);
+      // Only reserve names for core transformers (isReserved: true)
+      // Convenience transformers (upper, lower, trim, etc.) can be overridden
+      if (transformer.isReserved === true) {
+        this.reservedNames.add(transformer.uppercase);
+        this.reservedNames.add(transformer.name);
+      }
 
       if (transformer.variants && transformer.variants.length > 0) {
         const lowerInternal = (lowerVar.internal ??= {});
