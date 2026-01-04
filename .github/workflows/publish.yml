@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write
   packages: write
-  id-token: write  # For PyPI trusted publishing
+  id-token: write  # For npm and PyPI trusted publishing (OIDC)
 
 jobs:
   release:
@@ -99,7 +99,6 @@ jobs:
       - name: Publish packages
         if: steps.check_release.outputs.skip == 'false'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RC_LATEST: ${{ vars.RC_LATEST }}
         run: |
           VERSION=${{ steps.check_release.outputs.version }}
