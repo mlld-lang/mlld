@@ -12,6 +12,9 @@ const args = process.argv.slice(2);
 const tagIndex = args.indexOf('--tag');
 const tag = tagIndex !== -1 && args[tagIndex + 1] ? args[tagIndex + 1] : 'latest';
 
+// --provenance only works in CI (GitHub Actions)
+const provenance = process.env.GITHUB_ACTIONS ? '--provenance' : '';
+
 console.log(`🚀 Publishing mlld and mlldx with tag: ${tag}`);
 
 try {
@@ -21,7 +24,7 @@ try {
   
   // Publish main package (with --ignore-scripts to skip postpublish)
   console.log('\n📦 Publishing mlld...');
-  execSync(`npm publish --tag ${tag} --ignore-scripts`, { stdio: 'inherit' });
+  execSync(`npm publish --tag ${tag} --ignore-scripts ${provenance}`.trim(), { stdio: 'inherit' });
   
   // Publish mlldx with the same tag
   console.log('\n📦 Publishing mlldx...');

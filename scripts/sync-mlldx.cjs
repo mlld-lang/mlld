@@ -9,6 +9,9 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// --provenance only works in CI (GitHub Actions)
+const provenance = process.env.GITHUB_ACTIONS ? '--provenance' : '';
+
 // Read the main package.json
 const mainPackagePath = path.join(__dirname, '..', 'package.json');
 const mainPackage = JSON.parse(fs.readFileSync(mainPackagePath, 'utf8'));
@@ -73,7 +76,7 @@ if (shouldPublish) {
       tag = isPrerelease ? 'next' : 'latest';
     }
     
-    execSync(`npm publish --tag ${tag}`, {
+    execSync(`npm publish --tag ${tag} ${provenance}`.trim(), {
       cwd: mlldxDir,
       stdio: 'inherit'
     });

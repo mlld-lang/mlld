@@ -2,4 +2,4 @@
 // Do not edit manually
 
 export const version = '2.0.0-rc78';
-export const buildTime = 1767506353770;
+export const buildTime = 1767508579938;
