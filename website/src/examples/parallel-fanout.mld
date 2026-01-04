@@ -1,3 +1,7 @@
-/exe @review(f) = cmd {claude -p "Review @f"}
-/var @files = <src/**/*.ts>
-/for parallel @f in @files => @review(@f)
+exe @review(f) = [
+  let @result = @f | cmd { claude -p "Review this:" }
+  => { file: @f.mx.relative, review: @result.trim() }
+]
+
+var @files = <src/**/*.ts>
+var @reviews = for parallel(5) @f in @files => @review(@f)
