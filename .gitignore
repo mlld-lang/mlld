@@ -154,3 +154,7 @@ tmp
 modules/
 
 __pycache__/
+
+
+.fray
+.beads
