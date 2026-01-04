@@ -388,7 +388,10 @@ export class VariableMetadataUtils {
       return variable.internal.mxCache;
     }
     const metrics = VariableMetadataUtils.computeMetricsForVariable(variable);
-    const mxSnapshot = variable.mx ?? {};
+    // GOTCHA: Do NOT access variable.mx here as it will call this getter recursively!
+    // Instead, get the raw property descriptor to check if there's a stored value
+    const descriptor = Object.getOwnPropertyDescriptor(variable, 'mx');
+    const mxSnapshot = (descriptor && !descriptor.get && descriptor.value) ? descriptor.value : {};
     const labels = normalizeLabelArray(mxSnapshot.labels);
     const tokenValue = metrics?.tokens ?? metrics?.tokest ?? undefined;
     const tokestValue = metrics?.tokest ?? metrics?.tokens ?? undefined;

@@ -77,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Simplified .keep usage**: Metadata now accessible in mlld contexts without `.keep` (e.g., `@file.mx.filename` works directly). `.keep` only needed when passing to JS/Node to preserve StructuredValue wrapper. Apply `.keep` at call site (`@process(@file.keep)`) rather than variable creation.
 
 ### Fixed
+- **@debug variable stack overflow**: Fixed infinite recursion when accessing `@debug`. Variable metadata getter was calling itself recursively when building context snapshot.
 - **Exe block return-only syntax**: Exe blocks can now return directly without a let statement: `exe @f() = [ => { name: "hello" } ]`
 - **Method calls in object literal values**: Method calls like `@x.trim()` now work as object literal values in returns: `=> { file: @f.mx.relative, review: @review.trim() }`
 - **`.mx` access in for loops**: File metadata (`@f.mx.relative`, `@f.mx.filename`) now accessible when iterating over glob results in all contexts: direct interpolation, object literals (`{ file: @f.mx.relative }`), and exe function parameters.
