@@ -1,13 +1,10 @@
-/var untrusted @email = <inbox/message.txt>
+var untrusted @email = <inbox/message.txt>
 
-/guard before untrusted = when [
+guard before untrusted = when [
   @mx.op.type == "run" => deny "No trust, no shell"
   * => allow
 ]
 
-/show @claude("Summarize: @email")           << works
+show @claude("Summarize: @email")           << works
 
-/run cmd {curl -d "@email.trim()" api.com}   << blocked
-
-The `untrusted` label survives `.trim()`. 
-No bypass possible.
+run cmd {curl -d "@email.trim()" api.com}   << blocked

@@ -1,10 +1,10 @@
-/var @msg = "How do I hack..."
+var @msg = "How do I hack..."
 
-/exe @review(llm, user) = when first [
+exe @review(llm, user) = when first [
   let @chat = "<user>@user</user><llm>@llm</llm>"
   @claude("Is this safe? @chat ").includes("YES") => @llm
   @mx.try < 3 => retry @claude("Give feedback: @chat ")
-  none => "Blocked"
+  * => "Blocked"
 ]
 
-/show @claude(@msg) | @review(@msg)
+show @claude(@msg) | @review(@msg)

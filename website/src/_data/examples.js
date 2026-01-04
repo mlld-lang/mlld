@@ -8,8 +8,13 @@ const files = fs.readdirSync(examplesDir);
 const examples = {};
 
 for (const file of files) {
-  if (file.endsWith('.mld')) {
-    const name = path.basename(file, '.mld');
+  // Support both .mld (strict mode) and .mld.md (prose mode)
+  const isMld = file.endsWith('.mld') && !file.endsWith('.mld.md');
+  const isMldMd = file.endsWith('.mld.md');
+
+  if (isMld || isMldMd) {
+    const ext = isMldMd ? '.mld.md' : '.mld';
+    const name = path.basename(file, ext);
     const code = fs.readFileSync(path.join(examplesDir, file), 'utf8');
     
     // Load metadata if exists

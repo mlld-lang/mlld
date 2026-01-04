@@ -1,4 +1,4 @@
-/exe @security() = `Security: OK`
-/exe @perf() = `Performance: OK`
-/exe @style() = `Style: OK`
-/var @audits = || @security() || @perf() || @style()
+exe @security() = `Security: OK`
+exe @perf() = `Performance: OK`
+exe @style() = `Style: OK`
+var @audits = || @security() || @perf() || @style()

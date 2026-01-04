@@ -1,14 +1,13 @@
+var @commits = cmd { git log --since="yesterday" }
+var @prs = cmd { gh pr list --json title,url,createdAt }
 
-/var @commits = run {git log --since="yesterday"}
-/var @prs = run {gh pr list --json title,url,createdAt}
-
-/exe @claude(request) = run {claude -p "@request"}
-/exe @formatPRs(items) = js {
+exe @claude(request) = cmd { claude -p "@request" }
+exe @formatPRs(items) = js {
   return items.map(pr => `- PR: ${pr.title} (${pr.url})`).join('\n');
 }
 
-/var @standup = `
-  Write a standup update in markdown summarizing the work I did 
+var @standup = `
+  Write a standup update in markdown summarizing the work I did
   yesterday based on the following commits and PRs.
 
   ## Commits:
@@ -18,35 +17,26 @@
   @formatPRs(@prs)
 `
 
-/exe @reviewPrompt(input) = `
-Review the following standup update to ensure I'm not taking credit for work I didn't do.
+exe @reviewPrompt(input) = `
+Review the following standup update to ensure I'm not taking
+credit for work I didn't do.
 
 My username is @githubuser. Here's my standup update:
 <standup>
 @input
 </standup>
 
-Check whether there are any commits or PRs listed that I wasn't involved in. If there are, respond with DENY. If there are not, respond with APPROVE.
-
-Your response should contain APPROVE or DENY in all caps.
+Check whether there are any commits or PRs listed that I wasn't
+involved in. Respond with APPROVE or DENY in all caps.
 `
 
-/exe @hasApproval(text) = js {
-  const lowerText = text.toLowerCase();
-  if (lowerText.includes('approve')) {
-    return 'true';
-  } else if (lowerText.includes('deny')) {
-    return 'false';  
-  }
-  return 'error';
-}
+exe @hasApproval(text) = @text.toLowerCase().includes("approve")
 
-/exe @review(@input) = when [
+exe @review(input) = when first [
   let @check = @claude(@reviewPrompt(@input))
-  @hasApproval(@check) => show "Approved: @check"
   @hasApproval(@check) => @input
-  !@hasApproval(@check) && @mx.retries < 3 => retry
-  none => show "No definitive answer: @input"
+  @mx.try < 3 => retry
+  * => "No definitive answer"
 ]
 
-/show @claude(@standup) | show "Reviewing #@p.try..." | @review
+show @claude(@standup) | show "Reviewing #@mx.try..." | @review
