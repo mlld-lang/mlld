@@ -1,0 +1,100 @@
+>> Unified Docs Coverage Checker
+>> Validates CHANGELOG features are documented across all audiences per DOCS.md
+
+var @changelog = <CHANGELOG.md>
+var @docsMatrix = <docs/dev/DOCS.md>
+var @userGuide = <docs/dev/DOCS-USER.md>
+var @llmGuide = <docs/dev/DOCS-LLM.md>
+var @devGuide = <docs/dev/DOCS-DEV.md>
+
+var @userDocs = <docs/user/*.md>
+var @llmDocs = <docs/llm/*.txt>
+var @devDocs = <docs/dev/*.md>
+
+exe @claude(prompt) = cmd { claude -p --model haiku --tools "" "@prompt" }
+
+>> Extract and categorize features from recent changelog
+var @extractPrompt = `
+Analyze this CHANGELOG and extract features from the most recent version(s).
+Categorize each by which documentation audiences need it, per this matrix:
+
+DOCS MATRIX:
+@docsMatrix
+
+Return a JSON array of objects:
+[{
+  "feature": "feature name",
+  "description": "brief description",
+  "needs_user_docs": true/false,
+  "needs_llm_docs": true/false,
+  "needs_dev_docs": true/false,
+  "reason": "why this categorization"
+}]
+
+Rules from matrix:
+- Architecture change → Dev only
+- New directive/feature → All three
+- New SDK method → All three
+- Bug fix → None
+- Behavior change → User + LLM (maybe dev)
+- Performance optimization → Dev only
+- Internal refactor → Maybe dev
+
+If no documentable features found, return [].
+
+CHANGELOG:
+@changelog
+`
+
+var @features = @claude(@extractPrompt) | @json
+
+>> Check coverage in a specific docs set
+exe @checkDocs(feature, docs, audience, guide) = @claude(`
+Check if "@feature.feature" is documented for @audience.
+
+Feature: @feature.feature
+Description: @feature.description
+
+@audience documentation:
+@docs
+
+Style guide:
+@guide
+
+Respond with JSON:
+{"covered": true/false, "location": "where found or null", "notes": "brief notes"}
+`)
+
+>> Generate report
+show "# Documentation Coverage Report"
+show ""
+when @features.length == 0 => show "No documentable features found in recent CHANGELOG."
+when @features.length > 0 => show "Analyzed @features.length features from recent CHANGELOG"
+show ""
+
+for @f in @features [
+  show "## @f.feature"
+  show "@f.description"
+  show ""
+  show "Reason: @f.reason"
+  show ""
+
+  >> Check all audiences (check is cheap, display is conditional)
+  let @userRaw = @checkDocs(@f, @userDocs, "user", @userGuide)
+  let @userResult = @userRaw | @json
+  let @userStatus = @userResult.covered ? "✅" : "❌"
+
+  let @llmRaw = @checkDocs(@f, @llmDocs, "LLM", @llmGuide)
+  let @llmResult = @llmRaw | @json
+  let @llmStatus = @llmResult.covered ? "✅" : "❌"
+
+  let @devRaw = @checkDocs(@f, @devDocs, "developer", @devGuide)
+  let @devResult = @devRaw | @json
+  let @devStatus = @devResult.covered ? "✅" : "❌"
+
+  when @f.needs_user_docs => show "- **User docs**: @userStatus @userResult.notes"
+  when @f.needs_llm_docs => show "- **LLM docs**: @llmStatus @llmResult.notes"
+  when @f.needs_dev_docs => show "- **Dev docs**: @devStatus @devResult.notes"
+
+  show ""
+]

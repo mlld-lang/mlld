@@ -81,6 +81,7 @@
     "validate:tokens": "tsx scripts/validate-tokens.mjs",
     "validate:tokens:strict": "tsx scripts/validate-tokens.mjs --mode=strict",
     "validate:tokens:verbose": "tsx scripts/validate-tokens.mjs --verbose",
+    "check:syntax-coverage": "./dist/cli.cjs run check-syntax-coverage",
     "dump:tokens": "tsx scripts/dump-tokens-for-file.mjs",
     "test:nvim-lsp": "node scripts/test-nvim-lsp.mjs",
     "test:nvim-lsp:verbose": "node scripts/test-nvim-lsp.mjs --verbose",

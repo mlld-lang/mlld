@@ -1,0 +1,37 @@
+>> Syntax Coverage Checker
+>> Validates that new CHANGELOG features are covered in syntax highlighting
+
+var @changelog = <@base/CHANGELOG.md>
+
+exe @claude(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+
+var @prompt = `
+Analyze this CHANGELOG and identify any NEW SYNTAX FEATURES added in the
+most recent version(s). Focus on:
+- New keywords or directives
+- New operators
+- New syntax patterns (block syntax, arrow operators, etc.)
+
+For each syntax feature found, check if it's likely covered in:
+1. grammar/syntax-generator/build-syntax.js (regex highlighting)
+2. services/lsp/ASTSemanticVisitor.ts (LSP semantic tokens)
+
+Return JSON with this exact structure:
+{
+  "summary": "3-5 line summary with: number of features checked, number of confirmed gaps, most important gap to fix (if any)",
+  "report": "Full markdown report with all details, features, coverage status, gaps"
+}
+
+IMPORTANT: Return ONLY valid JSON, no markdown code fences.
+
+CHANGELOG:
+@changelog
+`
+
+var @result = @claude(@prompt) | @json.llm
+
+output @result.report to "syntax-gaps.md"
+
+>> Output summary 
+log @result.summary
+log "Details written to syntax-gaps.md"

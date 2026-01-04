@@ -22,7 +22,7 @@
       "contentName": "source.mlld.embedded",
       "patterns": [
         {
-          "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export)\\b)",
+          "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b)",
           "end": "$",
           "name": "meta.embedded.line.mlld",
           "beginCaptures": {
@@ -446,7 +446,7 @@
             },
             {
               "name": "keyword.operator.mlld",
-              "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|let|var|stream|module|static|live|cached|local|cmd|in|for)\\b"
+              "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\\b"
             },
             {
               "name": "support.type.guard-filter.mlld",
@@ -485,7 +485,7 @@
       ]
     },
     {
-      "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export)\\b)",
+      "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b)",
       "end": "$",
       "name": "meta.embedded.block.mlld",
       "beginCaptures": {
@@ -909,7 +909,7 @@
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|let|var|stream|module|static|live|cached|local|cmd|in|for)\\b"
+          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\\b"
         },
         {
           "name": "support.type.guard-filter.mlld",

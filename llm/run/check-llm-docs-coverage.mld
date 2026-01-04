@@ -1,0 +1,74 @@
+>> LLM Docs Coverage Checker
+>> Validates that new CHANGELOG features are covered in LLM documentation
+
+var @changelog = <CHANGELOG.md>
+var @docsGuide = <docs/dev/DOCS-LLM.md>
+var @llmDocs = <docs/llm/*.txt>
+
+exe @claude(prompt) = cmd { claude -p --model haiku --tools "" "@prompt" }
+
+>> Extract LLM-relevant features from recent changelog entries
+>> Per DOCS.md: LLM docs need coverage for syntax, directives, patterns
+var @extractPrompt = `
+Analyze this CHANGELOG and extract any features that LLMs need to know
+about when WRITING mlld code. Per the documentation guide, LLM docs need:
+- New directives or syntax features
+- New SDK methods
+- Behavior changes affecting syntax
+- New patterns
+
+Do NOT include:
+- Architecture changes (dev docs only)
+- Bug fixes
+- Performance optimizations
+- Internal changes
+
+Return a JSON array of objects with format:
+[{"feature": "feature name", "type": "syntax|directive|sdk|pattern", "description": "brief description"}]
+
+Focus on what an LLM needs to generate correct mlld code.
+If no relevant features found, return [].
+
+CHANGELOG:
+@changelog
+`
+
+var @features = @claude(@extractPrompt) | @json
+
+>> Check if feature is documented in LLM docs
+exe @checkLLMDocs(feature, docs) = @claude(`
+Check if this feature is documented in the LLM documentation (llms.txt modules).
+Feature: @feature.feature
+Type: @feature.type
+Description: @feature.description
+
+LLM documentation contents (docs/llm/ modules):
+@docs
+
+Following this style guide:
+@docsGuide
+
+Is this feature documented with correct strict-mode examples? Respond with JSON:
+{"covered": true/false, "location": "module or section if found", "notes": "what's missing or what exists"}
+`)
+
+>> Run checks - for handles empty arrays gracefully
+show "## LLM Docs Coverage Report"
+show ""
+when @features.length == 0 => show "No LLM-relevant features found in recent CHANGELOG entries."
+when @features.length > 0 => show "Found @features.length LLM-relevant features in recent CHANGELOG"
+show ""
+
+for @f in @features [
+  show "### @f.feature"
+  show "Type: @f.type | @f.description"
+  show ""
+
+  let @result = @checkLLMDocs(@f, @llmDocs) | @json
+  let @status = @result.covered ? "✅ Documented" : "❌ Missing"
+
+  show "Coverage: @status"
+  when @result.location => show "Location: @result.location"
+  when @result.notes => show "Notes: @result.notes"
+  show ""
+]

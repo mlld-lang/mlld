@@ -1,0 +1,73 @@
+>> Dev Docs Coverage Checker
+>> Validates that new CHANGELOG features are covered in developer documentation
+
+var @changelog = <CHANGELOG.md>
+var @docsGuide = <docs/dev/DOCS-DEV.md>
+var @devDocs = <docs/dev/*.md>
+
+exe @claude(prompt) = cmd { claude -p --model haiku --tools "" "@prompt" }
+
+>> Extract dev-facing features from recent changelog entries
+>> Per DOCS.md: Dev docs need coverage for architecture, internals, gotchas
+var @extractPrompt = `
+Analyze this CHANGELOG and extract any DEVELOPER-FACING changes in the
+most recent version(s). Per the documentation guide, dev docs need:
+- Architecture changes
+- New directives/features (implementation details)
+- New SDK methods (implementation)
+- Performance optimizations
+- Internal refactors (if significant)
+
+Do NOT include:
+- Simple bug fixes
+- Minor tweaks
+
+Return a JSON array of objects with format:
+[{"feature": "feature name", "type": "architecture|directive|sdk|performance|refactor", "description": "brief description"}]
+
+Focus on what a developer maintaining mlld needs to understand.
+If no dev-relevant features found, return [].
+
+CHANGELOG:
+@changelog
+`
+
+var @features = @claude(@extractPrompt) | @json
+
+>> Check if feature is documented in dev docs
+exe @checkDevDocs(feature, docs) = @claude(`
+Check if this feature/change is documented in the developer documentation.
+Feature: @feature.feature
+Type: @feature.type
+Description: @feature.description
+
+Developer documentation contents (docs/dev/):
+@docs
+
+Following this style guide:
+@docsGuide
+
+Is this adequately documented for developers? Respond with JSON:
+{"covered": true/false, "location": "file or section if found", "notes": "what's missing or what exists"}
+`)
+
+>> Run checks - for handles empty arrays gracefully
+show "## Dev Docs Coverage Report"
+show ""
+when @features.length == 0 => show "No dev-facing changes found in recent CHANGELOG entries."
+when @features.length > 0 => show "Found @features.length dev-facing changes in recent CHANGELOG"
+show ""
+
+for @f in @features [
+  show "### @f.feature"
+  show "Type: @f.type | @f.description"
+  show ""
+
+  let @result = @checkDevDocs(@f, @devDocs) | @json
+  let @status = @result.covered ? "✅ Documented" : "❌ Missing"
+
+  show "Coverage: @status"
+  when @result.location => show "Location: @result.location"
+  when @result.notes => show "Notes: @result.notes"
+  show ""
+]

@@ -1,131 +1,74 @@
----
-updated: 2025-07-30
-tags: #editors, #syntax, #lsp, #semantic-tokens
-related-docs: docs/dev/LANGUAGE-SERVER.md, editors/HIGHLIGHTING.md
-related-code: grammar/syntax-generator/build-syntax.js, services/lsp/ASTSemanticVisitor.ts
-related-types: services/lsp/ASTSemanticVisitor { TokenInfo, VisitorContext }
----
-
 # mlld Editor Support
 
-## tldr
+Editor integrations for mlld syntax highlighting and language features.
 
-mlld provides two levels of editor support: basic TextMate grammars for regex-based highlighting and a full Language Server Protocol implementation with semantic tokens. For the best experience, use VSCode or Neovim with LSP enabled.
+## Quick Start
 
-```mld
->> mlld with semantic highlighting knows context
-/var @msg = `Hello @name!`     >> @name highlighted as interpolation
-/var @ref = @name               >> @name highlighted as variable reference
-/var @data = {"user": @name}    >> @name highlighted as variable reference
-/run {echo "@name"}             >> @name highlighted as interpolation
-```
+| Editor | Recommended Setup |
+|--------|-------------------|
+| **VSCode/Cursor** | Install extension from marketplace or `npm run install:vscode` |
+| **Neovim** | `mlld nvim-setup` for LSP + highlighting |
+| **Vim** | Copy `editors/vim/` to `~/.vim/` |
+| **Sublime Text** | Copy `editors/textmate/*.json` to Packages/User/ |
 
-## Principles
+## Architecture
 
-- LSP is the primary solution - Semantic tokens provide context-aware highlighting
-- TextMate grammars are "good enough" - Basic highlighting for non-LSP editors
-- Parser is the source of truth - LSP uses the real AST, not regex patterns
-- Pragmatic over perfect - Ship working features, iterate on edge cases
+mlld provides two levels of editor support:
 
-## Details
+### 1. LSP (Language Server Protocol)
 
-### Language Server Protocol (LSP)
+Full-featured support with semantic highlighting, autocomplete, go-to-definition, and real-time validation.
 
-The mlld LSP provides intelligent features through semantic tokens:
-
-**Semantic Token Types**:
-- `directive` - /var, /show, /run, /while, /stream, /guard, etc.
-- `variable` - Variable declarations with @
-- `variableRef` - Variable references
-- `interpolation` - Variables in templates/commands
-- `template` - Template delimiters (backticks, ::, :::)
-- `operator` - Logical, comparison, ternary operators
-- `embedded` - Language identifiers (js, python, etc.)
-- `embeddedCode` - Code regions for syntax injection
-- `alligator` - File references <file.md>
-- `property` - Object property access
-
-**Mode Detection**:
-- `.mld` files → strict mode (bare directives like `var`, `show`)
-- `.mld.md` files → markdown mode (require `/` prefix)
-
-**Context Awareness**:
-- Different highlighting for @var in templates vs directives
-- Triple-colon templates use {{var}}, others use @var
-- Single quotes never interpolate
-- Commands allow @var interpolation
-
-**Starting the LSP**:
 ```bash
-mlld language-server    # or mlld lsp
+mlld language-server  # or: mlld lsp
 ```
 
-**Editor Configuration**:
-- VSCode: Automatic with extension
-- Neovim: Configure built-in LSP client
-- Vim: Use coc.nvim or vim-lsp
+**Supported:** VSCode, Neovim (0.8+), any LSP-compatible editor
 
-### TextMate Grammars
+**Features:**
+- Context-aware highlighting (knows `@var` in templates vs directives)
+- Autocomplete for directives, variables, file paths
+- Hover information for variables and functions
+- Go-to-definition for variables and imports
+- Real-time syntax validation
 
-Basic syntax highlighting for editors without LSP support:
+### 2. Regex-based Highlighting
 
-**Generation**:
-```bash
-npm run build:syntax              # Normal build
-FORCE_SYNTAX_BUILD=true npm run build:syntax  # Force regenerate
-```
+Basic syntax highlighting using TextMate grammars (VSCode, Sublime) or Vim syntax files.
 
-**Coverage**:
-- Directives and keywords
-- Basic variable highlighting (no context)
-- Comment syntax
-- String literals
+**Features:**
+- Directive keywords
+- Variables and operators
+- Comments and strings
+- Template delimiters
 
-**Limitations**:
-- Can't distinguish interpolation contexts
-- No semantic understanding
+**Limitations:**
+- No context awareness
+- No autocomplete or validation
 - May highlight invalid syntax
 
-### Installation
+## Directory Structure
 
-**VSCode/Cursor** (Best Experience):
+```
+editors/
+├── vscode/      # VSCode extension (LSP + TextMate fallback)
+├── vim/         # Vim/Neovim syntax files
+├── textmate/    # Generic TextMate grammars (Sublime, etc.)
+└── web/         # Prism.js for websites
+```
+
+## Regenerating Syntax Files
+
+Syntax files are generated from `grammar/syntax-generator/`:
+
 ```bash
-npm run install:vscode
-# Extension provides LSP + TextMate fallback
+npm run build:syntax        # Only if files missing
+npm run build:syntax:force  # Force regenerate
 ```
 
-**Neovim** (LSP Support):
-```lua
--- In init.lua
-require'lspconfig'.mlld_ls.setup{
-  cmd = {"mlld", "language-server"},
-  filetypes = {"mld", "mlld"}
-}
-```
+## Editor-Specific Guides
 
-**Vim** (Basic Highlighting):
-```bash
-npm run install:vim
-# Or use coc.nvim for LSP support
-```
-
-## Gotchas
-
-- TextMate grammars CANNOT handle context-sensitive syntax correctly
-- Embedded language blocks marked as regions, actual highlighting by editor
-- Parser location quirks documented in ASTSemanticVisitor.ts
-- Primitive values in objects/arrays lack individual highlighting
-- Template delimiters in object values skipped to avoid position guessing
-
-## Debugging
-
-**LSP Issues**:
-- Check language server running: `ps aux | grep mlld`
-- Enable debug: `DEBUG=mlld:lsp mlld lsp`
-- Verify semantic tokens in editor developer tools
-
-**Highlighting Issues**:
-- For best results, use editor with LSP support
-- TextMate highlighting is basic by design
-- Check file extension (.mld or .mlld)
-- Reload editor after changes
+- [VSCode Extension](vscode/README.md) - Full LSP support
+- [Vim/Neovim](vim/README.md) - Syntax + LSP setup
+- [TextMate Grammars](textmate/README.md) - Sublime Text, Nova, etc.
+- [Web/Prism.js](web/README.md) - Website highlighting

@@ -48,7 +48,13 @@ class MlldSyntaxGenerator {
       whenKeyword: 'when\\s*:',
       whenArrow: '=>',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|let|var|stream|module|static|live|cached|local|cmd|in|for)\\b',
+      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\\b',
+      // Block keywords (inside [...] blocks)
+      blockKeywords: '\\b(let|done|continue|skip)\\b',
+      // Wildcard in when blocks
+      wildcard: '(?:^|\\s)\\*(?=\\s|$|=>)',
+      // Object keys in literals: key:
+      objectKey: '(?<=^|[{,\\s])[\\w]+(?=\\s*:(?!:))',
       // Guard filter syntax
       guardFilter: '\\bop:(run|exe|output|show|import)\\b',
       // Type-checking builtin methods
@@ -110,17 +116,35 @@ class MlldSyntaxGenerator {
 const Prism = require('prismjs');
 
 Prism.languages.mlld = {
+  // Comment MUST be first to match >> before comparison operators grab individual >
   'comment': {
-    pattern: /${this.patterns.comment}/,
+    pattern: /(?:>>|<<).*$/m,
     greedy: true
   },
   'directive': {
-    pattern: /${this.patterns.directive}/,
+    pattern: /\\b${this.patterns.directive}/,
     alias: 'keyword'
   },
   'when-keyword': {
     pattern: /${this.patterns.whenKeyword}/,
     alias: 'keyword'
+  },
+  // Alligator MUST come before comparison operators to match <file.md> as one token
+  'alligator': {
+    pattern: /<[^>]*[\\.\\/@*][^>]*>/,
+    greedy: true,
+    inside: {
+      'url': {
+        pattern: /https?:\\/\\/[^>]+/,
+        alias: 'string'
+      },
+      'punctuation': /<|>/
+    }
+  },
+  // Arrow operator MUST come before comparison/assignment to match => as one token
+  'arrow-operator': {
+    pattern: /${this.patterns.whenArrow}/,
+    alias: 'operator'
   },
   'logical-operator': {
     pattern: /${this.patterns.logicalAnd}|${this.patterns.logicalOr}|${this.patterns.logicalNot}/,
@@ -128,10 +152,6 @@ Prism.languages.mlld = {
   },
   'comparison-operator': {
     pattern: /${this.patterns.comparisonOps}/,
-    alias: 'operator'
-  },
-  'arrow-operator': {
-    pattern: /${this.patterns.whenArrow}/,
     alias: 'operator'
   },
   'ternary-operator': {
@@ -227,27 +247,21 @@ Prism.languages.mlld = {
     pattern: /${this.patterns.singleQuoteString}/,
     greedy: true
   },
-  'alligator': {
-    pattern: /${this.patterns.alligatorExpression}/,
-    greedy: true,
-    inside: {
-      'url': {
-        pattern: /https?:\\/\\/[^>]+/,
-        alias: 'string'
-      },
-      'punctuation': /<|>/
-    }
+  // Block keywords (let, done, continue, skip)
+  'block-keyword': {
+    pattern: /${this.patterns.blockKeywords}/,
+    alias: 'keyword'
   },
-  'path': {
-    pattern: /${this.patterns.pathBrackets}/,
+  // Wildcard in when blocks
+  'wildcard': {
+    pattern: /(?:^|\\s)\\*(?=\\s|$|=>)/m,
+    alias: 'keyword'
+  },
+  // Object keys in literals (file:, review:, etc) - word followed by : but not ::
+  'object-key': {
+    pattern: /[\\w]+(?=\\s*:(?!:))/,
     greedy: true,
-    inside: {
-      'url': {
-        pattern: /https?:\\/\\/[^\\]]+/,
-        alias: 'string'
-      },
-      'punctuation': /\\[|\\]/
-    }
+    alias: 'property'
   },
   'reserved-variable': {
     pattern: /${this.patterns.reservedVariable}/,
@@ -273,7 +287,7 @@ Prism.languages.mlld = {
   'number': /${this.patterns.number}/,
   'boolean': /${this.patterns.boolean}/,
   'null': /${this.patterns.null}/,
-  'punctuation': /[{}(),]/
+  'punctuation': /[{}()\\[\\],;:]/
 };
 
 // Also highlight .mlld and .mld files
@@ -1108,109 +1122,66 @@ hi def link markdownMlldDirective mlldDirective
   }
 
   generate() {
-    const outputDir = path.join(__dirname, '../generated');
     const rootDir = path.join(__dirname, '../..');
-    
-    // Generate Prism.js
-    const prismPath = path.join(outputDir, 'prism-mlld.js');
-    fs.writeFileSync(prismPath, this.generatePrism());
-    console.log(`Generated: ${prismPath}`);
-    
-    // Generate TextMate/VSCode
-    const textmatePath = path.join(outputDir, 'mlld.tmLanguage.json');
+    const editorsDir = path.join(rootDir, 'editors');
+
+    // Generate content
+    const prismContent = this.generatePrism();
     const textmateContent = this.generateTextMate();
-    fs.writeFileSync(textmatePath, textmateContent);
-    console.log(`Generated: ${textmatePath}`);
-    
-    // Generate Vim
-    const vimPath = path.join(outputDir, 'mlld.vim');
+    const injectionContent = this.generateMarkdownInjection();
     const vimContent = this.generateVim();
-    fs.writeFileSync(vimPath, vimContent);
-    console.log(`Generated: ${vimPath}`);
-    
-    // Generate Markdown injection grammar for TextMate
-    const injectionPath = path.join(outputDir, 'mlld-markdown.injection.json');
-    fs.writeFileSync(injectionPath, this.generateMarkdownInjection());
-    console.log(`Generated: ${injectionPath}`);
-    
-    // Generate Vim Markdown support
-    const vimMarkdownPath = path.join(outputDir, 'markdown-mlld.vim');
-    fs.writeFileSync(vimMarkdownPath, this.generateVimMarkdown());
-    console.log(`Generated: ${vimMarkdownPath}`);
-    
-    // Copy to editor directories
-    console.log('\nCopying to editor directories...');
-    
-    // Copy to VSCode
-    const vscodeDir = path.join(rootDir, 'editors/vscode/syntaxes');
-    if (fs.existsSync(vscodeDir)) {
-      fs.writeFileSync(path.join(vscodeDir, 'mlld.tmLanguage.json'), textmateContent);
-      fs.writeFileSync(path.join(vscodeDir, 'mlld-markdown.injection.json'), this.generateMarkdownInjection());
-      console.log(`Copied to: ${vscodeDir}/mlld.tmLanguage.json`);
-      console.log(`Copied to: ${vscodeDir}/mlld-markdown.injection.json`);
+    const vimMarkdownContent = this.generateVimMarkdown();
+
+    console.log('Generating syntax highlighting files...\n');
+
+    // 1. Web (Prism.js for websites)
+    const webDir = path.join(editorsDir, 'web');
+    if (!fs.existsSync(webDir)) {
+      fs.mkdirSync(webDir, { recursive: true });
     }
-    
-    // Copy to Vim
-    const vimDir = path.join(rootDir, 'editors/vim/syntax');
-    if (fs.existsSync(vimDir)) {
-      fs.writeFileSync(path.join(vimDir, 'mlld.vim'), vimContent);
-      console.log(`Copied to: ${vimDir}/mlld.vim`);
-      
-      // Create after/syntax directory for Markdown support
-      const vimAfterDir = path.join(rootDir, 'editors/vim/after/syntax');
-      if (!fs.existsSync(vimAfterDir)) {
-        fs.mkdirSync(vimAfterDir, { recursive: true });
-      }
-      fs.writeFileSync(path.join(vimAfterDir, 'markdown.vim'), this.generateVimMarkdown());
-      console.log(`Copied to: ${vimAfterDir}/markdown.vim`);
-    }
-    
-    // Copy to website
+    fs.writeFileSync(path.join(webDir, 'prism-mlld.js'), prismContent);
+    console.log(`Generated: editors/web/prism-mlld.js`);
+
+    // Also copy to website/src for convenience
     const websiteDir = path.join(rootDir, 'website/src');
     if (fs.existsSync(websiteDir)) {
-      fs.writeFileSync(path.join(websiteDir, 'prism-mlld.js'), this.generatePrism());
-      console.log(`Copied to: ${websiteDir}/prism-mlld.js`);
+      fs.writeFileSync(path.join(websiteDir, 'prism-mlld.js'), prismContent);
+      console.log(`  → Copied to: website/src/prism-mlld.js`);
     }
-    
-    // Create generic TextMate bundle for other editors
-    const textmateDir = path.join(rootDir, 'editors/textmate');
+
+    // 2. TextMate (canonical location for TextMate grammars)
+    const textmateDir = path.join(editorsDir, 'textmate');
     if (!fs.existsSync(textmateDir)) {
       fs.mkdirSync(textmateDir, { recursive: true });
     }
     fs.writeFileSync(path.join(textmateDir, 'mlld.tmLanguage.json'), textmateContent);
-    fs.writeFileSync(path.join(textmateDir, 'mlld-markdown.injection.json'), this.generateMarkdownInjection());
-    fs.writeFileSync(path.join(textmateDir, 'README.md'), `# Mlld TextMate Grammar
+    fs.writeFileSync(path.join(textmateDir, 'mlld-markdown.injection.json'), injectionContent);
+    console.log(`Generated: editors/textmate/mlld.tmLanguage.json`);
+    console.log(`Generated: editors/textmate/mlld-markdown.injection.json`);
 
-This directory contains TextMate grammar files for Mlld syntax highlighting.
+    // 3. VSCode (copies TextMate grammars)
+    const vscodeDir = path.join(editorsDir, 'vscode/syntaxes');
+    if (fs.existsSync(vscodeDir)) {
+      fs.writeFileSync(path.join(vscodeDir, 'mlld.tmLanguage.json'), textmateContent);
+      fs.writeFileSync(path.join(vscodeDir, 'mlld-markdown.injection.json'), injectionContent);
+      console.log(`  → Copied to: editors/vscode/syntaxes/`);
+    }
 
-## Files
+    // 4. Vim
+    const vimDir = path.join(editorsDir, 'vim/syntax');
+    if (fs.existsSync(vimDir)) {
+      fs.writeFileSync(path.join(vimDir, 'mlld.vim'), vimContent);
+      console.log(`Generated: editors/vim/syntax/mlld.vim`);
 
-- \`mlld.tmLanguage.json\` - Main Mlld syntax highlighting for \`.mlld\` and \`.mld\` files
-- \`mlld-markdown.injection.json\` - Injection grammar to highlight Mlld directives in Markdown files
+      const vimAfterDir = path.join(editorsDir, 'vim/after/syntax');
+      if (!fs.existsSync(vimAfterDir)) {
+        fs.mkdirSync(vimAfterDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(vimAfterDir, 'markdown.vim'), vimMarkdownContent);
+      console.log(`Generated: editors/vim/after/syntax/markdown.vim`);
+    }
 
-## Compatible Editors
-
-These grammar files can be used with:
-- Sublime Text
-- TextMate
-- Nova (with adaptation)
-- Any other TextMate-compatible editor
-
-## Installation
-
-Copy these files to your editor's syntax directory. The exact location varies by editor.
-
-### Sublime Text
-- macOS: \`~/Library/Application Support/Sublime Text/Packages/Mlld/\`
-- Windows: \`%APPDATA%\\Sublime Text\\Packages\\Mlld\\\`
-- Linux: \`~/.config/sublime-text/Packages/Mlld/\`
-
-### TextMate
-- Create a bundle: \`~/Library/Application Support/TextMate/Bundles/Mlld.tmbundle/Syntaxes/\`
-`);
-    console.log(`Created TextMate bundle in: ${textmateDir}`);
-    
-    console.log('\nSyntax highlighting files generated and distributed successfully!');
+    console.log('\n✅ Syntax highlighting files generated successfully!');
   }
 }
 
