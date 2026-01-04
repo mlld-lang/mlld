@@ -1,7 +1,7 @@
 # Guard Deny Unhandled
 
 /guard @secretExecBlock for secret = when [
-  @ctx.op.type == "exe" => deny "Secrets blocked in exec"
+  @mx.op.type == "exe" => deny "Secrets blocked in exec"
   * => allow
 ]
 

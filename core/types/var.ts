@@ -7,7 +7,8 @@
 
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
-import { DirectiveNode, ExecInvocation } from './nodes';
+import { DirectiveNode, ExecInvocation, ConditionalArrayElementNode } from './nodes';
+import type { ExeBlockNode } from './exe';
 import type { PipelineStage } from './run';
 import type { DataLabel } from './security';
 
@@ -16,6 +17,7 @@ import type { DataLabel } from './security';
  */
 export type DataObjectEntry =
   | { type: 'pair'; key: string; value: DataValue }
+  | { type: 'conditionalPair'; key: string; value: DataValue }
   | { type: 'spread'; value: VariableNodeArray };
 
 /**
@@ -92,6 +94,7 @@ export type DataValue =
   | DataArrayValue
   | DirectiveNode // Nested directive
   | ExecInvocation // Exec invocation
+  | ConditionalArrayElementNode
   | ForeachCommandExpression
   | ForeachSectionExpression;
 
@@ -133,6 +136,7 @@ export type VarValue =
   | DataArrayValue // Arrays
   | DirectiveNode // Nested directives (@run, @add, etc.)
   | ExecInvocation // Exec invocations
+  | ExeBlockNode // Block expressions
   | ForeachCommandExpression // Foreach command expressions
   | ForeachSectionExpression // Foreach section expressions
   | VarExecDefinition; // Exec definitions (parameterized commands)
@@ -275,7 +279,10 @@ export function isTemplateValue(value: unknown): value is ContentNodeArray {
     typeof node === 'object' &&
     node !== null &&
     'type' in node &&
-    (node.type === 'Text' || node.type === 'VariableReference')
+    (node.type === 'Text' ||
+      node.type === 'VariableReference' ||
+      node.type === 'ConditionalTemplateSnippet' ||
+      node.type === 'ConditionalStringFragment')
   );
 }
 

@@ -29,8 +29,8 @@ describe('pipeline stage context', () => {
       structuredInput: ReturnType<typeof wrapStructured>,
       stageEnv: Environment
     ) => {
-      const ctxValue = stageEnv.getVariable('ctx')?.value as any;
-      observedTypes.push(ctxValue?.op?.type);
+      const mxValue = stageEnv.getVariable('mx')?.value as any;
+      observedTypes.push(mxValue?.op?.type);
       const pVar = stageEnv.getVariable('p')?.value as any;
       observedGuards.push(pVar?.guards);
       return await originalExecuteCommand(cmd, input, structuredInput, stageEnv);

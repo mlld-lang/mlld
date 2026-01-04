@@ -341,6 +341,9 @@ async function executeEffect(
           if (resolvedPath.startsWith('@base/')) {
             const projectRoot = (env as any).getProjectRoot ? (env as any).getProjectRoot() : '/';
             resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
+          } else if (resolvedPath.startsWith('@root/')) {
+            const projectRoot = (env as any).getProjectRoot ? (env as any).getProjectRoot() : '/';
+            resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
           }
 
           if (!path.isAbsolute(resolvedPath)) {

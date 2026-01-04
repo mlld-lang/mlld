@@ -128,4 +128,127 @@ describe('evaluateExecInvocation (structured)', () => {
     const result = await evaluateExecInvocation(invocation, env);
     expect(asText(result.value)).toBe('false');
   });
+
+  it('pipes RHS variable through inline command pipeline', async () => {
+    const src = '/exe @pipe(value) = @value | cmd { cat }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'pipe',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'pipe-ref',
+        identifier: 'pipe',
+        args: [{ type: 'Text', content: 'hello' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('hello');
+  });
+
+  it('supports legacy run-pipe sugar in exe RHS', async () => {
+    const src = '/exe @pipeRun(value) = run @value | cmd { cat }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'pipe-run',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'pipe-run-ref',
+        identifier: 'pipeRun',
+        args: [{ type: 'Text', content: 'world' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('world');
+  });
+
+  it('processes value through inline pipeline structure (direct source)', async () => {
+    const src = '/exe @func(value) = @value | cmd { tr a-z A-Z }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'func-inline',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'func-inline-ref',
+        identifier: 'func',
+        args: [{ type: 'Text', content: 'abc123' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('ABC123');
+  });
+
+  it('processes value through inline command body pipeline', async () => {
+    const src = '/exe @func(value) = cmd { printf "%s" "@value" | tr a-z A-Z }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'func-inline-body',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'func-inline-body-ref',
+        identifier: 'func',
+        args: [{ type: 'Text', content: 'abc123' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value).trim()).toBe('ABC123');
+  });
+
+  it('processes delegated executable output through pipeline', async () => {
+    const src = `
+/exe @other(value) = js { return value + "-tail" }
+/exe @func(value) = @other(value) | cmd { tr a-z A-Z }
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'func-delegate',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'func-delegate-ref',
+        identifier: 'func',
+        args: [{ type: 'Text', content: 'abc' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('ABC-TAIL');
+  });
+
+  it('processes js output through inline pipeline', async () => {
+    const src = '/exe @func(value) = js { return "hi-" + value } | cmd { tr a-z A-Z }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'func-js',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'func-js-ref',
+        identifier: 'func',
+        args: [{ type: 'Text', content: 'there' } as any]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('HI-THERE');
+  });
 });

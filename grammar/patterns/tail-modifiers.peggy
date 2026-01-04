@@ -20,7 +20,7 @@ TailModifiers "tail modifiers"
       }
     }
 
-TailKeyword = "pipeline" / "|" / "needs" / "with" / "as"
+TailKeyword = "pipeline" / "|" / "with" / "as"
 
 TailValue
   = "{" _ props:WithProperties _ "}" {
@@ -35,7 +35,6 @@ TailValue
     }      // for 'with'
   / "[" _ items:PipelineStageList _ "]" { return items; } // for 'pipeline' (supports parallel groups)
   / transformers:PipelineShorthand { return transformers; }  // for '|'
-  / deps:NeedsObject { return deps; }                        // for 'needs'
   / title:AsSectionRenameString { return title; }            // for 'as'
 
 // Support parallel groups with `||` inside pipeline shorthand.
@@ -102,6 +101,6 @@ PipelineRest
 
 // One pipeline stage consisting of multiple commands executed in parallel
 ParallelSequence
-  = first:PipelineStageEntry rest:(_ "||" _ c:PipelineStageEntry { return c; })+ {
+  = leading:("||" _)? first:PipelineStageEntry rest:(_ "||" _ c:PipelineStageEntry { return c; })+ {
       return [first, ...rest];
     }

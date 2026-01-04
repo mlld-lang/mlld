@@ -9,7 +9,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
 import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
-import type { PipelineStage, PipelineCommand } from '@core/types';
+import type { PipelineStage, PipelineCommand, WhilePipelineStage } from '@core/types';
 import { PipelineExecutor } from './executor';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
@@ -24,12 +24,11 @@ import {
   type StructuredValue,
   type StructuredValueMetadata
 } from '../../utils/structured-value';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { inheritExpressionProvenance, setExpressionProvenance } from '../../utils/expression-provenance';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor, type DataLabel } from '@core/types/security';
 import { wrapLoadContentValue } from '../../utils/load-content-structured';
 import { resolveNestedValue } from '../../utils/display-materialization';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 /**
  * Context for pipeline processing
@@ -173,7 +172,7 @@ export async function processPipeline(
     logger.debug('[processPipeline] Checking for synthetic source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
-      hasMetadata: !!(value && typeof value === 'object' && ('ctx' in value || 'internal' in value) && ((value as any).ctx || (value as any).internal)),
+      hasMetadata: !!(value && typeof value === 'object' && ('mx' in value || 'internal' in value) && ((value as any).mx || (value as any).internal)),
       hasSourceFunction: !!sourceNode,
       valueType: value && typeof value === 'object' && 'type' in value ? value.type : typeof value
     });
@@ -265,6 +264,19 @@ let executionResult: StructuredValue;
     }
     throw error;
   }
+  const errorsMeta =
+    isStructuredValue(executionResult) &&
+    executionResult.metadata &&
+    Array.isArray((executionResult.metadata as any).errors)
+      ? (executionResult.metadata as any).errors as any[]
+      : undefined;
+
+  if (errorsMeta && errorsMeta.length > 0) {
+    const mxManager = env.getContextManager?.();
+    mxManager?.setLatestErrors(errorsMeta);
+    mxManager?.pushGenericContext('parallel', { errors: errorsMeta, timestamp: Date.now() });
+  }
+
   if (pipelineDescriptor && isStructuredValue(executionResult)) {
     const metadata: StructuredValueMetadata = {
       ...(executionResult.metadata || {}),
@@ -289,6 +301,27 @@ async function validatePipeline(
   for (const stage of pipeline) {
     if (Array.isArray(stage)) {
       await validatePipeline(stage, env, identifier);
+      continue;
+    }
+    if ((stage as any).type === 'whileStage') {
+      const processorName = getWhileProcessorName(stage as WhilePipelineStage);
+      if (!processorName) {
+        continue;
+      }
+      const variable = env.getVariable(processorName);
+      if (!variable) {
+        throw new MlldDirectiveError(
+          `While processor '@${processorName}' is not defined${identifier ? ` (in @${identifier})` : ''}. ` +
+            `Available functions: ${getAvailableFunctions(env).join(', ')}`,
+          'pipeline'
+        );
+      }
+      if (variable.type !== 'executable' && variable.type !== 'computed') {
+        throw new MlldDirectiveError(
+          `'@${processorName}' is not a function, it's a ${variable.type}${identifier ? ` (in @${identifier})` : ''}`,
+          'pipeline'
+        );
+      }
       continue;
     }
     if ((stage as any).type === 'inlineCommand' || (stage as any).type === 'inlineValue') {
@@ -319,6 +352,42 @@ async function validatePipeline(
       );
     }
   }
+}
+
+function getWhileProcessorName(stage: WhilePipelineStage): string | undefined {
+  const processor = (stage as any)?.processor;
+  if (!processor) {
+    return undefined;
+  }
+
+  if (processor.commandRef) {
+    const ref = processor.commandRef;
+    if (ref.name) {
+      return ref.name;
+    }
+    if (Array.isArray(ref.identifier)) {
+      const candidate = ref.identifier.map((id: any) => id.identifier || id.content || '').find(Boolean);
+      if (candidate) {
+        return candidate;
+      }
+    } else if (ref.identifier) {
+      return ref.identifier;
+    }
+  }
+
+  if (processor.identifier) {
+    return processor.identifier;
+  }
+
+  if (Array.isArray(processor.identifier) && processor.identifier[0]?.identifier) {
+    return processor.identifier[0].identifier;
+  }
+
+  if (processor.rawIdentifier) {
+    return processor.rawIdentifier;
+  }
+
+  return undefined;
 }
 
 // Note: attachBuiltinEffects is imported from './effects-attachment' above.
@@ -388,7 +457,7 @@ async function prepareStructuredInput(
     );
   }
 
-  if (value && typeof value === 'object' && 'value' in value && ('ctx' in value || 'internal' in value)) {
+  if (value && typeof value === 'object' && 'value' in value && ('mx' in value || 'internal' in value)) {
     const metadata = mergedMetadata(undefined);
     const nested = await prepareStructuredInput(value.value, env, metadata, providedDescriptor);
     return finalizeWrapper(nested);
@@ -401,18 +470,6 @@ async function prepareStructuredInput(
       const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
       return finalizeWrapper(nested);
     }
-  }
-
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    const wrapped = wrapLoadContentValue(value);
-    return finalizeWrapper(
-      wrapStructured(
-        wrapped,
-        wrapped.type,
-        wrapped.text,
-        mergedMetadata(wrapped.metadata)
-      )
-    );
   }
 
   if (typeof value === 'string') {
@@ -471,8 +528,8 @@ function extractDescriptorFromAst(node: any, env: Environment): SecurityDescript
     }
     if (typeof node.commandRef.identifier === 'string') {
       const variable = env.getVariable(node.commandRef.identifier);
-      if (variable?.ctx) {
-        return ctxToSecurityDescriptor(variable.ctx);
+      if (variable?.mx) {
+        return varMxToSecurityDescriptor(variable.mx);
       }
     } else if (Array.isArray(node.commandRef.identifier)) {
       for (const identifierNode of node.commandRef.identifier) {
@@ -486,8 +543,8 @@ function extractDescriptorFromAst(node: any, env: Environment): SecurityDescript
 
   if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
     const variable = env.getVariable(node.identifier);
-    if (variable?.ctx) {
-      return ctxToSecurityDescriptor(variable.ctx);
+    if (variable?.mx) {
+      return varMxToSecurityDescriptor(variable.mx);
     }
   }
 

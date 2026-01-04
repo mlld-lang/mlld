@@ -43,6 +43,10 @@ export const DirectiveKind = {
   when: 'when',
   guard: 'guard',
   // NO deprecated entries - clean break!
+  needs: 'needs',
+  wants: 'wants',
+  policy: 'policy',
+  while: 'while'
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 
@@ -56,6 +60,16 @@ export interface GrammarWarning {
 type WarningCollector = ((warning: GrammarWarning) => void) | GrammarWarning[];
 
 let warningCollector: ((warning: GrammarWarning) => void) | null = null;
+
+export interface BlockReparseOptions {
+  parse: (input: string, options?: any) => any;
+  SyntaxErrorClass: new (...args: any[]) => any;
+  text: string;
+  startRule: string;
+  baseLocation: any;
+  grammarSource?: string;
+  mode?: string;
+}
 
 export const helpers = {
   debug(msg: string, ...args: unknown[]) {
@@ -140,43 +154,41 @@ export const helpers = {
   // ---------------------------------------------
   
   /**
-   * Determines if the current position represents a slash directive context
-   * A slash directive context requires:
-   * 1. / symbol at logical line start
-   * 2. Followed by a valid directive keyword
+   * Determines if the current position represents a directive context.
+   * A directive context requires:
+   * 1. Logical line start
+   * 2. Optional leading slash
+   * 3. Followed by a directive keyword
+   */
+  isDirectiveContext(input: string, pos: number): boolean {
+    if (!this.isLogicalLineStart(input, pos)) return false;
+    let cursor = pos;
+    if (input[cursor] === '/') cursor++;
+
+    const directiveKeywords = [...Object.keys(DirectiveKind), 'log'];
+
+    for (const keyword of directiveKeywords) {
+      const end = cursor + keyword.length;
+      if (end > input.length) continue;
+
+      const potentialKeyword = input.substring(cursor, end);
+      if (potentialKeyword !== keyword) continue;
+
+      if (end === input.length) return true;
+
+      const nextChar = input[end];
+      if (' \t\r\n'.includes(nextChar)) return true;
+    }
+
+    return false;
+  },
+
+  /**
+   * Legacy helper retained for compatibility.
+   * Delegates to isDirectiveContext but requires the slash prefix.
    */
   isSlashDirectiveContext(input: string, pos: number): boolean {
-    // First check if we're at a / symbol
-    if (input[pos] !== '/') return false;
-    
-    // Determine if this / symbol is at a logical line start
-    const isAtLineStart = this.isLogicalLineStart(input, pos);
-    if (!isAtLineStart) return false;
-    
-    // Check if it's followed by a valid directive keyword
-    // Include 'log' as a special case since it's syntactic sugar for 'output'
-    const directiveKeywords = [...Object.keys(DirectiveKind), 'log'];
-    const afterSlashPos = pos + 1;
-    
-    // Look ahead to see if a directive keyword follows
-    for (const keyword of directiveKeywords) {
-      // Check if there's enough text after / for this keyword
-      if (afterSlashPos + keyword.length > input.length) continue;
-      
-      const potentialKeyword = input.substring(afterSlashPos, afterSlashPos + keyword.length);
-      
-      // Check if the text matches the keyword and is followed by whitespace or EOL
-      if (potentialKeyword === keyword) {
-        // If we're at the end of input or the next char is whitespace, it's a directive
-        if (afterSlashPos + keyword.length === input.length) return true;
-        
-        const nextChar = input[afterSlashPos + keyword.length];
-        if (' \t\r\n'.includes(nextChar)) return true;
-      }
-    }
-    
-    // Not a directive context
-    return false;
+    return input[pos] === '/' && this.isDirectiveContext(input, pos);
   },
   
   /**
@@ -190,7 +202,7 @@ export const helpers = {
     if (input[pos] !== '@') return false;
     
     // If we're at a slash directive context, this can't be a variable context
-    if (this.isSlashDirectiveContext(input, pos)) return false;
+    if (this.isDirectiveContext(input, pos)) return false;
     
     // If not a directive, but we have an @ symbol, it's a variable reference
     // This assumes that @ is either:
@@ -215,7 +227,7 @@ export const helpers = {
    */
   isPlainTextContext(input: string, pos: number): boolean {
     // If it's not any of the special contexts, it's plain text
-    return !this.isSlashDirectiveContext(input, pos) && 
+    return !this.isDirectiveContext(input, pos) && 
            !this.isAtVariableContext(input, pos);
   },
 
@@ -326,7 +338,7 @@ export const helpers = {
     // this.debug('TRACE', `Reject @${pos}: ${reason}`);
   },
 
-  reconstructRawString(nodes: any[] | any) {
+  reconstructRawString(nodes: any[] | any): string {
     // Basic implementation - iterates nodes and concatenates
     if (!Array.isArray(nodes)) {
       // Handle cases where a single node might be passed (though likely expects array)
@@ -359,6 +371,16 @@ export const helpers = {
             // Default case - should not happen with consistent valueTypes
             return `{{${varId}${fieldPath}}}`;
           }
+        }
+        if (nodes.type === 'ConditionalStringFragment') {
+          const conditionRaw = this.reconstructRawString(nodes.condition);
+          const contentRaw = this.reconstructRawString(nodes.content || []);
+          return `${conditionRaw}?"${contentRaw}"`;
+        }
+        if (nodes.type === 'ConditionalTemplateSnippet') {
+          const conditionRaw = this.reconstructRawString(nodes.condition);
+          const contentRaw = this.reconstructRawString(nodes.content || []);
+          return `${conditionRaw}?\`${contentRaw}\``;
         }
       }
       return String(nodes || ''); // Fallback
@@ -402,6 +424,14 @@ export const helpers = {
       } else if (node.type === NodeType.StringLiteral) {
         // Handle string literals properly - avoids adding extra quotes
         raw += node.value || '';
+      } else if (node.type === 'ConditionalStringFragment') {
+        const conditionRaw = this.reconstructRawString(node.condition);
+        const contentRaw = this.reconstructRawString(node.content || []);
+        raw += `${conditionRaw}?"${contentRaw}"`;
+      } else if (node.type === 'ConditionalTemplateSnippet') {
+        const conditionRaw = this.reconstructRawString(node.condition);
+        const contentRaw = this.reconstructRawString(node.content || []);
+        raw += `${conditionRaw}?\`${contentRaw}\``;
       } else if (typeof node === 'string') {
         // Handle potential raw string segments passed directly
         raw += node;
@@ -432,7 +462,12 @@ export const helpers = {
   createTemplateMetadata(parts: any[], wrapperType: string) {
     return {
       hasVariables: parts.some(p => 
-        p && (p.type === NodeType.VariableReference || p.type === NodeType.ExecInvocation)
+        p && (
+          p.type === NodeType.VariableReference ||
+          p.type === NodeType.ExecInvocation ||
+          p.type === 'ConditionalTemplateSnippet' ||
+          p.type === 'ConditionalStringFragment'
+        )
       ),
       isTemplateContent: wrapperType === 'doubleBracket'
     };
@@ -1044,6 +1079,106 @@ export const helpers = {
     error.mlldErrorLocation = loc;
     throw error;
   },
+
+  /**
+   * Capture content inside balanced [ ] brackets starting at startPos (the first character after '[')
+   * Returns null if no matching closing bracket is found
+   */
+  captureBracketContent(input: string, startPos: number): { content: string; endOffset: number } | null {
+    let depth = 1;
+    let i = startPos;
+    let inString = false;
+    let quote: string | null = null;
+
+    while (i < input.length && depth > 0) {
+      const ch = input[i];
+      if (inString) {
+        if (ch === quote && input[i - 1] !== '\\') {
+          inString = false;
+          quote = null;
+        }
+      } else {
+        if (ch === '"' || ch === '\'' || ch === '`') {
+          inString = true;
+          quote = ch;
+        } else if (ch === '[') {
+          depth++;
+        } else if (ch === ']') {
+          depth--;
+          if (depth === 0) {
+            return {
+              content: input.slice(startPos, i),
+              endOffset: i
+            };
+          }
+        }
+      }
+      i++;
+    }
+
+    return null;
+  },
+
+  /**
+   * Offset a location object by a base location (start of the block content)
+   */
+  offsetLocation(loc: any, baseLocation: any) {
+    if (!loc || !baseLocation?.start) return loc;
+
+    const baseStart = baseLocation.start;
+    const adjustPosition = (pos: any) => {
+      const line = (pos?.line || 1) + (baseStart.line || 1) - 1;
+      const column =
+        pos?.line === 1
+          ? (pos?.column || 1) + (baseStart.column || 1) - 1
+          : pos?.column || 1;
+
+      return {
+        offset: (pos?.offset || 0) + (baseStart.offset || 0),
+        line,
+        column
+      };
+    };
+
+    return {
+      source: baseLocation.source || loc.source,
+      start: adjustPosition(loc.start),
+      end: adjustPosition(loc.end)
+    };
+  },
+
+  /**
+   * Reparse a block substring with a specific start rule to surface inner errors with corrected offsets
+   */
+  reparseBlock(options: BlockReparseOptions): never {
+    const parseOptions: Record<string, any> = { startRule: options.startRule };
+    if (options.mode) parseOptions.mode = options.mode;
+    if (options.grammarSource) parseOptions.grammarSource = options.grammarSource;
+
+    try {
+      // Trim trailing whitespace to mirror outer `_` consumption before the closing bracket
+      const normalizedText = options.text.replace(/\s+$/, '');
+      options.parse(normalizedText, parseOptions);
+    } catch (error: any) {
+      const err = error as any;
+      if (err instanceof options.SyntaxErrorClass && err.location) {
+        const adjustedLocation = this.offsetLocation(err.location, options.baseLocation);
+        const enhancedError = new options.SyntaxErrorClass(
+          err.message,
+          err.expected,
+          err.found,
+          adjustedLocation
+        ) as any;
+        enhancedError.expected = err.expected;
+        enhancedError.found = err.found;
+        enhancedError.location = adjustedLocation;
+        throw enhancedError;
+      }
+      throw error as Error;
+    }
+
+    throw this.mlldError('Invalid block content.', undefined, options.baseLocation);
+  },
   
   // Parser State Management for Code Blocks
   // ----------------------------------------
@@ -1188,6 +1323,59 @@ export const helpers = {
       }), first);
   },
 
+  buildWhenBoundPatternExpression(boundIdentifier: string, pattern: any): any {
+    const anchorLocation = (loc: any) => {
+      if (!loc || !loc.start) return loc;
+      return {
+        start: loc.start,
+        end: loc.start
+      };
+    };
+
+    const boundRef = (loc: any) =>
+      this.createVariableReferenceNode('identifier', { identifier: boundIdentifier }, anchorLocation(loc));
+
+    const build = (p: any): any => {
+      if (!p) return p;
+
+      if (p.kind === 'logical') {
+        const first = build(p.first);
+        const rest = Array.isArray(p.rest)
+          ? p.rest.map((r: any) => ({ op: r.op, right: build(r.right) }))
+          : [];
+        return this.createBinaryExpression(first, rest, p.location);
+      }
+
+      if (p.kind === 'wildcard') return p.node;
+
+      if (p.kind === 'compare') {
+        return this.createNode('BinaryExpression' as NodeTypeKey, {
+          operator: p.op,
+          left: boundRef(p.location),
+          right: p.right,
+          location: p.location
+        });
+      }
+
+      if (p.kind === 'equals') {
+        const value = p.value;
+        if (value && typeof value === 'object' && 'type' in value && value.type === 'Literal') {
+          if (value.valueType === 'none' || value.valueType === 'wildcard') return value;
+        }
+        return this.createNode('BinaryExpression' as NodeTypeKey, {
+          operator: '==',
+          left: boundRef(p.location),
+          right: value,
+          location: p.location
+        });
+      }
+
+      return p;
+    };
+
+    return build(pattern);
+  },
+
   // Check if nodes contain newlines
   containsNewline(nodes: any[] | any): boolean {
     if (!Array.isArray(nodes)) nodes = [nodes];
@@ -1201,16 +1389,27 @@ export const helpers = {
   /**
    * Creates a WhenExpression node for when expressions (used in /var assignments)
    */
-  createWhenExpression(conditions: any[], withClause: any, location: any, modifier: string | null = null) {
+  createWhenExpression(
+    conditions: any[],
+    withClause: any,
+    location: any,
+    modifier: string | null = null,
+    bound: { boundIdentifier: string; boundValue: any } | null = null
+  ) {
     return this.createNode(NodeType.WhenExpression, {
       conditions: conditions,
       withClause: withClause || null,
+      ...(bound
+        ? { boundIdentifier: bound.boundIdentifier, boundValue: bound.boundValue }
+        : {}),
       meta: {
         conditionCount: conditions.length,
         isValueReturning: true,
         evaluationType: 'expression',
         hasTailModifiers: !!withClause,
-        modifier: modifier
+        modifier: modifier,
+        hasBoundValue: !!bound,
+        ...(bound ? { boundIdentifier: bound.boundIdentifier } : {})
       },
       location
     });
@@ -1246,7 +1445,7 @@ export const helpers = {
   /**
    * Creates an action node for /for directive actions
    */
-  createForActionNode(directive: string, content: any, location: any, endingTail?: any) {
+  createForActionNode(directive: string, content: any, location: any, endingTail?: any, endingComment?: any) {
     const kind = directive as DirectiveKindKey;
     // Special-case: support show actions with either templates/quotes or unified references
     if (kind === 'show' && content) {
@@ -1257,12 +1456,16 @@ export const helpers = {
         if (endingTail && endingTail.pipeline) {
           values.pipeline = endingTail.pipeline;
         }
+        const meta: any = { implicit: false, isTemplateContent: true };
+        if (endingComment) {
+          meta.comment = endingComment;
+        }
         return [this.createNode(NodeType.Directive, {
           kind,
           subtype: 'showTemplate',
           values,
           raw: { content: this.reconstructRawString((content as any).content) },
-          meta: { implicit: false, isTemplateContent: true },
+          meta,
           location
         })];
       }
@@ -1274,21 +1477,29 @@ export const helpers = {
       if (endingTail && endingTail.pipeline) {
         values.withClause = { pipeline: endingTail.pipeline };
       }
+      const meta: any = { implicit: false };
+      if (endingComment) {
+        meta.comment = endingComment;
+      }
       return [this.createNode(NodeType.Directive, {
         kind,
         subtype: isExec ? 'showInvocation' : 'showVariable',
         values,
         raw: { content: this.reconstructRawString(content) },
-        meta: { implicit: false },
+        meta,
         location
       })];
+    }
+    const meta: any = { implicit: false };
+    if (endingComment) {
+      meta.comment = endingComment;
     }
     return [this.createNode(NodeType.Directive, {
       kind,
       subtype: kind,
       values: { content: Array.isArray(content) ? content : [content] },
       raw: { content: this.reconstructRawString(content) },
-      meta: { implicit: false },
+      meta,
       location
     })];
   },

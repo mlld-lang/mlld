@@ -172,6 +172,15 @@ helpers.isUnclosedObject = function(input, pos) {
 };
 ```
 
+### Block Reparse Helper
+
+`grammar/deps/grammar-core.ts` exposes `captureBracketContent`, `offsetLocation`, and `reparseBlock` to surface inner errors from bracketed blocks with correct offsets. When a rule owns a `[...]` body and outer parsing fails, add a fallback branch that:
+- grabs the raw substring with `captureBracketContent`
+- calls `reparseBlock` with the inner start rule (e.g., `ExeBlockBody`, `ForBlockBody`, `WhenConditionList`, `WhenActionBlockContent`, `GuardRuleList`, `WhenExpressionConditionList`)
+- passes `peg$computeLocation` for the base offset
+
+`grammar/build-grammar.mjs` lists the allowed inner start rules; update that list when adding new block parsers. Current blocks wired for reparsing: exe statement blocks, for block actions, when block/match/action blocks (including when expressions), and guard when clauses.
+
 ### Error Recovery Pattern
 ```peggy
 DirectiveName "description"
@@ -199,7 +208,7 @@ npm run ast -- '<your syntax>'
 
 ### Key Algorithms
 
-**Context Detection**: `helpers.isSlashDirectiveContext()` determines directive vs content
+**Context Detection**: `helpers.isDirectiveContext()` determines directive vs content (slash optional; strict mode gates bare directives)
 **Semantic Commitment**: Once directive identified, parser commits to that branch
 **Location Tracking**: Peggy's `location()` includes lookahead (see issue #340)
 

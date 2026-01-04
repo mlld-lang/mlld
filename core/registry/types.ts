@@ -1,3 +1,5 @@
+import type { NeedsDeclaration } from '@core/policy/needs';
+
 export interface VersionSpecifier {
   name: string;
   specifier?: string;
@@ -14,12 +16,14 @@ export interface ModuleNeeds {
   runtimes?: RuntimeRequirement[];
   tools?: ToolRequirement[];
   packages?: PackageRequirementMap;
+   capabilities?: NeedsDeclaration;
 }
 
 export interface ModuleNeedsNormalized {
   runtimes: RuntimeRequirement[];
   tools: ToolRequirement[];
   packages: PackageRequirementMap;
+  capabilities?: NeedsDeclaration;
 }
 
 export type ModuleDependencyMap = Record<string, string>;
@@ -72,4 +76,3 @@ export interface DependencyResolution {
   aggregatedNeeds: AggregatedModuleNeeds;
   conflicts: DependencyConflict[];
 }
-

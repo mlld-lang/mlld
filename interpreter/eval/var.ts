@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { DirectiveNode, VarValue, VariableNodeArray } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -30,7 +31,7 @@ import type { SecurityDescriptor, DataLabel, CapabilityKind } from '@core/types/
 import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/security';
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
-import { updateCtxFromDescriptor, ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -198,10 +199,10 @@ export async function prepareVarAssignment(
     return env.mergeSecurityDescriptors(...resolved);
   };
   const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
-    if (!variable?.ctx) {
+    if (!variable?.mx) {
       return undefined;
     }
-    return ctxToSecurityDescriptor(variable.ctx);
+    return varMxToSecurityDescriptor(variable.mx);
   };
   const interpolateWithSecurity = (
     nodes: any,
@@ -215,17 +216,17 @@ export async function prepareVarAssignment(
    */
   const extractSecurityFromValue = (value: any): SecurityDescriptor | undefined => {
     if (!value) return undefined;
-    // Check if it's a Variable with .ctx
-    if (typeof value === 'object' && 'ctx' in value && value.ctx) {
-      const ctx = value.ctx;
-      const hasLabels = Array.isArray(ctx.labels) && ctx.labels.length > 0;
-      const hasTaint = Array.isArray(ctx.taint) && ctx.taint.length > 0;
+    // Check if it's a Variable with .mx
+    if (typeof value === 'object' && 'mx' in value && value.mx) {
+      const mx = value.mx;
+      const hasLabels = Array.isArray(mx.labels) && mx.labels.length > 0;
+      const hasTaint = Array.isArray(mx.taint) && mx.taint.length > 0;
       if (hasLabels || hasTaint) {
         return {
-          labels: ctx.labels,
-          taint: ctx.taint,
-          sources: ctx.sources,
-          policyContext: ctx.policy ?? undefined
+          labels: mx.labels,
+          taint: mx.taint,
+          sources: mx.sources,
+          policyContext: mx.policy ?? undefined
         } as SecurityDescriptor;
       }
     }
@@ -242,18 +243,18 @@ export async function prepareVarAssignment(
       metadata: { identifier },
       operation: operationMetadata
     });
-    // Extract existing security from variable's ctx
+    // Extract existing security from variable's mx
     const existingSecurity = extractSecurityFromValue(variable);
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(existingSecurity ? { security: existingSecurity } : undefined, {
       existingDescriptor: descriptor,
       capability: capabilityContext
     });
-    // Update ctx from the final security descriptor
-    if (!variable.ctx) {
-      variable.ctx = {};
+    // Update mx from the final security descriptor
+    if (!variable.mx) {
+      variable.mx = {};
     }
     if (finalMetadata.security) {
-      updateCtxFromDescriptor(variable.ctx, finalMetadata.security);
+      updateVarMxFromDescriptor(variable.mx, finalMetadata.security);
     }
     return VariableMetadataUtils.attachContext(variable);
   };
@@ -428,6 +429,9 @@ export async function prepareVarAssignment(
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
             processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
+          } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray(propValue.parts)) {
+            // Handle strings with @references that need interpolation
+            processedObject[key] = await interpolateWithSecurity(propValue.parts);
           } else {
             // For primitive types (numbers, booleans, null, strings), use as-is
             processedObject[key] = propValue;
@@ -472,6 +476,9 @@ export async function prepareVarAssignment(
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
             processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
+          } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray((propValue as any).parts)) {
+            // Handle strings with @references that need interpolation
+            processedObject[key] = await interpolateWithSecurity((propValue as any).parts);
           } else {
             // For primitive types (numbers, booleans, null, strings), use as-is
             processedObject[key] = propValue;
@@ -744,6 +751,12 @@ export async function prepareVarAssignment(
     const whenResult = await evaluateWhenExpression(valueNode as any, env);
     resolvedValue = whenResult.value;
     
+  } else if (valueNode && valueNode.type === 'ExeBlock') {
+    const { evaluateExeBlock } = await import('./exe');
+    const blockEnv = env.createChild();
+    const blockResult = await evaluateExeBlock(valueNode as any, blockEnv);
+    resolvedValue = blockResult.value;
+
   } else if (valueNode && valueNode.type === 'ExecInvocation') {
     // Handle exec function invocations: @getConfig(), @transform(@data)
     if (process.env.MLLD_DEBUG === 'true') {
@@ -862,7 +875,7 @@ export async function prepareVarAssignment(
   const cloneFactoryOptions = (
     overrides?: Partial<VariableFactoryInitOptions>
   ): VariableFactoryInitOptions => ({
-    ctx: { ...baseCtx, ...(overrides?.ctx ?? {}) },
+    mx: { ...baseCtx, ...(overrides?.mx ?? {}) },
     internal: { ...baseInternal, ...(overrides?.internal ?? {}) }
   });
 
@@ -876,9 +889,9 @@ export async function prepareVarAssignment(
       labels: securityLabels,
       existingDescriptor: existing ?? resolvedValueDescriptor
     });
-    // Update ctx from security descriptor
+    // Update mx from security descriptor
     if (finalMetadata?.security) {
-      updateCtxFromDescriptor(options.ctx ?? (options.ctx = {}), finalMetadata.security);
+      updateVarMxFromDescriptor(options.mx ?? (options.mx = {}), finalMetadata.security);
     }
     if (finalMetadata) {
       options.metadata = {
@@ -946,7 +959,7 @@ export async function prepareVarAssignment(
       });
     }
     const overrides: Partial<VariableFactoryInitOptions> = {
-      ctx: { ...(resolvedValue.ctx ?? {}), ...baseCtx },
+      mx: { ...(resolvedValue.mx ?? {}), ...baseCtx },
       internal: { ...(resolvedValue.internal ?? {}), ...baseInternal }
     };
     // Preserve security from existing variable
@@ -956,7 +969,7 @@ export async function prepareVarAssignment(
       ...resolvedValue,
       name: identifier,
       definedAt: location,
-      ctx: options.ctx,
+      mx: options.mx,
       internal: options.internal
     };
     VariableMetadataUtils.attachContext(variable);
@@ -1067,8 +1080,29 @@ export async function prepareVarAssignment(
     const options = applySecurityOptions();
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, options);
 
-  } else if (valueNode.type === 'ExecInvocation') {
-    // Exec invocations can return any type
+  } else if (valueNode.type === 'WhenExpression') {
+    // When expressions can return any type based on matching arm
+    if (isStructuredValue(resolvedValue)) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
+      } else {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
+      }
+    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
+    } else {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
+    }
+
+  } else if (valueNode.type === 'ExecInvocation' || valueNode.type === 'ExeBlock') {
+    // Exec invocations and blocks can return any type
     if (isStructuredValue(resolvedValue)) {
       const options = applySecurityOptions(undefined, resolvedValueDescriptor);
       variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
@@ -1194,7 +1228,7 @@ export async function prepareVarAssignment(
       console.error('[var.ts] Calling processPipeline:', {
         identifier,
         variableType: variable.type,
-        hasCtx: !!variable.ctx,
+        hasCtx: !!variable.mx,
         hasInternal: !!variable.internal,
         isRetryable: variable.internal?.isRetryable || false,
         hasSourceFunction: !!(variable.internal?.sourceFunction),
@@ -1219,7 +1253,7 @@ export async function prepareVarAssignment(
       const existingSecurity = extractSecurityFromValue(variable);
       const options = applySecurityOptions(
         {
-          ctx: { ...(variable.ctx ?? {}), ...baseCtx },
+          mx: { ...(variable.mx ?? {}), ...baseCtx },
           internal: { ...(variable.internal ?? {}), ...baseInternal }
         },
         existingSecurity
@@ -1229,7 +1263,7 @@ export async function prepareVarAssignment(
     const existingSecurity = extractSecurityFromValue(variable);
     const options = applySecurityOptions(
       {
-        ctx: { ...(variable.ctx ?? {}), ...baseCtx },
+        mx: { ...(variable.mx ?? {}), ...baseCtx },
         internal: { ...(variable.internal ?? {}), ...baseInternal, isPipelineResult: true }
       },
       existingSecurity
@@ -1435,7 +1469,6 @@ async function evaluateArrayItem(
         .join('');
       if (process.env.MLLD_DEBUG_FIX === 'true') {
         try {
-          const fs = require('fs');
           fs.appendFileSync(
             '/tmp/mlld-debug.log',
             JSON.stringify({
@@ -1465,6 +1498,16 @@ async function evaluateArrayItem(
   // Handle raw Text nodes that may appear in objects
   if (item.type === 'Text' && 'content' in item) {
     return item.content;
+  }
+
+  // Handle Literal nodes from grammar (numbers, booleans, null)
+  if (item.type === 'Literal' && 'value' in item) {
+    return item.value;
+  }
+
+  // Handle needsInterpolation marker (from DataString with @references)
+  if ('needsInterpolation' in item && Array.isArray(item.parts)) {
+    return await interpolateAndCollect(item.parts, env, collectDescriptor);
   }
 
   // Handle objects without explicit type property (plain objects from parser)
@@ -1555,17 +1598,14 @@ async function evaluateArrayItem(
       // Load content node in array - use the content loader
       const { processContentLoader } = await import('./content-loader');
       const loadResult = await processContentLoader(item, env);
-      
-      // Check if this is a LoadContentResult and return its content
-      const { isLoadContentResult } = await import('@core/types/load-content');
-      if (isStructuredValue(loadResult)) {
-        return loadResult;
+
+      // Handle file-loaded values (both StructuredValue and LoadContentResult formats)
+      const { isFileLoadedValue } = await import('@interpreter/utils/load-content-structured');
+      if (isFileLoadedValue(loadResult)) {
+        // Return structured format if already wrapped, otherwise extract content
+        return isStructuredValue(loadResult) ? loadResult : loadResult.content;
       }
 
-      if (isLoadContentResult(loadResult)) {
-        return loadResult.content;
-      }
-      
       return loadResult;
 
     default:

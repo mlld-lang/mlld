@@ -17,7 +17,7 @@ function createSecretObject() {
     true,
     source
   );
-  variable.ctx = { labels: ['secret'] } as any;
+  variable.mx = { labels: ['secret'] } as any;
   return variable;
 }
 
@@ -26,7 +26,7 @@ describe('field access provenance', () => {
     const variable = createSecretObject();
     const result = await accessField(variable, { type: 'field', value: 'nested' });
     const materialized = materializeExpressionValue(result as Record<string, unknown>, { name: 'nested' });
-    expect(materialized?.ctx?.labels).toContain('secret');
+    expect(materialized?.mx?.labels).toContain('secret');
   });
 
   it('preserves provenance across multiple field accesses', async () => {
@@ -37,6 +37,35 @@ describe('field access provenance', () => {
     ];
     const result = await accessFields(variable, fields);
     const materialized = materializeExpressionValue((result as any).value ?? result, { name: 'inner' });
-    expect(materialized?.ctx?.labels).toContain('secret');
+    expect(materialized?.mx?.labels).toContain('secret');
+  });
+});
+
+describe('object mx utilities', () => {
+  it('exposes keys, values, and entries on .mx', async () => {
+    const variable = createObjectVariable(
+      'obj',
+      { a: 1, b: 2, c: 3 },
+      false,
+      source
+    );
+
+    const keys = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'keys' } as const
+    ], { preserveContext: false });
+    expect(keys).toEqual(['a', 'b', 'c']);
+
+    const values = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'values' } as const
+    ], { preserveContext: false });
+    expect(values).toEqual([1, 2, 3]);
+
+    const entries = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'entries' } as const
+    ], { preserveContext: false });
+    expect(entries).toEqual([['a', 1], ['b', 2], ['c', 3]]);
   });
 });

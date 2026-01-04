@@ -1,4 +1,3 @@
-import { isLoadContentResultArray, LoadContentResultArray } from '@core/types/load-content';
 import { Variable, ArrayVariable, createArrayVariable } from '@core/types/variable';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { ArrayData } from '../ArrayOperationsHandler';
@@ -7,12 +6,6 @@ import { wrapStructured } from '../../structured-value';
 export class MetadataPreserver {
   preserveType(arrayData: ArrayData, transformed: any[]): any {
     switch (arrayData.type) {
-      case 'load-content-result':
-        return this.preserveLoadContentResultArray(
-          arrayData.original as LoadContentResultArray,
-          transformed
-        );
-
       case 'array-variable':
         return this.preserveArrayVariable(
           arrayData.original as ArrayVariable,
@@ -31,7 +24,7 @@ export class MetadataPreserver {
           transformed,
           (wrapper && wrapper.type) || 'array',
           JSON.stringify(transformed),
-          wrapper?.ctx,
+          wrapper?.mx,
           wrapper?.internal
         );
       }
@@ -40,28 +33,6 @@ export class MetadataPreserver {
       default:
         return transformed;
     }
-  }
-
-  private preserveLoadContentResultArray(
-    original: LoadContentResultArray,
-    transformed: any[]
-  ): LoadContentResultArray {
-    // Create new array with preserved special behaviors
-    const result = Object.assign(transformed, {
-      // Custom toString for concatenation in templates
-      toString: () => transformed.map(f => f.content).join('\n\n'),
-      // Custom content getter for template interpolation
-      get content() {
-        return transformed.map(f => f.content).join('\n\n');
-      }
-    });
-
-    // Preserve Variable metadata if present
-    if ((original as any).__variable) {
-      (result as any).__variable = (original as any).__variable;
-    }
-
-    return result as LoadContentResultArray;
   }
 
   private preserveArrayVariable(
@@ -74,7 +45,7 @@ export class MetadataPreserver {
       original.isComplex || false,
       original.source,
       {
-        ctx: { ...original.ctx },
+        mx: { ...original.mx },
         internal: { ...original.internal, transformedBy: 'array-operation' }
       }
     );

@@ -9,6 +9,7 @@
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
 import { DirectiveNode, ExecInvocation } from './nodes';
+import type { ExeBlockNode } from './exe';
 import { 
   DataValue, 
   DataObjectValue, 
@@ -62,6 +63,7 @@ export type VarValue =
   | DataArrayValue // Arrays
   | DirectiveNode // Nested directives (@run, @add, etc.)
   | ExecInvocation // Exec invocations
+  | ExeBlockNode // Block expressions
   | ForeachCommandExpression // Foreach command expressions
   | ForeachSectionExpression // Foreach section expressions
   | VarExecDefinition; // Exec definitions (parameterized commands)
@@ -117,7 +119,7 @@ export interface VarVariable {
   type: ExtendedVariableType.VAR;
   name: string;
   value: any; // Can be any type of value
-  ctx: VariableCtx & {
+  mx: VariableCtx & {
     inferredType?: 'text' | 'data' | 'path' | 'exec';
   };
   internal: VariableInternal;
@@ -152,7 +154,7 @@ export function createVarVariable(
   name: string,
   value: any,
   options?: {
-    ctx?: Partial<VariableCtx & { inferredType?: string }>;
+    mx?: Partial<VariableCtx & { inferredType?: string }>;
     internal?: Partial<VariableInternal>;
   }
 ): VarVariable {
@@ -160,8 +162,8 @@ export function createVarVariable(
     type: ExtendedVariableType.VAR,
     name,
     value,
-    ctx: {
-      ...options?.ctx
+    mx: {
+      ...options?.mx
     },
     internal: {
       ...options?.internal
@@ -193,7 +195,7 @@ export function isVarExecDefinition(value: VarValue): value is VarExecDefinition
 export function convertVarToTypedVariable(
   varVariable: VarVariable
 ): TextVariable | DataVariable | PathVariable | CommandVariable {
-  const inferredType = varVariable.ctx?.inferredType;
+  const inferredType = varVariable.mx?.inferredType;
   
   switch (inferredType) {
     case 'text':
@@ -201,7 +203,7 @@ export function convertVarToTypedVariable(
         type: VariableType.TEXT,
         name: varVariable.name,
         value: String(varVariable.value),
-        ctx: varVariable.ctx,
+        mx: varVariable.mx,
         internal: varVariable.internal
       };
     
@@ -213,7 +215,7 @@ export function convertVarToTypedVariable(
           resolvedPath: String(varVariable.value),
           isURL: false
         },
-        ctx: varVariable.ctx,
+        mx: varVariable.mx,
         internal: varVariable.internal
       };
     
@@ -230,7 +232,7 @@ export function convertVarToTypedVariable(
               ? { commandTemplate: varVariable.value.body.template }
               : { codeTemplate: varVariable.value.body.template, language: varVariable.value.body.language })
           },
-          ctx: varVariable.ctx,
+          mx: varVariable.mx,
           internal: varVariable.internal
         };
       }
@@ -242,7 +244,7 @@ export function convertVarToTypedVariable(
         type: VariableType.DATA,
         name: varVariable.name,
         value: varVariable.value,
-        ctx: varVariable.ctx,
+        mx: varVariable.mx,
         internal: varVariable.internal
       };
   }

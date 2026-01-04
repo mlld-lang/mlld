@@ -5,7 +5,7 @@ import { isVariable } from './variable-resolution';
 import { resolveNestedValue } from './display-materialization';
 import { extractSecurityDescriptor } from './structured-value';
 import { makeSecurityDescriptor } from '@core/types/security';
-import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 
 const FALLBACK_SOURCE: VariableSource = {
   directive: 'var',
@@ -42,7 +42,7 @@ export function materializeGuardInputs(
         nameHint,
         formatGuardInputValue(normalized),
         FALLBACK_SOURCE,
-        { ctx: {} }
+        { mx: {} }
       );
       applyDescriptorFromValue(normalized, fallback);
       return fallback;
@@ -72,7 +72,7 @@ export function materializeGuardInputsWithMapping(
         nameHint,
         formatGuardInputValue(normalized),
         FALLBACK_SOURCE,
-        { ctx: {} }
+        { mx: {} }
       );
       applyDescriptorFromValue(normalized, fallback);
       return fallback;
@@ -110,11 +110,11 @@ function applyDescriptorFromValue(value: unknown, target: Variable): void {
   const descriptor =
     extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true }) ??
     makeSecurityDescriptor();
-  if (!target.ctx) {
-    target.ctx = {};
+  if (!target.mx) {
+    target.mx = {};
   }
-  updateCtxFromDescriptor(target.ctx, descriptor);
-  if ((target.ctx as any).ctxCache) {
-    delete (target.ctx as any).ctxCache;
+  updateVarMxFromDescriptor(target.mx, descriptor);
+  if ((target.mx as any).mxCache) {
+    delete (target.mx as any).mxCache;
   }
 }

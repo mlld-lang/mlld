@@ -1,1 +1,0 @@
-/import { @helper } from @alice/my-tool@beta

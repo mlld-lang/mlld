@@ -199,6 +199,190 @@ describe('Import type handling', () => {
     expect((output as string).trim()).toBe('secret-key');
   });
 
+  it('imports template collections with declared parameters', async () => {
+    await fileSystem.writeFile(
+      '/project/templates/agents/alice.att',
+      'Agent: @message (@context)'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/bob.att',
+      'Bob: @message'
+    );
+
+    const source = `/import templates from "./templates" as @tpl(message, context)
+/show @tpl.agents.alice("hello", "world")`;
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect(typeof output).toBe('string');
+    expect((output as string).trim()).toBe('Agent: hello (world)');
+  });
+
+  it('imports directories by loading each subdirectory index.mld', async () => {
+    await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
+    await fileSystem.writeFile('/project/agents/mllddev/index.mld', '/var @who = "mllddev"');
+    await fileSystem.writeFile('/project/agents/_private/index.mld', '/var @who = "private"');
+    await fileSystem.writeFile('/project/agents/.hidden/index.mld', '/var @who = "hidden"');
+
+    const source = `/import "./agents" as @agents
+/show @agents.party.who
+/show @agents.mllddev.who`;
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    expect(lines).toEqual(['party', 'mllddev']);
+
+    const missingSource = `/import "./agents" as @agents
+/show @agents._private.who`;
+    await expect(
+      interpret(missingSource, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow(/_private/);
+  });
+
+  it('allows overriding directory skip patterns via with { skipDirs: [] }', async () => {
+    await fileSystem.writeFile('/project/agents/party/index.mld', '/var @who = "party"');
+    await fileSystem.writeFile('/project/agents/_private/index.mld', '/var @who = "private"');
+    await fileSystem.writeFile('/project/agents/.hidden/index.mld', '/var @who = "hidden"');
+
+    const source = `/import "./agents" as @agents with { skipDirs: [] }
+/show @agents.party.who
+/show @agents._private.who
+/show @agents._hidden.who`;
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    expect(lines).toEqual(['party', 'private', 'hidden']);
+  });
+
+  it('rejects template collection imports with undeclared variables', async () => {
+    await fileSystem.writeFile(
+      '/project/templates/bad.att',
+      'Hi @message @oops'
+    );
+
+    const source = `/import templates from "./templates" as @tpl(message)
+/show @tpl.bad("hello")`;
+
+    await expect(
+      interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      })
+    ).rejects.toThrow(/undeclared/i);
+  });
+
+  it('imports nested template directories preserving hyphens in keys', async () => {
+    await fileSystem.writeFile(
+      '/project/templates/agents/alice.att',
+      'Agent: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/agents/finance/bob.att',
+      'Finance: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/finance/quarterly-report.att',
+      'Report: @message'
+    );
+
+    const source = `/import templates from "./templates" as @tpl(message)
+/show @tpl.agents.finance.bob("numbers")
+/show @tpl.finance["quarterly-report"]("q1")
+/show @tpl.agents.alice("hi")`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').filter(l => l.length > 0);
+    expect(lines[0]).toBe('Finance: numbers');
+    expect(lines[1]).toBe('Report: q1');
+    expect(lines[2]).toBe('Agent: hi');
+  });
+
+  it('supports dynamic template selection with bracket access', async () => {
+    await fileSystem.writeFile(
+      '/project/templates/agents/alice.att',
+      'Agent: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/agents/party.att',
+      'Party: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/agents/finance/bob.att',
+      'Finance: @message'
+    );
+
+    const source = `/var @agent = "party"
+/var @group = "finance"
+/var @person = "bob"
+/import templates from "./templates" as @tpl(message)
+/show @tpl.agents[@agent]("welcome")
+/show @tpl.agents[@group][@person]("regional update")
+/show @tpl.agents.alice("hi")`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    const lines = (output as string).trim().split('\n').filter(l => l.length > 0);
+    expect(lines[0]).toBe('Party: welcome');
+    expect(lines[1]).toBe('Finance: regional update');
+    expect(lines[2]).toBe('Agent: hi');
+  });
+
+  it('resolves bracket access with field expressions', async () => {
+    await fileSystem.writeFile(
+      '/project/templates/agents/alice.att',
+      'Agent: @message'
+    );
+    await fileSystem.writeFile(
+      '/project/templates/agents/party.att',
+      'Party: @message'
+    );
+
+    const source = `/var @agentObj = { agent: "party" }
+/import templates from "./templates" as @tpl(message)
+/show @tpl.agents[@agentObj.agent]("dynamic field")`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      approveAllImports: true
+    });
+
+    expect((output as string).trim()).toBe('Party: dynamic field');
+  });
+
   it('treats quoted non-resolver namespace as module reference', async () => {
     // This tests that "@author/module" in quotes gets treated as a module import
     // even though it goes through variable interpolation in the grammar

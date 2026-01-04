@@ -8,9 +8,9 @@
 ]
 
 /exe @scoreGenerator(input) = js {
-  // Simulate generating different scores based on attempt - @ctx.try is ambient
-  if (ctx.try == 1) return 0.1; // Too low, should retry
-  if (ctx.try == 2) return 0.3; // Low quality
+  // Simulate generating different scores based on attempt - @mx.try is ambient
+  if (mx.try == 1) return 0.1; // Too low, should retry
+  if (mx.try == 2) return 0.3; // Low quality
   return 0.9; // High quality
 }
 

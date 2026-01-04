@@ -112,7 +112,7 @@ export class LocalResolver implements Resolver {
         return {
           content,
           contentType: 'module',
-          ctx: metadata,
+          mx: metadata,
           metadata
         };
       }
@@ -163,12 +163,12 @@ export class LocalResolver implements Resolver {
         // No fuzzy match found - try with extensions
         fullPath = await this.resolveFullPath(relativePath, config);
         
-        // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
+        // If no extension and the file doesn't exist, try with .mld.md, .mld, or .md extensions
         if (!path.extname(fullPath)) {
           const existsAsIs = await this.fileSystem.exists(fullPath);
           if (!existsAsIs) {
             // Try with extensions using fuzzy matching
-            const extensions = ['.mlld.md', '.mld', '.md'];
+            const extensions = ['.mld.md', '.mld', '.md', '.mlld.md'];
             let foundWithExtension = false;
             
             for (const ext of extensions) {
@@ -211,14 +211,14 @@ export class LocalResolver implements Resolver {
       // Fuzzy matching disabled - use original logic
       fullPath = await this.resolveFullPath(relativePath, config);
       
-      // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
+      // If no extension and the file doesn't exist, try with .mld.md, .mld, or .md extensions
       if (!path.extname(fullPath)) {
         const existsAsIs = await this.fileSystem.exists(fullPath);
         if (!existsAsIs) {
-          // Try .mlld.md first (mlld module format)
-          const withMlldMd = fullPath + '.mlld.md';
-          if (await this.fileSystem.exists(withMlldMd)) {
-            fullPath = withMlldMd;
+          // Try .mld.md first (module with docs)
+          const withMldMd = fullPath + '.mld.md';
+          if (await this.fileSystem.exists(withMldMd)) {
+            fullPath = withMldMd;
           } else {
             // Try .mld as fallback
             const withMld = fullPath + '.mld';
@@ -229,6 +229,11 @@ export class LocalResolver implements Resolver {
               const withMd = fullPath + '.md';
               if (await this.fileSystem.exists(withMd)) {
                 fullPath = withMd;
+              } else {
+                const withLegacy = fullPath + '.mlld.md';
+                if (await this.fileSystem.exists(withLegacy)) {
+                  fullPath = withLegacy;
+                }
               }
             }
           }
@@ -268,7 +273,7 @@ export class LocalResolver implements Resolver {
       return {
         content,
         contentType,
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     } catch (error) {
@@ -494,7 +499,7 @@ export class LocalResolver implements Resolver {
         }
         
         // Try with extensions
-        const extensions = ['.mlld.md', '.mld', '.md'];
+        const extensions = ['.mld.md', '.mld', '.md', '.mlld.md'];
         for (const ext of extensions) {
           const pathWithExt = relativePath + ext;
           const extMatchResult = await this.pathMatcher.findMatch(
@@ -514,13 +519,13 @@ export class LocalResolver implements Resolver {
         // Fuzzy matching disabled or write operation - use original logic
         const fullPath = await this.resolveFullPath(relativePath, config);
 
-        // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
+        // If no extension and the file doesn't exist, try with .mld.md, .mld, or .md extensions
         if (operation === 'read' && !path.extname(fullPath)) {
           const existsAsIs = await this.fileSystem.exists(fullPath);
           if (!existsAsIs) {
-            // Try .mlld.md first (mlld module format)
-            const withMlldMd = fullPath + '.mlld.md';
-            if (await this.fileSystem.exists(withMlldMd)) {
+            // Try .mld.md first (module with docs)
+            const withMldMd = fullPath + '.mld.md';
+            if (await this.fileSystem.exists(withMldMd)) {
               return true;
             }
             // Try .mld as fallback
@@ -531,6 +536,10 @@ export class LocalResolver implements Resolver {
             // Try .md as final fallback
             const withMd = fullPath + '.md';
             if (await this.fileSystem.exists(withMd)) {
+              return true;
+            }
+            const withLegacy = fullPath + '.mlld.md';
+            if (await this.fileSystem.exists(withLegacy)) {
               return true;
             }
           }
@@ -641,7 +650,7 @@ export class LocalResolver implements Resolver {
    */
   private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
     // Check file extension - all mlld extensions are recognized as modules
-    const mlldExtensions = ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md'];
+    const mlldExtensions = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'];
 
     // Check if file has an mlld extension
     const hasMLLDExtension = mlldExtensions.some(ext => filePath.endsWith(ext));
@@ -650,7 +659,9 @@ export class LocalResolver implements Resolver {
     if (hasMLLDExtension || (!filePath.endsWith('.json'))) {
       try {
         const { parse } = await import('@grammar/parser');
-        const result = await parse(content);
+        const { inferMlldMode } = await import('@core/utils/mode');
+        const mode = inferMlldMode(filePath);
+        const result = await parse(content, { mode });
         if (result.success && this.hasModuleExports(result.ast)) {
           return 'module';
         }

@@ -1,8 +1,8 @@
-import type { DirectiveNode, TextNode } from '@core/types';
+import type { BaseMlldNode, DirectiveNode, ExeBlockNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable } from '@core/types/executable';
-import { interpolate } from '../core/interpreter';
+import { interpolate, evaluate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import {
   createExecutableVariable,
@@ -12,9 +12,12 @@ import {
 } from '@core/types/variable';
 // import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
+import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
+import { VariableImporter } from './import/VariableImporter';
 import * as path from 'path';
 import {
   createCapabilityContext,
@@ -25,6 +28,57 @@ import {
 } from '@core/types/security';
 import { asData, asText, isStructuredValue } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
+
+/**
+ * Evaluate an exe block sequentially with local scope for let/+= assignments.
+ */
+export async function evaluateExeBlock(
+  block: ExeBlockNode,
+  env: Environment,
+  args: Record<string, unknown> = {}
+): Promise<EvalResult> {
+  let blockEnv = env.createChild();
+
+  if (args && Object.keys(args).length > 0) {
+    const importer = new VariableImporter();
+    for (const [param, value] of Object.entries(args)) {
+      const variable = importer.createVariableFromValue(
+        param,
+        value,
+        'exe-param',
+        undefined,
+        { env: blockEnv }
+      );
+      blockEnv.setVariable(param, variable);
+    }
+  }
+
+  for (const stmt of block.values?.statements ?? []) {
+    if (isLetAssignment(stmt)) {
+      blockEnv = await evaluateLetAssignment(stmt, blockEnv);
+    } else if (isAugmentedAssignment(stmt)) {
+      blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
+    } else {
+      const result = await evaluate(stmt, blockEnv);
+      blockEnv = result.env || blockEnv;
+    }
+  }
+
+  let returnValue: unknown = undefined;
+  const returnNode = block.values?.return;
+  const hasReturnValue = returnNode?.meta?.hasValue !== false;
+  if (returnNode && hasReturnValue) {
+    const returnNodes = Array.isArray(returnNode.values) ? returnNode.values : [];
+    if (returnNodes.length > 0) {
+      const returnResult = await evaluate(returnNodes, blockEnv, { isExpression: true });
+      returnValue = returnResult.value;
+      blockEnv = returnResult.env || blockEnv;
+    }
+  }
+
+  env.mergeChild(blockEnv);
+  return { value: returnValue, env };
+}
 
 async function interpolateAndRecord(
   nodes: any,
@@ -253,12 +307,14 @@ export async function evaluateExe(
          *      We preserve identity bodies as templates at compile-time to avoid runtime ambiguity.
          */
         let refName: string | undefined;
+        const commandRefNodes = Array.isArray(commandRef) ? commandRef : [commandRef];
         try {
-          if (commandRef && typeof commandRef === 'object') {
-            if ('type' in commandRef && (commandRef as any).type === 'VariableReference' && 'identifier' in (commandRef as any)) {
-              refName = (commandRef as any).identifier as string;
-            } else if ('name' in commandRef && typeof (commandRef as any).name === 'string') {
-              refName = (commandRef as any).name as string;
+          const refCandidate = commandRefNodes[0];
+          if (refCandidate && typeof refCandidate === 'object') {
+            if ('type' in refCandidate && (refCandidate as any).type === 'VariableReference' && 'identifier' in (refCandidate as any)) {
+              refName = (refCandidate as any).identifier as string;
+            } else if ('name' in refCandidate && typeof (refCandidate as any).name === 'string') {
+              refName = (refCandidate as any).name as string;
             }
           }
         } catch {}
@@ -268,17 +324,41 @@ export async function evaluateExe(
         }
 
         const args = directive.values?.args || [];
-        const isIdentity = paramNames.length >= 1 && args.length === 0 && typeof refName === 'string' && refName.length > 0 && refName === paramNames[0];
+        const refCandidate = commandRefNodes[0];
+        const isVariableRef =
+          refCandidate &&
+          typeof refCandidate === 'object' &&
+          'type' in refCandidate &&
+          ((refCandidate as any).type === 'VariableReference' || (refCandidate as any).type === 'VariableReferenceWithTail');
+        const refFields = isVariableRef ? (refCandidate as any).fields : undefined;
+        const refPipes = isVariableRef ? (refCandidate as any).pipes : undefined;
+        const shouldTemplateFromRef =
+          isVariableRef &&
+          (((refCandidate as any).type === 'VariableReferenceWithTail') ||
+            (Array.isArray(refFields) && refFields.length > 0) ||
+            (Array.isArray(refPipes) && refPipes.length > 0));
+        const isIdentity =
+          !shouldTemplateFromRef &&
+          isVariableRef &&
+          commandRefNodes.length === 1 &&
+          paramNames.length >= 1 &&
+          args.length === 0 &&
+          typeof refName === 'string' &&
+          refName.length > 0 &&
+          refName === paramNames[0];
 
-        if (isIdentity) {
+        if (isIdentity || shouldTemplateFromRef) {
           executableDef = {
             type: 'template',
-            template: [
-              { type: 'VariableReference', identifier: refName }
-            ],
+            template: isIdentity
+              ? [{ type: 'VariableReference', identifier: refName }]
+              : commandRefNodes,
             paramNames,
             sourceDirective: 'exec'
           } satisfies TemplateExecutable;
+          if (withClause) {
+            (executableDef as any).withClause = withClause;
+          }
         } else {
           executableDef = {
             type: 'commandRef',
@@ -295,12 +375,16 @@ export async function evaluateExe(
           throw new Error('Exec command directive missing command');
         }
 
+        const workingDir = (directive.values as any)?.workingDir;
+        const workingDirMeta = (directive.meta as any)?.workingDirMeta || (directive.values as any)?.workingDirMeta;
         executableDef = {
           type: 'command',
           commandTemplate: commandNodes,
           withClause,
           paramNames,
-          sourceDirective: 'exec'
+          sourceDirective: 'exec',
+          ...(workingDir ? { workingDir } : {}),
+          ...(workingDirMeta ? { workingDirMeta } : {})
         } satisfies CommandExecutable;
       }
     }
@@ -335,6 +419,7 @@ export async function evaluateExe(
     // Get parameter names if any
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
+    const withClause = directive.values?.withClause;
     
     // Parameters are allowed to shadow outer scope variables
     
@@ -342,12 +427,17 @@ export async function evaluateExe(
     const language = directive.meta?.language || 'javascript';
     
     // Store the code template (not interpolated yet)
+    const workingDir = (directive.values as any)?.workingDir;
+    const workingDirMeta = (directive.meta as any)?.workingDirMeta || (directive.values as any)?.workingDirMeta;
     executableDef = {
       type: 'code',
       codeTemplate: codeNodes,
       language,
       paramNames,
-      sourceDirective: 'exec'
+      sourceDirective: 'exec',
+      ...(withClause ? { withClause } : {}),
+      ...(workingDir ? { workingDir } : {}),
+      ...(workingDirMeta ? { workingDirMeta } : {})
     } satisfies CodeExecutable;
     
   } else if (directive.subtype === 'exeResolver') {
@@ -422,9 +512,9 @@ export async function evaluateExe(
     if (!pathNodes || !Array.isArray(pathNodes) || pathNodes.length === 0) {
       throw new Error('Exec template-file directive missing path');
     }
-    // Path is parsed as Text nodes; join raw content
-    const rawPath = directive.raw?.path || (Array.isArray(pathNodes) ? pathNodes.map((n: any) => n.content || '').join('') : '');
-    const filePath = String(rawPath);
+    // Evaluate path nodes to resolve any variable references
+    const evaluatedPath = await interpolate(pathNodes, env);
+    const filePath = String(evaluatedPath);
     
     // Determine template style by extension
     const ext = path.extname(filePath).toLowerCase();
@@ -595,6 +685,35 @@ export async function evaluateExe(
       paramNames,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
+
+  } else if (directive.subtype === 'exeBlock') {
+    const statements = (directive.values as any)?.statements || [];
+    const returnStmt = (directive.values as any)?.return;
+    
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+
+    const blockNode: ExeBlockNode = {
+      type: 'ExeBlock',
+      nodeId: directive.nodeId,
+      values: {
+        statements,
+        ...(returnStmt ? { return: returnStmt } : {})
+      },
+      meta: {
+        statementCount: (directive.meta as any)?.statementCount ?? statements.length,
+        hasReturn: (directive.meta as any)?.hasReturn ?? Boolean(returnStmt)
+      },
+      location: directive.location
+    };
+
+    executableDef = {
+      type: 'code',
+      codeTemplate: [blockNode],
+      language: 'mlld-exe-block',
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
     
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
@@ -729,12 +848,11 @@ function createSyncJsWrapper(
         // Auto-unwrap without async shelf (sync context)
         if (isStructuredValue(argValue)) {
           argValue = asData(argValue);
-        } else if (isLoadContentResult(argValue)) {
+        } else if (isFileLoadedValue(argValue)) {
+          // Handle LoadContentResult format
           argValue = argValue.content;
-        } else if (isLoadContentResultArray(argValue)) {
-          argValue = argValue.map(item => item.content);
         }
-        
+
         // Try to parse numeric values (same logic as async wrapper)
         if (typeof argValue === 'string') {
           const numValue = Number(argValue);

@@ -54,7 +54,11 @@ export class DataValueEvaluator {
    * @param env The evaluation environment
    * @returns The evaluated result
    */
-  async evaluate(value: DataValue, env: Environment): Promise<any> {
+  async evaluate(
+    value: DataValue,
+    env: Environment,
+    options?: { suppressErrors?: boolean }
+  ): Promise<any> {
     
     try {
       // Route to appropriate evaluator based on type
@@ -88,15 +92,33 @@ export class DataValueEvaluator {
       return value;
       
     } catch (error) {
-      // Provide better error context
-      const errorContext = {
-        value: typeof value === 'object' ? { type: value?.type, keys: Object.keys(value || {}) } : value,
-        environment: env.getExecutionDirectory(),
-        error: error instanceof Error ? error.message : String(error)
-      };
-      
-      logger.error('DataValueEvaluator error:', errorContext);
-      throw error;
+      // Build context string for better error messages
+      const valueTypeField = typeof value === 'object' ? (value as any)?.type : undefined;
+      const identifier = typeof value === 'object' ? (value as any)?.identifier : undefined;
+
+      let contextHint = '';
+      if (identifier) {
+        contextHint = ` (evaluating @${identifier})`;
+      } else if (valueTypeField) {
+        contextHint = ` (evaluating ${valueTypeField})`;
+      }
+
+      // If the original error already has a good message, just re-throw it
+      // Only wrap if the error message is missing or generic
+      const originalMessage = error instanceof Error ? error.message : String(error);
+      if (originalMessage && originalMessage.length > 0 && !originalMessage.includes('undefined')) {
+        throw error;
+      }
+
+      // Wrap with context for generic/empty errors
+      const wrappedError = new Error(
+        `Data evaluation failed${contextHint}: ${originalMessage || 'unknown error'}`
+      );
+      if (error instanceof Error) {
+        wrappedError.stack = error.stack;
+        wrappedError.cause = error;
+      }
+      throw wrappedError;
     }
   }
 

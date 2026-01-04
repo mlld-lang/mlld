@@ -1,7 +1,7 @@
 import type { SecurityDescriptor } from '@core/types/security';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { Variable, VariableSource } from '@core/types/variable';
-import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { createComputedVariable } from '@core/types/variable/VariableFactories';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 
@@ -32,18 +32,18 @@ export function materializeGuardTransform(
       'js',
       '',
       GUARD_TRANSFORM_SOURCE,
-      { ctx: {} }
+      { mx: {} }
     );
 
-  const ctx = (materialized.ctx ??
+  const mx = (materialized.mx ??
     {
       labels: [],
       taint: [],
       sources: [],
       policy: null
     }) as any;
-  materialized.ctx = ctx;
-  updateCtxFromDescriptor(ctx, descriptor);
+  materialized.mx = mx;
+  updateVarMxFromDescriptor(mx, descriptor);
 
   return materialized;
 }

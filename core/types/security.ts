@@ -1,6 +1,6 @@
 import type { DirectiveKind } from './primitives';
 
-export type ImportType = 'module' | 'static' | 'live' | 'cached' | 'local';
+export type ImportType = 'module' | 'static' | 'live' | 'cached' | 'local' | 'templates';
 
 /**
  * Data labels are user-defined strings describing data properties and operation behaviors.

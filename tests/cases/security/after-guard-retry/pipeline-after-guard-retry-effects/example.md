@@ -1,7 +1,7 @@
 # After guard retry in pipeline re-emits effects
 
 /guard after @pipelineRetry for retryable = when [
-  @output != "ok" && @ctx.guard.try < 3 => retry "retry stage"
+  @output != "ok" && @mx.guard.try < 3 => retry "retry stage"
   * => allow
 ]
 

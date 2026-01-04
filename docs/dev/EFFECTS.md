@@ -256,7 +256,7 @@ When `interpret()` uses `mode: 'structured'`, `'stream'`, or `'debug'`, effects 
 ```typescript
 interface StructuredEffect extends Effect {
   capability?: CapabilityContext;  // What the effect can do
-  security?: SecurityDescriptor;   // Labels, taint level, sources
+  security?: SecurityDescriptor;   // Labels, taint, sources
   provenance?: SecurityDescriptor; // Origin chain (when provenance: true)
 }
 ```

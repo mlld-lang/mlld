@@ -1,0 +1,4 @@
+/export { * }
+
+/var @greeting = "Hello, world!"
+/var @count = 42

@@ -144,9 +144,9 @@ describe('RunCommand', () => {
     });
     
     it('should successfully run a script', async () => {
-      // Mock executeRoute from the SDK
-      const { executeRoute } = await import('@sdk/execute');
-      vi.mocked(executeRoute).mockResolvedValue({
+      // Mock execute from the SDK
+      const { execute } = await import('@sdk/execute');
+      vi.mocked(execute).mockResolvedValue({
         output: 'Script output',
         effects: [],
         exports: {},
@@ -182,7 +182,7 @@ describe('RunCommand', () => {
       }
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Running'));
-      expect(executeRoute).toHaveBeenCalled();
+      expect(execute).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Script output');
       expect(exitSpy).toHaveBeenCalledWith(0);
 
@@ -190,9 +190,9 @@ describe('RunCommand', () => {
       exitSpy.mockRestore();
     });
 
-    it('should pass timeout option to executeRoute', async () => {
-      const { executeRoute } = await import('@sdk/execute');
-      vi.mocked(executeRoute).mockResolvedValue({
+    it('should pass timeout option to execute', async () => {
+      const { execute } = await import('@sdk/execute');
+      vi.mocked(execute).mockResolvedValue({
         output: 'Done',
         effects: [],
         exports: {},
@@ -213,7 +213,7 @@ describe('RunCommand', () => {
         if (!error.message.includes('exit:0')) throw error;
       }
 
-      expect(executeRoute).toHaveBeenCalledWith(
+      expect(execute).toHaveBeenCalledWith(
         expect.any(String),
         undefined,
         expect.objectContaining({ timeoutMs: 5000 })
@@ -224,8 +224,8 @@ describe('RunCommand', () => {
     });
 
     it('should show metrics in debug mode', async () => {
-      const { executeRoute } = await import('@sdk/execute');
-      vi.mocked(executeRoute).mockResolvedValue({
+      const { execute } = await import('@sdk/execute');
+      vi.mocked(execute).mockResolvedValue({
         output: 'Output',
         effects: [],
         exports: {},

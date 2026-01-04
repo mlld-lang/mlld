@@ -1,0 +1,3 @@
+import { first, second } from "strict-export-wildcard-module.mld"
+
+show :::{{first}} and {{second}}:::

@@ -7,10 +7,10 @@ mlld can handle large amounts of data like entire codebases. Node.js has limits 
 Use shell mode for large data (mlld will auto-fallback when needed):
 ```mlld
 >> This usually works automatically now, but explicit shell mode is recommended for clarity when dealing with large data
-/run sh (@largefile) { echo "$largefile" | grep "TODO" }
+run sh (@largefile) { echo "$largefile" | grep "TODO" }
 
 >> This works with any size  
-/run sh (@largefile) { echo "$largefile" | grep "TODO" }
+run sh (@largefile) { echo "$largefile" | grep "TODO" }
 ```
 
 ## The Problem
@@ -19,10 +19,10 @@ Node.js can't pass variables larger than ~128KB to commands - it throws an `E2BI
 
 ```mlld
 >> Load entire codebase (could be megabytes)
-/var @allCode = <**/*.js>
+var @allCode = <**/*.js>
 
 >> Previously, this could error if @allCode > 128KB. mlld now auto-falls back to shell when needed.
-/run sh (@allCode) { echo "$allCode" | wc -l }
+run sh (@allCode) { echo "$allCode" | wc -l }
 ```
 
 ## The Solution
@@ -35,10 +35,10 @@ Switch from simple `/run cmd {...}` to shell mode `/run sh {...}` when writing w
 
 ```mlld
 >> Simple run - limited to ~128KB, uses @var syntax
-/run cmd {tool "@data"}
+run cmd {tool "@data"}
 
 >> Shell mode - handles any size, pass params then use $var syntax
-/run sh (@data) { echo "$data" | tool }
+run sh (@data) { echo "$data" | tool }
 ```
 
 **Important syntax difference:**
@@ -51,15 +51,15 @@ Define executables with bash or sh to handle large data:
 
 ```mlld
 >> Load entire codebase
-/var @contracts = <**/*.sol>
+var @contracts = <**/*.sol>
 
 >> Process with shell executable - parameter becomes shell variable
-/exe @analyze(code) = sh {
+exe @analyze(code) = sh {
   echo "$code" | solidity-analyzer
 }
 
 >> Pass the mlld variable when calling
-/show @analyze(@contracts)
+show @analyze(@contracts)
 ```
 
 The key: shell mode receives mlld variables as parameters (declared in parentheses), then accesses them as shell variables with `$` inside the code block.
@@ -70,13 +70,13 @@ Pipe data to tools instead of passing as arguments:
 
 ```mlld
 >> Good pattern for large data
-/exe @process(content) = sh {
+exe @process(content) = sh {
   echo "$content" | jq '.items[]'
 }
 
 >> Load many files
-/var @configs = <**/*.json>
-/show @process(@configs)
+var @configs = <**/*.json>
+show @process(@configs)
 ```
 
 ## How It Works

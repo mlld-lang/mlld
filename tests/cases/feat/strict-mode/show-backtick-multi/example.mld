@@ -1,0 +1,6 @@
+var @a = "first"
+var @b = "second"
+var @c = "third"
+
+show `Values: @a, @b, @c`
+show `Only @a and @c`

@@ -1,6 +1,0 @@
-/var @mode = "active"
-/when @mode: [
-  let @prefix = "Status:"
-  "active" => show "@prefix Active"
-  * => show "@prefix Unknown"
-]

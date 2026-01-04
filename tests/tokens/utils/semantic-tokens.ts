@@ -12,36 +12,32 @@ export interface Token {
   text?: string;
 }
 
-// Token types and modifiers from language-server-impl.ts
+// Token types and modifiers (MUST MATCH language-server-impl.ts EXACTLY)
 const TOKEN_TYPES = [
-  'keyword',          // Keywords and directives
-  'variable',         // Variables (declarations and references)
-  'string',           // Strings, templates, file paths
-  'operator',         // Operators and brackets
-  'label',            // Labels for sections and languages
-  'number',           // Numbers
-  'comment',          // Comments
-  'regexp',           // Regular expressions
-  'type',             // Types (like XML tags)
-  'property',         // Properties and attributes
-  'parameter',        // Function parameters
-  'function',         // Function names
-  'namespace',        // Namespaces
-  'method',           // Methods
-  'event'             // Events
+  'keyword',          // 0 - Keywords and directives
+  'variable',         // 1 - Variables (declarations and references)
+  'string',           // 2 - Strings, templates, file paths
+  'operator',         // 3 - Operators and brackets
+  'label',            // 4 - Labels for sections and languages
+  'type',             // 5 - Types (used for XML tags)
+  'parameter',        // 6 - Function parameters
+  'comment',          // 7 - Comments
+  'number',           // 8 - Numbers
+  'property',         // 9 - Object properties
+  'interface',        // 10 - Interfaces (file references)
+  'typeParameter',    // 11 - Type parameters (file paths in sections)
+  'namespace',        // 12 - Namespaces (section names)
+  'function'          // 13 - Functions (exec invocations)
 ];
 
 const TOKEN_MODIFIERS = [
-  'declaration',      // Variable is being declared
-  'definition',       // Function/type is being defined
-  'readonly',         // Read-only variable
-  'static',           // Static member
-  'deprecated',       // Deprecated item
-  'abstract',         // Abstract member
-  'async',            // Async function
-  'modification',     // Being modified
-  'documentation',    // Documentation
-  'defaultLibrary'    // Part of default library
+  'declaration',      // 0 - variable declarations
+  'reference',        // 1 - variable references
+  'readonly',         // 2 - imported variables
+  'interpolated',     // 3 - interpolated content
+  'literal',          // 4 - literal strings (single quotes)
+  'invalid',          // 5 - invalid syntax
+  'deprecated'        // 6 - deprecated syntax
 ];
 
 // Map mlld-specific token types to VSCode standard types

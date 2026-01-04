@@ -1,0 +1,68 @@
+{
+  "name": "mlld Template (MTT)",
+  "scopeName": "source.mlld-mtt",
+  "fileTypes": ["mtt"],
+  "patterns": [
+    {
+      "name": "comment.line.mlld",
+      "match": "^\\s*(>>|<<).*$"
+    },
+    {
+      "name": "keyword.control.directive.mlld",
+      "match": "^\\s*/(?:for|when|end)\\b"
+    },
+    {
+      "name": "meta.interpolation.mlld",
+      "begin": "\\{\\{",
+      "end": "\\}\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.interpolation.begin.mlld"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.interpolation.end.mlld"
+        }
+      },
+      "patterns": [
+        {
+          "name": "variable.other.mlld",
+          "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      ]
+    },
+    {
+      "name": "string.other.link.mlld",
+      "begin": "<",
+      "end": ">",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.link.begin.mlld"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.link.end.mlld"
+        }
+      },
+      "patterns": [
+        {
+          "name": "meta.interpolation.mlld",
+          "begin": "\\{\\{",
+          "end": "\\}\\}",
+          "patterns": [
+            {
+              "name": "variable.other.mlld",
+              "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+            }
+          ]
+        },
+        {
+          "name": "string.path.mlld",
+          "match": "[^{}>]+"
+        }
+      ]
+    }
+  ]
+}

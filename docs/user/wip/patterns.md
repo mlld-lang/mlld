@@ -27,7 +27,7 @@ Generate multiple responses and select the highest quality:
 }
 
 /exe @collectAndSelect(input) = when first [
-  @ctx.try < 5 => retry
+  @mx.try < 5 => retry
   * => js {
     const scored = @p.retries.all.map(r => ({
       response: r,
@@ -68,7 +68,7 @@ Chain validation and improvement stages:
 
 /exe @validateStructure(draft) = when [
   @draft.includes("## Problem") && @draft.includes("## Solution") => @draft
-  @ctx.try < 3 => retry "Missing required sections: Problem, Solution"
+  @mx.try < 3 => retry "Missing required sections: Problem, Solution"
   * => @draft
 ]
 
@@ -98,14 +98,14 @@ Validate outputs against expected behavior:
 }
 
 /exe @guardedQuery(prompt, data) = when [
-  @ctx.try == 1 => @safeQuery(@prompt, @data)
-  @ctx.try > 1 => @safeQuery("@prompt (Previous attempt rejected: @ctx.hint)", @data)
+  @mx.try == 1 => @safeQuery(@prompt, @data)
+  @mx.try > 1 => @safeQuery("@prompt (Previous attempt rejected: @mx.hint)", @data)
 ]
 
 /exe @responseGuard(response) = when [
   @validation = @validateResponse(@response, @prompt)
   @validation.includes("APPROVE") => @response
-  !@validation.includes("APPROVE") && @ctx.try < 3 => retry @validation
+  !@validation.includes("APPROVE") && @mx.try < 3 => retry @validation
   * => "Response validation failed"
 ]
 
@@ -154,7 +154,7 @@ Transform API responses through validation and formatting:
 
 /exe @validateUsers(data) = when [
   @validateSchema(@data, @userSchema) => @data
-  @ctx.try < 3 => retry "Invalid user data format"
+  @mx.try < 3 => retry "Invalid user data format"
   * => []
 ]
 
@@ -251,15 +251,15 @@ Handle failures gracefully with multiple fallback strategies:
 /exe @cachedFallback(request) = <cache/@request.json>
 
 /exe @resilientFetch(request) = when first [
-  @ctx.try == 1 => @primaryService(@request)
-  @ctx.try == 2 => @secondaryService(@request)  
-  @ctx.try == 3 => @cachedFallback(@request)
+  @mx.try == 1 => @primaryService(@request)
+  @mx.try == 2 => @secondaryService(@request)  
+  @mx.try == 3 => @cachedFallback(@request)
   * => throw "All services unavailable"
 ]
 
 /exe @validateResponse(response) = when [
   @response && @response.status == "success" => @response
-  @ctx.try < 3 => retry "Service returned error"
+  @mx.try < 3 => retry "Service returned error"
   * => throw "No valid response available"
 ]
 
@@ -291,7 +291,7 @@ Break complex processes into discrete, validated steps:
 
 /exe @gatekeeper(stepOutput, stepName) = when [
   @stepOutput.includes("✅ Complete") => @stepOutput
-  @ctx.try < 2 => retry "Step @stepName incomplete"
+  @mx.try < 2 => retry "Step @stepName incomplete"
   * => throw "Step @stepName failed validation"
 ]
 

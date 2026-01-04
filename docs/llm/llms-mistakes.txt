@@ -1,0 +1,199 @@
+<MLLD_COMMON_MISTAKES>
+
+<MISTAKE_MISSING_AT>
+Variables always need `@` prefix.
+
+```mlld
+>> Wrong
+var greeting = "Hello"
+
+>> Correct
+var @greeting = "Hello"
+```
+</MISTAKE_MISSING_AT>
+
+<MISTAKE_SLASH_IN_STRICT_MODE>
+Strict mode (.mld) uses bare directives. Markdown mode (.mld.md) uses slashes.
+
+```mlld
+>> Wrong (in .mld file)
+/var @x = 1
+/show @x
+
+>> Correct (in .mld file)
+var @x = 1
+show @x
+```
+</MISTAKE_SLASH_IN_STRICT_MODE>
+
+<MISTAKE_USING_AT_FOR_DIRECTIVES>
+Directives don't use `@` prefix.
+
+```mlld
+>> Wrong
+@run cmd {echo "hello"}
+var @result = @run cmd {echo "hello"}
+
+>> Correct
+run cmd {echo "hello"}
+var @result = cmd {echo "hello"}
+```
+</MISTAKE_USING_AT_FOR_DIRECTIVES>
+
+<MISTAKE_JS_TEMPLATE_SYNTAX>
+Use `@var` not `${var}`. mlld is not JavaScript.
+
+```mlld
+>> Wrong
+var @msg = "Hello ${name}"
+show `Result: ${count}`
+
+>> Correct
+var @msg = "Hello @name"
+show `Result: @count`
+```
+</MISTAKE_JS_TEMPLATE_SYNTAX>
+
+<MISTAKE_INTERPOLATION_IN_TEXT>
+In strict mode, plain text is an error. Use `show` or templates.
+
+```mlld
+>> Wrong (strict mode)
+Hello @name!
+
+>> Correct
+show `Hello @name!`
+```
+</MISTAKE_INTERPOLATION_IN_TEXT>
+
+<MISTAKE_FILE_VS_STRING>
+Angle brackets load content; quotes are literal strings.
+
+```mlld
+var @content = <README.md>     >> loads file contents
+var @path = "README.md"        >> literal string
+```
+</MISTAKE_FILE_VS_STRING>
+
+<MISTAKE_XML_VS_FILE_TAGS>
+`<thinking>` is plain text. `<file.txt>` (has `.`) is a file ref.
+
+```mlld
+>> These are plain text (no . / * @)
+<OVERVIEW>
+<thinking>
+</OVERVIEW>
+
+>> These are file references
+<README.md>
+<src/*.ts>
+<@base/config.json>
+```
+</MISTAKE_XML_VS_FILE_TAGS>
+
+<MISTAKE_NESTED_FUNC_IN_SHELL>
+Don't call mlld functions inside shell commands.
+
+```mlld
+>> Wrong
+run cmd {
+  RESULT=$(@helper("x"))
+  echo $RESULT
+}
+
+>> Correct
+var @r = @helper("x")
+run @r | { cat }
+```
+</MISTAKE_NESTED_FUNC_IN_SHELL>
+
+<MISTAKE_TEMPLATE_COLLECTION_IMPORT>
+Template collections need parameters and directories.
+
+```mlld
+>> Wrong
+import { @tpl } from "./file.att"           >> single file
+import templates from "./agents" as @agents  >> missing params
+
+>> Correct
+exe @tpl(x) = template "./file.att"          >> single file
+import templates from "./agents" as @agents(message, context)
+```
+</MISTAKE_TEMPLATE_COLLECTION_IMPORT>
+
+<MISTAKE_VAR_IN_PARALLEL_BLOCK>
+Parallel blocks can't write to outer scope. Use `let`.
+
+```mlld
+>> Wrong
+var @total = 0
+for parallel @x in @items [
+  var @total += 1   >> outer scope write blocked
+]
+
+>> Correct
+exe @countItems(items) = [
+  let @results = for parallel @x in @items => 1
+  => @results.length
+]
+```
+</MISTAKE_VAR_IN_PARALLEL_BLOCK>
+
+<MISTAKE_RETURN_STATEMENT>
+mlld has no `return`. Use `=> value` in blocks.
+
+```mlld
+>> Wrong
+exe @calc(x) = [
+  let @result = @x * 2
+  return @result
+]
+
+>> Correct
+exe @calc(x) = [
+  let @result = @x * 2
+  => @result
+]
+```
+</MISTAKE_RETURN_STATEMENT>
+
+<MISTAKE_MISSING_BRACES>
+Commands always need braces.
+
+```mlld
+>> Wrong
+run cmd echo "hello"
+
+>> Correct
+run cmd {echo "hello"}
+```
+</MISTAKE_MISSING_BRACES>
+
+<MISTAKE_COMPLEX_LOGIC>
+Move heavy logic to helpers or modules. Keep orchestration simple.
+
+```mlld
+>> Wrong (too much logic inline)
+var @result = for @item in @items => when first [
+  @item.type == "a" && @item.status == "active" => [
+    let @x = @item.value * 2
+    let @y = @transform(@x)
+    let @z = @validate(@y)
+    => when [ @z.ok => @z.value * => null ]
+  ]
+  * => null
+]
+
+>> Correct (extract to helper)
+exe @processItem(item) = [
+  let @x = @item.value * 2
+  let @y = @transform(@x)
+  let @z = @validate(@y)
+  => when [ @z.ok => @z.value * => null ]
+]
+
+var @result = for @item in @items when @item.type == "a" => @processItem(@item)
+```
+</MISTAKE_COMPLEX_LOGIC>
+
+</MLLD_COMMON_MISTAKES>

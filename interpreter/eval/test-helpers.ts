@@ -3,18 +3,18 @@ import type { StructuredValue, StructuredValueContext } from '../utils/structure
 
 export interface UnwrappedStructured<T> {
   data: T;
-  ctx?: StructuredValueContext;
+  mx?: StructuredValueContext;
   metadata?: StructuredValueContext;
   wrapper?: StructuredValue<T>;
 }
 
 export function unwrapStructuredForTest<T>(value: T | StructuredValue<T>): UnwrappedStructured<T> {
   if (isStructuredValue<T>(value)) {
-    const ctx = value.ctx;
+    const mx = value.mx;
     return {
       data: asData<T>(value),
-      ctx,
-      metadata: ctx,
+      mx,
+      metadata: mx,
       wrapper: value
     };
   }

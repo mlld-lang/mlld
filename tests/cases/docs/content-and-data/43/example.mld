@@ -1,0 +1,2 @@
+exe @deploy(env, status) = template "./templates/deploy.att"
+show @deploy("prod", "success")

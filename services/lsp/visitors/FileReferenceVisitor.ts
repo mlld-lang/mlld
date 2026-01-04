@@ -129,20 +129,57 @@ export class FileReferenceVisitor extends BaseVisitor {
       }
       
       if (!node.section) {
-        // No section - just filename and >
-        const filenameEnd = fileRefEndOffset - node.location.start.offset - 1; // -1 for >
-        const filenameLength = filenameEnd - 1; // -1 for <
-        if (filenameLength > 0) {
-          this.tokenBuilder.addToken({
-            line: node.location.start.line - 1,
-            char: nodeStartChar + 1,
-            length: filenameLength,
-            tokenType: 'alligator',
-            modifiers: []
-          });
+        // No section - check if we have segments (variables/paths) or simple filename
+        if (node.source?.segments && Array.isArray(node.source.segments)) {
+          // Path with variables like <@base/file.md>
+          // Tokenize each segment individually
+          for (const segment of node.source.segments) {
+            if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
+              // Variable like @base - highlight as variable (light blue)
+              this.tokenBuilder.addToken({
+                line: segment.location.start.line - 1,
+                char: segment.location.start.column - 1,
+                length: segment.identifier.length + 1, // +1 for @
+                tokenType: 'variable',
+                modifiers: []
+              });
+            } else if (segment.type === 'Text' && segment.location && segment.content) {
+              // Text content like "file.md" - highlight as alligator (light teal)
+              this.tokenBuilder.addToken({
+                line: segment.location.start.line - 1,
+                char: segment.location.start.column - 1,
+                length: segment.content.length,
+                tokenType: 'alligator',
+                modifiers: []
+              });
+            } else if (segment.type === 'PathSeparator' && segment.location) {
+              // Path separator "/" - highlight as operator
+              this.tokenBuilder.addToken({
+                line: segment.location.start.line - 1,
+                char: segment.location.start.column - 1,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
+          }
+        } else {
+          // Simple filename without variables
+          const filenameEnd = fileRefEndOffset - node.location.start.offset - 1; // -1 for >
+          const filenameLength = filenameEnd - 1; // -1 for <
+          if (filenameLength > 0) {
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: nodeStartChar + 1,
+              length: filenameLength,
+              tokenType: 'alligator',
+              modifiers: []
+            });
+          }
         }
-        
+
         // Token for ">"
+        const filenameEnd = fileRefEndOffset - node.location.start.offset - 1; // -1 for >
         const closePos = nodeStartChar + filenameEnd;
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
@@ -154,17 +191,54 @@ export class FileReferenceVisitor extends BaseVisitor {
       } else {
         // Has section - need to handle # and section name
         const hashIndex = text.indexOf('#');
-        
+
         // Token for filename (between < and #)
-        if (hashIndex > 1) {
-          const filenameLength = hashIndex - 1; // From after < to before #
-          this.tokenBuilder.addToken({
-            line: node.location.start.line - 1,
-            char: nodeStartChar + 1,
-            length: filenameLength,
-            tokenType: 'typeParameter',  // Use typeParameter for filenames with sections
-            modifiers: []
-          });
+        // Check if we have segments (variables/paths) or simple filename
+        if (node.source?.segments && Array.isArray(node.source.segments)) {
+          // Path with variables like <@base/file.md#section>
+          // Tokenize each segment individually
+          for (const segment of node.source.segments) {
+            if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
+              // Variable like @base - highlight as variable (light blue)
+              this.tokenBuilder.addToken({
+                line: segment.location.start.line - 1,
+                char: segment.location.start.column - 1,
+                length: segment.identifier.length + 1, // +1 for @
+                tokenType: 'variable',
+                modifiers: []
+              });
+            } else if (segment.type === 'Text' && segment.location && segment.content) {
+              // Text content like "file.md" - highlight as alligator (light teal)
+              this.tokenBuilder.addToken({
+                line: segment.location.start.line - 1,
+                char: segment.location.start.column - 1,
+                length: segment.content.length,
+                tokenType: 'alligator',
+                modifiers: []
+              });
+            } else if (segment.type === 'PathSeparator' && segment.location) {
+              // Path separator "/" - highlight as operator
+              this.tokenBuilder.addToken({
+                line: segment.location.start.line - 1,
+                char: segment.location.start.column - 1,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
+          }
+        } else {
+          // Simple filename without variables
+          if (hashIndex > 1) {
+            const filenameLength = hashIndex - 1; // From after < to before #
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: nodeStartChar + 1,
+              length: filenameLength,
+              tokenType: 'typeParameter',  // Use typeParameter for filenames with sections
+              modifiers: []
+            });
+          }
         }
         
         // Token for "#"
@@ -249,7 +323,7 @@ export class FileReferenceVisitor extends BaseVisitor {
               modifiers: []
             });
             
-            // Token for "@" + pipe name as a single variable token (for FileReference nodes)
+            // Token for "@" + pipe name as function (pipeline transforms are function invocations)
             const atSymbolPos = nodeText.indexOf('@', currentPos + (nodeText[currentPos + 1] === '|' ? 2 : 1));
             if (atSymbolPos !== -1) {
               const pipeTransform = pipe.transform || pipe.name; // Support both properties
@@ -259,7 +333,7 @@ export class FileReferenceVisitor extends BaseVisitor {
                   line: node.location.start.line - 1,
                   char: nodeStartChar + atSymbolPos,
                   length: pipeName.length,
-                  tokenType: 'variable',
+                  tokenType: 'function',
                   modifiers: []
                 });
                 
@@ -355,9 +429,9 @@ export class FileReferenceVisitor extends BaseVisitor {
     }
     
     if (!node.options?.section?.identifier) {
-      // No section - tokenize as: <, filename, >, [pipes]
-      
-      // Calculate filename length (from < to > or to first |)
+      // No section - check if we have segments (variables/paths) or simple filename
+
+      // Calculate close index
       let closeIndex;
       if (node.pipes && node.pipes.length > 0) {
         const pipeIndex = nodeText.indexOf('|');
@@ -365,18 +439,54 @@ export class FileReferenceVisitor extends BaseVisitor {
       } else {
         closeIndex = nodeText.lastIndexOf('>');
       }
-      const filenameLength = closeIndex - 1; // -1 for the initial <
-      
-      if (filenameLength > 0) {
-        this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: nodeStartChar + 1,
-          length: filenameLength,
-          tokenType: 'alligator',
-          modifiers: []
-        });
+
+      if (node.source?.segments && Array.isArray(node.source.segments)) {
+        // Path with variables like <@base/file.md>
+        // Tokenize each segment individually
+        for (const segment of node.source.segments) {
+          if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
+            // Variable like @base - highlight as variable (light blue)
+            this.tokenBuilder.addToken({
+              line: segment.location.start.line - 1,
+              char: segment.location.start.column - 1,
+              length: segment.identifier.length + 1, // +1 for @
+              tokenType: 'variable',
+              modifiers: []
+            });
+          } else if (segment.type === 'Text' && segment.location && segment.content) {
+            // Text content like "file.md" - highlight as alligator (light teal)
+            this.tokenBuilder.addToken({
+              line: segment.location.start.line - 1,
+              char: segment.location.start.column - 1,
+              length: segment.content.length,
+              tokenType: 'alligator',
+              modifiers: []
+            });
+          } else if (segment.type === 'PathSeparator' && segment.location) {
+            // Path separator "/" - highlight as operator
+            this.tokenBuilder.addToken({
+              line: segment.location.start.line - 1,
+              char: segment.location.start.column - 1,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+        }
+      } else {
+        // Simple filename without variables
+        const filenameLength = closeIndex - 1; // -1 for the initial <
+        if (filenameLength > 0) {
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + 1,
+            length: filenameLength,
+            tokenType: 'alligator',
+            modifiers: []
+          });
+        }
       }
-      
+
       // Token for ">"
       const closePos = nodeStartChar + closeIndex;
       this.tokenBuilder.addToken({
@@ -392,20 +502,57 @@ export class FileReferenceVisitor extends BaseVisitor {
       // Find the # position to know where filename ends
       const hashIndex = nodeText.indexOf('#');
       if (hashIndex === -1) return; // Shouldn't happen
-      
+
       // Token for filename (from after < to before space before #)
-      const spaceBeforeHash = nodeText.lastIndexOf(' ', hashIndex - 1);
-      const filenameEnd = spaceBeforeHash > 0 ? spaceBeforeHash : hashIndex;
-      const filenameLength = filenameEnd - 1; // -1 for the initial <
-      
-      if (filenameLength > 0) {
-        this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: nodeStartChar + 1, // After <
-          length: filenameLength,
-          tokenType: 'alligator',
-          modifiers: []
-        });
+      // Check if we have segments (variables/paths) or simple filename
+      if (node.source?.segments && Array.isArray(node.source.segments)) {
+        // Path with variables like <@base/file.md#section>
+        // Tokenize each segment individually
+        for (const segment of node.source.segments) {
+          if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
+            // Variable like @base - highlight as variable (light blue)
+            this.tokenBuilder.addToken({
+              line: segment.location.start.line - 1,
+              char: segment.location.start.column - 1,
+              length: segment.identifier.length + 1, // +1 for @
+              tokenType: 'variable',
+              modifiers: []
+            });
+          } else if (segment.type === 'Text' && segment.location && segment.content) {
+            // Text content like "file.md" - highlight as alligator (light teal)
+            this.tokenBuilder.addToken({
+              line: segment.location.start.line - 1,
+              char: segment.location.start.column - 1,
+              length: segment.content.length,
+              tokenType: 'alligator',
+              modifiers: []
+            });
+          } else if (segment.type === 'PathSeparator' && segment.location) {
+            // Path separator "/" - highlight as operator
+            this.tokenBuilder.addToken({
+              line: segment.location.start.line - 1,
+              char: segment.location.start.column - 1,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+        }
+      } else {
+        // Simple filename without variables
+        const spaceBeforeHash = nodeText.lastIndexOf(' ', hashIndex - 1);
+        const filenameEnd = spaceBeforeHash > 0 ? spaceBeforeHash : hashIndex;
+        const filenameLength = filenameEnd - 1; // -1 for the initial <
+
+        if (filenameLength > 0) {
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + 1, // After <
+            length: filenameLength,
+            tokenType: 'alligator',
+            modifiers: []
+          });
+        }
       }
       
       // Token for "#"
@@ -570,7 +717,7 @@ export class FileReferenceVisitor extends BaseVisitor {
 
               currentPos = nodeText.indexOf('|', contentStart);
             } else {
-              // Standard @transform flow
+              // Standard @transform flow - use function token type (pipeline transforms)
               const atSymbolPos = nodeText.indexOf('@', afterPipe);
               if (atSymbolPos !== -1) {
                 const pipeTransform = pipe.transform || pipe.name;
@@ -580,14 +727,14 @@ export class FileReferenceVisitor extends BaseVisitor {
                     line: node.location.start.line - 1,
                     char: nodeStartChar + atSymbolPos,
                     length: pipeName.length,
-                    tokenType: 'variable',
+                    tokenType: 'function',
                     modifiers: []
                   });
                   currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
                 } else {
                   currentPos = nodeText.indexOf('|', currentPos + 1);
                 }
-            // Token for "@pipeName"
+            // Token for "@pipeName" - use function token type (pipeline transforms)
             const atSymbolPos = nodeText.indexOf('@', currentPos + (isParallel ? 2 : 1));
             if (atSymbolPos !== -1) {
               const pipeTransform = pipe.transform || pipe.name;
@@ -597,7 +744,7 @@ export class FileReferenceVisitor extends BaseVisitor {
                   line: node.location.start.line - 1,
                   char: nodeStartChar + atSymbolPos,
                   length: pipeName.length,
-                  tokenType: 'variable',
+                  tokenType: 'function',
                   modifiers: []
                 });
                 currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
@@ -664,13 +811,13 @@ export class FileReferenceVisitor extends BaseVisitor {
             helper.tokenizeSimpleArg(contentOffset + effectName.length, rest);
           }
         } else {
-          // Regular @transform token
+          // Regular @transform token - use function token type (pipeline transforms)
           const atChar = contentPos.character; // content starts at '@'
           this.tokenBuilder.addToken({
             line: pipe.location.start.line - 1,
             char: atChar,
             length: pipeTransform.length + 1, // +1 for @
-            tokenType: 'variable',
+            tokenType: 'function',
             modifiers: []
           });
         }
@@ -734,10 +881,12 @@ export class FileReferenceVisitor extends BaseVisitor {
   }
 
   private visitParameter(node: any): void {
+    // Parameter location includes @ symbol but name doesn't, so add 1
+    const length = node.name ? (node.name.length + 1) : TextExtractor.extract([node]).length;
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
-      length: node.name?.length || TextExtractor.extract([node]).length,
+      length,
       tokenType: 'parameter',
       modifiers: []
     });
@@ -751,7 +900,7 @@ export class FileReferenceVisitor extends BaseVisitor {
       tokenType: 'comment',
       modifiers: []
     });
-    this.visitChildren(node, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+    this.visitChildren(node, context, (child, mx) => this.mainVisitor.visitNode(child, mx));
     if (node.closeLocation) {
       this.tokenBuilder.addToken({
         line: node.closeLocation.start.line - 1,

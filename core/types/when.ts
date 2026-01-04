@@ -3,6 +3,7 @@
  */
 
 import type { DirectiveNode, BaseMlldNode } from './nodes';
+import type { WithClause } from './run';
 
 /**
  * Modifiers for when block form that control evaluation behavior
@@ -24,6 +25,8 @@ export interface LetAssignmentNode extends BaseMlldNode {
   type: 'LetAssignment';
   identifier: string;
   value: BaseMlldNode[];
+  withClause?: WithClause;
+  meta?: Record<string, unknown>;
 }
 
 /**
@@ -35,6 +38,8 @@ export interface AugmentedAssignmentNode extends BaseMlldNode {
   identifier: string;
   operator: '+=';  // Extensible for future -=, *=, etc.
   value: BaseMlldNode[];
+  withClause?: WithClause;
+  meta?: Record<string, unknown>;
 }
 
 /**
@@ -157,12 +162,17 @@ export interface TailModifiers {
 export interface WhenExpressionNode extends BaseMlldNode {
   type: 'WhenExpression';
   conditions: WhenEntry[];  // Mixed let assignments and condition pairs
-  withClause?: TailModifiers;
+  withClause?: TailModifiers | null;
+  boundValue?: BaseMlldNode;
+  boundIdentifier?: string;
   meta: {
     conditionCount: number;
     isValueReturning: true;
     evaluationType: 'expression';
     hasTailModifiers: boolean;
+    modifier?: WhenModifier | null;
+    hasBoundValue?: boolean;
+    boundIdentifier?: string;
   };
 }
 

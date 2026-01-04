@@ -3,22 +3,24 @@
  * Print a Mlld AST for a snippet
  *
  * Usage:
- *   npm run ast -- "@run [echo 'hi']"              # Parse command line args
- *   npm run ast -- file.mld                         # Auto-detect files
+ *   npm run ast -- "var @x = 1"                     # Parse in strict mode (default)
+ *   npm run ast -- --markdown "/var @x = 1"         # Parse in markdown mode
+ *   npm run ast -- file.mld                         # Auto-detect mode from extension
  *   npm run ast -- -f test.mld                      # Explicit file flag
- *   echo "@run [echo 'hi']" | npm run ast           # Parse from stdin
- *   npm run ast -- --debug "@text x = 'y'"         # Enable debug mode
+ *   echo "var @x = 1" | npm run ast                 # Parse from stdin (strict mode)
+ *   npm run ast -- --debug "var @x = 1"             # Enable debug mode
  */
 
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import parser from '../grammar/generated/parser/parser.js';  // Import directly from generated parser
+import parser from '../grammar/generated/parser/parser.js';
 const parse = parser.parse;
 
 // ---------- CLI parsing ----------
 const argv = process.argv.slice(2);
 let debug = false;
 let filePath = null;
+let markdownMode = false;
 const snippetParts = [];
 
 for (let i = 0; i < argv.length; i++) {
@@ -27,42 +29,75 @@ for (let i = 0; i < argv.length; i++) {
     debug = true;
   } else if (arg === '-f' || arg === '--file') {
     filePath = argv[++i];
+  } else if (arg === '--markdown' || arg === '-m') {
+    markdownMode = true;
   } else {
     snippetParts.push(arg);
   }
 }
 
+/**
+ * Determine parse options from file path
+ * .mld.md -> markdown mode
+ * .mld -> strict mode
+ * .att -> at-template (TemplateBodyAtt start rule)
+ * .mtt -> mustache-template (TemplateBodyMtt start rule)
+ */
+function getParseOptionsFromPath(path) {
+  const lowerPath = path.toLowerCase();
+  if (lowerPath.endsWith('.att')) {
+    return { mode: 'strict', startRule: 'TemplateBodyAtt' };
+  }
+  if (lowerPath.endsWith('.mtt')) {
+    return { mode: 'strict', startRule: 'TemplateBodyMtt' };
+  }
+  if (lowerPath.endsWith('.mld.md')) {
+    return { mode: 'markdown', startRule: 'Start' };
+  }
+  if (lowerPath.endsWith('.mld')) {
+    return { mode: 'strict', startRule: 'Start' };
+  }
+  return { mode: 'strict', startRule: 'Start' }; // default
+}
+
+// Legacy function for compatibility
+function getModeFromPath(path) {
+  return getParseOptionsFromPath(path).mode;
+}
+
 // ---------- source acquisition ----------
+// Returns { source, detectedFile } where detectedFile is the path if reading from file
 async function readSource() {
   // If file path specified, read from file
   if (filePath) {
     if (!existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
     }
-    return fs.readFile(filePath, 'utf8');
+    return { source: await fs.readFile(filePath, 'utf8'), detectedFile: filePath };
   }
-  
+
   // If command line args provided
   if (snippetParts.length) {
     const possibleFile = snippetParts.join(' ');
-    
+
     // Auto-detect: if it's a single argument that could be a file path
     if (snippetParts.length === 1 && existsSync(possibleFile)) {
-      return fs.readFile(possibleFile, 'utf8');
+      return { source: await fs.readFile(possibleFile, 'utf8'), detectedFile: possibleFile };
     }
-    
+
     // Otherwise treat as mlld snippet
-    return possibleFile;
+    return { source: possibleFile, detectedFile: null };
   }
-  
+
   // Otherwise read from stdin
-  return new Promise((resolve, reject) => {
+  const source = await new Promise((resolve, reject) => {
     let data = '';
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', chunk => data += chunk);
     process.stdin.on('end', () => resolve(data));
     process.stdin.on('error', reject);
   });
+  return { source, detectedFile: null };
 }
 
 // ---------- shell escaping detection ----------
@@ -118,13 +153,22 @@ function detectShellEscapingIssues(source, error) {
   try {
     if (debug) process.env.DEBUG_MLLD_GRAMMAR = '1';
 
-    const source = (await readSource()).trimEnd();
+    const { source: rawSource, detectedFile } = await readSource();
+    const source = rawSource.trimEnd();
     if (!source) {
       console.error('No Mlld source provided (arg or stdin).');
       process.exit(1);
     }
 
-    const ast = parse(source);
+    // Determine parse options: CLI flag > file extension > default (strict)
+    let parseOptions = { mode: 'strict', startRule: 'Start' };
+    if (markdownMode) {
+      parseOptions.mode = 'markdown';
+    } else if (detectedFile) {
+      parseOptions = getParseOptionsFromPath(detectedFile);
+    }
+
+    const ast = parse(source, parseOptions);
     console.dir(ast, { depth: null, colors: true });
   } catch (err) {
     // Check if this might be a shell escaping issue

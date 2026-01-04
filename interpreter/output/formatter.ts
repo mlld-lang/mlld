@@ -1,7 +1,6 @@
 import type { MlldNode } from '@core/types';
 import type { Variable } from '@core/types/variable';
-import { formatMarkdown } from '../utils/markdown-formatter';
-import { normalizeOutputBlankLines } from '../utils/blank-line-normalizer';
+import { normalizeOutput } from './normalizer';
 
 /**
  * Output formatting options
@@ -52,27 +51,13 @@ async function formatMarkdownNodes(nodes: MlldNode[], options: FormatOptions): P
   }
   
   let result = parts.join('');
-  
-  // Use prettier for formatting if enabled (default: true)
-  const useFormatter = options.useMarkdownFormatter !== false;
-  if (useFormatter) {
-    result = await formatMarkdown(result);
-  } else {
-    // Apply the original normalization when not using prettier
-    // Apply final output normalization if enabled (default: true)
-    const shouldNormalize = options.normalizeBlankLines !== false;
-    if (shouldNormalize) {
-      // Trim leading and trailing whitespace
-      result = result.trim();
-      // Normalize multiple blank lines to max 2 newlines (1 blank line)
-      result = normalizeOutputBlankLines(result);
-      // Ensure single trailing newline if there's content
-      if (result.length > 0) {
-        result += '\n';
-      }
-    }
+
+  // Apply output normalization if enabled (default: true)
+  const shouldNormalize = options.normalizeBlankLines !== false;
+  if (shouldNormalize) {
+    result = normalizeOutput(result);
   }
-  
+
   return result;
 }
 

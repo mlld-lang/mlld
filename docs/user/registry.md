@@ -10,7 +10,7 @@ Publish modules to the mlld registry with `mlld publish`. First-time modules go 
 
 1. **GitHub account** - You'll authenticate via GitHub
 2. **mlld CLI** - Install via `npm install -g mlld`
-3. **Module file** - Your `.mld` file with frontmatter
+3. **Module file** - Your `.mld`/`.mld.md` file with frontmatter and `/needs`
 
 ### Required Metadata
 
@@ -20,12 +20,18 @@ name: my-tool
 author: yourname
 version: 1.0.0
 about: Brief description of what this does
-needs: []
 license: CC0
 ---
 ```
 
-All fields required. License must be CC0.
+All fields required. License must be CC0. Declare runtimes in the module body:
+
+```mlld
+/needs {
+  node: [],
+  sh: true
+}
+```
 
 ### Publish Command
 
@@ -301,10 +307,14 @@ For private/internal modules, use local or custom resolvers. See [resolvers.md](
 
 ### Runtime Dependencies
 
-```yaml
----
-needs: [js, py, sh]
----
+Declare runtimes with `/needs`:
+
+```mlld
+/needs {
+  node: [],
+  py: [],
+  sh: true
+}
 ```
 
 Types:
@@ -315,27 +325,25 @@ Types:
 
 ### Package Dependencies
 
-Use the legacy format (CLI-generated via `mlld add-needs`):
+Include package requirements in `/needs`:
 
-```yaml
----
-needs: [js]
-needs-js: lodash, axios
----
+```mlld
+/needs {
+  node: [lodash@^4, axios],
+  py: [requests>=2.31.0]
+}
 ```
 
 ### Command Dependencies
 
-Use the legacy format (CLI-generated via `mlld add-needs`):
+List required commands:
 
-```yaml
----
-needs: [sh]
-needs-sh: git, curl, jq
----
+```mlld
+/needs {
+  sh: true,
+  cmd: [git, curl, jq]
+}
 ```
-
-**Note:** The parser supports a structured format (`packages: [...]`) but the CLI currently only generates and validates the legacy comma-separated string format shown above.
 
 ### mlld Module Dependencies
 
@@ -352,6 +360,8 @@ dependencies:
 ```bash
 mlld add-needs my-tool.mld
 ```
+
+`mlld add-needs` analyzes your module and updates the `/needs` block.
 
 Analyzes your module and updates frontmatter with detected dependencies.
 
@@ -375,7 +385,7 @@ mlld publish --tag beta my-tool.mld
 
 Users import via tag:
 ```mlld
-/import { @helper } from @alice/my-tool@beta
+import { @helper } from @alice/my-tool@beta
 ```
 
 Common tags:
@@ -579,7 +589,7 @@ mlld publish --dry-run my-tool.mld  # Validate
 
 **Use explicit exports**:
 ```mlld
-/export { @publicAPI }
+export { @publicAPI }
 ```
 
 **Version appropriately**:

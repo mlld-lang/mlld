@@ -94,10 +94,17 @@ export interface VariableReferenceNode extends BaseMlldNode {
   pipes?: CondensedPipe[]; // NEW: Condensed pipe transformations
 }
 
+// Variable reference with tail modifiers (pipelines, with clauses)
+export interface VariableReferenceWithTailNode extends BaseMlldNode {
+  type: 'VariableReferenceWithTail';
+  variable: VariableReferenceNode;
+  withClause?: WithClause;
+}
+
 // Literal value node
 export interface LiteralNode extends BaseMlldNode {
   type: 'Literal';
-  value: string | number | boolean | null;
+  value: string | number | boolean | null | BaseMlldNode[];
   valueType?: string;
 }
 
@@ -190,6 +197,24 @@ export interface TemplateInlineShowNode extends BaseMlldNode {
   meta?: { [key: string]: unknown };
 }
 
+export interface ConditionalTemplateSnippetNode extends BaseMlldNode {
+  type: 'ConditionalTemplateSnippet';
+  condition: VariableReferenceNode;
+  content: BaseMlldNode[];
+}
+
+export interface ConditionalStringFragmentNode extends BaseMlldNode {
+  type: 'ConditionalStringFragment';
+  condition: VariableReferenceNode;
+  content: BaseMlldNode[];
+}
+
+export interface ConditionalArrayElementNode extends BaseMlldNode {
+  type: 'ConditionalArrayElement';
+  condition: VariableReferenceNode;
+  value: VariableReferenceNode;
+}
+
 
 // Formatting metadata for text nodes
 export interface FormattingMetadata {
@@ -214,19 +239,25 @@ export type DirectiveKind =
   | 'append'
   | 'when'
   | 'guard'
-  | 'stream';
+  | 'stream'
+  | 'needs'
+  | 'wants'
+  | 'policy'
+  | 'while'
+  | 'for';
 
 export type DirectiveSubtype =
   // Import subtypes
-  | 'importAll' | 'importSelected' | 'importNamespace'
+  | 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy'
   // Export subtype
   | 'exportSelected'
   // Unified var subtype
   | 'var'
   // Unified show subtypes
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
-  // Unified exe subtype
-  | 'exe'
+  // Unified exe subtypes
+  | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeTemplate' | 'exeTemplateFile'
+  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeResolver' | 'exeBlock'
   // Path subtypes
   | 'pathAssignment'
   // Run subtypes
@@ -238,7 +269,16 @@ export type DirectiveSubtype =
   // When subtypes
   | 'whenSimple' | 'whenBlock' | 'whenMatch'
   // Guard subtype
-  | 'guard';
+  | 'guard'
+  // For subtype
+  | 'for'
+  // While subtype
+  | 'while'
+  // Needs/Wants subtypes
+  | 'needs'
+  | 'wants'
+  // Policy subtype
+  | 'policy';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 
@@ -323,11 +363,12 @@ export interface UnaryExpression extends BaseMlldNode {
 }
 
 // Union type for all expression nodes
-export type Expression = 
-  | BinaryExpression 
-  | TernaryExpression 
-  | UnaryExpression 
-  | VariableReferenceNode 
-  | LiteralNode 
+export type Expression =
+  | BinaryExpression
+  | TernaryExpression
+  | UnaryExpression
+  | VariableReferenceNode
+  | VariableReferenceWithTailNode
+  | LiteralNode
   | ExecInvocation
   | NegationNode;

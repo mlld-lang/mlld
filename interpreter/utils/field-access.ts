@@ -2,9 +2,11 @@
  * Utility for accessing fields on objects/arrays
  */
 
+import * as fs from 'fs';
+import * as util from 'util';
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
-import { isLoadContentResult, isLoadContentResultURL, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
 import { ArrayOperationsHandler } from './array-operations';
@@ -57,10 +59,70 @@ function hasObjectField(obj: any, fieldName: string): boolean {
  * Helper to check if a value is an object AST node.
  */
 function isObjectAST(value: any): boolean {
-  return value &&
-         typeof value === 'object' &&
-         value.type === 'object' &&
-         (value.entries || value.properties);
+  if (!value || typeof value !== 'object' || value.type !== 'object') {
+    return false;
+  }
+
+  if (Array.isArray(value.entries)) {
+    return value.entries.every(
+      (entry: any) =>
+        entry &&
+        typeof entry === 'object' &&
+        ((entry.type === 'pair' && typeof entry.key === 'string' && 'value' in entry) ||
+          (entry.type === 'spread' && 'value' in entry))
+    );
+  }
+
+  return Boolean(value.properties && typeof value.properties === 'object');
+}
+
+function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return false;
+  }
+  if (isObjectAST(value)) {
+    return false;
+  }
+  if (isLoadContentResult(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function createObjectUtilityMxView(
+  mx: unknown,
+  data: unknown
+): unknown {
+  if (!mx || typeof mx !== 'object') {
+    return mx;
+  }
+  if (!isPlainObjectValue(data)) {
+    return mx;
+  }
+
+  const obj = data as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  const view = Object.create(mx as object) as Record<string, unknown>;
+  Object.defineProperty(view, 'keys', {
+    value: keys,
+    enumerable: true,
+    configurable: true
+  });
+  Object.defineProperty(view, 'values', {
+    value: keys.map(key => obj[key]),
+    enumerable: true,
+    configurable: true
+  });
+  Object.defineProperty(view, 'entries', {
+    value: keys.map(key => [key, obj[key]]),
+    enumerable: true,
+    configurable: true
+  });
+  return view;
 }
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
@@ -115,7 +177,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     'source',
     'metadata',
     'internal',
-    'ctx',
+    'mx',
     'any',
     'all',
     'none',
@@ -126,15 +188,38 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
-  
+
+  // Extract the raw value if we have a Variable (do this BEFORE metadata check)
+  let rawValue = isVariable(value) ? value.value : value;
+  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
+  const structuredCtx = (structuredWrapper?.mx ?? undefined) as Record<string, unknown> | undefined;
+  if (structuredWrapper) {
+    rawValue = structuredWrapper.data;
+  }
+
   // Special handling for Variable metadata properties
+  // IMPORTANT: Check metadata for core properties (.type, .mx, etc.),
+  // but allow data precedence for guard quantifiers (.all, .any, .none)
   if (isVariable(value) && field.type === 'field') {
     const fieldName = String(field.value);
-    
-    if (VARIABLE_METADATA_PROPS.includes(fieldName)) {
-      // Return metadata property
-      const metadataValue = value[fieldName as keyof typeof value];
-      
+
+    // Core metadata properties always come from Variable, never from data
+    const CORE_METADATA = ['type', 'isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
+
+    if (CORE_METADATA.includes(fieldName)) {
+      const metadataValue = (() => {
+        if (fieldName !== 'mx') {
+          return value[fieldName as keyof typeof value];
+        }
+
+        const baseMx =
+          structuredCtx ??
+          (isLoadContentResult(rawValue) ? (rawValue as any).mx : undefined) ??
+          (value as any).mx;
+
+        return createObjectUtilityMxView(baseMx, rawValue);
+      })();
+
       if (options?.preserveContext) {
         return {
           value: metadataValue,
@@ -145,14 +230,28 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
       return metadataValue;
     }
-  }
-  
-  // Extract the raw value if we have a Variable
-  let rawValue = isVariable(value) ? value.value : value;
-  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
-  const structuredCtx = (structuredWrapper?.ctx ?? undefined) as Record<string, unknown> | undefined;
-  if (structuredWrapper) {
-    rawValue = structuredWrapper.data;
+
+    // Guard quantifiers (.all, .any, .none) - allow data to override
+    const GUARD_QUANTIFIERS = ['all', 'any', 'none'];
+    if (GUARD_QUANTIFIERS.includes(fieldName)) {
+      // Check if this field exists in the actual data first
+      const fieldExistsInData = rawValue && typeof rawValue === 'object' && fieldName in rawValue;
+
+      if (!fieldExistsInData) {
+        // Field doesn't exist in data, so return metadata property
+        const metadataValue = value[fieldName as keyof typeof value];
+
+        if (options?.preserveContext) {
+          return {
+            value: metadataValue,
+            parentVariable: value,
+            accessPath: [...(options.parentPath || []), fieldName],
+            isVariable: false
+          };
+        }
+        return metadataValue;
+      }
+    }
   }
   const fieldValue = field.value;
   
@@ -185,8 +284,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           rawValueTypeField: (rawValue as any)?.type
         });
         try {
-          const fs = require('fs');
-          const util = require('util');
           const preview =
             Array.isArray(rawValue) && rawValue.length > 0
               ? { isArray: true, length: rawValue.length, first: rawValue[0] }
@@ -216,7 +313,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             rawValue &&
             typeof rawValue === 'object' &&
             name in (rawValue as any) &&
-            structuredWrapper.ctx?.source !== 'load-content'
+            structuredWrapper.mx?.source !== 'load-content'
           ) {
             accessedValue = (rawValue as any)[name];
           } else {
@@ -258,8 +355,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = structuredWrapper.metadata;
           break;
         }
-        if (name === 'ctx') {
-          accessedValue = structuredWrapper.ctx;
+        if (name === 'mx') {
+          accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue);
           break;
         }
         if (
@@ -304,6 +401,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
         if (STRING_TEXT_ACCESSORS.has(name)) {
           accessedValue = rawValue;
+          break;
+        }
+
+        // Support .length on strings (like JavaScript)
+        if (name === 'length') {
+          accessedValue = rawValue.length;
           break;
         }
 
@@ -378,34 +481,25 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         }
       }
       
-      // Handle LoadContentResultArray - special case for .content
-      if (isLoadContentResultArray(rawValue)) {
-        if (name === 'content') {
-          // CRITICAL: rawValue might be wrapped in StructuredValue, ensure we have the actual array
-          const actualArray = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
-          if (isLoadContentResultArray(actualArray)) {
-            accessedValue = actualArray.map(item => item.content).join('\n\n');
-          } else {
-            accessedValue = rawValue.map(item => item.content).join('\n\n');
-          }
+      // Handle StructuredValue arrays - special case for .content and .length
+      if (structuredWrapper && structuredWrapper.type === 'array') {
+        // For .content/.text, return the pre-joined text
+        if (name === 'content' || name === 'text') {
+          accessedValue = structuredWrapper.text;
           break;
         }
-        // Try to access as array property
+        // For .length, use the array data
+        if (name === 'length') {
+          accessedValue = (structuredWrapper.data as any[]).length;
+          break;
+        }
+        // For other properties, try to access on the array itself
         const result = (rawValue as any)[name];
         if (result !== undefined) {
           accessedValue = result;
           break;
         }
-        {
-          const chain = [...(options?.parentPath || []), name];
-          const msg = `Field "${name}" not found in LoadContentResultArray`;
-          throw new FieldAccessError(msg, {
-            baseValue: rawValue,
-            fieldAccessChain: [],
-            failedAtIndex: Math.max(0, chain.length - 1),
-            failedKey: name
-          }, { sourceLocation: options?.sourceLocation, env: options?.env });
-        }
+        // If property not found, fall through to error handling below
       }
       
       // Handle Variable objects with type 'object' and value field
@@ -672,18 +766,18 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         });
       }
 
-      const indexVar = env.getVariable(field.value);
-      if (!indexVar) {
-        throw new FieldAccessError(`Variable not found for index: ${field.value}`, {
-          baseValue: value,
-          fieldAccessChain: options?.parentPath || [],
-          failedAtIndex: options?.parentPath ? options.parentPath.length : 0,
-          failedKey: field.value
-        });
-      }
+      const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+      // Build a VariableReference node when only an identifier string is provided
+      const indexNode =
+        typeof field.value === 'object'
+          ? (field.value as any)
+          : {
+              type: 'VariableReference',
+              valueType: 'varIdentifier',
+              identifier: String(field.value)
+            };
 
-      const { resolveValue, ResolutionContext } = await import('./variable-resolution');
-      const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
+      const indexValue = await evaluateDataValue(indexNode as any, env);
       const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
       return accessField(value, resolvedField, options);
     }

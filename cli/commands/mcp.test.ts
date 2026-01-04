@@ -132,14 +132,14 @@ describe('mcp command', () => {
   it('excludes built-in executables when no manifest exists', async () => {
     const command = createMcpCommand();
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-test-'));
-    const modulePath = path.join(tmpDir, 'tools.mld');
+    const modulePath = path.join(tmpDir, 'tools.mld.md');
 
     await fs.writeFile(modulePath, [
       '/exe @greet(name) = js {',
       '  return "Hello " + name;',
       '}',
       '',
-      '// No /export directive',
+      '>> No /export directive',
       '',
     ].join('\n'));
 

@@ -3,7 +3,6 @@ import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl } from './load-content';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { wrapLoadContentValue } from '../utils/load-content-structured';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
@@ -12,14 +11,14 @@ import { MlldDirectiveError } from '@core/errors';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
-import type { ArrayVariable, Variable } from '@core/types/variable/VariableTypes';
-import { createRenamedContentVariable, createLoadContentResultVariable, extractVariableValue } from '@interpreter/utils/variable-migration';
 import { processPipeline } from './pipeline/unified-processor';
 import { wrapStructured, isStructuredValue, ensureStructuredValue, asText } from '../utils/structured-value';
 import type { StructuredValue, StructuredValueType, StructuredValueMetadata } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
+import { extractVariableValue } from '../utils/variable-resolution';
+import { isLoadContentResult } from '@core/types/load-content';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -116,7 +115,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
     let astPatterns = ast as AstPattern[];
 
     // Resolve variables in patterns (type-filter-var, name-list-var)
-    astPatterns = astPatterns.map(pattern => {
+    astPatterns = await Promise.all(astPatterns.map(async pattern => {
       if (pattern.type === 'type-filter-var') {
         const variable = env.getVariable(pattern.identifier);
         if (!variable) {
@@ -125,7 +124,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
             { identifier: pattern.identifier }
           );
         }
-        const varValue = extractVariableValue(variable);
+        const varValue = await extractVariableValue(variable, env);
         const filter = varValue ? String(varValue) : undefined;
         if (!filter) {
           throw new MlldDirectiveError(
@@ -142,7 +141,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
             { identifier: pattern.identifier }
           );
         }
-        const varValue = extractVariableValue(variable);
+        const varValue = await extractVariableValue(variable, env);
         const filter = varValue ? String(varValue) : undefined;
         if (!filter) {
           throw new MlldDirectiveError(
@@ -153,7 +152,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
         return { type: 'name-list', filter, usage: pattern.usage };
       }
       return pattern;
-    }) as AstPattern[];
+    })) as AstPattern[];
 
     // Validate: cannot mix content patterns with name-list patterns
     const hasNames = hasNameListPattern(astPatterns);
@@ -479,7 +478,15 @@ export async function processContentLoader(node: any, env: Environment): Promise
     if (error.message && error.message.includes('Unknown transform:')) {
       throw error;
     }
-    
+
+    // If this is a security/access denial, preserve the clear error message
+    if (error.message && error.message.includes('Access denied:')) {
+      throw new MlldError(error.message, {
+        path: pathOrUrl,
+        error: error.message
+      });
+    }
+
     // Otherwise, treat it as a file loading error
     let errorMessage = `Failed to load content: ${pathOrUrl}`;
 
@@ -635,6 +642,9 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   if (pattern.startsWith('@base/')) {
     globCwd = relativeBase;
     globPattern = pattern.slice('@base/'.length);
+  } else if (pattern.startsWith('@root/')) {
+    globCwd = relativeBase;
+    globPattern = pattern.slice('@root/'.length);
   } else if (path.isAbsolute(pattern)) {
     globCwd = path.parse(pattern).root || '/';
     globPattern = path.relative(globCwd, pattern);
@@ -810,43 +820,10 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
       continue;
     }
   }
-  
-  // Type assertion based on what we're returning
-  if (options?.section?.renamed) {
-    // Create RenamedContentArray Variable
-    const arrayValue = results as string[];
-    
-    // Create Variable with RenamedContentArray behavior
-    const variable = createRenamedContentVariable(arrayValue, {
-      name: 'glob-result',
-      fromGlobPattern: true,
-      globPattern: pattern,
-      fileCount: arrayValue.length
-    });
-    
-    // Extract the value with behaviors preserved
-    const arrayWithBehaviors = extractVariableValue(variable);
-    
-    // For compatibility, still return the array but with behaviors and tagging
-    return arrayWithBehaviors;
-  } else {
-    // Create LoadContentResultArray Variable
-    const loadContentArray = results as LoadContentResult[];
-    
-    // Create Variable with LoadContentResultArray behavior
-    const variable = createLoadContentResultVariable(loadContentArray, {
-      name: 'glob-result',
-      fromGlobPattern: true,
-      globPattern: pattern,
-      fileCount: loadContentArray.length
-    });
-    
-    // Extract the value with behaviors preserved
-    const arrayWithBehaviors = extractVariableValue(variable);
-    
-    // For compatibility, still return the array but with behaviors and tagging
-    return arrayWithBehaviors;
-  }
+
+  // Return the results array directly
+  // The caller will handle wrapping with wrapStructured if needed
+  return results as LoadContentResult[] | string[];
 }
 
 /**
@@ -1195,9 +1172,9 @@ async function applyTransformToResults(
           for (const field of part.fields) {
             if (value && typeof value === 'object') {
               const fieldName = field.value;
-              // Handle .ctx accessor - use the ctx getter on LoadContentResult
-              if (fieldName === 'ctx' && typeof value.ctx === 'object') {
-                value = value.ctx;
+              // Handle .mx accessor - use the mx getter on LoadContentResult
+              if (fieldName === 'mx' && typeof value.mx === 'object') {
+                value = value.mx;
               } else {
                 value = value[fieldName];
               }
@@ -1286,19 +1263,17 @@ function finalizeLoaderResult<T>(
   value: T,
   options?: { type?: StructuredValueType; text?: string; metadata?: StructuredValueMetadata }
 ): T | StructuredValue {
+  // ADD THIS CHECK FIRST - before any other logic
+  if (isLoadContentResult(value)) {
+    return wrapLoadContentValue(value) as any;
+  }
+
   if (isStructuredValue(value)) {
     const metadata = mergeMetadata(value.metadata, options?.metadata);
     if (!options?.type && !options?.text && (!metadata || metadata === value.metadata)) {
       return value;
     }
     return wrapStructured(value, options?.type, options?.text, metadata);
-  }
-
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    const wrapped = wrapLoadContentValue(value);
-    const metadata = mergeMetadata(wrapped.metadata, options?.metadata);
-    const text = options?.text ?? wrapped.text;
-    return wrapStructured(wrapped, wrapped.type, text, metadata);
   }
 
   const inferredType = options?.type ?? inferLoaderType(value);
@@ -1323,11 +1298,16 @@ function deriveLoaderText(value: unknown, type: StructuredValueType): string {
   }
 
   if (type === 'array') {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value ?? '');
+    if (Array.isArray(value)) {
+      // Check if it's an array of LoadContentResult objects
+      if (value.length > 0 && isLoadContentResult(value[0])) {
+        // Concatenate file contents with \n\n separator
+        return value.map(item => item.content ?? '').join('\n\n');
+      }
+      // For other arrays (like string arrays from renamed content)
+      return value.map(item => String(item)).join('\n\n');
     }
+    return String(value ?? '');
   }
 
   if (type === 'object' && value && typeof value === 'object' && 'content' in value && typeof (value as any).content === 'string') {

@@ -9,8 +9,8 @@ export interface PeggyError extends Error {
 
 export interface ErrorPattern {
   name: string;
-  test(error: PeggyError, ctx: ErrorContext): boolean;
-  enhance(error: PeggyError, ctx: ErrorContext): MlldParseError;
+  test(error: PeggyError, mx: ErrorContext): boolean;
+  enhance(error: PeggyError, mx: ErrorContext): MlldParseError;
 }
 
 export interface ErrorContext {

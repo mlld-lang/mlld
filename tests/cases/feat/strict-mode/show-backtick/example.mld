@@ -1,0 +1,6 @@
+var @name = "World"
+show `Hello, @name!`
+
+var @greeting = "Welcome"
+var @user = "Alice"
+show `@greeting, @user!`

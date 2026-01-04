@@ -9,7 +9,7 @@ related-code: sdk/types.ts, sdk/execute.ts, interpreter/index.ts
 
 ## tldr
 
-SDK provides execution modes (document/structured/stream/debug), runtime module injection (dynamicModules), state management (state:// protocol), and programmatic execution (executeRoute, analyzeModule). Built on ExecutionEmitter event bridge and StructuredResult format.
+SDK provides execution modes (document/structured/stream/debug), runtime module injection (dynamicModules), state management (state:// protocol), and programmatic execution (execute, analyzeModule). Built on ExecutionEmitter event bridge and StructuredResult format.
 
 ## Principles
 
@@ -24,7 +24,7 @@ SDK provides execution modes (document/structured/stream/debug), runtime module 
 **Entry points**:
 - `processMlld(script, options)` - Simple API, returns string
 - `interpret(script, options)` - Full control, mode selection
-- `executeRoute(filepath, payload, options)` - File-based execution
+- `execute(filepath, payload, options)` - File-based execution
 - `analyzeModule(filepath, options)` - Static analysis
 
 **Core types**: InterpretMode, StructuredResult, DebugResult, StreamExecution, SDKEvent, StateWrite
@@ -33,7 +33,7 @@ SDK provides execution modes (document/structured/stream/debug), runtime module 
 
 **Effect collection**: DefaultEffectHandler.recordEffects flag enables structured collection
 
-**State management**: state:// protocol captures updates without filesystem writes
+**State management**: state:// protocol captures updates without filesystem writes; @state is a live snapshot during a run (writes mutate the in-run snapshot) and stateWrites describe what to persist
 
 ## Architecture
 
@@ -81,7 +81,7 @@ DynamicModuleResolver (priority 1)
         ├─ String input → parse → AST
         ├─ Object input → serialize → parse → AST
         │
-        └─ Add ctx: { taint: ['src:dynamic'], labels: ['src:dynamic'] }
+        └─ Add mx: { taint: ['src:dynamic'], labels: ['src:dynamic'] }
                 │
                 ▼
         deriveImportTaint()
@@ -113,10 +113,22 @@ Script:                 Runtime:
                        ┌────────────────────┐
                        │ StructuredResult   │
                        │  .stateWrites      │
+                       └────────┬───────────┘
+                                │
+                                ▼
+                       ┌────────────────────┐
+                       │ Live @state        │
+                       │  (snapshot updates │
+                       │   during run)      │
                        └────────────────────┘
 ```
 
 Application persists state; runtime only captures writes.
+
+**Live snapshot rules**:
+- `@state` is injected as a dynamic module (literal strings, no interpolation).
+- `/output ... to state://path` mutates the in-run `@state` snapshot so subsequent `@state` reads/imports see the new value.
+- Persistence is out-of-band via `stateWrites`; pass the saved state back on the next `execute()` call.
 
 ### Event System
 
@@ -141,10 +153,10 @@ Executor (shell/node/bash)
                 StreamExecution.on() handlers
 ```
 
-### executeRoute Flow
+### execute Flow
 
 ```
-executeRoute(filepath, payload, options)
+execute(filepath, payload, options)
         │
         ├─ Check MemoryASTCache (mtime-based)
         │   ├─ Hit: use cached AST
@@ -195,7 +207,7 @@ analyzeModule(filepath)
 - Debug mode disables streaming (captures full trace instead)
 - Effects include security metadata only in structured/stream/debug modes
 - Object modules have size limits (1MB, 10 depth, 1000 keys/arrays)
-- executeRoute caches ASTs in-memory (process lifetime, not persistent)
+- execute caches ASTs in-memory (process lifetime, not persistent)
 
 ## Debugging
 
@@ -227,3 +239,21 @@ if (!analysis.valid) {
   console.error('Parse errors:', analysis.errors);
 }
 ```
+
+## Language Wrappers
+
+Thin CLI wrappers exist for Go, Python, and Rust in `sdk/`. These call the mlld CLI via subprocess and provide idiomatic APIs for each language.
+
+**Design decisions**:
+- Wrap CLI rather than reimplement (full feature parity, zero maintenance)
+- Each wrapper is ~200-300 LOC
+- All provide: `process()`, `execute()`, `analyze()`
+- Require Node.js + mlld CLI at runtime
+
+**When to use wrappers vs native rewrite**:
+- Wrappers: Almost always. Full compatibility, works today.
+- Native: Embedded systems without Node, extreme performance needs, WASM targets.
+
+Even a native rewrite would need to embed a JS runtime (QuickJS, Deno core) to support `/run js` and `/run node` - the JavaScript ecosystem access is a feature.
+
+**Location**: `sdk/go/`, `sdk/python/`, `sdk/rust/`

@@ -1,12 +1,12 @@
 # Guard Composition - Hints Aggregation
 
 /guard @retryA for secret = when [
-  @ctx.guard.try < 2 => retry "hint-a"
+  @mx.guard.try < 2 => retry "hint-a"
   * => allow
 ]
 
 /guard @retryB for secret = when [
-  @ctx.guard.try < 3 => retry "hint-b"
+  @mx.guard.try < 3 => retry "hint-b"
   * => allow
 ]
 

@@ -16,7 +16,7 @@ mlld provides two iteration mechanisms:
 
 Both follow mlld's single-pass evaluation and direct execution principles.
 
-Parallelism also exists in pipelines via `||` groups (see docs/dev/PIPELINE.md). Pipeline parallelism is distinct from iterator parallelism and has different semantics (results are collected as a JSON array and `retry` is not supported inside the group).
+Parallelism also exists in pipelines via `||` groups (see docs/dev/PIPELINE.md). Pipeline parallelism is distinct from iterator parallelism and has different semantics (results are collected as a StructuredValue array and `retry` is not supported inside the group).
 
 ## Principles
 
@@ -45,7 +45,7 @@ The `/for` directive provides simple iteration with two forms:
 Key characteristics:
 - Single action per iteration (no block syntax, but actions can be nested for loops)
 - Child environment per iteration with Variable preservation
-- Object iteration exposes keys via `@var_key` pattern
+- Object iteration exposes keys via `.mx.key` accessor (internal: `@var_key` binding)
 - ForExpression returns ArrayVariable with metadata
 - Error collection continues execution
   
@@ -76,7 +76,7 @@ Key characteristics:
 ### Plain Value Contract
 
 - `/for` and `foreach` call `normalizeIterableValue` (`interpreter/eval/for-utils.ts`) on every collection before iteration. The helper unwraps StructuredValues and Variables into plain JavaScript arrays/objects while attaching provenance via `ExpressionProvenance`. User-visible data (loop bodies, `/for` expression results, foreach tuples, batch inputs) therefore contains raw values without `.data` detours.
-- Provenance-aware consumers materialize labels on demand. Guard hooks run `materializeGuardInputs()` to build Variables from the provenance registry, and ArrayHelpers/when-conditions continue to see `.ctx.labels` even though the loop returned primitives.
+- Provenance-aware consumers materialize labels on demand. Guard hooks run `materializeGuardInputs()` to build Variables from the provenance registry, and ArrayHelpers/when-conditions continue to see `.mx.labels` even though the loop returned primitives.
 - Normalization stops at executable Variables so higher-order helpers receive callable objects. Keep function arrays in executable form when assembling operation lists; the helper preserves them automatically.
 
 ### Evaluation Patterns
@@ -147,7 +147,7 @@ throw new MlldDirectiveError(
 ## Parallelism: Iterators vs Pipelines
 
 - Iterators (`/for`) run sequentially by default and support parallel execution.
-- Pipelines support parallel groups: `A || B || C` executes a single stage concurrently. Outputs are collected in declaration order and passed as a JSON array string to the next stage. Concurrency is limited by `MLLD_PARALLEL_LIMIT`.
+- Pipelines support parallel groups: `A || B || C` executes a single stage concurrently. Outputs are collected in declaration order as a StructuredValue array (`.data` is the array, `.text` is JSON). Concurrency is limited by `MLLD_PARALLEL_LIMIT`.
 - `retry` is not supported from inside a pipeline parallel group; design validation in the following stage and request an upstream retry if needed. Per‑command rate‑limit errors inside the group use exponential backoff.
 
 See also: `docs/dev/PIPELINE.md` (Parallel Execution) for shorthand rules (no leading `||`), with-clause nested-group syntax, and effect behavior on parallel groups.
@@ -190,8 +190,9 @@ Syntax options:
 Semantics:
 - Concurrency cap: defaults to `MLLD_PARALLEL_LIMIT` (env), overridable per loop; cap never exceeds collection length.
 - Pacing: optional minimum delay between iteration starts; `parallel(n, 1s)` adds ~1 second between starts across the loop.
-- Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff.
-- Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is `null`.
+- Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff; block bodies run in isolated iteration scopes and aggregate errors into `@mx.errors` instead of failing the loop.
+- Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is an error marker `{ index, key?, message, error, value }`; `@mx.errors` is reset at loop start and populated for parallel loops.
+- Parallel block bodies are supported; augmented assignments to variables defined outside the iteration scope fail and record an error marker. Each iteration shares read-only access to outer values but cannot mutate them.
 - Nested loops: inner loops inherit outer `forOptions` unless overridden.
 
 Implementation references:

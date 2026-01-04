@@ -11,9 +11,9 @@
 /var secret @token = "abc"
 
 /exe @process(value) = when [
-  denied => show `decision: @ctx.guard.decision`
-  denied => show `hint: @ctx.guard.hints[0].hint`
-  denied => show `reason: @ctx.guard.reason`
+  denied => show `decision: @mx.guard.decision`
+  denied => show `hint: @mx.guard.hints[0].hint`
+  denied => show `reason: @mx.guard.reason`
   * => show "should not run"
 ]
 

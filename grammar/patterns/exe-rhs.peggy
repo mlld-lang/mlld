@@ -42,6 +42,7 @@ ExeRHSContent "exe assignment value"
   / ExeTemplateFromFilePattern  // template "path" - external template file
   / ExeTemplatePattern          // [[...]] and `...` - inline template executables
   / ExeSectionPattern           // [@file # section] - section extraction
+  / ExeStatementBlock           // [ ... ] - statement block for exe definitions
   / ExeResolverPattern          // @resolver/path - resolver patterns
   / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
 
@@ -143,13 +144,11 @@ ExeRunCommandWithStdin "exe run command with stdin"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases,
+          ...content.values,
           withClause: withClause
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases,
+          ...content.raw,
           withClause: withClause
         },
         meta: {
@@ -162,7 +161,7 @@ ExeRunCommandWithStdin "exe run command with stdin"
 // Run command pipe stdin pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+  = "run" _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
       if (tail) {
         Object.assign(withClause, tail);
@@ -171,13 +170,11 @@ ExeRunCommandPipeStdin "exe run command pipe stdin"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases,
+          ...content.values,
           withClause
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases,
+          ...content.raw,
           stdinExpr: stdinExpr.type === 'VariableReference' ? '@' + stdinExpr.identifier : 'expression',
           ...(tail ? { tailModifiers: tail } : {})
         },
@@ -201,13 +198,11 @@ ExeStreamCommandPattern "exe stream command pattern"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases,
+          ...content.values,
           withClause
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases,
+          ...content.raw,
           ...(tail ? { tailModifiers: tail } : {}),
           stream: true
         },
@@ -227,12 +222,10 @@ ExeRunCommandPattern "exe run command pattern"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases
+          ...content.values
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases
+          ...content.raw
         },
         meta: content.meta
       };
@@ -245,14 +238,10 @@ ExeCodePattern "exe code pattern"
         subtype: 'exeCode',
         source: 'code',
         values: {
-          lang: codeCore.values.lang,
-          args: codeCore.values.args,
-          code: codeCore.values.code
+          ...codeCore.values
         },
         raw: {
-          lang: codeCore.raw.lang,
-          args: codeCore.raw.args,
-          code: codeCore.raw.code
+          ...codeCore.raw
         },
         meta: codeCore.meta
       };
@@ -265,12 +254,10 @@ ExeCommandPattern "exe command pattern"
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases
+          ...content.values
         },
         raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases
+          ...content.raw
         },
         meta: content.meta
       };
@@ -412,6 +399,170 @@ ExeEnvironmentDeclaration "exe environment declaration"
     }
 
 // -------------------------------------------------------------
+// EXE STATEMENT BLOCKS
+// -------------------------------------------------------------
+
+ExeStatementBlock "exe statement block"
+  = "[" _ body:ExeBlockBody _ "]" {
+      const statements = body.statements || [];
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
+      const normalizedStatements = statements.flatMap(normalize);
+      const hasReturn = !!body.returnStmt;
+      return helpers.createNode('ExeBlock', {
+        values: {
+          statements: normalizedStatements,
+          ...(body.returnStmt ? { return: body.returnStmt } : {})
+        },
+        raw: {
+          statements: helpers.reconstructRawString(normalizedStatements),
+          hasReturn
+        },
+        meta: {
+          statementCount: normalizedStatements.length,
+          hasReturn
+        },
+        location: location()
+      });
+    }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'ExeBlockBody',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block. Expected ']' to close the block.`,
+        "]",
+        location()
+      );
+    }
+
+ExeBlockBody
+  = statements:ExeBlockStatementList firstReturn:(
+      BlockStatementSeparator ret:ExeReturnStatement { return ret; }
+    / _ ret:ExeReturnStatement { return ret; }
+    )
+    extraReturn:(BlockStatementSeparator ExeReturnStatement { return true; })?
+    trailing:(BlockStatementSeparator ExeBlockStatement { return true; })? {
+      if (extraReturn) {
+        helpers.mlldError(
+          'Multiple return statements in exe block. Only one return allowed as last statement.',
+          'single return',
+          location()
+        );
+      }
+      if (trailing) {
+        helpers.mlldError(
+          'Return must be the last statement in a block.',
+          'end of block',
+          location()
+        );
+      }
+      return {
+        statements,
+        returnStmt: firstReturn
+      };
+    }
+  / statements:ExeBlockStatementList {
+      return {
+        statements,
+        returnStmt: null
+      };
+    }
+  / leadingComments:LeadingBlockComment* _ ret:ExeReturnStatement {
+      return {
+        statements: [],
+        returnStmt: ret
+      };
+    }
+
+ExeBlockStatementList
+  = leadingComments:LeadingBlockComment* _ first:ExeBlockStatement rest:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })* trailing:BlockComments* {
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt.flat() : [stmt];
+      const stmts = [...normalize(first), ...rest.flatMap(normalize)];
+      // Attach leading comments to first statement's meta (immutable update)
+      if (leadingComments.length > 0 && stmts.length > 0) {
+        const firstStmt = stmts[0];
+        if (firstStmt && typeof firstStmt === 'object') {
+          const existingMeta = firstStmt.meta || {};
+          stmts[0] = {
+            ...firstStmt,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return stmts;
+    }
+  / BlockComments+ { return []; }
+
+ExeBlockStatement
+  = LetAssignment
+  / AugmentedAssignment
+  / WhenExpressionAny
+  / ForNestedDirective
+  / ExeBlockAction
+
+ExeBlockAction
+  = RunBlockAction
+  / EffectAction
+  / WhenRHSVarAssignment
+  / WhenRHSCommandAction
+  / WhenRHSFunctionCall
+  / WhenRHSSkipAction
+  / WhenRHSRetryAction
+  / WhenRHSVariableReference
+  / DoneLiteral
+  / ContinueLiteral
+  / ExeForeachPattern
+  / ExeDataPattern
+
+ExeReturnStatement "exe return statement"
+  = "=>" _ value:ExeReturnValue? noise:BlockComments* {
+      const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
+      return helpers.createNode('ExeReturn', {
+        values: normalized,
+        raw: text(),
+        meta: {
+          hasValue: normalized.length > 0
+        },
+        location: location()
+      });
+    }
+
+ExeReturnValue
+  = WhenRHSAction
+
+// -------------------------------------------------------------
 // HELPER RULES (no conflicts with exe.peggy versions)
 // -------------------------------------------------------------
 
@@ -419,6 +570,12 @@ ExeEnvironmentDeclaration "exe environment declaration"
 // Must contain at least one slash to distinguish from simple identifiers like "run"
 ResolverPathPattern
   = chars:$([a-zA-Z0-9_@-]+ "/" [a-zA-Z0-9_/@-]*) { return chars; }
+
+// Stdin expressions for pipe sugar allow variables even when followed by tail modifiers
+PipeStdinExpression
+  = "(" _ expr:Expression _ ")" { return expr; }
+  / VariableForPipeline
+  / Expression
 
 // ExecResolverPayload - optional payload syntax: { @variable }
 ExecResolverPayload
@@ -444,8 +601,47 @@ ExecAsNewTitle
 // Purpose: Allow when: [...] expressions that return values based on first matching condition
 
 WhenExpression "when expression"
+  // Bound-value: when <expr> [patterns] or when <expr> first [patterns]
+  = "when" _ boundValue:Expression _ modifier:WhenExprModifier? _ "[" _ entries:WhenBoundExpressionConditionList _ "]" tail:TailModifiers? {
+      const boundOffset =
+        boundValue && typeof boundValue === 'object' && boundValue.location && boundValue.location.start
+          ? boundValue.location.start.offset
+          : location().start.offset;
+      const boundIdentifier = `__when_bound_${boundOffset}`;
+
+      const conditions = entries.map((entry) => {
+        if (entry && typeof entry === 'object' && 'pattern' in entry) {
+          const conditionExpr = helpers.buildWhenBoundPatternExpression(boundIdentifier, entry.pattern);
+          return { condition: [conditionExpr], action: entry.action };
+        }
+        return entry;
+      });
+
+      helpers.debug('WhenExpression matched', { 
+        conditionCount: conditions.length,
+        hasTailModifiers: !!tail,
+        modifier: modifier,
+        hasBoundValue: true
+      });
+      
+      return helpers.createWhenExpression(conditions, tail, location(), modifier, { boundIdentifier, boundValue });
+    }
+  / "when" _ boundValue:Expression _ modifier:WhenExprModifier? _ "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenBoundExpressionConditionList',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
   // Standard: when [ ... ] or when first [ ... ]
-  = "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
+  / "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
         hasTailModifiers: !!tail,
@@ -454,7 +650,28 @@ WhenExpression "when expression"
       
       return helpers.createWhenExpression(conditions, tail, location(), modifier);
     }
+  / "when" _ modifier:WhenExprModifier? _ "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenExpressionConditionList',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
   // Error recovery: Missing bracket after when
+  / "when" _ Expression _ WhenExprModifier? _ !"[" {
+      helpers.mlldError(
+        `Missing condition list in when expression. Expected: when @value [pattern => value, ...]`,
+        "[",
+        location()
+      );
+    }
   / "when" _ WhenExprModifier? _ !"[" {
       helpers.mlldError(
         `Missing condition list in when expression. Expected: when [condition => value, ...]`,
@@ -488,32 +705,86 @@ WhenExpression "when expression"
         location()
       );
     }
-  / "when" _ WhenExprModifier? _ !"[" {
-      helpers.mlldError(
-        `Missing condition list in when expression. Expected: when [condition => value, ...]`,
-        "[",
-        location()
-      );
+
+// Bound pattern list for when expressions
+WhenBoundExpressionConditionList
+  = leadingComments:LeadingBlockComment* _ first:WhenBoundExpressionEntry rest:(WhenConditionSeparator entry:WhenBoundExpressionEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return entries;
     }
+  / BlockComments+ { return []; }
+
+WhenBoundExpressionEntry
+  = LetAssignment
+  / AugmentedAssignment
+  / WhenBoundExpressionConditionPair
+
+WhenBoundExpressionConditionPair
+  = pattern:WhenBoundPatternExpression _ "=>" _ action:WhenExpressionAction {
+      const act = Array.isArray(action) ? action : [action];
+      return { pattern, action: act };
+    }
+
+WhenBoundPatternExpression
+  = WhenBoundPatternOr
+
+WhenBoundPatternOr
+  = first:WhenBoundPatternAnd rest:(_ "||" _ right:WhenBoundPatternAnd { return { op: "||", right }; })* {
+      if (!rest || rest.length === 0) return first;
+      return { kind: 'logical', first, rest, location: location() };
+    }
+
+WhenBoundPatternAnd
+  = first:WhenBoundPatternAtom rest:(_ "&&" _ right:WhenBoundPatternAtom { return { op: "&&", right }; })* {
+      if (!rest || rest.length === 0) return first;
+      return { kind: 'logical', first, rest, location: location() };
+    }
+
+WhenBoundPatternAtom
+  = "(" _ inner:WhenBoundPatternExpression _ ")" { return inner; }
+  / wc:WildcardLiteral { return { kind: 'wildcard', node: wc, location: location() }; }
+  / op:UnifiedComparisonOp _ right:Expression { return { kind: 'compare', op, right, location: location() }; }
+  / value:Expression { return { kind: 'equals', value, location: location() }; }
 
 // Optional modifier for when-expression in /exe RHS (currently supports 'first')
 WhenExprModifier = mod:("first") { return mod; }
 
 // Value-oriented condition list for when expressions
+// Reuses WhenConditionSeparator from when.peggy (shared abstraction)
 WhenExpressionConditionList
-  = first:WhenExpressionEntry rest:(_ (
-      "," {
-        helpers.mlldError(
-          "Unexpected ',' in when condition list. Separate conditions with whitespace or newlines (no commas).",
-          ",",
-          location()
-        );
+  = leadingComments:LeadingBlockComment* _ first:WhenExpressionEntry rest:(WhenConditionSeparator entry:WhenExpressionEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
       }
-    / entry:WhenExpressionEntry { return entry; }
-    ))* {
-      const restEntries = rest.map(entry => entry && entry[1]).filter(Boolean);
-      return [first, ...restEntries];
+      return entries;
     }
+  / BlockComments+ { return []; }
 
 // Single entry in a when expression - let assignment, augmented assignment, or condition pair
 WhenExpressionEntry
@@ -531,7 +802,21 @@ WhenExpressionConditionPair
 
 // Actions in when expressions - for /exe context, supports both side effects and return values
 WhenExpressionAction
-  = WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
+  = block:ExeStatementBlock { return block; }
+  / WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
+
+// Inline single-condition when expression (no brackets)
+WhenExpressionInline
+  = "when" _ condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
+      const act = Array.isArray(action) ? action : [action];
+      const conditions = [{ condition: [condition], action: act }];
+      return helpers.createWhenExpression(conditions, null, location(), null);
+    }
+
+// Alias to allow both inline and bracketed when expressions
+WhenExpressionAny
+  = WhenExpressionInline
+  / WhenExpression
 
 // -------------------------------------------------------------
 // FOR EXPRESSION - Iteration with directive action support for executable assignments
@@ -541,20 +826,62 @@ WhenExpressionAction
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:WhenRHSAction batchPipe:ForBatchPipeline? {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
+      const hasNoneCondition = Array.isArray(whenExpr.conditions) && whenExpr.conditions.some((entry) => {
+        const condition = entry && entry.condition;
+        return Array.isArray(condition) &&
+          condition.length === 1 &&
+          condition[0]?.type === NodeType.Literal &&
+          condition[0]?.valueType === 'none';
+      });
+
+      let normalizedWhen = whenExpr;
+      if (!hasNoneCondition) {
+        const loc = whenExpr.location || location();
+        const noneLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'none',
+          valueType: 'none',
+          location: loc
+        });
+        const skipLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'skip',
+          valueType: 'skip',
+          location: loc
+        });
+        const conditions = [...whenExpr.conditions, { condition: [noneLiteral], action: [skipLiteral] }];
+        normalizedWhen = helpers.createWhenExpression(
+          conditions,
+          whenExpr.withClause || null,
+          loc,
+          whenExpr.meta?.modifier || null
+        );
+      }
+
+      helpers.debug('ForExpressionExe when-filter matched', { pattern, hasNoneCondition });
+
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source, 
+        [normalizedWhen],  // Accepts directive actions or block statements
+        location(),
+        opts || null,
+        batchPipe || null
+      );
+    }
+  / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionExeBody batchPipe:ForBatchPipeline? {
       helpers.debug('ForExpressionExe matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
-        action,  // Note: accepts WhenRHSAction instead of VarRHSContent
+        action,  // Accepts directive actions or block statements
         location(),
         opts || null,
         batchPipe || null
       );
     }
   // Error recovery
-  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !"=>" {
+  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !( "=>" / "[" ) {
       helpers.mlldError("Missing '=>' in for expression. Expected: for @var in @collection => action", "=>", location());
     }
   / "for" _ "@" id:BaseIdentifier _ !"in" {
@@ -563,3 +890,7 @@ ForExpressionExe "for expression with actions"
   / "for" _ !"each" _ !"@" {
       helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => action", "@", location());
     }
+
+ForExpressionExeBody
+  = "=>" _ action:ForExpressionAction { return action; }
+  / block:ForBlockAction { return block.statements; }

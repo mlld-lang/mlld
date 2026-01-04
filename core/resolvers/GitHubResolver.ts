@@ -158,7 +158,7 @@ export class GitHubResolver implements Resolver {
       return {
         content: cached.content,
         contentType,
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }
@@ -188,7 +188,7 @@ export class GitHubResolver implements Resolver {
       return {
         content,
         contentType,
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     } catch (error) {
@@ -619,7 +619,8 @@ export class GitHubResolver implements Resolver {
    */
   private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
     // Check file extension
-    if (filePath.endsWith('.mld') || filePath.endsWith('.mlld')) {
+    if (filePath.endsWith('.mld') || filePath.endsWith('.mld.md') ||
+        filePath.endsWith('.mlld') || filePath.endsWith('.mlld.md')) {
       return 'module';
     }
     if (filePath.endsWith('.json')) {

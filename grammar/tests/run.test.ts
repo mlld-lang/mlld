@@ -8,7 +8,7 @@ describe('Run directive', () => {
       const content = '/run {ls -la}';
       const parseResult = await parse(content);
       
-      // The tests now pass with a single directive node in the AST
+      // The tests pass with a single directive node in the AST
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
@@ -18,7 +18,7 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.command).toBeDefined();
-      // Command is now tokenized into parts
+      // Command tokenizes into parts
       expect(directiveNode.values.command).toHaveLength(3); // 'ls', ' ', '-la'
       expect(directiveNode.values.command[0].content).toBe('ls');
       expect(directiveNode.values.command[1].content).toBe(' ');
@@ -27,6 +27,26 @@ describe('Run directive', () => {
       expect(directiveNode.meta.isMultiLine).toBe(false);
       
       // Type guard
+      expect(isRunCommandDirective(directiveNode)).toBe(true);
+    });
+
+    test('Command stdin pipe sugar', async () => {
+      const content = '/run @data | cmd {cat}';
+      const parseResult = await parse(content);
+
+      expect(parseResult.ast).toHaveLength(1);
+
+      const directiveNode: any = parseResult.ast[0];
+      expect(directiveNode.type).toBe('Directive');
+      expect(directiveNode.kind).toBe('run');
+      expect(directiveNode.subtype).toBe('runCommand');
+
+      expect(directiveNode.values.withClause).toBeDefined();
+      expect(directiveNode.values.withClause.stdin).toBeDefined();
+      expect(directiveNode.values.withClause.stdin.type).toBe('VariableReference');
+      expect(directiveNode.values.withClause.stdin.identifier).toBe('data');
+
+      expect(directiveNode.raw.command).toBe('cat');
       expect(isRunCommandDirective(directiveNode)).toBe(true);
     });
     
@@ -64,7 +84,7 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.command).toBeDefined();
-      // Command is now tokenized: 'ls', ' ', '-la', ' ', '@directory'
+      // Command tokenizes: 'ls', ' ', '-la', ' ', '@directory'
       expect(directiveNode.values.command.length).toBeGreaterThanOrEqual(4);
       expect(directiveNode.values.command[0].content).toBe('ls');
       expect(directiveNode.values.command[2].content).toBe('-la');

@@ -1,12 +1,12 @@
 export const pattern = {
   name: 'field-access-array',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Match errors about field access on LoadContentResultArray
     return error.message && error.message.includes('not found in LoadContentResultArray');
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract the field name being accessed
     const fieldMatch = error.message.match(/Field "([^"]+)" not found/);
     const fieldName = fieldMatch ? fieldMatch[1] : 'unknown';
@@ -15,10 +15,10 @@ export const pattern = {
     let contextLine = '';
     let suggestion = '';
     
-    if (ctx.code) {
+    if (mx.code) {
       // Look for patterns like @files.filename
       const accessPattern = new RegExp(`@\\w+\\.${fieldName}`, 'g');
-      const matches = ctx.code.match(accessPattern);
+      const matches = mx.code.match(accessPattern);
       if (matches && matches.length > 0) {
         contextLine = matches[0];
         const varName = contextLine.split('.')[0];

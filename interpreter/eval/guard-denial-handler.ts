@@ -49,7 +49,7 @@ export async function handleExecGuardDenial(
       const clonedOutput: Variable = {
         ...outVar,
         name: 'output',
-        ctx: { ...(outVar.ctx ?? {}) },
+        mx: { ...(outVar.mx ?? {}) },
         internal: {
           ...(outVar.internal ?? {}),
           isSystem: true,
@@ -103,7 +103,7 @@ function maybeInjectGuardInputVariable(execEnv: Environment, value: unknown) {
   const clonedInput: Variable = {
     ...variable,
     name: 'input',
-    ctx: { ...(variable.ctx ?? {}) },
+    mx: { ...(variable.mx ?? {}) },
     internal: {
       ...(variable.internal ?? {}),
       isSystem: true,

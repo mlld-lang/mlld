@@ -1,2 +1,0 @@
-/append @payload to "events.jsonl"
-/append "raw text entry" to "events.log"

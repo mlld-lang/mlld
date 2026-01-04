@@ -5,8 +5,8 @@
 /exe @id(input) = js { return input }
 
 /exe @validate() = when first [
-  @ctx.try < 3 => retry
-  * => `ok @input try=@ctx.try`
+  @mx.try < 3 => retry
+  * => `ok @input try=@mx.try`
 ]
 
 /for @seed in @seeds => show @seed | @id | @left || @right | @validate()

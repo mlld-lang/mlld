@@ -12,7 +12,7 @@ import { ImportType, DataLabel } from './security';
 /**
  * Base Import directive node
  */
-export interface ImportDirectiveNode extends TypedDirectiveNode<'import', 'importAll' | 'importSelected' | 'importNamespace'> {
+export interface ImportDirectiveNode extends TypedDirectiveNode<'import', 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy'> {
   values: ImportValues;
   raw: ImportRaw;
   meta: ImportMeta;
@@ -25,6 +25,7 @@ export interface ImportAllDirectiveNode extends ImportDirectiveNode {
   subtype: 'importAll';
   values: {
     imports: [ImportWildcardNode]; // Always a single-item array with '*'
+    namespace?: ImportValues['namespace'];
     path: ImportValues['path'];
     importType?: ImportType;
     cachedDuration?: TimeDurationNode;
@@ -40,6 +41,7 @@ export interface ImportSelectedDirectiveNode extends ImportDirectiveNode {
   subtype: 'importSelected';
   values: {
     imports: ImportReferenceNode[]; // One or more items
+    namespace?: ImportValues['namespace'];
     path: ImportValues['path'];
     importType?: ImportType;
     cachedDuration?: TimeDurationNode;
@@ -55,6 +57,20 @@ export interface ImportNamespaceDirectiveNode extends ImportDirectiveNode {
   subtype: 'importNamespace';
   values: {
     imports: [ImportWildcardNode]; // Always a single-item array with '*' and alias
+    namespace?: ImportValues['namespace'];
+    path: ImportValues['path'];
+    importType?: ImportType;
+    cachedDuration?: TimeDurationNode;
+    withClause?: WithClause;
+    securityLabels?: DataLabel[];
+  };
+}
+
+export interface ImportPolicyDirectiveNode extends ImportDirectiveNode {
+  subtype: 'importPolicy';
+  values: {
+    imports: [ImportWildcardNode];
+    namespace: ImportValues['namespace'];
     path: ImportValues['path'];
     importType?: ImportType;
     cachedDuration?: TimeDurationNode;

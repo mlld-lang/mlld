@@ -8,6 +8,7 @@ on:
       - 'docs/**'
       - 'website/**'
       - 'llms.txt'
+      - 'llms-combined.txt'
       - '.github/workflows/pages.yml'
   
   # Allows you to run this workflow manually from the Actions tab
@@ -45,12 +46,26 @@ jobs:
       - name: Build
         working-directory: website
         run: npm run build
-      
+
+      - name: Copy llms.txt files to site root
+        run: |
+          # Copy module files
+          cp docs/llm/llms-*.txt website/_site/
+
+          # Copy combined file
+          cp llms-combined.txt website/_site/
+
+          # Create entry point with website URLs
+          sed 's|docs/llm/llms-|https://mlld.ai/llms-|g; s|llms-combined\.txt|https://mlld.ai/llms-combined.txt|g' llms.txt > website/_site/llms.txt
+
+          echo "Copied llms.txt files to website/_site/"
+          ls -la website/_site/llms*.txt
+
       - name: Create .nojekyll file
         run: touch website/_site/.nojekyll
       
       - name: Create CNAME file
-        run: echo "meld.sh" > website/_site/CNAME
+        run: echo "mlld.ai" > website/_site/CNAME
       
       - name: Setup Pages
         uses: actions/configure-pages@v4

@@ -82,7 +82,7 @@ When you’re done testing, uninstall the local extension from the Extensions pa
 Semantic highlighting powered by the Language Server Protocol:
 
 - **Context-aware highlighting**: Variables highlighted differently based on usage (declaration vs reference vs interpolation)
-- **Directives**: `/var`, `/show`, `/run`, `/exe`, `/import`, `/when`, `/output`, `/path`, `/log`
+- **Directives**: `/var`, `/show`, `/run`, `/exe`, `/import`, `/when`, `/for`, `/while`, `/stream`, `/guard`, `/output`, `/append`, `/path`, `/log`
 - **Variables**: `@variableName` with field access (`@user.name`) and array indexing (`@items[0]`)
 - **Operators**: `&&`, `||`, `==`, `!=`, `!`, `?:`, `>`, `<`, `>=`, `<=`
 - **Templates**: 
@@ -114,7 +114,8 @@ The mlld language server provides advanced IDE features:
 
 ### Smart File Detection
 
-- `.mlld` and `.mld` files are automatically recognized
+- `.mld` files use **strict mode**: bare directives (`var`, `show`) work without `/` prefix
+- `.mld.md` files use **markdown mode**: require `/` prefix, prose content allowed
 - `.md` files switch to mlld mode when directives are detected
 - Manual switching via Command Palette: "mlld: Switch to mlld Mode"
 

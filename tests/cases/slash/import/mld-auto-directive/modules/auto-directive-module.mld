@@ -1,0 +1,3 @@
+/var @test = "value"
+/var @other = "another"
+/export { @test, @other }

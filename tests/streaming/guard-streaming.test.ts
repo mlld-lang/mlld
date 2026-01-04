@@ -2,19 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { interpret } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { startStreamRecorder } from '../helpers/stream-recorder';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 describe('Guards with streaming', () => {
   const fs = new NodeFileSystem();
   const pathService = new PathService();
+  let manager: StreamingManager;
 
   beforeEach(() => {
-    getStreamBus().clear();
-  });
-
-  afterEach(() => {
-    getStreamBus().clear();
+    manager = new StreamingManager();
   });
 
   it('runs before guards while streaming and still emits chunks', async () => {
@@ -26,10 +23,11 @@ describe('Guards with streaming', () => {
 /run stream sh { echo "one"; sleep 0.05; echo "two" }
 `;
 
-    const recorder = startStreamRecorder();
+    const recorder = startStreamRecorder(manager.getBus());
     const result = await interpret(script, {
       fileSystem: fs,
       pathService,
+      streamingManager: manager,
       streaming: { enabled: true }
     });
     recorder.stop();
@@ -50,9 +48,9 @@ describe('Guards with streaming', () => {
 /run stream sh { echo "streaming guard" }
 `;
 
-    const recorder = startStreamRecorder();
+    const recorder = startStreamRecorder(manager.getBus());
     await expect(
-      interpret(script, { fileSystem: fs, pathService, streaming: { enabled: true } })
+      interpret(script, { fileSystem: fs, pathService, streamingManager: manager, streaming: { enabled: true } })
     ).rejects.toThrow(/Cannot run after-guards when streaming is enabled/);
     recorder.stop();
 

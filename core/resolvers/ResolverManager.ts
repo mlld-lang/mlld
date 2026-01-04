@@ -94,23 +94,34 @@ export class ResolverManager {
     }
 
     // Validate against security policy
-    if (this.securityPolicy.allowedResolvers && 
+    if (this.securityPolicy.allowedResolvers &&
         !this.securityPolicy.allowedResolvers.includes(resolver.name)) {
       throw new Error(`Resolver '${resolver.name}' is not in the allowed list`);
     }
 
     this.resolvers.set(resolver.name, resolver);
-    
+
+    // Register aliases if any (e.g., @root as alias for @base)
+    const aliases = (resolver as { aliases?: string[] }).aliases || [];
+    for (const alias of aliases) {
+      if (!this.resolvers.has(alias)) {
+        this.resolvers.set(alias, resolver);
+        this.resolverNamesCache.add(alias);
+        this.resolverNamesCache.add(alias.toUpperCase());
+        this.resolverNamesCache.add(alias.toLowerCase());
+      }
+    }
+
     // Add to priority-sorted array
     this.resolversByPriority.push(resolver);
     this.resolversByPriority.sort((a, b) => a.capabilities.priority - b.capabilities.priority);
-    
+
     // Update resolver names cache with all variants
     this.resolverNamesCache.add(resolver.name);
     this.resolverNamesCache.add(resolver.name.toUpperCase());
     this.resolverNamesCache.add(resolver.name.toLowerCase());
-    
-    logger.debug(`Registered resolver: ${resolver.name} (priority: ${resolver.capabilities.priority})`);
+
+    logger.debug(`Registered resolver: ${resolver.name} (priority: ${resolver.capabilities.priority})${aliases.length > 0 ? `, aliases: ${aliases.join(', ')}` : ''}`);
   }
 
   /**
@@ -206,8 +217,8 @@ export class ResolverManager {
       const files = await fs.readdir(basePath);
 
       for (const file of files) {
-        // Check for all valid mlld extensions
-        if (file.endsWith('.mlld.md') || file.endsWith('.mld.md') ||
+        // Check for all valid module extensions
+        if (file.endsWith('.mld.md') || file.endsWith('.mlld.md') ||
             file.endsWith('.mld') || file.endsWith('.md')) {
           try {
             const filePath = path.join(basePath, file);
@@ -312,7 +323,7 @@ export class ResolverManager {
   }
 
   private stripModuleExtension(module: string): string {
-    const extensions = ['.mlld.md', '.mld.md', '.mlld', '.mld', '.md'];
+    const extensions = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'];
     for (const ext of extensions) {
       if (module.endsWith(ext)) {
         return module.slice(0, -ext.length);
@@ -366,7 +377,7 @@ export class ResolverManager {
                 content: {
                   content: cached.content,
                   contentType: cached.contentType || 'module', // Default to module if not stored
-                  ctx: metadata,
+                  mx: metadata,
                   metadata
                 },
                 resolverName: 'cache',
@@ -487,8 +498,8 @@ export class ResolverManager {
             ...content.metadata,
             hash: cacheEntry.hash
           };
-          content.ctx = {
-            ...(content.ctx ?? content.metadata ?? {}),
+          content.mx = {
+            ...(content.mx ?? content.metadata ?? {}),
             hash: cacheEntry.hash
           };
           
@@ -515,10 +526,10 @@ export class ResolverManager {
 
       // Check for dirty state if not using LOCAL resolver
       if (resolver.name !== 'LOCAL' && prefixConfig?.config?.basePath) {
-        // Add .mlld.md extension if not present
+        // Add .mld.md extension if not present
         let fileName = resolverRef;
         if (!fileName.includes('.')) {
-          fileName += '.mlld.md';
+          fileName += '.mld.md';
         }
         const localPath = path.join(process.cwd(), prefixConfig.config.basePath, fileName);
         

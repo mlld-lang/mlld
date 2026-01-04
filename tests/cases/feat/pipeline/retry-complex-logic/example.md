@@ -1,9 +1,9 @@
 # Complex Retry Logic Test
 
 /exe @qualityScorer(input) = js {
-  // Generate different scores based on attempt - @ctx.try is ambient
+  // Generate different scores based on attempt - @mx.try is ambient
   const scores = [0.2, 0.6, 0.9, 0.95, 0.85];
-  const score = scores[ctx.try - 1] || 0.8;
+  const score = scores[mx.try - 1] || 0.8;
   return `score:${score}:${input}`;
 }
 

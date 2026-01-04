@@ -250,18 +250,49 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
-          // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
+          // Emit intents for non-directive nodes (preserves document structure with break collapsing)
           if (isText(n)) {
-            const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // If Text node contains only newlines, emit as collapsible breaks
+            if (/^\n+$/.test(n.content)) {
+              for (let i = 0; i < n.content.length; i++) {
+                env.emitIntent({
+                  type: 'break',
+                  value: '\n',
+                  source: 'newline',
+                  visibility: 'always',
+                  collapsible: true
+                });
+              }
+            } else {
+              const materialized = materializeDisplayValue(n.content, undefined, n.content);
+              env.emitIntent({
+                type: 'content',
+                value: materialized.text,
+                source: 'text',
+                visibility: 'always',
+                collapsible: false
+              });
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
             }
           } else if (isNewline(n)) {
-            env.emitEffect('doc', '\n');
+            env.emitIntent({
+              type: 'break',
+              value: '\n',
+              source: 'newline',
+              visibility: 'always',
+              collapsible: true
+            });
           } else if (isCodeFence(n)) {
             const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
+            env.emitIntent({
+              type: 'content',
+              value: materialized.text,
+              source: 'text',
+              visibility: 'always',
+              collapsible: false
+            });
             if (materialized.descriptor) {
               env.recordSecurityDescriptor(materialized.descriptor);
             }
@@ -292,7 +323,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
         const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
-        
+
         // Add all nodes to environment for document reconstruction
         // This enables /output directive to recreate the complete document
         if (!context?.isExpression) {
@@ -311,18 +342,49 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
-          // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
+          // Emit intents for non-directive nodes (preserves document structure with break collapsing)
           if (isText(n)) {
-            const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // If Text node contains only newlines, emit as collapsible breaks
+            if (/^\n+$/.test(n.content)) {
+              for (let i = 0; i < n.content.length; i++) {
+                env.emitIntent({
+                  type: 'break',
+                  value: '\n',
+                  source: 'newline',
+                  visibility: 'always',
+                  collapsible: true
+                });
+              }
+            } else {
+              const materialized = materializeDisplayValue(n.content, undefined, n.content);
+              env.emitIntent({
+                type: 'content',
+                value: materialized.text,
+                source: 'text',
+                visibility: 'always',
+                collapsible: false
+              });
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
             }
           } else if (isNewline(n)) {
-            env.emitEffect('doc', '\n');
+            env.emitIntent({
+              type: 'break',
+              value: '\n',
+              source: 'newline',
+              visibility: 'always',
+              collapsible: true
+            });
           } else if (isCodeFence(n)) {
             const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitEffect('doc', materialized.text);
+            env.emitIntent({
+              type: 'content',
+              value: materialized.text,
+              source: 'text',
+              visibility: 'always',
+              collapsible: false
+            });
             if (materialized.descriptor) {
               env.recordSecurityDescriptor(materialized.descriptor);
             }
@@ -409,8 +471,14 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
   
   if (isCodeFence(node)) {
-    // Emit code fence content as 'doc' effect
-    env.emitEffect('doc', node.content);
+    // Emit code fence content as content intent
+    env.emitIntent({
+      type: 'content',
+      value: node.content,
+      source: 'text',
+      visibility: 'always',
+      collapsible: false
+    });
     return { value: node.content, env };
   }
   
@@ -418,8 +486,14 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     // Handle mlld-run blocks by evaluating their content
     if (node.error) {
       // If there was a parse error, output it as text
-      // Emit error as a 'doc' effect
-      env.emitEffect('doc', `Error in mlld-run block: ${node.error}`);
+      // Emit error as error intent
+      env.emitIntent({
+        type: 'error',
+        value: `Error in mlld-run block: ${node.error}`,
+        source: 'directive',
+        visibility: 'always',
+        collapsible: false
+      });
       return { value: node.error, env };
     }
     
@@ -452,8 +526,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     if (hasZeroOffset &&
         node.valueType !== 'commandRef' &&
         node.valueType !== 'varIdentifier' &&
-        // Allow ambient @ctx to resolve even if parser produced zero offsets
-        node.identifier !== 'ctx') {
+        // Allow ambient @mx to resolve even if parser produced zero offsets
+        node.identifier !== 'mx') {
       // Skip orphaned parameter references from grammar bug
       // Note: varIdentifier is excluded because when conditions create these
       // See issue #217 - this workaround prevents when conditions from working
@@ -554,7 +628,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     
     // Check if we're in an expression context that needs raw values
     const isInExpression = context && context.isExpression;
-    const resolutionContext = isInExpression ? ResolutionContext.Equality : ResolutionContext.FieldAccess;
+    const hasFieldAccess = Array.isArray(node.fields) && node.fields.length > 0;
+    const resolutionContext =
+      hasFieldAccess ? ResolutionContext.FieldAccess
+      : isInExpression ? ResolutionContext.Equality
+      : ResolutionContext.FieldAccess;
     
     let resolvedValue = await resolveVariable(variable, env, resolutionContext);
     
@@ -568,33 +646,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       
       // Apply each field access in sequence
       for (const field of node.fields) {
-        // Handle variableIndex type - need to resolve the variable first
-        if (field.type === 'variableIndex') {
-          const indexVar = env.getVariable(field.value);
-          if (!indexVar) {
-            throw new Error(`Variable not found for index: ${field.value}`);
-          }
-          // Extract Variable value for index access
-          const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-          const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
-          // Create a new field with the resolved value
-          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = await accessField(resolvedValue, resolvedField, { 
-            preserveContext: true,
-            returnUndefinedForMissing: context?.isCondition,
-            env,
-            sourceLocation: fieldAccessLocation
-          });
-          resolvedValue = (fieldResult as any).value;
-        } else {
-          const fieldResult = await accessField(resolvedValue, field, { 
-            preserveContext: true,
-            returnUndefinedForMissing: context?.isCondition,
-            env,
-            sourceLocation: fieldAccessLocation
-          });
-          resolvedValue = (fieldResult as any).value;
-        }
+        const fieldResult = await accessField(resolvedValue, field, { 
+          preserveContext: true,
+          returnUndefinedForMissing: context?.isCondition,
+          env,
+          sourceLocation: fieldAccessLocation
+        });
+        resolvedValue = (fieldResult as any).value;
         if (resolvedValue === undefined) break;
       }
     }
@@ -618,11 +676,20 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     const { evaluateExecInvocation } = await import('../eval/exec-invocation');
     return evaluateExecInvocation(node, env);
   }
-  
+
+  // Handle VariableReferenceWithTail (variable with pipeline from when-expression actions)
+  if (node.type === 'VariableReferenceWithTail') {
+    const { VariableReferenceEvaluator } = await import('../eval/data-values/VariableReferenceEvaluator');
+    const evaluator = new VariableReferenceEvaluator();
+    const result = await evaluator.evaluate(node, env);
+    return { value: result, env };
+  }
+
   // Handle expression nodes
   if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
-    const { evaluateExpression } = await import('../eval/expression');
-    return evaluateExpression(node, env);
+    const { evaluateUnifiedExpression } = await import('../eval/expressions');
+    const result = await evaluateUnifiedExpression(node, env);
+    return { value: result.value, env };
   }
   
   // Handle literal nodes
@@ -636,6 +703,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       }
       return { value: 'retry', env };
     }
+
+    if (node.valueType === 'done' || node.valueType === 'continue') {
+      return { value: node, env };
+    }
     
     return { value: node.value, env };
   }
@@ -644,6 +715,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   if (node.type === 'WhenExpression') {
     const { evaluateWhenExpression } = await import('../eval/when-expression');
     return evaluateWhenExpression(node as any, env, context);
+  }
+
+  if (node.type === 'ExeBlock') {
+    const { evaluateExeBlock } = await import('../eval/exe');
+    return evaluateExeBlock(node as any, env);
   }
   
   // Handle foreach expressions as first-class expressions
@@ -773,9 +849,15 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
     const result = await evaluate(child, env, context);
     lastValue = result.value;
     
-    // Emit text nodes as 'doc' effects
+    // Emit text nodes as content intents
     if (isText(child)) {
-      env.emitEffect('doc', child.content);
+      env.emitIntent({
+        type: 'content',
+        value: child.content,
+        source: 'text',
+        visibility: 'always',
+        collapsible: false
+      });
     }
     // VariableReference nodes are handled consistently through interpolate()
   }

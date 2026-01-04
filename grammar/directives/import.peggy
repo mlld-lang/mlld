@@ -17,16 +17,20 @@ It can be used in these forms:
 // TOP-LEVEL IMPORT DIRECTIVE
 // -------------------------------------------------------------
 
+ImportKeyword
+  = "/"? "import"
+
 // Primary /import directive
 SlashImport
-  = SlashImportShorthand
+  = SlashImportPolicy
+  / SlashImportShorthand
   / SlashImportFull
   
   // Error Recovery Rules for /import directive
   // -------------------------------------------
   
   // Error: Unclosed import list bracket
-  / DirectiveContext "/import" _ "{" &{
+  / DirectiveContext ImportKeyword _ "{" &{
       // Check if we have an unclosed bracket for import list
       let depth = 1;
       let i = peg$currPos;
@@ -42,89 +46,97 @@ SlashImport
     }
     
   // Error: Missing 'from' keyword
-  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ &{
+  / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ &{
       return helpers.isMissingFromKeyword(input, peg$currPos);
     } {
       helpers.mlldError("Missing 'from' keyword in /import directive. Expected: /import { items } from \"path\"", "from", location());
     }
     
   // Error: Missing path after 'from'
-  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ &(LineTerminator / EOF) {
+  / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing path in /import directive. Expected a path after 'from' keyword.", "path", location());
     }
     
   // Error: Unclosed quoted path
-  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "\"" &{
+  / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
       helpers.mlldError("Unclosed quoted path in /import directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed single quoted path
-  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "'" &{
+  / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
       helpers.mlldError("Unclosed quoted path in /import directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed bracket path
-  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "[" &{
+  / DirectiveContext ImportKeyword _ "{" _ ImportsList _ "}" _ "from" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed path bracket in /import directive. Expected closing bracket for path.", "]", location());
     }
     
   // Error: Invalid wildcard syntax (missing alias)
-  / DirectiveContext "/import" _ "{" _ "*" _ "}" {
+  / DirectiveContext ImportKeyword _ "{" _ "*" _ "}" {
       helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as @name } from \"path\"", "as", location());
     }
     
   // Error: Missing content after /import
-  / DirectiveContext "/import" _ &(LineTerminator / EOF) {
+  / DirectiveContext ImportKeyword _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing content in /import directive. Expected import list or path.", String.fromCharCode(123), location());
     }
     
   // Error: Invalid @ usage in shorthand
-  / DirectiveContext "/import" _ "@" &{
+  / DirectiveContext ImportKeyword _ "@" &{
       const nextChar = input[peg$currPos];
       // Check if it's not a valid special import or module reference
       const rest = input.substring(peg$currPos);
-      const validStarts = ['INPUT', 'TIME', 'stdin'];
+      const validStarts = ['INPUT', 'TIME', 'stdin', 'payload', 'state'];
       const isValidSpecial = validStarts.some(s => rest.toUpperCase().startsWith(s.toUpperCase()));
       const isValidModule = /^[a-zA-Z_][a-zA-Z0-9_-]*\//.test(rest);
       return !isValidSpecial && !isValidModule;
     } {
-      helpers.mlldError("Invalid import source. Expected @INPUT, @TIME, module reference (@author/module), or configured resolver path", "INPUT", location());
+      helpers.mlldError("Invalid import source. Expected @input, @time, @payload, @state, module reference (@author/module), or configured resolver path", "INPUT", location());
     }
     
   // Error: Unclosed shorthand path bracket
-  / DirectiveContext "/import" _ "[" &{
+  / DirectiveContext ImportKeyword _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed path bracket in /import shorthand. Expected closing bracket.", "]", location());
     }
     
   // Error: Generic /import syntax error (catch-all)
-  / DirectiveContext "/import" {
+  / DirectiveContext ImportKeyword {
       helpers.mlldError("Invalid /import syntax. Expected: /import \"path\", /import @module, or /import { items } from \"path\"", "\"", location());
     }
 
 // Shorthand import alias must include @ prefix when provided
 SlashImportShorthand
-  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(HWS DataLabelList)? _ ("from" _)? path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
       helpers.mlldError(
         `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
         '@',
         location()
       );
     }
-  / DirectiveContext "/import" _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ path:ImportPath alias:(_ "as" _ name:ImportAliasIdentifier { return name; })? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImportShorthand matched', { path, alias, tail, importType: typeInfo?.type });
+  / DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(HWS DataLabelList)? _ fromSeg:("from" _)? path:ImportPath aliasSegment:(_ "as" _ name:ImportAliasIdentifier params:ExecParameters? { return { alias: name, params }; })? tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportShorthand matched', { path, alias: aliasSegment?.alias, tail, importType: typeInfo?.type });
+      
+      if (aliasSegment?.params && (!typeInfo || typeInfo.type !== 'templates')) {
+        helpers.mlldError("Import parameters are only supported with 'templates' imports", "templates", location());
+      }
       
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
       
       // NEW: Derive namespace from path if no alias provided
-      let namespace = alias;
+      let namespace = aliasSegment?.alias;
+      const templateParams = aliasSegment?.params || [];
+      if (typeInfo?.type === 'templates' && !namespace) {
+        helpers.mlldError("Templates import requires an alias with parameters. Use: /import templates from \"dir\" as @name(param1, param2)", "@", location());
+      }
       if (!namespace) {
         // Extract namespace from path
         const pathStr = path.raw?.path || path.raw?.module || '';
@@ -145,6 +157,7 @@ SlashImportShorthand
       // Create values object with namespace import structure
       const values = {
         namespace: [helpers.createNode(NodeType.Text, { content: namespace, location: location() })],  // Store namespace as array for consistency
+        templateParams,
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       if (labelInfo) {
@@ -165,7 +178,8 @@ SlashImportShorthand
       
       // Create raw object with text segments
       const raw = {
-        namespace: alias ? `@${namespace}` : namespace,  // Preserve explicit alias prefix in raw output
+        namespace: aliasSegment?.alias ? `@${namespace}` : namespace,  // Preserve explicit alias prefix in raw output
+        templateParams: templateParams.length > 0 ? templateParams.map(p => p.name) : undefined,
         path: path.raw?.path || path.raw?.module || path // Handle string paths like @input
       };
       if (typeInfo) {
@@ -182,10 +196,16 @@ SlashImportShorthand
       if (typeInfo) {
         meta.importType = typeInfo.type;
       }
+      if (templateParams && templateParams.length > 0) {
+        meta.templateParams = templateParams.map(p => p.name);
+      }
       if (labelInfo) {
         meta.securityLabels = labelInfo.labels;
       }
-      
+      if (comment) {
+        meta.comment = comment;
+      }
+
       return helpers.createStructuredDirective(
         'import',
         'importNamespace',  // CHANGED from 'importAll'
@@ -195,12 +215,57 @@ SlashImportShorthand
         location(),
         'path'
       );
-    }
+  }
 
+
+// Policy import: /import policy @alias from "path"
+SlashImportPolicy
+  = DirectiveContext ImportKeyword _ "policy" _ alias:ImportAliasIdentifier _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportPolicy matched', { alias, path, tail });
+
+      const namespace = [helpers.createNode(NodeType.Text, { content: alias, location: location() })];
+      const values = {
+        namespace,
+        path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path),
+        imports: [
+          helpers.createVariableReferenceNode('import', { identifier: '*', alias }, location())
+        ],
+        importType: 'policy'
+      };
+
+      if (tail) {
+        values.withClause = tail;
+      }
+
+      const raw = {
+        imports: `* as @${alias}`,
+        path: path.raw?.path || path.raw?.module || path.raw?.url || path,
+        importType: 'policy'
+      };
+
+      const meta = {
+        path: path.meta || { isSpecial: typeof path === 'string', pathSubtype: path.subtype },
+        importType: 'policy'
+      };
+
+      if (comment) {
+        meta.comment = comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'import',
+        'importPolicy',
+        values,
+        raw,
+        meta,
+        location(),
+        'path'
+      );
+    }
 
 // Full import with explicit imports list
 SlashImportFull
-  = DirectiveContext "/import" _ typeInfo:ImportTypeClause? labelsSegment:(_ DataLabelList)? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+  = DirectiveContext ImportKeyword _ typeInfo:ImportTypeClause? labelsSegment:(HWS DataLabelList)? _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImport matched', { imports, path, tail, importType: typeInfo?.type });
       
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -285,9 +350,9 @@ SlashImportFull
       
       // Create meta object with path metadata
       const meta = {
-        path: path.meta || { 
+        path: path.meta || {
           isSpecial: typeof path === 'string',
-          pathSubtype: path.subtype 
+          pathSubtype: path.subtype
         }
       };
       if (typeInfo) {
@@ -296,7 +361,10 @@ SlashImportFull
       if (labelInfo) {
         meta.securityLabels = labelInfo.labels;
       }
-      
+      if (comment) {
+        meta.comment = comment;
+      }
+
       return helpers.createStructuredDirective(
         'import',
         subtype,
@@ -315,7 +383,7 @@ ImportTypeClause
   / BasicImportType
 
 BasicImportType
-  = type:("module" / "static" / "live" / "local") ![a-zA-Z0-9_] {
+  = type:("module" / "static" / "live" / "local" / "templates") ![a-zA-Z0-9_] {
       const raw = text();
       return {
         type,
@@ -346,16 +414,52 @@ CachedImportType
 
 // Import path - handles special @input source, module references, and regular paths
 ImportPath
-  = "@INPUT"i {
-      helpers.debug('ImportPath matched @INPUT');
+  = "@payload"i {
+      helpers.debug('ImportPath matched @payload');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'payloadPath',
+        values: {
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        },
+        raw: {
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'payload'
+        }
+      };
+    }
+  / "@state"i {
+      helpers.debug('ImportPath matched @state');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'statePath',
+        values: {
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        },
+        raw: {
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'state'
+        }
+      };
+    }
+  / "@INPUT"i {
+      helpers.debug('ImportPath matched @input (case-insensitive)');
       const matched = text();
       return {
         type: 'path',
         subtype: 'inputPath',
-        values: { 
+        values: {
           path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
         },
-        raw: { 
+        raw: {
           path: matched
         },
         meta: {
@@ -383,7 +487,7 @@ ImportPath
       };
     }
   / "@TIME"i {
-      helpers.debug('ImportPath matched @TIME');
+      helpers.debug('ImportPath matched @time (case-insensitive)');
       const matched = text();
       return {
         type: 'path',
@@ -572,9 +676,42 @@ ModuleIdentifierPart "Module Identifier Part"
       return first + rest.join('');
     }
 
-// Short hash (4+ hex characters)
+// Version or hash specifier for module references
+// Supports:
+//   - Semver versions: 1.0.0, 1.2.3-beta.1, 2.0.0-rc.1
+//   - Short hashes: abcd1234 (4+ hex characters)
 ShortHash
-  = chars:[a-f0-9]+ &{ return chars.length >= 4; } {
+  = version:SemverVersion {
+      return version;
+    }
+  / chars:[a-f0-9]+ &{ return chars.length >= 4; } {
+      return chars.join('');
+    }
+
+// Semantic version pattern: major.minor.patch[-prerelease][+metadata]
+SemverVersion
+  = major:[0-9]+ "." minor:[0-9]+ "." patch:[0-9]+ prerelease:("-" pre:SemverPrerelease { return pre; })? metadata:("+" meta:SemverMetadata { return meta; })? {
+      const base = major.join('') + '.' + minor.join('') + '.' + patch.join('');
+      return base + (prerelease ? '-' + prerelease : '') + (metadata ? '+' + metadata : '');
+    }
+
+SemverPrerelease
+  = first:SemverPrereleaseId rest:("." id:SemverPrereleaseId { return id; })* {
+      return [first, ...rest].join('.');
+    }
+
+SemverPrereleaseId
+  = chars:[a-zA-Z0-9-]+ {
+      return chars.join('');
+    }
+
+SemverMetadata
+  = first:SemverMetadataId rest:("." id:SemverMetadataId { return id; })* {
+      return [first, ...rest].join('.');
+    }
+
+SemverMetadataId
+  = chars:[a-zA-Z0-9-]+ {
       return chars.join('');
     }
 

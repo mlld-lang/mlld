@@ -121,6 +121,14 @@ async function evaluateBinaryExpression(
     const rightResult = await evaluateUnifiedExpression(node.right, env);
     return rightResult;
   }
+
+  if (operator === '??') {
+    const isNullish = leftValue === null || leftValue === undefined;
+    if (!isNullish) {
+      return leftResult;
+    }
+    return await evaluateUnifiedExpression(node.right, env);
+  }
   
   const rightResult = await evaluateUnifiedExpression(node.right, env);
   const rightValue = rightResult.value;

@@ -1,0 +1,5 @@
+exe @greet(name) = cmd {echo "Hello @name!"
+echo "Welcome @name!"
+echo "Greetings @name!"}
+
+run @greet("Alice")

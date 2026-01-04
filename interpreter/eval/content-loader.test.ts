@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { processContentLoader } from './content-loader';
 import { Environment } from '../env/Environment';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
@@ -216,13 +216,13 @@ describe('Content Loader with Glob Support', () => {
       }
       const { data: result } = unwrapStructuredForTest(rawResult);
 
-      expect(isLoadContentResultArray(result)).toBe(true);
-      if (isLoadContentResultArray(result)) {
-        expect(result.map(item => item.relative).sort()).toEqual([
-          './todo/spec-a.md',
-          './todo/spec-b.md'
-        ]);
-      }
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBeGreaterThan(0);
+      expect(isLoadContentResult(result[0])).toBe(true);
+      expect(result.map(item => item.relative).sort()).toEqual([
+        './todo/spec-a.md',
+        './todo/spec-b.md'
+      ]);
     });
   });
 
@@ -252,12 +252,11 @@ describe('Content Loader with Glob Support', () => {
 
       const rawResult = await processContentLoader(node, env);
       const { data: result } = unwrapStructuredForTest(rawResult);
-      
-      expect(isLoadContentResultArray(result)).toBe(true);
-      if (isLoadContentResultArray(result)) {
-        expect(result.length).toBeGreaterThan(0);
-        expect(result[0].filename).toMatch(/\.md$/);
-      }
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBeGreaterThan(0);
+      expect(isLoadContentResult(result[0])).toBe(true);
+      expect(result[0].filename).toMatch(/\.md$/);
     });
 
     it.skip('should handle recursive glob patterns', async () => {
@@ -278,15 +277,14 @@ describe('Content Loader with Glob Support', () => {
 
       const rawResult = await processContentLoader(node, env);
       const { data: result, metadata } = unwrapStructuredForTest(rawResult);
-      
-      expect(isLoadContentResultArray(result)).toBe(true);
-      if (isLoadContentResultArray(result)) {
-        expect(result.length).toBeGreaterThan(0);
-        result.forEach(file => {
-          expect(file.filename).toMatch(/\.md$/);
-          expect(file.relative).toContain('tests');
-        });
-      }
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBeGreaterThan(0);
+      expect(isLoadContentResult(result[0])).toBe(true);
+      result.forEach(file => {
+        expect(file.filename).toMatch(/\.md$/);
+        expect(file.relative).toContain('tests');
+      });
       expectLoadContentMetadata(metadata);
     });
 

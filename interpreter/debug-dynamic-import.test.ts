@@ -22,7 +22,7 @@ describe('debug dynamic import events', () => {
 /export { exported }
       `.trim(),
       contentType: 'module',
-      ctx: { source: 'dynamic://@user/context', taint: ['src:dynamic'] },
+      mx: { source: 'dynamic://@user/context', taint: ['src:dynamic'] },
       metadata: { exports: ['exported'] },
       resolverName: 'dynamic'
     });

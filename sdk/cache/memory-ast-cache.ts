@@ -2,6 +2,7 @@ import { parse } from '@grammar/parser';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import { MlldParseError, ErrorSeverity } from '@core/errors';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { MlldMode } from '@core/types/mode';
 import { performance } from 'node:perf_hooks';
 
 interface CacheEntry {
@@ -15,32 +16,35 @@ export class MemoryAstCache {
 
   async get(
     filePath: string,
-    fileSystem: IFileSystemService
+    fileSystem: IFileSystemService,
+    mode: MlldMode
   ): Promise<CacheEntry & { cacheHit: boolean }> {
     const source = await fileSystem.readFile(filePath);
-    const cached = this.cache.get(filePath);
+    const cacheKey = `${filePath}:${mode}`;
+    const cached = this.cache.get(cacheKey);
     if (cached && cached.source === source) {
       return { ...cached, cacheHit: true, parseDurationMs: 0 };
     }
 
     const parseStart = performance.now();
-    const ast = await this.parseSource(source, filePath);
+    const ast = await this.parseSource(source, filePath, mode);
     const entry = { ast, source, parseDurationMs: performance.now() - parseStart };
-    this.cache.set(filePath, entry);
+    this.cache.set(cacheKey, entry);
     return { ...entry, cacheHit: false };
   }
 
-  invalidate(filePath: string): void {
-    this.cache.delete(filePath);
+  invalidate(filePath: string, mode: MlldMode): void {
+    const cacheKey = `${filePath}:${mode}`;
+    this.cache.delete(cacheKey);
   }
 
   clear(): void {
     this.cache.clear();
   }
 
-  private async parseSource(source: string, filePath: string): Promise<any> {
+  private async parseSource(source: string, filePath: string, mode: MlldMode): Promise<any> {
     await initializePatterns();
-    const parseResult = await parse(source);
+    const parseResult = await parse(source, { mode });
 
     if (!parseResult.success || parseResult.error) {
       const parseError = parseResult.error || new Error('Unknown parse error');

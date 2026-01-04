@@ -2,7 +2,7 @@
   "name": "mlld-vscode",
   "displayName": "mlld",
   "description": "Language support for mlld - A modular prompt scripting language",
-  "version": "1.1.0",
+  "version": "2.0.0-rc78",
   "publisher": "andyet",
   "repository": {
     "type": "git",
@@ -45,6 +45,26 @@
           ".mld"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "mlld-att",
+        "aliases": [
+          "mlld Template (ATT)"
+        ],
+        "extensions": [
+          ".att"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "mlld-mtt",
+        "aliases": [
+          "mlld Template (MTT)"
+        ],
+        "extensions": [
+          ".mtt"
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
@@ -54,9 +74,21 @@
         "path": "./syntaxes/mlld-minimal.tmLanguage.json"
       },
       {
+        "language": "mlld-att",
+        "scopeName": "source.mlld-att",
+        "path": "./syntaxes/mlld-att.tmLanguage.json"
+      },
+      {
+        "language": "mlld-mtt",
+        "scopeName": "source.mlld-mtt",
+        "path": "./syntaxes/mlld-mtt.tmLanguage.json"
+      },
+      {
         "scopeName": "markdown.mlld.codeblock",
         "path": "./syntaxes/mlld-markdown.tmLanguage.json",
-        "injectTo": ["text.html.markdown"],
+        "injectTo": [
+          "text.html.markdown"
+        ],
         "embeddedLanguages": {
           "meta.embedded.block.mlld": "mlld"
         }

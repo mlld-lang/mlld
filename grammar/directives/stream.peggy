@@ -1,8 +1,11 @@
 // STREAM DIRECTIVE
 // Streams the output of an invocation with implicit with { stream: true }
 
+StreamDirectiveKeyword
+  = "/"? "stream"
+
 SlashStream
-  = DirectiveContext "/stream" _ invocation:UnifiedReferenceWithTail ending:StandardDirectiveEnding {
+  = DirectiveContext StreamDirectiveKeyword _ invocation:UnifiedReferenceWithTail ending:StandardDirectiveEnding {
       helpers.debug('SlashStream matched invocation', { invocation });
 
       const withClause = {

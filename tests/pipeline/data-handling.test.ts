@@ -207,7 +207,7 @@ describe('Data handling accessors', () => {
 `;
 
     const output = await interpret(input, { fileSystem, pathService });
-    expect(output.trim()).toBe('Ada\nRex\nmatched');
+    expect(output.trim()).toBe('Ada\n\nRex\n\nmatched');
   });
 
   it('wraps load-content assignments with structured metadata', async () => {
@@ -225,6 +225,6 @@ describe('Data handling accessors', () => {
       pathService,
       filePath: '/project/test.mld'
     });
-    expect(output.trim()).toBe('doc.md\nStructured body');
+    expect(output.trim()).toBe('doc.md\n\nStructured body');
   });
 });

@@ -1,11 +1,11 @@
 /guard @stageRetrySecret for secret = when [
-  @ctx.op.type == "pipeline-stage" && @ctx.op.subtype == "sendStage" && @ctx.guard.try == 1 => retry "Retry send stage for masked output"
-  @ctx.op.type == "pipeline-stage" && @ctx.op.subtype == "sendStage" => deny "Stage denied secret after retry"
+  @mx.op.type == "pipeline-stage" && @mx.op.subtype == "sendStage" && @mx.guard.try == 1 => retry "Retry send stage for masked output"
+  @mx.op.type == "pipeline-stage" && @mx.op.subtype == "sendStage" => deny "Stage denied secret after retry"
   * => allow
 ]
 
 /exe network @sendStage(value) = when [
-  denied => `blocked: @ctx.guard.reason (tries: @ctx.guard.try)`
+  denied => `blocked: @mx.guard.reason (tries: @mx.guard.try)`
   * => `sent:@value`
 ]
 

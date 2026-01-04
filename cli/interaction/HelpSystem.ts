@@ -67,6 +67,11 @@ export class HelpSystem {
       return;
     }
 
+    if (command === 'nvim-doctor') {
+      this.displayNvimDoctorHelp();
+      return;
+    }
+
     if (command === 'mcp' || command === 'serve') {
       this.displayMcpHelp();
       return;
@@ -438,11 +443,15 @@ Commands:
   serve                   Expose mlld functions as MCP tools over stdio
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
+  nvim-doctor             Diagnose and fix mlld Neovim LSP configuration
   debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
 
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
+  --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin strict)
+  --loose, --markdown, --md, --prose
+                          Set parser mode to markdown (aliases for --mode markdown)
   -o, --output <path>     Output file path
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)
@@ -453,7 +462,8 @@ Options:
   -d, --debug             Stream execution with progress logs to stderr
   --json                  With --debug, emit DebugResult JSON to stdout (no streaming)
   --structured            Output JSON with effects, exports, and security metadata
-  --inject KEY=VALUE      Inject dynamic module (can use multiple times)
+  --inject, --payload KEY=VALUE
+                          Inject dynamic module (can use multiple times)
                           VALUE formats: JSON object, @file.json, or mlld source
   --no-stream             Disable streaming (document mode only)
   -w, --watch             Watch for changes and reprocess
@@ -590,6 +600,45 @@ Manual Setup:
   require('lspconfig').mlld_ls.setup{
     cmd = { 'mlld', 'lsp' }
   }
+    `);
+  }
+
+  private displayNvimDoctorHelp(): void {
+    console.log(`
+Usage: mlld nvim-doctor [options]
+
+Diagnose and fix mlld Neovim LSP configuration issues.
+
+This command checks your Neovim setup and identifies common problems that prevent
+the mlld Language Server from working correctly. It can also automatically fix
+many issues.
+
+Options:
+  --fix, -f            Automatically fix detected issues
+
+What it checks:
+  1. mlld installation and version
+  2. LSP server can start correctly
+  3. Neovim config directory exists
+  4. mlld LSP config file exists and is current
+  5. Config uses correct file types (.mld vs .mlld)
+  6. Config has required lspconfig.setup() call
+  7. nvim-lspconfig is installed
+
+Common issues it fixes:
+  - Outdated config files (missing setup() call)
+  - Wrong filetype mappings
+  - Missing config version
+
+Examples:
+  mlld nvim-doctor                  # Check for issues
+  mlld nvim-doctor --fix            # Check and auto-fix
+  mlld nvim-doctor -f               # Short flag
+
+If LSP still doesn't work after fixing:
+  1. Check Neovim LSP logs: :checkhealth lsp
+  2. Verify server starts: DEBUG=mlld:lsp mlld lsp
+  3. Open a .mld file and run: :LspInfo
     `);
   }
 

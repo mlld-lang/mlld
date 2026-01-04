@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Environment } from './Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 
 describe('@debug variable', () => {
   it('should produce markdown output with multiple sections', async () => {
@@ -138,5 +139,135 @@ describe('@debug variable', () => {
     expect(debugOutput).toContain('xxx'); // Contains some x's
     expect(debugOutput).toContain('(100 chars)'); // Shows total length
     expect(debugOutput).not.toContain(longValue); // But not the full value
+  });
+
+  it('should not cause stack overflow when variable has mx getter attached', async () => {
+    // Regression test for issue mlld-0rz: @debug caused stack overflow
+    // when VariableMetadataUtils.attachContext had been called on the variable,
+    // because buildVariableContext accessed variable.mx which triggered the getter
+    // recursively.
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(
+      fileSystem,
+      pathService,
+      '/test/project'
+    );
+
+    await env.registerBuiltinResolvers();
+
+    // Get @debug once - this creates the variable
+    const debugVar1 = env.getVariable('debug');
+    expect(debugVar1).toBeDefined();
+
+    // Attach context (this adds the mx getter that caused the recursion)
+    VariableMetadataUtils.attachContext(debugVar1!);
+
+    // Getting @debug again should NOT cause stack overflow
+    // Before the fix, this would throw "Maximum call stack size exceeded"
+    expect(() => {
+      const debugVar2 = env.getVariable('debug');
+      expect(debugVar2).toBeDefined();
+      expect(debugVar2?.type).toBe('simple-text');
+    }).not.toThrow();
+  });
+
+  it('should work when accessed through materializeGuardInputs path', async () => {
+    // This tests the path that actually triggered the bug:
+    // extractShowInputs -> getVariable -> materializeGuardInputs -> attachContext
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(
+      fileSystem,
+      pathService,
+      '/test/project'
+    );
+
+    await env.registerBuiltinResolvers();
+
+    // Import the guard inputs function that triggers attachContext
+    const { materializeGuardInputs } = await import('../utils/guard-inputs');
+
+    // Get @debug
+    const debugVar = env.getVariable('debug');
+    expect(debugVar).toBeDefined();
+
+    // This is what extractShowInputs does - it passes the variable through
+    // materializeGuardInputs which calls attachContext
+    const materialized = materializeGuardInputs([debugVar!]);
+
+    expect(materialized).toHaveLength(1);
+    expect(materialized[0].name).toBe('debug');
+    expect(materialized[0].type).toBe('simple-text');
+
+    // Now access @debug again - this should not cause recursion
+    const debugVar2 = env.getVariable('debug');
+    expect(debugVar2).toBeDefined();
+    expect(debugVar2?.value).toContain('### Environment variables:');
+  });
+
+  it('should handle multiple consecutive accesses without issues', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(
+      fileSystem,
+      pathService,
+      '/test/project'
+    );
+
+    await env.registerBuiltinResolvers();
+
+    // Access @debug multiple times rapidly
+    const results: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const debugVar = env.getVariable('debug');
+      expect(debugVar).toBeDefined();
+      results.push(debugVar?.value as string);
+    }
+
+    // All results should be valid markdown
+    for (const result of results) {
+      expect(result).toContain('### Environment variables:');
+      expect(result).toContain('### Global variables:');
+      expect(result).toContain('### Statistics:');
+    }
+  });
+
+  it('should include user variables when accessed after setting them', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(
+      fileSystem,
+      pathService,
+      '/test/project'
+    );
+
+    await env.registerBuiltinResolvers();
+
+    // Add multiple user variables
+    const { createSimpleTextVariable } = await import('@core/types/variable');
+
+    env.setVariable('myString', createSimpleTextVariable(
+      'myString',
+      'hello world',
+      { directive: 'var', syntax: 'quoted', hasInterpolation: false, isMultiLine: false }
+    ));
+
+    env.setVariable('myNumber', createSimpleTextVariable(
+      'myNumber',
+      '42',
+      { directive: 'var', syntax: 'quoted', hasInterpolation: false, isMultiLine: false }
+    ));
+
+    // Get @debug
+    const debugVar = env.getVariable('debug');
+    const output = debugVar?.value as string;
+
+    // Should include user variables section
+    expect(output).toContain('### User variables:');
+    expect(output).toContain('@myString');
+    expect(output).toContain('hello world');
+    expect(output).toContain('@myNumber');
+    expect(output).toContain('42');
   });
 });

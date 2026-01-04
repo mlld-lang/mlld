@@ -1,10 +1,10 @@
 /guard @sendSecretBlock for secret = when [
-  @ctx.op.type == "exe" && @ctx.op.name == "sendData" => deny "Network secret blocked"
+  @mx.op.type == "exe" && @mx.op.name == "sendData" => deny "Network secret blocked"
   * => allow
 ]
 
 /guard @handlerDisplayBlock for secret = when [
-  @ctx.op.name == "displayDenied" => deny "Handler display blocked"
+  @mx.op.name == "displayDenied" => deny "Handler display blocked"
   * => allow
 ]
 
@@ -14,7 +14,7 @@
 ]
 
 /exe @displayDenied(value) = when [
-  denied => `blocked display: @ctx.guard.reason`
+  denied => `blocked display: @mx.guard.reason`
   * => `displayed: @value`
 ]
 

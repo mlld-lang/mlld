@@ -75,7 +75,7 @@ export interface IImportResolver {
     content: string; 
     contentType: 'module' | 'data' | 'text'; 
     metadata?: any;
-    ctx?: any;
+    mx?: any;
     resolverName?: string;
   }>;
   
@@ -135,7 +135,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
    * Resolve a module reference using the ResolverManager
    * This handles @prefix/ patterns and registry lookups for @user/module
    */
-  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; ctx?: any; resolverName?: string }> {
+  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; mx?: any; resolverName?: string }> {
     const resolverManager = this.dependencies.getResolverManager();
     if (!resolverManager) {
       throw new Error('ResolverManager not available');
@@ -158,7 +158,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       content: result.content.content,
       contentType: result.content.contentType,
       metadata: result.content.metadata,
-      ctx: result.content.ctx,
+      mx: result.content.mx,
       resolverName: result.resolverName
     };
   }
@@ -191,6 +191,10 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       const projectRoot = await this.getProjectPath();
       inputPath = path.join(projectRoot, inputPath.substring(6));
     }
+    if (inputPath.startsWith('@root/')) {
+      const projectRoot = await this.getProjectPath();
+      inputPath = path.join(projectRoot, inputPath.substring(6));
+    }
     
     // Handle URL-relative resolution when current file is a URL
     const currentFile = this.dependencies.getCurrentFilePath?.();
@@ -207,15 +211,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     
     // Use the path module that's already imported
     if (path.isAbsolute(inputPath)) {
-      const absolutePath = path.resolve(inputPath);
-      if (!this.dependencies.getAllowAbsolutePaths()) {
-        const projectRoot = path.resolve(this.dependencies.pathContext.projectRoot);
-        const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
-        if (!absolutePath.startsWith(rootWithSep)) {
-          throw new Error(`Access denied: path is outside project root (${inputPath})`);
-        }
-      }
-      return absolutePath;
+      return path.resolve(inputPath);
     }
     
     // Check if fuzzy matching is enabled for local files
@@ -246,7 +242,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       
       // If no match found with fuzzy matching, check with extensions
       if (!path.extname(inputPath)) {
-        const extensions = ['.mlld.md', '.mld', '.md'];
+        const extensions = ['.mld.md', '.mld', '.md', '.mlld.md'];
         const allSuggestions: string[] = [];
         
         for (const ext of extensions) {
@@ -297,15 +293,9 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       }
     }
     
-    // Fall back to standard path resolution, but check against project root and existence
+    // Fall back to standard path resolution
     const resolvedPath = path.resolve(this.dependencies.pathContext.fileDirectory, inputPath);
-    // Enforce project root boundary
-    const projectRoot = path.resolve(this.dependencies.pathContext.projectRoot);
-    const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
-    if (!resolvedPath.startsWith(rootWithSep)) {
-      throw new Error(`Access denied: path is outside project root (${inputPath})`);
-    }
-    
+
     // If fuzzy matching is enabled but didn't find anything, check if the file exists
     // If not, throw an error with better messaging
     if (fuzzyEnabled && !await this.dependencies.fileSystem.exists(resolvedPath)) {

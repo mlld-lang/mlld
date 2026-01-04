@@ -18,7 +18,7 @@ describe('Exec pipeline structured flow', () => {
 `;
 
     const output = await interpret(input, { fileSystem, pathService });
-    expect(output.trim()).toBe('{"count": 5}\n{"count": 5}');
+    expect(output.trim()).toBe('{"count": 5}\n\n{"count": 5}');
   });
 
   it('pipes parsed JSON arrays into JS executables (#435 regression)', async () => {

@@ -14,6 +14,7 @@ VarRHSContent "var assignment value"
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
+  / VarBlock                    // Statement block for var evaluation
   / ArrayLiteral                // Arrays: [1, 2, 3] - MUST come before templates to handle [[nested]]
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / UnifiedQuoteOrTemplate      // Unified quotes and templates (moved after arrays)
@@ -26,6 +27,36 @@ VarRHSContent "var assignment value"
   / InlineShowDirective         // show actions used inline (for expressions)
   / PrimitiveValue              // Direct primitives: 42, true, false, null, and strings WITHOUT pipes
 
+VarBlock "var block"
+  = &{
+      let i = peg$currPos;
+      if (input[i] !== '[') return false;
+      i += 1;
+      while (i < input.length) {
+        const ch = input[i];
+        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+          i += 1;
+          continue;
+        }
+        if (input[i] === '>' && input[i + 1] === '>') {
+          i += 2;
+          while (i < input.length && input[i] !== '\n') i += 1;
+          continue;
+        }
+        if (input[i] === '<' && input[i + 1] === '<') {
+          i += 2;
+          while (i < input.length && input[i] !== '\n') i += 1;
+          continue;
+        }
+        break;
+      }
+      const rest = input.substring(i);
+      if (rest.startsWith('let')) return true;
+      if (rest.startsWith('=>')) return true;
+      if (/^@[_a-zA-Z]\w*\s*\+=/.test(rest)) return true;
+      return false;
+    } block:ExeStatementBlock { return block; }
+
 // Expression that definitely has an operator (to avoid matching simple variables)
 ExpressionWithOperator
   = &{
@@ -35,7 +66,7 @@ ExpressionWithOperator
       // Only look within the current line/directive context
       const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)>>/);
       const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
-      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
+      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!|[-+*/%]))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }
     expr:Expression {
       return expr;
@@ -218,9 +249,13 @@ FieldAccessExecPattern "field access exec invocation"
       }, location());
       
       // Create the exec invocation
+      const identifierRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        fields
+      }, location());
       const ref = {
         name: methodName,
-        identifier: [helpers.createNode(NodeType.Text, { content: methodName, location: location() })],
+        identifier: [identifierRef],
         args: args || [],
         isCommandReference: true,
         objectReference: objectRef
@@ -258,12 +293,32 @@ ExecInvocationPattern "exec invocation pattern"
 // Note: BracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading
 
 
-// Primitive values for arrays and when expressions
+// Primitive values for when expressions and var assignments (returns Literal nodes)
 PrimitiveValue
   = ExpressionString        // Returns Literal node for both single and double quotes
-  / NumberLiteral
-  / BooleanLiteral
-  / NullLiteral
+  / value:NumberLiteral {
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'number',
+        location: location()
+      });
+    }
+  / value:BooleanLiteral {
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'boolean',
+        location: location()
+      });
+    }
+  / value:NullLiteral {
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'null',
+        location: location()
+      });
+    }
+  / DoneLiteral
+  / ContinueLiteral
   / RetryLiteral           // retry keyword for pipeline control
 
 // Object property values - use data context patterns for proper typing and unwrapping
@@ -311,6 +366,8 @@ RunCommandValue
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
         hasRunKeyword: true,
         meta: content.meta
       };
@@ -363,7 +420,7 @@ NestedDirective
 
 InlineShowDirective
   = "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
-      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
+      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null, ending ? ending.comment : null);
     }
 
 // Command content inside brackets
@@ -391,6 +448,8 @@ CodeExecution "code execution"
         type: 'command',
         command: content.values.command,  // Parsed command nodes
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
         hasRunKeyword: true,
         meta: content.meta
       };
@@ -410,6 +469,8 @@ CodeExecution "code execution"
         type: 'command',
         command: content.values.command,
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
         hasRunKeyword: false,
         meta: content.meta
       };
@@ -436,23 +497,65 @@ CodeChar
 
 // Note: when-expressions are allowed in /var assignments
 
-// FOR EXPRESSION - for @var in @collection => expression
+// FOR EXPRESSION - for @var in @collection => expression or block
 // Used in /var and /exe assignments to collect results
 ForExpression "for expression"
-  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent batchPipe:ForBatchPipeline? {
-      helpers.debug('ForExpression matched', { pattern, expr, hasBatch: !!batchPipe });
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ whenExpr:WhenExpressionAny batchPipe:ForBatchPipeline? {
+      const hasNoneCondition = Array.isArray(whenExpr.conditions) && whenExpr.conditions.some((entry) => {
+        const condition = entry && entry.condition;
+        return Array.isArray(condition) &&
+          condition.length === 1 &&
+          condition[0]?.type === NodeType.Literal &&
+          condition[0]?.valueType === 'none';
+      });
+
+      let normalizedWhen = whenExpr;
+      if (!hasNoneCondition) {
+        const loc = whenExpr.location || location();
+        const noneLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'none',
+          valueType: 'none',
+          location: loc
+        });
+        const skipLiteral = helpers.createNode(NodeType.Literal, {
+          value: 'skip',
+          valueType: 'skip',
+          location: loc
+        });
+        const conditions = [...whenExpr.conditions, { condition: [noneLiteral], action: [skipLiteral] }];
+        normalizedWhen = helpers.createWhenExpression(
+          conditions,
+          whenExpr.withClause || null,
+          loc,
+          whenExpr.meta?.modifier || null
+        );
+      }
+
+      helpers.debug('ForExpression when-filter matched', { pattern, hasNoneCondition });
+
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source, 
+        [normalizedWhen],
+        location(),
+        opts || null,
+        batchPipe || null
+      );
+    }
+  / "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ action:ForExpressionBody batchPipe:ForBatchPipeline? {
+      helpers.debug('ForExpression matched', { pattern, action, hasBatch: !!batchPipe });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
-        expr,
+        action,
         location(),
         opts || null,
         batchPipe || null
       );
     }
   // Error recovery
-  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !"=>" {
+  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !( "=>" / "[" ) {
       helpers.mlldError("Missing '=>' in for expression. Expected: for @var in @collection => expression", "=>", location());
     }
   / "for" _ "@" id:BaseIdentifier _ !"in" {
@@ -461,6 +564,10 @@ ForExpression "for expression"
   / "for" _ !"each" _ !"@" {
       helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => expression", "@", location());
     }
+
+ForExpressionBody
+  = "=>" _ expr:VarRHSContent { return expr; }
+  / block:ForBlockAction { return block.statements; }
 
 ForBatchPipeline "for batch pipeline"
   = _ "=>" _ "||" _ firstParallel:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {

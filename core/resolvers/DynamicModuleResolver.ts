@@ -21,6 +21,11 @@ export interface DynamicModuleOptions {
    * Example: { source: 'user-upload' } → ['src:dynamic', 'src:user-upload']
    */
   source?: string;
+  /**
+   * Treat string values as literals (no interpolation) by emitting single-quoted strings.
+   * Use for user data modules like @payload/@state so @text stays literal.
+   */
+  literalStrings?: boolean;
 }
 
 /**
@@ -43,8 +48,10 @@ export class DynamicModuleResolver implements Resolver {
 
   private modules: Map<string, string>;
   private source?: string;
+  private literalStrings: boolean;
 
   constructor(modules: Record<string, DynamicModuleValue>, options?: DynamicModuleOptions) {
+    this.literalStrings = options?.literalStrings ?? false;
     this.modules = this.normalizeModules(modules);
     this.source = options?.source;
   }
@@ -72,7 +79,7 @@ export class DynamicModuleResolver implements Resolver {
     return {
       content,
       contentType: 'module',
-      ctx: {
+      mx: {
         source: `dynamic://${ref}`,
         taint: labels,
         labels: labels,
@@ -132,6 +139,12 @@ export class DynamicModuleResolver implements Resolver {
     this.validateStructuredData(path, value, depth, stats);
 
     if (value === null || typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
+      if (typeof value === 'string' && this.literalStrings) {
+        const escaped = value
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'");
+        return `'${escaped}'`;
+      }
       return JSON.stringify(value);
     }
 
@@ -192,5 +205,19 @@ export class DynamicModuleResolver implements Resolver {
     if (!value || typeof value !== 'object') return false;
     const proto = Object.getPrototypeOf(value);
     return proto === Object.prototype || proto === null;
+  }
+
+  updateModule(path: string, content: DynamicModuleValue): void {
+    if (typeof content === 'string') {
+      this.modules.set(path, content);
+      return;
+    }
+
+    if (!content || Array.isArray(content) || typeof content !== 'object' || !this.isPlainObject(content)) {
+      throw new TypeError(`Dynamic module '${path}' must be string or plain object`);
+    }
+
+    const serialized = this.serializeObjectModule(path, content as Record<string, unknown>);
+    this.modules.set(path, serialized);
   }
 }

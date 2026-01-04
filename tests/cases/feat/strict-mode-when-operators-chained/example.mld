@@ -1,0 +1,19 @@
+var @isUser = true
+var @isActive = true
+var @hasPermission = true
+var @isAdmin = false
+
+when @isUser && @isActive && @hasPermission => show "Access granted (user path)\n"
+
+when @isAdmin || @isUser && @isActive => show "Access granted (admin or active user)\n"
+
+var @isGuest = false
+var @hasTrialAccess = true
+when @isAdmin || @isUser && @isActive || @isGuest && @hasTrialAccess => show "Access granted (complex)\n"
+
+var @condition1 = false
+var @condition2 = false
+var @condition3 = true
+var @condition4 = false
+
+when @condition1 || @condition2 || @condition3 || @condition4 => show "At least one condition is true\n"

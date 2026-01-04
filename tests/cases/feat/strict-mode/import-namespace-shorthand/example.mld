@@ -1,0 +1,13 @@
+import "./strict-namespace-test-config.mld"
+
+show `Config author: @strict_namespace_test_config.author`
+show `Config version: @strict_namespace_test_config.version`
+
+import "./strict-namespace-test-utils.mld" as @lib
+
+show `Library greeting: @lib.greeting`
+show `Library version: @lib.version`
+
+import "./strict-namespace-test-data.json"
+
+show `Data value: @strict_namespace_test_data.value`

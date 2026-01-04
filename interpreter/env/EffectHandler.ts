@@ -1,5 +1,6 @@
 import { Location } from '@core/types/location';
 import type { CapabilityContext } from '@core/types/security';
+import { processAnsi, stripAnsiMarkers, type AnsiProcessingOptions } from '@core/utils/ansi-processor';
 import * as fs from 'fs';
 
 /**
@@ -14,6 +15,7 @@ export interface Effect {
   mode?: 'append' | 'write';
   metadata?: any;  // For preserving LoadContentResult metadata, etc.
   capability?: CapabilityContext;
+  keepAnsi?: boolean;  // If true, preserve %color% markers (don't process or strip)
 }
 
 /**
@@ -37,48 +39,81 @@ export class DefaultEffectHandler implements EffectHandler {
   private streamingEnabled: boolean;
   private recordEffects: boolean;
   private effectLog: Effect[] = [];
+  private ansiOptions: AnsiProcessingOptions;
+  private hasWrittenContent: boolean = false;  // Track if we've written any non-newline content
 
-  constructor(options: { streaming?: boolean; recordEffects?: boolean } = {}) {
+  constructor(options: { streaming?: boolean; recordEffects?: boolean; ansiEnabled?: boolean } = {}) {
     // Streaming is enabled by default, can be disabled via env var or option
-    this.streamingEnabled = options.streaming !== false && 
+    this.streamingEnabled = options.streaming !== false &&
                            process.env.MLLD_STREAMING !== 'false' &&
                            process.env.MLLD_NO_STREAMING !== 'true';
     this.recordEffects = options.recordEffects === true;
+    this.ansiOptions = { enabled: options.ansiEnabled };
+  }
+
+  private processContent(content: string, target: 'stdout' | 'stderr' | 'file' | 'doc', keepAnsi?: boolean): string {
+    // If keepAnsi is explicitly true, don't process at all
+    if (keepAnsi === true) {
+      return content;
+    }
+    return processAnsi(content, target, this.ansiOptions);
   }
 
   handleEffect(effect: Effect): void {
     if (this.recordEffects) {
       this.effectLog.push({ ...effect });
     }
+
+    const { content, keepAnsi } = effect;
+
     switch (effect.type) {
       case 'doc':
-        // Write to stdout if streaming (for real-time display)
-        if (this.streamingEnabled) {
-          process.stdout.write(effect.content);
-        }
-        // Always append to document
-        this.documentBuffer.push(effect.content);
+        // Document buffer: strip ANSI markers (plain text)
+        // Note: We always buffer first, then output normalized content at the end
+        // This ensures streaming and non-streaming modes produce identical normalized output
+        const docContent = this.processContent(content, 'doc', keepAnsi);
+        this.documentBuffer.push(docContent);
         break;
-        
+
       case 'stdout':
         // Only write to stdout (bypasses document)
-        process.stdout.write(effect.content);
+        const stdoutOnly = this.processContent(content, 'stdout', keepAnsi);
+        process.stdout.write(stdoutOnly);
         break;
-        
+
       case 'stderr':
         // Only write to stderr
-        process.stderr.write(effect.content);
+        const stderrContent = this.processContent(content, 'stderr', keepAnsi);
+        process.stderr.write(stderrContent);
         break;
-        
+
       case 'both':
         // Write to stdout if streaming
         if (this.streamingEnabled) {
-          process.stdout.write(effect.content);
+          let bothStdout = this.processContent(content, 'stdout', keepAnsi);
+
+          // Skip leading newlines in streaming output until first real content
+          if (!this.hasWrittenContent) {
+            // Check if content is only newlines
+            if (/^\n+$/.test(bothStdout)) {
+              // Skip all-newline content before first real content
+              bothStdout = '';
+            } else if (bothStdout) {
+              // Strip leading newlines from first real content
+              bothStdout = bothStdout.replace(/^\n+/, '');
+              this.hasWrittenContent = true;
+            }
+          }
+
+          if (bothStdout) {
+            process.stdout.write(bothStdout);
+          }
         }
-        // Always append to document
-        this.documentBuffer.push(effect.content);
+        // Document buffer: strip ANSI markers
+        const bothDoc = this.processContent(content, 'doc', keepAnsi);
+        this.documentBuffer.push(bothDoc);
         break;
-        
+
       case 'file':
         if (effect.mode === 'append') {
           // Append operations already performed by evaluator
@@ -86,7 +121,9 @@ export class DefaultEffectHandler implements EffectHandler {
         }
         if (effect.path) {
           try {
-            fs.writeFileSync(effect.path, effect.content);
+            // File output: strip ANSI markers
+            const fileContent = this.processContent(content, 'file', keepAnsi);
+            fs.writeFileSync(effect.path, fileContent);
           } catch (error) {
             console.error(`Failed to write to file ${effect.path}:`, error);
           }
@@ -96,10 +133,12 @@ export class DefaultEffectHandler implements EffectHandler {
   }
 
   getDocument(): string {
+    const raw = this.documentBuffer.join('');
+    if (process.env.DEBUG_NORMALIZER) {
+      console.error(`[EffectHandler.getDocument] buffer length=${raw.length}, content=${raw.substring(0, 100).replace(/\n/g, '\\n')}`);
+    }
     // Basic newline normalization
-    return this.documentBuffer
-      .join('')
-      .replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
+    return raw.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
   }
 
   isStreamingEnabled(): boolean {

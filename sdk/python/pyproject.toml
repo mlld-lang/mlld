@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mlld-sdk"
+version = "2.0.0rc78"
+description = "Python wrapper for the mlld CLI"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "mlld-lang" }
+]
+keywords = ["mlld", "scripting", "llm", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/mlld-lang/mlld"
+Documentation = "https://mlld.dev"
+Repository = "https://github.com/mlld-lang/mlld"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mlld.py"]

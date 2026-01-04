@@ -9,6 +9,7 @@
  */
 
 import { PipelineStateMachine } from './state-machine';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
 
 describe('PipelineStateMachine - Simplified Model', () => {
   describe('Basic Execution', () => {
@@ -49,8 +50,8 @@ describe('PipelineStateMachine - Simplified Model', () => {
       
       // Verify events
       const events = sm.getEvents();
-      expect(events).toContainEqual({ type: 'PIPELINE_START', input: 'base' });
-      expect(events).toContainEqual({ type: 'PIPELINE_COMPLETE', output: 's2-output' });
+      expect(events.find(e => e.type === 'PIPELINE_START')).toMatchObject({ type: 'PIPELINE_START', input: 'base' });
+      expect(events.find(e => e.type === 'PIPELINE_COMPLETE')).toMatchObject({ type: 'PIPELINE_COMPLETE', output: 's2-output' });
       expect(events.filter(e => e.type === 'STAGE_SUCCESS')).toHaveLength(3);
     });
 
@@ -432,8 +433,9 @@ describe('PipelineStateMachine - Simplified Model', () => {
       // History accumulates but might not include the initial attempt
       const history = allHistory.get(contextId);
       expect(history).toBeDefined();
-      expect(history).toContain('s1-v2');
-      expect(history).toContain('s1-v3');
+      const historyTexts = (history ?? []).map(entry => (isStructuredValue(entry) ? entry.text : entry));
+      expect(historyTexts).toContain('s1-v2');
+      expect(historyTexts).toContain('s1-v3');
     });
   });
 
@@ -447,12 +449,12 @@ describe('PipelineStateMachine - Simplified Model', () => {
       
       const events = sm.getEvents();
       
-      expect(events[0]).toEqual({ type: 'PIPELINE_START', input: 'base' });
-      expect(events[1]).toEqual({ type: 'STAGE_START', stage: 0, input: 'base' });
-      expect(events[2]).toEqual({ type: 'STAGE_SUCCESS', stage: 0, output: 's0' });
-      expect(events[3]).toEqual({ type: 'STAGE_START', stage: 1, input: 's0' });
-      expect(events[4]).toEqual({ type: 'STAGE_SUCCESS', stage: 1, output: 's1' });
-      expect(events[5]).toEqual({ type: 'PIPELINE_COMPLETE', output: 's1' });
+      expect(events[0]).toMatchObject({ type: 'PIPELINE_START', input: 'base' });
+      expect(events[1]).toMatchObject({ type: 'STAGE_START', stage: 0, input: 'base' });
+      expect(events[2]).toMatchObject({ type: 'STAGE_SUCCESS', stage: 0, output: 's0' });
+      expect(events[3]).toMatchObject({ type: 'STAGE_START', stage: 1, input: 's0' });
+      expect(events[4]).toMatchObject({ type: 'STAGE_SUCCESS', stage: 1, output: 's1' });
+      expect(events[5]).toMatchObject({ type: 'PIPELINE_COMPLETE', output: 's1' });
     });
 
     it('should include contextId in retry-related events', () => {

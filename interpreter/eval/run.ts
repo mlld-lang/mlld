@@ -1,4 +1,4 @@
-import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause } from '@core/types';
+import type { DirectiveNode, ExeBlockNode, MlldNode, TextNode, VariableReference, WithClause } from '@core/types';
 import { GuardError } from '@core/errors/GuardError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -15,8 +15,10 @@ import { isExecutableVariable, createSimpleTextVariable } from '@core/types/vari
 import type { Variable } from '@core/types/variable';
 import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
-import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
+import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
+import { getAdapter } from '../streaming/adapter-registry';
+import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream-format';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { wrapExecResult } from '../utils/structured-exec';
 import {
@@ -26,9 +28,10 @@ import {
   extractSecurityDescriptor
 } from '../utils/structured-value';
 import { materializeDisplayValue } from '../utils/display-materialization';
-import { ctxToSecurityDescriptor, hasSecurityContext } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor, hasSecurityVarMx } from '@core/types/variable/VarMxHelpers';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
+import { resolveWorkingDirectory } from '../utils/working-directory';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -148,7 +151,7 @@ export async function evaluateRun(
     const wrapped = wrapExecResult(value);
     if (pendingOutputDescriptor) {
       const existingDescriptor =
-        wrapped.ctx && hasSecurityContext(wrapped.ctx) ? ctxToSecurityDescriptor(wrapped.ctx) : undefined;
+        wrapped.mx && hasSecurityVarMx(wrapped.mx) ? varMxToSecurityDescriptor(wrapped.mx) : undefined;
       const descriptor = existingDescriptor
         ? env.mergeSecurityDescriptors(existingDescriptor, pendingOutputDescriptor)
         : pendingOutputDescriptor;
@@ -181,6 +184,50 @@ export async function evaluateRun(
   const streamingRequested = Boolean(withClause && (withClause as any).stream);
   const streamingEnabled = streamingOptions.enabled !== false && streamingRequested;
   const pipelineId = `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+
+  // Check for streamFormat in withClause
+  const hasStreamFormat = withClause && (withClause as any).streamFormat !== undefined;
+  const rawStreamFormat = hasStreamFormat ? (withClause as any).streamFormat : undefined;
+  const streamFormatValue = hasStreamFormat
+    ? await resolveStreamFormatValue(rawStreamFormat, env)
+    : undefined;
+
+  // Persist streamFormat/sink preferences in env so downstream executors see them
+  if (hasStreamFormat) {
+    env.setStreamingOptions({
+      ...streamingOptions,
+      streamFormat: streamFormatValue as any,
+      skipDefaultSinks: true,
+      suppressTerminal: true
+    });
+  }
+  const activeStreamingOptions = env.getStreamingOptions();
+
+  if (process.env.MLLD_DEBUG) {
+    console.error('[FormatAdapter /run] streamingEnabled:', streamingEnabled);
+    console.error('[FormatAdapter /run] hasStreamFormat:', hasStreamFormat);
+    console.error('[FormatAdapter /run] streamFormatValue:', streamFormatValue);
+    console.error('[FormatAdapter /run] withClause:', JSON.stringify(withClause));
+  }
+
+  // Setup streaming via manager
+  const streamingManager = env.getStreamingManager();
+  if (streamingEnabled) {
+    let adapter;
+    if (hasStreamFormat && streamFormatValue) {
+      adapter = await loadStreamAdapter(streamFormatValue);
+    }
+    if (!adapter) {
+      adapter = await getAdapter('ndjson');
+    }
+    streamingManager.configure({
+      env,
+      streamingEnabled: true,
+      streamingOptions: activeStreamingOptions,
+      adapter: adapter as any
+    });
+  }
+
   if (streamingEnabled) {
     const registry = env.getGuardRegistry?.();
     const subtypeKey =
@@ -238,6 +285,13 @@ export async function evaluateRun(
     const command =
       preExtractedCommand ??
       (await interpolateWithPendingDescriptor(commandNodes, InterpolationContext.ShellCommand));
+
+    const workingDirectory = await resolveWorkingDirectory(
+      (directive.values as any)?.workingDir,
+      env,
+      { sourceLocation: directive.location, directiveType: 'run' }
+    );
+    const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
     const commandTaint = deriveCommandTaint({ command });
     mergePendingDescriptor(
       makeSecurityDescriptor({
@@ -280,7 +334,7 @@ export async function evaluateRun(
             exitCode: 1,
             duration: 0,
             stderr: message,
-            workingDirectory: env.getBasePath(),
+            workingDirectory: effectiveWorkingDirectory,
             directiveType: 'run'
           },
           env
@@ -313,19 +367,19 @@ export async function evaluateRun(
         // Block immediately dangerous commands
         if (analysis.blocked) {
           const reason = analysis.risks[0]?.description || 'Security policy violation';
-          throw new MlldCommandExecutionError(
-            `Security: Command blocked - ${reason}`,
-            directive.location,
-            {
-              command,
-              exitCode: 1,
-              duration: 0,
-              stderr: `This command is blocked by security policy: ${reason}`,
-              workingDirectory: env.getBasePath(),
-              directiveType: 'run'
-            },
-            env
-          );
+        throw new MlldCommandExecutionError(
+          `Security: Command blocked - ${reason}`,
+          directive.location,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: `This command is blocked by security policy: ${reason}`,
+            workingDirectory: effectiveWorkingDirectory,
+            directiveType: 'run'
+          },
+          env
+        );
         }
         // TODO: Add approval prompts for suspicious commands
         // Temporarily disable security warnings for cleaner output
@@ -346,11 +400,19 @@ export async function evaluateRun(
       stdinInput = await resolveStdinInput(withClause.stdin, env);
     }
 
-    const commandOptions = stdinInput !== undefined ? { input: stdinInput } : undefined;
+    const commandOptions =
+      stdinInput !== undefined || workingDirectory
+        ? {
+            ...(stdinInput !== undefined ? { input: stdinInput } : {}),
+            ...(workingDirectory ? { workingDirectory } : {})
+          }
+        : undefined;
     setOutput(await env.executeCommand(command, commandOptions, {
       ...executionContext,
       streamingEnabled,
-      pipelineId
+      pipelineId,
+      suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true,
+      workingDirectory
     }));
     
   } else if (directive.subtype === 'runCode') {
@@ -362,6 +424,11 @@ export async function evaluateRun(
     
     // Verbatim code (no interpolation) with dedent to avoid top-level indent issues
     const code = dedentCommonIndent(extractRawTextContent(codeNodes));
+    const workingDirectory = await resolveWorkingDirectory(
+      (directive.values as any)?.workingDir,
+      env,
+      { sourceLocation: directive.location, directiveType: 'run' }
+    );
     
     // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
     const args = directive.values?.args || [];
@@ -402,11 +469,19 @@ export async function evaluateRun(
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
     setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await env.executeCode(code, language, argValues, {
-        ...executionContext,
-        streamingEnabled,
-        pipelineId
-      });
+      return await env.executeCode(
+        code,
+        language,
+        argValues,
+        undefined,
+        workingDirectory ? { workingDirectory } : undefined,
+        {
+          ...executionContext,
+          streamingEnabled,
+          pipelineId,
+          workingDirectory
+        }
+      );
     }));
     
   } else if (directive.subtype === 'runExec') {
@@ -516,8 +591,8 @@ export async function evaluateRun(
           },
           createdAt: Date.now(),
           modifiedAt: Date.now(),
-          ctx: {
-            ...(value.ctx || {})
+          mx: {
+            ...(value.mx || {})
           },
           internal: {
             ...(value.internal || {}),
@@ -600,6 +675,13 @@ export async function evaluateRun(
       for (const [key, value] of Object.entries(argValues)) {
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
+
+      const workingDirectory = await resolveWorkingDirectory(
+        (definition as any)?.workingDir,
+        tempEnv,
+        { sourceLocation: directive.location, directiveType: 'run' }
+      );
+      const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
       
       // TODO: Remove this workaround when issue #51 is fixed
       // Strip leading '[' from first command segment if present
@@ -629,25 +711,26 @@ export async function evaluateRun(
             throw new MlldCommandExecutionError(
               `Security: Exec command blocked - ${reason}`,
               directive.location,
-              {
-                command,
-                exitCode: 1,
-                duration: 0,
-                stderr: `This exec command is blocked by security policy: ${reason}`,
-                workingDirectory: env.getBasePath(),
-                directiveType: 'run'
-              },
-              env
-            );
-          }
+            {
+              command,
+              exitCode: 1,
+              duration: 0,
+              stderr: `This exec command is blocked by security policy: ${reason}`,
+              workingDirectory: effectiveWorkingDirectory,
+              directiveType: 'run'
+            },
+            env
+          );
+        }
         }
       }
       
       // Pass context for exec command errors too
-      setOutput(await env.executeCommand(command, undefined, {
+      setOutput(await env.executeCommand(command, workingDirectory ? { workingDirectory } : undefined, {
         ...executionContext,
         streamingEnabled,
-        pipelineId
+        pipelineId,
+        workingDirectory
       }));
       
     } else if (definition.type === 'commandRef') {
@@ -680,27 +763,16 @@ export async function evaluateRun(
       setOutput(result.value);
       
     } else if (definition.type === 'code') {
-      // Interpolate the code template with parameters
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
-      
-      // Interpolate executable code templates with parameters (canonical behavior)
-      const code = await interpolateWithPendingDescriptor(
-        definition.codeTemplate,
-        InterpolationContext.ShellCommand,
-        tempEnv
+      const workingDirectory = await resolveWorkingDirectory(
+        (definition as any)?.workingDir,
+        tempEnv,
+        { sourceLocation: directive.location, directiveType: 'run' }
       );
-      if (process.env.DEBUG_EXEC) {
-        logger.debug('run.ts code execution debug:', {
-          codeTemplate: definition.codeTemplate,
-          interpolatedCode: code,
-          argValues
-        });
-      }
       
-      // Pass captured shadow environments to code execution
       const codeParams = { ...argValues };
       const capturedEnvs = execVar.internal?.capturedShadowEnvs;
       if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
@@ -736,9 +808,49 @@ export async function evaluateRun(
           outputType: typeof outputValue,
           outputValue: outputText.substring(0, 100)
         });
+      } else if (definition.language === 'mlld-exe-block') {
+        const blockNode = Array.isArray(definition.codeTemplate)
+          ? (definition.codeTemplate[0] as ExeBlockNode | undefined)
+          : undefined;
+        if (!blockNode || !blockNode.values) {
+          throw new Error('mlld-exe-block executable missing block content');
+        }
+
+        const execEnv = env.createChild();
+        for (const [key, value] of Object.entries(codeParams)) {
+          execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
+        }
+
+        const { evaluateExeBlock } = await import('./exe');
+        const blockResult = await evaluateExeBlock(blockNode, execEnv);
+        setOutput(blockResult.value);
       } else {
+        // Interpolate executable code templates with parameters (canonical behavior)
+        const code = await interpolateWithPendingDescriptor(
+          definition.codeTemplate,
+          InterpolationContext.ShellCommand,
+          tempEnv
+        );
+        if (process.env.DEBUG_EXEC) {
+          logger.debug('run.ts code execution debug:', {
+            codeTemplate: definition.codeTemplate,
+            interpolatedCode: code,
+            argValues
+          });
+        }
+
         setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
-          return await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);
+          return await env.executeCode(
+            code,
+            definition.language || 'javascript',
+            codeParams,
+            undefined,
+            workingDirectory ? { workingDirectory } : undefined,
+            {
+              ...executionContext,
+              workingDirectory
+            }
+          );
         }));
       }
     } else if (definition.type === 'template') {
@@ -800,12 +912,6 @@ export async function evaluateRun(
         console.error('[mlld] withClause', withClause);
       }
     }
-    // Check dependencies first if specified
-    if (withClause.needs) {
-      const checker = new DefaultDependencyChecker();
-      await checkDependencies(withClause.needs, checker, directive.location);
-    }
-    
     // Apply pipeline transformations if specified
     if (withClause.pipeline && withClause.pipeline.length > 0) {
       // Use unified pipeline processor
@@ -814,7 +920,7 @@ export async function evaluateRun(
       const enableStage0 = !!sourceNodeForPipeline;
       const pipelineInput = outputValue;
       const valueForPipeline = enableStage0
-        ? { value: pipelineInput, ctx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
+        ? { value: pipelineInput, mx: {}, internal: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : pipelineInput;
       const outputDescriptor = lastOutputDescriptor ?? extractSecurityDescriptor(pipelineInput, {
         recursive: true,
@@ -838,14 +944,26 @@ export async function evaluateRun(
       setOutput(pipelineResult);
     }
   }
- 
+
+  // Cleanup streaming sinks and capture adapter output
+  const finalizedStreaming = streamingManager.finalizeResults();
+  env.setStreamingResult(finalizedStreaming.streaming);
+
+  // When using format adapter, use the accumulated formatted text from the adapter
+  // instead of the raw command output
+  if (hasStreamFormat && finalizedStreaming.streaming?.text) {
+    outputText = finalizedStreaming.streaming.text;
+    // Update outputValue to match the formatted text
+    setOutput(outputText);
+  }
+
   // Output directives always end with a newline for display
   let displayText = outputText;
   if (!displayText.endsWith('\n')) {
     displayText += '\n';
   }
   outputText = displayText;
-  
+
   // Only add output nodes for non-embedded directives
   if (!directive.meta?.isDataValue && !directive.meta?.isEmbedded) {
     // Create replacement text node with the output
@@ -854,13 +972,15 @@ export async function evaluateRun(
       nodeId: `${directive.nodeId}-output`,
       content: displayText
     };
-    
+
     // Add the replacement node to environment
     env.addNode(replacementNode);
   }
-  
+
   // Emit effect only for top-level run directives (not data/RHS contexts)
-  if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef) {
+  // Skip emission when using format adapter (adapter already emitted during streaming)
+  const shouldEmitFinalOutput = !hasStreamFormat || !streamingEnabled;
+  if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef && shouldEmitFinalOutput) {
     const materializedEffect = materializeDisplayValue(
       outputValue,
       undefined,
@@ -873,7 +993,7 @@ export async function evaluateRun(
     }
     env.emitEffect('both', effectText);
   }
-  
+
   // Return the output value
   return {
     value: outputValue,
@@ -881,6 +1001,8 @@ export async function evaluateRun(
   };
   } catch (error) {
     throw error;
+  } finally {
+    // Streaming cleanup already done above (moved out of finally to use results)
   }
 }
 

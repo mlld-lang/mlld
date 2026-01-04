@@ -1,8 +1,0 @@
-/guard @validateInput before op:exe = when [
-  @input.length > 1000 => deny "Input too large"
-  @input.includes("<script") => deny "Potentially malicious input"
-  * => allow
-]
-
-/exe @process(data) = run { echo "@data" }
-/show @process("<script>alert('xss')</script>")  # Blocked

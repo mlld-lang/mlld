@@ -1,0 +1,2 @@
+var secret @data = "sensitive"
+show @data.mx.labels  >> ["secret"]

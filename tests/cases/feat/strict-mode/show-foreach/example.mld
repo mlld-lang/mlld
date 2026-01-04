@@ -1,0 +1,7 @@
+var @questions = ["What is your name?", "Where are you from?", "What do you do?"]
+
+exe @ask(q) = cmd {echo "Answer to: @q"}
+
+show foreach @ask(@questions)
+
+show foreach @ask(@questions) with { separator: "\n==========\n" }

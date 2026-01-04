@@ -18,16 +18,16 @@ describe('universal array helpers', () => {
       isSystem: true
     });
 
-    expect(arrayVar.any?.ctx.labels.includes('secret')).toBe(true);
-    expect(arrayVar.all?.ctx.labels.includes('secret')).toBe(false);
-    expect(arrayVar.none?.ctx.labels.includes('public')).toBe(true);
+    expect(arrayVar.any?.mx.labels.includes('secret')).toBe(true);
+    expect(arrayVar.all?.mx.labels.includes('secret')).toBe(false);
+    expect(arrayVar.none?.mx.labels.includes('public')).toBe(true);
 
-    const ctx = arrayVar.ctx as any;
-    expect(ctx.labels).toEqual(['secret', 'pii']);
-    expect(ctx.sources).toEqual(['vault', 'form']);
-    expect(Array.isArray(ctx.tokens)).toBe(true);
-    expect(typeof ctx.totalTokens()).toBe('number');
-    expect(typeof ctx.maxTokens()).toBe('number');
+    const mx = arrayVar.mx as any;
+    expect(mx.labels).toEqual(['secret', 'pii']);
+    expect(mx.sources).toEqual(['vault', 'form']);
+    expect(Array.isArray(mx.tokens)).toBe(true);
+    expect(typeof mx.totalTokens()).toBe('number');
+    expect(typeof mx.maxTokens()).toBe('number');
 
     expect(typeof arrayVar.totalTokens).toBe('function');
     expect(typeof arrayVar.maxTokens).toBe('function');
@@ -39,12 +39,12 @@ describe('universal array helpers', () => {
     const source = VariableMetadataUtils.createSource('array', false, false);
     const arrayVar = createArrayVariable('plain', [{ text: 'hello' }], false, source);
 
-    expect(arrayVar.any?.ctx.labels.includes('secret')).toBe(false);
-    const ctx = arrayVar.ctx as any;
-    expect(ctx.labels).toEqual([]);
-    expect(ctx.sources).toEqual([]);
-    expect(ctx.tokens).toEqual([]);
-    expect(ctx.totalTokens()).toBe(0);
-    expect(ctx.maxTokens()).toBe(0);
+    expect(arrayVar.any?.mx.labels.includes('secret')).toBe(false);
+    const mx = arrayVar.mx as any;
+    expect(mx.labels).toEqual([]);
+    expect(mx.sources).toEqual([]);
+    expect(mx.tokens).toEqual([]);
+    expect(mx.totalTokens()).toBe(0);
+    expect(mx.maxTokens()).toBe(0);
   });
 });

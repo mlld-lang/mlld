@@ -29,6 +29,7 @@ export interface PathMeta {
 export interface ImportMeta extends DirectiveMeta {
   path: PathMeta; // Path metadata is required for import directives
   importType?: ImportType;
+  templateParams?: string[];
 }
 
 /**
@@ -78,6 +79,8 @@ export interface PathDirectiveMeta extends DirectiveMeta {
  */
 export interface RunMeta extends DirectiveMeta {
   riskLevel?: 'low' | 'medium' | 'high';
+  workingDirMeta?: PathMeta;
+  hasWorkingDir?: boolean;
   // Command execution metadata
 }
 

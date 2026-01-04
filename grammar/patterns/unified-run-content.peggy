@@ -82,8 +82,27 @@ UnifiedCommandBrackets "Command brackets {...}"
 
 // CMD PREFIXED COMMAND BRACKETS - Explicit command wrapper
 CmdCommandBrackets "cmd command brackets"
-  = "cmd" _ content:UnifiedCommandBrackets {
-      return content;
+  = "cmd" workingDir:WorkingDirPath? _ content:UnifiedCommandBrackets {
+      if (!workingDir) {
+        return content;
+      }
+
+      return {
+        ...content,
+        values: {
+          ...content.values,
+          workingDir: workingDir.parts
+        },
+        raw: {
+          ...content.raw,
+          workingDir: workingDir.raw
+        },
+        meta: {
+          ...content.meta,
+          workingDirMeta: workingDir.meta,
+          hasWorkingDir: true
+        }
+      };
     }
 
 // Bare command brackets are no longer allowed without cmd prefix
@@ -255,7 +274,8 @@ UnifiedCommandParts
 
 // Command tokens - complete units (quoted strings, variables, words)
 UnifiedCommandToken
-  = UnifiedVariableNoTail               // Variables first (unified pattern)
+  = ConditionalTemplateSnippet   // @var?`...`
+  / UnifiedVariableNoTail               // Variables first (unified pattern)
   / UnifiedCommandQuotedString   // Complete quoted strings
   / UnifiedCommandWord           // Unquoted words with spaces
   / UnifiedCommandSpace          // Explicit spaces between tokens
@@ -287,9 +307,9 @@ UnifiedCommandQuotedString
       
       // Add closing quote and flush remaining text
       currentText += '"';
-      if (currentText !== '""') {
-        nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
-      }
+      // Always add the text node - even for empty strings ""
+      // Empty strings are valid shell arguments and must be preserved
+      nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
       
       // If only one text node, return it directly
       if (nodes.length === 1 && nodes[0].type === NodeType.Text) {

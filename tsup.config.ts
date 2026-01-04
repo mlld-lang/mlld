@@ -13,7 +13,7 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'ut
 
 // Define common external dependencies to ensure consistency across builds
 const externalDependencies = [
-  // Core libraries 
+  // Core libraries
   // Note: mlld-ast is now consolidated into @core/ast and should be bundled, not external
   'llmxml',
   'marked',
@@ -22,6 +22,8 @@ const externalDependencies = [
   'yargs',
   'vscode-languageserver/node',
   'vscode-languageserver',
+  // TypeScript is only used for AST extraction and has CJS code that breaks ESM
+  'typescript',
   
   // Node.js built-ins
   'fs',

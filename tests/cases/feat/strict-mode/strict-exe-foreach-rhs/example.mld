@@ -1,0 +1,4 @@
+exe @wrap(x) = `[@x]`
+exe @processAll(items) = foreach @wrap(@items)
+
+show @processAll(["a", "b"])

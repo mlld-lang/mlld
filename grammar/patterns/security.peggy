@@ -21,7 +21,7 @@ DataLabelList
     }
 
 DataLabelSequence
-  = first:DataLabelToken rest:(_ "," _ DataLabelToken)* {
+  = first:DataLabelToken rest:(HWS "," HWS DataLabelToken)* {
       const tokens = [first];
       for (const entry of rest) {
         tokens.push(entry[3]);
@@ -36,6 +36,6 @@ DataLabelToken
 
 DataLabelIdentifier
   = label:BaseIdentifier &{
-      const reserved = ['module', 'static', 'live', 'cached', 'local', 'foreach', 'pipeline', 'with', 'needs', 'from', 'as'];
+      const reserved = ['module', 'static', 'live', 'cached', 'local', 'foreach', 'pipeline', 'with', 'from', 'as'];
       return !reserved.includes(label.toLowerCase());
     } { return label; }

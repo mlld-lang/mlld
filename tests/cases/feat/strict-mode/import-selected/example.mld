@@ -1,0 +1,3 @@
+import {greeting, count} from "strict-selected-test-utils.mld"
+show @greeting
+show @count

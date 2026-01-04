@@ -21,12 +21,15 @@ import { FileReferenceVisitor } from '@services/lsp/visitors/FileReferenceVisito
 import { ForeachVisitor } from '@services/lsp/visitors/ForeachVisitor';
 import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
+import type { VisitorDiagnostic } from '@tests/utils/token-validator/types.js';
 
 export class ASTSemanticVisitor {
   private contextStack: ContextStack;
   private tokenBuilder: TokenBuilder;
   private visitors: Map<string, INodeVisitor>;
   private textCache = new Map<string, string>();
+  private visitedNodeIds = new Set<string>();
+  private visitorCalls: VisitorDiagnostic[] = [];
   
   constructor(
     private document: TextDocument,
@@ -38,7 +41,25 @@ export class ASTSemanticVisitor {
     this.contextStack = new ContextStack();
     this.tokenBuilder = new TokenBuilder(builder, tokenTypes, tokenModifiers, document, tokenTypeMap);
     this.visitors = new Map();
-    
+
+    // Initialize template context from document URI for .att/.mtt files
+    const uri = document.uri.toLowerCase();
+    if (uri.endsWith('.att')) {
+      this.contextStack.push({
+        templateType: 'att',
+        wrapperType: 'att',
+        interpolationAllowed: true,
+        variableStyle: '@var'
+      });
+    } else if (uri.endsWith('.mtt')) {
+      this.contextStack.push({
+        templateType: 'mtt',
+        wrapperType: 'mtt',
+        interpolationAllowed: true,
+        variableStyle: '{{var}}'
+      });
+    }
+
     this.initializeVisitors();
   }
   
@@ -68,8 +89,10 @@ export class ASTSemanticVisitor {
     this.registerVisitor('Template', templateVisitor);
     this.registerVisitor('TemplateForBlock', templateVisitor);
     this.registerVisitor('TemplateInlineShow', templateVisitor);
+    this.registerVisitor('Text', templateVisitor);
     this.registerVisitor('CommandBase', commandVisitor);
     this.registerVisitor('command', commandVisitor);
+    this.registerVisitor('code', commandVisitor);
     this.registerVisitor('ExecInvocation', commandVisitor);
     this.registerVisitor('CommandReference', commandVisitor);
     this.registerVisitor('BinaryExpression', expressionVisitor);
@@ -84,6 +107,9 @@ export class ASTSemanticVisitor {
     this.registerVisitor('array', structureVisitor);
     this.registerVisitor('Property', structureVisitor);
     this.registerVisitor('MemberExpression', structureVisitor);
+    this.registerVisitor('field', structureVisitor);
+    this.registerVisitor('numericField', structureVisitor);
+    this.registerVisitor('arrayIndex', structureVisitor);
     this.registerVisitor('FileReference', fileReferenceVisitor);
     this.registerVisitor('load-content', fileReferenceVisitor);
     this.registerVisitor('Comment', fileReferenceVisitor);
@@ -93,6 +119,8 @@ export class ASTSemanticVisitor {
     this.registerVisitor('MlldRunBlock', fileReferenceVisitor);
     this.registerVisitor('foreach', foreachVisitor);
     this.registerVisitor('foreach-command', foreachVisitor);
+    this.registerVisitor('LetAssignment', expressionVisitor);
+    this.registerVisitor('ExeReturn', expressionVisitor);
   }
   
   private registerVisitor(nodeType: string, visitor: INodeVisitor): void {
@@ -110,10 +138,20 @@ export class ASTSemanticVisitor {
   popContext(): void {
     this.contextStack.pop();
   }
-  
+
+  getVisitorDiagnostics(): VisitorDiagnostic[] {
+    return this.visitorCalls;
+  }
+
+  getTokenBuilder(): TokenBuilder {
+    return this.tokenBuilder;
+  }
+
   async visitAST(ast: any[]): Promise<void> {
     this.textCache.clear();
-    
+    this.visitedNodeIds.clear();
+    this.visitorCalls = [];
+
     // Initialize embedded language service if not already initialized
     await embeddedLanguageService.initialize();
     
@@ -128,11 +166,21 @@ export class ASTSemanticVisitor {
   
   visitNode(node: any, context?: VisitorContext): void {
     if (!node || !node.type) return;
-    
+
     if (this.shouldSkipNode(node)) return;
-    
+
     const actualContext = context || this.currentContext;
-    
+
+    const diagnostic: VisitorDiagnostic = {
+      visitorClass: 'Unknown',
+      nodeType: node.type,
+      nodeId: node.nodeId || 'unknown',
+      called: false,
+      tokensEmitted: 0,
+      tokensAccepted: 0,
+      tokensRejected: 0
+    };
+
     try {
       if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
         console.log(`[VISITOR] Node: ${node.type}`, {
@@ -140,15 +188,46 @@ export class ASTSemanticVisitor {
           content: node.content || node.identifier || node.value || '?'
         });
       }
-      
+
       if (!node.location && node.type !== 'Text' && node.type !== 'Newline' && process.env.DEBUG_LSP) {
         console.warn(`Node type ${node.type} missing location`);
       }
-      
+
       const visitor = this.visitors.get(node.type);
       if (visitor) {
+        diagnostic.visitorClass = visitor.constructor.name;
+        diagnostic.called = true;
+
+        if (node.nodeId) {
+          this.tokenBuilder.setSourceNode(node.nodeId);
+        }
+
+        const attemptsBefore = this.tokenBuilder.getAttempts().length;
+
         visitor.visitNode(node, actualContext);
+
+        const attemptsAfter = this.tokenBuilder.getAttempts().length;
+        const newAttempts = this.tokenBuilder.getAttempts().slice(attemptsBefore);
+
+        diagnostic.tokensEmitted = newAttempts.length;
+        diagnostic.tokensAccepted = newAttempts.filter(a => a.accepted).length;
+        diagnostic.tokensRejected = newAttempts.filter(a => !a.accepted).length;
+
+        this.tokenBuilder.clearSourceNode();
+
+        // Visit children to ensure nested nodes are processed
+        // Visitors that manually recurse will skip duplicates via valueType checks
+        this.visitChildren(node, actualContext);
       } else {
+        diagnostic.called = true;
+        diagnostic.visitorClass = 'ASTSemanticVisitor';
+
+        if (node.nodeId) {
+          this.tokenBuilder.setSourceNode(node.nodeId);
+        }
+
+        const attemptsBefore = this.tokenBuilder.getAttempts().length;
+
         switch (node.type) {
           case 'Text':
             this.visitText(node, actualContext);
@@ -161,12 +240,37 @@ export class ASTSemanticVisitor {
           case 'Parameter':
             this.visitParameter(node, actualContext);
             break;
+          case 'VariableReferenceWithTail':
+            this.visitVariableReferenceWithTail(node, actualContext);
+            break;
+          case 'ExeBlock':
+            this.visitExeBlock(node, actualContext);
+            break;
+          case 'LetAssignment':
+            this.visitLetAssignment(node, actualContext);
+            break;
+          case 'AugmentedAssignment':
+            this.visitAugmentedAssignment(node, actualContext);
+            break;
+          case 'ExeReturn':
+            this.visitExeReturn(node, actualContext);
+            break;
           default:
             console.warn(`Unknown node type: ${node.type}`);
             this.visitChildren(node, actualContext);
         }
+
+        const attemptsAfter = this.tokenBuilder.getAttempts().length;
+        const newAttempts = this.tokenBuilder.getAttempts().slice(attemptsBefore);
+
+        diagnostic.tokensEmitted = newAttempts.length;
+        diagnostic.tokensAccepted = newAttempts.filter(a => a.accepted).length;
+        diagnostic.tokensRejected = newAttempts.filter(a => !a.accepted).length;
+
+        this.tokenBuilder.clearSourceNode();
       }
     } catch (error) {
+      diagnostic.called = true;
       console.error(`[SEMANTIC-TOKEN-ERROR] Error visiting node type ${node.type}:`, {
         error: error.message,
         stack: error.stack,
@@ -178,25 +282,65 @@ export class ASTSemanticVisitor {
       });
       // Continue processing other nodes
     }
+
+    this.visitorCalls.push(diagnostic);
   }
   
   private shouldSkipNode(node: any): boolean {
     if (!node.type) return true;
-    
+
     const skipTypes = ['Newline', 'Whitespace', 'EOF'];
     if (skipTypes.includes(node.type)) return true;
-    
+
     if (node.error || node.isError) return false;
-    
+
     if (node.type.startsWith('_') || node.type.startsWith('$')) return true;
-    
+
+    // Skip nodes we've already visited (prevents duplicates from manual recursion + visitChildren)
+    if (node.nodeId && this.visitedNodeIds.has(node.nodeId)) {
+      return true;
+    }
+
+    // Mark this node as visited
+    if (node.nodeId) {
+      this.visitedNodeIds.add(node.nodeId);
+    }
+
     return false;
   }
   
   visitChildren(node: any, context?: VisitorContext): void {
     const actualContext = context || this.currentContext;
-    const childProps = ['values', 'children', 'body', 'content', 'nodes', 'elements'];
-    
+
+    // If this is a container object without .type, visit ALL its properties
+    if (!node.type) {
+      for (const key of Object.keys(node)) {
+        const value = node[key];
+        if (Array.isArray(value)) {
+          for (const child of value) {
+            this.visitNode(child, actualContext);
+          }
+        } else if (value && typeof value === 'object') {
+          this.visitNode(value, actualContext);
+        }
+      }
+      return;
+    }
+
+    // For nodes with .type, check specific child properties
+    const childProps = [
+      'values',
+      'value',
+      'variable',
+      'invocation',
+      'withClause',
+      'children',
+      'body',
+      'content',
+      'nodes',
+      'elements'
+    ];
+
     for (const prop of childProps) {
       if (node[prop]) {
         if (Array.isArray(node[prop])) {
@@ -204,7 +348,13 @@ export class ASTSemanticVisitor {
             this.visitNode(child, actualContext);
           }
         } else if (typeof node[prop] === 'object') {
-          this.visitNode(node[prop], actualContext);
+          // Check if it's a node or a container object
+          if (node[prop].type) {
+            this.visitNode(node[prop], actualContext);
+          } else {
+            // Plain container object - recurse into its properties
+            this.visitChildren(node[prop], actualContext);
+          }
         }
       }
     }
@@ -348,7 +498,7 @@ export class ASTSemanticVisitor {
   
   visitParameter(node: any, context: VisitorContext): void {
     if (!node.location || !node.name) return;
-    
+
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
@@ -356,5 +506,235 @@ export class ASTSemanticVisitor {
       tokenType: 'parameter',
       modifiers: []
     });
+  }
+
+  visitVariableReferenceWithTail(node: any, context: VisitorContext): void {
+    // Visit the main variable reference
+    if (node.variable) {
+      this.visitNode(node.variable, context);
+    }
+
+    // Handle the pipeline in withClause
+    if (node.withClause?.pipeline && Array.isArray(node.withClause.pipeline)) {
+      const source = this.document.getText();
+
+      for (const transform of node.withClause.pipeline) {
+        // Each transform has .identifier array with VariableReference nodes
+        if (transform.identifier && Array.isArray(transform.identifier)) {
+          for (const identNode of transform.identifier) {
+            if (identNode.type === 'VariableReference' && identNode.location) {
+              // Find the | operator before this transform
+              const pipeOffset = source.lastIndexOf('|', identNode.location.start.offset);
+              if (pipeOffset !== -1 && pipeOffset > (node.variable?.location?.end?.offset || 0)) {
+                const pipePos = this.document.positionAt(pipeOffset);
+                this.tokenBuilder.addToken({
+                  line: pipePos.line,
+                  char: pipePos.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+
+              // Visit the variable reference in the pipeline
+              this.visitNode(identNode, context);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Visit an ExeBlock node (statement block with let/+=/=> return)
+   * Used in both /exe definitions and /var blocks
+   */
+  private visitExeBlock(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const blockText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize opening bracket '['
+    const openBracketIndex = blockText.indexOf('[');
+    if (openBracketIndex !== -1) {
+      const bracketOffset = node.location.start.offset + openBracketIndex;
+      const bracketPos = this.document.positionAt(bracketOffset);
+      this.tokenBuilder.addToken({
+        line: bracketPos.line,
+        char: bracketPos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+
+    // Process statements
+    if (node.values?.statements && Array.isArray(node.values.statements)) {
+      for (const statement of node.values.statements) {
+        this.visitNode(statement, context);
+      }
+    }
+
+    // Process return statement
+    if (node.values?.return) {
+      this.visitNode(node.values.return, context);
+    }
+
+    // Tokenize closing bracket ']'
+    const closeBracketIndex = blockText.lastIndexOf(']');
+    if (closeBracketIndex !== -1) {
+      const bracketOffset = node.location.start.offset + closeBracketIndex;
+      const bracketPos = this.document.positionAt(bracketOffset);
+      this.tokenBuilder.addToken({
+        line: bracketPos.line,
+        char: bracketPos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+  }
+
+  /**
+   * Visit a LetAssignment node (let @var = value)
+   */
+  private visitLetAssignment(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const letText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize 'let' keyword
+    const letMatch = letText.match(/^let\b/);
+    if (letMatch) {
+      const letPos = this.document.positionAt(node.location.start.offset);
+      this.tokenBuilder.addToken({
+        line: letPos.line,
+        char: letPos.character,
+        length: 3,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize the variable being assigned (@identifier)
+    if (node.identifier) {
+      const atIndex = letText.indexOf(`@${node.identifier}`);
+      if (atIndex !== -1) {
+        const atOffset = node.location.start.offset + atIndex;
+        const atPos = this.document.positionAt(atOffset);
+        this.tokenBuilder.addToken({
+          line: atPos.line,
+          char: atPos.character,
+          length: node.identifier.length + 1,
+          tokenType: 'variable',
+          modifiers: ['declaration']
+        });
+      }
+    }
+
+    // Tokenize '=' operator
+    const eqMatch = letText.match(/\s*(=)\s*/);
+    if (eqMatch && eqMatch.index !== undefined) {
+      const eqOffset = node.location.start.offset + letText.indexOf('=', eqMatch.index);
+      const eqPos = this.document.positionAt(eqOffset);
+      this.tokenBuilder.addToken({
+        line: eqPos.line,
+        char: eqPos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+
+    // Process value expression
+    if (node.value) {
+      const valueNodes = Array.isArray(node.value) ? node.value : [node.value];
+      for (const valueNode of valueNodes) {
+        this.visitNode(valueNode, context);
+      }
+    }
+  }
+
+  /**
+   * Visit an AugmentedAssignment node (@var += value)
+   */
+  private visitAugmentedAssignment(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const augText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize the variable being assigned (@identifier)
+    if (node.identifier) {
+      const atIndex = augText.indexOf(`@${node.identifier}`);
+      if (atIndex !== -1) {
+        const atOffset = node.location.start.offset + atIndex;
+        const atPos = this.document.positionAt(atOffset);
+        this.tokenBuilder.addToken({
+          line: atPos.line,
+          char: atPos.character,
+          length: node.identifier.length + 1,
+          tokenType: 'variable',
+          modifiers: ['modification']
+        });
+      }
+    }
+
+    // Tokenize the augmented operator (+=)
+    if (node.operator) {
+      const opMatch = augText.match(/\+=/);
+      if (opMatch && opMatch.index !== undefined) {
+        const opOffset = node.location.start.offset + opMatch.index;
+        const opPos = this.document.positionAt(opOffset);
+        this.tokenBuilder.addToken({
+          line: opPos.line,
+          char: opPos.character,
+          length: 2,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      }
+    }
+
+    // Process value expression
+    if (node.value) {
+      const valueNodes = Array.isArray(node.value) ? node.value : [node.value];
+      for (const valueNode of valueNodes) {
+        this.visitNode(valueNode, context);
+      }
+    }
+  }
+
+  /**
+   * Visit an ExeReturn node (=> value)
+   */
+  private visitExeReturn(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const returnText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    // Tokenize '=>' operator
+    const arrowMatch = returnText.match(/^=>/);
+    if (arrowMatch) {
+      const arrowPos = this.document.positionAt(node.location.start.offset);
+      this.tokenBuilder.addToken({
+        line: arrowPos.line,
+        char: arrowPos.character,
+        length: 2,
+        tokenType: 'modifier',
+        modifiers: []
+      });
+    }
+
+    // Process return values
+    if (node.values) {
+      const valueNodes = Array.isArray(node.values) ? node.values : [node.values];
+      for (const valueNode of valueNodes) {
+        this.visitNode(valueNode, context);
+      }
+    }
   }
 }

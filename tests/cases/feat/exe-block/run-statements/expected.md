@@ -1,0 +1,9 @@
+exec:EXEC
+STATIC
+CMD
+BRACES
+JS
+QUOTED
+STDIN
+["A","B"]
+DONE

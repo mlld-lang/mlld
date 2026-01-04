@@ -49,13 +49,21 @@ export class StructureVisitor extends BaseVisitor {
   private visitObjectExpression(node: any, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const objectText = sourceText.substring(node.location.start.offset, node.location.end.offset);
-    
-    if (node.properties && typeof node.properties === 'object') {
+
+    // Handle both 'entries' (AST format) and 'properties' (legacy format)
+    const entries = node.entries || (node.properties ? Object.entries(node.properties).map(([key, value]) => ({
+      type: 'pair',
+      key,
+      value
+    })) : []);
+
+    if (entries.length > 0) {
       // Check if this is a plain object (all values are primitives) or has mlld constructs
-      const hasASTNodes = Object.values(node.properties).some(value => 
-        typeof value === 'object' && value !== null && value.type
-      );
-      
+      const hasASTNodes = entries.some((entry: any) => {
+        const value = entry.value;
+        return typeof value === 'object' && value !== null && value.type;
+      });
+
       if (!hasASTNodes) {
         // Plain object - let embedded service handle all tokens including braces
         this.tokenizePlainObject(node, objectText);
@@ -65,13 +73,26 @@ export class StructureVisitor extends BaseVisitor {
         this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
         // Object with mlld constructs - process AST nodes
         let lastPropertyEndOffset = node.location.start.offset + 1; // After '{'
-        
-        for (const [key, value] of Object.entries(node.properties)) {
-          // Find and tokenize the property key
-          const keyPattern = new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`);
-          const keyMatch = objectText.match(keyPattern);
-          if (keyMatch && keyMatch.index !== undefined) {
-            const keyPosition = this.document.positionAt(node.location.start.offset + keyMatch.index);
+
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          const key = entry.key;
+          const value = entry.value;
+
+          // Find and tokenize the property key (quoted or unquoted)
+          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const quotedPattern = new RegExp(`"${escapedKey}"`);
+          const unquotedPattern = new RegExp(`\\b${escapedKey}\\s*:`);
+
+          const quotedMatch = objectText.match(quotedPattern);
+          const unquotedMatch = objectText.match(unquotedPattern);
+
+          const keyMatch = quotedMatch || unquotedMatch; // For use in subsequent code
+          const keyMatchIndex = quotedMatch?.index ?? unquotedMatch?.index;
+
+          if (quotedMatch && quotedMatch.index !== undefined) {
+            // Quoted key
+            const keyPosition = this.document.positionAt(node.location.start.offset + quotedMatch.index);
             this.tokenBuilder.addToken({
               line: keyPosition.line,
               char: keyPosition.character,
@@ -79,14 +100,36 @@ export class StructureVisitor extends BaseVisitor {
               tokenType: 'string',
               modifiers: []
             });
-            
+
             // Find and tokenize the colon
-            const colonIndex = objectText.indexOf(':', keyMatch.index + keyMatch[0].length);
+            const colonIndex = objectText.indexOf(':', quotedMatch.index + quotedMatch[0].length);
             if (colonIndex !== -1) {
               this.operatorHelper.addOperatorToken(node.location.start.offset + colonIndex, 1);
             }
+          } else if (unquotedMatch && unquotedMatch.index !== undefined) {
+            // Unquoted key
+            const keyPosition = this.document.positionAt(node.location.start.offset + unquotedMatch.index);
+            this.tokenBuilder.addToken({
+              line: keyPosition.line,
+              char: keyPosition.character,
+              length: key.length,
+              tokenType: 'property',
+              modifiers: []
+            });
+
+            // Tokenize the colon (it's part of the match)
+            const colonOffset = node.location.start.offset + unquotedMatch.index + key.length;
+            const sourceText = this.document.getText();
+            // Find the colon after the key
+            let colonPos = colonOffset;
+            while (colonPos < sourceText.length && sourceText[colonPos] !== ':') {
+              colonPos++;
+            }
+            if (sourceText[colonPos] === ':') {
+              this.operatorHelper.addOperatorToken(colonPos, 1);
+            }
           }
-          
+
           // Process the value
           if (typeof value === 'object' && value !== null) {
             if (value.type) {
@@ -102,7 +145,7 @@ export class StructureVisitor extends BaseVisitor {
                   }
                 }
               }
-              // Regular AST node
+              // Regular AST node - RECURSIVE VISITATION FOR MLLD VALUES
               this.mainVisitor.visitNode(value, context);
               if (value.location) {
                 lastPropertyEndOffset = value.location.end.offset;
@@ -141,11 +184,9 @@ export class StructureVisitor extends BaseVisitor {
               }
             }
           }
-          
+
           // Find and tokenize comma if not the last property
-          const entries = Object.entries(node.properties);
-          const currentIndex = entries.findIndex(([k]) => k === key);
-          if (currentIndex < entries.length - 1) {
+          if (i < entries.length - 1) {
             // Use helper to find and tokenize comma
             this.operatorHelper.tokenizeOperatorBetween(
               lastPropertyEndOffset,
@@ -155,8 +196,12 @@ export class StructureVisitor extends BaseVisitor {
           }
         }
       }
+    } else if (node.properties && typeof node.properties === 'object') {
+      // Fallback for old format with properties object but no entries
+      this.tokenizePlainObject(node, objectText);
+      return;
     }
-    
+
     // Add closing brace
     this.operatorHelper.addOperatorToken(node.location.end.offset - 1, 1);
   }
@@ -247,9 +292,14 @@ export class StructureVisitor extends BaseVisitor {
     
     if (node.items && Array.isArray(node.items)) {
       // Check if this is a plain array (all values are primitives) or has mlld constructs
-      const hasASTNodes = node.items.some((item: any) => 
-        typeof item === 'object' && item !== null && item.type
-      );
+      const hasASTNodes = node.items.some((item: any) => {
+        if (typeof item !== 'object' || item === null) return false;
+        if (item.type) return true;
+        if (Array.isArray(item.content)) {
+          return item.content.some((part: any) => typeof part === 'object' && part !== null && part.type);
+        }
+        return false;
+      });
       
       if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
         console.log('[ARRAY]', {
@@ -271,21 +321,40 @@ export class StructureVisitor extends BaseVisitor {
         
         for (let i = 0; i < node.items.length; i++) {
           const item = node.items[i];
-          
-          // Process the item if it's an AST node
+
           if (typeof item === 'object' && item !== null && item.type) {
+            // AST node (variable/object/array/etc.)
             this.mainVisitor.visitNode(item, context);
-            if (item.location) {
-              lastItemEndOffset = item.location.end.offset;
+            if (item.location) lastItemEndOffset = item.location.end.offset;
+          } else if (typeof item === 'object' && item !== null && Array.isArray(item.content)) {
+            // Wrapper object that contains AST nodes (e.g., quoted string content)
+            for (const part of item.content) {
+              if (part && typeof part === 'object' && part.type) {
+                this.mainVisitor.visitNode(part, context);
+              }
+            }
+            const lastPartWithLocation = [...item.content].reverse().find((p: any) => p?.location);
+            if (lastPartWithLocation?.location) {
+              lastItemEndOffset = lastPartWithLocation.location.end.offset;
+            }
+          } else {
+            // Primitive value - scan and tokenize
+            const itemStart = lastItemEndOffset;
+            const scannedLen = this.scanAndTokenizePrimitive(arrayText, itemStart - node.location.start.offset, node.location.start.offset);
+            if (scannedLen > 0) {
+              lastItemEndOffset = itemStart + scannedLen;
             }
           }
-          
+
           // Find and tokenize comma if not the last item
           if (i < node.items.length - 1) {
             // Use helper to tokenize comma between items
-            const nextItemStart = (i + 1 < node.items.length && node.items[i + 1]?.location) 
-              ? node.items[i + 1].location.start.offset 
-              : node.location.end.offset;
+            const nextItem = node.items[i + 1];
+            const nextItemContent = Array.isArray(nextItem?.content) ? nextItem.content : [];
+            const nextItemStart =
+              (nextItem?.location?.start?.offset) ??
+              (nextItemContent.find((p: any) => p?.location)?.location?.start?.offset) ??
+              node.location.end.offset;
             this.operatorHelper.tokenizeOperatorBetween(
               lastItemEndOffset,
               nextItemStart,

@@ -1,0 +1,9 @@
+exe @claude(prompt, model, tools) = when first [
+  @tools == "" => @prompt | cmd { claude -p --model @model --tools "" }
+  @tools => @prompt | cmd { claude -p --model @model --allowedTools "@tools" }
+  * => @prompt | cmd { claude -p --model @model }
+]
+
+show @claude("Hello", "haiku", "")
+show @claude("Search for cats", "sonnet", "WebSearch")
+show @claude("Write code", "opus", null)

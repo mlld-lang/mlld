@@ -37,12 +37,10 @@ export class MetadataEnhancer implements ValidationStep {
       });
     }
 
-    if (!module.metadata.needs || !Array.isArray(module.metadata.needs)) {
+    if (!Array.isArray(module.metadata.needs)) {
       errors.push({
         field: 'needs',
-        message: 'Missing required field: needs\n' +
-                'Add to your frontmatter: needs: [] for pure mlld modules\n' +
-                'Or specify runtime dependencies: needs: ["js", "node", "py", "sh"]'
+        message: 'Missing runtime metadata. Declare runtimes with /needs { ... } (js, node, py, sh).'
       });
     } else {
       // Validate needs values
@@ -58,11 +56,12 @@ export class MetadataEnhancer implements ValidationStep {
     }
 
     // Validate license
-    if (module.metadata.license && module.metadata.license !== 'CC0') {
+    const allowedLicenses = ['CC0', 'MIT'];
+    if (module.metadata.license && !allowedLicenses.includes(module.metadata.license)) {
       errors.push({
         field: 'license',
-        message: `Invalid license '${module.metadata.license}'. All modules must be CC0 licensed.\n` +
-                `Please update your frontmatter to: license: CC0`
+        message: `Invalid license '${module.metadata.license}'. Allowed licenses: ${allowedLicenses.join(', ')}.\n` +
+                `Please update your frontmatter to: license: CC0 or license: MIT`
       });
     } else if (!module.metadata.license) {
       // Auto-add CC0 if missing

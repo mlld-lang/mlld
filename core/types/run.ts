@@ -5,11 +5,22 @@ import { DirectiveNode, TypedDirectiveNode } from './base';
 import type { Expression } from './primitives';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 import type { DataLabel } from './security';
+import type { PathMeta } from './meta';
 
 /**
  * With clause for pipeline and dependency management
  */
-export type PipelineStageEntry = PipelineCommand | InlineCommandStage | InlineValueStage;
+export interface WhilePipelineStage {
+  type: 'whileStage';
+  cap: number;
+  rateMs: number | null;
+  processor: VariableNodeArray;
+  rawIdentifier?: string;
+  meta?: { hasRate?: boolean; [key: string]: unknown };
+  location?: any;
+}
+
+export type PipelineStageEntry = PipelineCommand | InlineCommandStage | InlineValueStage | WhilePipelineStage;
 export type PipelineStage = PipelineStageEntry | PipelineStageEntry[];
 
 export interface GuardOverrideOptions {
@@ -19,13 +30,13 @@ export interface GuardOverrideOptions {
 
 export interface WithClause {
   pipeline?: PipelineStage[];
-  needs?: DependencyMap;
   trust?: TrustLevel;
   parallel?: number;
   delayMs?: number;
   stdin?: Expression;
   guards?: GuardOverrideOptions | false;
   stream?: boolean;
+  streamFormat?: any;
   [key: string]: any; // For other with clause properties
 }
 
@@ -52,6 +63,9 @@ export interface InlineCommandStage {
   type: 'inlineCommand';
   command: ContentNodeArray;
   commandBases?: VariableNodeArray;
+  workingDir?: ContentNodeArray;
+  workingDirMeta?: PathMeta;
+  rawWorkingDir?: string;
   rawCommand: string;
   meta?: Record<string, unknown>;
   location?: any;
@@ -69,15 +83,6 @@ export interface InlineValueStage {
 }
 
 /**
- * Dependency map by language
- */
-export interface DependencyMap {
-  [language: string]: {
-    [packageName: string]: string; // version constraint
-  };
-}
-
-/**
  * Run directive raw values
  */
 export interface RunRaw {
@@ -88,6 +93,7 @@ export interface RunRaw {
   identifier?: string;
   withClause?: WithClause;
   securityLabels?: string;
+  workingDir?: string;
 }
 
 /**
@@ -100,6 +106,8 @@ export interface RunMeta {
   hasVariables?: boolean;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  workingDirMeta?: PathMeta;
+  hasWorkingDir?: boolean;
 }
 
 /**
@@ -127,6 +135,8 @@ export interface RunValues {
   identifier?: VariableNodeArray;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  workingDir?: ContentNodeArray;
+  workingDirMeta?: PathMeta;
 }
 
 /**
@@ -137,15 +147,20 @@ export interface RunCommandDirectiveNode extends RunDirectiveNode {
   values: {
     command: ContentNodeArray;
     securityLabels?: DataLabel[];
+    workingDir?: ContentNodeArray;
+    workingDirMeta?: PathMeta;
   };
   raw: {
     command: string;
     securityLabels?: string;
+    workingDir?: string;
   };
   meta: {
     isMultiLine: boolean;
     hasVariables: boolean;
     securityLabels?: DataLabel[];
+    workingDirMeta?: PathMeta;
+    hasWorkingDir?: boolean;
   };
 }
 
@@ -159,17 +174,22 @@ export interface RunCodeDirectiveNode extends RunDirectiveNode {
     args: VariableNodeArray;
     code: ContentNodeArray;
     securityLabels?: DataLabel[];
+    workingDir?: ContentNodeArray;
+    workingDirMeta?: PathMeta;
   };
   raw: {
     lang: string;
     args: string[];
     code: string;
     securityLabels?: string;
+    workingDir?: string;
   };
   meta: {
     isMultiLine: boolean;
     language: string;
     securityLabels?: DataLabel[];
+    workingDirMeta?: PathMeta;
+    hasWorkingDir?: boolean;
   };
 }
 

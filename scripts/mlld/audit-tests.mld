@@ -95,7 +95,7 @@ Analyze this test case and return a JSON object with the following structure:
 
 Focus on:
 1. Whether expected output shows wrapper leakage (StructuredValue objects in output)
-2. Whether test expects .ctx property access (metadata flow)
+2. Whether test expects .mx property access (metadata flow)
 3. What boundary type this test exercises (display/computation/storage)
 4. Alignment with DATA.md rules for that boundary type
 
@@ -338,7 +338,7 @@ Generated: @now
 - **Total Tests Analyzed**: @summary.total
 - **Tests Expecting StructuredValue Wrappers**: @summary.expectsStructuredValues
 - **Tests Expecting Unwrapped Data**: @summary.expectsUnwrappedData
-- **Tests Expecting .ctx Access**: @summary.expectsCtxAccess
+- **Tests Expecting .mx Access**: @summary.expectsCtxAccess
 - **Tests Expecting Metadata Preservation**: @summary.expectsMetadata
 - **Parse Errors**: @summary.parseErrors
 

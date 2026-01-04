@@ -12,6 +12,8 @@ import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { findProjectRoot } from '@core/utils/findProjectRoot';
 
 export interface InitModuleOptions {
   name?: string;
@@ -41,6 +43,15 @@ export class InitModuleCommand {
     });
 
     try {
+      const fileSystem = new NodeFileSystem();
+      let projectRoot = process.cwd();
+      try {
+        projectRoot = await findProjectRoot(process.cwd(), fileSystem);
+      } catch {
+        // Fall back to current directory when project root is not found
+      }
+      const projectConfig = new ProjectConfig(projectRoot);
+
       // Check if user provided @resolver/module syntax
       let resolverPrefix: string | undefined;
       let resolverPath: string | undefined;
@@ -54,7 +65,6 @@ export class InitModuleCommand {
           suggestedModuleName = match[2];
           
           // Look up the resolver configuration
-          const projectConfig = new ProjectConfig(process.cwd());
           const resolverPrefixes = projectConfig.getResolverPrefixes();
 
           if (resolverPrefixes.length > 0) {
@@ -83,7 +93,7 @@ export class InitModuleCommand {
                     const localBasePath = basePath || 'modules';
                     resolverPath = localBasePath;
                     console.log(chalk.green(`✔ Current repository matches ${repository}`));
-                    console.log(`Module will be created at: ${localBasePath}/${suggestedModuleName}.mlld.md`);
+                    console.log(`Module will be created at: ${localBasePath}/${suggestedModuleName}.mld.md`);
                     console.log('');
                   } else {
                     throw new MlldError(
@@ -129,13 +139,14 @@ export class InitModuleCommand {
       } else if (options.output) {
         // Extract module name from regular filename
         const basename = path.basename(options.output);
-        // First strip mlld-specific extensions
-        if (basename.endsWith('.mlld.md')) {
-          suggestedModuleName = basename.slice(0, -8);
-        } else if (basename.endsWith('.mld.md')) {
+        // First strip module extensions
+        if (basename.endsWith('.mld.md')) {
           suggestedModuleName = basename.slice(0, -7);
         } else if (basename.endsWith('.mld')) {
           suggestedModuleName = basename.slice(0, -4);
+        } else if (basename.endsWith('.mlld.md')) {
+          // Legacy extension handling for compatibility
+          suggestedModuleName = basename.slice(0, -8);
         } else {
           // Strip any other file extension (e.g., .md, .txt, etc.)
           const extIndex = basename.lastIndexOf('.');
@@ -152,40 +163,29 @@ export class InitModuleCommand {
       let displayPath: string;
       
       // Check for local resolver configuration
-      let localModulesPath = './llm/modules'; // Default
+      const resolverPrefixes = projectConfig.getResolverPrefixes();
+      let localModulesPath = projectConfig.getLocalModulesPath();
 
-      try {
-        const projectConfig = new ProjectConfig(process.cwd());
-        const resolverPrefixes = projectConfig.getResolverPrefixes();
+      // Look for LOCAL resolver with @local/ prefix
+      const localResolver = resolverPrefixes.find(
+        (r: any) => r.resolver === 'LOCAL' && r.prefix === '@local/'
+      );
 
-        // Look for LOCAL resolver with @local/ prefix
-        const localResolver = resolverPrefixes.find(
-          (r: any) => r.resolver === 'LOCAL' && r.prefix === '@local/'
-        );
-
-        if (localResolver && localResolver.config?.basePath) {
-          localModulesPath = localResolver.config.basePath;
-        }
-      } catch (error) {
-        // Ignore errors loading config
+      if (localResolver?.config?.basePath) {
+        localModulesPath = localResolver.config.basePath;
       }
 
-      // Check if we're already in the configured modules directory
-      // If so, use current directory instead of creating nested paths
-      let projectRoot = process.cwd();
-      try {
-        const tempConfig = new ProjectConfig(process.cwd());
-        projectRoot = tempConfig.getProjectRoot();
-      } catch (error) {
-        // If no project root found, use cwd
-      }
-
-      const absoluteModulesPath = path.resolve(projectRoot, localModulesPath);
+      const absoluteModulesPath = path.isAbsolute(localModulesPath)
+        ? localModulesPath
+        : path.resolve(projectRoot, localModulesPath);
       const currentDir = process.cwd();
 
-      // If current directory is within or is the modules path, use current directory
+      // If current directory is within or is the modules path, use current directory.
+      // Otherwise, make the suggested path relative to the current directory to avoid nesting.
       if (currentDir === absoluteModulesPath || currentDir.startsWith(absoluteModulesPath + path.sep)) {
         localModulesPath = '.';
+      } else if (!path.isAbsolute(localModulesPath)) {
+        localModulesPath = path.relative(currentDir, absoluteModulesPath);
       }
 
       // If we have a resolver path, we know exactly where to create it
@@ -212,15 +212,18 @@ export class InitModuleCommand {
       }
       // If user provided a filename, ask where to create it
       else if (options.output) {
-        const moduleFileName = suggestedModuleName + '.mlld.md';
+        const moduleFileName = suggestedModuleName + '.mld.md';
         const option1Path = path.join(localModulesPath, moduleFileName);
         
         // For option 2, preserve directory structure if provided
         let option2Path: string;
-        if (options.output.endsWith('.mlld.md')) {
+        if (options.output.endsWith('.mld.md')) {
           option2Path = options.output;
-        } else if (options.output.endsWith('.mld.md') || options.output.endsWith('.mld')) {
-          option2Path = options.output.replace(/\.mld(\.md)?$/, '.mlld.md');
+        } else if (options.output.endsWith('.mld')) {
+          option2Path = options.output.replace(/\.mld$/, '.mld.md');
+        } else if (options.output.endsWith('.mlld.md')) {
+          // Accept legacy extension but normalize to .mld.md
+          option2Path = options.output.replace(/\.mlld\.md$/, '.mld.md');
         } else {
           // For any other case, we need to handle directories and extensions
           const dir = path.dirname(options.output);
@@ -233,11 +236,11 @@ export class InitModuleCommand {
             nameWithoutExt = base.slice(0, extIndex);
           }
           
-          // Reconstruct the path with .mlld.md extension
+          // Reconstruct the path with .mld.md extension
           if (dir === '.') {
-            option2Path = nameWithoutExt + '.mlld.md';
+            option2Path = nameWithoutExt + '.mld.md';
           } else {
-            option2Path = path.join(dir, nameWithoutExt + '.mlld.md');
+            option2Path = path.join(dir, nameWithoutExt + '.mld.md');
           }
         }
         
@@ -397,23 +400,21 @@ export class InitModuleCommand {
         }
       }
 
+      let selectedNeeds: string[] = [];
       console.log('\nRuntime dependencies (js, node, py, sh):');
       const needsInput = await rl.question('Needs []: ');
-      if (needsInput) {
-        metadata.needs = needsInput.split(',').map(n => n.trim());
-        
-        // Validate needs values
-        const validNeeds = ['js', 'node', 'py', 'sh'];
-        for (const need of metadata.needs) {
-          if (!validNeeds.includes(need)) {
-            throw new MlldError(`Invalid runtime dependency: "${need}". Valid options are: ${validNeeds.join(', ')}`, {
-              code: 'INVALID_RUNTIME_DEPENDENCY',
-              severity: ErrorSeverity.Fatal
-            });
-          }
+      selectedNeeds = needsInput
+        ? needsInput.split(',').map(n => n.trim()).filter(Boolean)
+        : [];
+
+      const validNeeds = ['js', 'node', 'py', 'sh'];
+      for (const need of selectedNeeds) {
+        if (!validNeeds.includes(need)) {
+          throw new MlldError(`Invalid runtime dependency: "${need}". Valid options are: ${validNeeds.join(', ')}`, {
+            code: 'INVALID_RUNTIME_DEPENDENCY',
+            severity: ErrorSeverity.Fatal
+          });
         }
-      } else {
-        metadata.needs = [];
       }
 
       // Always use simple module pattern
@@ -422,12 +423,12 @@ export class InitModuleCommand {
       metadata.license = 'CC0';
       metadata.mlldVersion = '*';
 
-      const content = this.generateModuleContent(metadata, patternChoice);
+      const content = this.generateModuleContent(metadata, patternChoice, selectedNeeds);
 
       // Determine output path if not already set
       if (!outputPath) {
         // No output was specified, so ask where to create it
-        const moduleFileName = metadata.name + '.mlld.md';
+        const moduleFileName = metadata.name + '.mld.md';
         const option1Path = path.join(localModulesPath, moduleFileName);
         const option2Path = path.join('.', moduleFileName);
         
@@ -485,7 +486,7 @@ export class InitModuleCommand {
         console.log(chalk.gray(`  4. Your module will be available at: ${options.output}`));
       }
       
-      if (metadata.needs.length === 0) {
+      if (selectedNeeds.length === 0) {
         console.log(chalk.gray('\nNote: Dependencies will be auto-detected when you publish.'));
       }
 
@@ -494,11 +495,13 @@ export class InitModuleCommand {
     }
   }
 
-  private generateModuleContent(metadata: any, patternChoice: string): string {
+  private generateModuleContent(metadata: any, _patternChoice: string, needs: string[]): string {
     const frontmatter = this.formatFrontmatter(metadata);
+    const needsBlock = this.formatNeedsBlock(needs);
     
     const moduleContent = `
 
+${needsBlock}
 # @${metadata.author}/${metadata.name}
 
 ## tldr
@@ -527,6 +530,21 @@ More detailed usage examples and documentation.
     return frontmatter + moduleContent.trim() + '\n';
   }
 
+  private formatNeedsBlock(needs: string[]): string {
+    if (!needs || needs.length === 0) {
+      return '/needs {}\n';
+    }
+
+    const lines = needs.map(need => {
+      if (need === 'sh') {
+        return '  sh';
+      }
+      return `  ${need}: []`;
+    });
+
+    return `/needs {\n${lines.join('\n')}\n}\n`;
+  }
+
   private formatFrontmatter(metadata: any): string {
     const lines = ['---'];
     
@@ -534,8 +552,6 @@ More detailed usage examples and documentation.
     lines.push(`author: ${metadata.author}`);
     if (metadata.version) lines.push(`version: ${metadata.version}`);
     lines.push(`about: ${metadata.about}`);
-    
-    lines.push(`needs: [${metadata.needs.map((n: string) => `"${n}"`).join(', ')}]`);
     
     if (metadata.bugs) lines.push(`bugs: ${metadata.bugs}`);
     if (metadata.repo) lines.push(`repo: ${metadata.repo}`);
@@ -607,13 +623,13 @@ More Examples:
         // Extract module name from the filename if not provided via flag
         if (!moduleName) {
           const basename = path.basename(args[0]);
-          // First strip mlld-specific extensions
-          if (basename.endsWith('.mlld.md')) {
-            moduleName = basename.slice(0, -8);
-          } else if (basename.endsWith('.mld.md')) {
+          // First strip module extensions
+          if (basename.endsWith('.mld.md')) {
             moduleName = basename.slice(0, -7);
           } else if (basename.endsWith('.mld')) {
             moduleName = basename.slice(0, -4);
+          } else if (basename.endsWith('.mlld.md')) {
+            moduleName = basename.slice(0, -8);
           } else {
             // Strip any other file extension (e.g., .md, .txt, etc.)
             const extIndex = basename.lastIndexOf('.');

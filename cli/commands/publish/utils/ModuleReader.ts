@@ -12,7 +12,10 @@ import { parseSync } from '@grammar/parser';
 import type { MlldNode } from '@core/types';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { ModuleMetadata, ModuleData, GitInfo } from '../types/PublishingTypes';
-import { normalizeModuleNeeds, moduleNeedsToRuntimeNames, stringifyPackageMap, stringifyRequirementList } from '@core/registry';
+import { parseModuleMetadata } from '@core/registry/utils/ModuleMetadata';
+import { formatVersionSpecifier } from '@core/registry/utils/ModuleNeeds';
+import type { ModuleNeedsNormalized } from '@core/registry/types';
+import type { CommandNeeds } from '@core/policy/needs';
 
 export class ModuleReader {
   private authService: GitHubAuthService;
@@ -39,33 +42,32 @@ export class ModuleReader {
     if (stat.isDirectory()) {
       // Look for .mld files in directory
       const files = await fs.readdir(modulePath);
-      const mldFiles = files.filter(f => f.endsWith('.mld') || f.endsWith('.mld.md') || f.endsWith('.mlld.md'));
+      const mldFiles = files.filter(f =>
+        f.endsWith('.mld.md') || f.endsWith('.mld') || f.endsWith('.mlld.md')
+      );
       
       if (mldFiles.length === 0) {
-        throw new MlldError('No .mld, .mld.md, or .mlld.md files found in the specified directory', {
+        throw new MlldError('No .mld or .mld.md files found in the specified directory (legacy .mlld.md is also supported)', {
           code: 'NO_MLD_FILES',
           severity: ErrorSeverity.Fatal
         });
       }
       
-      // Prefer main.mlld.md, main.mld.md, main.mld, index.mlld.md, index.mld.md, or index.mld
-      if (mldFiles.includes('main.mlld.md')) {
-        filename = 'main.mlld.md';
-      } else if (mldFiles.includes('main.mld.md')) {
+      // Prefer main.mld.md, main.mld, index.mld.md, or index.mld
+      if (mldFiles.includes('main.mld.md')) {
         filename = 'main.mld.md';
       } else if (mldFiles.includes('main.mld')) {
         filename = 'main.mld';
-      } else if (mldFiles.includes('index.mlld.md')) {
-        filename = 'index.mlld.md';
       } else if (mldFiles.includes('index.mld.md')) {
         filename = 'index.mld.md';
       } else if (mldFiles.includes('index.mld')) {
         filename = 'index.mld';
       } else {
-        // Prefer .mlld.md over .mld.md over .mld
-        const mlldMdFile = mldFiles.find(f => f.endsWith('.mlld.md'));
+        // Prefer .mld.md over .mld, fall back to legacy .mlld.md
         const mldMdFile = mldFiles.find(f => f.endsWith('.mld.md'));
-        filename = mlldMdFile || mldMdFile || mldFiles[0];
+        const mlldMdFile = mldFiles.find(f => f.endsWith('.mlld.md'));
+        const mldFile = mldFiles.find(f => f.endsWith('.mld'));
+        filename = mldMdFile || mldFile || mlldMdFile || mldFiles[0];
       }
       
       filePath = path.join(modulePath, filename);
@@ -75,7 +77,7 @@ export class ModuleReader {
       filename = path.basename(filePath);
       
       if (!filename.endsWith('.mld') && !filename.endsWith('.mld.md') && !filename.endsWith('.mlld.md')) {
-        throw new MlldError('Module file must have .mld, .mld.md, or .mlld.md extension', {
+        throw new MlldError('Module file must have .mld or .mld.md extension (legacy .mlld.md is still accepted)', {
           code: 'INVALID_FILE_EXTENSION',
           severity: ErrorSeverity.Fatal
         });
@@ -135,8 +137,10 @@ export class ModuleReader {
       author: '',
       about: '',
       license: 'CC0', // Default to CC0
+      wants: [],
       needs: [],
-      moduleNeeds: normalizeModuleNeeds(undefined),
+      moduleNeeds: undefined,
+      moduleWants: undefined,
     };
     
     // Module name comes from frontmatter 'name' field, NOT from filename
@@ -161,22 +165,6 @@ export class ModuleReader {
         metadata.bugs = parsed.bugs;
         metadata.repo = parsed.repo || parsed.repository;
         metadata.mlldVersion = parsed.mlldVersion || parsed['mlld-version'] || parsed.mlld_version;
-
-        const legacyNeedsValue = parsed.needs;
-
-        metadata.needsJs = parsed['needs-js'] || parsed.needsJs;
-        metadata.needsNode = parsed['needs-node'] || parsed.needsNode;
-        metadata.needsPy = parsed['needs-py'] || parsed.needsPy;
-        metadata.needsSh = parsed['needs-sh'] || parsed.needsSh;
-
-        const normalizedNeeds = normalizeModuleNeeds(legacyNeedsValue, {
-          js: metadata.needsJs,
-          node: metadata.needsNode,
-          py: metadata.needsPy,
-          sh: metadata.needsSh,
-        });
-        metadata.moduleNeeds = normalizedNeeds;
-        metadata.needs = moduleNeedsToRuntimeNames(normalizedNeeds);
 
         const dependencies = parsed.dependencies ?? parsed['dependencies'];
         if (dependencies && typeof dependencies === 'object') {
@@ -205,14 +193,110 @@ export class ModuleReader {
       }
     }
     
-    if (!metadata.moduleNeeds) {
-      metadata.moduleNeeds = normalizeModuleNeeds(undefined);
-    }
-    if (!Array.isArray(metadata.needs)) {
-      metadata.needs = moduleNeedsToRuntimeNames(metadata.moduleNeeds);
-    }
+    const parsedNeeds = parseModuleMetadata(content);
+    metadata.moduleNeeds = parsedNeeds.needs;
+    metadata.moduleWants = parsedNeeds.wants;
+    metadata.wants = parsedNeeds.wants.map(tier => tier.tier);
+    this.applyModuleNeeds(metadata, parsedNeeds.needs);
+    metadata.dependencies = parsedNeeds.dependencies;
+    metadata.devDependencies = parsedNeeds.devDependencies;
+    metadata.name = metadata.name || parsedNeeds.name || '';
+    metadata.author = metadata.author || parsedNeeds.author || '';
+    metadata.version = metadata.version || parsedNeeds.version;
 
     return metadata as ModuleMetadata;
+  }
+
+  private applyModuleNeeds(metadata: Partial<ModuleMetadata>, needs: ModuleNeedsNormalized): void {
+    const runtimes = new Set<string>();
+    let needsJs: ModuleMetadata['needsJs'];
+    let needsNode: ModuleMetadata['needsNode'];
+    let needsPy: ModuleMetadata['needsPy'];
+    let needsSh: ModuleMetadata['needsSh'];
+
+    const addRuntime = (name: string, specifier?: string): void => {
+      switch (name) {
+        case 'js':
+          runtimes.add('js');
+          needsJs = needsJs || {};
+          if (specifier) needsJs.node = specifier;
+          break;
+        case 'node':
+          runtimes.add('node');
+          needsNode = needsNode || {};
+          if (specifier) needsNode.node = specifier;
+          break;
+        case 'python':
+        case 'py':
+          runtimes.add('py');
+          needsPy = needsPy || {};
+          if (specifier) needsPy.python = specifier;
+          break;
+        case 'sh':
+          runtimes.add('sh');
+          needsSh = needsSh || {};
+          if (specifier) needsSh.shell = specifier;
+          break;
+        default:
+          break;
+      }
+    };
+
+    for (const runtime of needs.runtimes || []) {
+      addRuntime(runtime.name, runtime.specifier);
+    }
+
+    for (const [ecosystem, packages] of Object.entries(needs.packages || {})) {
+      const formattedPackages = packages
+        .map(pkg => pkg.raw || formatVersionSpecifier(pkg.name, pkg.specifier))
+        .filter(Boolean);
+
+      if (ecosystem === 'js') {
+        addRuntime('js');
+        needsJs = needsJs || {};
+        if (formattedPackages.length > 0) {
+          needsJs.packages = formattedPackages;
+        }
+      } else if (ecosystem === 'node') {
+        addRuntime('node');
+        needsNode = needsNode || {};
+        if (formattedPackages.length > 0) {
+          needsNode.packages = formattedPackages;
+        }
+      } else if (ecosystem === 'python' || ecosystem === 'py') {
+        addRuntime('py');
+        needsPy = needsPy || {};
+        if (formattedPackages.length > 0) {
+          needsPy.packages = formattedPackages;
+        }
+      }
+    }
+
+    if (needs.capabilities?.sh) {
+      addRuntime('sh');
+      needsSh = needsSh || {};
+    }
+
+    const commandList = this.flattenCommandNeeds(needs.capabilities?.cmd);
+    if (commandList && commandList.length > 0) {
+      addRuntime('sh');
+      needsSh = needsSh || {};
+      needsSh.commands = commandList;
+    }
+
+    metadata.needs = Array.from(runtimes);
+    if (needsJs) metadata.needsJs = needsJs;
+    if (needsNode) metadata.needsNode = needsNode;
+    if (needsPy) metadata.needsPy = needsPy;
+    if (needsSh) metadata.needsSh = needsSh;
+  }
+
+  private flattenCommandNeeds(cmd?: CommandNeeds): string[] | undefined {
+    if (!cmd) return undefined;
+    if (cmd.type === 'all') return ['*'];
+    if (cmd.type === 'list') return [...cmd.commands];
+    if (cmd.type === 'map') return Object.keys(cmd.entries);
+    return undefined;
   }
 
   /**
@@ -263,17 +347,6 @@ export class ModuleReader {
       if (authorInput && authorInput !== githubUser) {
         console.log(chalk.gray(`Note: Publishing as '${authorInput}' - this will be validated during publishing`));
       }
-
-      // Runtime dependencies (required)
-      console.log('\nRuntime dependencies (required):');
-      console.log('  - Provide runtime identifiers (node, python, sh, etc.)');
-      console.log('  - Leave blank for pure mlld modules');
-      const needsInput = await rl.question('Runtimes []: ');
-      const runtimeList = needsInput
-        ? needsInput.split(',').map(n => n.trim()).filter(Boolean)
-        : [];
-      metadata.needs = runtimeList;
-      metadata.moduleNeeds = normalizeModuleNeeds(runtimeList);
 
       // Optional fields
       const addOptional = await rl.question('\nAdd optional fields? (y/n): ');
@@ -331,31 +404,6 @@ export class ModuleReader {
     lines.push(`author: ${metadata.author}`);
     if (metadata.version) lines.push(`version: ${metadata.version}`);
     lines.push(`about: ${metadata.about}`);
-    
-    const moduleNeeds = metadata.moduleNeeds ?? normalizeModuleNeeds(metadata.needs ?? []);
-    const runtimeStrings = stringifyRequirementList(moduleNeeds.runtimes);
-    const toolStrings = stringifyRequirementList(moduleNeeds.tools);
-    const packageStrings = stringifyPackageMap(moduleNeeds.packages);
-    const hasNeedsData = runtimeStrings.length > 0 || toolStrings.length > 0 || Object.keys(packageStrings).length > 0;
-
-    if (hasNeedsData) {
-      lines.push('needs:');
-      if (runtimeStrings.length > 0) {
-        lines.push(`  runtimes: [${runtimeStrings.map(value => `"${value}"`).join(', ')}]`);
-      }
-      if (toolStrings.length > 0) {
-        lines.push(`  tools: [${toolStrings.map(value => `"${value}"`).join(', ')}]`);
-      }
-      if (Object.keys(packageStrings).length > 0) {
-        lines.push('  packages:');
-        for (const ecosystem of Object.keys(packageStrings).sort()) {
-          const values = packageStrings[ecosystem];
-          lines.push(`    ${ecosystem}: [${values.map(value => `"${value}"`).join(', ')}]`);
-        }
-      }
-    } else {
-      lines.push('needs: {}');
-    }
 
     if (metadata.dependencies && Object.keys(metadata.dependencies).length > 0) {
       lines.push('dependencies:');

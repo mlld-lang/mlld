@@ -1,0 +1,12 @@
+>> Path existence
+when @exists("config.json") => show "Config found"
+
+>> Glob pattern existence (true if at least one match)
+when @exists(<*.md>) => show "Markdown files exist"
+
+>> Use in conditionals
+exe @loadConfig() = when first [
+  @exists("config.local.json") => <config.local.json>
+  @exists("config.json") => <config.json>
+  * => {}
+]

@@ -2,6 +2,37 @@ import { describe, expect, it } from 'vitest';
 import { ArgumentParser } from './ArgumentParser';
 import { OptionProcessor } from './OptionProcessor';
 
+describe('ArgumentParser --payload alias', () => {
+  it('parses --payload as alias for --inject', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--payload', '@data={"name":"test"}']);
+
+    expect(options.inject).toEqual(['@data={"name":"test"}']);
+  });
+
+  it('allows mixing --inject and --payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--inject', '@config={"a":1}',
+      '--payload', '@data={"b":2}'
+    ]);
+
+    expect(options.inject).toEqual(['@config={"a":1}', '@data={"b":2}']);
+  });
+
+  it('supports multiple --payload flags', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--payload', '@a=1',
+      '--payload', '@b=2'
+    ]);
+
+    expect(options.inject).toEqual(['@a=1', '@b=2']);
+  });
+});
+
 describe('ArgumentParser streaming flag', () => {
   it('parses --no-stream', () => {
     const parser = new ArgumentParser();
@@ -26,6 +57,58 @@ describe('ArgumentParser streaming flag', () => {
   });
 });
 
+describe('ArgumentParser streaming visibility flags', () => {
+  it('parses --show-thinking', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--show-thinking']);
+
+    expect(options.showThinking).toBe(true);
+  });
+
+  it('parses --show-tools', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--show-tools']);
+
+    expect(options.showTools).toBe(true);
+  });
+
+  it('parses --show-metadata', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--show-metadata']);
+
+    expect(options.showMetadata).toBe(true);
+  });
+
+  it('parses --show-all-streaming', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--show-all-streaming']);
+
+    expect(options.showAllStreaming).toBe(true);
+  });
+
+  it('parses --stream-format text', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--stream-format', 'text']);
+
+    expect(options.streamOutputFormat).toBe('text');
+  });
+
+  it('parses --stream-format ansi', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--stream-format', 'ansi']);
+
+    expect(options.streamOutputFormat).toBe('ansi');
+  });
+
+  it('throws on invalid --stream-format', () => {
+    const parser = new ArgumentParser();
+
+    expect(() => parser.parseArgs(['script.mld', '--stream-format', 'invalid'])).toThrow(
+      '--stream-format must be "text", "ansi", or "json"'
+    );
+  });
+});
+
 describe('OptionProcessor streaming mapping', () => {
   it('maps noStream to streaming enabled=false', () => {
     const processor = new OptionProcessor();
@@ -35,5 +118,65 @@ describe('OptionProcessor streaming mapping', () => {
     } as any);
 
     expect(apiOptions.streaming).toEqual({ enabled: false });
+  });
+
+  it('maps visibility flags to streaming visibility', () => {
+    const processor = new OptionProcessor();
+    const apiOptions = processor.cliToApiOptions({
+      input: 'script.mld',
+      showThinking: true,
+      showTools: true
+    } as any);
+
+    expect(apiOptions.streaming).toEqual({
+      visibility: {
+        showThinking: true,
+        showTools: true
+      }
+    });
+  });
+
+  it('maps showAllStreaming to visibility.showAll', () => {
+    const processor = new OptionProcessor();
+    const apiOptions = processor.cliToApiOptions({
+      input: 'script.mld',
+      showAllStreaming: true
+    } as any);
+
+    expect(apiOptions.streaming).toEqual({
+      visibility: {
+        showAll: true
+      }
+    });
+  });
+
+  it('maps streamOutputFormat to streaming.format', () => {
+    const processor = new OptionProcessor();
+    const apiOptions = processor.cliToApiOptions({
+      input: 'script.mld',
+      streamOutputFormat: 'ansi'
+    } as any);
+
+    expect(apiOptions.streaming).toEqual({
+      format: 'ansi'
+    });
+  });
+
+  it('combines all streaming options', () => {
+    const processor = new OptionProcessor();
+    const apiOptions = processor.cliToApiOptions({
+      input: 'script.mld',
+      noStream: false,
+      showThinking: true,
+      streamOutputFormat: 'text'
+    } as any);
+
+    expect(apiOptions.streaming).toEqual({
+      enabled: true,
+      visibility: {
+        showThinking: true
+      },
+      format: 'text'
+    });
   });
 });

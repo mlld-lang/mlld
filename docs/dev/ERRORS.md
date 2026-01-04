@@ -73,7 +73,7 @@ JS/Node Error → enhanceJSError() → Enhanced Error → User
 
 ### ExecuteError
 
-`executeRoute` wraps failures with `ExecuteError` codes for API consumers:
+`execute` wraps failures with `ExecuteError` codes for API consumers:
 
 ```typescript
 class ExecuteError extends Error {
@@ -86,7 +86,7 @@ class ExecuteError extends Error {
 }
 
 type ExecuteErrorCode =
-  | 'ROUTE_NOT_FOUND'  // File missing (ENOENT)
+  | 'FILE_NOT_FOUND'   // File missing (ENOENT)
   | 'PARSE_ERROR'      // mlld parse failure
   | 'GUARD_DENIED'     // Guard blocked execution
   | 'TIMEOUT'          // timeoutMs elapsed
@@ -98,7 +98,7 @@ Each error carries the `filepath` and original `cause` for debugging:
 
 ```typescript
 try {
-  await executeRoute('./agent.mld', payload, { timeout: 30000 });
+  await execute('./agent.mld', payload, { timeout: 30000 });
 } catch (error) {
   if (error instanceof ExecuteError) {
     console.error(`Route error: ${error.code}`);
@@ -118,7 +118,7 @@ class TimeoutError extends Error {
 }
 ```
 
-Thrown when `executeRoute` exceeds timeout. Partial results not available (execution is aborted immediately).
+Thrown when `execute` exceeds timeout. Partial results not available (execution is aborted immediately).
 
 ### Analysis Errors
 
@@ -161,15 +161,15 @@ analysis.warnings.forEach(warn => {
 
 ### Error Handling Patterns
 
-**executeRoute with recovery**:
+**execute with recovery**:
 ```typescript
 async function executeWithFallback(filepath: string, payload: unknown) {
   try {
-    return await executeRoute(filepath, payload, { timeout: 30000 });
+    return await execute(filepath, payload, { timeout: 30000 });
   } catch (error) {
     if (error instanceof TimeoutError) {
       // Retry with longer timeout
-      return await executeRoute(filepath, payload, { timeout: 60000 });
+      return await execute(filepath, payload, { timeout: 60000 });
     }
     if (error instanceof ExecuteError && error.code === 'GUARD_DENIED') {
       // Log security violation
@@ -206,8 +206,8 @@ try {
 
 2. **Pattern Files** (`errors/{parse,js}/*/pattern.js`)
    - Pure functions (no imports!)
-   - `test(error, ctx)` - Returns true if pattern matches
-   - `enhance(error, ctx)` - Returns variables for template interpolation
+   - `test(error, mx)` - Returns true if pattern matches
+   - `enhance(error, mx)` - Returns variables for template interpolation
    - Parse patterns match on Peggy error structure
    - JS patterns match on error messages and code context
 
@@ -239,14 +239,14 @@ errors/parse/my-error/
 export const pattern = {
   name: 'my-error',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Return true if this pattern matches
-    return error.found === '@' && ctx.line.includes('confusing');
+    return error.found === '@' && mx.line.includes('confusing');
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract variables for template interpolation
-    const varName = ctx.line.match(/@(\w+)/)?.[1] || 'unknown';
+    const varName = mx.line.match(/@(\w+)/)?.[1] || 'unknown';
     
     // Return object with template variables
     return {
@@ -276,16 +276,16 @@ errors/js/my-js-error/
 export const pattern = {
   name: 'my-js-error',
   
-  test(error, ctx) {
-    // ctx has: code, error, params, metadata
+  test(error, mx) {
+    // mx has: code, error, params, metadata
     // Check error message and code content
     return error.message.includes('TypeError') && 
-           ctx.code.includes('undefined');
+           mx.code.includes('undefined');
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Extract context from the code
-    const line = ctx.code.split('\n')[0];
+    const line = mx.code.split('\n')[0];
     
     return {
       LINE: line,
@@ -343,8 +343,8 @@ const patterns = [
   {
     name: 'pattern-name',
     template: `Error template with \${variables}`,
-    test(error, ctx) { /* test logic */ },
-    enhance(error, ctx) { /* returns variables */ }
+    test(error, mx) { /* test logic */ },
+    enhance(error, mx) { /* returns variables */ }
   },
   // ... more patterns
 ];
@@ -364,7 +364,7 @@ Each parse pattern receives:
   - `expected` - Array of expected tokens
   - `found` - What was actually found
   - `location` - Position information
-- `ctx` - Context object with:
+- `mx` - Context object with:
   - `line` - The line where error occurred
   - `lines` - All lines in the source
   - `lineNumber` - Line number (1-based)
@@ -375,7 +375,7 @@ Each JS pattern receives:
 - `error` - The JavaScript/Node error object with:
   - `message` - Error message
   - `stack` - Stack trace (if available)
-- `ctx` - Context object with:
+- `mx` - Context object with:
   - `code` - The JavaScript/Node code that was executed
   - `params` - Parameters passed to the function
   - `metadata` - Additional execution metadata
@@ -391,7 +391,7 @@ Template variables should be UPPERCASE to stand out:
 
 - Test the most specific conditions first
 - Use `error.found` to check what token triggered the error
-- Use `ctx.line` to examine the full line context
+- Use `mx.line` to examine the full line context
 - Return early from `test()` for performance
 
 ## System Files

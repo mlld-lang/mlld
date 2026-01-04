@@ -2,11 +2,11 @@
 // Unified system for all expression evaluation across mlld
 // Provides infix operators for logical and comparison operations
 // Used by: when directive conditions, var assignments, array filters, etc.
-// Precedence (lowest to highest): Ternary → OR → AND → Comparison → Unary → Primary
+// Precedence (lowest to highest): Ternary → Nullish → OR → AND → Comparison → Unary → Primary
 
 // Top-level unified expression with ternary operator (lowest precedence)
 UnifiedExpression
-  = condition:UnifiedLogicalOr _ "?" _ trueBranch:UnifiedExpression _ ":" _ falseBranch:UnifiedExpression {
+  = condition:UnifiedNullish _ "?" _ trueBranch:UnifiedExpression _ ":" _ falseBranch:UnifiedExpression {
       return helpers.createNode('TernaryExpression', {
         condition,
         trueBranch,
@@ -14,7 +14,13 @@ UnifiedExpression
         location: location()
       });
     }
-  / UnifiedLogicalOr
+  / UnifiedNullish
+
+// Nullish coalescing (left-associative)
+UnifiedNullish
+  = first:UnifiedLogicalOr rest:(_ "??" _ right:UnifiedLogicalOr { return { op: "??", right }; })* {
+      return helpers.createBinaryExpression(first, rest, location());
+    }
 
 // Logical OR (left-associative)
 UnifiedLogicalOr
@@ -30,12 +36,23 @@ UnifiedLogicalAnd
 
 // Comparison operators (left-associative)
 UnifiedComparison
-  = first:UnifiedPrimary rest:(_ op:UnifiedComparisonOp _ right:UnifiedPrimary { return { op, right }; })* {
+  = first:UnifiedAdditive rest:(_ op:UnifiedComparisonOp _ right:UnifiedAdditive { return { op, right }; })* {
       return helpers.createBinaryExpression(first, rest, location());
     }
 
 UnifiedComparisonOp
   = "==" / "!=" / "~=" / "<=" / ">=" / "<" !"=" / ">" !"="
+
+// Arithmetic operators
+UnifiedAdditive
+  = first:UnifiedMultiplicative rest:(_ op:("+" / "-") _ right:UnifiedMultiplicative { return { op, right }; })* {
+      return helpers.createBinaryExpression(first, rest, location());
+    }
+
+UnifiedMultiplicative
+  = first:UnifiedPrimary rest:(_ op:("*" / "/" / "%") _ right:UnifiedPrimary { return { op, right }; })* {
+      return helpers.createBinaryExpression(first, rest, location());
+    }
 
 // Primary expressions (highest precedence)
 UnifiedPrimary
@@ -94,7 +111,7 @@ UnifiedAtomicExpression
       });
     }
   / NoneLiteral  // NoneLiteral already returns a properly formatted Literal node
-  / DeniedLiteral  // DeniedLiteral maps to @ctx.denied during evaluation
+  / DeniedLiteral  // DeniedLiteral maps to @mx.denied during evaluation
 
 // Method call on the result of an exec invocation
 // Example: @helper(@input).includes("APPROVE")

@@ -9,7 +9,7 @@ import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import {
   asData,
   asText,
@@ -21,6 +21,26 @@ import { materializeDisplayValue } from '../utils/display-materialization';
 import { accessFields } from '../utils/field-access';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { evaluateWhenExpression } from './when-expression';
+import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
+import { evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
+
+interface ForIterationError {
+  index: number;
+  key?: string | number | null;
+  message: string;
+  error: string;
+  value?: unknown;
+}
+
+// Check if an object looks like file content data (e.g., from glob iteration)
+function looksLikeFileData(value: unknown): value is Record<string, unknown> & { content: string; filename?: string; relative?: string; absolute?: string } {
+  if (!value || typeof value !== 'object') return false;
+  const obj = value as Record<string, unknown>;
+  // Must have content (the file's text content)
+  if (typeof obj.content !== 'string') return false;
+  // Should have at least one file path property
+  return typeof obj.filename === 'string' || typeof obj.relative === 'string' || typeof obj.absolute === 'string';
+}
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown, env: Environment): Variable {
@@ -28,11 +48,11 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
   if (isVariable(value)) {
     return value;
   }
-  
-  // Special handling for LoadContentResult objects
+
+  // Special handling for LoadContentResult objects and StructuredValue arrays
   // These need to be preserved as objects with their special metadata
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    return createObjectVariable(
+  if (isLoadContentResult(value)) {
+    const variable = createObjectVariable(
       name,
       value,
       false, // Not complex - it's already evaluated
@@ -44,12 +64,66 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
       },
       {
         isLoadContentResult: true,
-        arrayType: isLoadContentResultArray(value) ? 'load-content-result' : undefined,
         source: 'for-loop'
       }
     );
+    // Preserve file metadata in .mx so @f.mx.relative etc. works
+    variable.mx = {
+      ...(variable.mx ?? {}),
+      filename: value.filename,
+      relative: value.relative,
+      absolute: value.absolute,
+      ext: (value as any).ext ?? (value as any)._extension,
+      tokest: (value as any).tokest ?? (value as any)._metrics?.tokest,
+      tokens: (value as any).tokens ?? (value as any)._metrics?.tokens
+    };
+    return variable;
   }
-  
+
+  if (isStructuredValue(value)) {
+    // For StructuredValue items (both arrays and individual items like glob file entries),
+    // preserve the .mx metadata from the StructuredValue
+    const variable = createObjectVariable(
+      name,
+      value,
+      false, // Not complex - it's already evaluated
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        arrayType: value.type === 'array' ? 'structured-value-array' : undefined,
+        source: 'for-loop'
+      }
+    );
+    // Preserve the StructuredValue's .mx metadata on the Variable
+    // This ensures file metadata (relative, absolute, filename, etc.) is accessible
+    if (value.mx) {
+      variable.mx = { ...value.mx };
+    }
+    return variable;
+  }
+
+  // Check if this looks like file data (from normalizeIterableValue stripping StructuredValue wrapper)
+  // If so, copy file metadata properties to .mx so @f.mx.relative etc. works
+  if (looksLikeFileData(value)) {
+    const importer = new VariableImporter();
+    const variable = importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
+    // Copy file metadata to .mx
+    variable.mx = {
+      ...(variable.mx ?? {}),
+      filename: value.filename,
+      relative: value.relative,
+      absolute: value.absolute,
+      ext: (value as any).ext,
+      tokest: (value as any).tokest,
+      tokens: (value as any).tokens
+    };
+    return variable;
+  }
+
   // Otherwise, create a Variable from the value
   const importer = new VariableImporter();
   return importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
@@ -117,6 +191,71 @@ function enhanceFieldAccessError(
   });
 }
 
+function withIterationMxKey(variable: Variable, key: unknown): Variable {
+  if (key === null || typeof key === 'undefined') {
+    return variable;
+  }
+  if (typeof key !== 'string' && typeof key !== 'number') {
+    return variable;
+  }
+  return {
+    ...variable,
+    mx: { ...(variable.mx ?? {}), key }
+  };
+}
+
+function formatIterationError(error: unknown): string {
+  if (error instanceof Error) {
+    let message = error.message;
+    // Strip directive wrapper noise for user-facing markers
+    if (message.startsWith('Directive error (')) {
+      const prefixEnd = message.indexOf(': ');
+      if (prefixEnd >= 0) {
+        message = message.slice(prefixEnd + 2);
+      }
+      const lineIndex = message.indexOf(' at line ');
+      if (lineIndex >= 0) {
+        message = message.slice(0, lineIndex);
+      }
+    }
+    return message;
+  }
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function resetForErrorsContext(env: Environment, errors: ForIterationError[]): void {
+  const mxManager = env.getContextManager?.();
+  if (!mxManager) return;
+  while (mxManager.popGenericContext('for')) {
+    // clear previous loop context
+  }
+  mxManager.pushGenericContext('for', { errors, timestamp: Date.now() });
+  mxManager.setLatestErrors(errors);
+}
+
+function findVariableOwner(env: Environment, name: string): Environment | undefined {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current.getCurrentVariables().has(name)) return current;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function isDescendantEnvironment(env: Environment, ancestor: Environment): boolean {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current === ancestor) return true;
+    current = current.getParent();
+  }
+  return false;
+}
+
 export async function evaluateForDirective(
   directive: ForDirective,
   env: Environment
@@ -164,10 +303,18 @@ export async function evaluateForDirective(
     const effective = specified ?? inherited;
 
     const iterableArray = Array.from(iterable);
+    const forErrors = effective?.parallel ? ([] as ForIterationError[]) : null;
+    if (forErrors) {
+      resetForErrorsContext(env, forErrors);
+    }
 
     const runOne = async (entry: [any, any], idx: number) => {
       const [key, value] = entry;
-      let childEnv = env.createChildEnvironment();
+      const iterationRoot = env.createChildEnvironment();
+      if (effective?.parallel) {
+        (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
+      }
+      let childEnv = iterationRoot;
       // Inherit forOptions for nested loops if set
       if (effective) (childEnv as any).__forOptions = effective;
       let derivedValue: unknown;
@@ -191,7 +338,7 @@ export async function evaluateForDirective(
         }
       }
       const iterationVar = ensureVariable(varName, value, env);
-      childEnv.setVariable(varName, iterationVar);
+      childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
       if (typeof derivedValue !== 'undefined' && fieldPathString) {
         const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
         childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
@@ -205,38 +352,70 @@ export async function evaluateForDirective(
       const retry = new RateLimitRetry();
       while (true) {
         try {
-          let actionResult: any = { value: undefined, env: childEnv };
-          for (const actionNode of actionNodes) {
-            if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
-              const nodeWithFirst = {
-                ...actionNode,
-                meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
-              };
-              actionResult = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
-            } else {
-              actionResult = await evaluate(actionNode, childEnv);
+          if (directive.meta?.actionType === 'block') {
+            let blockEnv = childEnv;
+            for (const actionNode of actionNodes) {
+              if (isLetAssignment(actionNode)) {
+                blockEnv = await evaluateLetAssignment(actionNode, blockEnv);
+              } else if (isAugmentedAssignment(actionNode)) {
+                if (effective?.parallel) {
+                  const owner = findVariableOwner(blockEnv, actionNode.identifier);
+                  if (!owner || !isDescendantEnvironment(owner, iterationRoot)) {
+                    throw new MlldDirectiveError(
+                      `Parallel for block cannot mutate outer variable @${actionNode.identifier}.`,
+                      'for',
+                      { location: actionNode.location }
+                    );
+                  }
+                }
+                blockEnv = await evaluateAugmentedAssignment(actionNode, blockEnv);
+              } else if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
+                const nodeWithFirst = {
+                  ...actionNode,
+                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
+                };
+                const actionResult = await evaluateWhenExpression(nodeWithFirst as any, blockEnv);
+                blockEnv = actionResult.env || blockEnv;
+              } else {
+                const actionResult = await evaluate(actionNode, blockEnv);
+                blockEnv = actionResult.env || blockEnv;
+              }
             }
-            if (actionResult.env) childEnv = actionResult.env;
-          }
-          // Emit bare exec output as effect (legacy behavior)
-          if (
-            directive.values.action.length === 1 &&
-            directive.values.action[0].type === 'ExecInvocation' &&
-            actionResult.value !== undefined && actionResult.value !== null
-          ) {
-            const materialized = materializeDisplayValue(
-              actionResult.value,
-              undefined,
-              actionResult.value
-            );
-            let outputContent = materialized.text;
-            if (!outputContent.endsWith('\n')) {
-              outputContent += '\n';
+            childEnv = blockEnv;
+          } else {
+            let actionResult: any = { value: undefined, env: childEnv };
+            for (const actionNode of actionNodes) {
+              if (actionNode.type === 'WhenExpression' && actionNode.meta?.modifier !== 'first') {
+                const nodeWithFirst = {
+                  ...actionNode,
+                  meta: { ...(actionNode.meta || {}), modifier: 'first' as const }
+                };
+                actionResult = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
+              } else {
+                actionResult = await evaluate(actionNode, childEnv);
+              }
+              if (actionResult.env) childEnv = actionResult.env;
             }
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // Emit bare exec output as effect (legacy behavior)
+            if (
+              directive.values.action.length === 1 &&
+              directive.values.action[0].type === 'ExecInvocation' &&
+              actionResult.value !== undefined && actionResult.value !== null
+            ) {
+              const materialized = materializeDisplayValue(
+                actionResult.value,
+                undefined,
+                actionResult.value
+              );
+              let outputContent = materialized.text;
+              if (!outputContent.endsWith('\n')) {
+                outputContent += '\n';
+              }
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
+              env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
             }
-            env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
           }
           retry.reset();
           break;
@@ -244,6 +423,16 @@ export async function evaluateForDirective(
           if (isRateLimitError(err)) {
             const again = await retry.wait();
             if (again) continue;
+          }
+          if (forErrors) {
+            forErrors.push({
+              index: idx,
+              key: key ?? null,
+              message: formatIterationError(err),
+              error: formatIterationError(err),
+              value
+            });
+            return;
           }
           throw err;
         }
@@ -297,18 +486,25 @@ export async function evaluateForExpression(
   }
 
   const results: unknown[] = [];
-  const errors: Array<{ index: number; error: Error; value: unknown }> = [];
+  const errors: ForIterationError[] = [];
 
   const specified = (expr.meta as any)?.forOptions as { parallel?: boolean; cap?: number; rateMs?: number } | undefined;
   const inherited = (env as any).__forOptions as typeof specified | undefined;
   const effective = specified ?? inherited;
+  if (effective?.parallel) {
+    resetForErrorsContext(env, errors);
+  }
 
   const iterableArray = Array.from(iterable);
 
   const SKIP = Symbol('skip');
   const runOne = async (entry: [any, any], idx: number) => {
     const [key, value] = entry;
-    let childEnv = env.createChildEnvironment();
+    const iterationRoot = env.createChildEnvironment();
+    if (effective?.parallel) {
+      (iterationRoot as any).__parallelIsolationRoot = iterationRoot;
+    }
+    let childEnv = iterationRoot;
     if (effective) (childEnv as any).__forOptions = effective;
     let derivedValue: unknown;
     if (varFields && varFields.length > 0) {
@@ -331,7 +527,7 @@ export async function evaluateForExpression(
       }
     }
     const iterationVar = ensureVariable(varName, value, env);
-    childEnv.setVariable(varName, iterationVar);
+    childEnv.setVariable(varName, withIterationMxKey(iterationVar, key));
     if (typeof derivedValue !== 'undefined' && fieldPathString) {
       const derivedVar = ensureVariable(`${varName}.${fieldPathString}`, derivedValue, env);
       childEnv.setVariable(`${varName}.${fieldPathString}`, derivedVar);
@@ -353,20 +549,41 @@ export async function evaluateForExpression(
           nodesToEvaluate = (expr.expression[0] as any).content;
         }
 
-        let result: EvalResult;
-        if (
-          nodesToEvaluate.length === 1 &&
-          (nodesToEvaluate[0] as any).type === 'WhenExpression' &&
-          (nodesToEvaluate[0] as any).meta?.modifier !== 'first'
-        ) {
-          const nodeWithFirst = {
-            ...(nodesToEvaluate[0] as any),
-            meta: { ...((nodesToEvaluate[0] as any).meta || {}), modifier: 'first' as const }
-          };
-          result = await evaluateWhenExpression(nodeWithFirst as any, childEnv);
-        } else {
-          result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
-        }
+        const evaluateSequence = async (nodes: unknown[], startEnv: Environment): Promise<EvalResult> => {
+          let currentEnv = startEnv;
+          let lastResult: EvalResult = { value: undefined, env: currentEnv };
+
+          for (const node of nodes) {
+            if (isLetAssignment(node as any)) {
+              currentEnv = await evaluateLetAssignment(node as any, currentEnv);
+              lastResult = { value: undefined, env: currentEnv };
+              continue;
+            }
+
+            if (isAugmentedAssignment(node as any)) {
+              currentEnv = await evaluateAugmentedAssignment(node as any, currentEnv);
+              lastResult = { value: undefined, env: currentEnv };
+              continue;
+            }
+
+            if ((node as any)?.type === 'WhenExpression' && (node as any).meta?.modifier !== 'first') {
+              const nodeWithFirst = {
+                ...(node as any),
+                meta: { ...(((node as any).meta || {}) as Record<string, unknown>), modifier: 'first' as const }
+              };
+              lastResult = await evaluateWhenExpression(nodeWithFirst as any, currentEnv);
+              currentEnv = lastResult.env || currentEnv;
+              continue;
+            }
+
+            lastResult = await evaluate(node as any, currentEnv, { isExpression: true });
+            currentEnv = lastResult.env || currentEnv;
+          }
+
+          return { value: lastResult.value, env: currentEnv };
+        };
+
+        const result = await evaluateSequence(nodesToEvaluate, childEnv);
 
         if (result.env) childEnv = result.env;
         let branchValue = result?.value;
@@ -399,7 +616,18 @@ export async function evaluateForExpression(
       }
       return exprResult as any;
     } catch (error) {
-      errors.push({ index: idx, error: error as Error, value });
+      const message = formatIterationError(error);
+      const marker: ForIterationError = {
+        index: idx,
+        key: key ?? null,
+        message,
+        error: message,
+        value
+      };
+      errors.push(marker);
+      if (effective?.parallel) {
+        return marker as any;
+      }
       return null as any;
     }
   };
@@ -506,7 +734,7 @@ export async function evaluateForExpression(
       'for-result',
       null,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -519,7 +747,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults as number | boolean | null,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -528,7 +756,7 @@ export async function evaluateForExpression(
       'for-result',
       finalResults,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -538,7 +766,7 @@ export async function evaluateForExpression(
       finalResults,
       false,
       variableSource,
-      { ctx: metadata }
+      { mx: metadata }
     );
   }
 
@@ -546,6 +774,6 @@ export async function evaluateForExpression(
     'for-result',
     String(finalResults),
     variableSource,
-    { ctx: metadata }
+    { mx: metadata }
   );
 }

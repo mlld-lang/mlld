@@ -1,0 +1,5 @@
+import { author as @primaryAuthor, title } from "strict-alias-test-config.mld"
+import { author as @secondaryAuthor } from "strict-alias-test-utils.mld"
+
+var @result = :::Primary: {{primaryAuthor}}, Secondary: {{secondaryAuthor}}, Title: {{title}}:::
+show @result

@@ -9,6 +9,7 @@ import type { Resolver } from '@core/resolvers/types';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parseSemVer, compareSemVer } from '@core/utils/version-checker';
+import { splitModuleNameVersion, normalizeModuleName as normalizeModuleNameUtil } from './utils/moduleNames';
 
 import type { DependencyResolution } from './types';
 
@@ -133,10 +134,15 @@ export class ModuleWorkspace {
 
   getDependenciesFromConfig(): ModuleSpecifier[] {
     const dependencies = this.projectConfig.getDependencies();
-    return Object.entries(dependencies).map(([name, version]) => ({
-      name: this.normalizeModuleName(name),
-      version: version && version !== 'latest' ? version : undefined
-    }));
+    return Object.entries(dependencies).map(([name, version]) => {
+      const parsed = splitModuleNameVersion(name);
+      const normalized = this.normalizeModuleName(parsed.name);
+      const requestedVersion = parsed.version || (version && version !== 'latest' ? version : undefined);
+      return {
+        name: normalized,
+        version: requestedVersion
+      };
+    });
   }
 
   getModulesFromLockFile(): ModuleSpecifier[] {
@@ -147,20 +153,15 @@ export class ModuleWorkspace {
   }
 
   normalizeModuleName(name: string): string {
-    if (!name) return name;
-    if (name.startsWith('mlld://')) {
-      name = name.slice('mlld://'.length);
-    }
-    if (!name.startsWith('@')) {
-      return `@${name}`;
-    }
-    return name;
+    return normalizeModuleNameUtil(name);
   }
 
   buildReference(spec: ModuleSpecifier): string {
-    const name = this.normalizeModuleName(spec.name);
-    if (spec.version && spec.version.length > 0) {
-      return `${name}@${spec.version}`;
+    const parsed = splitModuleNameVersion(spec.name);
+    const name = this.normalizeModuleName(parsed.name);
+    const version = spec.version ?? parsed.version;
+    if (version && version.length > 0) {
+      return `${name}@${version}`;
     }
     return name;
   }
@@ -194,10 +195,12 @@ export class ModuleInstaller {
   }
 
   private async installSingle(spec: ModuleSpecifier, options: InstallOptions): Promise<ModuleInstallResult> {
-    const moduleName = this.workspace.normalizeModuleName(spec.name);
-    const reference = this.workspace.buildReference(spec);
+    const parsed = splitModuleNameVersion(spec.name);
+    const moduleName = this.workspace.normalizeModuleName(parsed.name);
+    const requestedVersion = spec.version?.toString() || parsed.version;
+    const reference = this.workspace.buildReference({ name: moduleName, version: requestedVersion });
     const emit = options.onEvent;
-    emit?.({ type: 'start', module: moduleName, version: spec.version });
+    emit?.({ type: 'start', module: moduleName, version: requestedVersion });
 
     if (options.dryRun) {
       const existing = this.workspace.lockFile.getModule(moduleName);
@@ -215,12 +218,35 @@ export class ModuleInstaller {
       return {
         module: moduleName,
         status: 'dry-run',
-        version: spec.version,
+        version: requestedVersion,
         message: 'would install'
       };
     }
 
-    const lockEntry = this.workspace.lockFile.getModule(moduleName);
+    let lockEntry = this.workspace.lockFile.getModule(moduleName);
+    const previousHash = lockEntry?.resolved;
+    const lockVersion = lockEntry ? (lockEntry.registryVersion || lockEntry.version) : undefined;
+    const versionMismatch = Boolean(
+      requestedVersion &&
+      lockVersion &&
+      requestedVersion !== lockVersion
+    );
+
+    // If a different version is requested, purge cache and lock entry to force refetch
+    if (versionMismatch && lockEntry?.resolved) {
+      try {
+        await this.workspace.moduleCache.remove(lockEntry.resolved);
+      } catch (error) {
+        console.warn(`Failed to purge cache for ${moduleName}: ${(error as Error).message}`);
+      }
+      try {
+        await this.workspace.lockFile.removeModule(moduleName);
+        lockEntry = undefined;
+      } catch (error) {
+        console.warn(`Failed to remove lock entry for ${moduleName}: ${(error as Error).message}`);
+      }
+    }
+
     if (!options.force && !options.noCache && lockEntry?.resolved) {
       try {
         const cached = await this.workspace.moduleCache.has(lockEntry.resolved);
@@ -266,7 +292,7 @@ export class ModuleInstaller {
       resolvedContent = resolution.content.content;
       const metadata = resolution.content.metadata ?? {};
       resolvedHash = metadata.hash ?? undefined;
-      resolvedVersion = metadata.version ?? metadata.registryVersion ?? spec.version;
+      resolvedVersion = metadata.version ?? metadata.registryVersion ?? requestedVersion;
       source = metadata.source ?? reference;
       sourceUrl = metadata.sourceUrl ?? metadata.source;
     } catch (error) {
@@ -292,7 +318,7 @@ export class ModuleInstaller {
     }
 
     const lockEntryToWrite: ModuleLockEntry = {
-      version: resolvedVersion || spec.version || 'latest',
+      version: resolvedVersion || requestedVersion || 'latest',
       resolved: hash,
       source: source ?? reference,
       sourceUrl,
@@ -303,6 +329,15 @@ export class ModuleInstaller {
     };
 
     await this.workspace.lockFile.addModule(moduleName, lockEntryToWrite);
+
+    // Drop stale cached content when version or hash changes
+    if (previousHash && previousHash !== hash) {
+      try {
+        await this.workspace.moduleCache.remove(previousHash);
+      } catch (error) {
+        console.warn(`Failed to purge old cache for ${moduleName}: ${(error as Error).message}`);
+      }
+    }
 
     emit?.({
       type: 'success',
@@ -460,10 +495,13 @@ export class ModuleInstaller {
   private async fetchLatestMetadata(spec: ModuleSpecifier): Promise<{ version?: string; hash?: string; source?: string } | null> {
     try {
       const resolver = new RegistryResolver();
-      const resolution = await resolver.resolve(this.workspace.buildReference({ name: spec.name }));
+      const parsed = splitModuleNameVersion(spec.name);
+      const name = this.workspace.normalizeModuleName(parsed.name);
+      const version = spec.version ?? parsed.version;
+      const resolution = await resolver.resolve(this.workspace.buildReference({ name, version }));
       const metadata = resolution.content.metadata ?? {};
       return {
-        version: metadata.version ?? metadata.registryVersion ?? spec.version,
+        version: metadata.version ?? metadata.registryVersion ?? version,
         hash: metadata.hash,
         source: metadata.source ?? metadata.sourceUrl
       };

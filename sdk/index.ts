@@ -12,6 +12,8 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ErrorFormatSelector, type FormattedErrorResult, type ErrorFormatOptions } from '@core/utils/errorFormatSelector';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
+import { resolveMlldMode } from '@core/utils/mode';
+import type { MlldMode } from '@core/types/mode';
 
 // Export core types/errors
 export { MlldError };
@@ -23,7 +25,7 @@ export { DependencyDetector } from '@core/utils/dependency-detector';
 export { PathContextBuilder } from '@core/services/PathContextService';
 export { ExecutionEmitter } from './execution-emitter';
 export { StreamExecution } from './stream-execution';
-export { executeRoute, TimeoutError, MemoryRouteCache } from './execute';
+export { execute, TimeoutError, MemoryAstCache } from './execute';
 export { ExecuteError, type ExecuteErrorCode } from './types';
 
 // Export static analysis
@@ -43,6 +45,50 @@ export type {
 // Export types
 export type { Location, Position } from '@core/types/index';
 export type { PathContext, PathContextOptions } from '@core/services/PathContextService';
+export type { MlldMode } from '@core/types/mode';
+
+// Export SDK streaming types
+export type {
+  SDKEvent,
+  SDKEffectEvent,
+  SDKCommandEvent,
+  SDKStreamEvent,
+  SDKExecutionEvent,
+  SDKDebugEvent,
+  SDKStreamingEvent,
+  SDKStreamingThinkingEvent,
+  SDKStreamingMessageEvent,
+  SDKStreamingToolUseEvent,
+  SDKStreamingToolResultEvent,
+  SDKStreamingErrorEvent,
+  SDKStreamingMetadataEvent,
+  StreamingFormattedText,
+  StreamingToolCall,
+  StreamingUsageMetadata,
+  StreamingResult,
+  StructuredResult,
+  DebugResult,
+  InterpretMode
+} from './types';
+
+// Export streaming options
+export type {
+  StreamingOptions,
+  StreamingVisibility,
+  StreamingOutputFormat
+} from '@interpreter/eval/pipeline/streaming-options';
+
+// Export ANSI processing utilities
+export {
+  expandAnsiCodes,
+  stripAnsiMarkers,
+  stripAnsiEscapes,
+  processAnsi,
+  getFormattedText,
+  getAvailableCodes,
+  shouldProcessAnsi
+} from '@core/utils/ansi-processor';
+export type { AnsiProcessingOptions } from '@core/utils/ansi-processor';
 
 /**
  * Options for processing Mlld documents
@@ -56,6 +102,8 @@ export interface ProcessOptions {
   filePath?: string;
   /** Explicit path context (advanced usage) */
   pathContext?: PathContext;
+  /** Parsing mode (strict vs markdown); defaults based on filePath or strict for raw strings */
+  mode?: MlldMode;
   /** Custom file system implementation */
   fileSystem?: IFileSystemService;
   /** Custom path service implementation */
@@ -92,10 +140,31 @@ export interface ProcessOptions {
    * });
    *
    * // In your script, guards can check:
-   * // @guard(not(@input.ctx.labels.includes("src:user-upload"))) { ... }
+   * // @guard(not(@input.mx.labels.includes("src:user-upload"))) { ... }
    * ```
    */
   dynamicModuleSource?: string;
+
+  /**
+   * Parsing mode for string dynamic modules (default: 'strict').
+   * String dynamic modules are programmatic/code, so they default to strict mode.
+   * Set to 'markdown' if you need to inject markdown-style content.
+   *
+   * @example
+   * ```typescript
+   * // Default (strict mode) - directives without / prefix
+   * processMlld(script, {
+   *   dynamicModules: { '@foo': 'var @x = 1\nexport { @x }' }
+   * });
+   *
+   * // Markdown mode - allows text content
+   * processMlld(script, {
+   *   dynamicModules: { '@foo': 'Some text\n/var @x = 1' },
+   *   dynamicModuleMode: 'markdown'
+   * });
+   * ```
+   */
+  dynamicModuleMode?: MlldMode;
 }
 
 /**
@@ -105,6 +174,7 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
   // Create default services if not provided
   const fileSystem = options?.fileSystem || new NodeFileSystem();
   const pathService = options?.pathService || new PathService();
+  const languageMode = resolveMlldMode(options?.mode, options?.filePath, options?.filePath ? 'markdown' : 'strict');
   
   // Build or use PathContext
   let pathContext: PathContext | undefined;
@@ -125,7 +195,9 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     normalizeBlankLines: options?.normalizeBlankLines,
     useMarkdownFormatter: options?.useMarkdownFormatter,
     dynamicModules: options?.dynamicModules,
-    dynamicModuleSource: options?.dynamicModuleSource
+    dynamicModuleSource: options?.dynamicModuleSource,
+    dynamicModuleMode: options?.dynamicModuleMode,
+    mlldMode: languageMode
   });
 
   // Interpret returns string output in document mode; other modes carry output on the object

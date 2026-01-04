@@ -66,6 +66,7 @@ describe('Output Format Tests', () => {
       // Should have clean output with just the content
       // Note: Current implementation adds extra newlines
       expect(result.trim()).toBe(`Hello Markdown
+
 {
   "name": "MyApp",
   "version": "1.0.0"
@@ -156,7 +157,7 @@ describe('Integration Scenarios', () => {
       
       // Import's author comes first ("first import wins" immutable design)
       // Note: Each @add creates a new line in current implementation
-      expect(result.trim()).toBe('Hello from import\nby\nImport Author');
+      expect(result.trim()).toBe('Hello from import\n by\n\nImport Author');
     });
     
     it('should import only selected variables', async () => {

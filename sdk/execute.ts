@@ -17,6 +17,8 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { ExecuteError } from './types';
 import { MlldParseError } from '@core/errors';
+import { resolveMlldMode } from '@core/utils/mode';
+import type { MlldMode } from '@core/types/mode';
 
 export class TimeoutError extends Error {
   constructor(public readonly timeoutMs: number) {
@@ -25,7 +27,7 @@ export class TimeoutError extends Error {
   }
 }
 
-export interface ExecuteRouteOptions {
+export interface ExecuteOptions {
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
@@ -35,20 +37,22 @@ export interface ExecuteRouteOptions {
   fileSystem?: IFileSystemService;
   pathService?: IPathService;
   allowAbsolutePaths?: boolean;
+  mode?: MlldMode;
 }
 
 const astCache = new MemoryAstCache();
 
-export async function executeRoute(
+export async function execute(
   filePath: string,
   payload: unknown,
-  options: ExecuteRouteOptions = {}
+  options: ExecuteOptions = {}
 ): Promise<StructuredResult | StreamExecution> {
   const overallStart = performance.now();
   const fileSystem = options.fileSystem ?? new NodeFileSystem();
   const pathService = options.pathService ?? new PathService();
 
-  const cacheEntry = await getCachedAst(filePath, fileSystem);
+  const languageMode = resolveMlldMode(options.mode, filePath, 'strict');
+  const cacheEntry = await getCachedAst(filePath, fileSystem, languageMode);
 
   const dynamicModules: Record<string, string | Record<string, unknown>> = {
     ...(options.dynamicModules ?? {}),
@@ -59,6 +63,7 @@ export async function executeRoute(
   const interpretOptions: InterpretOptions = {
     mode: options.stream ? 'stream' : 'structured',
     filePath,
+    mlldMode: languageMode,
     fileSystem,
     pathService,
     allowAbsolutePaths: options.allowAbsolutePaths,
@@ -92,7 +97,7 @@ export async function executeRoute(
   return await runWithGuards(run, options);
 }
 
-function attachSignalAndTimeout(handle: StreamExecution, options: ExecuteRouteOptions): void {
+function attachSignalAndTimeout(handle: StreamExecution, options: ExecuteOptions): void {
   let timer: NodeJS.Timeout | undefined;
 
   if (options.timeoutMs !== undefined) {
@@ -119,7 +124,7 @@ function attachSignalAndTimeout(handle: StreamExecution, options: ExecuteRouteOp
 
 async function runWithGuards<T>(
   fn: () => Promise<T>,
-  options: Pick<ExecuteRouteOptions, 'timeoutMs' | 'signal'>
+  options: Pick<ExecuteOptions, 'timeoutMs' | 'signal'>
 ): Promise<T> {
   if (!options.timeoutMs && !options.signal) {
     return await fn();
@@ -217,11 +222,11 @@ function buildMetrics(result: StructuredResult, context: MetricsContext, now = p
   };
 }
 
-export { astCache as MemoryRouteCache };
+export { astCache as MemoryAstCache };
 
-async function getCachedAst(filePath: string, fileSystem: IFileSystemService) {
+async function getCachedAst(filePath: string, fileSystem: IFileSystemService, mode: MlldMode) {
   try {
-    return await astCache.get(filePath, fileSystem);
+    return await astCache.get(filePath, fileSystem, mode);
   } catch (error) {
     throw wrapExecuteError(error, filePath);
   }
@@ -253,7 +258,7 @@ function wrapExecuteError(error: unknown, filePath?: string): ExecuteError {
 
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === 'ENOENT') {
-      return new ExecuteError(error.message, 'ROUTE_NOT_FOUND', filePath, { cause: error });
+      return new ExecuteError(error.message, 'FILE_NOT_FOUND', filePath, { cause: error });
     }
 
     return new ExecuteError(error.message, 'RUNTIME_ERROR', filePath, { cause: error });

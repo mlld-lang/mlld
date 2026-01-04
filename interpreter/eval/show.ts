@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { DirectiveNode } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
@@ -44,7 +45,7 @@ import {
 } from '@interpreter/utils/structured-value';
 
 import { wrapExecResult } from '../utils/structured-exec';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 // Template normalization now handled in grammar - no longer needed here
 import { resolveDirectiveExecInvocation } from './directive-replay';
 
@@ -69,6 +70,11 @@ export async function evaluateShow(
 
   let resultValue: unknown | undefined;
   let content = '';
+  let skipJsonFormatting = false;
+  const hasErrorMetadata = (val: unknown): boolean =>
+    isStructuredValue(val) &&
+    Array.isArray((val as any).metadata?.errors) &&
+    (val as any).metadata?.errors?.length > 0;
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
   let isStreamingShow = false;
   let interpolatedDescriptor: SecurityDescriptor | undefined;
@@ -93,10 +99,10 @@ export async function evaluateShow(
     return env.mergeSecurityDescriptors(...descriptors);
   };
   const descriptorFromVariable = (variable?: Variable): SecurityDescriptor | undefined => {
-    if (!variable?.ctx) {
+    if (!variable?.mx) {
       return undefined;
     }
-    return ctxToSecurityDescriptor(variable.ctx);
+    return varMxToSecurityDescriptor(variable.mx);
   };
   
   const directiveLocation = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
@@ -351,40 +357,41 @@ export async function evaluateShow(
       ? (variableNode as any).variable?.fields
       : variableNode?.fields;
 
-    if (fieldsToProcess && fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
+    if (fieldsToProcess && fieldsToProcess.length > 0) {
       const { accessField } = await import('../utils/field-access');
+      const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+      let fieldTarget: any = variable
+        ? await resolveVariable(variable, env, ResolutionContext.FieldAccess)
+        : value;
       for (const field of fieldsToProcess) {
         // Handle variableIndex type - need to resolve the variable first
         if (field.type === 'variableIndex') {
-          const indexVar = env.getVariable(field.value);
-          if (!indexVar) {
-            const { FieldAccessError } = await import('@core/errors');
-            throw new FieldAccessError(`Variable not found for index: ${field.value}`,
-              { baseValue: value, fieldAccessChain: [], failedAtIndex: 0, failedKey: String(field.value) },
-              { sourceLocation: directiveLocation, env }
-            );
-          }
-          // Get the actual value to use as index
-          let indexValue = indexVar.value;
-          if (isTextLike(indexVar)) {
-            indexValue = indexVar.value;
-          }
-          // Create a new field with the resolved value
+          const { evaluateDataValue } = await import('./data-value-evaluator');
+          const indexNode =
+            typeof field.value === 'object'
+              ? (field.value as any)
+              : {
+                  type: 'VariableReference',
+                  valueType: 'varIdentifier',
+                  identifier: String(field.value)
+                };
+          const indexValue = await evaluateDataValue(indexNode as any, env);
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = await accessField(value, resolvedField, {
+          const fieldResult = await accessField(fieldTarget, resolvedField, {
             preserveContext: true,
             env,
             sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         } else {
-          const fieldResult = await accessField(value, field, {
+          const fieldResult = await accessField(fieldTarget, field, {
             preserveContext: true,
             env,
             sourceLocation: directiveLocation
           });
           value = (fieldResult as any).value;
         }
+        fieldTarget = value;
         if (value === undefined) break;
       }
     }
@@ -449,7 +456,6 @@ export async function evaluateShow(
 
     if (process.env.MLLD_DEBUG_FIX === 'true' && varName === 'complex') {
       try {
-        const fs = require('fs');
         fs.appendFileSync(
           '/tmp/mlld-debug.log',
           JSON.stringify({
@@ -484,15 +490,24 @@ export async function evaluateShow(
       const params = (value as any).paramNames || [];
       content = `<function(${params.join(', ')})>`;
     } else {
-      if (Array.isArray(value) && process.env.MLLD_DEBUG === 'true') {
-        logger.debug('show.ts: Formatting array:', {
-          varName: variable.name,
-          valueLength: value.length,
-          value,
-          isForeachSection
-        });
+      if (isStructuredValue(value)) {
+        if (hasErrorMetadata(value)) {
+          content = asText(value);
+          skipJsonFormatting = true;
+        } else {
+          content = formatForDisplay(value, { isForeachSection, pretty: true });
+        }
+      } else {
+        if (Array.isArray(value) && process.env.MLLD_DEBUG === 'true') {
+          logger.debug('show.ts: Formatting array:', {
+            varName: variable.name,
+            valueLength: value.length,
+            value,
+            isForeachSection
+          });
+        }
+        content = formatForDisplay(value, { isForeachSection, pretty: false });
       }
-      content = formatForDisplay(value, { isForeachSection });
     }
     
     // Legacy path: only run when invocation is not present (avoid double-processing)
@@ -928,7 +943,12 @@ export async function evaluateShow(
 
     // Convert result to string appropriately
     if (isStructuredValue(result.value)) {
-      content = formatForDisplay(result.value);
+      if (hasErrorMetadata(result.value)) {
+        content = asText(result.value);
+        skipJsonFormatting = true;
+      } else {
+        content = formatForDisplay(result.value, { pretty: false });
+      }
     } else if (typeof result.value === 'string') {
       content = result.value;
     } else if (result.value === null || result.value === undefined) {
@@ -987,16 +1007,10 @@ export async function evaluateShow(
     
     // Use the content loader to process the node
     const { processContentLoader } = await import('./content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
-    const { wrapLoadContentValue } = await import('../utils/load-content-structured');
     const loadResult = await processContentLoader(loadContentNode, env);
 
     // Handle different return types from processContentLoader
-    if (isLoadContentResult(loadResult) || isLoadContentResultArray(loadResult)) {
-      const structured = wrapLoadContentValue(loadResult);
-      resultValue = structured;
-      content = asText(structured);
-    } else if (isStructuredValue(loadResult)) {
+    if (isStructuredValue(loadResult)) {
       resultValue = loadResult;
       content = asText(loadResult);
     } else if (typeof loadResult === 'string') {
@@ -1106,21 +1120,28 @@ export async function evaluateShow(
   } else if (directive.subtype === 'show' && directive.values?.content) {
     // Handle simple show directive with content (used in for loops)
     let templateNodes = directive.values.content;
-    
+
     // Handle wrapped content structure from for loop actions
-    if (Array.isArray(templateNodes) && templateNodes.length === 1 && 
+    if (Array.isArray(templateNodes) && templateNodes.length === 1 &&
         templateNodes[0].content && templateNodes[0].wrapperType) {
       // Unwrap the content
       templateNodes = templateNodes[0].content;
     }
-    
-    
+
     // Process the content using the standard interpolation
     content = await interpolate(templateNodes, env, undefined, {
       collectSecurityDescriptor: collectInterpolatedDescriptor
     });
-    
-    
+
+  } else if (directive.subtype === 'showLiteral' && directive.values?.content) {
+    // Handle literal show directive (from unified effects pattern)
+    const templateNodes = directive.values.content;
+
+    // Process the content using the standard interpolation
+    content = await interpolate(templateNodes, env, undefined, {
+      collectSecurityDescriptor: collectInterpolatedDescriptor
+    });
+
   } else {
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }
@@ -1158,13 +1179,8 @@ export async function evaluateShow(
   // Final safety: ensure content is a string and pretty-print JSON when possible
   if (typeof content !== 'string') {
     try {
-      const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
       if (isStructuredValue(content)) {
         content = asText(content);
-      } else if (isLoadContentResult(content)) {
-        content = content.content;
-      } else if (isLoadContentResultArray(content)) {
-        content = content.map(item => item.content).join('\n\n');
       } else if (Array.isArray(content)) {
         content = JSONFormatter.stringify(content, { pretty: true });
       } else if (content !== null && content !== undefined) {
@@ -1175,7 +1191,7 @@ export async function evaluateShow(
     } catch {
       content = String(content);
     }
-  } else if (typeof content === 'string') {
+  } else if (typeof content === 'string' && !skipJsonFormatting) {
     const parsed = parseAndWrapJson(content, { preserveText: true });
     if (parsed && typeof parsed !== 'string' && isStructuredValue(parsed)) {
       content = JSONFormatter.stringify(parsed.data, { pretty: true });
@@ -1192,7 +1208,6 @@ export async function evaluateShow(
 
   if (process.env.MLLD_DEBUG_FIX === 'true') {
     try {
-      const fs = require('fs');
       fs.appendFileSync(
         '/tmp/mlld-debug.log',
         JSON.stringify({

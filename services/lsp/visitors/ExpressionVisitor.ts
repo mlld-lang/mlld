@@ -18,16 +18,18 @@ export class ExpressionVisitor extends BaseVisitor {
   }
   
   canHandle(node: any): boolean {
-    return node.type === 'BinaryExpression' || 
+    return node.type === 'BinaryExpression' ||
            node.type === 'UnaryExpression' ||
            node.type === 'TernaryExpression' ||
            node.type === 'WhenExpression' ||
-           node.type === 'ForExpression';
+           node.type === 'ForExpression' ||
+           node.type === 'LetAssignment' ||
+           node.type === 'ExeReturn';
   }
   
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
-    
+
     switch (node.type) {
       case 'BinaryExpression':
       case 'UnaryExpression':
@@ -41,6 +43,12 @@ export class ExpressionVisitor extends BaseVisitor {
         break;
       case 'ForExpression':
         this.visitForExpression(node, context);
+        break;
+      case 'LetAssignment':
+        this.visitLetAssignment(node, context);
+        break;
+      case 'ExeReturn':
+        this.visitExeReturn(node, context);
         break;
     }
   }
@@ -137,25 +145,48 @@ export class ExpressionVisitor extends BaseVisitor {
       const whenIndex = nodeText.indexOf('when');
       
       if (whenIndex !== -1) {
+        const whenOffset = node.location.start.offset + whenIndex;
+        const whenPos = this.document.positionAt(whenOffset);
         this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: node.location.start.column + whenIndex - 1,
+          line: whenPos.line,
+          char: whenPos.character,
           length: 4,
           tokenType: 'keyword',
           modifiers: []
         });
       }
     }
-    
+
+    // Handle 'first' modifier if present
+    if (node.meta?.modifier === 'first') {
+      const sourceText = this.document.getText();
+      const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+      const firstIndex = nodeText.indexOf('first');
+
+      if (firstIndex !== -1) {
+        const firstOffset = node.location.start.offset + firstIndex;
+        const firstPos = this.document.positionAt(firstOffset);
+        this.tokenBuilder.addToken({
+          line: firstPos.line,
+          char: firstPos.character,
+          length: 5,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+    }
+
     // Find and tokenize the ':' after 'when'
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     const colonIndex = nodeText.indexOf(':');
     
     if (colonIndex !== -1) {
+      const colonOffset = node.location.start.offset + colonIndex;
+      const colonPos = this.document.positionAt(colonOffset);
       this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column + colonIndex - 1,
+        line: colonPos.line,
+        char: colonPos.character,
         length: 1,
         tokenType: 'operator',
         modifiers: []
@@ -177,7 +208,14 @@ export class ExpressionVisitor extends BaseVisitor {
         // Visit condition expression(s)
         if (conditionPair.condition && Array.isArray(conditionPair.condition)) {
           conditionPair.condition.forEach((cond: any) => {
-            this.mainVisitor.visitNode(cond, context);
+            // Handle nested array structure [[BinaryExpression]]
+            if (Array.isArray(cond)) {
+              cond.forEach((innerCond: any) => {
+                this.mainVisitor.visitNode(innerCond, context);
+              });
+            } else {
+              this.mainVisitor.visitNode(cond, context);
+            }
           });
         }
         
@@ -199,14 +237,14 @@ export class ExpressionVisitor extends BaseVisitor {
           if (lastCondition?.location && firstAction?.location) {
             const searchStart = lastCondition.location.end.offset;
             const searchEnd = firstAction.location.start.offset;
-            this.operatorHelper.tokenizeOperatorBetween(searchStart, searchEnd, '=>');
+            this.operatorHelper.tokenizeOperatorBetween(searchStart, searchEnd, '=>', 'modifier');
           } else if (lastCondition?.location) {
             // Fallback: search until end of when block
             const sourceText = this.document.getText();
             const searchText = sourceText.substring(lastCondition.location.end.offset, node.location.end.offset);
             const arrowIndex = searchText.indexOf('=>');
             if (arrowIndex !== -1) {
-              this.operatorHelper.addOperatorToken(lastCondition.location.end.offset + arrowIndex, 2);
+              this.operatorHelper.addOperatorToken(lastCondition.location.end.offset + arrowIndex, 2, 'modifier');
             }
           }
         }
@@ -276,9 +314,11 @@ export class ExpressionVisitor extends BaseVisitor {
     const forIndex = nodeText.indexOf('for');
     
     if (forIndex !== -1) {
+      const forOffset = node.location.start.offset + forIndex;
+      const forPos = this.document.positionAt(forOffset);
       this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column + forIndex - 1,
+        line: forPos.line,
+        char: forPos.character,
         length: 3,
         tokenType: 'keyword',
         modifiers: []
@@ -360,12 +400,12 @@ export class ExpressionVisitor extends BaseVisitor {
     if (arrowMatch && arrowMatch.index !== undefined) {
       const arrowOffset = node.location.start.offset + arrowMatch.index + arrowMatch[0].indexOf('=>');
       const arrowPosition = this.document.positionAt(arrowOffset);
-      
+
       this.tokenBuilder.addToken({
         line: arrowPosition.line,
         char: arrowPosition.character,
         length: 2,
-        tokenType: 'operator',
+        tokenType: 'modifier',
         modifiers: []
       });
     }
@@ -391,4 +431,82 @@ export class ExpressionVisitor extends BaseVisitor {
       }
     }
   }
+
+  private visitLetAssignment(node: any, context: VisitorContext): void {
+    // Tokenize "let" keyword
+    const sourceText = this.document.getText();
+    const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const letIndex = nodeText.indexOf('let');
+
+    if (letIndex !== -1) {
+      const letOffset = node.location.start.offset + letIndex;
+      const letPos = this.document.positionAt(letOffset);
+      this.tokenBuilder.addToken({
+        line: letPos.line,
+        char: letPos.character,
+        length: 3,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    // Tokenize @identifier
+    if (node.identifier) {
+      // Find @ position after "let "
+      const atIndex = nodeText.indexOf('@', letIndex);
+      if (atIndex !== -1) {
+        const atOffset = node.location.start.offset + atIndex;
+        const atPos = this.document.positionAt(atOffset);
+        this.tokenBuilder.addToken({
+          line: atPos.line,
+          char: atPos.character,
+          length: node.identifier.length + 1, // +1 for @
+          tokenType: 'variable',
+          modifiers: ['declaration']
+        });
+      }
+    }
+
+    // Tokenize = operator
+    const equalIndex = nodeText.indexOf('=', letIndex);
+    if (equalIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + equalIndex,
+        1
+      );
+    }
+
+    // Visit the value expression
+    if (node.value && Array.isArray(node.value)) {
+      for (const valueNode of node.value) {
+        this.mainVisitor.visitNode(valueNode, context);
+      }
+    }
+  }
+
+  private visitExeReturn(node: any, context: VisitorContext): void {
+    // Tokenize => operator
+    const sourceText = this.document.getText();
+    const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const arrowIndex = nodeText.indexOf('=>');
+
+    if (arrowIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + arrowIndex,
+        2 // => is 2 characters
+      );
+    }
+
+    // Visit the return value
+    if (node.value) {
+      if (Array.isArray(node.value)) {
+        for (const valueNode of node.value) {
+          this.mainVisitor.visitNode(valueNode, context);
+        }
+      } else {
+        this.mainVisitor.visitNode(node.value, context);
+      }
+    }
+  }
 }
+

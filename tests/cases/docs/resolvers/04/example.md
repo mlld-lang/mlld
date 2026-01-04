@@ -1,1 +1,0 @@
-/import <https://raw.githubusercontent.com/alice/repo/main/module.mld> as @mod

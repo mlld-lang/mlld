@@ -1,0 +1,5 @@
+var @x = "a"
+
+var @y = "b"
+
+show `@x @y`

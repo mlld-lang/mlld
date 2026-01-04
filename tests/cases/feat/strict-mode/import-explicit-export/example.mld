@@ -1,0 +1,3 @@
+import { publicVar } from "strict-explicit-export-module.mld"
+
+show @publicVar

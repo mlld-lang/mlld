@@ -5,7 +5,7 @@
 ]
 
 /exe @emit(value) = when [
-  denied => `Handled after-guard: @ctx.guard.reason`
+  denied => `Handled after-guard: @mx.guard.reason`
   * => `Emitted: @value`
 ]
 

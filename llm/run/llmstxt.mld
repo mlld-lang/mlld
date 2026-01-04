@@ -1,0 +1,49 @@
+>> llms.txt Build Script
+>> Generates llms-combined.txt from modular docs/llm/*.txt files
+
+>> Get version from package.json
+var @pkg = <@base/package.json>
+var @version = @pkg.version
+
+>> Define module order (logical reading sequence)
+var @modules = [
+  "llms-overview.txt",
+  "llms-core-rules.txt",
+  "llms-syntax.txt",
+  "llms-commands.txt",
+  "llms-control-flow.txt",
+  "llms-modules.txt",
+  "llms-patterns.txt",
+  "llms-configuration.txt",
+  "llms-sdk.txt",
+  "llms-mistakes.txt",
+  "llms-security.txt",
+  "llms-reference.txt",
+  "llms-cookbook.txt"
+]
+
+>> Load all modules
+var @contents = for @module in @modules => <@base/docs/llm/@module>
+
+>> Build combined document
+>> Note: Using JS because :::...::: with large interpolated content has a bug (see mlld-zigd)
+exe @buildDoc(version, timestamp, body) = js {
+  return `<MLLD_COMPLETE_GUIDE version="${version}">
+
+This is the complete mlld reference guide, combining all documentation modules.
+For modular access, see individual files in docs/llm/.
+
+Generated: ${timestamp}
+
+${body}
+
+</MLLD_COMPLETE_GUIDE>
+`;
+}
+
+var @body = @contents.join("\n\n")
+var @combined = @buildDoc(@version, @now, @body)
+
+>> Write output
+output @combined to "@base/llms-combined.txt"
+show `Generated llms-combined.txt (@contents.length modules, version @version)`

@@ -1,0 +1,5 @@
+var @file = <package.json>
+
+show @file.text  >> String content
+show @file.data  >> Parsed payload (JSON object)
+show @file.mx  >> Metadata (filename, tokens, labels, etc.)

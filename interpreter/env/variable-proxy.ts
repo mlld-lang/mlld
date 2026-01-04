@@ -10,8 +10,7 @@
 
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from '@interpreter/utils/variable-resolution';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
-import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
+import { wrapLoadContentValue, isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 function cloneValue<T>(input: T | undefined): T | undefined {
@@ -70,7 +69,7 @@ export function createVariableProxy(variable: Variable): any {
           
         case VARIABLE_PROXY_PROPS.METADATA:
           return {
-            ctx: variable.ctx,
+            mx: variable.mx,
             internal: variable.internal
           };
           
@@ -163,7 +162,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
           isVariable: true,
           type: value.type,
           subtype: (value as any).primitiveType,
-          ctx: value.ctx,
+          mx: value.mx,
           internal: value.internal
         });
       }
@@ -171,27 +170,64 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     }
     return createVariableProxy(value);
   }
-  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
-    const wrapped = wrapLoadContentValue(value);
-    const data = asData(wrapped);
-    if (target && key) {
-      recordPrimitiveMetadata(target, key, {
-        isVariable: false,
-        type: wrapped.type,
-        ctx: wrapped.ctx,
-        internal: wrapped.internal,
-        text: wrapped.text
-      });
+
+  // Handle file-loaded values (both StructuredValue and legacy LoadContentResult)
+  if (isFileLoadedValue(value)) {
+    if (isStructuredValue(value)) {
+      // StructuredValue with file metadata
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: 'load-content',
+          mx: value.mx,
+          internal: value.internal,
+          text: value.text
+        });
+      }
+      return value.text;
+    } else {
+      // Legacy LoadContentResult
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: 'load-content',
+          mx: undefined,
+          internal: undefined
+        });
+      }
+      return (value as any).content;
     }
-    return data;
   }
+
+  // Handle other StructuredValue types
   if (isStructuredValue(value)) {
+    // For load-content arrays, use .text (concatenated content)
+    if (value.type === 'array') {
+      const isLoadContentArray = value.mx?.source === 'load-content' ||
+                                   value.metadata?.source === 'load-content';
+
+      if (isLoadContentArray) {
+        // Return text for display - preserves concatenation
+        if (target && key) {
+          recordPrimitiveMetadata(target, key, {
+            isVariable: false,
+            type: value.type,
+            mx: value.mx,
+            internal: value.internal,
+            text: value.text
+          });
+        }
+        return value.text;
+      }
+    }
+
+    // For non-load-content structured values, extract data
     const data = asData(value);
     if (target && key) {
       recordPrimitiveMetadata(target, key, {
         isVariable: false,
         type: value.type,
-        ctx: value.ctx,
+        mx: value.mx,
         internal: value.internal,
         text: value.text
       });
@@ -299,10 +335,10 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
     getCtx: (value: any, name?: string) => {
       const proxyVariable = getProxyVariable(value);
       if (proxyVariable) {
-        return cloneValue(proxyVariable.ctx);
+        return cloneValue(proxyVariable.mx);
       }
       if (name && primitiveMetadata && primitiveMetadata[name]) {
-        return cloneValue(primitiveMetadata[name].ctx);
+        return cloneValue(primitiveMetadata[name].mx);
       }
       return undefined;
     },
@@ -319,12 +355,12 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
     },
 
     getMetadata: (value: any, name?: string) => {
-      const ctx = helpers.getCtx(value, name);
+      const mx = helpers.getCtx(value, name);
       const internal = helpers.getInternal(value, name);
-      if (!ctx && !internal) {
+      if (!mx && !internal) {
         return undefined;
       }
-      return { ctx, internal };
+      return { mx, internal };
     },
     
     // Get subtype - also check primitive metadata
@@ -356,7 +392,7 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
           value,
           type: meta.type,
           subtype: meta.subtype,
-          ctx: meta.ctx || {},
+          mx: meta.mx || {},
           internal: meta.internal || {},
           isVariable: true
         };
@@ -367,6 +403,6 @@ export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
 
   return {
     ...helpers,
-    ctx: helpers.getCtx
+    mx: helpers.getCtx
   };
 }

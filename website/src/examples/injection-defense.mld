@@ -1,7 +1,7 @@
 /var untrusted @email = <inbox/message.txt>
 
 /guard before untrusted = when [
-  @ctx.op.type == "run" => deny "No trust, no shell"
+  @mx.op.type == "run" => deny "No trust, no shell"
   * => allow
 ]
 

@@ -5,6 +5,111 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc78]
+
+### Added
+- **Strict mode for .mld files**: Bare directive syntax without slash prefixes
+  - `.mld` files use strict mode: bare directives (`var`, `show`, `exe`), text lines error, blank lines ignored
+  - `.mld.md` and `.md` files use markdown mode: require `/` prefix, text becomes content (existing behavior)
+  - Slash prefix optional in strict mode for backward compatibility (`/var` and `var` both work)
+  - SDK defaults to strict mode for raw strings (no file path) and unknown extensions
+  - File extension determines parsing mode: `.mld` → strict, `.mld.md`/`.md` → markdown
+  - CLI flags: `--loose`/`--markdown`/`--md`/`--prose` force markdown mode
+  - Mode included in AST cache keys to differentiate same file parsed in different modes
+- **Block syntax for exe and for**: Multi-statement bodies using `[...]` delimiters
+  - Exe blocks: `/exe @func() = [let @x = 1; let @y = 2; => @x + @y]` (statements separated by newlines or semicolons)
+  - For blocks: `/for @item in @items [show @item; let @count += 1]` (`=>` optional for block bodies)
+  - When-expression exe block actions: `when first [ @cond => [...] ]` supports full exe block semantics (let, side effects, return)
+  - `let @var = value` creates block-scoped variables; `let @var += value` for augmented assignment (arrays, strings, objects, numbers)
+  - `=> @value` optional return must be the last statement when present in exe blocks
+  - Nested for/when inside blocks supported; inner directives are slashless
+  - Blocks use `[...]` (not `{...}`) to distinguish mlld control flow from code/command/data
+- **Block syntax for var**: `/var @value = [let @x = ...; => @x]` evaluates a local statement block and returns its value
+- **Block comments in bracket bodies**: `>>`/`<<` comments inside `[...]` blocks (exe, for, when, guard, when-expressions) are consumed as whitespace
+- **While loops**: Bounded iteration with `done`/`continue` control flow
+  - `/while (100) @processor` - directive form with iteration cap
+  - `@input | while(100, 1s) @processor` - pipeline stage with optional pacing
+  - `done @value` terminates iteration and returns value
+  - `continue @newState` advances to next iteration with new state
+  - `@mx.while.iteration` (1-based) and `@mx.while.limit` available in processor
+- **Streaming format adapters**: NDJSON streaming parsed via configurable adapters
+  - `with { streamFormat: "claude-code" }` for Claude SDK-specific parsing
+  - Default `ndjson` adapter handles generic JSON streaming
+  - `with { streamFormat: @adapterConfig }` accepts custom AdapterConfig objects
+- **Command working directories**: `cmd:/abs/path`, `sh:/abs/path`, `bash:/abs/path`, `js:/abs/path`, `node:/abs/path`, and `python:/abs/path` set the execution directory for `/run`, inline pipelines, and `/exe` definitions; execution fails on relative, missing, or non-Unix paths
+- **Template collection imports**: Load entire directories of templates with shared parameter signatures
+  - `/import templates from "@base/agents" as @agents(message, context)` imports all `.att`/`.mtt` files
+  - Access by filename: `@agents["alice"](@msg, @ctx)` or nested: `@agents.support["helper"]`
+- **Directory module imports**: Import a directory that loads each immediate subdirectory `index.mld`
+  - Returns an object keyed by sanitized directory name with each `index.mld` export set as the value
+  - Skips `_*` and `.*` directories by default, override with `with { skipDirs: [] }`
+- **@exists() builtin**: Returns true when an expression evaluates without error (string args check paths; glob args require at least one match)
+- **When separators**: Semicolons separate when arms in directives and expressions
+- **Bound-value when-expressions**: `when @value first [...]` and `when @value [...]` support pattern arms like `>= 0.7`, `>= 0.3 && < 0.7`, and `*`
+- **Nullish coalescing operator**: `??` returns the left operand when it is not nullish, otherwise returns the right operand
+- **For-when filter sugar**: `for ... when ...` drops non-matches without null placeholders via implicit `none => skip` branch
+- **Conditional inclusion (`@var?`)**: Universal pattern for conditionally including content based on truthiness
+  - Commands/Templates: `@var?`...`` - include backtick template if truthy (e.g., `cmd { echo @tools?`--tools` }`)
+  - Strings: `@var?"..."` - include quoted fragment if truthy (e.g., `"Hello @title?"@title "`)
+  - Arrays: `[@a, @b?, @c]` - omit element if falsy
+  - Objects: `{key?: @val}` - omit pair if value is falsy
+  - Field access supported: `@obj.field?`...`` evaluates full path before truthiness check
+- **Object mx helpers**: `@obj.mx.keys`, `@obj.mx.values`, and `@obj.mx.entries` expose object utilities
+- **For-loop item keys**: `@item.mx.key` exposes the current object key (alongside `@item_key`)
+- **Parallel execution error accumulation**: Errors accumulate in `@mx.errors` array instead of failing fast
+  - `/for parallel @x in @xs [complex-block]` supported with block-scoped `let` only
+  - Failed iterations produce error markers `{ index, key?, message, error, value }` in results
+  - Parallel pipeline groups (`|| @a || @b || @c`) also accumulate errors
+- **Comments in block bodies**: `>>` (start-of-line) and `<<` (end-of-line) comments work inside `[...]` blocks
+
+### Changed
+- **Renamed `@ctx` to `@mx`**: The execution context variable is now `@mx` ("mlld execution"). Access retry count via `@mx.try`, hints via `@mx.hint`, stage info via `@mx.stage`, etc. The `.ctx` metadata namespace on variables is now `.mx` ("metadata")—use `@file.mx.filename`, `@file.mx.tokens`, etc.
+- `/exe` RHS pipe sugar accepts direct `@value | cmd { ... }` pipelines (legacy `run` form still works); identity definitions keep with-clause pipelines when evaluating parameters
+- **Mode-aware parsing**: Environment variable `MLLD_STRICT=1` forces strict mode, `MLLD_STRICT=0` forces markdown mode, overriding file extension inference
+  - FormatAdapterSink and TerminalSink are mutually exclusive
+- **Import from @payload and @state**: Route files can now import fields from execute() payload and state
+  - `/import { @message, @userId } from @payload` imports specific fields
+  - `/import { @conversationId } from @state` imports state fields
+  - Enables explicit, auditable access to runtime-injected data
+  - Similar pattern to `/import { USER } from @input` for environment variables
+- **Live @state and literal payload strings**: `@state` reads stay fresh after state writes, and `@payload/@state` dynamic modules emit literal strings so @mentions and user data do not interpolate.
+- **LoadContentResult implements StructuredValue surface**: File loading now returns values with `.text`, `.data`, and `.mx` surfaces. Access metadata via `.mx.filename`, `.mx.tokens`, `.mx.fm` etc. Direct property access (`.content`, `.filename`) remains for backward compatibility but `.mx` is recommended for new code.
+- **Simplified .keep usage**: Metadata now accessible in mlld contexts without `.keep` (e.g., `@file.mx.filename` works directly). `.keep` only needed when passing to JS/Node to preserve StructuredValue wrapper. Apply `.keep` at call site (`@process(@file.keep)`) rather than variable creation.
+
+### Fixed
+- **@debug variable stack overflow**: Fixed infinite recursion when accessing `@debug`. Variable metadata getter was calling itself recursively when building context snapshot.
+- **Exe block return-only syntax**: Exe blocks can now return directly without a let statement: `exe @f() = [ => { name: "hello" } ]`
+- **Method calls in object literal values**: Method calls like `@x.trim()` now work as object literal values in returns: `=> { file: @f.mx.relative, review: @review.trim() }`
+- **`.mx` access in for loops**: File metadata (`@f.mx.relative`, `@f.mx.filename`) now accessible when iterating over glob results in all contexts: direct interpolation, object literals (`{ file: @f.mx.relative }`), and exe function parameters.
+- **@json error clarity**: `@json` throws clear errors when parsing fails instead of silently mangling input. Detects markdown code fences and suggests `@json.llm`.
+- **Pipeline filter error**: Writing `| json` instead of `| @json` now gives helpful error: "Pipeline filters require the @ prefix"
+- **Arithmetic operators in exe blocks**: Math operators (`+`, `-`, `*`, `/`, `%`) work in exe blocks, let assignments, and return values
+- **Universal StructuredValue model**: All runtime values flow as StructuredValues with `.text`, `.data`, and `.mx` surfaces. Boundaries use `asData()`/`asText()` for extraction. Fixes when-expressions returning numbers, object serialization, and numeric comparisons.
+- **Field access precedence**: User data properties take precedence over guard quantifiers (`.all`, `.any`, `.none`). Core metadata (`.type`, `.mx`) always from Variable.
+- **Standalone @ in double-quoted strings**: `@` not followed by identifier treated as literal character (`.startsWith("@")` now works)
+- **Setup in nested directories**: `mlld setup` detects parent config and prompts to update parent or create new local config
+- Effect actions (`show`, `log`, `output`, `append`) work uniformly in all RHS contexts
+- Streaming no longer produces duplicate output when using format adapters
+- Regex arguments are parsed as RegExp values, so `.match(/.../)` conditions (including grouped patterns) work in when-expressions and other exec calls without falling back to strings
+- Block directive parse errors reparse with correct offsets for better error locations
+- Registry publish flow improvements: recreates missing fork refs, minimal PR bodies, better error messages
+- Module installer honors requested versions by purging mismatched cache entries
+- Lock file normalization strips version suffixes to prevent duplicates
+- Variable boundary escaping (`@var\.ext`) works in all interpolation contexts
+- `@@` and `\@` both escape to literal `@`
+- Template paths support `@var` interpolation in double-quoted strings
+- CLI `--payload` alias for `--inject`
+- **ESM bundle compatibility**: MJS bundle fixed for Node 24+ ESM projects (converted `require()` calls to ESM imports)
+- **LSP: Mode-aware highlighting**: Language server detects `.mld` (strict) vs `.mld.md` (markdown) and highlights bare directives correctly; text content in strict mode shows diagnostics; completions adapt to mode
+- **/var augmented assignment errors**: Invalid `@x = @y += @z` errors stop at the `+=` instead of earlier lines in LSP diagnostics
+- **Exe block += evaluation**: `let @result = @a; @result += @b` concatenates arrays instead of replacing them
+- `run` statements work inside `[...]` blocks for `/exe` and `/for` bodies
+- Fixed `/run @value | cmd { ... }` parsing so `@value` becomes `with { stdin: ... }` (matches `/exe` RHS pipe sugar)
+- **LSP: rc78 syntax support**: Semantic tokens for block syntax `[...]`, `let` keyword, `+=` augmented assignment, `while`/`done`/`continue`, `stream` directive, working directories `cmd:/path`, when semicolons
+- **LSP bug fixes**: When block assignments ([#327](https://github.com/mlld-lang/mlld/issues/327)), pipe transform parity ([#328](https://github.com/mlld-lang/mlld/issues/328)), EOL comments in when ([#329](https://github.com/mlld-lang/mlld/issues/329)), variable interpolation in /run ([#330](https://github.com/mlld-lang/mlld/issues/330)), function execution in /run ([#331](https://github.com/mlld-lang/mlld/issues/331)), array/object value highlighting ([#332](https://github.com/mlld-lang/mlld/issues/332))
+- **LSP debugging tools**: `npm run validate:tokens`, `npm run test:nvim-lsp <file>` for testing semantic highlighting
+- **LSP tokenization fixes**: Negative char positions causing Neovim crashes, missing visitor registrations (field/numericField/arrayIndex/LetAssignment/ExeReturn), container object recursion in visitChildren(), ExecInvocation wrong token type.
+
 ## [2.0.0-rc77]
 
 ### Added
@@ -18,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `debug`: Returns `DebugResult` with AST, variables, ordered trace, and timing
 - **Dynamic module injection**: `processMlld(script, { dynamicModules: {...} })` enables runtime context injection without filesystem I/O. All dynamic imports automatically labeled `src:dynamic` for guard enforcement. Enables multi-tenant applications (inject per-user/project context from database). Optional `dynamicModuleSource` parameter adds custom source labels (e.g., `src:user-upload`, `src:database`) for fine-grained guard policies distinguishing between trusted and untrusted dynamic data.
 - **State write protocol**: `/output @value to "state://path"` captures state updates as structured data instead of writing to filesystem. State writes included in `StructuredResult.stateWrites` with security metadata.
-- **SDK runtime execution**: `executeRoute(filepath, payload, options)` provides file-based route execution with in-memory AST caching, state hydration (`@state`, `@payload`), timeout/cancellation, and full effects logging.
+- **SDK runtime execution**: `execute(filepath, payload, options)` provides file-based route execution with in-memory AST caching, state hydration (`@state`, `@payload`), timeout/cancellation, and full effects logging.
 - **SDK analysis tools**: `analyzeModule(filepath)` extracts capabilities, imports, exports, guards, and security metadata without execution. Enables static analysis, capability checking, and module introspection.
 - **Effect security metadata**: All effects in structured/stream/debug modes include `security` field with labels, taint tracking, and provenance for auditing and policy enforcement.
 - **Execution events**: `ExecutionEmitter` bridges streaming infrastructure to SDK events (`stream:chunk`, `command:start/complete`, `effect`, `execution:complete`) for real-time monitoring.
@@ -27,11 +132,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Security model streamlined**: `SecurityDescriptor` now uses `taint: DataLabel[]` (accumulated labels) instead of single `taintLevel` enum. Automatic labels added: `src:exec` (commands), `src:file` (file loads), `src:dynamic` (runtime injection), `dir:/path` (file directories).
 - Effect handler now records effects when `mode: 'structured' | 'stream' | 'debug'`; default `document` mode skips recording for performance.
-- **`mlld run` now uses `executeRoute()`**: Run command leverages AST caching, metrics, and timeout support from SDK's `executeRoute()`. New `--timeout` and `--debug` flags available.
+- **`mlld run` now uses `execute()`**: Run command leverages AST caching, metrics, and timeout support from SDK's `execute()`. New `--timeout` and `--debug` flags available.
 
 ### Fixed
+- **Whitespace normalization** ([#396](https://github.com/mlld-lang/mlld/issues/396)): Introduced OutputIntent abstraction with collapsible breaks to eliminate extra blank lines. Newlines from document structure now collapse automatically, producing consistent output spacing.
+- **Prettier dependency removed** ([#281](https://github.com/mlld-lang/mlld/issues/281)): Replaced Prettier with simple line-based normalizer. Eliminates hanging bug, removes JSON protection hacks, and improves performance (~0ms vs ~50ms). The `@md` transformer now normalizes output (strips trailing whitespace, collapses blank lines) rather than reformatting.
 - Array slicing now supports variable interpolation in slice indices ([#457](https://github.com/mlld-lang/mlld/issues/457)). Previously `@arr[0:@limit]` would fail to parse; now `@arr[@start:@end]`, `@arr[0:@limit]`, and `@arr[@offset:]` all work as expected.
-- Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern 
+- Fixed issue where `/var @item = cmd {..}` would fail due to missing grammar pattern
 - Pipeline effects (`output`, `show`, `append`, `log`) run through guard pre/post hooks. `op:output`/`op:show`/`op:append`/`op:log` guards block both directives and inline effects; guard retries on effects deny with a clear message.
 
 ## [2.0.0-rc76]
@@ -95,8 +202,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Type-checking builtin methods: `.isArray()`, `.isObject()`, `.isString()`, `.isNumber()`, `.isBoolean()`, `.isNull()`, `.isDefined()` return booleans for conditional logic ([#414](https://github.com/mlld-lang/mlld/issues/414)). Note: `.isDefined()` safely returns `false` for missing variables or fields without throwing.
-- Test infrastructure for `/output` directive file operations - enables validation of file writes in fixture tests ([#340](https://github.com/mlld-lang/mlld/issues/340))
-- `.isDefined()` now returns `false` for missing variables or fields instead of throwing
 
 ### Fixed
 - Method chaining after array access now works: `@msg.split("_")[0].toUpperCase()` ([#408](https://github.com/mlld-lang/mlld/issues/408))

@@ -21,13 +21,15 @@ export interface CommandExecutionContext {
   directiveNode?: any; // MlldNode
   filePath?: string;
   directiveType?: string;
+  workingDirectory?: string;
   streamingEnabled?: boolean;
   pipelineId?: string;
   stageIndex?: number;
   parallelIndex?: number;
   streamId?: string;
   emitEffect?: (chunk: string, source: 'stdout' | 'stderr') => void;
-  ndjsonParser?: any;
+  suppressTerminal?: boolean;
+  bus?: import('../eval/pipeline/stream-bus').StreamBus;
 }
 
 /**

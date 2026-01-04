@@ -5,7 +5,7 @@
 // DataString - For data contexts that need raw JavaScript strings
 DataString "Data Context String"
   = "'" content:EscapedSingleStringContent "'" { return content; }
-  / '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DoubleQuotedText)* '"' {
+  / '"' parts:(ConditionalStringFragment / SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DataStringAtLiteral / DoubleQuotedText)* '"' {
       // In data context, we need to evaluate interpolation immediately
       if (parts.length === 0) {
         return "";  // Empty string
@@ -24,12 +24,19 @@ TemplateString "Template Context String"
     }
   / quote:UnifiedDoubleQuote { return quote.content; }  // Extract content from unified quote
 
+// Literal @ when not followed by an identifier (e.g., "@" at end of string or "@:")
+// BUT not @@ which is an escape sequence
+DataStringAtLiteral "literal @ character in data string"
+  = "@" !"@" !BaseIdentifier {
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+
 // ExpressionString - For expression contexts that need typed Literal nodes
 ExpressionString "Expression Context String"
   = "'" content:EscapedSingleStringContent "'" {
       return helpers.createNode('Literal', { value: content, valueType: 'string', location: location() });
     }
-  / '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DoubleQuotedText)* '"' {
+  / '"' parts:(ConditionalStringFragment / SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DataStringAtLiteral / DoubleQuotedText)* '"' {
       if (parts.length === 0) {
         return helpers.createNode('Literal', { value: "", valueType: 'string', location: location() });
       }

@@ -33,7 +33,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - Attaches optional streaming sinks (`progress`, `full`) before evaluation; formats final output (Markdown/XML) from effect handler.
 - `interpreter/core/interpreter.ts`:
   - `evaluate(node|nodes, env, context?)`: recursive AST evaluator; central dispatcher for directives, literals, expressions, exec invocations, when/for, objects/arrays, file/code fences, frontmatter.
-  - `interpolate(nodes, env, ctx)`: primary interpolation path for templates/quotes and condensed pipes.
+  - `interpolate(nodes, env, mx)`: primary interpolation path for templates/quotes and condensed pipes.
 
 ### Phases and Data Flow
 
@@ -79,7 +79,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - Condensed: `@value|@json|@xml|@upper` processed by `eval/pipeline/unified-processor`.
   - With-clause: `run [...] with { pipeline: [...] }` sets `pipelineContext` on env for each stage.
   - Inline effects: built-ins `| log`, `| output`, `| show` attach to the preceding stage, run after it succeeds, and re-run on each retry attempt.
-  - Streaming: optional sinks in `eval/pipeline/stream-sinks/*` (progress-only, terminal); ambient `@ctx` exposes attempt/hint history for retry semantics.
+  - Streaming: optional sinks in `eval/pipeline/stream-sinks/*` (progress-only, terminal); ambient `@mx` exposes attempt/hint history for retry semantics.
 - Structured execution: exec invocation, `/run`, and pipeline stages surface `StructuredValue` wrappers with `.text` and `.data` properties. Display/interpolation paths automatically use `.text`. `@p`/`@pipeline` hold wrappers, so use helpers (`asText`/`asData`) in low-level code that inspects stage history.
 
 ### Metadata Preservation
@@ -88,7 +88,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 
 ### Iteration
 
-- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately (show/output/log); collection form returns array results; supports `_key` pattern for object keys.
+- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately (show/output/log); collection form returns array results; exposes key via `.mx.key` accessor.
 - `foreach`: `eval/data-value-evaluator.ts` (Cartesian product) executes parameterized commands/templates over arrays; lazy complex data until needed; capped combinations for performance.
 
 ### Imports and Resolvers
@@ -127,17 +127,17 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Enable granular logs: `DEBUG_EXEC=1`, `DEBUG_FOR=1`, `DEBUG_PIPELINE=1`, `MLLD_DEBUG=true`.
 - Capture parse errors (pattern dev): `captureErrors: true` interpret option.
 - Use directive trace: `enableTrace` option (on by default) to inspect directive flow.
-- Inspect pipeline context via ambient `@ctx` (stages, attempts, hint).
+- Inspect pipeline context via ambient `@mx` (stages, attempts, hint).
 
 ### Hint Scoping in Pipelines
 
-`@ctx` is ambient and amnesiac: it reflects only the current stage. As part of retry semantics, `@ctx.hint` (the retry payload) is:
+`@mx` is ambient and amnesiac: it reflects only the current stage. As part of retry semantics, `@mx.hint` (the retry payload) is:
 
 - Visible only inside the body of the retried stage while it executes.
 - Cleared before inline effects on that stage and before re-executing the requesting stage.
 - Null in downstream stages and inline effects.
 
-This keeps `@ctx.hint` tightly scoped to the location where it is meaningful, while leaving aggregate history visible via `@p.retries.all`.
+This keeps `@mx.hint` tightly scoped to the location where it is meaningful, while leaving aggregate history visible via `@p.retries.all`.
 
 ## Quick Map
 
@@ -157,3 +157,9 @@ This keeps `@ctx.hint` tightly scoped to the location where it is meaningful, wh
 - Expressions: `interpreter/eval/expression.ts` — binary/unary/ternary
 - Pipelines: `interpreter/eval/pipeline/unified-processor.ts` — condensed + structured
 - Interpolation: `interpreter/core/interpreter.ts#interpolate` — templates, pipes, file refs
+
+### Working Directory Resolution
+
+- Grammar attaches `workingDir` metadata for `cmd:/abs`, `sh:/abs`, `bash:/abs`, `js:/abs`, `node:/abs`, and `python:/abs` in `/run`, inline pipelines, and `/exe` definitions.
+- `resolveWorkingDirectory()` (`interpreter/utils/working-directory.ts`) uses the FilePath interpolation context, requires absolute existing directories, and rejects tilde or Windows paths.
+- Executors accept per-call `workingDirectory` overrides; if absent, they fall back to the environment execution directory instead of guessing.

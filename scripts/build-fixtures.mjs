@@ -426,7 +426,7 @@ async function processCategoryDirectory(dirPath, categoryName, dirName) {
     // For valid tests (regular directories at root level)
     // Check if this directory contains example.md files directly
     const entries = await fs.readdir(dirPath);
-    const hasDirectMdFiles = entries.some(f => f.startsWith('example') && f.endsWith('.md'));
+    const hasDirectMdFiles = entries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
 
     if (hasDirectMdFiles) {
       // This directory contains test files directly
@@ -454,7 +454,7 @@ async function processCategoryDirectory(dirPath, categoryName, dirName) {
       
       // Check if this subdirectory contains example.md files directly
       const subEntries = await fs.readdir(subDirPath);
-      const hasDirectMdFiles = subEntries.some(f => f.startsWith('example') && f.endsWith('.md'));
+      const hasDirectMdFiles = subEntries.some(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
       
       if (hasDirectMdFiles) {
         // Process this directory directly
@@ -549,6 +549,16 @@ async function processExampleDirectory(dirPath, category, name, directive = null
   // Look for example*.md files (or copied .mld files in examples directory)
   const files = await fs.readdir(dirPath);
 
+  // Optional config per test directory
+  const configPath = path.join(dirPath, 'config.json');
+  let config = null;
+  try {
+    const configContent = await fs.readFile(configPath, 'utf-8');
+    config = JSON.parse(configContent);
+  } catch (error) {
+    // No config or invalid JSON; ignore
+  }
+
   // Check for skip files
   const skipFiles = files.filter(f => f === 'skip.md' || f.startsWith('skip-') && f.endsWith('.md'));
   if (skipFiles.length > 0) {
@@ -564,8 +574,8 @@ async function processExampleDirectory(dirPath, category, name, directive = null
   }
 
   const exampleFiles = name === 'examples' ?
-    files.filter(f => f.endsWith('.md') && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.')) :
-    files.filter(f => f.startsWith('example') && f.endsWith('.md'));
+    files.filter(f => (f.endsWith('.md') || f.endsWith('.mld')) && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.')) :
+    files.filter(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
   
   // Determine output directory - mirrors the structure under tests/cases/
   const testPath = path.relative(CASES_DIR, dirPath);
@@ -616,9 +626,9 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     // Allow any fixture to specify error expectations via local error.md (and variants)
     if (!errorContent) {
       const errorFile =
-        file === 'example.md'
+        (file === 'example.md' || file === 'example.mld')
           ? 'error.md'
-          : file.replace('example-', 'error-');
+          : file.replace('example-', 'error-').replace('.mld', '.md');
       if (files.includes(errorFile)) {
         errorContent = await fs.readFile(path.join(dirPath, errorFile), 'utf-8');
       }
@@ -628,13 +638,13 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     let fixtureFileName;
     if (name === 'examples') {
       // For examples directory, use the filename as the fixture name
-      fixtureFileName = file.replace('.md', '') + '.generated-fixture.json';
-    } else if (file !== 'example.md') {
+      fixtureFileName = file.replace('.md', '').replace('.mld', '') + '.generated-fixture.json';
+    } else if (file !== 'example.md' && file !== 'example.mld') {
       // Handle variants like example-multiline.md
-      const variant = file.replace('example-', '').replace('.md', '');
+      const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
       fixtureFileName = `${name}-${variant}.generated-fixture.json`;
     } else {
-      // For standard example.md files, use the directory name
+      // For standard example.md or example.mld files, use the directory name
       fixtureFileName = `${name}.generated-fixture.json`;
     }
     
@@ -642,9 +652,12 @@ async function processExampleDirectory(dirPath, category, name, directive = null
       // Parse the content (may fail for invalid/exceptions, which is expected)
       let ast = null;
       let parseError = null;
+      // Infer mode from file extension or config
+      const inferredMode = file.endsWith('.mld') ? 'strict' : (config?.mode || undefined);
+      const parseOptions = inferredMode ? { mode: inferredMode } : undefined;
       
       try {
-        ast = await parse(content);
+        ast = parseOptions ? await parse(content, parseOptions) : await parse(content);
       } catch (error) {
         parseError = {
           message: error.message,
@@ -677,15 +690,20 @@ async function processExampleDirectory(dirPath, category, name, directive = null
 
       // For variant files, include the variant in the name
       let fixtureName = fullPath;
-      if (file !== 'example.md' && file.startsWith('example-')) {
-        const variant = file.replace('example-', '').replace('.md', '');
+      if (file !== 'example.md' && file !== 'example.mld' && file.startsWith('example-')) {
+        const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
         fixtureName = `${fullPath}-${variant}`;
       }
+
+      const description =
+        (config && typeof config.description === 'string' && config.description.trim())
+          ? config.description.trim()
+          : `Test fixture for ${fixtureName}`;
 
       // The fixture name should be unique for each test
       const fixture = {
         name: fixtureName,
-        description: `Test fixture for ${fixtureName}`,
+        description,
         category,
         subcategory: name,
         input: content,
@@ -694,7 +712,9 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         expectedWarning: warningContent,
         actualOutput: actualOutput, // Include generated output for smoke tests
         ast: ast,
-        parseError: parseError
+        parseError: parseError,
+        ...(config?.env ? { environmentVariables: config.env } : {}),
+        ...(inferredMode ? { mlldMode: inferredMode } : {})
       };
       
       // Write fixture only if content changed
@@ -853,8 +873,8 @@ async function buildExamplesMarkdown() {
         const node = tree[key];
         if (node._examples.length > 0) {
           for (const ex of node._examples) {
-            if (ex.file !== 'example.md') {
-              const variant = ex.file.replace('example-', '').replace('.md', '');
+            if (ex.file !== 'example.md' && ex.file !== 'example.mld') {
+              const variant = ex.file.replace('example-', '').replace('.md', '').replace('.mld', '');
               contentLines.push(`${'#'.repeat(level + 1)} ${capitalize(variant)} Variant`);
               contentLines.push('');
             }
@@ -886,8 +906,8 @@ async function buildExamplesMarkdown() {
       // Add examples for this node
       if (node._examples.length > 0) {
         for (const ex of node._examples) {
-          if (ex.file !== 'example.md') {
-            const variant = ex.file.replace('example-', '').replace('.md', '');
+          if (ex.file !== 'example.md' && ex.file !== 'example.mld') {
+            const variant = ex.file.replace('example-', '').replace('.md', '').replace('.mld', '');
             contentLines.push(`${'#'.repeat(level + 1)} ${capitalize(variant)} Variant`);
             contentLines.push('');
           }

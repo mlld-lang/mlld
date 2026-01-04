@@ -1,6 +1,5 @@
 import {
   isLoadContentResult,
-  isLoadContentResultArray,
   type LoadContentResult,
   type LoadContentResultHTML,
   type LoadContentResultURL
@@ -148,6 +147,12 @@ function deriveArrayText(value: any[]): string {
   if (typeof value.toString === 'function' && value.toString !== Array.prototype.toString) {
     return value.toString();
   }
+
+  // For arrays of LoadContentResult items (glob results), concatenate file contents
+  if (value.length > 0 && isLoadContentResult(value[0])) {
+    return value.map(item => item.content ?? '').join('\n\n');
+  }
+
   try {
     return JSON.stringify(value);
   } catch {
@@ -203,7 +208,9 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
     // Preserve original variable metadata if tagged
     const variableMetadata = hasVariableMetadata(value) ? getVariableMetadata(value) : undefined;
-    const aggregatedSecurity = isLoadContentResultArray(value)
+
+    // Aggregate security descriptors from LoadContentResult items
+    const aggregatedSecurity = value.length > 0 && isLoadContentResult(value[0])
       ? value
           .map(item => buildLoadSecurityDescriptor(item))
           .filter((descriptor): descriptor is NonNullable<ReturnType<typeof buildLoadSecurityDescriptor>> =>
@@ -215,8 +222,8 @@ export function wrapLoadContentValue(value: any): StructuredValue {
 
     const metadata = buildMetadata(
       baseMetadata,
-      variableMetadata?.ctx
-        ? { variableMetadata: variableMetadata.ctx }
+      variableMetadata?.mx
+        ? { variableMetadata: variableMetadata.mx }
         : undefined
     );
     const finalMetadata = mergedSecurity
@@ -238,4 +245,21 @@ export function wrapLoadContentValue(value: any): StructuredValue {
         })();
 
   return wrapStructured(value, 'object', fallbackText, { source: 'load-content' });
+}
+
+export function isFileLoadedValue(value: unknown): boolean {
+  if (isStructuredValue(value)) {
+    return Boolean(value.mx?.filename || value.mx?.url);
+  }
+  return isLoadContentResult(value);
+}
+
+export function isURLLoadedValue(value: unknown): boolean {
+  if (isStructuredValue(value)) {
+    return Boolean(value.mx?.url);
+  }
+  if (isLoadContentResult(value)) {
+    return Boolean((value as any).url);
+  }
+  return false;
 }

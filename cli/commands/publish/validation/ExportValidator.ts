@@ -19,7 +19,8 @@ import type {
   PathDirectiveNode,
   ExeDirectiveNode,
   VariableReferenceNode,
-  TextNode
+  TextNode,
+  GuardDirectiveNode
 } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 
@@ -56,12 +57,15 @@ export class ExportValidator implements ValidationStep {
     }
 
     for (const binding of entries) {
-      if (!declarations.has(binding.name)) {
-        errors.push({
-          field: 'exports',
-          message: `Exported name '${binding.name}' is not declared by /var, /exe, or /path directives. Declare the binding before exporting it.`
-        });
+      if (declarations.has(binding.name)) {
+        continue;
       }
+      errors.push({
+        field: 'exports',
+        message:
+          `Exported name '${binding.name}' is not declared by any recognized binding. ` +
+          'Declare it with /var, /exe, /guard (with a name), or another directive that defines a binding before exporting.'
+      });
     }
 
     return {
@@ -77,10 +81,8 @@ export class ExportValidator implements ValidationStep {
     let manifestCount = 0;
     let hasWildcard = false;
 
-    const ast = Array.isArray(module.ast) ? module.ast : [];
-
-    for (const node of ast) {
-      if (node.type !== 'Directive' || node.kind !== 'export') continue;
+    this.walkAst(module.ast, node => {
+      if (node.type !== 'Directive' || node.kind !== 'export') return;
 
       manifestCount += 1;
       const directive = node as ExportDirectiveNode;
@@ -98,7 +100,7 @@ export class ExportValidator implements ValidationStep {
           location: astLocationToSourceLocation(exportNode.location, module.filePath)
         });
       }
-    }
+    });
 
     if (manifestCount === 0) {
       let match: RegExpExecArray | null;
@@ -135,10 +137,8 @@ export class ExportValidator implements ValidationStep {
 
   private collectDeclarations(ast: MlldNode[]): Map<string, string> {
     const declarations = new Map<string, string>();
-    const nodes = Array.isArray(ast) ? ast : [];
-
-    for (const node of nodes) {
-      if (node.type !== 'Directive') continue;
+    this.walkAst(ast, node => {
+      if (node.type !== 'Directive') return;
 
       switch (node.kind) {
         case 'var':
@@ -159,20 +159,34 @@ export class ExportValidator implements ValidationStep {
             }
           }
           break;
+        case 'guard':
+          this.extractGuardNames(node as GuardDirectiveNode).forEach(name => {
+            if (!declarations.has(name)) declarations.set(name, 'guard');
+          });
+          break;
         default:
           break;
       }
-    }
+    });
 
     return declarations;
   }
 
   private extractVarNames(node: VarDirectiveNode | PathDirectiveNode): string[] {
     const identifierNodes = node.values?.identifier;
-    if (!Array.isArray(identifierNodes)) return [];
+    return this.extractIdentifierValues(identifierNodes);
+  }
 
+  private extractGuardNames(node: GuardDirectiveNode): string[] {
+    return this.extractIdentifierValues(node.values?.name);
+  }
+
+  private extractIdentifierValues(field: unknown): string[] {
+    if (!field) return [];
+
+    const refs = Array.isArray(field) ? field : [field];
     const names: string[] = [];
-    for (const ref of identifierNodes as VariableReferenceNode[]) {
+    for (const ref of refs as VariableReferenceNode[]) {
       if (ref?.type === 'VariableReference' && typeof ref.identifier === 'string') {
         names.push(ref.identifier);
       }
@@ -190,5 +204,18 @@ export class ExportValidator implements ValidationStep {
       .trim();
 
     return parts || null;
+  }
+
+  private walkAst(nodes: MlldNode[] | undefined, visitor: (node: MlldNode) => void): void {
+    if (!Array.isArray(nodes)) return;
+
+    for (const node of nodes) {
+      visitor(node);
+
+      const possibleNested = (node as any).content;
+      if (Array.isArray(possibleNested)) {
+        this.walkAst(possibleNested as MlldNode[], visitor);
+      }
+    }
   }
 }

@@ -1,0 +1,5 @@
+/var @fenced = ::```json
+{"key": "value"}
+```::
+
+/var @result = @fenced | @json

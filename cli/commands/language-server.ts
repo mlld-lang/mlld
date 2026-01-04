@@ -17,29 +17,9 @@ export async function languageServerCommand(args?: string[]): Promise<void> {
   // We don't need to do anything special with it as the connection
   // will be set up automatically via stdio
   const hasStdio = args?.includes('--stdio');
-  
-  // Check if vscode-languageserver is installed
-  try {
-    // Dynamic import to check if the package exists
-    const lspModule = await import('vscode-languageserver/node.js').catch(() => null);
-    
-    if (!lspModule) {
-      console.error('Error: Language server dependencies not installed.');
-      console.error('\nTo fix this, try one of the following:');
-      console.error('1. Reinstall mlld: npm install -g mlld');
-      console.error('2. Install locally: npm install mlld');
-      console.error('3. Install the dependency directly: npm install vscode-languageserver');
-      console.error('\nThe mlld language server provides intelligent features like:');
-      console.error('- Syntax validation and error reporting');
-      console.error('- Autocomplete for directives, variables, and file paths');
-      console.error('- Hover information for variables');
-      console.error('- Go-to-definition for variables');
-      console.error('- Import resolution and multi-file analysis');
-      console.error('- Semantic syntax highlighting');
-      process.exit(1);
-    }
 
-    // If we get here, the package is installed - start the server
+  // vscode-languageserver is now bundled, so we can start directly
+  try {
     const { startLanguageServer } = await import('./language-server-impl');
     await startLanguageServer();
   } catch (error) {
@@ -127,6 +107,8 @@ export interface DocumentAnalysis {
   lastAnalyzed: number;
 }
 
+export type TemplateType = 'att' | 'mtt';
+
 export interface DocumentState {
   uri: string;
   version: number;
@@ -135,4 +117,6 @@ export interface DocumentState {
   lastValidTokens?: any; // SemanticTokens data
   currentEditLine?: number;
   lastEditTime: number;
+  mode?: import('@core/types/mode').MlldMode;
+  templateType?: TemplateType;
 }

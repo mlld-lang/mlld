@@ -63,6 +63,56 @@ DeniedLiteral "denied literal"
       });
     }
 
+DoneLiteral "done literal"
+  = "done" _ "(" _ expr:Expression _ ")" {
+      const normalized = Array.isArray(expr) ? expr : [expr];
+      return helpers.createNode('Literal', {
+        value: normalized,
+        valueType: 'done',
+        location: location()
+      });
+    }
+  / "done" _ value:VarRHSContent {
+      const normalized = Array.isArray(value) ? value : [value];
+      return helpers.createNode('Literal', {
+        value: normalized,
+        valueType: 'done',
+        location: location()
+      });
+    }
+  / "done" {
+      return helpers.createNode('Literal', {
+        value: 'done',
+        valueType: 'done',
+        location: location()
+      });
+    }
+
+ContinueLiteral "continue literal"
+  = "continue" _ "(" _ expr:Expression _ ")" {
+      const normalized = Array.isArray(expr) ? expr : [expr];
+      return helpers.createNode('Literal', {
+        value: normalized,
+        valueType: 'continue',
+        location: location()
+      });
+    }
+  / "continue" _ value:VarRHSContent {
+      const normalized = Array.isArray(value) ? value : [value];
+      return helpers.createNode('Literal', {
+        value: normalized,
+        valueType: 'continue',
+        location: location()
+      });
+    }
+  / "continue" {
+      return helpers.createNode('Literal', {
+        value: 'continue',
+        valueType: 'continue',
+        location: location()
+      });
+    }
+
 // Retry literal - signals pipeline retry
 RetryLiteral "Retry Literal"
   = "retry" { 

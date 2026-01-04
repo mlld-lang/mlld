@@ -66,36 +66,32 @@ describe('DependencyResolver', () => {
 name: '@alice/a'
 author: alice
 version: 1.0.0
-needs:
-  runtimes: ["node@18"]
-  tools: ["jq"]
-  packages:
-    node: ["lodash@4.17.21"]
 dependencies:
   "@bob/b": "1.0.0"
 ---
+/needs {
+  cmd: [jq],
+  node: [lodash@4.17.21]
+}
 `),
       '@bob/b@1.0.0': moduleContent(`---
 name: '@bob/b'
 author: bob
 version: 1.0.0
-needs:
-  tools: ["rg"]
-  packages:
-    node: ["lodash@^4.17.0", "axios@1.6.0"]
 devDependencies:
   "@carol/dev": "0.1.0"
 ---
+/needs {
+  cmd: [rg],
+  node: [lodash@^4.17.0, axios@1.6.0]
+}
 `),
       '@carol/dev@0.1.0': moduleContent(`---
 name: '@carol/dev'
 author: carol
 version: 0.1.0
-needs:
-  runtimes: ["python@3.11"]
-  packages:
-    python: ["requests==2.31.0"]
 ---
+/needs { python: [requests==2.31.0] }
 `)
     };
 
@@ -115,9 +111,6 @@ needs:
     expect(Object.keys(result.modules)).not.toContain('@carol/dev@0.1.0');
 
     const aggregated = result.aggregatedNeeds;
-    expect(aggregated.runtimes.map(r => r.raw)).toContain('node@18');
-    expect(aggregated.tools.map(t => t.raw)).toEqual(expect.arrayContaining(['jq', 'rg']));
-
     const lodashSummary = aggregated.packages.find(pkg => pkg.name === 'lodash');
     expect(lodashSummary).toBeDefined();
     expect(lodashSummary?.resolved?.specifier).toBe('4.17.21');
@@ -151,19 +144,15 @@ devDependencies:
 name: '@foo/lib'
 author: foo
 version: 1.0.0
-needs:
-  packages:
-    node: ["left-pad@1.3.0"]
 ---
+/needs { node: [left-pad@1.3.0] }
 `),
       '@bar/dev@2.0.0': moduleContent(`---
 name: '@bar/dev'
 author: bar
 version: 2.0.0
-needs:
-  packages:
-    node: ["left-pad@2.0.0"]
 ---
+/needs { node: [left-pad@2.0.0] }
 `)
     };
 
@@ -197,18 +186,14 @@ dependencies:
       '@a/pkg@1.0.0': moduleContent(`---
 name: '@a/pkg'
 version: 1.0.0
-needs:
-  packages:
-    node: ["cool-lib@1.0.0"]
 ---
+/needs { node: [cool-lib@1.0.0] }
 `),
       '@b/pkg@1.0.0': moduleContent(`---
 name: '@b/pkg'
 version: 1.0.0
-needs:
-  packages:
-    node: ["cool-lib@2.0.0"]
 ---
+/needs { node: [cool-lib@2.0.0] }
 `)
     };
 

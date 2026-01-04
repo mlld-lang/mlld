@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { MlldError } from '@core/errors/MlldError';
 import { SourceContextExtractor, SourceContext } from './sourceContextExtractor';
 import { EnhancedLocationFormatter } from './enhancedLocationFormatter';
+import { formatLocationForError } from './locationFormatter';
 import { IFileSystemService } from '@services/fs/IFileSystemService';
 import { logger } from '@core/utils/logger';
 
@@ -337,7 +338,6 @@ export class ErrorDisplayFormatter {
           relevantDetails.push(`  ${key}: ${formattedLocation}`);
         } catch {
           // Fallback to basic formatting if smart formatting fails
-          const { formatLocationForError } = require('./locationFormatter');
           relevantDetails.push(`  ${key}: ${formatLocationForError(value)}`);
         }
       } else {

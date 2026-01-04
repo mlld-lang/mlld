@@ -5,7 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 
 // Import existing utilities
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { formatMarkdown } from '../utils/markdown-formatter';
+import { normalizeOutput } from '../output/normalizer';
 import { jsonToXml } from '../utils/json-to-xml';
 
 export interface TransformerDefinition {
@@ -14,6 +14,8 @@ export interface TransformerDefinition {
   description: string;
   implementation: (input: any) => Promise<any> | any;
   variants?: TransformerVariant[];
+  /** If true, the name is reserved and cannot be overridden by user code */
+  isReserved?: boolean;
 }
 
 export interface TransformerVariant {
@@ -42,6 +44,11 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
         return JSON.parse(input);
       } catch (error) {
         const details = error instanceof Error ? error.message : String(error);
+        // Check if input looks like markdown-fenced JSON
+        const trimmed = input.trim();
+        if (trimmed.startsWith('```json') || trimmed.startsWith('```\n{') || trimmed.startsWith('```\n[')) {
+          throw new Error(`Strict JSON parsing failed - input appears to be wrapped in markdown code fences. Use @json.llm to extract JSON from LLM responses.\n\n${details}`);
+        }
         throw new Error(`Strict JSON parsing failed (use @json.loose for relaxed syntax)\n\n${details}`);
       }
     }
@@ -49,13 +56,19 @@ function makeJsonTransformer(mode: 'loose' | 'strict' | 'llm') {
     if (mode === 'loose') {
       try {
         return JSON5.parse(input);
-      } catch {
-        // Fall through to the legacy path (strict JSON then markdown conversion)
-        // so behaviour stays consistent with pre-JSON5 parsing.
+      } catch (error) {
+        const details = error instanceof Error ? error.message : String(error);
+        // Check if input looks like markdown-fenced JSON
+        const trimmed = input.trim();
+        if (trimmed.startsWith('```json') || trimmed.startsWith('```\n{') || trimmed.startsWith('```\n[')) {
+          throw new Error(`JSON parsing failed - input appears to be wrapped in markdown code fences. Use @json.llm to extract JSON from LLM responses.\n\n${details}`);
+        }
+        throw new Error(`JSON parsing failed (use @json.llm for LLM responses with code fences)\n\n${details}`);
       }
     }
 
-    return parseJsonWithMarkdownFallback(input);
+    // This shouldn't be reached, but fallback to strict parsing
+    return JSON.parse(input);
   };
 }
 
@@ -118,24 +131,13 @@ function looksLikeJson(str: string): boolean {
   return startsRight && endsRight && hasStructure && minLength;
 }
 
-function parseJsonWithMarkdownFallback(input: string): unknown {
-  try {
-    return JSON.parse(input);
-  } catch {
-    const converted = convertToJSON(input);
-    try {
-      return JSON.parse(converted);
-    } catch {
-      return converted;
-    }
-  }
-}
 
 export const builtinTransformers: TransformerDefinition[] = [
   {
     name: 'typeof',
     uppercase: 'TYPEOF',
     description: 'Get type information for a variable',
+    isReserved: true,
     implementation: async (input: string) => {
       // The input will be a special marker when we have a Variable object
       // Otherwise it's just the string value
@@ -148,9 +150,19 @@ export const builtinTransformers: TransformerDefinition[] = [
     }
   },
   {
+    name: 'exists',
+    uppercase: 'EXISTS',
+    description: 'Return true when an expression evaluates without error',
+    isReserved: true,
+    implementation: async (input: string) => {
+      return input.trim().length > 0;
+    }
+  },
+  {
     name: 'xml',
     uppercase: 'XML',
     description: 'Convert content to SCREAMING_SNAKE_CASE XML',
+    isReserved: true,
     implementation: async (input: string) => {
       try {
         // Try to parse as JSON first
@@ -160,13 +172,13 @@ export const builtinTransformers: TransformerDefinition[] = [
       } catch {
         // Not JSON - try llmxml for markdown conversion
         const result = await llmxmlInstance.toXML(input);
-        
+
         // If llmxml returned the input unchanged (no conversion happened)
         if (result === input) {
           // Wrap plain text in DOCUMENT tags
           return `<DOCUMENT>\n${input}\n</DOCUMENT>`;
         }
-        
+
         return result;
       }
     }
@@ -174,7 +186,8 @@ export const builtinTransformers: TransformerDefinition[] = [
   {
     name: 'json',
     uppercase: 'JSON',
-    description: 'Format as JSON or convert to JSON structure (supports loose JSON syntax)',
+    description: 'Parse JSON (supports loose JSON5 syntax)',
+    isReserved: true,
     implementation: makeJsonTransformer('loose'),
     variants: [
       {
@@ -208,6 +221,7 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'csv',
     uppercase: 'CSV',
     description: 'Convert to CSV format',
+    isReserved: true,
     implementation: (input: string) => {
       return convertToCSV(input);
     }
@@ -215,9 +229,70 @@ export const builtinTransformers: TransformerDefinition[] = [
   {
     name: 'md',
     uppercase: 'MD',
-    description: 'Format markdown with prettier',
+    description: 'Normalize markdown output',
+    isReserved: true,
     implementation: async (input: string) => {
-      return await formatMarkdown(input);
+      return normalizeOutput(input);
+    }
+  },
+  {
+    name: 'upper',
+    uppercase: 'UPPER',
+    description: 'Convert text to uppercase',
+    implementation: (input: string) => {
+      return String(input).toUpperCase();
+    }
+  },
+  {
+    name: 'lower',
+    uppercase: 'LOWER',
+    description: 'Convert text to lowercase',
+    implementation: (input: string) => {
+      return String(input).toLowerCase();
+    }
+  },
+  {
+    name: 'trim',
+    uppercase: 'TRIM',
+    description: 'Remove leading and trailing whitespace',
+    implementation: (input: string) => {
+      return String(input).trim();
+    }
+  },
+  {
+    name: 'pretty',
+    uppercase: 'PRETTY',
+    description: 'Pretty-print JSON with indentation',
+    implementation: (input: string) => {
+      try {
+        const parsed = JSON.parse(input);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return input;
+      }
+    }
+  },
+  {
+    name: 'sort',
+    uppercase: 'SORT',
+    description: 'Sort array elements or object keys alphabetically',
+    implementation: (input: string) => {
+      try {
+        const parsed = JSON.parse(input);
+        if (Array.isArray(parsed)) {
+          return JSON.stringify(parsed.sort());
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          const sorted: Record<string, unknown> = {};
+          Object.keys(parsed).sort().forEach(key => {
+            sorted[key] = parsed[key];
+          });
+          return JSON.stringify(sorted, null, 2);
+        }
+        return input;
+      } catch {
+        // For plain text, sort lines
+        return input.split('\n').sort().join('\n');
+      }
     }
   }
 ];
@@ -257,6 +332,7 @@ export function createTransformerVariable(
     internal: {
       executableDef,
       isBuiltinTransformer: true,
+      isSystem: true,
       transformerImplementation: implementation,
       transformerVariants: undefined,
       description,
@@ -265,76 +341,6 @@ export function createTransformerVariable(
   };
 }
 
-/**
- * Convert markdown structures to JSON
- */
-function convertToJSON(input: string): string {
-  try {
-    const lines = input.split('\n');
-    const result: any = {};
-    let currentList: string[] | null = null;
-    let currentTable: any[] | null = null;
-    let tableHeaders: string[] | null = null;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      
-      // Handle headers as keys
-      if (trimmed.startsWith('#')) {
-        const level = trimmed.match(/^#+/)?.[0].length || 1;
-        const text = trimmed.replace(/^#+\s*/, '');
-        if (level === 1) {
-          result[text] = {};
-        }
-      }
-      // Handle lists
-      else if (trimmed.match(/^[-*]\s+/)) {
-        if (!currentList) currentList = [];
-        currentList.push(trimmed.replace(/^[-*]\s+/, ''));
-        
-        // Check if next line continues the list
-        if (i === lines.length - 1 || !lines[i + 1].trim().match(/^[-*]\s+/)) {
-          result.list = currentList;
-          currentList = null;
-        }
-      }
-      // Handle table headers
-      else if (trimmed.includes('|') && i + 1 < lines.length && lines[i + 1].includes('---')) {
-        tableHeaders = trimmed.split('|').map(h => h.trim()).filter(h => h);
-        currentTable = [];
-        i++; // Skip separator line
-      }
-      // Handle table rows
-      else if (trimmed.includes('|') && tableHeaders) {
-        const values = trimmed.split('|').map(v => v.trim()).filter(v => v);
-        const row: any = {};
-        tableHeaders.forEach((header, idx) => {
-          row[header] = values[idx] || '';
-        });
-        currentTable!.push(row);
-        
-        // Check if next line continues the table
-        if (i === lines.length - 1 || !lines[i + 1].trim().includes('|')) {
-          result.table = currentTable;
-          currentTable = null;
-          tableHeaders = null;
-        }
-      }
-      // Handle key-value pairs
-      else if (trimmed.includes(':')) {
-        const [key, ...valueParts] = trimmed.split(':');
-        const value = valueParts.join(':').trim();
-        result[key.trim()] = value;
-      }
-    }
-    
-    return JSON.stringify(result, null, 2);
-  } catch (error) {
-    // If conversion fails, wrap the input as a string
-    return JSON.stringify({ content: input }, null, 2);
-  }
-}
 
 /**
  * Convert to CSV format

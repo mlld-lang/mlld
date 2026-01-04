@@ -6,6 +6,8 @@ import {
   DataLabel
 } from './security';
 
+import type { PathMeta } from './meta';
+
 import {
   TextNode,
   VariableReferenceNode,
@@ -13,7 +15,9 @@ import {
   PathSeparatorNode,
   BaseMlldNode,
   TimeDurationNode,
-  ExecInvocation
+  ExecInvocation,
+  ConditionalTemplateSnippetNode,
+  ConditionalStringFragmentNode
 } from './primitives';
 import { WithClause } from './run';
 
@@ -33,7 +37,13 @@ export type PathNodeArray = Array<
 export type VariableNodeArray = Array<VariableReferenceNode>;
 
 // Array of content nodes (text, variables, and exec invocations)
-export type ContentNodeArray = Array<TextNode | VariableReferenceNode | ExecInvocation>;
+export type ContentNodeArray = Array<
+  TextNode |
+  VariableReferenceNode |
+  ExecInvocation |
+  ConditionalTemplateSnippetNode |
+  ConditionalStringFragmentNode
+>;
 
 /**
  * Import directive values
@@ -45,6 +55,8 @@ export interface ImportValues {
   cachedDuration?: TimeDurationNode;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  namespace?: TextNode[];
+  templateParams?: any[];
 }
 
 export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;
@@ -112,6 +124,8 @@ export interface RunValues {
   parameters?: ContentNodeArray;
   options?: BaseMlldNode[];
   securityLabels?: DataLabel[];
+  workingDir?: ContentNodeArray;
+  workingDirMeta?: PathMeta;
 }
 
 /**

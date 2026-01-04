@@ -5,20 +5,26 @@ import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { VariableImporter } from './VariableImporter';
 import { ExportManifest } from './ExportManifest';
 import { parse } from '@grammar/parser';
+import type { TemplateExecutable } from '@core/types/executable';
 import { interpolate, evaluate } from '../../core/interpreter';
-import { MlldError } from '@core/errors';
+import { MlldError, MlldImportError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
-import type { ContentType } from '@core/resolvers/types';
+import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import { inferMlldMode } from '@core/utils/mode';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
   frontmatter: Record<string, any> | null;
   childEnvironment: Environment;
   guardDefinitions: SerializedGuardDefinition[];
+  moduleNeeds?: NeedsDeclaration;
+  moduleWants?: WantsTier[];
+  policyContext?: Record<string, unknown> | null;
 }
 
 /**
@@ -70,6 +76,10 @@ export class ModuleContentProcessor {
       this.env.recordSecurityDescriptor(combinedDescriptor);
     }
     try {
+      if (resolution.importType === 'templates') {
+        return await this.processTemplateCollection(resolution, directive);
+      }
+
       // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
       const lowerPath = resolvedPath.toLowerCase();
       if (lowerPath.endsWith('.att') || lowerPath.endsWith('.mtt')) {
@@ -143,7 +153,8 @@ export class ModuleContentProcessor {
     content: string,
     ref: string,
     directive: DirectiveNode,
-    contentType?: ContentType
+    contentType?: 'module' | 'data' | 'text',
+    labels?: readonly string[]
   ): Promise<ModuleProcessingResult> {
     // Begin import tracking for security
     this.securityValidator.beginImport(ref);
@@ -210,12 +221,16 @@ export class ModuleContentProcessor {
       // Cache the source content for error reporting
       this.env.cacheSource(ref, content);
 
+      // Check if this is a dynamic module (has 'src:dynamic' label)
+      const isDynamicModule = labels?.includes('src:dynamic') ?? false;
+
       // Parse content based on type
       const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
         content,
         ref,
         directive,
-        contentType
+        contentType,
+        isDynamicModule
       );
 
       // Check if this is a JSON file (special handling)
@@ -250,6 +265,234 @@ export class ModuleContentProcessor {
     }
   }
 
+  private async processTemplateCollection(
+    resolution: ImportResolution,
+    directive: DirectiveNode
+  ): Promise<ModuleProcessingResult> {
+    const fsService = this.env.getFileSystemService?.();
+    if (!fsService || typeof fsService.readdir !== 'function') {
+      throw new MlldImportError('Templates import requires filesystem access', {
+        code: 'TEMPLATE_IMPORT_FS_UNAVAILABLE',
+        details: { path: resolution.resolvedPath }
+      });
+    }
+
+    const paramNames = this.extractParamNames((directive as any)?.values?.templateParams);
+    if (paramNames.length === 0) {
+      throw new MlldImportError(
+        'Templates import requires parameters. Use: /import templates from "dir" as @name(param1, param2)',
+        {
+          code: 'TEMPLATE_IMPORT_MISSING_PARAMS',
+          details: { path: resolution.resolvedPath }
+        }
+      );
+    }
+
+    const baseDir = resolution.resolvedPath;
+    const isDir = await fsService.isDirectory(baseDir);
+    if (!isDir) {
+      throw new MlldImportError(`Templates import must target a directory: ${baseDir}`, {
+        code: 'TEMPLATE_IMPORT_NOT_DIRECTORY',
+        details: { path: baseDir }
+      });
+    }
+
+    const moduleObject: Record<string, any> = {};
+    await this.walkTemplateDirectory(fsService, baseDir, moduleObject, paramNames, baseDir);
+
+    if (Object.keys(moduleObject).length === 0) {
+      throw new MlldImportError(`No templates found under ${baseDir}`, {
+        code: 'TEMPLATE_IMPORT_EMPTY',
+        details: { path: baseDir }
+      });
+    }
+
+    const childEnv = this.env.createChild(baseDir);
+    childEnv.setCurrentFilePath(baseDir);
+
+    return {
+      moduleObject,
+      frontmatter: null,
+      childEnvironment: childEnv,
+      guardDefinitions: []
+    };
+  }
+
+  private async walkTemplateDirectory(
+    fsService: IFileSystemService,
+    dir: string,
+    target: Record<string, any>,
+    paramNames: string[],
+    root: string
+  ): Promise<void> {
+    const entries = await fsService.readdir(dir);
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      const stat = await fsService
+        .stat(fullPath)
+        .catch(() => ({ isDirectory: () => false, isFile: () => false }));
+
+      if (stat.isDirectory()) {
+        const key = this.sanitizeKey(entry);
+        if (key in target) {
+          throw new MlldImportError(
+            `Duplicate template group '${key}' in ${dir}`,
+            {
+              code: 'TEMPLATE_IMPORT_DUPLICATE_GROUP',
+              details: { path: fullPath }
+            }
+          );
+        }
+        const childGroup: Record<string, any> = {};
+        await this.walkTemplateDirectory(fsService, fullPath, childGroup, paramNames, root);
+        if (Object.keys(childGroup).length > 0) {
+          target[key] = childGroup;
+        }
+      } else if (stat.isFile()) {
+        const lower = entry.toLowerCase();
+        if (!lower.endsWith('.att') && !lower.endsWith('.mtt')) {
+          continue;
+        }
+        const key = this.sanitizeKey(entry);
+        if (key in target) {
+          throw new MlldImportError(
+            `Duplicate template name '${key}' in ${dir}`,
+            {
+              code: 'TEMPLATE_IMPORT_DUPLICATE_TEMPLATE',
+              details: { path: fullPath }
+            }
+          );
+        }
+        const relativePath = path.relative(root, fullPath) || entry;
+        target[key] = await this.buildTemplateExecutable(fullPath, paramNames, relativePath);
+      }
+    }
+  }
+
+  private async buildTemplateExecutable(
+    filePath: string,
+    paramNames: string[],
+    displayPath: string
+  ): Promise<Record<string, unknown>> {
+    const ext = path.extname(filePath).toLowerCase();
+    const fileContent = await this.env.readFile(filePath);
+    const { parseSync } = await import('@grammar/parser');
+    const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
+    let templateNodes: any[];
+    try {
+      templateNodes = parseSync(fileContent, { startRule });
+    } catch (err: any) {
+      let normalized = fileContent;
+      if (ext === '.mtt') {
+        normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
+      }
+      templateNodes = this.buildTemplateAst(normalized);
+    }
+
+    this.validateTemplateParameters(templateNodes, paramNames, displayPath);
+
+    const execDef: TemplateExecutable = {
+      type: 'template',
+      template: templateNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    };
+
+    return {
+      __executable: true,
+      value: execDef,
+      executableDef: execDef,
+      internal: { executableDef: execDef }
+    };
+  }
+
+  private validateTemplateParameters(
+    templateNodes: any[],
+    paramNames: string[],
+    templatePath: string
+  ): void {
+    const references = new Set<string>();
+    this.collectTemplateReferences(templateNodes, references);
+    const allowed = new Set<string>([
+      ...paramNames,
+      'mx',
+      'pipeline',
+      'p',
+      'state',
+      'payload',
+      'input'
+    ]);
+    const invalid = Array.from(references).filter(ref => !allowed.has(ref));
+    if (invalid.length > 0) {
+      throw new MlldImportError(
+        `Template '${templatePath}' references undeclared variables: ${invalid.join(', ')}`,
+        {
+          code: 'TEMPLATE_IMPORT_PARAM_MISMATCH',
+          details: {
+            template: templatePath,
+            allowed: paramNames,
+            invalid
+          }
+        }
+      );
+    }
+  }
+
+  private collectTemplateReferences(node: any, refs: Set<string>): void {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(child => this.collectTemplateReferences(child, refs));
+      return;
+    }
+    if (typeof node !== 'object') {
+      return;
+    }
+
+    if (node.type === 'VariableReference' && typeof node.identifier === 'string') {
+      refs.add(node.identifier);
+    }
+    if (
+      node.type === 'VariableReferenceWithTail' &&
+      node.variable &&
+      typeof node.variable.identifier === 'string'
+    ) {
+      refs.add(node.variable.identifier);
+    }
+
+    for (const value of Object.values(node)) {
+      if (value && typeof value === 'object') {
+        this.collectTemplateReferences(value, refs);
+      }
+    }
+  }
+
+  private sanitizeKey(name: string): string {
+    const withoutExt = name.replace(/\.[^.]+$/, '');
+    // Preserve hyphens in file names - they're valid in mlld identifiers
+    const sanitized = withoutExt.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return sanitized.length > 0 ? sanitized : 'template';
+  }
+
+  private extractParamNames(params: any[] | undefined): string[] {
+    if (!params || params.length === 0) {
+      return [];
+    }
+    return params
+      .map(param => {
+        if (typeof param === 'string') {
+          return param;
+        }
+        if (param?.type === 'Parameter' && param.name) {
+          return param.name;
+        }
+        if (param?.identifier) {
+          return param.identifier;
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+
   /**
    * Read content from file or URL
    */
@@ -276,18 +519,11 @@ export class ModuleContentProcessor {
     content: string,
     resolvedPath: string,
     directive: DirectiveNode,
-    contentTypeHint?: ContentType
+    contentType?: 'module' | 'data' | 'text',
+    isDynamicModule?: boolean
   ): Promise<{ parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' }> {
-    const forceModule = contentTypeHint === 'module';
-    const forcePlainText = contentTypeHint === 'text';
-    const treatAsData = contentTypeHint === 'data';
-
-    if (forcePlainText) {
-      return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
-    }
-
     // Check if this is a JSON file
-    if (resolvedPath.endsWith('.json') || treatAsData) {
+    if (resolvedPath.endsWith('.json')) {
       try {
         return { parsed: JSON.parse(content), processedContent: content, isPlainText: false };
       } catch (error) {
@@ -305,10 +541,16 @@ export class ModuleContentProcessor {
       return { parsed: null, processedContent: content, isPlainText: false, templateSyntax: 'tripleColon' };
     }
 
-    // Only parse .mld and .md files as mlld content
-    // All other files (like .txt) should be treated as plain text
-    const isModuleLike = forceModule || resolvedPath.endsWith('.mld') || resolvedPath.endsWith('.md');
-    if (!isModuleLike) {
+    const hasModuleExtension =
+      resolvedPath.endsWith('.mld') ||
+      resolvedPath.endsWith('.mlld') ||
+      resolvedPath.endsWith('.mld.md') ||
+      resolvedPath.endsWith('.mlld.md') ||
+      resolvedPath.endsWith('.md');
+    const forceModuleParse = contentType === 'module' || resolvedPath.startsWith('@');
+
+    // Only parse as mlld when it is a module (by hint or extension)
+    if (!forceModuleParse && !hasModuleExtension) {
       // Return a marker indicating this is plain text content
       return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
     }
@@ -342,8 +584,20 @@ export class ModuleContentProcessor {
     // Removed: triple-colon detection for .mld/.mld.md imports.
     // External template detection now uses .att and .mtt extensions.
 
-    // Parse the imported mlld content
-    const parseResult = await parse(processedContent);
+    // Infer mode from the imported file's extension
+    // Virtual filesystems (tests) use markdown mode for backward compatibility
+    // Real filesystems use extension-based mode inference
+    const fsService = this.env.getFileSystemService();
+    const hasIsVirtual = typeof fsService?.isVirtual === 'function';
+    const isVirtualFS = hasIsVirtual ? fsService.isVirtual() : false;
+    const mode = isDynamicModule
+      ? this.env.getDynamicModuleMode()
+      : isVirtualFS
+        ? 'markdown'
+        : inferMlldMode(resolvedPath);
+
+    // Parse the imported mlld content with the inferred mode
+    const parseResult = await parse(processedContent, { mode });
 
     // Check if parsing succeeded
     if (!parseResult.success) {
@@ -464,6 +718,11 @@ export class ModuleContentProcessor {
     // Create child environment for evaluation
     const childEnv = this.createChildEnvironment(resolvedPath, isURL);
 
+    // Set frontmatter on child environment so @fm is available during evaluation
+    if (frontmatterData) {
+      childEnv.setFrontmatter(frontmatterData);
+    }
+
     if (this.containsExportDirective(ast)) {
       // Seed the child environment with an empty manifest so subsequent
       // /export directives can accumulate entries during evaluation.
@@ -487,12 +746,6 @@ export class ModuleContentProcessor {
       });
     }
     const exportManifest = childEnv.getExportManifest();
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] Export manifest:`, {
-        hasManifest: !!exportManifest,
-        manifestNames: exportManifest?.getNames?.() ?? 'null'
-      });
-    }
     const { moduleObject, frontmatter, guards } = this.variableImporter.processModuleExports(
       childVars,
       { frontmatter: frontmatterData },
@@ -500,9 +753,6 @@ export class ModuleContentProcessor {
       exportManifest,
       childEnv
     );
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log(`[processMLLDContent] Module object keys:`, Object.keys(moduleObject));
-    }
 
     // Add __meta__ property with frontmatter if available
     if (frontmatter) {
@@ -514,11 +764,17 @@ export class ModuleContentProcessor {
       // Only wrap as template if the file has substantive content (not just comments/whitespace)
       const hasSubstantive = this.hasSubstantiveContent(sourceContent);
       if (!hasSubstantive) {
+        const moduleNeeds = childEnv.getModuleNeeds();
+        const moduleWants = childEnv.getModuleWants();
+        const policyContext = childEnv.getPolicyContext() ?? null;
         return {
           moduleObject,
           frontmatter,
           childEnvironment: childEnv,
-          guardDefinitions: guards
+          guardDefinitions: guards,
+          moduleNeeds,
+          moduleWants,
+          policyContext
         };
       }
       let templateSyntax: 'doubleColon' | 'tripleColon' = 'doubleColon';
@@ -540,11 +796,18 @@ export class ModuleContentProcessor {
       };
     }
 
+    const moduleNeeds = childEnv.getModuleNeeds();
+    const moduleWants = childEnv.getModuleWants();
+    const policyContext = childEnv.getPolicyContext() ?? null;
+
     return {
       moduleObject,
       frontmatter,
       childEnvironment: childEnv,
-      guardDefinitions: guards
+      guardDefinitions: guards,
+      moduleNeeds,
+      moduleWants,
+      policyContext
     };
   }
 

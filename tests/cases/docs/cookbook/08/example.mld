@@ -1,0 +1,29 @@
+var @THRESHOLD = 0.7
+
+exe @score(input) = [
+  let @length = @input.length()
+  let @hasQuestion = @input.includes("?")
+
+  let @base = when first [
+    @length > 100 => 0.5
+    @length > 50 => 0.3
+    * => 0.1
+  ]
+
+  => when first [
+    @hasQuestion => @base + 0.3
+    * => @base
+  ]
+]
+
+exe @route(input) = [
+  let @s = @score(@input)
+  => when first [
+    @s >= @THRESHOLD => { handler: "detailed", score: @s }
+    @s >= 0.3 => { handler: "quick", score: @s }
+    * => { handler: "ignore", score: @s }
+  ]
+]
+
+var @decision = @route("What's the weather like today?")
+show `Handler: @decision.handler (score: @decision.score)`

@@ -117,6 +117,38 @@ export class OperatorTokenHelper {
             contextAfter: sourceText.substring(dotOffset, dotOffset + 5)
           });
         }
+      } else if (field.type === 'numericField') {
+        const sourceText = this.document.getText();
+        const dotOffset = field.location.start.offset - 1;
+
+        if (sourceText[dotOffset] === '.') {
+          const dotPosition = this.document.positionAt(dotOffset);
+          this.tokenBuilder.addToken({
+            line: dotPosition.line,
+            char: dotPosition.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+
+          const valueText = String(field.value);
+          const valuePosition = this.document.positionAt(field.location.start.offset);
+          this.tokenBuilder.addToken({
+            line: valuePosition.line,
+            char: valuePosition.character,
+            length: valueText.length,
+            tokenType: 'property',
+            modifiers: []
+          });
+        } else {
+          console.error('[NUMERIC-FIELD-ERROR] No dot found before numeric field', {
+            fieldValue: field.value,
+            expectedDotOffset: dotOffset,
+            charAtOffset: sourceText[dotOffset],
+            contextBefore: sourceText.substring(dotOffset - 5, dotOffset),
+            contextAfter: sourceText.substring(dotOffset, dotOffset + 5)
+          });
+        }
       } else if (field.type === 'arrayIndex') {
         // Token for opening bracket
         const openBracketPos = this.document.positionAt(field.location.start.offset);
@@ -127,7 +159,7 @@ export class OperatorTokenHelper {
           tokenType: 'operator',
           modifiers: []
         });
-        
+
         // Token for index value
         if (field.value !== undefined) {
           const indexStr = String(field.value);
@@ -140,7 +172,30 @@ export class OperatorTokenHelper {
             modifiers: []
           });
         }
-        
+
+        // Token for closing bracket
+        const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
+        this.tokenBuilder.addToken({
+          line: closeBracketPos.line,
+          char: closeBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      } else if (field.type === 'variableIndex') {
+        // Token for opening bracket
+        const openBracketPos = this.document.positionAt(field.location.start.offset);
+        this.tokenBuilder.addToken({
+          line: openBracketPos.line,
+          char: openBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+
+        // The value is a VariableReference - visit it via callback if provided
+        // For now, just tokenize brackets; the nested VariableReference will be handled by visitChildren
+
         // Token for closing bracket
         const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
         this.tokenBuilder.addToken({

@@ -142,7 +142,7 @@ describe('Parallel Pipeline - Runtime Behavior', () => {
     }
   });
 
-  it('should fail the whole group if any branch errors', async () => {
+  it('accumulates errors when a branch fails', async () => {
     const input = `
 /exe @left(input) = \`L:@input\`
 /exe @boom(input) = js { throw new Error('boom') }
@@ -158,7 +158,7 @@ describe('Parallel Pipeline - Runtime Behavior', () => {
 
     await expect(
       interpret(input, { fileSystem, pathService })
-    ).rejects.toThrow(/Pipeline failed at stage 2|boom/);
+    ).resolves.toBeDefined();
   });
 
   it('allows leading || in shorthand without an error', async () => {

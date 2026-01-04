@@ -8,15 +8,34 @@ import type {
 import type { LoadContentResult } from '@core/types/load-content';
 import type { SecurityDescriptor } from '@core/types/security';
 import { asText, assertStructuredValue, isStructuredValue } from '@interpreter/utils/structured-value';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { Environment } from '../env/Environment';
 import type { VarAssignmentResult } from '../eval/var';
 import type { OperationContext } from '../env/ContextManager';
 import { EscapingStrategyFactory, InterpolationContext } from '../core/interpolation-context';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
+import { evaluateConditionalInclusion } from '../eval/conditional-inclusion';
 import { classifyShellValue } from '../utils/shell-value';
 import * as shellQuote from 'shell-quote';
+
+/**
+ * ASSERTION HELPER FOR PHASE 2.3 MIGRATION
+ *
+ * Enable runtime assertions during migration to verify array behavior changes.
+ * Set MLLD_ASSERT_ARRAY_BEHAVIOR=true to enable assertion mode.
+ *
+ * These assertions help catch unexpected behavior changes when migrating from
+ * specific array type checks to generic StructuredValue array handling.
+ */
+const ASSERT_MODE = process.env.MLLD_ASSERT_ARRAY_BEHAVIOR === 'true';
+
+function assertArrayBehavior(condition: boolean, message: string, context?: Record<string, unknown>): void {
+  if (ASSERT_MODE && !condition) {
+    const contextStr = context ? `\nContext: ${JSON.stringify(context, null, 2)}` : '';
+    throw new Error(`[ARRAY MIGRATION ASSERTION] ${message}${contextStr}`);
+  }
+}
 
 export interface InterpolationNode {
   type: string;
@@ -142,6 +161,15 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         pushPart(node.content || '');
       } else if (node.type === 'PathSeparator') {
         pushPart(node.value || '/');
+      } else if (node.type === 'ConditionalTemplateSnippet' || node.type === 'ConditionalStringFragment') {
+        const conditionNode = (node as any).condition;
+        const contentNodes = (node as any).content;
+        const { shouldInclude } = await evaluateConditionalInclusion(conditionNode, env);
+        if (!shouldInclude) {
+          continue;
+        }
+        const snippet = await interpolateImpl(Array.isArray(contentNodes) ? contentNodes : [], env, context, options);
+        pushPart(snippet);
       } else if (node.type === 'ExecInvocation') {
         // Handle function calls in templates
         const { evaluateExecInvocation } = await import('../eval/exec-invocation');
@@ -171,7 +199,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           pushPart(`{{${varName}}}`); // Keep unresolved with {{}} syntax
           continue;
         }
-        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
+        collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
         
         /**
          * Extract Variable value for string interpolation
@@ -205,17 +233,9 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           } else if (value.type === 'PipelineInput') {
             assertStructuredValue(value, 'interpolate:pipeline-input');
             stringValue = asText(value);
-          } else if (value.type === 'LoadContentResultArray') {
-            const { isRenamedContentArray } = await import('@core/types/load-content');
-            const { asData } = await import('../utils/structured-value');
-            const resolved = asData(value);
-            if (Array.isArray(resolved) && isRenamedContentArray(resolved)) {
-              stringValue = resolved
-                .map(item => (typeof item === 'string' ? item : (item as any)?.content ?? ''))
-                .join('\n\n');
-            } else {
-              stringValue = resolved.map((item: any) => item.content).join('\n\n');
-            }
+          } else if (isStructuredValue(value) && value.type === 'array') {
+            // StructuredValue arrays already have proper .text
+            stringValue = value.text;
           }
         } else if (typeof value === 'object') {
           stringValue = JSON.stringify(value);
@@ -237,7 +257,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           continue;
         }
         
-        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
+        collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
         
         // Template variable content needs template escaping context
         if (variable.internal?.templateAst) {
@@ -274,7 +294,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           continue;
         }
 
-        collectDescriptor(variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined);
+        collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
 
         // Extract value based on variable type using new type guards
         let value: unknown = '';
@@ -317,10 +337,13 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         }
         
         const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
-        // Determine context based on interpolation context
-        const resolutionContext = context === InterpolationContext.ShellCommand
-          ? ResolutionContext.ShellCommand
-          : ResolutionContext.StringInterpolation;
+        const fields = (node as any).fields as any[] | undefined;
+        const wantsVarMx =
+          Array.isArray(fields) &&
+          fields.length > 0 &&
+          fields[0]?.type === 'field' &&
+          String(fields[0]?.value ?? '') === 'mx';
+        const resolutionContext = wantsVarMx ? ResolutionContext.FieldAccess : ResolutionContext.StringInterpolation;
         
         value = await resolveVariable(variable, env, resolutionContext);
         collectDescriptor(extractInterpolationDescriptor(value));
@@ -341,13 +364,16 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           for (const field of fieldsToProcess) {
             // Handle variableIndex type - need to resolve the variable first
             if (field.type === 'variableIndex') {
-              const indexVar = env.getVariable(field.value);
-              if (!indexVar) {
-                throw new Error(`Variable not found for index: ${field.value}`);
-              }
-              // Extract Variable value for index access - WHY: Index values must be raw strings/numbers
-              const { resolveValue: resolveVal, ResolutionContext: ResCtx2 } = await import('../utils/variable-resolution');
-              const indexValue = await resolveVal(indexVar, env, ResCtx2.StringInterpolation);
+              const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+              const indexNode =
+                typeof field.value === 'object'
+                  ? (field.value as any)
+                  : {
+                      type: 'VariableReference',
+                      valueType: 'varIdentifier',
+                      identifier: String(field.value)
+                    };
+              const indexValue = await evaluateDataValue(indexNode as any, env);
               // Create a new field with the resolved value
               const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
               const fieldResult = await accessField(value, resolvedField, { 
@@ -389,7 +415,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             env,
             node,
             identifier: node.identifier,
-            descriptorHint: variable?.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined
+            descriptorHint: variable?.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
           });
           if (typeof value === 'string') {
             const strategy = EscapingStrategyFactory.getStrategy(context);
@@ -476,7 +502,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           } else if (nodeValue.type === 'Null') {
             stringValue = 'null';
           } else {
-            const { isPipelineInput } = await import('../utils/pipeline-input');
+            const { isPipelineInput } = await import('@core/types/variable/TypeGuards');
             if (isPipelineInput(value)) {
               stringValue = asText(value);
             } else {
@@ -484,18 +510,17 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             }
           }
         } else if (Array.isArray(value)) {
-          const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
-          if (isLoadContentResultArray(value)) {
-            stringValue = value.content;
-          } else if (isRenamedContentArray(value)) {
-            if ('content' in value) {
-              stringValue = value.content;
-            } else if (value.toString !== Array.prototype.toString) {
-              stringValue = value.toString();
-            } else {
-              stringValue = value.join('\n\n');
-            }
+          if (isStructuredValue(value) && value.type === 'array') {
+            // MIGRATION: This branch handles StructuredValue arrays (glob patterns)
+            // Expected behavior: Join array items with \n\n separator (already in .text)
+            stringValue = value.text;
+            assertArrayBehavior(
+              typeof stringValue === 'string',
+              'StructuredValue array should have .text property',
+              { arrayLength: Array.isArray(value.data) ? value.data.length : 0, resultType: typeof stringValue }
+            );
           } else {
+            // MIGRATION: Generic array handling
             const { JSONFormatter } = await import('../core/json-formatter');
             const printableArray = value.map(item => {
               if (isStructuredValue(item)) {
@@ -509,11 +534,12 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             stringValue = JSONFormatter.stringify(printableArray);
           }
         } else if (typeof value === 'object') {
-          const { isLoadContentResult, isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
+          const { isLoadContentResult } = await import('@core/types/load-content');
           if (isLoadContentResult(value)) {
-            stringValue = value.content;
-          } else if (isLoadContentResultArray(value)) {
-            stringValue = value.map(item => item.content).join('\n\n');
+            stringValue = asText(value);
+          } else if (isStructuredValue(value) && value.type === 'array') {
+            // StructuredValue arrays already have concatenated text
+            stringValue = value.text;
           } else if (variable && variable.internal?.isNamespace && node.fields?.length === 0) {
             const { JSONFormatter } = await import('../core/json-formatter');
             stringValue = JSONFormatter.stringifyNamespace(value);
@@ -664,11 +690,11 @@ export function extractInterpolationDescriptor(value: unknown): SecurityDescript
     return undefined;
   }
   if (isStructuredValue(value)) {
-    return ctxToSecurityDescriptor(value.ctx as any);
+    return varMxToSecurityDescriptor(value.mx as any);
   }
   if (typeof value === 'object') {
-    const ctx = (value as { ctx?: Record<string, unknown> }).ctx;
-    return ctx ? ctxToSecurityDescriptor(ctx as any) : undefined;
+    const mx = (value as { mx?: Record<string, unknown> }).mx;
+    return mx ? varMxToSecurityDescriptor(mx as any) : undefined;
   }
   return undefined;
 }
@@ -723,7 +749,7 @@ export async function interpolateFileReference(
   try {
     // Use existing content loader
     const { processContentLoader } = await import('../eval/content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { isLoadContentResult } = await import('@core/types/load-content');
     
     let loadResult: any;
     try {
@@ -782,7 +808,7 @@ export async function interpolateFileReference(
           console.error('');
           console.error('Workaround: Use a variable instead:');
           console.error('  /var @file = <file.md>.keep');
-          console.error('  /show `<@file.ctx.filename>@file</@file.ctx.filename>`');
+          console.error('  /show `<@file.mx.filename>@file</@file.mx.filename>`');
           console.error('');
           return '';
         }
@@ -821,10 +847,11 @@ export async function interpolateFileReference(
     }
     
     // Handle glob results (array of files)
-    if (isLoadContentResultArray(loadResult)) {
-      // For glob patterns, join all file contents
+    if (isStructuredValue(loadResult) && loadResult.type === 'array') {
+      // For glob patterns, process each file and join all file contents
+      const items = loadResult.data as LoadContentResult[];
       const contents = await Promise.all(
-        loadResult.map(file => processFileFields(file, node.fields, node.pipes, env))
+        items.map(file => processFileFields(file, node.fields, node.pipes, env))
       );
       return contents.join('\n\n');
     }
@@ -853,7 +880,7 @@ export async function processFileFields(
   if (isLoadContentResult(result)) {
     if (!fields || fields.length === 0) {
       // No field access needed, extract content
-      result = result.content;
+      result = asText(result);
     }
     // If we have fields to access, keep the full LoadContentResult object so we can access .fm, .json, etc.
   }

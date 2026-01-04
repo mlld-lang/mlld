@@ -6,14 +6,24 @@ import type { Environment } from '../../env/Environment';
 import type { EvalResult } from '../../core/interpreter';
 import { ImportPathResolver, ImportResolution } from './ImportPathResolver';
 import { ImportSecurityValidator } from './ImportSecurityValidator';
-import { ModuleContentProcessor } from './ModuleContentProcessor';
+import { ModuleContentProcessor, type ModuleProcessingResult } from './ModuleContentProcessor';
 import { VariableImporter } from './VariableImporter';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError, ErrorSeverity } from '@core/errors';
 // createVariableFromValue is now part of VariableImporter
 import { interpolate } from '../../core/interpreter';
+import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
+import type { NeedsDeclaration, CommandNeeds } from '@core/policy/needs';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import { spawnSync } from 'child_process';
+import { createRequire } from 'module';
+import * as path from 'path';
+import minimatch from 'minimatch';
+import type { SerializedGuardDefinition } from '../../guards';
 
-const MODULE_SOURCE_EXTENSIONS = ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md'] as const;
+const MODULE_SOURCE_EXTENSIONS = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'] as const;
+const DIRECTORY_INDEX_FILENAME = 'index.mld';
+const DEFAULT_DIRECTORY_IMPORT_SKIP_DIRS = ['_*', '.*'] as const;
 
 function matchesModuleExtension(candidate: string): boolean {
   return MODULE_SOURCE_EXTENSIONS.some(ext => candidate.endsWith(ext));
@@ -24,6 +34,7 @@ function matchesModuleExtension(candidate: string): boolean {
  * Orchestrates all import processing components
  */
 export class ImportDirectiveEvaluator {
+  private env: Environment;
   private pathResolver: ImportPathResolver;
   private securityValidator: ImportSecurityValidator;
   private contentProcessor: ModuleContentProcessor;
@@ -32,6 +43,7 @@ export class ImportDirectiveEvaluator {
   // TODO: Integrate capability context construction when import types and security descriptors land.
 
   constructor(env: Environment) {
+    this.env = env;
     this.objectResolver = new ObjectReferenceResolver();
     this.pathResolver = new ImportPathResolver(env);
     this.securityValidator = new ImportSecurityValidator(env);
@@ -57,6 +69,26 @@ export class ImportDirectiveEvaluator {
         resolution.cacheDurationMs = importContext.cacheDurationMs;
       }
 
+      if (resolution.importType === 'templates' && resolution.type !== 'file') {
+        const resolvedPath = await env.resolvePath(resolution.resolvedPath);
+        resolution.resolvedPath = resolvedPath;
+        resolution.type = 'file';
+      }
+
+      if (
+        (directive as any)?.values?.templateParams &&
+        (directive as any).values.templateParams.length > 0 &&
+        resolution.importType !== 'templates'
+      ) {
+        throw new MlldImportError('Import parameters are only supported with templates imports', {
+          code: 'IMPORT_TYPE_MISMATCH',
+          details: {
+            importType: resolution.importType,
+            path: resolution.resolvedPath
+          }
+        });
+      }
+
       const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
       const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
       const taintSnapshot = deriveImportTaint({
@@ -65,7 +97,7 @@ export class ImportDirectiveEvaluator {
         source: resolution.resolvedPath,
         resolvedPath: resolution.resolvedPath,
         sourceType: resolution.type,
-        labels: resolution.ctx?.labels
+        labels: resolution.mx?.labels
       });
       const taintDescriptor = makeSecurityDescriptor({
       taint: taintSnapshot.taint,
@@ -75,8 +107,11 @@ export class ImportDirectiveEvaluator {
       const descriptor = mergeDescriptors(baseDescriptor, taintDescriptor);
 
       // 2. Route to appropriate handler based on import type
-      const result = await this.routeImportRequest(resolution, directive, env);
-      return result;
+      return await this.withPolicyOverride(
+        directive,
+        env,
+        async () => await this.routeImportRequest(resolution, directive, env)
+      );
 
     } catch (error) {
       return this.handleImportError(error, directive, env);
@@ -167,7 +202,7 @@ export class ImportDirectiveEvaluator {
       return 'local';
     }
 
-    if (name === 'base' || name === 'project') {
+    if (name === 'base' || name === 'root' || name === 'project') {
       return 'static';
     }
 
@@ -213,10 +248,10 @@ export class ImportDirectiveEvaluator {
         if (resolution.type === 'file') {
           return;
         }
-        if (resolution.type === 'resolver' && (resolverName === 'base' || resolverName === 'project')) {
+        if (resolution.type === 'resolver' && (resolverName === 'base' || resolverName === 'root' || resolverName === 'project')) {
           return;
         }
-        throw new MlldImportError("Import type 'static' supports local files or @base/@project resolver paths.", {
+        throw new MlldImportError("Import type 'static' supports local files or @base/@root/@project resolver paths.", {
           code: 'IMPORT_TYPE_MISMATCH',
           details: { importType: type, resolvedType: resolution.type }
         });
@@ -229,6 +264,19 @@ export class ImportDirectiveEvaluator {
           code: 'IMPORT_TYPE_MISMATCH',
           details: { importType: type, resolvedType: resolution.type }
         });
+
+      case 'templates': {
+        const isAllowedResolver =
+          resolution.type === 'resolver' &&
+          (resolverName === 'base' || resolverName === 'root' || resolverName === 'project' || resolverName === 'local');
+        if (resolution.type === 'file' || isAllowedResolver) {
+          return;
+        }
+        throw new MlldImportError("Import type 'templates' expects a directory from the local filesystem or @base/@root/@project/@local resolvers.", {
+          code: 'IMPORT_TYPE_MISMATCH',
+          details: { importType: type, resolvedType: resolution.type }
+        });
+      }
 
       default:
         return;
@@ -336,14 +384,14 @@ export class ImportDirectiveEvaluator {
     });
 
     if (resolverResult.contentType === 'module') {
-      const ref = resolverResult.ctx?.source ?? `@${resolverName}`;
+      const ref = resolverResult.mx?.source ?? `@${resolverName}`;
       const taintDescriptor = deriveImportTaint({
         importType: 'module',
         resolverName,
         source: ref,
         resolvedPath: ref,
         sourceType: 'resolver',
-        labels: resolverResult.ctx?.labels
+        labels: resolverResult.mx?.labels
       });
       env.recordSecurityDescriptor(
         makeSecurityDescriptor({
@@ -412,10 +460,10 @@ export class ImportDirectiveEvaluator {
         const importDescriptor = deriveImportTaint({
           importType: resolution.importType ?? 'module',
           resolverName: resolverContent.resolverName,
-          source: resolverContent.ctx?.source ?? resolution.resolvedPath,
-          resolvedPath: resolverContent.ctx?.source ?? resolution.resolvedPath,
+          source: resolverContent.mx?.source ?? resolution.resolvedPath,
+          resolvedPath: resolverContent.mx?.source ?? resolution.resolvedPath,
           sourceType: 'module',
-          labels: resolverContent.ctx?.labels
+          labels: resolverContent.mx?.labels
         });
         env.recordSecurityDescriptor(
           makeSecurityDescriptor({
@@ -453,13 +501,224 @@ export class ImportDirectiveEvaluator {
     directive: DirectiveNode,
     env: Environment
   ): Promise<EvalResult> {
+    const directoryResult = await this.maybeProcessDirectoryImport(resolution, directive, env);
+
     // Process the file/URL content (handles its own import tracking)
-    const processingResult = await this.contentProcessor.processModuleContent(resolution, directive);
+    const processingResult =
+      directoryResult ?? (await this.contentProcessor.processModuleContent(resolution, directive));
+
+    this.validateModuleResult(processingResult, directive, resolution.resolvedPath);
 
     // Import variables into environment
     await this.variableImporter.importVariables(processingResult, directive, env);
+    this.applyPolicyImportContext(directive, env, resolution.resolvedPath);
 
     return { value: undefined, env };
+  }
+
+  private async maybeProcessDirectoryImport(
+    resolution: ImportResolution,
+    directive: DirectiveNode,
+    env: Environment
+  ): Promise<ModuleProcessingResult | null> {
+    if (resolution.type !== 'file') {
+      return null;
+    }
+
+    if (resolution.importType === 'templates') {
+      return null;
+    }
+
+    const fsService = env.getFileSystemService();
+    if (typeof fsService.isDirectory !== 'function') {
+      return null;
+    }
+
+    const baseDir = resolution.resolvedPath;
+    const isDir = await fsService.isDirectory(baseDir);
+    if (!isDir) {
+      return null;
+    }
+
+    return await this.processDirectoryImport(fsService, baseDir, resolution, directive, env);
+  }
+
+  private async processDirectoryImport(
+    fsService: IFileSystemService,
+    baseDir: string,
+    resolution: ImportResolution,
+    directive: DirectiveNode,
+    env: Environment
+  ): Promise<ModuleProcessingResult> {
+    if (typeof fsService.readdir !== 'function' || typeof fsService.stat !== 'function') {
+      throw new MlldImportError('Directory import requires filesystem access', {
+        code: 'DIRECTORY_IMPORT_FS_UNAVAILABLE',
+        details: { path: baseDir }
+      });
+    }
+
+    const skipDirs = this.getDirectoryImportSkipDirs(directive, baseDir);
+    const moduleObject: Record<string, any> = {};
+    const guardDefinitions: SerializedGuardDefinition[] = [];
+
+    const entries = await fsService.readdir(baseDir);
+    for (const entry of entries) {
+      const fullPath = path.join(baseDir, entry);
+      const stat = await fsService
+        .stat(fullPath)
+        .catch(() => ({ isDirectory: () => false, isFile: () => false }));
+      if (!stat.isDirectory()) {
+        continue;
+      }
+
+      if (this.shouldSkipDirectory(entry, skipDirs)) {
+        continue;
+      }
+
+      const indexPath = path.join(fullPath, DIRECTORY_INDEX_FILENAME);
+      const hasIndex = await fsService.exists(indexPath).catch(() => false);
+      if (!hasIndex) {
+        continue;
+      }
+
+      const indexStat = await fsService
+        .stat(indexPath)
+        .catch(() => ({ isDirectory: () => false, isFile: () => false }));
+      if (!indexStat.isFile()) {
+        continue;
+      }
+
+      const childResolution: ImportResolution = {
+        type: 'file',
+        resolvedPath: indexPath,
+        importType: resolution.importType
+      };
+
+      const childResult = await this.contentProcessor.processModuleContent(childResolution, directive);
+      this.enforceModuleNeeds(childResult.moduleNeeds, indexPath);
+
+      const key = this.sanitizeDirectoryKey(entry);
+      if (key in moduleObject) {
+        throw new MlldImportError(`Duplicate directory import key '${key}' under ${baseDir}`, {
+          code: 'DIRECTORY_IMPORT_DUPLICATE_KEY',
+          details: { path: baseDir, key, entries: [entry] }
+        });
+      }
+
+      moduleObject[key] = childResult.moduleObject;
+      if (childResult.guardDefinitions && childResult.guardDefinitions.length > 0) {
+        guardDefinitions.push(...childResult.guardDefinitions);
+      }
+    }
+
+    if (Object.keys(moduleObject).length === 0) {
+      throw new MlldImportError(`No ${DIRECTORY_INDEX_FILENAME} modules found under ${baseDir}`, {
+        code: 'DIRECTORY_IMPORT_EMPTY',
+        details: { path: baseDir, index: DIRECTORY_INDEX_FILENAME }
+      });
+    }
+
+    const childEnv = env.createChild(baseDir);
+    childEnv.setCurrentFilePath(baseDir);
+
+    return {
+      moduleObject,
+      frontmatter: null,
+      childEnvironment: childEnv,
+      guardDefinitions
+    };
+  }
+
+  private getDirectoryImportSkipDirs(directive: DirectiveNode, baseDir: string): string[] {
+    const withClause = (directive.meta?.withClause || directive.values?.withClause) as any | undefined;
+    if (!withClause || !('skipDirs' in withClause)) {
+      return [...DEFAULT_DIRECTORY_IMPORT_SKIP_DIRS];
+    }
+
+    const value = (withClause as any).skipDirs as unknown;
+    const parsed = this.parseStringArrayOption(value, { option: 'skipDirs', source: baseDir });
+    return parsed;
+  }
+
+  private parseStringArrayOption(
+    value: unknown,
+    context: { option: string; source: string }
+  ): string[] {
+    if (Array.isArray(value)) {
+      const coerced = value.map(item => this.coerceStringLiteral(item)).filter((v): v is string => v !== null);
+      if (coerced.length !== value.length) {
+        throw new MlldImportError(`Import with { ${context.option}: [...] } only supports string values`, {
+          code: 'DIRECTORY_IMPORT_INVALID_OPTION',
+          details: { option: context.option, source: context.source }
+        });
+      }
+      return coerced;
+    }
+
+    if (this.isArrayLiteralAst(value)) {
+      const coerced = value.items.map(item => this.coerceStringLiteral(item)).filter((v): v is string => v !== null);
+      if (coerced.length !== value.items.length) {
+        throw new MlldImportError(`Import with { ${context.option}: [...] } only supports string values`, {
+          code: 'DIRECTORY_IMPORT_INVALID_OPTION',
+          details: { option: context.option, source: context.source }
+        });
+      }
+      return coerced;
+    }
+
+    throw new MlldImportError(`Import with { ${context.option}: [...] } expects an array`, {
+      code: 'DIRECTORY_IMPORT_INVALID_OPTION',
+      details: { option: context.option, source: context.source }
+    });
+  }
+
+  private isArrayLiteralAst(value: unknown): value is { type: 'array'; items: unknown[] } {
+    return Boolean(
+      value &&
+        typeof value === 'object' &&
+        'type' in value &&
+        (value as any).type === 'array' &&
+        'items' in value &&
+        Array.isArray((value as any).items)
+    );
+  }
+
+  private coerceStringLiteral(value: unknown): string | null {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (value && typeof value === 'object') {
+      if ((value as any).type === 'Literal' && (value as any).valueType === 'string') {
+        return String((value as any).value ?? '');
+      }
+
+      if ('content' in value && Array.isArray((value as any).content)) {
+        const parts = (value as any).content as any[];
+        const hasOnlyLiteralOrText = parts.every(
+          node =>
+            node &&
+            typeof node === 'object' &&
+            ((node.type === 'Literal' && 'value' in node) || (node.type === 'Text' && 'content' in node))
+        );
+        if (!hasOnlyLiteralOrText) {
+          return null;
+        }
+        return parts.map(node => (node.type === 'Literal' ? String(node.value ?? '') : String(node.content ?? ''))).join('');
+      }
+    }
+
+    return null;
+  }
+
+  private shouldSkipDirectory(dirName: string, patterns: string[]): boolean {
+    return patterns.some(pattern => minimatch(dirName, pattern, { dot: true }));
+  }
+
+  private sanitizeDirectoryKey(name: string): string {
+    // Preserve hyphens in directory names - they're valid in mlld identifiers
+    const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return sanitized.length > 0 ? sanitized : 'module';
   }
 
   /**
@@ -495,9 +754,12 @@ export class ImportDirectiveEvaluator {
         resolverContent.content,
         processingRef,
         directive,
-        resolverContent.contentType
+        resolverContent.contentType,
+        resolverContent.mx?.labels
       );
-      
+
+      this.validateModuleResult(processingResult, directive, processingRef);
+
 
       if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ImportDirectiveEvaluator] Processing result for ${ref}:`, {
@@ -509,8 +771,9 @@ export class ImportDirectiveEvaluator {
 
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
+      this.applyPolicyImportContext(directive, env, processingRef);
 
-      const dynamicSource = resolverContent.ctx?.source;
+      const dynamicSource = resolverContent.mx?.source;
       if (dynamicSource && typeof dynamicSource === 'string' && dynamicSource.startsWith('dynamic://')) {
         const childVariables = processingResult.childEnvironment.getAllVariables?.();
         const parentVariables = env.getAllVariables?.();
@@ -787,5 +1050,229 @@ export class ImportDirectiveEvaluator {
   private handleImportError(error: any, directive: DirectiveNode, env: Environment): EvalResult {
     // Enhanced error context could be added here
     throw error;
+  }
+
+  private async withPolicyOverride<T>(
+    directive: DirectiveNode,
+    env: Environment,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const overrideConfig = (directive.values as any)?.withClause?.policy as PolicyConfig | undefined;
+    if (!overrideConfig) {
+      return await operation();
+    }
+
+    const previousContext = env.getPolicyContext();
+    const mergedConfig = mergePolicyConfigs(
+      previousContext?.configs as PolicyConfig | undefined,
+      normalizePolicyConfig(overrideConfig)
+    );
+    const nextContext = {
+      tier: previousContext?.tier ?? null,
+      configs: mergedConfig ?? {},
+      activePolicies: previousContext?.activePolicies ?? []
+    };
+
+    env.setPolicyContext(nextContext);
+    try {
+      return await operation();
+    } finally {
+      env.setPolicyContext(previousContext ?? null);
+    }
+  }
+
+  private applyPolicyImportContext(
+    directive: DirectiveNode,
+    env: Environment,
+    source?: string
+  ): void {
+    const isPolicyImport =
+      directive.subtype === 'importPolicy' ||
+      (directive.meta as any)?.importType === 'policy' ||
+      (directive.values as any)?.importType === 'policy';
+    if (!isPolicyImport) {
+      return;
+    }
+
+    const existing = (env.getPolicyContext() as any) || {};
+    const activePolicies = Array.isArray(existing.activePolicies)
+      ? [...existing.activePolicies]
+      : [];
+    const alias =
+      (directive.values as any)?.namespace?.[0]?.content ||
+      (directive.values as any)?.imports?.[0]?.alias ||
+      (directive.values as any)?.imports?.[0]?.identifier ||
+      source ||
+      'policy';
+    if (!activePolicies.includes(alias)) {
+      activePolicies.push(alias);
+    }
+
+    const nextContext = {
+      tier: existing.tier ?? null,
+      configs: existing.configs ?? {},
+      activePolicies
+    };
+    env.setPolicyContext(nextContext);
+  }
+
+  private validateModuleResult(
+    result: ModuleProcessingResult,
+    directive: DirectiveNode,
+    source?: string
+  ): void {
+    this.enforceModuleNeeds(result.moduleNeeds, source);
+    this.validateExportBindings(result.moduleObject, directive, source);
+  }
+
+  private enforceModuleNeeds(needs: NeedsDeclaration | undefined, source?: string): void {
+    if (!needs) {
+      return;
+    }
+
+    const unmet = this.findUnmetNeeds(needs);
+    if (unmet.length === 0) {
+      return;
+    }
+
+    const detailLines = unmet.map(entry => {
+      const valueSegment = entry.value ? ` '${entry.value}'` : '';
+      return `- ${entry.capability}${valueSegment}: ${entry.reason}`;
+    });
+    const label = source ?? 'import';
+    const message = `Import needs not satisfied for ${label}:\n${detailLines.join('\n')}`;
+
+    throw new MlldImportError(message, {
+      code: 'NEEDS_UNMET',
+      details: {
+        source: label,
+        unmet,
+        needs
+      }
+    });
+  }
+
+  private findUnmetNeeds(needs: NeedsDeclaration): Array<{ capability: string; value?: string; reason: string }> {
+    const unmet: Array<{ capability: string; value?: string; reason: string }> = [];
+
+    if (needs.sh && !this.isCommandAvailable('sh')) {
+      unmet.push({ capability: 'sh', reason: 'shell executable not available (sh)' });
+    }
+
+    if (needs.cmd) {
+      for (const cmd of this.collectCommandNames(needs.cmd)) {
+        if (!this.isCommandAvailable(cmd)) {
+          unmet.push({ capability: 'cmd', value: cmd, reason: 'command not found in PATH' });
+        }
+      }
+    }
+
+    if (needs.packages) {
+      const basePath = this.env.getBasePath ? this.env.getBasePath() : process.cwd();
+      const moduleDir = this.env.getCurrentFilePath ? path.dirname(this.env.getCurrentFilePath() ?? basePath) : basePath;
+      for (const [ecosystem, packages] of Object.entries(needs.packages)) {
+        if (!Array.isArray(packages)) {
+          continue;
+        }
+        switch (ecosystem) {
+          case 'node':
+            for (const pkg of packages) {
+              if (!this.isNodePackageAvailable(pkg.name, moduleDir)) {
+                unmet.push({ capability: 'node', value: pkg.name, reason: 'package not installed' });
+              }
+            }
+            break;
+          case 'python':
+          case 'py':
+            if (!this.isRuntimeAvailable(['python', 'python3'])) {
+              unmet.push({ capability: 'python', reason: 'python runtime not available' });
+            }
+            break;
+          case 'ruby':
+          case 'rb':
+            if (!this.isRuntimeAvailable(['ruby'])) {
+              unmet.push({ capability: 'ruby', reason: 'ruby runtime not available' });
+            }
+            break;
+          case 'go':
+            if (!this.isRuntimeAvailable(['go'])) {
+              unmet.push({ capability: 'go', reason: 'go runtime not available' });
+            }
+            break;
+          case 'rust':
+            if (!this.isRuntimeAvailable(['cargo', 'rustc'])) {
+              unmet.push({ capability: 'rust', reason: 'rust toolchain not available' });
+            }
+            break;
+          default:
+            break;
+        }
+      }
+    }
+
+    return unmet;
+  }
+
+  private collectCommandNames(cmdNeeds: CommandNeeds): string[] {
+    if (cmdNeeds.type === 'all') {
+      return [];
+    }
+    if (cmdNeeds.type === 'list') {
+      return cmdNeeds.commands;
+    }
+    return Object.keys(cmdNeeds.entries ?? {});
+  }
+
+  private isCommandAvailable(command: string): boolean {
+    if (!command || typeof command !== 'string') {
+      return false;
+    }
+
+    const binary = process.platform === 'win32' ? 'where' : 'which';
+    const result = spawnSync(binary, [command], {
+      stdio: 'ignore'
+    });
+    return result.status === 0;
+  }
+
+  private isRuntimeAvailable(candidates: string[]): boolean {
+    return candidates.some(cmd => this.isCommandAvailable(cmd));
+  }
+
+  private isNodePackageAvailable(name: string, basePath: string): boolean {
+    try {
+      // Use createRequire for ESM compatibility
+      const esmRequire = createRequire(import.meta.url);
+      esmRequire.resolve(name, { paths: [basePath] });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private validateExportBindings(moduleObject: Record<string, any>, directive: DirectiveNode, source?: string): void {
+    if (!directive.values) {
+      return;
+    }
+
+    const exportKeys = Object.keys(moduleObject || {}).filter(key => !key.startsWith('__'));
+
+    if (directive.subtype !== 'importSelected') {
+      return;
+    }
+
+    const imports = directive.values?.imports ?? [];
+    for (const importItem of imports) {
+      const name = (importItem as any)?.identifier;
+      if (typeof name !== 'string') {
+        continue;
+      }
+      if (!exportKeys.includes(name)) {
+        throw new MlldImportError(`Import '${name}' not found in module '${source ?? 'import'}'`, {
+          code: 'IMPORT_EXPORT_MISSING',
+          details: { source, missing: name }
+        });
+      }
+    }
   }
 }

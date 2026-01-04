@@ -1,12 +1,12 @@
 /**
  * Implementation classes for content loading with metadata support
- * 
- * Note: The special array factory functions (createLoadContentResultArray and 
- * createRenamedContentArray) are deprecated as of Phase 2 of the type refactor.
- * Use the Variable-based alternatives from variable-migration.ts instead.
+ *
+ * Note: Legacy array types (LoadContentResultArray, RenamedContentArray) have been
+ * removed as of Phase 5 cleanup. All values are now wrapped as StructuredValue.
  */
 
 import { JSDOM } from 'jsdom';
+import yaml from 'js-yaml';
 import type {
   LoadContentResult,
   LoadContentResultURL,
@@ -72,7 +72,6 @@ export class LoadContentResultImpl implements LoadContentResult {
         const fmMatch = contentToParse.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
         if (fmMatch) {
           // Parse YAML frontmatter
-          const yaml = require('js-yaml');
           this._fm = yaml.load(fmMatch[1]);
         }
       } catch (error) {
@@ -133,7 +132,7 @@ export class LoadContentResultImpl implements LoadContentResult {
     return this.content;
   }
   
-  get ctx() {
+  get mx() {
     const self = this;
     return {
       filename: this.filename,
@@ -255,8 +254,8 @@ export class LoadContentResultURLImpl extends LoadContentResultImpl implements L
     return 'text';
   }
   
-  get ctx() {
-    const base = super.ctx;
+  get mx() {
+    const base = super.mx;
     return {
       ...base,
       url: this.url,
@@ -378,8 +377,8 @@ export class LoadContentResultHTMLImpl extends LoadContentResultImpl implements 
     return 'html';
   }
   
-  get ctx() {
-    const base = super.ctx;
+  get mx() {
+    const base = super.mx;
     return {
       ...base,
       html: this.html

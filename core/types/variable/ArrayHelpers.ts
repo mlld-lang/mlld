@@ -26,7 +26,7 @@ export interface QuantifierContextHelper {
 }
 
 export interface QuantifierHelper {
-  ctx: QuantifierContextHelper;
+  mx: QuantifierContextHelper;
 }
 
 export interface ArrayAggregateSnapshot {
@@ -41,7 +41,7 @@ export interface ArrayAggregateSnapshot {
 
 export interface GuardInputHelper {
   raw: readonly Variable[];
-  ctx: {
+  mx: {
     labels: readonly DataLabel[];
     taint: readonly DataLabel[];
     tokens: readonly number[];
@@ -65,7 +65,7 @@ export function createGuardInputHelper(inputs: readonly Variable[]): GuardInputH
   const quantifiers = createQuantifierHelpers(aggregate.contexts);
   return {
     raw: inputs,
-    ctx: {
+    mx: {
       labels: aggregate.labels,
       taint: aggregate.taint,
       tokens: aggregate.tokens,
@@ -117,27 +117,27 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   }
   (variable.internal as any).arrayHelperAggregate = aggregate;
 
-  // Update .ctx snapshot to include aggregate info for consumers and tests
-  const ctx = ensureContext(variable);
+  // Update .mx snapshot to include aggregate info for consumers and tests
+  const mx = ensureContext(variable);
   const hasAggregateContexts = aggregate.contexts.length > 0;
 
   if (hasAggregateContexts) {
-    ctx.labels = aggregate.labels;
-    ctx.taint = aggregate.taint;
-    ctx.sources = aggregate.sources;
-    ctx.tokens = aggregate.tokens;
-  } else if (!ctx.tokens) {
-    ctx.tokens = aggregate.tokens;
-    ctx.taint = aggregate.taint;
+    mx.labels = aggregate.labels;
+    mx.taint = aggregate.taint;
+    mx.sources = aggregate.sources;
+    mx.tokens = aggregate.tokens;
+  } else if (!mx.tokens) {
+    mx.tokens = aggregate.tokens;
+    mx.taint = aggregate.taint;
   }
 
-  ctx.totalTokens = aggregate.totalTokens;
-  ctx.maxTokens = aggregate.maxTokens;
+  mx.totalTokens = aggregate.totalTokens;
+  mx.maxTokens = aggregate.maxTokens;
   if (Array.isArray(variable.value)) {
-    ctx.size = variable.value.length;
+    mx.size = variable.value.length;
   }
-  if (variable.internal?.ctxCache) {
-    variable.internal.ctxCache = ctx;
+  if (variable.internal?.mxCache) {
+    variable.internal.mxCache = mx;
   }
 }
 
@@ -155,16 +155,16 @@ export function buildArrayAggregate(
     })
     .filter((value): value is Variable => Boolean(value));
   const contexts = variables.map(ensureContext);
-  const tokenValues = contexts.map(ctx => ctx.tokens ?? ctx.tokest ?? 0);
+  const tokenValues = contexts.map(mx => mx.tokens ?? mx.tokest ?? 0);
   const tokens = Object.freeze(tokenValues.slice()) as readonly number[];
   const labels = freezeArray(
-    contexts.flatMap(ctx => ctx.labels ?? [])
+    contexts.flatMap(mx => mx.labels ?? [])
   );
   const taint = freezeArray(
-    contexts.flatMap(ctx => ctx.taint ?? ctx.labels ?? [])
+    contexts.flatMap(mx => mx.taint ?? mx.labels ?? [])
   );
   const sources = freezeArray(
-    contexts.flatMap(ctx => ctx.sources ?? [])
+    contexts.flatMap(mx => mx.sources ?? [])
   );
 
   const totalTokens = (): number =>
@@ -199,20 +199,20 @@ function createQuantifierHelper(
   type: QuantifierType,
   contexts: VariableContextSnapshot[]
 ): QuantifierHelper {
-  const evaluate = (predicate: (ctx: VariableContextSnapshot) => boolean): boolean => {
+  const evaluate = (predicate: (mx: VariableContextSnapshot) => boolean): boolean => {
     switch (type) {
       case 'any':
         return contexts.some(predicate);
       case 'all':
         return contexts.every(predicate);
       case 'none':
-        return contexts.every(ctx => !predicate(ctx));
+        return contexts.every(mx => !predicate(mx));
     }
   };
 
   const labelsHelper: QuantifierLabelsHelper = {
     includes(label: DataLabel): boolean {
-      return evaluate(ctx => (ctx.labels ?? []).includes(label));
+      return evaluate(mx => (mx.labels ?? []).includes(label));
     }
   };
 
@@ -226,16 +226,16 @@ function createQuantifierHelper(
 
   const tokensHelper: QuantifierTokensHelper = {
     some(predicate: (token: number) => boolean): boolean {
-      return evaluate(ctx => predicate(ctx.tokens ?? ctx.tokest ?? 0));
+      return evaluate(mx => predicate(mx.tokens ?? mx.tokest ?? 0));
     },
     greaterThan(value: number): boolean {
-      return evaluate(ctx => (ctx.tokens ?? ctx.tokest ?? 0) > value);
+      return evaluate(mx => (mx.tokens ?? mx.tokest ?? 0) > value);
     }
   };
 
   const taintHelper: QuantifierLabelsHelper = {
     includes(label: DataLabel): boolean {
-      return evaluate(ctx => (ctx.taint ?? ctx.labels ?? []).includes(label));
+      return evaluate(mx => (mx.taint ?? mx.labels ?? []).includes(label));
     }
   };
 
@@ -263,7 +263,7 @@ function createQuantifierHelper(
   });
 
   return {
-    ctx: {
+    mx: {
       labels: labelsHelper,
       taint: taintHelper,
       tokens: tokensHelper
@@ -272,10 +272,10 @@ function createQuantifierHelper(
 }
 
 function ensureContext(variable: Variable): VariableContextSnapshot {
-  if (!('ctx' in variable) || !variable.ctx) {
+  if (!('mx' in variable) || !variable.mx) {
     VariableMetadataUtils.attachContext(variable);
   }
-  return variable.ctx as VariableContextSnapshot;
+  return variable.mx as VariableContextSnapshot;
 }
 
 function isVariableLike(value: unknown): value is Variable {

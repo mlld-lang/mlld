@@ -84,10 +84,13 @@ export async function runMLLD(
     });
     
     child.on('close', (code) => {
+      // If code is null and there's stderr output, treat as error (exit code 1)
+      // This handles cases where process is terminated in CI environments
+      const exitCode = code ?? (error ? 1 : 0);
       resolve({
         output,
         error,
-        exitCode: code ?? 0,
+        exitCode,
         duration: Date.now() - startTime
       });
     });

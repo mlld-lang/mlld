@@ -307,44 +307,41 @@ function extractValue(value: unknown): unknown {
  * - Non-numeric strings → NaN
  */
 export function toNumber(value: unknown): number {
-  // Handle Variable objects by extracting their value
-  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
-    const variable = value as Variable;
-    return toNumber(variable.value);
-  }
-  
+  // Use extractValue to handle both Variables and StructuredValues
+  const extracted = extractValue(value);
+
   // Handle null and undefined
-  if (value === null) {
+  if (extracted === null) {
     return 0;
   }
-  if (value === undefined) {
+  if (extracted === undefined) {
     return NaN;
   }
-  
+
   // Handle booleans
-  if (typeof value === 'boolean') {
-    return value ? 1 : 0;
+  if (typeof extracted === 'boolean') {
+    return extracted ? 1 : 0;
   }
-  
+
   // Handle numbers
-  if (typeof value === 'number') {
-    return value;
+  if (typeof extracted === 'number') {
+    return extracted;
   }
-  
+
   // Handle strings
-  if (typeof value === 'string') {
+  if (typeof extracted === 'string') {
     // Special case for boolean strings
-    if (value === 'true') {
+    if (extracted === 'true') {
       return 1;
     }
-    if (value === 'false') {
+    if (extracted === 'false') {
       return 0;
     }
     // Try to parse as number
-    const num = Number(value);
+    const num = Number(extracted);
     return num;
   }
-  
+
   // For objects and arrays, return NaN
   return NaN;
 }

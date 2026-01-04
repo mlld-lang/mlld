@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { DirectiveNode } from '@core/types';
 import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, TemplateVariable, VariableMetadata } from '@core/types/variable';
 import { 
@@ -26,7 +27,7 @@ import { ExportManifest } from './ExportManifest';
 import { astLocationToSourceLocation } from '@core/types';
 import type { SourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
-import { ctxToSecurityDescriptor } from '@core/types/variable/CtxHelpers';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -149,8 +150,9 @@ export class VariableImporter {
    */
   private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
     // Create a temporary childVars map and reuse processModuleExports logic
-    // Skip module env serialization to prevent infinite recursion
-    const tempResult = this.processModuleExports(moduleEnv, {}, true);
+    // Skip module env serialization to prevent infinite recursion, but pass the
+    // current target so we can detect circular references within the env.
+    const tempResult = this.processModuleExports(moduleEnv, {}, true, null, undefined, undefined, moduleEnv);
     return tempResult.moduleObject;
   }
 
@@ -208,7 +210,9 @@ export class VariableImporter {
     parseResult: any,
     skipModuleEnvSerialization?: boolean,
     manifest?: ExportManifest | null,
-    childEnv?: Environment
+    childEnv?: Environment,
+    options?: { resolveStrings?: boolean },
+    currentSerializationTarget?: Map<string, Variable>
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
@@ -329,7 +333,32 @@ export class VariableImporter {
             capturedModuleEnv: this.serializeModuleEnv(capturedEnv)
           };
         } else {
-          delete serializedInternal.capturedModuleEnv;
+          // When not adding fresh module env captures (to avoid recursion),
+          // preserve existing capturedModuleEnv from prior imports.
+          //
+          // Key insight: An exe's capturedModuleEnv is circular (and should be deleted)
+          // only if it points to the same env we're currently serializing.
+          // If it's from a different module (e.g., imported exe), preserve it.
+          //
+          // We use currentSerializationTarget (passed from serializeModuleEnv) to detect
+          // circular references, since after deserialization all exes in a module env
+          // point to that same Map.
+          const existingCapture = serializedInternal.capturedModuleEnv;
+          if (existingCapture instanceof Map) {
+            // Check if this is a circular reference
+            if (currentSerializationTarget && existingCapture === currentSerializationTarget) {
+              // Circular - delete to prevent infinite recursion
+              delete serializedInternal.capturedModuleEnv;
+            } else {
+              // Different module's env - serialize and preserve
+              serializedInternal = {
+                ...serializedInternal,
+                capturedModuleEnv: this.serializeModuleEnv(existingCapture)
+              };
+            }
+          }
+          // If already serialized (object), keep it as-is
+          // If undefined, leave it undefined (don't capture new)
         }
         
         // Export executable with all necessary metadata
@@ -352,14 +381,18 @@ export class VariableImporter {
         };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
-        const resolvedObject = this.objectResolver.resolveObjectReferences(variable.value, childVars);
+        const resolvedObject = this.objectResolver.resolveObjectReferences(
+          variable.value,
+          childVars,
+          { resolveStrings: options?.resolveStrings }
+        );
         moduleObject[name] = resolvedObject;
       } else {
         // For other variables, export the value directly
         moduleObject[name] = variable.value;
       }
 
-      const descriptor = variable.ctx ? ctxToSecurityDescriptor(variable.ctx) : undefined;
+      const descriptor = variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined;
       const mergedDescriptor = descriptor && envDescriptor
         ? mergeDescriptors(descriptor, envDescriptor)
         : descriptor ?? envDescriptor;
@@ -462,7 +495,7 @@ export class VariableImporter {
         })
       );
     }
-    
+
     // Check if this is an executable export
     if (value && typeof value === 'object' && '__executable' in value && value.__executable) {
       return this.createExecutableFromImport(name, value, source, buildMetadata(), options?.securityLabels);
@@ -496,11 +529,8 @@ export class VariableImporter {
     // Infer the variable type from the value
     const originalType = this.inferVariableType(value);
 
-    // Convert non-string primitives to strings
+    // Preserve primitive types (no stringification) so math/boolean logic works in eval
     let processedValue = value;
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      processedValue = String(value);
-    }
     
     // For array types, create an ArrayVariable to preserve array behaviors
     if (originalType === 'array' && Array.isArray(processedValue)) {
@@ -541,7 +571,6 @@ export class VariableImporter {
           agentRosterPreview: normalizedObject && (normalizedObject as any).agent_roster
         });
         try {
-          const fs = require('fs');
           fs.appendFileSync(
             '/tmp/mlld-debug.log',
             JSON.stringify({
@@ -704,7 +733,16 @@ export class VariableImporter {
     metadataMap?: Record<string, ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined>,
     guardDefinitions?: SerializedGuardDefinition[]
   ): Promise<void> {
-    if (directive.subtype === 'importAll') {
+    if (directive.subtype === 'importPolicy') {
+      await this.handleNamespaceImport(
+        directive,
+        moduleObject,
+        targetEnv,
+        childEnv,
+        metadataMap,
+        guardDefinitions
+      );
+    } else if (directive.subtype === 'importAll') {
       throw new MlldImportError(
         'Wildcard imports \'/import { * }\' are no longer supported. ' +
         'Use namespace imports instead: \'/import "file"\' or \'/import "file" as @name\'',
@@ -777,6 +815,9 @@ export class VariableImporter {
       if (guardDefinitions && guardDefinitions.length > 0) {
         targetEnv.registerSerializedGuards(guardDefinitions);
       }
+      if (directive.subtype === 'importPolicy') {
+        targetEnv.recordPolicyConfig(alias, namespaceObject);
+      }
       return;
     }
 
@@ -793,6 +834,10 @@ export class VariableImporter {
     this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
     if (guardDefinitions && guardDefinitions.length > 0) {
       targetEnv.registerSerializedGuards(guardDefinitions);
+    }
+    if (directive.subtype === 'importPolicy') {
+      const policyConfig = (namespaceObject as any)?.config ?? namespaceObject;
+      targetEnv.recordPolicyConfig(alias, policyConfig);
     }
   }
 
@@ -898,13 +943,18 @@ export class VariableImporter {
       const deserializedEnv = this.deserializeModuleEnv(originalInternal.capturedModuleEnv);
 
       // IMPORTANT: Each executable in the module env needs to have access to the full env
-      // This allows command-refs to find their siblings
+      // This allows command-refs to find their siblings.
+      // BUT: Only set capturedModuleEnv if the exe doesn't already have one from a prior import.
+      // Imported exes preserve their original scope chain.
       for (const [_, variable] of deserializedEnv) {
         if (variable.type === 'executable') {
-          variable.internal = {
-            ...(variable.internal ?? {}),
-            capturedModuleEnv: deserializedEnv
-          };
+          const existingEnv = variable.internal?.capturedModuleEnv;
+          if (!existingEnv || !(existingEnv instanceof Map)) {
+            variable.internal = {
+              ...(variable.internal ?? {}),
+              capturedModuleEnv: deserializedEnv
+            };
+          }
         }
       }
 

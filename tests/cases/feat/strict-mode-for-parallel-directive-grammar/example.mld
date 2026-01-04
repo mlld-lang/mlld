@@ -1,0 +1,3 @@
+exe @upper(input) = js { return String(input).toUpperCase() }
+
+for parallel(1) @x in ["a","b","c"] => show @upper(@x)

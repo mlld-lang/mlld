@@ -1,0 +1,3 @@
+var @empty = []
+for @item in @empty => show `Item: @item`
+var @results = for @x in @empty => @x

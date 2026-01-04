@@ -1,0 +1,241 @@
+<MLLD_MODULES>
+
+<PHILOSOPHY>
+Module-first design: keep `.mld` files readable; move complexity into focused modules. Avoid "kitchen sink" modules or side effects on import.
+</PHILOSOPHY>
+
+<CREATING_MODULES>
+Modules require frontmatter and explicit exports.
+
+```mlld
+---
+name: text-utils
+author: alice
+version: 1.0.0
+about: String helpers
+license: CC0
+---
+
+needs {
+  js: []
+}
+
+exe @upper(s) = js { return s.toUpperCase() }
+exe @trim(s) = js { return s.trim() }
+
+export { @upper, @trim }
+```
+
+**Frontmatter fields:**
+- `name` - Module name (required for registry)
+- `author` - Your username (required for registry)
+- `version` - Semver version
+- `about` - Brief description
+- `license` - License (CC0 recommended)
+
+**Accessing frontmatter in module:**
+
+```mlld
+var @meta = {
+  id: @fm.id,
+  name: @fm.name,
+  version: @fm.version
+}
+```
+</CREATING_MODULES>
+
+<IMPORTING>
+Import from registry, local files, or URLs.
+
+**Registry modules:**
+
+```mlld
+import { @parallel, @retry } from @mlld/core
+import @corp/utils as @corp
+
+>> With version
+import { @helper } from @alice/utils@1.0.0
+import { @helper } from @alice/utils@^1.0.0   >> semver range
+```
+
+**Local files:**
+
+```mlld
+import { @helper } from "./utils.mld"
+import { @config } from <@base/config.mld>
+import { @prompt } from "../prompts/main.mld"
+```
+
+**Namespace imports:**
+
+```mlld
+import @alice/utils as @alice
+import @bob/utils as @bob
+
+show @alice.format(@data)
+show @bob.format(@data)   >> no collision
+```
+
+**Directory imports:**
+
+```mlld
+import "@agents" as @agentRegistry
+show @agentRegistry.alice.tldr
+show @agentRegistry.support.helper.name
+
+>> With options
+import "./agents" as @agents with { skipDirs: [] }
+```
+
+Directories auto-load `*/index.mld`. Default `skipDirs: ["_*", ".*"]`.
+</IMPORTING>
+
+<IMPORT_TYPES>
+Control caching and resolution behavior.
+
+| Type | Behavior | Use Case |
+|------|----------|----------|
+| `module` | Content-addressed cache | Registry modules (default) |
+| `static` | Embedded at parse time | Prompts, templates |
+| `live` | Always fresh | Status APIs |
+| `cached(TTL)` | Time-based cache | Feeds, configs |
+| `local` | Dev modules (llm/modules/) | Development |
+| `templates` | Directory of .att files | Template collections |
+
+```mlld
+import module { @api } from @corp/tools
+import static { @prompt } from "./prompt.md"
+import live <https://status.io> as @status
+import cached(1h) <https://feed.xml> as @feed
+import local { @dev } from @alice/experimental
+```
+
+**Template collections:**
+
+```mlld
+import templates from "@base/agents" as @agents(message, context)
+
+show @agents["alice"](@msg, @ctx)           >> agents/alice.att
+show @agents.support["helper"](@msg, @ctx)  >> agents/support/helper.att
+```
+
+Template collections require parameters. All templates in directory share the signature.
+</IMPORT_TYPES>
+
+<EXPORTING>
+Explicit exports required (auto-export is legacy).
+
+```mlld
+>> Export specific items
+export { @upper, @trim, @format }
+
+>> Common pattern: export config object
+var @meta = { id: @fm.id, name: @fm.name }
+exe @process(data) = [...]
+
+export { @meta, @process }
+```
+
+**Module patterns:**
+
+```mlld
+>> Library module
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku }
+exe @sonnet(prompt) = @prompt | cmd { claude -p --model sonnet }
+export { @haiku, @sonnet }
+
+>> Config/agent module
+var @meta = { id: @fm.id, name: @fm.name }
+var @prompts = { primary: @primaryPrompt, optional: @optionalPrompt }
+export { @meta, @prompts }
+
+>> Gate module
+exe @gate(response, instruction, message) = [...]
+export { @gate }
+```
+</EXPORTING>
+
+<LOCAL_DEVELOPMENT>
+Dev modules live in `llm/modules/` (flat structure).
+
+```
+llm/modules/
+├── my-utils.mld.md    # author: alice, name: experimental
+└── helpers.mld        # author: bob, name: tools
+```
+
+```mlld
+import local { @helper } from @alice/experimental
+```
+
+Matched by frontmatter `author` and `name` fields.
+</LOCAL_DEVELOPMENT>
+
+<REGISTRY>
+Public registry at github.com/mlld-lang/registry.
+
+**Publishing:**
+
+```bash
+mlld publish my-tool.mld.md             # first time creates PR
+mlld publish my-tool.mld.md             # updates publish directly
+mlld publish --tag beta my-tool.mld.md  # with tag
+```
+
+**Installing:**
+
+```bash
+mlld install @alice/utils
+mlld install @alice/utils@1.0.0
+mlld update @alice/utils
+mlld ls                                  # list installed
+```
+
+**Lock files:**
+- `mlld-lock.json` auto-generated
+- Commit to version control
+- Only registry modules validated
+</REGISTRY>
+
+<RESOLVERS>
+Prefixes map `@` references to content sources.
+
+**Built-in:**
+- `@author/module` → Registry
+- `@base/file` → Project root
+- `./file.mld` → Local (with fuzzy extension matching)
+
+**Custom prefixes** (mlld-config.json):
+
+```json
+{
+  "resolvers": {
+    "prefixes": [
+      {
+        "prefix": "@lib/",
+        "resolver": "LOCAL",
+        "config": { "basePath": "./src/lib" }
+      },
+      {
+        "prefix": "@company/",
+        "resolver": "GITHUB",
+        "config": {
+          "repository": "company/private-modules",
+          "branch": "main"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Quick setup:**
+
+```bash
+mlld alias --name notes --path ~/notes
+mlld alias --name shared --path ../shared --global
+mlld setup --github   # private repo wizard
+```
+</RESOLVERS>
+
+</MLLD_MODULES>

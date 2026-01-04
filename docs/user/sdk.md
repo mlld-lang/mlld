@@ -224,10 +224,14 @@ const result = await processMlld(template, {
 In your script:
 
 ```mlld
-/var @count = @state.count + 1
-/var @theme = @state.preferences.theme
-/var @input = @payload.text
+var @count = @state.count + 1
+var @theme = @state.preferences.theme
+var @input = @payload.text
 ```
+
+Notes:
+- `@payload` and `@state` object modules treat strings as literals (no interpolation).
+- `@state` is a live snapshot during a single run: `/output ... to "state://path"` updates the in-run `@state` so later reads/imports see the new value. Persist changes yourself via `stateWrites` between runs.
 
 ### Security
 
@@ -242,8 +246,8 @@ result.effects.forEach(effect => {
 Guards can enforce policies on dynamic data:
 
 ```mlld
-/guard before secret = when [
-  @input.ctx.taint.includes('src:dynamic') =>
+guard before secret = when [
+  @input.mx.taint.includes('src:dynamic') =>
     deny "Cannot use dynamic data as secrets"
   * => allow
 ]
@@ -268,17 +272,17 @@ This enables fine-grained guard policies:
 
 ```mlld
 // Block user-uploaded data from dangerous operations
-/guard before fileWrite = when [
-  @input.ctx.labels.includes('src:user-upload') =>
+guard before fileWrite = when [
+  @input.mx.labels.includes('src:user-upload') =>
     deny "User uploads cannot be written to filesystem"
   * => allow
 ]
 
 // Allow trusted database content through
-/guard before apiCall = when [
-  @input.ctx.labels.includes('src:user-upload') =>
+guard before apiCall = when [
+  @input.mx.labels.includes('src:user-upload') =>
     deny "User data cannot call external APIs"
-  @input.ctx.labels.includes('src:dynamic') =>
+  @input.mx.labels.includes('src:dynamic') =>
     allow
   * => allow
 ]
@@ -302,14 +306,17 @@ Common source labels:
 
 Track state changes via the `state://` protocol instead of filesystem writes.
 
+- `@payload` and `@state` object modules treat strings as literals (no interpolation).
+- `@state` is a live snapshot during a single run: `/output ... to "state://path"` updates the in-run `@state` so later reads/imports see the new value. Persist changes yourself via `stateWrites` between runs.
+
 ### State Write Protocol
 
 ```mlld
-/var @count = @state.count + 1
-/output @count to "state://count"
+var @count = @state.count + 1
+output @count to "state://count"
 
-/var @prefs = { theme: "dark", lang: "en" }
-/output @prefs to "state://preferences"
+var @prefs = { theme: "dark", lang: "en" }
+output @prefs to "state://preferences"
 ```
 
 State writes are captured in the result:
@@ -346,7 +353,7 @@ for (const write of result.stateWrites) {
 ### Nested Paths
 
 ```mlld
-/output "dark" to "state://prefs.theme"
+output "dark" to "state://prefs.theme"
 ```
 
 Captured as `{ path: 'prefs.theme', value: 'dark' }`.
@@ -363,9 +370,9 @@ write.security?.taint;   // Accumulated labels including automatic ones
 Use guards to prevent sensitive data in state:
 
 ```mlld
-/guard before op:output = when [
-  @ctx.op.target.startsWith('state://') &&
-  @input.ctx.labels.includes('secret') =>
+guard before op:output = when [
+  @mx.op.target.startsWith('state://') &&
+  @input.mx.labels.includes('secret') =>
     deny "Secrets cannot be persisted to state"
   * => allow
 ]
@@ -378,9 +385,9 @@ Execute mlld files with in-memory caching and state management.
 ### Basic Usage
 
 ```typescript
-import { executeRoute } from 'mlld';
+import { execute } from 'mlld';
 
-const result = await executeRoute('./agent.mld',
+const result = await execute('./agent.mld',
   { text: 'user input', userId: '123' },
   {
     state: { count: 0, messages: [] },
@@ -388,22 +395,30 @@ const result = await executeRoute('./agent.mld',
   }
 );
 
-console.log(result.value);        // Final output
+console.log(result.output);       // Execution output (NOT result.value)
 console.log(result.stateWrites);  // State updates
 console.log(result.effects);      // All effects
 console.log(result.metrics);      // Performance data
 ```
 
-### State Hydration
+### State and Payload Access
 
-State injected via `@state` module, payload via `@payload`:
+Import fields from `@payload` and `@state` using destructuring syntax:
 
 ```mlld
-/var @count = @state.count + 1
-/var @history = @state.messages
-/var @input = @payload.text
-/var @userId = @payload.userId
+>> Import specific fields from payload
+import { @text, @userId } from @payload
+
+>> Import specific fields from state
+import { @count, @messages } from @state
+
+>> Use the imported variables
+var @newCount = @count + 1
+var @history = @messages
+show "User @userId said: @text"
 ```
+
+The SDK automatically provides `@payload` and `@state` as importable modules when you call `execute()` with payload and state arguments.
 
 ### AST Caching
 
@@ -411,10 +426,10 @@ In-memory cache with mtime-based invalidation:
 
 ```typescript
 // First call parses the file
-await executeRoute('./agent.mld', payload);
+await execute('./agent.mld', payload);
 
 // Second call uses cached AST (unless file changed)
-await executeRoute('./agent.mld', payload);
+await execute('./agent.mld', payload);
 ```
 
 Cache invalidates automatically when file is modified.
@@ -424,7 +439,7 @@ Cache invalidates automatically when file is modified.
 ```typescript
 const controller = new AbortController();
 
-const promise = executeRoute('./agent.mld', payload, {
+const promise = execute('./agent.mld', payload, {
   timeout: 30000,  // 30 second timeout
   signal: controller.signal
 });
@@ -460,7 +475,7 @@ async function handleUserMessage(userId: string, message: string) {
   const state = await loadUserState(userId);
 
   // Execute with user context
-  const result = await executeRoute('./agents/chat.mld',
+  const result = await execute('./agents/chat.mld',
     { text: message, userId },
     { state, timeout: 30000 }
   );
@@ -479,7 +494,7 @@ async function handleUserMessage(userId: string, message: string) {
 Inject additional runtime data beyond `@state` and `@payload`:
 
 ```typescript
-const result = await executeRoute('./process.mld',
+const result = await execute('./process.mld',
   { text: 'user input' },
   {
     state: { count: 0 },
@@ -494,7 +509,7 @@ const result = await executeRoute('./process.mld',
 With custom source labels for security policies:
 
 ```typescript
-const result = await executeRoute('./upload-handler.mld',
+const result = await execute('./upload-handler.mld',
   userUploadedFile,
   {
     dynamicModules: {
@@ -630,6 +645,16 @@ For direct `interpret()` calls, additional options:
 | `provenance` | boolean | Include provenance chains |
 | `streaming` | StreamingOptions | Streaming configuration |
 | `emitter` | ExecutionEmitter | Custom event emitter |
+
+## Other Languages
+
+Experimental SDK wrappers are available for Go, Python, and Rust. These are thin wrappers around the mlld CLI that provide idiomatic APIs for each language.
+
+- [Go SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/go)
+- [Python SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/python)
+- [Rust SDK](https://github.com/mlld-lang/mlld/tree/main/sdk/rust)
+
+These wrappers require the mlld CLI to be installed (`npm install -g mlld`).
 
 ## See Also
 

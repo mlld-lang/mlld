@@ -4,13 +4,13 @@
 /exe @mkDetail(n) = js { return `try-${n}-detail` }
 
 /exe @source() = when first [
-  @ctx.try == 1 => "draft"
+  @mx.try == 1 => "draft"
   * => "final"
 ]
 
 /exe @validator() = when first [
-  @ctx.input == "draft" => retry { code: @calcCode(), detail: @mkDetail(@ctx.try) }
-  * => "Hint: code=@ctx.hint.code, detail=@ctx.hint.detail"
+  @mx.input == "draft" => retry { code: @calcCode(), detail: @mkDetail(@mx.try) }
+  * => "Hint: code=@mx.hint.code, detail=@mx.hint.detail"
 ]
 
 /var @result = @source() | @validator

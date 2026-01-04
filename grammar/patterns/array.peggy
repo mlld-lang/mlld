@@ -45,12 +45,23 @@ ArrayItems "array items"
       return [first, ...rest];
     }
 
+ConditionalArrayElement
+  = varRef:ConditionalVariableReference {
+      return {
+        type: 'ConditionalArrayElement',
+        condition: varRef.variable,
+        value: varRef.variable,
+        location: location()
+      };
+    }
+
 // Values that can appear in arrays - all mlld data types
 ArrayValue "array value"
   = AlligatorExpression     // <file.md> - load file content
   / ArrayLiteral            // nested arrays [1, [2, 3]]
   / DataObjectLiteral       // { key: value } objects
   / ExecInvocationPattern   // @func() execution
+  / ConditionalArrayElement // @var? conditional element
   / VariableWithTail        // @var with modifiers
   / AtVar                   // @var references
   / UnifiedQuoteOrTemplate      // `template`, [[template]], "string" (replaces TemplateStyleInterpolation)

@@ -78,16 +78,16 @@ Each pattern must export a `pattern` object with:
 export const pattern: ErrorPattern = {
   name: 'descriptive-name',
   
-  test(error, ctx) {
+  test(error, mx) {
     // Return true if this pattern matches the error
     // error.found - what the parser found
     // error.expected - what the parser expected
-    // ctx.line - the line containing the error
-    // ctx.source - full source code
+    // mx.line - the line containing the error
+    // mx.source - full source code
     return false;
   },
   
-  enhance(error, ctx) {
+  enhance(error, mx) {
     // Return a helpful error message
     return new MlldParseError(
       'Clear, actionable error message',
@@ -101,9 +101,9 @@ export const pattern: ErrorPattern = {
 
 ### Unknown Directive
 ```typescript
-test: (e, ctx) => e.found === '/' && !ctx.line.match(/^\/(var|show|run|...)/),
-enhance: (e, ctx) => {
-  const attempt = ctx.line.match(/^\/(\w+)/)?.[1];
+test: (e, mx) => e.found === '/' && !mx.line.match(/^\/(var|show|run|...)/),
+enhance: (e, mx) => {
+  const attempt = mx.line.match(/^\/(\w+)/)?.[1];
   return new MlldParseError(
     `Unknown directive '/${attempt}'. Available: /var, /show, /run...`,
     e.location
@@ -113,8 +113,8 @@ enhance: (e, ctx) => {
 
 ### Missing Quotes
 ```typescript
-test: (e, ctx) => e.expected.some(x => x.text === '"') && ctx.line.includes(' '),
-enhance: (e, ctx) => new MlldParseError(
+test: (e, mx) => e.expected.some(x => x.text === '"') && mx.line.includes(' '),
+enhance: (e, mx) => new MlldParseError(
   'Paths with spaces must be quoted: "path with spaces.mld"',
   e.location
 )

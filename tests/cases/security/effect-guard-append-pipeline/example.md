@@ -1,5 +1,5 @@
 /guard @noSecretAppend before op:append = when [
-  @input.ctx.labels.includes("secret") => deny "No secrets in append effects"
+  @input.mx.labels.includes("secret") => deny "No secrets in append effects"
   * => allow
 ]
 

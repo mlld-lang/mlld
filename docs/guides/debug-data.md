@@ -4,6 +4,8 @@ This guide aggregates key references for debugging structured pipeline issues (e
 
 # Source References
 
+/show <@devdocs/DATA.md # What Gets Wrapped vs Raw> as "## Primitive Value Policy"
+
 /show <@devdocs/DATA.md # Implementation Patterns> as "## StructuredValue Patterns"
 
 /show <@devdocs/DATA.md # Gotchas> as "## StructuredValue Gotchas"

@@ -1,0 +1,3 @@
+/import { @outerHelper } from "./exe-chain-base.mld"
+/exe @wrapper() = `Wrapper: @outerHelper()`
+/export { @wrapper }

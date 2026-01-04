@@ -25,7 +25,7 @@ across the grammar system.
 DirectiveContext "Top-level directive context"
   = &{
       const pos = offset();
-      return helpers.isSlashDirectiveContext(input, pos);
+      return helpers.isDirectiveContext(input, pos);
     }
 
 // Checks if we're in a context where @ is used for a variable reference
@@ -110,7 +110,7 @@ DirectiveBoundary "Directive boundary"
 Context detection relies on these helper methods in grammar-core.js:
 
 - Context Classification Methods:
-  • isSlashDirectiveContext(input, pos) - Detects top-level slash directives
+  • isDirectiveContext(input, pos) - Detects top-level directives (slash optional)
   • isAtVariableContext(input, pos) - Identifies variable references 
   • isRHSContext(input, pos) - Determines right-hand side expressions
   • isPlainTextContext(input, pos) - Identifies plain text occurrences

@@ -130,7 +130,7 @@ UnifiedVariableReferenceWithTail "variable reference with tail modifiers"
       if (tail) {
         // Wrap in a structure similar to ExecInvocation for consistency
         return {
-          type: 'UnifiedVariableReferenceWithTail',
+          type: 'VariableReferenceWithTail',
           variable: varRef,
           withClause: tail
         };
@@ -167,14 +167,14 @@ UnifiedVariableWithPipes "variable with optional pipes"
 // Used in template contexts where keywords like "with" should be treated as literal text
 // Handles backslash as a boundary marker: @var\ stops variable, @var\\ includes literal \
 UnifiedTemplateVariableReference "variable reference in template context"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* boundary:VariableBoundary? pipes:TemplatePipeChain? {
+  = "@" id:BaseIdentifier fields:BoundaryAwareFieldAccess* boundary:VariableBoundary? pipes:TemplatePipeChain? {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
         ...(fields.length > 0 ? { fields: fields } : {}),
         ...(boundary ? { boundary: boundary } : {})
       }, location());
-      
+
       if (pipes && pipes.length > 0) {
         return {
           ...varRef,
@@ -189,3 +189,8 @@ UnifiedTemplateVariableReference "variable reference in template context"
 VariableBoundary "variable boundary"
   = "\\\\" { return { type: 'literal', value: '\\' }; }  // Double backslash -> literal
   / "\\" !"\\" { return { type: 'consumed' }; }           // Single backslash -> boundary only
+
+// Boundary-aware field access - checks for boundary BEFORE consuming field access
+// This allows @var\.ext to stop at the backslash instead of consuming .ext as field access
+BoundaryAwareFieldAccess "boundary-aware field access"
+  = !VariableBoundary field:AnyFieldAccess { return field; }

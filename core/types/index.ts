@@ -32,7 +32,13 @@ export * from './when';
 export * from './var'; // New unified var directive
 export * from './for'; // For loop directive and expression
 export * from './guard'; // Guard directives
+export * from './policy'; // Policy directives
 export * from './load-content'; // Load content types and utilities including URL metadata
+export * from './while'; // While directives and stages
+export * from './control'; // Control literals (done/continue)
+
+// Parser modes
+export * from './mode';
 
 // Import node types for the MlldNode union
 import {
@@ -57,7 +63,10 @@ import {
   TernaryExpression,
   UnaryExpression,
   TemplateForBlockNode,
-  TemplateInlineShowNode
+  TemplateInlineShowNode,
+  ConditionalTemplateSnippetNode,
+  ConditionalStringFragmentNode,
+  ConditionalArrayElementNode
 } from './nodes';
 
 // Import WhenExpressionNode
@@ -65,6 +74,9 @@ import { WhenExpressionNode } from './when';
 
 // Import ForExpression
 import { ForExpression } from './for';
+
+// Import Exe block nodes (used by when-expression actions)
+import type { ExeBlockNode, ExeReturnNode } from './exe';
 
 /**
  * Unified AST node type - MlldNode
@@ -95,8 +107,13 @@ export type MlldNode =
   | UnaryExpression
   | TemplateForBlockNode
   | TemplateInlineShowNode
+  | ConditionalTemplateSnippetNode
+  | ConditionalStringFragmentNode
+  | ConditionalArrayElementNode
   | WhenExpressionNode
-  | ForExpression;
+  | ForExpression
+  | ExeBlockNode
+  | ExeReturnNode;
 
 // =========================================================================
 // VARIABLE TYPES

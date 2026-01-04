@@ -1,0 +1,21 @@
+exe @greet(name) = when first [
+  @name == "World" => "Hello, World!"
+  @name == "Friend" => "Hey there, Friend!"
+  * => "Welcome!"
+]
+
+show @greet("World")
+show @greet("Friend")
+show @greet("Alice")
+
+exe @statusHandler(code) = when first [
+  @code == 200 => "Success"
+  @code == 404 => "Not Found"
+  @code == 500 => "Server Error"
+  none => "Unknown Status Code"
+]
+
+show @statusHandler(200)
+show @statusHandler(404)
+show @statusHandler(403)
+show @statusHandler(999)

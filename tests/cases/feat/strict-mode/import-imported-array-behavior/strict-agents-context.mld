@@ -1,0 +1,10 @@
+/export { agentsContext }
+
+/var @names = ["Alpha", "Beta"]
+
+/var @agent_roster = for @name in @names => { "name": @name }
+
+/var @agentsContext = {
+  "agent_roster": @agent_roster,
+  "team": "Core"
+}

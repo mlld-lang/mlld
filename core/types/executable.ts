@@ -9,6 +9,7 @@ import { MlldNode } from './nodes';
 import { VariableContext, VariableInternal } from './index';
 import type { PipelineStage } from './run';
 import type { DataValue } from './var';
+import type { PathMeta } from './meta';
 
 /**
  * Base executable definition that can be invoked with parameters
@@ -30,6 +31,8 @@ export interface CommandExecutable extends BaseExecutable {
   commandTemplate: MlldNode[];
   withClause?: any; // Stdin and other with-clause options
   sourceDirective: 'exec';
+  workingDir?: MlldNode[];
+  workingDirMeta?: PathMeta;
 }
 
 /**
@@ -51,6 +54,8 @@ export interface CodeExecutable extends BaseExecutable {
   codeTemplate: MlldNode[];
   language: string;
   sourceDirective: 'exec';
+  workingDir?: MlldNode[];
+  workingDirMeta?: PathMeta;
 }
 
 /**
@@ -124,7 +129,7 @@ export interface ExecutableVariable {
   type: 'executable';
   name: string;
   value: ExecutableDefinition;
-  ctx: VariableContext;
+  mx: VariableContext;
   internal?: VariableInternal;
 }
 
@@ -183,14 +188,14 @@ export function isTextSourced(def: ExecutableDefinition): boolean {
 export function createExecutableVariable(
   name: string,
   definition: ExecutableDefinition,
-  options?: { ctx?: Partial<VariableContext>; internal?: Partial<VariableInternal> }
+  options?: { mx?: Partial<VariableContext>; internal?: Partial<VariableInternal> }
 ): ExecutableVariable {
   return {
     type: 'executable',
     name,
     value: definition,
-    ctx: {
-      ...options?.ctx
+    mx: {
+      ...options?.mx
     },
     internal: {
       ...options?.internal

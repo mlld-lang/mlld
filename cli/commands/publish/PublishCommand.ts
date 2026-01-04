@@ -40,6 +40,79 @@ export class PublishCommand {
     ];
   }
 
+  private async ensureForkRef(
+    octokit: any,
+    owner: string,
+    repo: string,
+    upstreamSha: string
+  ): Promise<string> {
+    try {
+      const ref = await octokit.git.getRef({
+        owner,
+        repo,
+        ref: 'heads/main'
+      });
+      return ref.data.object.sha;
+    } catch {
+      // Create main pointing to upstream sha
+      await octokit.git.createRef({
+        owner,
+        repo,
+        ref: 'refs/heads/main',
+        sha: upstreamSha
+      });
+      return upstreamSha;
+    }
+  }
+
+  private async getRepoModuleInfo(
+    octokit: any,
+    author: string,
+    name: string,
+    ref: string
+  ): Promise<{ exists: boolean; isVersioned: boolean }> {
+    const metadataPath = `modules/${author}/${name}/metadata.json`;
+    const tagsPath = `modules/${author}/${name}/tags.json`;
+    const legacyPath = `modules/${author}/${name}.json`;
+
+    // Check versioned structure
+    try {
+      await octokit.repos.getContent({
+        owner: 'mlld-lang',
+        repo: 'registry',
+        path: metadataPath,
+        ref
+      });
+      // If metadata exists, treat as versioned regardless of tags presence
+      try {
+        await octokit.repos.getContent({
+          owner: 'mlld-lang',
+          repo: 'registry',
+          path: tagsPath,
+          ref
+        });
+      } catch {
+        // tags may be missing temporarily; still considered versioned
+      }
+      return { exists: true, isVersioned: true };
+    } catch {
+      // Continue to legacy check
+    }
+
+    // Check legacy single-file format
+    try {
+      await octokit.repos.getContent({
+        owner: 'mlld-lang',
+        repo: 'registry',
+        path: legacyPath,
+        ref
+      });
+      return { exists: true, isVersioned: false };
+    } catch {
+      return { exists: false, isVersioned: false };
+    }
+  }
+
   /**
    * Main publish entry point
    */
@@ -135,7 +208,7 @@ export class PublishCommand {
 
       // 13. Submit to registry if we have a registry entry
       if (result.registryEntry && !options.dryRun) {
-        await this.submitToRegistry(result.registryEntry, user, octokit, registryModule);
+        await this.submitToRegistry(result.registryEntry, user, octokit, options, registryModule);
       }
       
       console.log(chalk.green(`\n✔ ${result.message}`));
@@ -834,7 +907,13 @@ export class PublishCommand {
     };
   }
 
-  private async submitToRegistry(registryEntry: any, user: any, octokit: any, existingModule?: any): Promise<void> {
+  private async submitToRegistry(
+    registryEntry: any,
+    user: any,
+    octokit: any,
+    options: PublishOptions,
+    existingModule?: any
+  ): Promise<void> {
     const REGISTRY_OWNER = 'mlld-lang';
     const REGISTRY_REPO = 'registry';
     const BASE_BRANCH = 'main';
@@ -860,32 +939,42 @@ export class PublishCommand {
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
       
-      // 2. Sync fork with upstream
+      // 2. Sync fork with upstream (best effort)
       try {
         await octokit.repos.mergeUpstream({
           owner: user.login,
           repo: REGISTRY_REPO,
           branch: BASE_BRANCH
         });
-      } catch (error) {
-        // Sync might fail if fork is already up to date
+      } catch {
+        // ignore merge failures (will base branch off upstream directly)
       }
+      // Always base new branches on upstream main to avoid stale forks
+      const upstreamMainRef = await octokit.git.getRef({
+        owner: REGISTRY_OWNER,
+        repo: REGISTRY_REPO,
+        ref: `heads/${BASE_BRANCH}`
+      });
       
-      // 3. Determine if this is a first-time author
-      const isFirstTimeAuthor = !existingModule;
-      
-      // 4. Create file path based on new versioned structure
+      // 3. Detect existing module presence in upstream registry repo
       const modulePath = `modules/${registryEntry.author}/${registryEntry.name}`;
       const metadataPath = `${modulePath}/metadata.json`;
       const versionPath = `${modulePath}/${registryEntry.version}.json`;
       const tagsPath = `${modulePath}/tags.json`;
+      const repoModuleInfo = await this.getRepoModuleInfo(
+        octokit,
+        registryEntry.author,
+        registryEntry.name,
+        upstreamMainRef.data.object.sha
+      );
+
+      const isExistingModule = Boolean(existingModule || repoModuleInfo.exists);
+      
+      // 4. Determine if this is a first-time author
+      const isFirstTimeAuthor = !isExistingModule;
       
       // 5. Check if this is an update (old structure)
-      let isLegacyUpdate = false;
-      if (existingModule && !existingModule.availableVersions) {
-        // Module exists in old format
-        isLegacyUpdate = true;
-      }
+      const isLegacyUpdate = (existingModule && !existingModule.availableVersions) || (repoModuleInfo.exists && !repoModuleInfo.isVersioned);
       
       // 6. Prepare content for versioned structure
       const timestamp = new Date().toISOString();
@@ -919,10 +1008,38 @@ export class PublishCommand {
       };
       
       // Tags (only for new modules or when custom tag specified)
-      const tags: Record<string, string> = {
+      let tags: Record<string, string> = {
         latest: registryEntry.version,
         stable: registryEntry.version
       };
+
+      if (!isLegacyUpdate && isExistingModule) {
+        try {
+          const existingTagsFile = await octokit.repos.getContent({
+            owner: REGISTRY_OWNER,
+            repo: REGISTRY_REPO,
+            path: tagsPath,
+            ref: upstreamMainRef.data.object.sha
+          });
+
+          if (!Array.isArray(existingTagsFile.data) && 'content' in existingTagsFile.data) {
+            const raw = Buffer.from(existingTagsFile.data.content, 'base64').toString('utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              const previousLatest = (parsed as Record<string, string>).latest;
+              tags = {
+                ...parsed,
+                latest: registryEntry.version
+              };
+              if (!tags.stable || tags.stable === previousLatest) {
+                tags.stable = registryEntry.version;
+              }
+            }
+          }
+        } catch {
+          // No existing tags, fall back to default
+        }
+      }
 
       // Add custom tag if specified
       if (options.tag) {
@@ -930,22 +1047,24 @@ export class PublishCommand {
       }
       
       // 7. Create branch name
-      const action = existingModule ? 'update' : 'add';
+      const action = isExistingModule ? 'update' : 'add';
       const timestampMs = Date.now();
       const branchName = `${action}-${registryEntry.author}-${registryEntry.name}-${timestampMs}`;
       
       // 7. Create branch
-      const mainRef = await octokit.git.getRef({
-        owner: user.login,
-        repo: REGISTRY_REPO,
-        ref: `heads/${BASE_BRANCH}`
-      });
-      
+      // Ensure the fork exists and has a main ref; fall back gracefully if missing
+      const forkMainRef = await this.ensureForkRef(
+        octokit,
+        user.login,
+        REGISTRY_REPO,
+        upstreamMainRef.data.object.sha
+      );
+
       await octokit.git.createRef({
         owner: user.login,
         repo: REGISTRY_REPO,
         ref: `refs/heads/${branchName}`,
-        sha: mainRef.data.object.sha
+        sha: forkMainRef
       });
       
       // 8. Create files based on structure
@@ -970,7 +1089,7 @@ export class PublishCommand {
         // For new structure, create multiple files
         const files = [];
         
-        if (!existingModule) {
+        if (!isExistingModule) {
           // New module: create all files
           files.push({
             path: metadataPath,
@@ -980,8 +1099,8 @@ export class PublishCommand {
             path: tagsPath,
             content: JSON.stringify(tags, null, 2) + '\n'
           });
-        } else if (options.tag) {
-          // Existing module with custom tag: update tags.json
+        } else {
+          // Existing module (versioned): update tags with new latest/stable and add version file
           files.push({
             path: tagsPath,
             content: JSON.stringify(tags, null, 2) + '\n'
@@ -1040,43 +1159,15 @@ Feel free to join our [Discord](https://discord.gg/mlld) to connect with other m
       }
 
       prBody += `### Module Files
-`;
-      
-      if (!existingModule) {
-        prBody += `\`\`\`json
-// metadata.json
-${JSON.stringify(metadata, null, 2)}
-
-// ${registryEntry.version}.json
-${JSON.stringify(versionData, null, 2)}
-
-// tags.json
-${JSON.stringify(tags, null, 2)}
+\`\`\`json
+${isExistingModule ? `// ${registryEntry.version}.json\n${JSON.stringify(versionData, null, 2)}` : `// metadata.json\n${JSON.stringify(metadata, null, 2)}\n\n// ${registryEntry.version}.json\n${JSON.stringify(versionData, null, 2)}\n\n// tags.json\n${JSON.stringify(tags, null, 2)}`}
 \`\`\`
 `;
-      } else {
-        prBody += `\`\`\`json
-// ${registryEntry.version}.json
-${JSON.stringify(versionData, null, 2)}
-\`\`\`
-`;
-      }
-      
-      prBody += `
-### Automated Checks
-- [ ] Valid module structure
-- [ ] Required fields present
-- [ ] Source URL accessible
-- [ ] Content hash verified
-- [ ] License is CC0
-
----
-*This PR was created by \`mlld publish\`*`;
 
       const pr = await octokit.pulls.create({
         owner: REGISTRY_OWNER,
         repo: REGISTRY_REPO,
-        title: existingModule 
+        title: isExistingModule
           ? `Update @${registryEntry.author}/${registryEntry.name} to v${registryEntry.version}`
           : `Add @${registryEntry.author}/${registryEntry.name}`,
         body: prBody,
@@ -1086,13 +1177,7 @@ ${JSON.stringify(versionData, null, 2)}
       
       console.log(chalk.green(`\n✅ Pull request created: ${pr.data.html_url}`));
       
-      if (isFirstTimeAuthor) {
-        console.log(chalk.blue('\n🎉 Welcome to the mlld community!'));
-        console.log(chalk.blue('Your module will be reviewed shortly.'));
-        console.log(chalk.blue('Once approved, you\'ll be able to publish updates directly.'));
-      } else {
-        console.log(chalk.blue('\nYour module update will be reviewed and added to the registry once approved.'));
-      }
+      console.log(chalk.blue('\nYour module submission has been opened in the registry. Maintainers will review and merge it.'));
       
     } catch (error) {
       if (error.response?.data?.message) {

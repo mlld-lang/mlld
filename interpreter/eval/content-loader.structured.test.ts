@@ -35,8 +35,8 @@ describe('processContentLoader (structured)', () => {
     expect(isStructuredValue(result)).toBe(true);
     if (isStructuredValue(result)) {
       expect(result.type).toBe('text');
-      expect(result.ctx.source).toBe('load-content');
-      expect(result.ctx.filename).toBe('README.md');
+      expect(result.mx.source).toBe('load-content');
+      expect(result.mx.filename).toBe('README.md');
       expect(asText(result)).toContain('# Test');
       expect(typeof result.data).toBe('string');
     }
@@ -68,8 +68,8 @@ describe('processContentLoader (structured)', () => {
     if (isStructuredValue(result)) {
       expect(result.type).toBe('text');
       expect(asText(result)).toContain('Install instructions here');
-      expect(result.ctx.source).toBe('load-content');
-      expect(result.ctx.filename).toBe('README.md');
+      expect(result.mx.source).toBe('load-content');
+      expect(result.mx.filename).toBe('README.md');
     }
   });
 
@@ -92,7 +92,7 @@ describe('processContentLoader (structured)', () => {
       expect(result.type).toBe('array');
       expect(Array.isArray(result.data)).toBe(true);
       expect(result.data).toEqual([{ value: 1 }, { value: 2 }]);
-      expect(result.ctx?.filename).toBe('data.json');
+      expect(result.mx?.filename).toBe('data.json');
       expect(asText(result)).toBe('[{"value":1},{"value":2}]');
     }
   });

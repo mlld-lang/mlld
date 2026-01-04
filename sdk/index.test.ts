@@ -6,18 +6,24 @@ import { PathService } from '@services/fs/PathService';
 describe('Mlld API', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
+  const originalStrict = process.env.MLLD_STRICT;
 
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
+    process.env.MLLD_STRICT = '1';
+  });
+
+  afterAll(() => {
+    process.env.MLLD_STRICT = originalStrict;
   });
 
   describe('processMlld', () => {
     it('should process simple text assignment', async () => {
       const content = '/var @greeting = "Hello, World!"';
       const result = await processMlld(content);
-      // Text assignment alone doesn't produce output
-      expect(result).toBe('');
+      // Text assignment alone doesn't produce output (just trailing newline from normalizer)
+      expect(result).toBe('\n');
     });
 
     it('should process text with show directive', async () => {
@@ -50,6 +56,7 @@ describe('Mlld API', () => {
         pathService,
         basePath: '/'
       });
+      // Markdown formatting adds blank line after header
       expect(result.trim()).toBe('# Test Content\n\nThis is a test file.');
     });
 
@@ -139,8 +146,8 @@ describe('Mlld API', () => {
         pathService,
         basePath: '/'
       });
-      // Exe directive alone doesn't produce output, just stores the value
-      expect(result).toBe('');
+      // Exe directive alone doesn't produce output (just trailing newline from normalizer)
+      expect(result).toBe('\n');
     });
 
     it('should handle simple literal show', async () => {
@@ -156,8 +163,46 @@ describe('Mlld API', () => {
 /show "Line 3"
       `.trim();
       const result = await processMlld(content);
-      const lines = result.trim().split('\n');
+      const lines = result.trim().split('\n').filter(l => l.length > 0);
       expect(lines).toEqual(['Line 1', 'Line 2', 'Line 3']);
+    });
+
+    it('defaults raw strings to strict mode', async () => {
+      await expect(processMlld('plain text')).rejects.toThrow('Text content not allowed in strict mode (.mld). Use .mld.md for prose.');
+    });
+
+    it('allows markdown mode override for raw strings', async () => {
+      const result = await processMlld('plain text', { mode: 'markdown' });
+      expect(result.trim()).toBe('plain text');
+    });
+
+    it('infers strict mode for .mld files and runs bare directives', async () => {
+      const content = `
+var @name = "World"
+show @name
+      `.trim();
+      await fileSystem.writeFile('/module.mld', content);
+      const result = await processMlld(content, {
+        filePath: '/module.mld',
+        fileSystem,
+        pathService
+      });
+      expect(result.trim()).toBe('World');
+    });
+
+    it('treats bare directives as text in markdown mode for .mld.md files', async () => {
+      const content = `
+var @name = "World"
+show @name
+      `.trim();
+      await fileSystem.writeFile('/module.mld.md', content);
+      const result = await processMlld(content, {
+        filePath: '/module.mld.md',
+        fileSystem,
+        pathService
+      });
+      expect(result.trim()).not.toBe('World');
+      expect(result).toContain('show @name');
     });
   });
 });

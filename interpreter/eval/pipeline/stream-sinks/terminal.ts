@@ -14,7 +14,7 @@ export class TerminalSink implements StreamSink {
   private destination: TerminalDestination;
 
   constructor(options?: TerminalSinkOptions) {
-    this.destination = options?.destination || 'auto';
+    this.destination = options?.destination || 'stderr';
   }
 
   handle(event: StreamEvent): void {

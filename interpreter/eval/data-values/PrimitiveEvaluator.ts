@@ -52,9 +52,23 @@ export class PrimitiveEvaluator {
     if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {
       return true;
     }
+
+    // Handle Literal nodes (from grammar)
+    if (value && typeof value === 'object' && value.type === 'Literal' && 'value' in value) {
+      return true;
+    }
+
+    if (value && typeof value === 'object' && value.type === 'RegexLiteral') {
+      return true;
+    }
     
     // Handle wrapped string values (with content array and wrapperType)
     if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
+      return true;
+    }
+
+    // Handle needsInterpolation marker (from DataString with @references)
+    if (value && typeof value === 'object' && 'needsInterpolation' in value && 'parts' in value && Array.isArray((value as any).parts)) {
       return true;
     }
     
@@ -83,6 +97,18 @@ export class PrimitiveEvaluator {
     // Handle Text nodes
     if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {
       return value.content;
+    }
+
+    // Handle Literal nodes (from grammar) - extract the value
+    if (value && typeof value === 'object' && value.type === 'Literal' && 'value' in value) {
+      return (value as { value: unknown }).value;
+    }
+
+    // Handle regex literals
+    if (value && typeof value === 'object' && value.type === 'RegexLiteral') {
+      const pattern = (value as any).pattern || '';
+      const flags = (value as any).flags || '';
+      return new RegExp(pattern, flags);
     }
     
     // Handle wrapped string values (quotes, backticks, or brackets)
@@ -113,7 +139,12 @@ export class PrimitiveEvaluator {
       }
       return await interpolateAndRecord(value.content, env);
     }
-    
+
+    // Handle needsInterpolation marker (from DataString with @references in object literals)
+    if (value && typeof value === 'object' && 'needsInterpolation' in value && 'parts' in value && Array.isArray((value as any).parts)) {
+      return await interpolateAndRecord((value as any).parts, env);
+    }
+
     // Handle command objects (from run directives in objects)
     if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
       return await this.evaluateCommandObject(value, env);

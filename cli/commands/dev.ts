@@ -82,7 +82,7 @@ async function showStatus(): Promise<void> {
   console.log('\nLocal modules detected:');
   for (const [author, modules] of prefixes) {
     for (const module of modules) {
-      const modulePath = path.join('llm', 'modules', `${module}.mlld.md`);
+      const modulePath = path.join('llm', 'modules', `${module}.mld.md`);
       console.log(chalk.cyan(`  @${author}/${module}`) + ' → ' + chalk.gray(modulePath));
     }
   }

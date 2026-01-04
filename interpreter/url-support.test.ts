@@ -183,8 +183,8 @@ describe('URL Support', () => {
         }
       });
 
-      // The import itself produces no output, but the variable should be available
-      expect(result).toBe('');
+      // The import itself produces no output (just trailing newline from normalizer)
+      expect(result).toBe('\n');
     });
 
     it('should detect circular imports with URLs', async () => {

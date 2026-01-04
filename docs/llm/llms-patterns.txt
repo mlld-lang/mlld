@@ -1,0 +1,173 @@
+<MLLD_PATTERNS>
+
+<TOOL_ORCHESTRATION>
+Coordinate multiple tools with data flow.
+
+```mlld
+var @areas = [
+  {"name": "auth", "files": ["auth/*.ts"], "tests": ["test/auth/*"]},
+  {"name": "api", "files": ["api/*.ts"], "tests": ["test/api/*"]}
+]
+
+exe @runQA(area) = cmd {echo "Testing @area.name" | cat}
+var @results = foreach @runQA(@areas)
+```
+</TOOL_ORCHESTRATION>
+
+<DATA_PIPELINES>
+Chain transformations with validation.
+
+```mlld
+import { @fetchData, @validate, @transform } from @data/pipeline
+
+var @raw = @fetchData("https://api.example.com/users")
+var @valid = @validate(@raw, { schema: "user" })
+var @report = @transform(@valid, { format: "report" })
+show `Processed @report.count users`
+```
+
+**With built-in transforms:**
+
+```mlld
+var @data = cmd {curl -s https://api.example.com/data}
+var @processed = @data | @json | @validate | @transform | @csv
+output @processed to "report.csv"
+```
+</DATA_PIPELINES>
+
+<CONDITIONAL_WORKFLOWS>
+Route execution based on conditions.
+
+```mlld
+import { @getPR, @commentOnPR } from @company/github
+
+var @pr = @getPR(@MLLD_PR_NUMBER)
+var @status = when first [
+  @pr.mergeable => "ready"
+  * => "blocked"
+]
+
+when [
+  @status == "ready" => @commentOnPR(@MLLD_PR_NUMBER, "Ready to merge")
+  @status == "blocked" => show "Needs attention"
+]
+```
+</CONDITIONAL_WORKFLOWS>
+
+<GUARDED_EXECUTION>
+Validate at each step before proceeding.
+
+```mlld
+var @processed = @data | @validate | @normalize | @analyze
+
+when [
+  @processed.ok => @emitReport(@processed)
+  !@processed.ok => show "Validation failed"
+]
+```
+</GUARDED_EXECUTION>
+
+<ROUTER_PATTERN>
+Score and route to different handlers.
+
+```mlld
+exe @router(message, handlers) = [
+  let @scores = for @h in @handlers => {
+    handler: @h.name,
+    score: @h.scorer(@message)
+  }
+  let @best = @scores | @sortBy("score") | @first
+  => when first [
+    @best.score > 0.7 => @handlers[@best.handler].handle(@message)
+    * => null
+  ]
+]
+```
+</ROUTER_PATTERN>
+
+<GATE_PATTERN>
+Validate or filter before proceeding.
+
+```mlld
+exe @gate(response, config) = [
+  let @check = @validate(@response)
+  => when first [
+    !@config.required => { pass: true }
+    @check.valid => { pass: true }
+    * => { pass: false, reason: @check.error }
+  ]
+]
+```
+</GATE_PATTERN>
+
+<PARALLEL_EXECUTION>
+Run independent tasks concurrently.
+
+```mlld
+>> Parallel for
+for parallel(3) @task in @tasks [
+  let @result = @runTask(@task)
+  show `Done: @task.id`
+]
+
+>> Parallel pipeline groups
+var @results = || @fetchA() || @fetchB() || @fetchC()
+
+>> With error handling
+exe @runAll(tasks) = [
+  let @results = for parallel @t in @tasks => @run(@t)
+  => when [
+    @mx.errors.length == 0 => @results
+    * => @repair(@results, @mx.errors)
+  ]
+]
+```
+</PARALLEL_EXECUTION>
+
+<LLM_INTEGRATION>
+Call LLMs with structured prompts.
+
+```mlld
+import { @haiku, @sonnet } from "@lib/claude.mld"
+
+exe @classify(text) = [
+  let @prompt = `Classify this text as positive/negative/neutral: @text`
+  let @response = @haiku(@prompt)
+  => @response.trim().toLowerCase()
+]
+
+exe @analyze(data) = [
+  let @prompt = `Analyze this data and return JSON: @data|@json`
+  let @response = @sonnet(@prompt)
+  => @response | @json.llm
+]
+```
+</LLM_INTEGRATION>
+
+<AGENT_DEFINITION>
+Define agent configuration modules.
+
+```mlld
+---
+id: my-agent
+name: My Agent
+---
+
+var @meta = {
+  id: @fm.id,
+  name: @fm.name,
+  workDir: "/path/to/work"
+}
+
+exe @systemPrompt(context) = template "./prompts/system.att"
+exe @primaryPrompt(msg, ctx) = template "./prompts/primary.att"
+
+var @prompts = {
+  primary: @primaryPrompt
+}
+
+export { @meta, @prompts, @systemPrompt }
+```
+</AGENT_DEFINITION>
+
+</MLLD_PATTERNS>

@@ -1,0 +1,4 @@
+/export { * }
+
+/var @author = "Config Author"
+/var @title = "My Project"

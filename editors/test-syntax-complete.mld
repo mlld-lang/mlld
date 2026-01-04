@@ -337,7 +337,7 @@ This is a template that contains @var
   * => @p.tries
 ]
 /var @best = @generate | @validate(@p) | @select(@p[-1])
-/exe @multi() = @ctx.input | @filter(@ctx.stage)
+/exe @multi() = @mx.input | @filter(@mx.stage)
 
 ### Wildcard Literal (rc33)
 /when * => show "Always executes"
@@ -384,14 +384,14 @@ This is a template that contains @var
 ### Retry Hints (rc40)
 /exe @improve() = when [
   @quality > 0.8 => @input
-  @ctx.try < 3 => retry "need better quality"
+  @mx.try < 3 => retry "need better quality"
   * => retry { temperature: 0.9, detail: "high" }
 ]
 /var @enhanced = @generate | @improve | @format
 
 ### Context Fields (rc40)
 /exe @stage() = when [
-  @ctx.isPipeline => show "In pipeline at stage @ctx.stage"
+  @mx.isPipeline => show "In pipeline at stage @mx.stage"
   * => show "Not in pipeline"
 ]
-/var @tracked = @start | @middle(@ctx.tries) | @end(@ctx.lastOutput) 
+/var @tracked = @start | @middle(@mx.tries) | @end(@mx.lastOutput) 

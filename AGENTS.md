@@ -93,7 +93,7 @@ Architecture (docs/dev/INTERPRETER.md):
 <PIPELINES>
 Semantics (docs/dev/PIPELINE.md):
 - Two syntaxes: `a | @t1 | @t2` and `a with { pipeline: [@t1, @t2] }` (identical AST/behavior).
-- Context vars: `@ctx` (stage-local) and `@p`/`@pipeline` (array of stage I/O, retry history).
+- Context vars: `@mx` (stage-local) and `@p`/`@pipeline` (array of stage I/O, retry history).
 - Retry: a stage may request retry of the previous stage; no nested retries; Stage 0 only retryable if its source is a function.
 - Format: with { format: "json|csv|xml|text" } wraps inputs for lazy parsing.
 - Parallel groups: `A || B` is one stage executed concurrently with ordered results (JSON array string to next stage). Concurrency limited by MLLD_PARALLEL_LIMIT. Retry is not supported inside the group; design post-group validation to request upstream retry.
@@ -167,7 +167,7 @@ Hard rule: keep code comments and documentation timeless and present‑tense.
 </TIMELESS_WRITING>
 
 <DOCS>
-Conventions (docs/dev/DOCS.md, docs/dev/USERDOCS.md):
+Conventions (docs/dev/DOCS.md):
 - Dev-facing docs: ALL CAPS titles; concise, architectural; pointers > prose.
 - User-facing: example-first, runnable snippets with outputs; inverted pyramid structure.
 - Keep llms.txt in sync with user-facing syntax/semantics; AGENTS.md complements it for repo development.
@@ -185,7 +185,7 @@ Workflow and releases:
 <DEBUGGING>
 Tips and flags:
 - Grammar: npm run ast, DEBUG_MLLD_GRAMMAR=1, grammar/docs/DEBUG.md.
-- Interpreter: DEBUG_EXEC, DEBUG_PIPELINE, DEBUG_WHEN; print @ctx/@p judiciously.
+- Interpreter: DEBUG_EXEC, DEBUG_PIPELINE, DEBUG_WHEN; print @mx/@p judiciously.
 - Tests: run specific fixtures; inspect *.generated-fixture.json; disable formatter in tests by default.
 - Performance: vitest.config.perf.mts and scripts/measure-performance.js.
 </DEBUGGING>
@@ -221,7 +221,7 @@ Iterator changes (/for, foreach):
 - docs/dev/EFFECTS.md — Effects and streaming
 - docs/dev/ERRORS.md — Error pattern system
 - docs/dev/TESTS.md — Fixture system, tokens, coverage
-- docs/dev/DOCS.md, docs/dev/USERDOCS.md — Documentation conventions
+- docs/dev/DOCS.md — Documentation conventions
 - CLAUDE.md — Repo guidelines (style, git, module system)
 - CHANGELOG.md — Version history and notable changes
 </SEE_ALSO>

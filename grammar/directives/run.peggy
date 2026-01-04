@@ -18,10 +18,13 @@ It can be used in three main forms:
 // TOP-LEVEL RUN DIRECTIVE
 // -------------------------------------------------------------
 
+RunKeyword
+  = "/"? "run"
+
 // Primary /run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 SlashRun
-  = DirectiveContext "/run" _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  = DirectiveContext RunKeyword _ leading:LeadingParallelPipeline caps:PipelineParallelSpec? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched leading parallel pipeline', { leading, caps });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -69,7 +72,7 @@ SlashRun
         'pipeline'
       );
     }
-  / DirectiveContext "/run" _ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched quoted command', { command, tail });
 
       const commandLocation = location();
@@ -137,7 +140,7 @@ SlashRun
         'command'
       );
     }
-  / DirectiveContext "/run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched command', { content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -181,7 +184,7 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext "/run" _ stdinExpr:Expression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -228,7 +231,7 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext "/run" _ codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched with language code pattern', { codeCore, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -272,7 +275,7 @@ SlashRun
         'code'
       );
     }
-  / DirectiveContext "/run" _ commandRef:UnifiedReferenceWithTail labelsSegment:(_ DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ commandRef:UnifiedReferenceWithTail labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched unified command reference', { commandRef });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -386,21 +389,21 @@ SlashRun
   // ----------------------------------------
   
   // Error: Unclosed quoted command
-  / DirectiveContext "/run" _ "\"" &{
+  / DirectiveContext RunKeyword _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
       helpers.mlldError("Unclosed quoted command in /run directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed bracket command
-  / DirectiveContext "/run" _ "{" &{
+  / DirectiveContext RunKeyword _ "{" &{
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed command brackets in /run directive. Expected closing brace for command.", String.fromCharCode(125), location());
     }
     
   // Error: Invalid syntax after language identifier - must check for NOT { or (
-  / DirectiveContext "/run" _ lang:BaseIdentifier _ !"{" !"(" !LineTerminator !EOF &{
+  / DirectiveContext RunKeyword _ lang:BaseIdentifier _ !"{" !"(" !LineTerminator !EOF &{
       // Only match if this is a valid language identifier
       const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
       return validLangs.includes(lang.toLowerCase());
@@ -409,7 +412,7 @@ SlashRun
     }
     
   // Error: Missing code block after language
-  / DirectiveContext "/run" _ lang:BaseIdentifier _ &(LineTerminator / EOF) &{
+  / DirectiveContext RunKeyword _ lang:BaseIdentifier _ &(LineTerminator / EOF) &{
       const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
       return validLangs.includes(lang.toLowerCase());
     } {
@@ -417,7 +420,7 @@ SlashRun
     }
     
   // Error: Invalid @ usage (not followed by valid identifier)
-  / DirectiveContext "/run" _ "@" &{
+  / DirectiveContext RunKeyword _ "@" &{
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
@@ -425,12 +428,12 @@ SlashRun
     }
     
   // Error: Missing content after /run
-  / DirectiveContext "/run" _ &(LineTerminator / EOF) {
+  / DirectiveContext RunKeyword _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing content in /run directive. Expected command, code block, or exec reference.", String.fromCharCode(123), location());
     }
     
   // Error: Unclosed code block
-  / DirectiveContext "/run" _ lang:BaseIdentifier _ "(" [^)]* ")" _ "{" &{
+  / DirectiveContext RunKeyword _ lang:BaseIdentifier _ "(" [^)]* ")" _ "{" &{
       // Check if we have an unclosed code block after language (args)
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
@@ -438,7 +441,7 @@ SlashRun
     }
     
   // Error: Unclosed code block without args
-  / DirectiveContext "/run" _ lang:BaseIdentifier _ "{" &{
+  / DirectiveContext RunKeyword _ lang:BaseIdentifier _ "{" &{
       // Check if we have an unclosed code block after language
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
@@ -446,7 +449,7 @@ SlashRun
     }
     
   // Error: Generic /run syntax error (catch-all)
-  / DirectiveContext "/run" {
+  / DirectiveContext RunKeyword {
       helpers.mlldError("Invalid /run syntax. Expected: /run cmd {command}, /run language {code}, or /run @exec", String.fromCharCode(123));
     }
 

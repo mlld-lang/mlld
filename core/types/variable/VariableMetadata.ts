@@ -330,47 +330,47 @@ export class VariableMetadataUtils {
       variable.internal = {};
     }
     variable.internal.metrics = metrics;
-    if (!variable.ctx) {
+    if (!variable.mx) {
       VariableMetadataUtils.attachContext(variable);
     }
-    if (variable.ctx) {
-      variable.ctx.length = metrics.length;
-      variable.ctx.tokest = metrics.tokest;
-      variable.ctx.tokens = metrics.tokens ?? metrics.tokest;
+    if (variable.mx) {
+      variable.mx.length = metrics.length;
+      variable.mx.tokest = metrics.tokest;
+      variable.mx.tokens = metrics.tokens ?? metrics.tokest;
     }
-    if (variable.internal.ctxCache) {
-      variable.internal.ctxCache = variable.ctx as VariableContextSnapshot;
+    if (variable.internal.mxCache) {
+      variable.internal.mxCache = variable.mx as VariableContextSnapshot;
     }
   }
 
   static attachContext(variable: Variable): Variable {
-    if ((variable as any).__ctxAttached) {
+    if ((variable as any).__mxAttached) {
       return variable;
     }
     if (!variable.internal) {
       variable.internal = {};
     }
-    const descriptor = Object.getOwnPropertyDescriptor(variable, 'ctx');
+    const descriptor = Object.getOwnPropertyDescriptor(variable, 'mx');
     if (descriptor && !descriptor.get && !descriptor.set) {
-      Object.defineProperty(variable, 'ctx', {
-        value: variable.ctx,
+      Object.defineProperty(variable, 'mx', {
+        value: variable.mx,
         enumerable: false,
         configurable: true,
         writable: true
       });
-      Object.defineProperty(variable, '__ctxAttached', {
+      Object.defineProperty(variable, '__mxAttached', {
         value: true,
         enumerable: false,
         configurable: false
       });
       return variable;
     }
-    Object.defineProperty(variable, '__ctxAttached', {
+    Object.defineProperty(variable, '__mxAttached', {
       value: true,
       enumerable: false,
       configurable: false
     });
-    Object.defineProperty(variable, 'ctx', {
+    Object.defineProperty(variable, 'mx', {
       enumerable: false,
       configurable: true,
       get() {
@@ -384,12 +384,15 @@ export class VariableMetadataUtils {
     if (!variable.internal) {
       variable.internal = {};
     }
-    if (variable.internal.ctxCache) {
-      return variable.internal.ctxCache;
+    if (variable.internal.mxCache) {
+      return variable.internal.mxCache;
     }
     const metrics = VariableMetadataUtils.computeMetricsForVariable(variable);
-    const ctxSnapshot = variable.ctx ?? {};
-    const labels = normalizeLabelArray(ctxSnapshot.labels);
+    // GOTCHA: Do NOT access variable.mx here as it will call this getter recursively!
+    // Instead, get the raw property descriptor to check if there's a stored value
+    const descriptor = Object.getOwnPropertyDescriptor(variable, 'mx');
+    const mxSnapshot = (descriptor && !descriptor.get && descriptor.value) ? descriptor.value : {};
+    const labels = normalizeLabelArray(mxSnapshot.labels);
     const tokenValue = metrics?.tokens ?? metrics?.tokest ?? undefined;
     const tokestValue = metrics?.tokest ?? metrics?.tokens ?? undefined;
     const context: VariableContextSnapshot = {
@@ -397,14 +400,14 @@ export class VariableMetadataUtils {
       type: variable.type,
       definedAt: variable.definedAt,
       labels,
-      taint: ctxSnapshot.taint ?? 'unknown',
+      taint: mxSnapshot.taint ?? 'unknown',
       tokens: tokenValue,
       tokest: tokestValue,
       length: metrics?.length,
       size: Array.isArray(variable.value) ? variable.value.length : undefined,
-      sources: ctxSnapshot.sources ?? [],
-      exported: Boolean(ctxSnapshot.exported),
-      policy: ctxSnapshot.policy ?? null
+      sources: mxSnapshot.sources ?? [],
+      exported: Boolean(mxSnapshot.exported),
+      policy: mxSnapshot.policy ?? null
     };
     if (variable.type === 'array' && variable.internal) {
       const aggregate = (variable.internal as any).arrayHelperAggregate;
@@ -420,7 +423,7 @@ export class VariableMetadataUtils {
         context.maxTokens = aggregate.maxTokens;
       }
     }
-    variable.internal.ctxCache = context;
+    variable.internal.mxCache = context;
     return context;
   }
 

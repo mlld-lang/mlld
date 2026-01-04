@@ -53,7 +53,7 @@ export class InputResolver implements Resolver {
       return {
         content: JSON.stringify(this.inputData, null, 2),
         contentType: 'data',
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }
@@ -74,7 +74,7 @@ export class InputResolver implements Resolver {
         return {
           content: JSON.stringify(exportData),
           contentType: 'data',
-          ctx: metadata,
+          mx: metadata,
           metadata
         };
       }
@@ -94,7 +94,7 @@ export class InputResolver implements Resolver {
       return {
         content: JSON.stringify(exports),
         contentType: 'data',
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }

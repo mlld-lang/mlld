@@ -1,14 +1,21 @@
 // FOR DIRECTIVE
 // Implementation of the /for directive for iteration
 
+ForKeyword
+  = "/"? "for"
+
 SlashFor "for directive"
-  = DirectiveContext "/for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction ending:StandardDirectiveEnding {
-      helpers.debug('SlashFor matched', { pattern, action, ending });
+  = DirectiveContext ForKeyword opts:ForParallelSpec? _ pattern:ForIterationPattern _ actionVariant:ForActionVariant ending:StandardDirectiveEnding {
+      helpers.debug('SlashFor matched', { pattern, action: actionVariant, ending });
       
       const meta = {
         hasVariables: true,
-        actionType: 'single'
+        actionType: actionVariant.actionType
       };
+
+      if (actionVariant.blockMeta) {
+        meta.block = actionVariant.blockMeta;
+      }
       
       // Add comment from ending if present
       if (ending.comment) {
@@ -21,26 +28,29 @@ SlashFor "for directive"
         {
           variable: [pattern.variable],
           source: pattern.source,
-          action: Array.isArray(action) ? action : [action],
+          action: actionVariant.action,
           forOptions: opts || undefined
         },
         {
           variable: helpers.reconstructRawString(pattern.variable),
           source: helpers.reconstructRawString(pattern.source),
-          action: helpers.reconstructRawString(action)
+          action: actionVariant.raw
         },
         meta,
         location()
       );
     }
+  / DirectiveContext ForKeyword opts:ForParallelSpec? _ pattern:ForIterationPattern _ "[" {
+      helpers.mlldError("Unterminated block. Expected ']' to close block.", "]", location());
+    }
 
   // Error recovery patterns
-  / DirectiveContext "/for" _ pattern:ForIterationPattern _ !"=>" {
+  / DirectiveContext ForKeyword _ pattern:ForIterationPattern _ !"=>" {
       helpers.mlldError("Missing '=>' in /for directive. Expected: /for @var in @collection => action", "=>", location());
     }
-  / DirectiveContext "/for" _ "@" id:BaseIdentifier _ !"in" {
+  / DirectiveContext ForKeyword _ "@" id:BaseIdentifier _ !"in" {
       helpers.mlldError("Missing 'in' in /for directive. Expected: /for @var in @collection => action", "in", location());
     }
-  / DirectiveContext "/for" _ !"@" {
+  / DirectiveContext ForKeyword _ !"@" {
       helpers.mlldError("Invalid /for syntax. Expected: /for @var in @collection => action", "@", location());
     }

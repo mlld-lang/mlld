@@ -1,5 +1,3 @@
-import type { PipelineStageEntry } from '@core/types';
-
 export type StreamEvent =
   | {
       type: 'PIPELINE_START';
@@ -23,7 +21,7 @@ export type StreamEvent =
       pipelineId: string;
       stageIndex: number;
       parallelIndex?: number;
-      command?: PipelineStageEntry;
+      command?: any;
       contextId?: string;
       attempt?: number;
       timestamp: number;
@@ -61,7 +59,7 @@ export type StreamEvent =
 
 export type StreamListener = (event: StreamEvent) => void;
 
-class StreamBus {
+export class StreamBus {
   private listeners: Set<StreamListener> = new Set();
 
   subscribe(listener: StreamListener): () => void {
@@ -84,13 +82,4 @@ class StreamBus {
   clear(): void {
     this.listeners.clear();
   }
-}
-
-let singleton: StreamBus | null = null;
-
-export function getStreamBus(): StreamBus {
-  if (!singleton) {
-    singleton = new StreamBus();
-  }
-  return singleton;
 }

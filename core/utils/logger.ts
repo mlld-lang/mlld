@@ -148,6 +148,12 @@ export class LoggerFactory implements ILoggerFactory {
 // Singleton instance for backward compatibility
 export const loggerFactory = new LoggerFactory();
 
+// Check if file logging is explicitly enabled
+const isFileLoggingEnabled = () => {
+  return process.env.MLLD_LOG_FILES === 'true' ||
+         process.env.MLLD_LOG_FILES === '1';
+};
+
 // Create the logger instance
 export const logger = winston.createLogger({
   level: getLogLevel(),
@@ -159,8 +165,8 @@ export const logger = winston.createLogger({
         format: consoleFormat
       })
     ]),
-    // File transports only if logs directory exists (not in serverless)
-    ...(fs.existsSync(loggingConfig.files.directory) ? [
+    // File transports only if explicitly enabled AND logs directory exists
+    ...(isFileLoggingEnabled() && fs.existsSync(loggingConfig.files.directory) ? [
       // File transport for all logs
       new winston.transports.File({
         filename: path.join(loggingConfig.files.directory, loggingConfig.files.mainLog),
@@ -187,8 +193,8 @@ export function createServiceLogger(serviceName: keyof typeof loggingConfig.serv
   return loggerFactory.createServiceLogger(serviceName);
 }
 
-// Ensure logs directory exists (skip in serverless environments)
-if (!fs.existsSync(loggingConfig.files.directory)) {
+// Only create logs directory if file logging is explicitly enabled
+if (isFileLoggingEnabled() && !fs.existsSync(loggingConfig.files.directory)) {
   try {
     fs.mkdirSync(loggingConfig.files.directory);
   } catch (error) {
@@ -222,8 +228,8 @@ export const embedLogger = createServiceLogger('embed');
 // Export default logger for general use
 export default logger;
 
-// Add file transport in production (only if logs directory exists)
-if (process.env.NODE_ENV === 'production' && fs.existsSync('logs')) {
+// Add file transport in production only if explicitly enabled
+if (process.env.NODE_ENV === 'production' && isFileLoggingEnabled() && fs.existsSync('logs')) {
   const fileTransport = new winston.transports.File({
     filename: 'logs/error.log',
     level: 'error'

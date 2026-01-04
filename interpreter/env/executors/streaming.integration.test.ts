@@ -3,31 +3,33 @@ import { ShellCommandExecutor } from './ShellCommandExecutor';
 import { BashExecutor } from './BashExecutor';
 import { NodeExecutor, type NodeShadowEnvironmentProvider } from './NodeExecutor';
 import { ErrorUtils } from '../ErrorUtils';
-import { getStreamBus, type StreamEvent } from '@interpreter/eval/pipeline/stream-bus';
+import type { StreamEvent } from '@interpreter/eval/pipeline/stream-bus';
 import { startStreamRecorder } from '../../../tests/helpers/stream-recorder';
 import { interpret } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 
 describe('Executor streaming integration', () => {
   let events: StreamEvent[];
   let unsubscribe: (() => void) | null;
   const cwd = process.cwd();
+  let manager: StreamingManager;
 
   beforeEach(() => {
     events = [];
-    const bus = getStreamBus();
-    bus.clear();
+    manager = new StreamingManager();
+    const bus = manager.getBus();
     unsubscribe = bus.subscribe((evt) => events.push(evt));
   });
 
   afterEach(() => {
     if (unsubscribe) unsubscribe();
-    getStreamBus().clear();
+    manager.getBus().clear();
   });
 
   it('emits incremental chunks for streaming shell commands', async () => {
-    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd);
+    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd, () => manager.getBus());
 
     await exec.execute('bash -lc "echo a; sleep 0.05; echo b"', undefined, {
       streamingEnabled: true,
@@ -42,8 +44,8 @@ describe('Executor streaming integration', () => {
   });
 
   it('emits chunks during execution with a real time gap', async () => {
-    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd);
-    const recorder = startStreamRecorder();
+    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd, () => manager.getBus());
+    const recorder = startStreamRecorder(manager.getBus());
 
     await exec.execute(
       'bash -lc "echo immediate; sleep 0.3; echo delayed"',
@@ -63,8 +65,8 @@ describe('Executor streaming integration', () => {
   });
 
   it('does not emit chunks when streaming is disabled', async () => {
-    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd);
-    const recorder = startStreamRecorder();
+    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd, () => manager.getBus());
+    const recorder = startStreamRecorder(manager.getBus());
 
     await exec.execute('echo disabled', undefined, {
       streamingEnabled: false,
@@ -79,8 +81,8 @@ describe('Executor streaming integration', () => {
   it('streams from BashExecutor', async () => {
     const exec = new BashExecutor(new ErrorUtils(), cwd, {
       getVariables: () => new Map()
-    });
-    const recorder = startStreamRecorder();
+    }, () => manager.getBus());
+    const recorder = startStreamRecorder(manager.getBus());
 
     await exec.execute('echo left; sleep 0.1; echo right', undefined, {
       streamingEnabled: true,
@@ -105,8 +107,8 @@ describe('Executor streaming integration', () => {
       },
       getCurrentFilePath: () => undefined
     };
-    const exec = new NodeExecutor(new ErrorUtils(), cwd, shadowProvider);
-    const recorder = startStreamRecorder();
+    const exec = new NodeExecutor(new ErrorUtils(), cwd, shadowProvider, () => manager.getBus());
+    const recorder = startStreamRecorder(manager.getBus());
 
     await exec.execute(
       'console.log("node-a"); await new Promise(r => setTimeout(r, 150)); console.log("node-b");',
@@ -126,8 +128,8 @@ describe('Executor streaming integration', () => {
   });
 
   it('emits chunks for parallel streams with overlapping timelines', async () => {
-    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd);
-    const recorder = startStreamRecorder();
+    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd, () => manager.getBus());
+    const recorder = startStreamRecorder(manager.getBus());
 
     await Promise.all([
       exec.execute('bash -lc "echo L1; sleep 0.3; echo L2"', undefined, {
@@ -161,7 +163,7 @@ describe('Executor streaming integration', () => {
   });
 
   it('preserves parallel metadata on emitted chunks', async () => {
-    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd);
+    const exec = new ShellCommandExecutor(new ErrorUtils(), cwd, () => manager.getBus());
 
     await exec.execute('echo parallel', undefined, {
       streamingEnabled: true,
@@ -176,7 +178,7 @@ describe('Executor streaming integration', () => {
   });
 
   it('suppresses streaming when disabled via interpret options', async () => {
-    const recorder = startStreamRecorder();
+    const recorder = startStreamRecorder(manager.getBus());
     const result = await interpret(
       '/run stream sh { echo "first"; sleep 0.1; echo "second" }',
       {

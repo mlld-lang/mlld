@@ -11,6 +11,7 @@ export interface ImportRaw {
   path: string;
   importType?: string;
   securityLabels?: string;
+  templateParams?: string[];
 }
 
 /**
@@ -55,6 +56,7 @@ export interface RunRaw {
   parameters?: string;
   options?: string;
   securityLabels?: string;
+  workingDir?: string;
 }
 
 /**

@@ -1,0 +1,238 @@
+<MLLD_SYNTAX>
+
+<VARIABLES>
+Create primitives, arrays, objects, or assign from command/code results.
+
+```mlld
+var @n = 42
+var @price = 19.99
+var @ok = true
+var @arr = [1, 2, 3]
+var @obj = {"key": "value"}
+var @merged = { ...@obj, "extra": 1 }    >> object spread
+
+exe @add(a, b) = js { return a + b }
+var @sum = @add(@n, 8)         >> 50 (number preserved)
+
+var @date = cmd {date}         >> command result
+var @readme = <README.md>      >> file contents
+```
+
+**Conditional inclusion** (`@var?`): omit content when variable is falsy.
+
+```mlld
+var @tools = "json"
+var @empty = ""
+
+>> In commands: @var?`...`
+run cmd { echo @tools?`--tools "@tools"` @empty?`--empty` }
+>> Output: --tools "json" (--empty omitted)
+
+>> In arrays
+var @list = [@a, @b?, @c]   >> @b omitted if falsy
+
+>> In objects
+var @obj = {"name": @n, "title"?: @t}   >> title omitted if @t falsy
+```
+
+Truthiness: falsy = `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`
+</VARIABLES>
+
+<TEMPLATES>
+Prefer backticks; use `::` for backticks-in-text.
+
+```mlld
+var @message = `Hello @name, welcome!`
+var @doc = ::Use `mlld` to orchestrate::
+
+>> Multi-line
+var @report = `
+Status: @status
+Config: <@base/config.json>
+Data: @data|@json
+`
+```
+
+**When-expressions in templates:**
+
+```mlld
+var @status = when [ @score > 90 => "A" * => "F" ]
+var @arr = [ 1, when [ @flag => 2 ], 3 ]
+```
+
+**Loops in templates:**
+
+```mlld
+var @toc = `
+for @item in @items
+- @item.name
+end
+`
+```
+
+Note: `for` and `end` must be at line start inside template body.
+</TEMPLATES>
+
+<FILE_LOADING>
+Angle brackets load file contents. Supports field access, globs, and AST selection.
+
+```mlld
+>> Basic loading
+var @content = <README.md>
+var @config = <config.json>          >> auto-parsed as object
+var @author = <package.json>.author  >> field access
+
+>> Globs (returns array)
+var @docs = <docs/**/*.md>
+show @docs.length
+for @doc in @docs => show @doc.mx.filename
+
+>> With "as" template
+var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
+```
+
+**AST Selection** (extract code from files):
+
+```mlld
+>> Exact names
+var @handler = <src/api.ts { createUser }>
+
+>> Wildcards
+var @handlers = <api.ts { handle* }>         >> prefix match
+var @validators = <api.ts { *Validator }>    >> suffix match
+
+>> Type filters
+var @funcs = <service.ts { *fn }>            >> all functions
+var @classes = <service.ts { *class }>       >> all classes
+
+>> Name listing (returns string arrays)
+var @names = <api.ts { ?? }>                 >> all definition names
+var @funcNames = <api.ts { fn?? }>           >> function names only
+```
+
+Supported: `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.go`, `.rs`, `.java`, `.rb`
+Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
+
+**Metadata fields** (via `.mx`):
+
+```mlld
+var @file = <README.md>
+show @file.mx.filename     >> "README.md"
+show @file.mx.relative     >> relative path
+show @file.mx.tokens       >> token count estimate
+show @file.mx.fm.title     >> frontmatter field
+```
+
+**JSON string accessors** (`.data` and `.text`):
+
+```mlld
+>> When you have a JSON string and need to parse it
+var @jsonStr = '[{"name":"Alice"},{"name":"Bob"}]'
+var @parsed = @jsonStr.data          >> parses JSON string to array/object
+show @parsed.0.name                  >> "Alice"
+
+>> When you have an object and need the JSON string
+var @obj = {"name": "Alice"}
+var @str = @obj.text                 >> stringified JSON
+show @str                            >> '{"name":"Alice"}'
+
+>> Common in pipelines with LLM responses
+var @response = @llm("return JSON") | @json.llm
+var @items = @response.data          >> if response is JSON string
+```
+</FILE_LOADING>
+
+<BUILTIN_METHODS>
+Arrays and strings have builtin methods.
+
+**Array methods:**
+- `@arr.includes(value)` - true if contains value
+- `@arr.indexOf(value)` - index or -1
+- `@arr.length` - array length
+- `@arr.join(separator)` - join to string
+
+**String methods:**
+- `@str.includes(sub)` - true if contains substring
+- `@str.indexOf(sub)` - index or -1
+- `@str.length` - string length
+- `@str.toLowerCase()` / `toUpperCase()`
+- `@str.trim()` - remove whitespace
+- `@str.startsWith(prefix)` / `endsWith(suffix)`
+- `@str.split(separator)` - split to array
+
+```mlld
+var @fruits = ["apple", "banana", "cherry"]
+var @message = "Hello World"
+
+show @fruits.includes("banana")    >> true
+show @fruits.join(" and ")         >> "apple and banana and cherry"
+show @message.toLowerCase()        >> "hello world"
+show @message.split(" ")           >> ["Hello", "World"]
+
+>> Method chaining
+show @message.trim().toLowerCase().startsWith("hello")  >> true
+```
+</BUILTIN_METHODS>
+
+<PIPELINES>
+Chain stages with `|`. Built-ins: `@json`, `@xml`, `@csv`, `@md`.
+
+```mlld
+var @users = cmd {cat users.json} | @json | @csv
+
+>> Custom functions in pipelines
+exe @double(n) = js { return n * 2 }
+var @x = cmd {echo "5"} | @double
+
+>> JSON parsing modes
+var @relaxed = @input | @json.loose   >> single quotes, trailing commas
+var @strict = @input | @json.strict   >> strict JSON only
+var @extracted = @llmResponse | @json.llm  >> extract from LLM response
+```
+
+**Pipeline context:**
+- `@mx.try` - current attempt number
+- `@mx.stage` - current stage name
+- `@p[-1]` - previous stage output
+
+**Retry in pipelines:**
+
+```mlld
+exe @validator(input) = when [
+  @input.valid => @input
+  @mx.try < 3 => retry "need more detail"
+  * => "fallback"
+]
+var @result = @raw | @validator
+```
+
+**Parallel groups:**
+
+```mlld
+>> Two transforms run concurrently
+var @results = || @fetchA() || @fetchB() || @fetchC()
+
+>> With concurrency cap
+var @capped = || @a() || @b() || @c() (2, 100ms)  >> cap=2, 100ms pacing
+```
+</PIPELINES>
+
+<COMMENTS>
+Use `>>` at start of line or `<<` at end.
+
+```mlld
+>> This is a comment
+var @x = 5    << end-of-line comment
+show @x       >> also works here
+```
+</COMMENTS>
+
+<RESERVED_VARIABLES>
+- `@now` - current timestamp
+- `@input` - stdin/env (must be allowed in config)
+- `@base` - project root path
+- `@debug` - environment info
+- `@fm` - current file's frontmatter (in modules)
+</RESERVED_VARIABLES>
+
+</MLLD_SYNTAX>

@@ -24,6 +24,7 @@ import { materializeGuardInputs } from '../../utils/guard-inputs';
 import { handleGuardDecision } from '../../hooks/hook-decision-handler';
 import { handleExecGuardDenial } from '../guard-denial-handler';
 import type { WhenExpressionNode } from '@core/types/when';
+import { resolveWorkingDirectory } from '../../utils/working-directory';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -620,7 +621,7 @@ export async function executeCommandVariable(
           command: commandVar.name,
           exitCode: 1,
           duration: 0,
-          workingDirectory: process.cwd()
+          workingDirectory: env.getExecutionDirectory()
         }
       );
     }
@@ -874,7 +875,7 @@ export async function executeCommandVariable(
           const clonedInput: Variable = {
             ...(guardInputVariable as Variable),
             name: 'input',
-            ctx: { ...(guardInputVariable as Variable).ctx },
+            mx: { ...(guardInputVariable as Variable).mx },
             internal: {
               ...((guardInputVariable as Variable).internal ?? {}),
               isSystem: true,
@@ -899,6 +900,17 @@ export async function executeCommandVariable(
   }
   
   // Execute based on type
+  let workingDirectory: string | undefined;
+  if (execDef?.workingDir) {
+    workingDirectory = await resolveWorkingDirectory(execDef.workingDir as any, execEnv, {
+      sourceLocation: commandVar?.mx?.definedAt,
+      directiveType: hookOptions?.executionContext?.directiveType || 'exec'
+    });
+  }
+  const executionContext = hookOptions?.executionContext
+    ? { ...hookOptions?.executionContext, workingDirectory: workingDirectory ?? hookOptions.executionContext?.workingDirectory }
+    : (workingDirectory ? { workingDirectory } : hookOptions?.executionContext);
+
   if (execDef.type === 'command' && execDef.commandTemplate) {
     // Interpolate command template with parameters
     const { interpolate } = await import('../../core/interpreter');
@@ -909,18 +921,12 @@ export async function executeCommandVariable(
     // Always pass pipeline input as stdin when available
     let commandOutput: unknown = await env.executeCommand(
       command,
-      { input: stdinInput } as any,
-      hookOptions?.executionContext
+      { input: stdinInput, ...(workingDirectory ? { workingDirectory } : {}) } as any,
+      executionContext
     );
 
     const withClause = execDef.withClause;
     if (withClause) {
-      if (withClause.needs) {
-        const { checkDependencies, DefaultDependencyChecker } = await import('../dependencies');
-        const checker = new DefaultDependencyChecker();
-        await checkDependencies(withClause.needs, checker, commandVar.ctx?.definedAt);
-      }
-
       if (withClause.pipeline && withClause.pipeline.length > 0) {
         const { processPipeline } = await import('./unified-processor');
         const processed = await processPipeline({
@@ -930,7 +936,7 @@ export async function executeCommandVariable(
           format: withClause.format as string | undefined,
           isRetryable: false,
           identifier: commandVar?.name,
-          location: commandVar.ctx?.definedAt
+          location: commandVar.mx?.definedAt
         });
         if (processed === 'retry') {
           return 'retry';
@@ -973,9 +979,9 @@ export async function executeCommandVariable(
       if (inPipeline && normalized.hadShowEffect) {
         // If this is the last stage, suppress echo to avoid showing seed text.
         // If there are more stages, propagate input forward to keep pipeline alive.
-        const pctx = env.getPipelineContext?.();
-        const isLastStage = pctx && typeof pctx.stage === 'number' && typeof pctx.totalStages === 'number'
-          ? pctx.stage >= pctx.totalStages
+        const pmx = env.getPipelineContext?.();
+        const isLastStage = pmx && typeof pmx.stage === 'number' && typeof pmx.totalStages === 'number'
+          ? pmx.stage >= pmx.totalStages
           : false;
         return finalizeResult(isLastStage ? '' : (stdinInput || ''));
       }
@@ -1060,7 +1066,14 @@ export async function executeCommandVariable(
       }
     }
 
-    const result = await env.executeCode(code, execDef.language || 'javascript', params);
+    const result = await env.executeCode(
+      code,
+      execDef.language || 'javascript',
+      params,
+      undefined,
+      workingDirectory ? { workingDirectory } : undefined,
+      executionContext
+    );
 
     // If the function returns a StructuredValue-like object, preserve it directly
     if (result && typeof result === 'object' && 'text' in result && 'type' in result) {

@@ -1,87 +1,77 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Environment } from '@interpreter/env/Environment';
 import { processContentLoader } from './content-loader';
-import { isRenamedContentArray } from '@core/types/load-content';
-import type { ArrayVariable } from '@core/types/variable/VariableTypes';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import path from 'path';
 import { unwrapStructuredForTest } from './test-helpers';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
+import minimatch from 'minimatch';
+import { glob } from 'tinyglobby';
 
-describe('Content Loader Variable Tagging', () => {
-  it('should tag RenamedContentArray with __variable metadata', async () => {
-    // Create a test environment
-    const fileSystem = new MemoryFileSystem();
-    const pathService = new PathService();
-    const projectRoot = '/test-project';
-    
-    // Set up test files in memory file system
-    await fileSystem.mkdir('/test-project/tests/cases/files', { recursive: true });
-    await fileSystem.writeFile('/test-project/tests/cases/files/file1.txt', 'Content of file 1');
-    await fileSystem.writeFile('/test-project/tests/cases/files/file2.txt', 'Content of file 2');
-    
-    const env = new Environment(fileSystem, pathService, projectRoot);
-    
-    // Create a load-content node with renamed section (glob pattern)
-    const loadContentNode = {
-      type: 'load-content',
-      source: {
-        type: 'path',
-        segments: [{ type: 'Text', content: 'tests/cases/files/*.txt' }],
-        raw: 'tests/cases/files/*.txt'
-      },
-      options: {
-        section: {
-          renamed: {
-            type: 'rename-template',
-            parts: [{ type: 'Text', content: '## File: ' }, { type: 'placeholder' }, { type: 'Text', content: '.filename' }]
+vi.mock('tinyglobby', () => ({
+  glob: vi.fn()
+}));
+
+describe('Content Loader StructuredValue Tagging', () => {
+  let env: Environment;
+  let fileSystem: MemoryFileSystem;
+
+  beforeEach(() => {
+    fileSystem = new MemoryFileSystem();
+    env = new Environment(fileSystem, new PathService(), '/test-project');
+
+    vi.mocked(glob).mockImplementation(async (pattern: string, options: any) => {
+      const { cwd = '/', absolute = false, ignore = [] } = options || {};
+
+      const allFiles: string[] = [];
+      const walkDir = async (dir: string) => {
+        try {
+          const entries = await fileSystem.readdir(dir);
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry);
+            try {
+              const stat = await fileSystem.stat(fullPath);
+              if (stat.isDirectory()) {
+                await walkDir(fullPath);
+              } else if (stat.isFile()) {
+                allFiles.push(fullPath);
+              }
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore
+        }
+      };
+
+      await walkDir(cwd);
+
+      const matches = allFiles.filter(file => {
+        const relativePath = path.relative(cwd, file);
+        if (!minimatch(relativePath, pattern)) {
+          return false;
+        }
+        for (const ignorePattern of ignore) {
+          if (minimatch(relativePath, ignorePattern)) {
+            return false;
           }
         }
-      }
-    };
-    
-    // Process the content loader
-    const rawResult = await processContentLoader(loadContentNode, env);
-    const { data: result, wrapper } = unwrapStructuredForTest<any>(rawResult);
-    
-    // Check that result is an array
-    expect(Array.isArray(result)).toBe(true);
-    
-    // Check that it has __variable property
-    expect('__variable' in result).toBe(true);
-    
-    // Check the __variable metadata
-    const variable = (result as any).__variable as ArrayVariable;
-    expect(variable).toBeDefined();
-    expect(variable.type).toBe('array');
-    expect(variable.internal?.arrayType).toBe('renamed-content');
-    expect(variable.internal?.joinSeparator).toBe('\n\n');
-    expect(variable.internal?.fromGlobPattern).toBe(true);
-    expect(variable.internal?.globPattern).toBe('tests/cases/files/*.txt');
-    expect(variable.internal?.fileCount).toBe((result as any[]).length);
-    
-    // Check that customToString is a function
-    expect(typeof variable.internal?.customToString).toBe('function');
-    
-    // Verify the toString behavior matches
-    expect(result.toString()).toBe(variable.internal?.customToString?.());
-    expect(wrapper?.ctx.source).toBe('load-content');
+        return true;
+      });
+
+      return absolute ? matches : matches.map(file => path.relative(cwd, file));
+    });
   });
-  
-  it('should tag LoadContentResultArray with __variable metadata', async () => {
-    // Create a test environment
-    const fileSystem = new MemoryFileSystem();
-    const pathService = new PathService();
-    const projectRoot = '/test-project';
-    
+
+  it('should return StructuredValue with array type for glob pattern results', async () => {
     // Set up test files in memory file system
     await fileSystem.mkdir('/test-project/tests/cases/files', { recursive: true });
     await fileSystem.writeFile('/test-project/tests/cases/files/file1.txt', 'Content of file 1');
     await fileSystem.writeFile('/test-project/tests/cases/files/file2.txt', 'Content of file 2');
-    
-    const env = new Environment(fileSystem, pathService, projectRoot);
-    
-    // Create a load-content node without renamed section (glob pattern)
+
+    // Create a load-content node (glob pattern without section)
     const loadContentNode = {
       type: 'load-content',
       source: {
@@ -90,75 +80,85 @@ describe('Content Loader Variable Tagging', () => {
         raw: 'tests/cases/files/*.txt'
       }
     };
-    
+
     // Process the content loader
-    const rawResult = await processContentLoader(loadContentNode, env);
-    const { data: result, wrapper } = unwrapStructuredForTest<any>(rawResult);
-    
-    // Check that result is an array
-    expect(Array.isArray(result)).toBe(true);
-    
-    // Check that it has __variable property
-    expect('__variable' in result).toBe(true);
-    
-    // Check the __variable metadata
-    const variable = (result as any).__variable as ArrayVariable;
-    expect(variable).toBeDefined();
-    expect(variable.type).toBe('array');
-    expect(variable.internal?.arrayType).toBe('load-content-result');
-    expect(variable.internal?.joinSeparator).toBe('\n\n');
-    expect(variable.internal?.fromGlobPattern).toBe(true);
-    expect(variable.internal?.globPattern).toBe('tests/cases/files/*.txt');
-    expect(variable.internal?.fileCount).toBe((result as any[]).length);
-    
-    // Check that customToString is a function
-    expect(typeof variable.internal?.customToString).toBe('function');
-    expect(wrapper?.ctx.source).toBe('load-content');
+    const result = await processContentLoader(loadContentNode, env);
+
+    // Check that result is a StructuredValue
+    expect(isStructuredValue(result)).toBe(true);
+
+    // Check the type is array
+    expect(result.type).toBe('array');
+
+    // Check metadata source
+    expect(result.metadata?.source).toBe('load-content');
+
+    // Check mx.source
+    expect(result.mx.source).toBe('load-content');
+
+    // Check that data is an array with 2 items (LoadContentResult objects)
+    expect(Array.isArray(result.data)).toBe(true);
+    expect(result.data.length).toBe(2);
   });
   
-  it('should preserve __variable metadata through var.ts', async () => {
-    // This test would require more setup to test the full flow through var.ts
-    // For now, we'll test that the metadata preservation logic works
-    
-    const mockArray = ['content1', 'content2'];
-    const mockVariable: ArrayVariable = {
-      type: 'array',
-      name: 'test',
-      value: mockArray,
+  it('should preserve StructuredValue type through string coercion', async () => {
+    // Set up test files in memory file system
+    await fileSystem.mkdir('/test-project/tests/cases/files', { recursive: true });
+    await fileSystem.writeFile('/test-project/tests/cases/files/file1.txt', 'Content of file 1');
+    await fileSystem.writeFile('/test-project/tests/cases/files/file2.txt', 'Content of file 2');
+
+    // Create a load-content node (glob pattern)
+    const loadContentNode = {
+      type: 'load-content',
       source: {
-        directive: 'var',
-        syntax: 'array',
-        hasInterpolation: false,
-        isMultiLine: false
-      },
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      metadata: {
-        arrayType: 'renamed-content',
-        joinSeparator: '\n\n',
-        customToString: () => mockArray.join('\n\n'),
-        fromGlobPattern: true,
-        globPattern: 'test/*.txt',
-        fileCount: 2
-      },
-      internal: {
-        arrayType: 'renamed-content',
-        joinSeparator: '\n\n',
-        customToString: () => mockArray.join('\n\n'),
-        fromGlobPattern: true,
-        globPattern: 'test/*.txt',
-        fileCount: 2
+        type: 'path',
+        segments: [{ type: 'Text', content: 'tests/cases/files/*.txt' }],
+        raw: 'tests/cases/files/*.txt'
       }
     };
-    
-    // Tag the array
-    Object.defineProperty(mockArray, '__variable', {
-      value: mockVariable,
-      enumerable: false
-    });
-    
-    // Verify tagging worked
-    expect((mockArray as any).__variable).toBe(mockVariable);
-    expect((mockArray as any).__variable.internal?.arrayType).toBe('renamed-content');
+
+    // Process the content loader
+    const result = await processContentLoader(loadContentNode, env);
+
+    // Check that result is a StructuredValue
+    expect(isStructuredValue(result)).toBe(true);
+
+    // Verify that toString works
+    expect(typeof result.toString()).toBe('string');
+
+    // Verify that text property exists
+    expect(typeof result.text).toBe('string');
+
+    // Verify that data is an array
+    expect(Array.isArray(result.data)).toBe(true);
+    expect(result.data.length).toBe(2);
+  });
+  
+  it('should preserve StructuredValue metadata through operations', async () => {
+    // Set up test files
+    await fileSystem.mkdir('/test-project/test', { recursive: true });
+    await fileSystem.writeFile('/test-project/test/file1.txt', 'Content 1');
+    await fileSystem.writeFile('/test-project/test/file2.txt', 'Content 2');
+
+    // Create a load-content node
+    const loadContentNode = {
+      type: 'load-content',
+      source: {
+        type: 'path',
+        segments: [{ type: 'Text', content: 'test/*.txt' }],
+        raw: 'test/*.txt'
+      }
+    };
+
+    const result = await processContentLoader(loadContentNode, env);
+
+    // Verify it's a StructuredValue
+    expect(isStructuredValue(result)).toBe(true);
+    expect(result.type).toBe('array');
+    expect(result.metadata?.source).toBe('load-content');
+
+    // Verify that the StructuredValue can be accessed as text
+    expect(typeof result.text).toBe('string');
+    expect(typeof result.toString()).toBe('string');
   });
 });

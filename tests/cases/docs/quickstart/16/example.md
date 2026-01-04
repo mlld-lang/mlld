@@ -1,8 +1,0 @@
-/var @records = [
-  {"id": 1, "status": "ok"},
-  {"id": 2, "status": "retry"}
-]
-
-/for @record in @records => append @record to "jobs.jsonl"
-
-/show <jobs.jsonl>

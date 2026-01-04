@@ -1,8 +1,11 @@
 // GUARD DIRECTIVE
 // Implements /guard parsing for security policy hooks.
 
+GuardKeyword
+  = "/"? "guard"
+
 SlashGuard
-  = DirectiveContext "/guard" _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+  = DirectiveContext GuardKeyword _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (new syntax - timing required)', { name: nameTiming?.name, timing, filter, guardBody });
       const guardTiming = timing;
 
@@ -49,7 +52,7 @@ SlashGuard
         'guard'
       );
     }
-  / DirectiveContext "/guard" _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
+  / DirectiveContext GuardKeyword _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (old syntax with for)', { timing, name, filter, guardBody });
       const guardTiming = timing ?? 'before';
 
@@ -96,7 +99,7 @@ SlashGuard
         'guard'
       );
     }
-  / DirectiveContext "/guard" {
+  / DirectiveContext GuardKeyword {
       return peg$FAILED;
     }
 
@@ -157,14 +160,69 @@ GuardWhenClause
         modifier: modifierText
       };
     }
+  / "when" _ modifier:GuardModifier? _ "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'GuardRuleList',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "when" _ modifier:GuardModifier? _ "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated guard block. Expected ']' to close the rule list.`,
+        "]",
+        location()
+      );
+    }
 
 GuardModifier
   = WhenModifier
 
 GuardRuleList
-  = first:GuardEntry rest:(GuardRuleSeparator entry:GuardEntry { return entry; })* {
-      return [first, ...rest];
+  = leadingComments:LeadingBlockComment* _ first:GuardEntry rest:(GuardRuleSeparator entry:GuardEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      // Attach leading comments to first entry's meta (immutable update)
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return entries;
     }
+  / BlockComments+ { return []; }
 
 GuardRuleSeparator
   = WhenConditionSeparator

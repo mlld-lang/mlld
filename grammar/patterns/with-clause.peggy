@@ -1,5 +1,5 @@
 // WITH CLAUSE PATTERN
-// Pattern for the 'with' clause that supports pipeline and needs options
+// Pattern for the 'with' clause that supports pipeline and related options
 
 // -------------------------------------------------------------
 // MAIN WITH CLAUSE
@@ -12,7 +12,7 @@ WithClause
       return object;
     }
 
-// Object containing pipeline and/or needs
+// Object containing pipeline and related options
 WithObject
   = "{" _ props:WithProperties? _ "}" {
       const result = {};
@@ -30,13 +30,13 @@ WithProperties
       return [first, ...rest];
     }
 
-// Individual property (pipeline or needs)
+// Individual property (pipeline or metadata)
 WithProperty
   = "pipeline" _ ":" _ pipeline:PipelineArray {
       return ["pipeline", pipeline];
     }
-  / "needs" _ ":" _ needs:NeedsObject {
-      return ["needs", needs];
+  / "skipDirs" _ ":" _ skipDirs:ArrayLiteral {
+      return ["skipDirs", skipDirs];
     }
   / "guards" _ ":" _ guards:GuardOverrides {
       return ["guards", guards];
@@ -50,6 +50,9 @@ WithProperty
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
     }
+  / "policy" _ ":" _ policy:DataObjectLiteral {
+      return ["policy", policy];
+    }
   / "parallel" _ ":" _ cap:NumberLiteral {
       return ["parallel", Number(cap)];
     }
@@ -59,6 +62,9 @@ WithProperty
     }
   / "stream" _ ":" _ stream:BooleanLiteral {
       return ["stream", stream === 'true' || stream === true];
+    }
+  / "streamFormat" _ ":" _ format:Expression {
+      return ["streamFormat", format];
     }
 
 // -------------------------------------------------------------
@@ -81,6 +87,7 @@ PipelineStageList
 
 PipelineStage
   = ParallelGroupArray
+  / WhilePipelineStage
   / PipelineStageEntry
 
 // Parallel group inside with { pipeline: [...] }, only commands allowed inside
@@ -161,6 +168,7 @@ GuardOverrideDoubleChars
 PipelineStageEntry
   = PipelineInlineValueStage
   / PipelineInlineCommandStage
+  / WhilePipelineStage
   / PipelineCommand
 
 // Single pipeline command (command reference with @input support)
@@ -212,11 +220,14 @@ PipelineCommand
 
 // Inline command stage using cmd { ... }
 PipelineInlineCommandStage
-  = "cmd" _ content:UnifiedCommandBrackets {
+  = content:CmdCommandBrackets {
       return {
         type: 'inlineCommand',
         command: content.values.command,
         commandBases: content.values.commandBases,
+        workingDir: content.values.workingDir,
+        workingDirMeta: content.meta?.workingDirMeta,
+        rawWorkingDir: content.raw.workingDir,
         rawCommand: content.raw.command,
         rawIdentifier: content.raw.commandBases && content.raw.commandBases.length > 0 ? content.raw.commandBases[0] : 'cmd-stage',
         meta: content.meta,
@@ -241,6 +252,39 @@ PipelineInlineValueStage
         rawIdentifier: 'data-literal',
         location: location()
       };
+    }
+
+// While loop pipeline stage
+WhilePipelineStage "while pipeline stage"
+  = "while" _ "(" _ cap:NumberLiteral _ rate:("," _ wait:TimeDurationLiteral)? _ ")" _ processor:UnifiedReferenceForPipeline {
+      const wait = rate ? rate[2] : null;
+      const rateMs = wait ? helpers.ttlToSeconds(wait.value, wait.unit) * 1000 : null;
+      const proc = processor;
+      return {
+        type: 'whileStage',
+        cap: Number(cap),
+        rateMs,
+        processor: proc,
+        rawIdentifier: proc?.rawIdentifier || 'while',
+        meta: {
+          hasRate: !!rateMs
+        },
+        location: location()
+      };
+    }
+  / "while" _ "(" _ ")" {
+      helpers.mlldError(
+        "while() requires a maximum iteration count, e.g., while(10) @processor",
+        "number",
+        location()
+      );
+    }
+  / "while" _ "(" _ cap:NumberLiteral _ ")" _ !("@") {
+      helpers.mlldError(
+        "while expects an executable reference like @processor after the iteration cap.",
+        "@",
+        location()
+      );
     }
 
 // -------------------------------------------------------------
@@ -408,56 +452,4 @@ PipelineBuiltinAppend
           hasExplicitSource: false
         }
       };
-    }
-
-// -------------------------------------------------------------
-// NEEDS SUPPORT
-// -------------------------------------------------------------
-
-// Object containing language-specific dependencies
-NeedsObject
-  = "{" _ langs:NeedsLanguageList? _ "}" {
-      const result = {};
-      if (langs) {
-        for (const [lang, packages] of langs) {
-          result[lang] = packages;
-        }
-      }
-      return result;
-    }
-
-// List of language entries
-NeedsLanguageList
-  = first:NeedsLanguageEntry rest:(CommaSpace entry:NeedsLanguageEntry { return entry; })* {
-      return [first, ...rest];
-    }
-
-// Single language entry (e.g., "node": { ... })
-NeedsLanguageEntry
-  = lang:DataString _ ":" _ packages:PackagesObject {
-      return [lang, packages];
-    }
-
-// Object containing package dependencies
-PackagesObject
-  = "{" _ packages:PackagesList? _ "}" {
-      const result = {};
-      if (packages) {
-        for (const [pkg, version] of packages) {
-          result[pkg] = version;
-        }
-      }
-      return result;
-    }
-
-// List of package entries
-PackagesList
-  = first:PackageEntry rest:(CommaSpace entry:PackageEntry { return entry; })* {
-      return [first, ...rest];
-    }
-
-// Single package entry (e.g., "lodash": "^4.17.0")
-PackageEntry
-  = pkg:DataString _ ":" _ version:DataString {
-      return [pkg, version];
     }

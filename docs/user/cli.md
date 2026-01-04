@@ -303,8 +303,8 @@ Scripts are loaded from the directory configured in `mlld-config.json` (default:
 
 **Example script** (`llm/run/hello.mld`):
 ```mlld
-/var @greeting = "Hello from mlld script!"
-/show @greeting
+var @greeting = "Hello from mlld script!"
+show @greeting
 ```
 
 ### `mlld test [patterns...]`
@@ -432,8 +432,8 @@ mlld alias --name home --path ~/my-modules
 
 **Usage after creating:**
 ```mlld
-/import { utils } from @shared/utils
-/import { data } from @desktop/my-data
+import { utils } from @shared/utils
+import { data } from @desktop/my-data
 ```
 
 ### `mlld auth`
@@ -478,7 +478,7 @@ mlld env remove API_KEY
 
 **Usage in mlld:**
 ```mlld
-/import { GITHUB_TOKEN, NODE_ENV } from @input
+import { GITHUB_TOKEN, NODE_ENV } from @input
 ```
 
 ## Registry Commands
@@ -570,7 +570,7 @@ mlld env allow MY_API_KEY
 
 Then use in mlld files:
 ```mlld
-/import { MY_API_KEY } from @input
+import { MY_API_KEY } from @input
 ```
 
 ## File Extensions

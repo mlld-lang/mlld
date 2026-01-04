@@ -19,7 +19,7 @@ describe('AutoUnwrapManager (structured values)', () => {
 
     expect(isStructuredValue(result)).toBe(true);
     if (isStructuredValue(result)) {
-      expect(result.ctx.filename).toBe('example.md');
+      expect(result.mx.filename).toBe('example.md');
       expect(result.type).toBe('object');
       expect(result.data.content).toBe('Updated');
     }

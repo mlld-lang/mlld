@@ -25,8 +25,17 @@
 // /output @variable to @resolver/path/file.md    <- resolver output
 // /output @variable to "file.json" as json       <- with format specification
 
+OutputKeyword
+  = "/"? "output"
+
+AppendKeyword
+  = "/"? "append"
+
+LogKeyword
+  = "/"? "log"
+
 SlashAppend
-  = DirectiveContext "/append" _ source:OutputSource _ "to" _ target:OutputTargetFile format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+  = DirectiveContext AppendKeyword _ source:OutputSource _ "to" _ target:OutputTargetFile format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
       helpers.debug('SlashAppend syntax matched', { source, target, format, ending });
 
       const values = {
@@ -57,13 +66,13 @@ SlashAppend
         location()
       );
     }
-  / DirectiveContext "/append" _ OutputSource _ &{
+  / DirectiveContext AppendKeyword _ OutputSource _ &{
       const rest = input.substring(peg$currPos).trim();
       return rest.length === 0 || rest.startsWith('\n');
     } {
       helpers.mlldError('Missing "to" keyword in /append directive. Use /append @var to "path".', 'to', location());
     }
-  / DirectiveContext "/append" {
+  / DirectiveContext AppendKeyword {
       helpers.mlldError('/append syntax error. Expected: /append @source to "path".', '@', location());
     }
 
@@ -71,7 +80,7 @@ SlashOutput
   // Support for simple quoted path syntax without source - MUST come first to avoid OutputLiteral matching
   // BUT don't match if followed by bracket (that's the literal+bracket syntax)
   // AND don't match if followed by "to" (that's the enhanced syntax)
-  = DirectiveContext "/output" _ path:DataString !(_ "[") !(_ "to") ending:StandardDirectiveEnding {
+  = DirectiveContext OutputKeyword _ path:DataString !(_ "[") !(_ "to") ending:StandardDirectiveEnding {
       helpers.debug('SlashOutput quoted path without source matched', { path, ending });
       
       const values = {
@@ -106,7 +115,7 @@ SlashOutput
       );
     }
   // Main enhanced syntax with 'to' keyword
-  / DirectiveContext "/output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+  / DirectiveContext OutputKeyword _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
       helpers.debug('SlashOutput enhanced syntax matched', { source, target, format, ending });
       
       const values = {
@@ -152,7 +161,7 @@ SlashOutput
   // Support for quoted path syntax with source (legacy) - for syntax like: /output @var "file.txt"
   // BUT don't match if followed by bracket (that would be invalid syntax anyway)
   // AND don't match if followed by "to" (that's the enhanced syntax)
-  / DirectiveContext "/output" _ source:OutputSource _ path:DataString !(_ "[") !(_ "to") ending:StandardDirectiveEnding {
+  / DirectiveContext OutputKeyword _ source:OutputSource _ path:DataString !(_ "[") !(_ "to") ending:StandardDirectiveEnding {
       helpers.debug('SlashOutput quoted path with source matched', { source, path, ending });
       
       const values = {
@@ -191,7 +200,7 @@ SlashOutput
     }
   // REMOVED: Legacy bracket syntax without source - use quoted paths instead
   // New enhanced syntax for document output
-  / DirectiveContext "/output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+  / DirectiveContext OutputKeyword _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
       helpers.debug('SlashOutput enhanced syntax without source matched', { target, format, ending });
       
       const values = {
@@ -232,7 +241,7 @@ SlashOutput
   
   // Error: Missing 'to' keyword in enhanced syntax
   // But allow quoted paths without 'to' (they're handled by earlier rules)
-  / DirectiveContext "/output" _ OutputSource _ &{
+  / DirectiveContext OutputKeyword _ OutputSource _ &{
       // Look ahead to see if there's a target but no 'to'
       const rest = input.substring(peg$currPos).trim();
       // Check if next content looks like a target OTHER than quotes (quotes are valid without 'to')
@@ -243,17 +252,17 @@ SlashOutput
     }
     
   // Error: Missing target after 'to'
-  / DirectiveContext "/output" _ OutputSource _ "to" _ &(LineTerminator / EOF) {
+  / DirectiveContext OutputKeyword _ OutputSource _ "to" _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
     }
     
   // Error: Missing target after 'to' (without source)
-  / DirectiveContext "/output" _ "to" _ &(LineTerminator / EOF) {
+  / DirectiveContext OutputKeyword _ "to" _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
     }
     
   // Error: Unclosed quoted path
-  / DirectiveContext "/output" _ OutputSource _ "to" _ "\"" &{
+  / DirectiveContext OutputKeyword _ OutputSource _ "to" _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
       helpers.mlldError("Unclosed quoted path in /output directive. Expected closing double quote (\").", "\"", location());
@@ -262,12 +271,12 @@ SlashOutput
   // REMOVED: Bracket syntax error handling - brackets no longer supported
     
   // Error: Invalid format specification
-  / DirectiveContext "/output" _ OutputSource _ "to" _ OutputTarget _ "as" _ &(LineTerminator / EOF) {
+  / DirectiveContext OutputKeyword _ OutputSource _ "to" _ OutputTarget _ "as" _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing format in /output directive. Expected format type after 'as' (e.g., json, xml, csv).", "format", location());
     }
     
   // Error: Invalid @ usage
-  / DirectiveContext "/output" _ "@" &{
+  / DirectiveContext OutputKeyword _ "@" &{
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
@@ -275,12 +284,12 @@ SlashOutput
     }
     
   // Error: Missing content after /output
-  / DirectiveContext "/output" _ &(LineTerminator / EOF) {
+  / DirectiveContext OutputKeyword _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing content in /output directive. Expected source or target specification.", "@", location());
     }
     
   // Error: Invalid environment variable syntax
-  / DirectiveContext "/output" _ OutputSource _ "to" _ "env:" &{
+  / DirectiveContext OutputKeyword _ OutputSource _ "to" _ "env:" &{
       // Check if there's no variable name after env:
       const rest = input.substring(peg$currPos).trim();
       return rest.length === 0 || /[^A-Z0-9_]/.test(rest[0]);
@@ -289,7 +298,7 @@ SlashOutput
     }
     
   // Error: Generic /output syntax error (catch-all)
-  / DirectiveContext "/output" {
+  / DirectiveContext OutputKeyword {
       helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output \"path\", or /output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: /var @content = \"your text\", then use: /output @content to \"file.txt\"", "@", location());
     }
 
@@ -301,7 +310,7 @@ SlashOutput
 
 SlashLog
   // Log with source - /log @variable or /log @template(args)
-  = DirectiveContext "/log" _ source:OutputSource format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+  = DirectiveContext LogKeyword _ source:OutputSource format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
       helpers.debug('SlashLog with source matched', { source, format, ending });
       
       // Create stderr target automatically (policy: logs -> stderr)
@@ -343,7 +352,7 @@ SlashLog
       );
     }
   // Document output variant (no source) - /log
-  / DirectiveContext "/log" format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+  / DirectiveContext LogKeyword format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
       helpers.debug('SlashLog without source matched', { format, ending });
       
       const stdoutTarget = {
@@ -384,12 +393,12 @@ SlashLog
   // -----------------------------------------
   
   // Error: Missing content after /log
-  / DirectiveContext "/log" _ &(LineTerminator / EOF) {
+  / DirectiveContext LogKeyword _ &(LineTerminator / EOF) {
       helpers.mlldError("Missing content in /log directive. Expected variable or content to log.", "@", location());
     }
     
   // Error: Invalid @ usage
-  / DirectiveContext "/log" _ "@" &{
+  / DirectiveContext LogKeyword _ "@" &{
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
@@ -397,7 +406,7 @@ SlashLog
     }
     
   // Error: Generic /log syntax error (catch-all)
-  / DirectiveContext "/log" {
+  / DirectiveContext LogKeyword {
       helpers.mlldError("Invalid /log syntax. Expected: /log @variable or /log (for document output). /log is syntactic sugar for /output to stdout.", "@", location());
     }
 

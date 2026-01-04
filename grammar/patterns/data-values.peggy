@@ -50,9 +50,9 @@ DataSpreadProperty "spread property"
 
 // DATA OBJECT PAIR - Key-value pair
 DataObjectPair
-  = key:PropertyKey _ ":" _ value:DataPropertyValue {
+  = key:PropertyKey optional:"?"? _ ":" _ value:DataPropertyValue {
       return {
-        type: 'pair',
+        type: optional ? 'conditionalPair' : 'pair',
         key: key,
         value: value
       };
@@ -64,16 +64,18 @@ DataObjectPair
 // 2. Uses StringLiteral directly instead of TemplateStyleInterpolation (for unwrapping)
 DataPropertyValue "data context property value"
   = RunCommandValue              // run {command} - preserve as-is
-  / CodeExecutionValue           // js {code} - preserve as-is  
+  / CodeExecutionValue           // js {code} - preserve as-is
   / DataObjectLiteral            // Nested objects get typed
   / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
   / AlligatorExpression          // File loading: <file.md> - always loading!
+  / ExecResultMethodCall         // @func(args).method(args) - chained method calls
+  / FieldAccessExecPattern       // @obj.method(args) - method calls on variables
   / ExecInvocationPattern        // @func() - preserve as-is
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks (not quotes)
   / DataStringValue              // Plain strings (unwrapped)
-  / PrimitiveValue               // Numbers, booleans, null - preserve as-is
+  / PrimitiveValue               // Numbers, booleans, null - AST Literal nodes
 
 // DATA TEMPLATE VALUE - Only real templates (brackets and backticks)
 // Excludes quoted strings which should be unwrapped in data context
@@ -111,15 +113,17 @@ DataArrayContent
 // DATA ARRAY VALUE - Similar to ArrayValue but uses data context patterns
 DataArrayValue
   = RunCommandValue              // run {command} - preserve as-is
-  / CodeExecutionValue           // js {code} - preserve as-is  
+  / CodeExecutionValue           // js {code} - preserve as-is
   / DataObjectLiteral            // Objects get typed
   / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
   / AlligatorExpression          // File loading: <file.md> - always loading!
+  / ExecResultMethodCall         // @func(args).method(args) - chained method calls
+  / FieldAccessExecPattern       // @obj.method(args) - method calls on variables
   / ExecInvocationPattern        // @func() - preserve as-is
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks
   / DataStringValue              // Plain strings (unwrapped)
-  / PrimitiveValue               // Numbers, booleans, null - preserve as-is
+  / PrimitiveValue               // Numbers, booleans, null - AST Literal nodes
 
 // Note: DataBracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading

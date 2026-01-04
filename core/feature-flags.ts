@@ -1,6 +1,6 @@
 // Centralized feature flags for controlled rollout
 
-// Ambient @ctx availability in ML layer and JS/Node injection
+// Ambient @mx availability in ML layer and JS/Node injection
 // Feature flag removed: always enabled
 export const USE_AMBIENT_CTX: boolean = true;
 

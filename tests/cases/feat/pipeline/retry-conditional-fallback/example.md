@@ -11,7 +11,7 @@
     '{"valid": "json"}',
     '{"perfect": "json", "attempt": 4}'
   ];
-  return attempts[ctx.try - 1] || '{"fallback": "json"}';
+  return attempts[mx.try - 1] || '{"fallback": "json"}';
 }
 
 /exe @retryUntilValidJSON(input, pipeline) = when first [

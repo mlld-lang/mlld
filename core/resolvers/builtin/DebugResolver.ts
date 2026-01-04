@@ -45,7 +45,7 @@ export class DebugResolver implements Resolver {
       return {
         content: JSON.stringify(info),
         contentType: 'data',
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }
@@ -104,7 +104,7 @@ export class DebugResolver implements Resolver {
       return {
         content: JSON.stringify(exports),
         contentType: 'data',
-        ctx: metadata,
+        mx: metadata,
         metadata
       };
     }

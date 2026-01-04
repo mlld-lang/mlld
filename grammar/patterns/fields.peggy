@@ -144,10 +144,13 @@ ExistingArrayIndex
         location: location()
       };
     }
-  / "[" _ "@" index:BaseIdentifier _ "]" {
+  / "[" _ "@" index:BaseIdentifier fields:AnyFieldAccess* _ "]" {
       return { 
         type: 'variableIndex', 
-        value: index,
+        value: helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: index,
+          ...(fields.length > 0 ? { fields } : {})
+        }, location()),
         location: location()
       };
     }

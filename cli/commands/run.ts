@@ -11,7 +11,7 @@ import { MlldError, ErrorSeverity } from '@core/errors/index';
 import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { executeRoute, TimeoutError } from '@sdk/execute';
+import { execute, TimeoutError } from '@sdk/execute';
 import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
@@ -111,8 +111,8 @@ export class RunCommand {
     console.log(chalk.gray(`Running ${path.relative(process.cwd(), scriptPath)}...\n`));
 
     try {
-      // Use executeRoute for AST caching and metrics
-      const result = await executeRoute(scriptPath, undefined, {
+      // Use execute for AST caching and metrics
+      const result = await execute(scriptPath, undefined, {
         fileSystem: this.fileSystem,
         pathService: new PathService(),
         timeoutMs: options.timeoutMs ?? 300000, // 5 minute default

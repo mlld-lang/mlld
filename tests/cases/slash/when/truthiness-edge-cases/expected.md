@@ -49,6 +49,7 @@ All checks passed
 ## 9. @when first: with Truthiness
 
 Default: {{firstDefault}}
+
 ## 10. Negation with logical operators
 
 At least one log level is clean
@@ -64,3 +65,4 @@ Mixed negation: || triggered
 Mixed negation: && triggered
 
 ## 13. Deeply Falsy Values
+

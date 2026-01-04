@@ -20,12 +20,16 @@
  * CONTEXT: The requesting stage asks to retry a specific upstream stage; attempts and hints
  *          are local to this context and cleared when the requesting stage completes.
  */
+import type { StructuredValue } from '../../utils/structured-value';
+import { isStructuredValue, wrapStructured } from '../../utils/structured-value';
+import { inheritExpressionProvenance } from '../../utils/expression-provenance';
+
 export interface RetryContext {
   id: string;                    // Unique context ID
   requestingStage: number;       // Stage that requested retry
   retryingStage: number;         // Stage being retried
   attemptNumber: number;         // Current attempt (1-based)
-  allAttempts: string[];         // All outputs from retry attempts
+  allAttempts: StructuredValue[];         // All outputs from retry attempts
   hints?: string[];              // Hints provided per retry request
   currentHint?: string;          // Last hint provided by requesting stage
 }
@@ -34,9 +38,9 @@ export interface RetryContext {
  * Pipeline Events - Same as before for compatibility
  */
 export type PipelineEvent =
-  | { type: 'PIPELINE_START'; input: string }
-  | { type: 'STAGE_START'; stage: number; input: string; contextId?: string }
-  | { type: 'STAGE_SUCCESS'; stage: number; output: string; contextId?: string }
+  | { type: 'PIPELINE_START'; input: string; structuredInput?: StructuredValue }
+  | { type: 'STAGE_START'; stage: number; input: string; structuredInput?: StructuredValue; contextId?: string }
+  | { type: 'STAGE_SUCCESS'; stage: number; output: string; structuredOutput?: StructuredValue; contextId?: string }
   | { 
       type: 'STAGE_RETRY_REQUEST';
       requestingStage: number;
@@ -52,7 +56,7 @@ export type PipelineEvent =
  */
 /**
  * Pipeline State
- * WHY: Centralize stage progression, retry limits, and history needed to build @p/@ctx.
+ * WHY: Centralize stage progression, retry limits, and history needed to build @p/@mx.
  * GOTCHA: We store a single activeRetryContext by design; nested retries are not supported.
  */
 export interface PipelineState {
@@ -60,31 +64,34 @@ export interface PipelineState {
   currentStage: number;
   currentInput: string;
   baseInput: string;
+  currentStructuredInput?: StructuredValue;
+  baseStructuredInput?: StructuredValue;
   events: PipelineEvent[];
+  stageStructuredOutputs: Map<number, StructuredValue>;
   
   // Simplified retry tracking
   activeRetryContext?: RetryContext;  // Just one active context
   globalStageRetryCount: Map<number, number>;   // Global safety limit
   
   // For @pipeline.retries.all accumulation
-  allRetryHistory: Map<string, string[]>;       // contextId → all outputs
+  allRetryHistory: Map<string, StructuredValue[]>;       // contextId → all outputs
 }
 
 /**
  * Actions and Results - Same interfaces for compatibility
  */
 export type PipelineAction =
-  | { type: 'START'; input: string }
+  | { type: 'START'; input: string; structuredInput?: StructuredValue }
   | { type: 'STAGE_RESULT'; result: StageResult }
   | { type: 'ABORT'; reason: string };
 
 export type StageResult =
-  | { type: 'success'; output: string }
+  | { type: 'success'; output: string; structuredOutput?: StructuredValue }
   | { type: 'retry'; reason?: string; from?: number; hint?: any }
   | { type: 'error'; error: Error };
 
 export type NextStep =
-  | { type: 'EXECUTE_STAGE'; stage: number; input: string; context: StageContext }
+  | { type: 'EXECUTE_STAGE'; stage: number; input: string; structuredInput?: StructuredValue; context: StageContext }
   | { type: 'COMPLETE'; output: string }
   | { type: 'ERROR'; stage: number; error: Error }
   | { type: 'ABORT'; reason: string }
@@ -98,13 +105,18 @@ export interface StageContext {
   attempt: number;                 // Global attempt count for this stage
   contextAttempt: number;          // Attempt within current retry context
   history: string[];               // Previous outputs from this stage
+  historyStructured?: StructuredValue[];               // Structured view of history
   previousOutputs: string[];       // Outputs from stages 0..stage-1
+  previousStructuredOutputs?: Array<StructuredValue | undefined>; // Structured outputs
   globalAttempt: number;           // Total retries across all stages
   totalStages: number;
   outputs: Record<number, string>; // Array-style access
+  structuredOutputs?: Record<number, StructuredValue | undefined>;
   contextId?: string;              // Current retry context ID
   hintHistory?: string[];          // Hints observed in this retry context
   currentHint?: string;            // Last hint for this retry cycle
+  baseStructuredInput?: StructuredValue;
+  currentStructuredInput?: StructuredValue;
 }
 
 /**
@@ -124,6 +136,7 @@ export class PipelineStateMachine {
   private readonly isStage0Retryable: boolean;
   private stage0Exhausted: boolean = false;
   private stage0BaseOutput: string | null = null;
+  private stage0BaseStructuredOutput: StructuredValue | null = null;
   private readonly hasStage0Replay: boolean;
   private stage0RetryConsumed: boolean = false;
 
@@ -140,7 +153,10 @@ export class PipelineStateMachine {
       currentStage: 0,
       currentInput: '',
       baseInput: '',
+      currentStructuredInput: undefined,
+      baseStructuredInput: undefined,
       events: [],
+      stageStructuredOutputs: new Map(),
       activeRetryContext: undefined,
       globalStageRetryCount: new Map(),
       allRetryHistory: new Map()
@@ -165,8 +181,13 @@ export class PipelineStateMachine {
   /**
    * Get all retry history for simplified implementation
    */
-  getAllRetryHistory(): Map<string, string[]> {
-    return new Map(this.state.allRetryHistory);
+  getAllRetryHistory(): Map<string, StructuredValue[]> {
+    return new Map(
+      Array.from(this.state.allRetryHistory.entries()).map(([contextId, attempts]) => [
+        contextId,
+        attempts.map(cloneStructuredValue)
+      ])
+    );
   }
 
   /**
@@ -179,7 +200,7 @@ export class PipelineStateMachine {
   transition(action: PipelineAction): NextStep {
     switch (action.type) {
       case 'START':
-        return this.handleStart(action.input);
+        return this.handleStart(action.input, action.structuredInput);
       case 'STAGE_RESULT':
         return this.handleStageResult(action.result);
       case 'ABORT':
@@ -193,19 +214,22 @@ export class PipelineStateMachine {
    * Initialize pipeline execution for the first stage.
    * CONTEXT: Records PIPELINE_START and first STAGE_START events and seeds baseInput.
    */
-  private handleStart(input: string): NextStep {
+  private handleStart(input: string, structuredInput?: StructuredValue): NextStep {
     if (this.state.status !== 'IDLE') {
       return { type: 'INVALID_ACTION' };
     }
 
     // Initialize pipeline
-    this.recordEvent({ type: 'PIPELINE_START', input });
+    const initialStructured = structuredInput ? cloneStructuredValue(structuredInput) : undefined;
+    this.state.baseStructuredInput = initialStructured;
+    this.state.currentStructuredInput = initialStructured;
+    this.recordEvent({ type: 'PIPELINE_START', input, structuredInput: initialStructured });
     this.state.status = 'RUNNING';
     this.state.currentStage = 0;
     this.state.currentInput = input;
     this.state.baseInput = input;
     this.stage0BaseOutput = input;
-    this.stage0BaseOutput = input;
+    this.stage0BaseStructuredOutput = initialStructured ?? null;
 
     // Short-circuit empty pipelines
     if (this.totalStages === 0) {
@@ -215,12 +239,13 @@ export class PipelineStateMachine {
     }
 
     // Start first stage
-    this.recordEvent({ type: 'STAGE_START', stage: 0, input });
+    this.recordEvent({ type: 'STAGE_START', stage: 0, input, structuredInput: initialStructured });
     
     return {
       type: 'EXECUTE_STAGE',
       stage: 0,
       input: input,
+      structuredInput: initialStructured,
       context: this.buildStageContext(0)
     };
   }
@@ -234,7 +259,7 @@ export class PipelineStateMachine {
 
     switch (result.type) {
       case 'success':
-        return this.handleStageSuccess(stage, result.output);
+        return this.handleStageSuccess(stage, result.output, result.structuredOutput);
       case 'retry':
         return this.handleStageRetry(stage, result.reason, result.from, (result as any).hint);
       case 'error':
@@ -246,25 +271,34 @@ export class PipelineStateMachine {
    * Process a successful stage output and advance the pipeline.
    * CONTEXT: When inside a retry context, completing the retried stage schedules the requester.
    */
-  private handleStageSuccess(stage: number, output: string): NextStep {
+  private handleStageSuccess(stage: number, output: string, structuredOutput?: StructuredValue): NextStep {
     const context = this.state.activeRetryContext;
+    const wrappedStructured = structuredOutput
+      ? cloneStructuredValue(structuredOutput)
+      : wrapStructured(output, 'text', output);
+    this.state.stageStructuredOutputs.set(stage, wrappedStructured);
+    if (stage === 0) {
+      this.stage0BaseStructuredOutput = wrappedStructured;
+    }
     
     // Record success
     this.recordEvent({ 
       type: 'STAGE_SUCCESS', 
       stage, 
       output,
+      structuredOutput: wrappedStructured,
       contextId: context?.id 
     });
 
     // Collect output if this is the retrying stage
     if (context && stage === context.retryingStage) {
-      context.allAttempts.push(output);
+      context.allAttempts.push(cloneStructuredValue(wrappedStructured));
     }
     
     // Early termination on empty output
     if (output === '') {
       this.state.status = 'COMPLETED';
+      this.state.currentStructuredInput = wrappedStructured;
       this.recordEvent({ type: 'PIPELINE_COMPLETE', output: '' });
       return { type: 'COMPLETE', output: '' };
     }
@@ -277,11 +311,13 @@ export class PipelineStateMachine {
       const nextStage = context.requestingStage;
       this.state.currentStage = nextStage;
       this.state.currentInput = output;
+      this.state.currentStructuredInput = wrappedStructured;
       
       this.recordEvent({ 
         type: 'STAGE_START', 
         stage: nextStage, 
         input: output,
+        structuredInput: wrappedStructured,
         contextId: context.id
       });
       
@@ -289,6 +325,7 @@ export class PipelineStateMachine {
         type: 'EXECUTE_STAGE',
         stage: nextStage,
         input: output,
+        structuredInput: wrappedStructured,
         context: this.buildStageContext(nextStage)
       };
     }
@@ -296,7 +333,10 @@ export class PipelineStateMachine {
     // Clear retry context when requesting stage completes successfully
     if (context && stage === context.requestingStage) {
       // Save attempts to history before clearing
-      this.state.allRetryHistory.set(context.id, [...context.allAttempts]);
+      this.state.allRetryHistory.set(
+        context.id,
+        context.allAttempts.map(attempt => cloneStructuredValue(attempt))
+      );
       this.state.activeRetryContext = undefined;
     }
 
@@ -306,6 +346,7 @@ export class PipelineStateMachine {
     // Check if pipeline complete
     if (nextStage >= this.totalStages) {
       this.state.status = 'COMPLETED';
+      this.state.currentStructuredInput = wrappedStructured;
       this.recordEvent({ type: 'PIPELINE_COMPLETE', output });
       return { type: 'COMPLETE', output };
     }
@@ -313,11 +354,13 @@ export class PipelineStateMachine {
     // Continue to next stage
     this.state.currentStage = nextStage;
     this.state.currentInput = output;
+    this.state.currentStructuredInput = wrappedStructured;
 
     this.recordEvent({ 
       type: 'STAGE_START', 
       stage: nextStage, 
       input: output,
+      structuredInput: wrappedStructured,
       contextId: context?.id
     });
 
@@ -325,6 +368,7 @@ export class PipelineStateMachine {
       type: 'EXECUTE_STAGE',
       stage: nextStage,
       input: output,
+      structuredInput: wrappedStructured,
       context: this.buildStageContext(nextStage)
     };
   }
@@ -355,7 +399,7 @@ export class PipelineStateMachine {
       if (!this.hasStage0Replay) {
         // Only allow a single no-op retry; subsequent requests short-circuit
         if (this.stage0RetryConsumed) {
-          return this.advanceToNextStage(this.state.baseInput);
+          return this.advanceToNextStage(this.state.baseInput, this.stage0BaseStructuredOutput ?? undefined);
         }
         this.stage0RetryConsumed = true;
         this.stage0Exhausted = true;
@@ -371,11 +415,16 @@ export class PipelineStateMachine {
           type: 'STAGE_SUCCESS',
           stage: 0,
           output: this.state.baseInput,
+          structuredOutput: this.stage0BaseStructuredOutput ?? undefined,
           contextId: 'stage0-self-retry'
         });
         this.state.currentStage = 0;
         this.state.currentInput = this.state.baseInput;
-        return this.advanceToNextStage(this.state.baseInput);
+        this.state.currentStructuredInput = this.stage0BaseStructuredOutput ?? this.state.baseStructuredInput;
+        return this.advanceToNextStage(
+          this.state.baseInput,
+          this.state.currentStructuredInput ?? undefined
+        );
       }
       
       // Use simplified retry tracking for stage 0
@@ -400,6 +449,7 @@ export class PipelineStateMachine {
         type: 'STAGE_START',
         stage: 0,
         input: this.state.baseInput,
+        structuredInput: this.stage0BaseStructuredOutput ?? this.state.baseStructuredInput,
         contextId: 'stage0-self-retry'
       });
       
@@ -407,6 +457,7 @@ export class PipelineStateMachine {
         type: 'EXECUTE_STAGE',
         stage: 0,
         input: this.state.baseInput,
+        structuredInput: this.stage0BaseStructuredOutput ?? this.state.baseStructuredInput,
         context: this.buildStageContext(0)
       };
     }
@@ -508,17 +559,20 @@ export class PipelineStateMachine {
     
     // Get input for retry
     const retryInput = this.getInputForStage(targetStage);
+    const retryStructuredInput = this.getStructuredInputForStage(targetStage);
     
     // Update state
     this.state.status = 'RETRYING';
     this.state.currentStage = targetStage;
     this.state.currentInput = retryInput;
+    this.state.currentStructuredInput = retryStructuredInput;
     
     // Record stage start
     this.recordEvent({
       type: 'STAGE_START',
       stage: targetStage,
       input: retryInput,
+      structuredInput: retryStructuredInput,
       contextId: context.id
     });
     
@@ -526,6 +580,7 @@ export class PipelineStateMachine {
       type: 'EXECUTE_STAGE',
       stage: targetStage,
       input: retryInput,
+      structuredInput: retryStructuredInput,
       context: this.buildStageContext(targetStage)
     };
   }
@@ -562,7 +617,7 @@ export class PipelineStateMachine {
    */
   /**
    * Build a user-facing context snapshot for a given stage.
-   * WHY: The executor uses this to construct @ctx and @p variables in stage environments.
+   * WHY: The executor uses this to construct @mx and @p variables in stage environments.
    * GOTCHA: Attempt counts are context-local; downstream stages outside a retry context see try=1.
    */
   private buildStageContext(stage: number): StageContext {
@@ -571,26 +626,40 @@ export class PipelineStateMachine {
     
     // Build previous outputs
     const previousOutputs: string[] = [];
+    const previousStructuredOutputs: Array<StructuredValue | undefined> = [];
+    const structuredOutputsRecord: Record<number, StructuredValue | undefined> = {};
+    structuredOutputsRecord[0] = this.stage0BaseStructuredOutput ?? this.state.baseStructuredInput;
     for (let s = 0; s < stage; s++) {
       let found = false;
       for (let i = events.length - 1; i >= 0; i--) {
         const event = events[i];
         if (event.type === 'STAGE_SUCCESS' && event.stage === s) {
           previousOutputs.push(event.output);
+          const structured = event.structuredOutput ?? this.state.stageStructuredOutputs.get(s);
+          previousStructuredOutputs.push(structured ? cloneStructuredValue(structured) : undefined);
+          structuredOutputsRecord[s + 1] = structured ? cloneStructuredValue(structured) : undefined;
           found = true;
           break;
         }
       }
       if (!found) {
         previousOutputs.push('');
+        const structured = this.state.stageStructuredOutputs.get(s);
+        previousStructuredOutputs.push(structured ? cloneStructuredValue(structured) : undefined);
+        structuredOutputsRecord[s + 1] = structured ? cloneStructuredValue(structured) : undefined;
       }
     }
     
     // Get stage history (context-local)
     const stageHistory: string[] = [];
+    const stageHistoryStructured: StructuredValue[] = [];
     if (context && (stage === context.requestingStage || stage === context.retryingStage)) {
       // Include attempts from current context
-      stageHistory.push(...context.allAttempts);
+      for (const attempt of context.allAttempts) {
+        const cloned = cloneStructuredValue(attempt);
+        stageHistoryStructured.push(cloned);
+        stageHistory.push(cloned.text);
+      }
     }
     
     // Count attempts - properly track for both requesting and retrying stages
@@ -646,9 +715,14 @@ export class PipelineStateMachine {
         0: this.state.baseInput,
         ...Object.fromEntries(previousOutputs.map((out, i) => [i + 1, out]))
       },
+      structuredOutputs: structuredOutputsRecord,
       contextId: context?.id,
       hintHistory: context?.hints ? [...context.hints] : [],
-      currentHint: context?.currentHint
+      currentHint: context?.currentHint,
+      previousStructuredOutputs,
+      historyStructured: stageHistoryStructured,
+      baseStructuredInput: this.state.baseStructuredInput,
+      currentStructuredInput: this.state.currentStructuredInput
     };
   }
 
@@ -656,7 +730,7 @@ export class PipelineStateMachine {
    * Helper methods
    */
   private generateContextId(): string {
-    return `ctx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `mx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   private getInputForStage(stage: number): string {
@@ -675,6 +749,19 @@ export class PipelineStateMachine {
     return this.state.baseInput;
   }
 
+  private getStructuredInputForStage(stage: number): StructuredValue | undefined {
+    if (stage === 0) {
+      return this.state.baseStructuredInput ? cloneStructuredValue(this.state.baseStructuredInput) : undefined;
+    }
+
+    const structured = this.state.stageStructuredOutputs.get(stage - 1);
+    if (structured) {
+      return cloneStructuredValue(structured);
+    }
+
+    return this.state.baseStructuredInput ? cloneStructuredValue(this.state.baseStructuredInput) : undefined;
+  }
+
   private recordEvent(event: PipelineEvent): void {
     this.state.events.push(event);
   }
@@ -683,27 +770,31 @@ export class PipelineStateMachine {
    * Advance to the next stage without creating a retry context.
    * Used for non-replayable stage-0 retries to avoid spinning.
    */
-  private advanceToNextStage(output: string): NextStep {
+  private advanceToNextStage(output: string, structuredOutput?: StructuredValue): NextStep {
     const nextStage = this.state.currentStage + 1;
 
     if (output === '') {
       this.state.status = 'COMPLETED';
+      this.state.currentStructuredInput = structuredOutput ?? this.state.baseStructuredInput;
       this.recordEvent({ type: 'PIPELINE_COMPLETE', output: '' });
       return { type: 'COMPLETE', output: '' };
     }
 
     if (nextStage >= this.totalStages) {
       this.state.status = 'COMPLETED';
+      this.state.currentStructuredInput = structuredOutput ?? this.state.baseStructuredInput;
       this.recordEvent({ type: 'PIPELINE_COMPLETE', output });
       return { type: 'COMPLETE', output };
     }
 
     this.state.currentStage = nextStage;
     this.state.currentInput = output;
+    this.state.currentStructuredInput = structuredOutput ?? this.state.baseStructuredInput;
     this.recordEvent({
       type: 'STAGE_START',
       stage: nextStage,
       input: output,
+      structuredInput: structuredOutput ?? this.state.baseStructuredInput,
       contextId: this.state.activeRetryContext?.id
     });
 
@@ -711,7 +802,14 @@ export class PipelineStateMachine {
       type: 'EXECUTE_STAGE',
       stage: nextStage,
       input: output,
+      structuredInput: structuredOutput ?? this.state.baseStructuredInput,
       context: this.buildStageContext(nextStage)
     };
   }
+}
+
+function cloneStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
+  const clone = wrapStructured(value);
+  inheritExpressionProvenance(clone, value);
+  return clone;
 }

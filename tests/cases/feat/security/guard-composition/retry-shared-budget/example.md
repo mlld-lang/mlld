@@ -1,7 +1,7 @@
 # Guard Composition - Retry Shared Budget
 
 /guard @retryOnce for op:exe = when [
-  @ctx.guard.try < 2 => retry "retrying"
+  @mx.guard.try < 2 => retry "retrying"
   * => allow
 ]
 

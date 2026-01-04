@@ -1,5 +1,5 @@
 import { JSONFormatter } from '../core/json-formatter';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult } from '@core/types/load-content';
 import { asText, isStructuredValue } from './structured-value';
 
 export interface DisplayFormatOptions {
@@ -21,11 +21,7 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
   }
 
   if (isLoadContentResult(value)) {
-    return value.content ?? '';
-  }
-
-  if (isLoadContentResultArray(value)) {
-    return value.map(item => item.content ?? '').join('\n\n');
+    return asText(value);
   }
 
   if (isStructuredValue(value)) {
@@ -38,9 +34,9 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
 
     if (data && typeof data === 'object') {
       if (
-        value.ctx?.source === 'load-content' ||
-        Boolean(value.ctx?.filename) ||
-        Boolean(value.ctx?.url)
+        value.mx?.source === 'load-content' ||
+        Boolean(value.mx?.filename) ||
+        Boolean(value.mx?.url)
       ) {
         return value.text;
       }

@@ -105,12 +105,24 @@ export class ImportPathResolver {
           resolvedPath: '@input',
           resolverName: 'input'
         };
+      } else if (content === '@state' || content === '@payload') {
+        return {
+          type: 'module',
+          resolvedPath: content
+        };
       }
     }
 
     // Handle variable reference special imports
     if (firstNode.type === 'VariableReference') {
       const varRef = firstNode as any;
+
+      if (varRef.identifier === 'state' || varRef.identifier === 'payload') {
+        return {
+          type: 'module',
+          resolvedPath: `@${varRef.identifier}`
+        };
+      }
 
       // Handle @input/@stdin as variable references
       if (varRef.identifier === 'INPUT' || varRef.identifier === 'input') {

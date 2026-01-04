@@ -25,12 +25,15 @@ For AND/OR logic, use && and || operators in conditions instead of deprecated an
 // TOP-LEVEL WHEN DIRECTIVE
 // -------------------------------------------------------------
 
+WhenKeyword
+  = "/"? "when"
+
 // Primary /when directive
 SlashWhen
   = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
   // Error recovery: deprecated 'any' modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'any' modifier has been removed from mlld. Use the || operator instead.\n\n" +
         "Old syntax: /when any [@cond1 @cond2] => action\n" +
@@ -42,13 +45,13 @@ SlashWhen
     }
   / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
   // Bare block form with modifier: /when <modifier>: [...] => <action>
-  / DirectiveContext "/when" _ modifier:WhenModifier _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
+  / DirectiveContext WhenKeyword _ modifier:WhenModifier _ ":"? _ block:WhenConditionBlock 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
-      helpers.debug('WhenBareBlockWithModifierForm matched', { modifier, conditions, action });
+      helpers.debug('WhenBareBlockWithModifierForm matched', { modifier, conditions: block, action });
       
       const values = {
-        conditions: conditions,
+        conditions: block,
         modifier: [modifier]
       };
       
@@ -58,7 +61,7 @@ SlashWhen
       
       // Create raw representation
       const raw = {
-        conditions: conditions.map(c => ({
+        conditions: block.map(c => ({
           condition: helpers.reconstructRawString(c.condition),
           action: c.action ? helpers.reconstructRawString(c.action) : undefined
         }))
@@ -76,7 +79,7 @@ SlashWhen
         raw,
         {
           modifier: modifier ? modifier.content : 'default',
-          conditionCount: conditions.length,
+          conditionCount: block.length,
           hasVariable: false
         },
         location()
@@ -84,15 +87,15 @@ SlashWhen
     }
   / WhenBlockForm
   // Error recovery: Missing => in simple form
-  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ !"=>" {
+  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !"=>" {
       helpers.mlldError("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action", "=>", location());
     }
   // Error recovery: Missing action after =>
-  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ !. {
+  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
       helpers.mlldError("Missing action in /when directive. Expected a directive after '=>'.", "directive", location());
     }
   // Error recovery: deprecated 'all' modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'all' modifier has been removed from mlld. Use the && operator instead.\n\n" +
         "Old syntax: /when all [@cond1 @cond2] => action\n" +
@@ -103,7 +106,7 @@ SlashWhen
       );
     }
   // Error recovery: Unclosed brackets in block form
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":"? _ "[" _ &{
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":"? _ "[" _ &{
       // Check if we hit newline or EOF before closing bracket
       let i = peg$currPos;
       let depth = 1;
@@ -125,7 +128,7 @@ SlashWhen
       helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
     }
   // Error recovery: Invalid modifier - check it's not a valid modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _
+  / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _
     modifier:BaseIdentifier &{ return modifier !== "first"; } _ ":"? _ "[" {
       helpers.mlldError("Invalid /when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
             "For AND/OR logic, use && and || operators instead.\n\n" +
@@ -135,7 +138,7 @@ SlashWhen
             "  /when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
     }
   // Error recovery: Generic catch-all
-  / DirectiveContext "/when" {
+  / DirectiveContext WhenKeyword {
       helpers.mlldError("Invalid /when syntax. Valid forms:\\n" +
             "  /when @condition => action          (simple form)\\n" +
             "  /when @variable [...]              (switch form)\\n" +
@@ -144,13 +147,21 @@ SlashWhen
     }
 
 // -------------------------------------------------------------
-// SIMPLE FORM: /when <condition> => <action>
+// SIMPLE FORM: /when <condition> => <action> (no brackets needed)
 // -------------------------------------------------------------
 
 WhenSimpleForm
-  = DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction {
-      helpers.debug('WhenSimpleForm matched', { condition, action });
-      
+  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction comment:InlineComment? {
+      helpers.debug('WhenSimpleForm matched', { condition, action, comment });
+
+      const meta = {
+        hasVariables: condition.some(n => n.type === NodeType.VariableReference)
+      };
+
+      if (comment) {
+        meta.comment = comment;
+      }
+
       return helpers.createStructuredDirective(
         'when',
         'whenSimple',
@@ -162,9 +173,7 @@ WhenSimpleForm
           condition: helpers.reconstructRawString(condition),
           action: helpers.reconstructRawString(action)
         },
-        {
-          hasVariables: condition.some(n => n.type === NodeType.VariableReference)
-        },
+        meta,
         location()
       );
     }
@@ -174,7 +183,7 @@ WhenSimpleForm
 // -------------------------------------------------------------
 
 WhenMatchForm
-  = DirectiveContext "/when" _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
+  = DirectiveContext WhenKeyword _ expression:WhenConditionExpression _ ":" _ conditions:WhenConditionBlock {
       helpers.debug('WhenMatchForm matched', { expression, conditions });
       
       return helpers.createStructuredDirective(
@@ -203,12 +212,12 @@ WhenMatchForm
 // -------------------------------------------------------------
 
 WhenBlockForm
-  = DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { 
+  = DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { 
       return helpers.createVariableReferenceNode('identifier', {
         identifier: id
       }, location()); 
     })? _ 
-    modifier:WhenModifier? _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
+    modifier:WhenModifier? _ ":"? _ conditions:WhenConditionBlock 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
       helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action });
@@ -266,7 +275,7 @@ WhenBlockForm
 // -------------------------------------------------------------
 
 WhenBareBlockForm
-  = DirectiveContext "/when" _ "[" _ conditions:WhenConditionList _ "]" {
+  = DirectiveContext WhenKeyword _ conditions:WhenConditionBlock {
       
       helpers.debug('WhenBareBlockForm matched', { conditions });
       
@@ -423,10 +432,66 @@ NonNegatedCondition
 // -------------------------------------------------------------
 
 // List of when block entries (let assignments and condition pairs)
-WhenConditionList
-  = first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* {
-      return [first, ...rest];
+WhenConditionBlock
+  = "[" _ conditions:WhenConditionList _ "]" {
+      return conditions;
     }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenConditionList',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
+    }
+
+WhenConditionList
+  = leadingComments:LeadingBlockComment* _ first:WhenEntry rest:(WhenConditionSeparator entry:WhenEntry { return entry; })* trailing:BlockComments* {
+      const entries = [first, ...rest];
+      // Attach leading comments to first entry's meta (immutable update)
+      if (leadingComments.length > 0 && entries.length > 0) {
+        const firstEntry = entries[0];
+        if (firstEntry && typeof firstEntry === 'object') {
+          const existingMeta = firstEntry.meta || {};
+          entries[0] = {
+            ...firstEntry,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return entries;
+    }
+  / BlockComments+ { return []; }
 
 // Single entry in a when block - let assignment, augmented assignment, or condition pair
 WhenEntry
@@ -439,9 +504,10 @@ WhenConditionSeparator
   = _ "," _ {
       helpers.mlldError(
         'Comma separators are not allowed in /when conditions. ' +
-        'For readability, /when conditions must be separated by whitespace (newlines or spaces) instead of commas.\n' +
-        '💡 Remove the comma and use a newline or space:\n' +
+        'Separate conditions with whitespace or semicolons instead of commas.\n' +
+        '💡 Remove the comma and use whitespace or semicolons:\n' +
         '   /when expr: [value1 => action1, value2 => action2]  ❌\n' +
+        '   /when expr: [value1 => action1; value2 => action2]  ✅\n' +
         '   /when expr: [value1 => action1  value2 => action2]  ✅\n' +
         '   /when expr: [\n' +
         '     value1 => action1\n' +
@@ -451,6 +517,8 @@ WhenConditionSeparator
         location()
       );
     }
+  / _? BlockComments+ _
+  / _ ";" _
   / _
 
 // Single condition => action pair
@@ -471,9 +539,69 @@ WhenAction
 
 // Block of directives as action: [directive1, directive2, ...]
 WhenActionBlock
-  = "[" _ first:WhenBlockAction rest:(_ d:WhenBlockAction { return d; })* _ "]" {
-      return [first, ...rest].flat();
+  = "[" _ actions:WhenActionBlockContent _ "]" {
+      return actions;
     }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenActionBlockContent',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block in when action. Expected ']' to close the block.`,
+        "]",
+        location()
+      );
+    }
+
+WhenActionBlockContent
+  = leadingComments:LeadingBlockComment* _ first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
+      const actions = [first, ...rest].flat();
+      // Attach leading comments to first action's meta (immutable update)
+      if (leadingComments.length > 0 && actions.length > 0) {
+        const firstAction = actions[0];
+        if (firstAction && typeof firstAction === 'object') {
+          const existingMeta = firstAction.meta || {};
+          actions[0] = {
+            ...firstAction,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return actions;
+    }
+  / BlockComments+ { return []; }
 
 // Single action within a when block - supports both implicit and explicit
 WhenBlockAction

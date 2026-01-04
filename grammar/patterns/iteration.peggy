@@ -51,155 +51,242 @@ ForParallelSpec
       return { parallel: true, cap: Number(cap) };
     }
 
-// Single action for for loops - simpler than WhenAction
+// Single action for for loops - uses unified effect actions
 ForSingleAction "for action"
-  // Support nested for directive (without slash) - creates a nested ForDirective
-  = "for" _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction {
-      helpers.debug('Nested for directive matched', { pattern, action });
-      
-      // Create a nested ForDirective node (not ForExpression)
+  // Nested for directive
+  = ForNestedDirective
+  // Unified effect actions: show, log, output, append
+  / effect:EffectAction {
+      return Array.isArray(effect) ? effect : [effect];
+    }
+  // Variable assignment
+  / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
+      // Create the action node; pass ending.tail so pipelines are embedded immutably
+      return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null, ending ? ending.comment : null);
+    }
+  / RunBlockAction
+  // Other when-style actions (including directives) directly in for loop bodies
+  / whenAction:WhenRHSAction {
+      return Array.isArray(whenAction) ? whenAction : [whenAction];
+    }
+  / invocation:UnifiedReferenceWithTail {
+      // Follow the /when pattern - no @ consumption
+      return [invocation];
+    }
+
+// Nested for directive allowed inside block bodies (no leading slash)
+ForNestedDirective
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ actionVariant:ForActionVariant {
+      helpers.debug('Nested for directive matched', { pattern, action: actionVariant });
+
+      const meta = {
+        hasVariables: true,
+        actionType: actionVariant.actionType,
+        isNested: true
+      };
+
+      if (actionVariant.blockMeta) {
+        meta.block = actionVariant.blockMeta;
+      }
+
+      const normalizedAction = Array.isArray(actionVariant.action)
+        ? actionVariant.action
+        : [actionVariant.action];
+
       const nestedFor = helpers.createStructuredDirective(
         'for',
         'for',
         {
           variable: [pattern.variable],
           source: pattern.source,
-          action: Array.isArray(action) ? action : [action]
+          action: normalizedAction,
+          forOptions: opts || undefined
         },
         {
-          variable: pattern.variable.identifier,
-          source: pattern.source,
-          action: action
+          variable: helpers.reconstructRawString(pattern.variable),
+          source: helpers.reconstructRawString(pattern.source),
+          action: actionVariant.raw
         },
-        {
-          hasVariables: true,
-          actionType: 'single',
-          isNested: true
-        },
+        meta,
         location()
       );
-      
+
       // Return as array for consistency with other actions
       return [nestedFor];
     }
-  // Special handling for /output directive with full source support via shared patterns
-  / "output" _ source:OutputSource? _ "to" _ target:OutputTarget {
-      const values = {
-        target: target
-      };
-      
-      const raw = {
-        target: target.raw
-      };
-      
-      let subtype = 'outputDocument';
-      const meta = { 
-        hasSource: false,
-        targetType: target.type
-      };
-      
-      if (source) {
-        values.source = source.values;
-        raw.source = source.raw;
-        meta.hasSource = true;
-        meta.sourceType = source.type;
-        subtype = 'outputFile';
-      }
-      
-      return [helpers.createNode(NodeType.Directive, {
-        kind: 'output',
-        subtype: subtype,
-        values: values,
-        raw: raw,
-        meta: meta,
-        location: location()
-      })];
-    }
-  // Support for /append directive inside /for actions
-  / "append" _ source:OutputSource _ "to" _ target:OutputTargetFile format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
-      const values = {
-        source: source.values,
-        target
-      };
 
-      const raw = {
-        source: source.raw,
-        target: target.raw
-      };
-
-      const meta = {
-        sourceType: source.type,
-        targetType: 'file',
-        hasSource: true,
-        ...(format ? { format, explicitFormat: true } : {})
-      };
-
-      helpers.processPipelineEnding(values, raw, meta, ending);
-
-      return [helpers.createStructuredDirective(
-        'append',
-        'appendFile',
-        values,
-        raw,
-        meta,
+// Separator for block statements - disallow commas to avoid array confusion
+BlockStatementSeparator
+  = _ "," _ {
+      helpers.mlldError(
+        'Comma separators are not allowed in block statements. Use whitespace or semicolons between statements.',
+        "whitespace",
         location()
-      )];
+      );
     }
-  // Special handling for /log directive - syntactic sugar for output to stderr
-  / "log" _ source:OutputSource? {
-      // Create stdout target automatically (same as /log directive)
-      const stdoutTarget = {
-        type: 'stream',
-        stream: 'stderr',
-        raw: 'stderr'
-      };
-      
-      const values = {
-        target: stdoutTarget
-      };
-      
-      const raw = {
-        target: 'stderr'
-      };
-      
-      let subtype = 'outputStream';
-      const meta = { 
-        hasSource: false,
-        targetType: 'stream',
-        isLogSugar: true  // Mark for debugging/tracing
-      };
-      
-      if (source) {
-        values.source = source.values;
-        raw.source = source.raw;
-        meta.hasSource = true;
-        meta.sourceType = source.type;
+  / _? BlockComments+ _
+  / _ ";" _
+  / _
+
+// Statement list for for-block bodies
+ForBlockStatementList "for block statement list"
+  = leadingComments:LeadingBlockComment* _ first:ForBlockStatement rest:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })* trailing:BlockComments* {
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
+      const stmts = [...normalize(first), ...rest.flatMap(normalize)];
+      // Attach leading comments to first statement's meta (immutable update)
+      if (leadingComments.length > 0 && stmts.length > 0) {
+        const firstStmt = stmts[0];
+        if (firstStmt && typeof firstStmt === 'object') {
+          const existingMeta = firstStmt.meta || {};
+          stmts[0] = {
+            ...firstStmt,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
       }
-      
-      return [helpers.createNode(NodeType.Directive, {
-        kind: 'output',  // CRITICAL: Use 'output' kind, not 'log'
-        subtype: subtype,
-        values: values,
-        raw: raw,
-        meta: meta,
-        location: location()
-      })];
+      return stmts;
     }
-  // Generic handling for other directives (with optional /)
-  / "show" _ content:WhenRHSShowContent ending:StandardDirectiveEnding {
-      // Support both template/quote content and unified references for show actions
-      // Pass along any tail pipeline from the standard directive ending
-      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
+  / BlockComments+ { return []; }
+
+// Single statement inside a for block
+ForBlockStatement "for block statement"
+  = LetAssignment
+  / AugmentedAssignment
+  / WhenExpressionAny
+  / ForNestedDirective
+  / ForSingleAction
+
+ForBlockReturnStatement "for block return statement"
+  = "=>" _ value:WhenRHSAction noise:BlockComments* {
+      const normalized = Array.isArray(value) ? value.flat() : [value];
+      return normalized;
     }
-  / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
-      // Create the action node; pass ending.tail so pipelines are embedded immutably
-      return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null);
+
+ForBlockBody "for block body"
+  = statements:ForBlockStatementList firstReturn:(
+      BlockStatementSeparator ret:ForBlockReturnStatement { return ret; }
+    / _ ret:ForBlockReturnStatement { return ret; }
+    )
+    extraReturn:(BlockStatementSeparator ForBlockReturnStatement { return true; })?
+    trailing:(BlockStatementSeparator ForBlockStatement { return true; })? {
+      if (extraReturn) {
+        helpers.mlldError(
+          'Multiple return statements in for block. Only one return allowed as last statement.',
+          'single return',
+          location()
+        );
+      }
+      if (trailing) {
+        helpers.mlldError(
+          'Return must be the last statement in a block.',
+          'end of block',
+          location()
+        );
+      }
+      return {
+        statements,
+        returnStmt: firstReturn
+      };
     }
-  / whenAction:WhenRHSAction {
-      // Allow when-style actions (including directives) directly in for loop bodies
-      return Array.isArray(whenAction) ? whenAction : [whenAction];
+  / statements:ForBlockStatementList {
+      return {
+        statements,
+        returnStmt: null
+      };
     }
-  / invocation:UnifiedReferenceWithTail {
-      // Follow the /when pattern - no @ consumption
-      return [invocation];
+
+// Block action for /for directives and for-expressions
+ForBlockAction "for block action"
+  = "[" _ body:ForBlockBody _ "]" {
+      const statements = body.statements || [];
+      const returnStmt = body.returnStmt;
+      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
+      const mergedStatements = hasReturn ? [...statements, ...returnStmt] : statements;
+      return {
+        type: 'ForBlock',
+        statements: mergedStatements,
+        meta: {
+          statementCount: statements.length,
+          hasReturn
+        }
+      };
+    }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'ForBlockBody',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block in for action. Expected ']' to close the block.`,
+        "]",
+        location()
+      );
+    }
+
+// Action variant for /for directives: single action or block
+ForActionVariant "for action variant"
+  = "=>" _ action:ForSingleAction {
+      const normalized = Array.isArray(action) ? action : [action];
+      return {
+        action: normalized,
+        actionType: 'single',
+        raw: helpers.reconstructRawString(normalized)
+      };
+    }
+  / "=>" _ block:ForBlockAction {
+      const normalized = Array.isArray(block.statements) ? block.statements : [block.statements];
+      return {
+        action: normalized,
+        actionType: 'block',
+        raw: helpers.reconstructRawString(normalized),
+        blockMeta: block.meta
+      };
+    }
+  / block:ForBlockAction {
+      const normalized = Array.isArray(block.statements) ? block.statements : [block.statements];
+      return {
+        action: normalized,
+        actionType: 'block',
+        raw: helpers.reconstructRawString(normalized),
+        blockMeta: block.meta
+      };
+    }
+
+// Action surface for exe for-expressions
+ForExpressionAction "for expression action"
+  = block:ForBlockAction { return block.statements; }
+  / whenExpr:WhenExpressionAny { return [whenExpr]; }
+  / action:WhenRHSAction {
+      return Array.isArray(action) ? action : [action];
     }

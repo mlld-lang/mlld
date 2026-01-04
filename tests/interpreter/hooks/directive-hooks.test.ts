@@ -32,17 +32,17 @@ describe('directive hook infrastructure', () => {
     expect(hookEvents).toEqual(['pre:var', 'post']);
   });
 
-  it('builds @ctx.op from the context manager stack', () => {
+  it('builds @mx.op from the context manager stack', () => {
     const env = createEnv();
     env.getContextManager().pushOperation({ type: 'diagnostic', labels: [] });
-    const ctxVar = env.getVariable('ctx');
+    const mxVar = env.getVariable('mx');
     env.getContextManager().popOperation();
 
-    expect(ctxVar).toBeDefined();
-    expect((ctxVar?.value as any)?.op?.type).toBe('diagnostic');
+    expect(mxVar).toBeDefined();
+    expect((mxVar?.value as any)?.op?.type).toBe('diagnostic');
   });
 
-  it('mirrors pipeline context into @ctx.pipe namespace', () => {
+  it('mirrors pipeline context into @mx.pipe namespace', () => {
     const env = createEnv();
     env.setPipelineContext({
       stage: 2,
@@ -57,12 +57,12 @@ describe('directive hook infrastructure', () => {
       hintHistory: ['retry please']
     });
 
-    const ctx = env.getVariable('ctx')?.value as any;
-    expect(ctx).toBeDefined();
-    expect(ctx.isPipeline).toBe(true);
-    expect(ctx.pipe.stage).toBe(2);
-    expect(ctx.pipe.try).toBe(2);
-    expect(ctx.input.foo).toBe('bar');
+    const mx = env.getVariable('mx')?.value as any;
+    expect(mx).toBeDefined();
+    expect(mx.isPipeline).toBe(true);
+    expect(mx.pipe.stage).toBe(2);
+    expect(mx.pipe.try).toBe(2);
+    expect(mx.input.foo).toBe('bar');
   });
 
   it('extracts /show directive inputs for pre-hooks', async () => {
@@ -255,7 +255,7 @@ describe('directive hook infrastructure', () => {
     let tokenSnapshot: number[] = [];
     env.getHookManager().registerPre(async (directive, _inputs, _env, _operation, helpers) => {
       if (directive.kind === 'show') {
-        tokenSnapshot = helpers?.guard?.ctx.tokens ?? [];
+        tokenSnapshot = helpers?.guard?.mx.tokens ?? [];
         return { action: 'abort', metadata: { reason: 'guard helper capture' } };
       }
       return { action: 'continue' };

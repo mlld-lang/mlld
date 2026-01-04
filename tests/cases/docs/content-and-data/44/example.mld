@@ -1,0 +1,1 @@
+exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"

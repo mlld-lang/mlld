@@ -10,7 +10,6 @@ import type { NodeShadowEnvironment } from '../NodeShadowEnvironment';
 import { prepareParamsForShadow, createMlldHelpers } from '../variable-proxy';
 import { enhanceJSError } from '@core/errors/patterns/init';
 import { addImplicitReturn } from './implicit-return';
-import { getStreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { randomUUID } from 'crypto';
 
 export interface NodeShadowEnvironmentProvider {
@@ -37,7 +36,8 @@ export class NodeExecutor extends BaseCommandExecutor {
   constructor(
     errorUtils: ErrorUtils,
     workingDirectory: string,
-    private nodeShadowProvider: NodeShadowEnvironmentProvider
+    private nodeShadowProvider: NodeShadowEnvironmentProvider,
+    private getBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus
   ) {
     super(errorUtils, workingDirectory);
   }
@@ -57,7 +57,7 @@ export class NodeExecutor extends BaseCommandExecutor {
       `node: ${code.substring(0, 50)}...`,
       nodeOptions,
       context,
-      () => this.executeNodeCode(code, params, metadata, context)
+      () => this.executeNodeCode(code, params, metadata, context, nodeOptions)
     );
   }
 
@@ -65,19 +65,38 @@ export class NodeExecutor extends BaseCommandExecutor {
     code: string,
     params?: Record<string, any>,
     metadata?: Record<string, any>,
-    context?: CommandExecutionContext
+    context?: CommandExecutionContext,
+    options?: CommandExecutionOptions
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
+    const workingDirectory = options?.workingDirectory || this.workingDirectory;
+    const resolvedWorkingDirectory = workingDirectory && fs.existsSync(workingDirectory)
+      ? workingDirectory
+      : process.cwd();
     let normalizedCode = code;
 
     try {
       normalizedCode = addImplicitReturn(code);
       const streamingEnabled = Boolean(context?.streamingEnabled);
       if (!streamingEnabled) {
-        return await this.executeNodeInProcess(normalizedCode, params, metadata, startTime, context);
+        return await this.executeNodeInProcess(
+          normalizedCode,
+          params,
+          metadata,
+          startTime,
+          context,
+          resolvedWorkingDirectory
+        );
       }
 
-      return await this.executeNodeSubprocessStreaming(normalizedCode, params, metadata, startTime, context);
+      return await this.executeNodeSubprocessStreaming(
+        normalizedCode,
+        params,
+        metadata,
+        startTime,
+        context,
+        resolvedWorkingDirectory
+      );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
@@ -110,7 +129,7 @@ export class NodeExecutor extends BaseCommandExecutor {
           ...(enrichedError as any).details,
           stderr: originalError,
           exitCode: 1,
-          workingDirectory: this.workingDirectory,
+          workingDirectory: resolvedWorkingDirectory,
           directiveType: context?.directiveType || 'exec'
         };
       }
@@ -123,66 +142,80 @@ export class NodeExecutor extends BaseCommandExecutor {
     params: Record<string, any> | undefined,
     metadata: Record<string, any> | undefined,
     startTime: number,
-    context?: CommandExecutionContext
+    context?: CommandExecutionContext,
+    workingDirectory?: string
   ): Promise<CommandExecutionResult> {
-    // Always use shadow environment for Node.js execution
-    const nodeShadowEnv = this.nodeShadowProvider.getOrCreateNodeShadowEnv();
-    
-    // NEW CODE: Extract and handle captured shadow environments
-    const capturedEnvs = params?.__capturedShadowEnvs;
-    if (params && '__capturedShadowEnvs' in params) {
-      delete params.__capturedShadowEnvs;
-    }
-    
-    // Prepare parameters with Variable proxies
-    const sanitizedParams = params ? { ...params } : undefined;
-    let shadowParams = sanitizedParams;
+    const previousCwd = process.cwd();
+    const targetCwd = workingDirectory || previousCwd;
+    const shouldRestoreCwd = Boolean(targetCwd && previousCwd !== targetCwd);
 
-    if (sanitizedParams) {
-      shadowParams = prepareParamsForShadow(sanitizedParams);
-      const primitiveMetadata = (shadowParams as any).__mlldPrimitiveMetadata;
-      if (primitiveMetadata) {
-        delete (shadowParams as any).__mlldPrimitiveMetadata;
+    if (shouldRestoreCwd) {
+      process.chdir(targetCwd);
+    }
+
+    try {
+      // Always use shadow environment for Node.js execution
+      const nodeShadowEnv = this.nodeShadowProvider.getOrCreateNodeShadowEnv();
+
+      // Extract and handle captured shadow environments
+      const capturedEnvs = params?.__capturedShadowEnvs;
+      if (params && '__capturedShadowEnvs' in params) {
+        delete params.__capturedShadowEnvs;
       }
-      // Also add mlld helpers with metadata
-      if (!shadowParams.mlld) {
-        const mergedMetadata = {
-          ...(metadata as Record<string, any> | undefined),
-          ...(primitiveMetadata || {})
-        };
-        const helperMetadata = Object.keys(mergedMetadata || {}).length ? mergedMetadata : undefined;
-        shadowParams.mlld = createMlldHelpers(helperMetadata);
+
+      // Prepare parameters with Variable proxies
+      const sanitizedParams = params ? { ...params } : undefined;
+      let shadowParams = sanitizedParams;
+
+      if (sanitizedParams) {
+        shadowParams = prepareParamsForShadow(sanitizedParams);
+        const primitiveMetadata = (shadowParams as any).__mlldPrimitiveMetadata;
+        if (primitiveMetadata) {
+          delete (shadowParams as any).__mlldPrimitiveMetadata;
+        }
+        // Also add mlld helpers with metadata
+        if (!shadowParams.mlld) {
+          const mergedMetadata = {
+            ...(metadata as Record<string, any> | undefined),
+            ...(primitiveMetadata || {})
+          };
+          const helperMetadata = Object.keys(mergedMetadata || {}).length ? mergedMetadata : undefined;
+          shadowParams.mlld = createMlldHelpers(helperMetadata);
+        }
+      }
+
+      // Merge captured shadow environments if they exist
+      if (capturedEnvs) {
+        const nodeEnv = capturedEnvs.node || capturedEnvs.nodejs;
+        if (nodeEnv) {
+          nodeShadowEnv.mergeCapturedFunctions(nodeEnv);
+        }
+      }
+
+      // Use shadow environment with VM
+      const result = await nodeShadowEnv.execute(code, shadowParams);
+
+      // Format result (same as subprocess version)
+      let output = '';
+      if (result !== undefined) {
+        if (typeof result === 'object') {
+          output = JSON.stringify(result);
+        } else {
+          output = String(result);
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      return {
+        output,
+        duration,
+        exitCode: 0
+      };
+    } finally {
+      if (shouldRestoreCwd) {
+        process.chdir(previousCwd);
       }
     }
-    
-    // Merge captured shadow environments if they exist
-    if (capturedEnvs) {
-      // Resolve shadow environment for Node.js - look for 'node' or 'nodejs' keys
-      const nodeEnv = capturedEnvs.node || capturedEnvs.nodejs;
-      if (nodeEnv) {
-        nodeShadowEnv.mergeCapturedFunctions(nodeEnv);
-      }
-    }
-    
-    // Use shadow environment with VM
-    const result = await nodeShadowEnv.execute(code, shadowParams);
-    
-    // Format result (same as subprocess version)
-    let output = '';
-    if (result !== undefined) {
-      if (typeof result === 'object') {
-        output = JSON.stringify(result);
-      } else {
-        output = String(result);
-      }
-    }
-    
-    const duration = Date.now() - startTime;
-    return {
-      output,
-      duration,
-      exitCode: 0
-    };
   }
 
   private async executeNodeSubprocessStreaming(
@@ -190,9 +223,10 @@ export class NodeExecutor extends BaseCommandExecutor {
     params: Record<string, any> | undefined,
     metadata: Record<string, any> | undefined,
     startTime: number,
-    context?: CommandExecutionContext
+    context?: CommandExecutionContext,
+    workingDirectory?: string
   ): Promise<CommandExecutionResult> {
-    const bus = getStreamBus();
+    const bus = context?.bus ?? this.getBus();
     const pipelineId = context?.pipelineId || 'pipeline';
     const stageIndex = context?.stageIndex ?? 0;
     const parallelIndex = context?.parallelIndex;
@@ -246,7 +280,7 @@ ${code}
       };
 
       const child = spawn('node', [tmpFile], {
-        cwd: this.workingDirectory,
+        cwd: workingDirectory || this.workingDirectory,
         env: { ...process.env },
         stdio: ['pipe', 'pipe', 'pipe']
       });
@@ -277,7 +311,7 @@ ${code}
               exitCode: 1,
               stderr: err.message,
               duration,
-              workingDirectory: this.workingDirectory,
+              workingDirectory: workingDirectory || this.workingDirectory,
               directiveType: context?.directiveType || 'exec',
               streamId
             }
@@ -317,7 +351,7 @@ ${code}
                 stderr: stderrBuffer,
                 stdout: stdoutBuffer,
                 duration,
-                workingDirectory: this.workingDirectory,
+                workingDirectory: workingDirectory || this.workingDirectory,
                 directiveType: context?.directiveType || 'exec',
                 streamId
               }

@@ -4,8 +4,33 @@
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 import { WithClause } from './run';
-import { ParameterNode } from './primitives';
+import type { BaseMlldNode, ParameterNode } from './primitives';
 import type { DataLabel } from './security';
+
+export interface ExeReturnNode extends BaseMlldNode {
+  type: 'ExeReturn';
+  values: BaseMlldNode[];
+  raw?: string;
+  meta?: {
+    hasValue?: boolean;
+  };
+}
+
+export interface ExeBlockNode extends BaseMlldNode {
+  type: 'ExeBlock';
+  values: {
+    statements: BaseMlldNode[];
+    return?: ExeReturnNode;
+  };
+  raw?: {
+    statements?: string;
+    hasReturn?: boolean;
+  };
+  meta?: {
+    statementCount?: number;
+    hasReturn?: boolean;
+  };
+}
 
 /**
  * Exe directive raw values
@@ -19,6 +44,8 @@ export interface ExeRaw {
   code?: string;
   withClause?: WithClause;
   securityLabels?: string;
+  statements?: string;
+  hasReturn?: boolean;
 }
 
 /**
@@ -36,6 +63,8 @@ export interface ExeMeta {
   };
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  statementCount?: number;
+  hasReturn?: boolean;
 }
 
 /**
@@ -50,7 +79,18 @@ export interface ExeDirectiveNode extends TypedDirectiveNode<'exe', ExeSubtype> 
 /**
  * Exe subtypes
  */
-export type ExeSubtype = 'exeCommand' | 'exeCode';
+export type ExeSubtype =
+  | 'exeCommand'
+  | 'exeCode'
+  | 'exeData'
+  | 'exeTemplate'
+  | 'exeTemplateFile'
+  | 'exeSection'
+  | 'exeWhen'
+  | 'exeForeach'
+  | 'exeFor'
+  | 'exeResolver'
+  | 'exeBlock';
 
 /**
  * Exe directive values - different structures based on subtype
@@ -64,6 +104,8 @@ export interface ExeValues {
   code?: ContentNodeArray;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
+  statements?: BaseMlldNode[];
+  return?: ExeReturnNode;
 }
 
 /**
@@ -110,6 +152,28 @@ export interface ExeCodeDirectiveNode extends ExeDirectiveNode {
     securityLabels?: string;
   };
   meta: ExeMeta;
+}
+
+export interface ExeBlockDirectiveNode extends ExeDirectiveNode {
+  subtype: 'exeBlock';
+  values: {
+    identifier: TextNodeArray;
+    params: ParameterNode[];
+    statements: BaseMlldNode[];
+    return?: ExeReturnNode;
+    securityLabels?: DataLabel[];
+  };
+  raw: {
+    identifier: string;
+    params: string[];
+    statements: string;
+    hasReturn: boolean;
+    securityLabels?: string;
+  };
+  meta: ExeMeta & {
+    statementCount: number;
+    hasReturn: boolean;
+  };
 }
 
 /**

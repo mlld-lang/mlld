@@ -2,17 +2,20 @@
 
 ## Format unformatted markdown
 
-# Header with extra spaces  
+#  Header with extra spaces
 
-This is a paragraph with irregular spacing.
+This is    a paragraph with     irregular spacing.
 
-- Item 1
+-   Item 1
 - Item 2
 - Nested item
 
-| Col1 | Col2 | Col3 |
-| ---- | ---- | ---- |
-| A    | B    | C    |
+| Col1|Col2 |Col3|
+
+|---|---|---|
+
+|A|B|C|
+
 ## Using uppercase alias
 
 # Quick test

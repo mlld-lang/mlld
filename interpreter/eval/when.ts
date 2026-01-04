@@ -6,7 +6,8 @@ import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
 import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
 import { VariableImporter } from './import/VariableImporter';
-import { evaluate } from '../core/interpreter';
+import { evaluate, interpolate } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
 import { logger } from '@core/utils/logger';
 import {
   isTextLike,
@@ -25,27 +26,116 @@ import { MlldWhenExpressionError } from '@core/errors';
 
 const DENIED_KEYWORD = 'denied';
 
-/**
- * Helper to evaluate a let assignment and return updated environment
- */
-async function evaluateLetAssignment(
-  entry: LetAssignmentNode,
+async function evaluateAssignmentValue(
+  entry: LetAssignmentNode | AugmentedAssignmentNode,
   env: Environment
-): Promise<Environment> {
+): Promise<unknown> {
   let value: unknown;
-  // Check if value is a raw primitive or contains nodes
+  const tail = (entry as any).withClause;
+  let handledByRunEvaluator = false;
+  const wrapperType = (entry as any).meta?.wrapperType;
   const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+
+  if (firstValue && typeof firstValue === 'object' && (firstValue as any).type === 'code') {
+    const { evaluateCodeExecution } = await import('./code-execution');
+    const result = await evaluateCodeExecution(firstValue as any, env);
+    value = result.value;
+  }
+
+  if (firstValue && typeof firstValue === 'object' && (firstValue as any).type === 'command') {
+    const commandNode: any = firstValue;
+
+    if (tail) {
+      const { evaluateRun } = await import('./run');
+      const runDirective: any = {
+        type: 'Directive',
+        nodeId: (entry as any).nodeId ? `${(entry as any).nodeId}-run` : undefined,
+        location: entry.location,
+        kind: 'run',
+        subtype: 'runCommand',
+        source: 'command',
+        values: {
+          command: commandNode.command,
+          withClause: tail
+        },
+        raw: {
+          command: Array.isArray(commandNode.command) ? (commandNode.meta?.raw || '') : String(commandNode.command),
+          withClause: tail
+        },
+        meta: {
+          isDataValue: true
+        }
+      };
+      const result = await evaluateRun(runDirective, env);
+      value = result.value;
+      handledByRunEvaluator = true;
+    } else {
+      if (Array.isArray(commandNode.command)) {
+        const interpolatedCommand = await interpolate(
+          commandNode.command,
+          env,
+          InterpolationContext.ShellCommand
+        );
+        value = await env.executeCommand(interpolatedCommand);
+      } else {
+        value = await env.executeCommand(commandNode.command);
+      }
+
+      const { processCommandOutput } = await import('../utils/json-auto-parser');
+      value = processCommandOutput(value);
+    }
+  }
+
+  if (wrapperType && Array.isArray(entry.value)) {
+    if (wrapperType === 'tripleColon') {
+      value = entry.value;
+    } else if (
+      wrapperType === 'backtick' &&
+      entry.value.length === 1 &&
+      (entry.value[0] as any).type === 'Text'
+    ) {
+      value = (entry.value[0] as any).content;
+    } else {
+      value = await interpolate(entry.value, env);
+    }
+  }
+
   const isRawPrimitive = firstValue === null ||
     typeof firstValue === 'number' ||
     typeof firstValue === 'boolean' ||
     (typeof firstValue === 'string' && !('type' in (firstValue as any)));
 
-  if (isRawPrimitive) {
-    value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
-  } else {
-    const valueResult = await evaluate(entry.value, env);
-    value = valueResult.value;
+  if (value === undefined) {
+    if (isRawPrimitive) {
+      value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+    } else {
+      const valueResult = await evaluate(entry.value, env, { isExpression: true });
+      value = valueResult.value;
+    }
   }
+
+  if (tail && !handledByRunEvaluator) {
+    const { processPipeline } = await import('./pipeline/unified-processor');
+    value = await processPipeline({
+      value,
+      env,
+      node: entry,
+      identifier: entry.identifier,
+      location: entry.location
+    });
+  }
+
+  return value;
+}
+
+/**
+ * Helper to evaluate a let assignment and return updated environment
+ */
+export async function evaluateLetAssignment(
+  entry: LetAssignmentNode,
+  env: Environment
+): Promise<Environment> {
+  const value = await evaluateAssignmentValue(entry, env);
 
   const importer = new VariableImporter();
   const variable = importer.createVariableFromValue(
@@ -63,10 +153,11 @@ async function evaluateLetAssignment(
 /**
  * Helper to evaluate an augmented assignment and return updated environment
  */
-async function evaluateAugmentedAssignment(
+export async function evaluateAugmentedAssignment(
   entry: AugmentedAssignmentNode,
   env: Environment
 ): Promise<Environment> {
+  const isolationRoot = findIsolationRoot(env);
   // Get existing variable - must exist
   const existing = env.getVariable(entry.identifier);
   if (!existing) {
@@ -77,20 +168,18 @@ async function evaluateAugmentedAssignment(
     );
   }
 
-  // Evaluate the RHS value
-  let rhsValue: unknown;
-  const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-  const isRawPrimitive = firstValue === null ||
-    typeof firstValue === 'number' ||
-    typeof firstValue === 'boolean' ||
-    (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-  if (isRawPrimitive) {
-    rhsValue = (entry.value as any[]).length === 1 ? firstValue : entry.value;
-  } else {
-    const rhsResult = await evaluate(entry.value, env);
-    rhsValue = rhsResult.value;
+  if (isolationRoot) {
+    const owner = findVariableOwner(env, entry.identifier);
+    if (!owner || !isDescendantEnvironment(owner, isolationRoot)) {
+      throw new MlldWhenExpressionError(
+        `Parallel for block cannot mutate outer variable @${entry.identifier}.`,
+        entry.location
+      );
+    }
   }
+
+  // Evaluate the RHS value
+  const rhsValue = await evaluateAssignmentValue(entry, env);
 
   // Get current value of the variable
   const existingValue = await extractVariableValue(existing, env);
@@ -107,8 +196,43 @@ async function evaluateAugmentedAssignment(
     undefined,
     { env }
   );
-  env.updateVariable(entry.identifier, updatedVar);
+
+  // Update the variable in the owning environment (current scope or ancestor)
+  let targetEnv: Environment | undefined = env;
+  while (targetEnv && !targetEnv.getCurrentVariables().has(entry.identifier)) {
+    targetEnv = targetEnv.getParent();
+  }
+  (targetEnv ?? env).updateVariable(entry.identifier, updatedVar);
   return env;
+}
+
+function findIsolationRoot(env: Environment): Environment | undefined {
+  let current: Environment | undefined = env;
+  while (current) {
+    if ((current as any).__parallelIsolationRoot === current) {
+      return current;
+    }
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function findVariableOwner(env: Environment, name: string): Environment | undefined {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current.getCurrentVariables().has(name)) return current;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function isDescendantEnvironment(env: Environment, ancestor: Environment): boolean {
+  let current: Environment | undefined = env;
+  while (current) {
+    if (current === ancestor) return true;
+    current = current.getParent();
+  }
+  return false;
 }
 
 /**
@@ -748,7 +872,7 @@ async function evaluateAnyMatch(
         // Create a variable from the condition value
         const variable = typeof conditionValue === 'string' ?
           createSimpleTextVariable(variableName, conditionValue, {
-            ctx: {
+            mx: {
               source: {
                 directive: 'var',
                 syntax: 'quoted',
@@ -758,7 +882,7 @@ async function evaluateAnyMatch(
             }
           }) :
           createObjectVariable(variableName, conditionValue, {
-            ctx: {
+            mx: {
               source: {
                 directive: 'var',
                 syntax: 'object',
@@ -1132,7 +1256,7 @@ export function conditionTargetsDenied(condition: BaseMlldNode[]): boolean {
         return true;
       }
       if (
-        identifier === 'ctx' &&
+        identifier === 'mx' &&
         Array.isArray((node as any).fields) &&
         (node as any).fields.some(isDeniedField)
       ) {

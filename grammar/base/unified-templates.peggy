@@ -140,13 +140,20 @@ UnifiedBraceInterpolation "Brace interpolation"
 
 // @var style interpolation for double colons
 UnifiedAtInterpolation "At-sign interpolation"
-  = ExecResultMethodCall         // @func(args).method(args)
+  = ConditionalTemplateSnippet   // @var?`...`
+  / ExecResultMethodCall         // @func(args).method(args)
   / FieldAccessExec              // @obj.method(args)
   / UnifiedExecInvocation        // @func(args)
   / UnifiedAngleBracketContent   // <file.md> or literal <xml> - USE UNIFIED PATTERN
   / TemplateVariableReference    // @var (with template pipes and fields)
   / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
-  / "@" !BaseIdentifier char:. { // @ followed by non-identifier
+  / "@@" {                       // @@ -> literal @ (mlld-75e)
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {                      // \@ -> literal @
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "@" !BaseIdentifier char:. { // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
   / UnifiedDoubleColonTextSegment  // Plain text
@@ -176,10 +183,10 @@ UnifiedTemplateChar
   / EscapeSequence
   / !((":::" / "{{" / "}}")) char:. { return char; }
 
-// Text for double colon templates (excludes ::, @, and < only when it's a valid file ref or literal tag)
+// Text for double colon templates (excludes ::, @, \@, and < only when it's a valid file ref or literal tag)
 // Only excludes /for and /end when they appear at line start
 UnifiedDoubleColonTextSegment "Double colon text segment"
-  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
+  = chars:(!("::" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
@@ -280,14 +287,22 @@ TemplateInlineShow "inline show (template)"
 // -------------------------------------------------------------
 
 // ATT-style templates (@var interpolation, slash blocks, inline show)
+// Uses UnifiedAttTextSegment which allows :: as literal text (unlike double-colon templates)
 TemplateBodyAtt "template body for .att files"
   = parts:(
       TemplateSlashForBlockDouble
       / TemplateInlineShow
       / UnifiedAtInterpolation
       / FileReferenceInterpolation
-      / UnifiedDoubleColonTextSegment
+      / UnifiedAttTextSegment
     )* { return parts; }
+
+// Text for standalone .att files - allows :: as literal text
+// Only excludes @, \@, < (for file refs), and /for, /end at line start
+UnifiedAttTextSegment "ATT text segment"
+  = chars:(!((LineStartPredicate "/for") / (LineStartPredicate "/end") / "\\@" / "@" / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
 
 // MTT-style templates ({{var}} interpolation, inline show)
 TemplateBodyMtt "template body for .mtt files"

@@ -28,7 +28,7 @@ export interface BaseVariable {
   modifiedAt: number;
   definedAt?: SourceLocation;
   source: VariableSource;
-  ctx?: VariableContextSnapshot;
+  mx?: VariableContextSnapshot;
   internal?: VariableInternalMetadata;
 }
 
@@ -89,7 +89,7 @@ export interface VariableMetadata extends Record<string, any> {
   security?: SecurityDescriptor;
   capability?: CapabilityContext;
   metrics?: VariableMetrics;
-  ctxCache?: VariableContextSnapshot;
+  mxCache?: VariableContextSnapshot;
 }
 
 export interface VariableMetrics {
@@ -105,6 +105,9 @@ export interface VariableContext {
   definedAt?: SourceLocation;
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
+  keys?: readonly string[];
+  values?: readonly unknown[];
+  entries?: readonly (readonly [string, unknown])[];
   tokens?: number | readonly number[];
   tokest?: number;
   length?: number;

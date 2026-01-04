@@ -34,7 +34,7 @@ mlld provides two levels of editor support: basic TextMate grammars for regex-ba
 The mlld LSP provides intelligent features through semantic tokens:
 
 **Semantic Token Types**:
-- `directive` - /var, /show, /run, etc.
+- `directive` - /var, /show, /run, /while, /stream, /guard, etc.
 - `variable` - Variable declarations with @
 - `variableRef` - Variable references
 - `interpolation` - Variables in templates/commands
@@ -44,6 +44,10 @@ The mlld LSP provides intelligent features through semantic tokens:
 - `embeddedCode` - Code regions for syntax injection
 - `alligator` - File references <file.md>
 - `property` - Object property access
+
+**Mode Detection**:
+- `.mld` files → strict mode (bare directives like `var`, `show`)
+- `.mld.md` files → markdown mode (require `/` prefix)
 
 **Context Awareness**:
 - Different highlighting for @var in templates vs directives

@@ -13,7 +13,7 @@ export class ArgumentParser {
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show',
     'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps',
     'setup', 'alias', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
-    'mcp', 'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim'
+    'mcp', 'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor'
   ];
 
   parseArgs(args: string[]): CLIOptions {
@@ -59,6 +59,9 @@ export class ArgumentParser {
         case '-f':
           options.format = this.normalizeFormat(args[++i]);
           break;
+        case '--mode':
+          options.mode = this.normalizeMode(args[++i]);
+          break;
         case '--stdout':
           options.stdout = true;
           break;
@@ -81,6 +84,12 @@ export class ArgumentParser {
           break;
         case '--permissive':
           options.strict = false;
+          break;
+        case '--loose':
+        case '--markdown':
+        case '--md':
+        case '--prose':
+          options.mode = 'markdown';
           break;
         case '--home-path':
           options.homePath = args[++i];
@@ -196,8 +205,30 @@ export class ArgumentParser {
         case '--structured':
           options.structured = true;
           break;
-        case '--inject': {
-          // Multiple --inject flags allowed: --inject @config={"key":"val"} --inject @data=@file.json
+        // Streaming visibility options
+        case '--show-thinking':
+          options.showThinking = true;
+          break;
+        case '--show-tools':
+          options.showTools = true;
+          break;
+        case '--show-metadata':
+          options.showMetadata = true;
+          break;
+        case '--show-all-streaming':
+          options.showAllStreaming = true;
+          break;
+        case '--stream-format': {
+          const format = args[++i];
+          if (format !== 'text' && format !== 'ansi' && format !== 'json') {
+            throw new Error('--stream-format must be "text", "ansi", or "json"');
+          }
+          options.streamOutputFormat = format;
+          break;
+        }
+        case '--inject':
+        case '--payload': {
+          // Multiple flags allowed: --inject @config={"key":"val"} --payload @data=@file.json
           const injectValue = args[++i];
           if (!options.inject) options.inject = [];
           options.inject.push(injectValue);
@@ -343,6 +374,15 @@ export class ArgumentParser {
         console.warn(`Warning: Unknown format '${format}', defaulting to markdown`);
         return 'markdown';
     }
+  }
+
+  normalizeMode(mode?: string): 'strict' | 'markdown' | undefined {
+    if (!mode) return undefined;
+    const normalized = mode.toLowerCase();
+    if (normalized === 'strict' || normalized === 'markdown') {
+      return normalized as 'strict' | 'markdown';
+    }
+    throw new Error("Invalid mode. Use 'strict' or 'markdown'.");
   }
 
   detectSpecialCommands(args: string[]): string[] {

@@ -3,6 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { getTextContent } from '../utils/type-guard-helpers';
 import type { OperationContext, PipelineContextSnapshot } from '../env/ContextManager';
+import type { PolicyDirectiveNode } from '@core/types/policy';
 import { extractDirectiveInputs } from './directive-inputs';
 import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
 import type { Variable } from '@core/types/variable';
@@ -21,10 +22,12 @@ import { evaluateExe } from './exe';
 import { evaluateForDirective } from './for';
 import { evaluateExport } from './export';
 import { evaluateGuard } from './guard';
+import { evaluateNeeds, evaluateWants } from './needs';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
-import { updateCtxFromDescriptor } from '@core/types/variable/CtxHelpers';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { evaluatePolicy } from './policy';
 
 /**
  * Extract trace information from a directive
@@ -97,6 +100,14 @@ function extractTraceInfo(directive: DirectiveNode): {
       const firstExport = directive.values?.exports?.[0];
       if (firstExport && typeof firstExport.identifier === 'string') {
         info.varName = firstExport.identifier;
+      }
+      break;
+
+    case 'policy':
+      const policyNameNode = (directive.values as any)?.name?.[0];
+      const policyName = getTextContent(policyNameNode);
+      if (policyName) {
+        info.varName = policyName;
       }
       break;
   }
@@ -174,9 +185,9 @@ export async function evaluateDirective(
           if (isVariable(result.value)) {
             const replacement = result.value as Variable;
             targetVar.value = (replacement as any).value ?? replacement;
-            targetVar.ctx = {
-              ...(targetVar.ctx ?? {}),
-              ...(replacement.ctx ?? {})
+            targetVar.mx = {
+              ...(targetVar.mx ?? {}),
+              ...(replacement.mx ?? {})
             };
           } else {
             targetVar.value = result.value;
@@ -185,10 +196,10 @@ export async function evaluateDirective(
               mergeArrayElements: true
             });
             if (descriptor) {
-              const ctx = (targetVar.ctx ?? (targetVar.ctx = {} as any)) as Record<string, unknown>;
-              updateCtxFromDescriptor(ctx, descriptor);
-              if ('ctxCache' in ctx) {
-                delete (ctx as any).ctxCache;
+              const mx = (targetVar.mx ?? (targetVar.mx = {} as any)) as Record<string, unknown>;
+              updateVarMxFromDescriptor(mx, descriptor);
+              if ('mxCache' in mx) {
+                delete (mx as any).mxCache;
               }
             }
           }
@@ -345,6 +356,15 @@ async function dispatchDirective(
 
     case 'guard':
       return await evaluateGuard(directive, env);
+
+    case 'needs':
+      return await evaluateNeeds(directive, env);
+
+    case 'wants':
+      return await evaluateWants(directive, env);
+
+    case 'policy':
+      return await evaluatePolicy(directive as PolicyDirectiveNode, env);
 
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

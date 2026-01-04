@@ -6,4 +6,4 @@
 
 /var secret @token = "sek"
 /show `value: @token`
-/show `ctx guard try: @ctx.guard.try`
+/show `mx guard try: @mx.guard.try`

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ShellCommandExecutor } from './ShellCommandExecutor';
 import type { ErrorUtils } from '../ErrorUtils';
+import { StreamBus } from '@interpreter/eval/pipeline/stream-bus';
 import { MlldCommandExecutionError } from '@core/errors';
 
 describe('ShellCommandExecutor – E2BIG safeguards', () => {
@@ -14,7 +15,7 @@ describe('ShellCommandExecutor – E2BIG safeguards', () => {
       handleCommandError: vi.fn(),
       createError: vi.fn()
     } as any;
-    executor = new ShellCommandExecutor(mockErrorUtils, process.cwd());
+    executor = new ShellCommandExecutor(mockErrorUtils, process.cwd(), () => new StreamBus());
   });
 
   afterEach(() => {
@@ -56,4 +57,3 @@ describe('ShellCommandExecutor – E2BIG safeguards', () => {
     ).rejects.toBeInstanceOf(MlldCommandExecutionError);
   });
 });
-

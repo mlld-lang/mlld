@@ -1,0 +1,6 @@
+exe @llm(prompt) = stream cmd {
+  claude "@prompt" --output-format stream-json
+}
+
+show @llm("Write a haiku")
+>> Parses NDJSON, shows message text as it streams
