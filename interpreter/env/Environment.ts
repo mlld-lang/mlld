@@ -688,7 +688,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private createDebugObject(version: number = 2): any {
     // TODO: Add security toggle from mlld.lock.json when available
     // For now, assume debug is enabled
-    
+
     // Use DebugUtils for debug object creation
     const allVars = this.getAllVariables();
     return DebugUtils.createDebugObject(allVars, this.reservedNames, version);

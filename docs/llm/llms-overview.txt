@@ -63,6 +63,8 @@ Think Docker Compose or GitHub Actions: declare what happens, don't program how.
 
 **Executables** - Reusable functions: `exe @greet(name) = `Hello @name!``
 
+**Blocks** - Multi-statement bodies with `let` for local variables: `exe @f(x) = [ let @y = @x * 2; => @y ]`
+
 **Modules** - Import/export for code reuse: `import { @helper } from @corp/utils`
 </KEY_CONCEPTS>
 

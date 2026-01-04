@@ -483,7 +483,7 @@ export class VariableManager implements IVariableManager {
 
   getAllVariables(): Map<string, Variable> {
     const allVars = new Map<string, Variable>();
-    
+
     // Start with parent variables (they get overridden by local ones)
     const parent = this.deps.getParent();
     if (parent) {
@@ -492,12 +492,12 @@ export class VariableManager implements IVariableManager {
         allVars.set(name, variable);
       }
     }
-    
+
     // Add local variables (these override parent variables)
     for (const [name, variable] of this.variables) {
       allVars.set(name, variable);
     }
-    
+
     return allVars;
   }
 

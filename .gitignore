@@ -152,3 +152,5 @@ tmp
 
 # Local checkout of modules repo (not a submodule)
 modules/
+
+__pycache__/

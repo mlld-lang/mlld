@@ -17,6 +17,13 @@
       "home_channel": "ch-3c3hnmzj",
       "created_at": "2026-01-03T06:01:11Z",
       "status": "active"
+    },
+    "usr-vewfv6ne": {
+      "name": "opus",
+      "global_name": "mlld-opus",
+      "home_channel": "ch-3c3hnmzj",
+      "created_at": "2026-01-03T10:11:48Z",
+      "status": "active"
     }
   }
 }

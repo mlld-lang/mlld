@@ -3,7 +3,7 @@ exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
 
 >> Build review prompt
 exe @buildPrompt(filename, content) = `
-Review this TypeScript code for issues:
+Review this code for issues:
 File: @filename
 ---
 @content
