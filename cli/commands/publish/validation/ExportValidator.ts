@@ -198,8 +198,16 @@ export class ExportValidator implements ValidationStep {
     const fragments = node.values?.identifier;
     if (!Array.isArray(fragments)) return null;
 
-    const parts = (fragments as TextNode[])
-      .map(fragment => (typeof fragment.content === 'string' ? fragment.content : ''))
+    const parts = fragments
+      .map(fragment => {
+        if (fragment.type === 'VariableReference') {
+          return (fragment as VariableReferenceNode).identifier || '';
+        }
+        if (typeof (fragment as TextNode).content === 'string') {
+          return (fragment as TextNode).content;
+        }
+        return '';
+      })
       .join('')
       .trim();
 
