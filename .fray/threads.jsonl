@@ -64,3 +64,8 @@
 {"type":"thread_subscribe","thread_guid":"thrd-3aotidu1","agent_id":"dev","subscribed_at":1767500633}
 {"type":"thread_subscribe","thread_guid":"thrd-3aotidu1","agent_id":"opus","subscribed_at":1767500633}
 {"type":"thread_subscribe","thread_guid":"thrd-3aotidu1","agent_id":"pen","subscribed_at":1767500633}
+{"type":"thread_subscribe","thread_guid":"thrd-3vpdravs","agent_id":"opus","subscribed_at":1767504834}
+{"type":"thread_subscribe","thread_guid":"thrd-3aotidu1","agent_id":"desktop.1","subscribed_at":1767506177}
+{"type":"thread_subscribe","thread_guid":"thrd-3aotidu1","agent_id":"dev","subscribed_at":1767506177}
+{"type":"thread_subscribe","thread_guid":"thrd-3aotidu1","agent_id":"opus","subscribed_at":1767506177}
+{"type":"thread_subscribe","thread_guid":"thrd-3aotidu1","agent_id":"pen","subscribed_at":1767506177}

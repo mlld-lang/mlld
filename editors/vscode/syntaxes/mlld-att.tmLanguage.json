@@ -1,0 +1,52 @@
+{
+  "name": "mlld Template (ATT)",
+  "scopeName": "source.mlld-att",
+  "fileTypes": ["att"],
+  "patterns": [
+    {
+      "name": "comment.line.mlld",
+      "match": "^\\s*(>>|<<).*$"
+    },
+    {
+      "name": "keyword.control.directive.mlld",
+      "match": "^\\s*/(?:for|when|end)\\b"
+    },
+    {
+      "name": "variable.language.reserved.mlld",
+      "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
+    },
+    {
+      "name": "variable.other.mlld",
+      "match": "@[a-zA-Z_][a-zA-Z0-9_]*"
+    },
+    {
+      "name": "string.other.link.mlld",
+      "begin": "<",
+      "end": ">",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.link.begin.mlld"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.link.end.mlld"
+        }
+      },
+      "patterns": [
+        {
+          "name": "variable.language.reserved.mlld",
+          "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
+        },
+        {
+          "name": "variable.other.mlld",
+          "match": "@[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+          "name": "string.path.mlld",
+          "match": "[^@>]+"
+        }
+      ]
+    }
+  ]
+}

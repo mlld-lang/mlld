@@ -45,6 +45,26 @@
           ".mld"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "mlld-att",
+        "aliases": [
+          "mlld Template (ATT)"
+        ],
+        "extensions": [
+          ".att"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "mlld-mtt",
+        "aliases": [
+          "mlld Template (MTT)"
+        ],
+        "extensions": [
+          ".mtt"
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
@@ -52,6 +72,16 @@
         "language": "mlld",
         "scopeName": "source.mlld",
         "path": "./syntaxes/mlld-minimal.tmLanguage.json"
+      },
+      {
+        "language": "mlld-att",
+        "scopeName": "source.mlld-att",
+        "path": "./syntaxes/mlld-att.tmLanguage.json"
+      },
+      {
+        "language": "mlld-mtt",
+        "scopeName": "source.mlld-mtt",
+        "path": "./syntaxes/mlld-mtt.tmLanguage.json"
       },
       {
         "scopeName": "markdown.mlld.codeblock",
