@@ -271,7 +271,7 @@ exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
 
 >> Build review prompt
 exe @buildPrompt(filename, content) = `
-Review this TypeScript code for issues:
+Review this code for issues:
 File: @filename
 ---
 @content
@@ -303,7 +303,7 @@ for @r in @reviews [
 
 **Key patterns:**
 - `<src/**/*.ts>` - Glob pattern loads all matching files
-- `@f.mx.relative` - Access file metadata (relative path)
+- `@file.mx.relative` - Access file metadata (relative path)
 - `@prompt | cmd { claude -p }` - Pipe to Claude CLI via stdin
 - `for parallel(5)` - Process up to 5 files concurrently
 
