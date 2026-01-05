@@ -1,73 +1,50 @@
 >> Dev Docs Coverage Checker
 >> Validates that new CHANGELOG features are covered in developer documentation
 
-var @changelog = <CHANGELOG.md>
-var @docsGuide = <docs/dev/DOCS-DEV.md>
-var @devDocs = <docs/dev/*.md>
+var @changelog = <@base/CHANGELOG.md>
+var @docsGuide = <@base/docs/dev/DOCS-DEV.md>
+var @devDocs = <@base/docs/dev/*.md>
 
-exe @claude(prompt) = cmd { claude -p --model haiku --tools "" "@prompt" }
+exe @claude(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
 
->> Extract dev-facing features from recent changelog entries
->> Per DOCS.md: Dev docs need coverage for architecture, internals, gotchas
-var @extractPrompt = `
-Analyze this CHANGELOG and extract any DEVELOPER-FACING changes in the
-most recent version(s). Per the documentation guide, dev docs need:
+var @prompt = `
+Analyze this CHANGELOG and check if DEVELOPER-FACING changes from recent
+version(s) are covered in the developer documentation.
+
+Per the documentation guide, dev docs need coverage for:
 - Architecture changes
 - New directives/features (implementation details)
 - New SDK methods (implementation)
 - Performance optimizations
 - Internal refactors (if significant)
 
-Do NOT include:
+Do NOT flag:
 - Simple bug fixes
 - Minor tweaks
 
-Return a JSON array of objects with format:
-[{"feature": "feature name", "type": "architecture|directive|sdk|performance|refactor", "description": "brief description"}]
+DOCUMENTATION STYLE GUIDE:
+@docsGuide
 
-Focus on what a developer maintaining mlld needs to understand.
-If no dev-relevant features found, return [].
+DEVELOPER DOCUMENTATION (docs/dev/):
+@devDocs
 
 CHANGELOG:
 @changelog
+
+Return JSON with this exact structure:
+{
+  "summary": "Brief bulleted list of gaps found, one per line, using - prefix",
+  "report": "Full markdown report with all details, changes, coverage status, gaps"
+}
+
+IMPORTANT: Return ONLY valid JSON, no markdown code fences.
 `
 
-var @features = @claude(@extractPrompt) | @json
+var @result = @claude(@prompt) | @json.llm
 
->> Check if feature is documented in dev docs
-exe @checkDevDocs(feature, docs) = @claude(`
-Check if this feature/change is documented in the developer documentation.
-Feature: @feature.feature
-Type: @feature.type
-Description: @feature.description
+output @result.report to "dev-docs-gaps.md"
 
-Developer documentation contents (docs/dev/):
-@docs
-
-Following this style guide:
-@docsGuide
-
-Is this adequately documented for developers? Respond with JSON:
-{"covered": true/false, "location": "file or section if found", "notes": "what's missing or what exists"}
-`)
-
->> Run checks - for handles empty arrays gracefully
-show "## Dev Docs Coverage Report"
-show ""
-when @features.length == 0 => show "No dev-facing changes found in recent CHANGELOG entries."
-when @features.length > 0 => show "Found @features.length dev-facing changes in recent CHANGELOG"
-show ""
-
-for @f in @features [
-  show "### @f.feature"
-  show "Type: @f.type | @f.description"
-  show ""
-
-  let @result = @checkDevDocs(@f, @devDocs) | @json
-  let @status = @result.covered ? "✅ Documented" : "❌ Missing"
-
-  show "Coverage: @status"
-  when @result.location => show "Location: @result.location"
-  when @result.notes => show "Notes: @result.notes"
-  show ""
-]
+>> Output summary
+log @result.summary
+log ""
+log "Details written to dev-docs-gaps.md"

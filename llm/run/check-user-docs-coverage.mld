@@ -1,73 +1,50 @@
 >> User Docs Coverage Checker
 >> Validates that new CHANGELOG features are covered in user documentation
 
-var @changelog = <CHANGELOG.md>
-var @docsGuide = <docs/dev/DOCS-USER.md>
-var @userDocs = <docs/user/*.md>
+var @changelog = <@base/CHANGELOG.md>
+var @docsGuide = <@base/docs/dev/DOCS-USER.md>
+var @userDocs = <@base/docs/user/*.md>
 
-exe @claude(prompt) = cmd { claude -p --model haiku --tools "" "@prompt" }
+exe @claude(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
 
->> Extract user-facing features from recent changelog entries
->> Per DOCS.md: User docs need coverage for new directives/features, SDK methods, behavior changes
-var @extractPrompt = `
-Analyze this CHANGELOG and extract any USER-FACING FEATURES added in the
-most recent version(s). Per the documentation guide, user docs need:
+var @prompt = `
+Analyze this CHANGELOG and check if USER-FACING FEATURES from recent version(s)
+are covered in the user documentation.
+
+Per the documentation guide, user docs need coverage for:
 - New directives or features
 - New SDK methods
 - Behavior changes (not bug fixes)
 
-Do NOT include:
+Do NOT flag:
 - Architecture changes (dev docs only)
 - Bug fixes
 - Performance optimizations
 - Internal refactors
 
-Return a JSON array of objects with format:
-[{"feature": "feature name", "type": "directive|sdk|behavior", "description": "brief description"}]
+DOCUMENTATION STYLE GUIDE:
+@docsGuide
 
-Only include changes that users would need to know about.
-If no user-facing features found, return [].
+USER DOCUMENTATION:
+@userDocs
 
 CHANGELOG:
 @changelog
+
+Return JSON with this exact structure:
+{
+  "summary": "Brief bulleted list of gaps found, one per line, using - prefix",
+  "report": "Full markdown report with all details, features, coverage status, gaps"
+}
+
+IMPORTANT: Return ONLY valid JSON, no markdown code fences.
 `
 
-var @features = @claude(@extractPrompt) | @json
+var @result = @claude(@prompt) | @json.llm
 
->> Check if feature is documented in user docs
-exe @checkUserDocs(feature, docs) = @claude(`
-Check if this feature is documented in the user documentation.
-Feature: @feature.feature
-Type: @feature.type
-Description: @feature.description
+output @result.report to "user-docs-gaps.md"
 
-User documentation contents:
-@docs
-
-Following this style guide:
-@docsGuide
-
-Is this feature adequately documented? Respond with JSON:
-{"covered": true/false, "location": "file or section if found", "notes": "what's missing or what exists"}
-`)
-
->> Run checks - for handles empty arrays gracefully
-show "## User Docs Coverage Report"
-show ""
-when @features.length == 0 => show "No user-facing features found in recent CHANGELOG entries."
-when @features.length > 0 => show "Found @features.length user-facing features in recent CHANGELOG"
-show ""
-
-for @f in @features [
-  show "### @f.feature"
-  show "Type: @f.type | @f.description"
-  show ""
-
-  let @result = @checkUserDocs(@f, @userDocs) | @json
-  let @status = @result.covered ? "✅ Documented" : "❌ Missing"
-
-  show "Coverage: @status"
-  when @result.location => show "Location: @result.location"
-  when @result.notes => show "Notes: @result.notes"
-  show ""
-]
+>> Output summary
+log @result.summary
+log ""
+log "Details written to user-docs-gaps.md"

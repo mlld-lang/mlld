@@ -1,74 +1,51 @@
 >> LLM Docs Coverage Checker
 >> Validates that new CHANGELOG features are covered in LLM documentation
 
-var @changelog = <CHANGELOG.md>
-var @docsGuide = <docs/dev/DOCS-LLM.md>
-var @llmDocs = <docs/llm/*.txt>
+var @changelog = <@base/CHANGELOG.md>
+var @docsGuide = <@base/docs/dev/DOCS-LLM.md>
+var @llmDocs = <@base/docs/llm/*.txt>
 
-exe @claude(prompt) = cmd { claude -p --model haiku --tools "" "@prompt" }
+exe @claude(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
 
->> Extract LLM-relevant features from recent changelog entries
->> Per DOCS.md: LLM docs need coverage for syntax, directives, patterns
-var @extractPrompt = `
-Analyze this CHANGELOG and extract any features that LLMs need to know
-about when WRITING mlld code. Per the documentation guide, LLM docs need:
+var @prompt = `
+Analyze this CHANGELOG and check if features that LLMs need to know about
+when WRITING mlld code are covered in the LLM documentation.
+
+Per the documentation guide, LLM docs need coverage for:
 - New directives or syntax features
 - New SDK methods
 - Behavior changes affecting syntax
 - New patterns
 
-Do NOT include:
+Do NOT flag:
 - Architecture changes (dev docs only)
 - Bug fixes
 - Performance optimizations
 - Internal changes
 
-Return a JSON array of objects with format:
-[{"feature": "feature name", "type": "syntax|directive|sdk|pattern", "description": "brief description"}]
+DOCUMENTATION STYLE GUIDE:
+@docsGuide
 
-Focus on what an LLM needs to generate correct mlld code.
-If no relevant features found, return [].
+LLM DOCUMENTATION (docs/llm/ modules):
+@llmDocs
 
 CHANGELOG:
 @changelog
+
+Return JSON with this exact structure:
+{
+  "summary": "Brief bulleted list of gaps found, one per line, using - prefix",
+  "report": "Full markdown report with all details, features, coverage status, gaps"
+}
+
+IMPORTANT: Return ONLY valid JSON, no markdown code fences.
 `
 
-var @features = @claude(@extractPrompt) | @json
+var @result = @claude(@prompt) | @json.llm
 
->> Check if feature is documented in LLM docs
-exe @checkLLMDocs(feature, docs) = @claude(`
-Check if this feature is documented in the LLM documentation (llms.txt modules).
-Feature: @feature.feature
-Type: @feature.type
-Description: @feature.description
+output @result.report to "llm-docs-gaps.md"
 
-LLM documentation contents (docs/llm/ modules):
-@docs
-
-Following this style guide:
-@docsGuide
-
-Is this feature documented with correct strict-mode examples? Respond with JSON:
-{"covered": true/false, "location": "module or section if found", "notes": "what's missing or what exists"}
-`)
-
->> Run checks - for handles empty arrays gracefully
-show "## LLM Docs Coverage Report"
-show ""
-when @features.length == 0 => show "No LLM-relevant features found in recent CHANGELOG entries."
-when @features.length > 0 => show "Found @features.length LLM-relevant features in recent CHANGELOG"
-show ""
-
-for @f in @features [
-  show "### @f.feature"
-  show "Type: @f.type | @f.description"
-  show ""
-
-  let @result = @checkLLMDocs(@f, @llmDocs) | @json
-  let @status = @result.covered ? "✅ Documented" : "❌ Missing"
-
-  show "Coverage: @status"
-  when @result.location => show "Location: @result.location"
-  when @result.notes => show "Notes: @result.notes"
-  show ""
-]
+>> Output summary
+log @result.summary
+log ""
+log "Details written to llm-docs-gaps.md"
