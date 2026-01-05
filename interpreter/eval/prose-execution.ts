@@ -16,8 +16,11 @@ import type { Environment } from '../env/Environment';
 import type { ProseExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { createSimpleTextVariable } from '@core/types/variable';
+import { createSimpleTextVariable, isExecutableVariable } from '@core/types/variable';
+import type { Variable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
+import { evaluateExecInvocation } from './exec-invocation';
+import type { ExecInvocation, CommandReference } from '@core/types';
 
 /**
  * Build the skill injection prompt for a given skill name
@@ -91,8 +94,8 @@ export async function executeProseExecutable(
     throw new Error(`Prose config not found: @${configVarName}`);
   }
 
-  // Extract config values
-  const config = extractProseConfig(configVar);
+  // Extract and validate config values
+  const config = extractProseConfig(configVar, configVarName, env);
 
   // 2. Create parameter environment
   const proseEnv = env.createChild();
@@ -124,7 +127,15 @@ export async function executeProseExecutable(
       proseEnv,
       InterpolationContext.Default
     );
-    const fileContent = await env.readFile(filePath);
+
+    let fileContent: string;
+    try {
+      fileContent = await env.readFile(filePath);
+    } catch (err: any) {
+      throw new Error(
+        `Failed to read prose file "${filePath}": ${err.message || err}`
+      );
+    }
 
     // Check for template extensions (.prose.att or .prose.mtt)
     const lowerPath = filePath.toLowerCase();
@@ -148,7 +159,15 @@ export async function executeProseExecutable(
       proseEnv,
       InterpolationContext.Default
     );
-    const fileContent = await env.readFile(filePath);
+
+    let fileContent: string;
+    try {
+      fileContent = await env.readFile(filePath);
+    } catch (err: any) {
+      throw new Error(
+        `Failed to read prose template "${filePath}": ${err.message || err}`
+      );
+    }
 
     // Detect template style from extension
     const lowerPath = filePath.toLowerCase();
@@ -158,7 +177,16 @@ export async function executeProseExecutable(
     throw new Error(`Unknown prose content type: ${definition.contentType}`);
   }
 
-  // 4. Construct the skill-injected prompt
+  // 4. Validate prose content is not empty
+  if (!proseContent || proseContent.trim() === '') {
+    const source = definition.contentType === 'inline' ? 'inline block' :
+                   definition.contentType === 'file' ? 'file' : 'template';
+    throw new Error(
+      `Prose ${source} is empty. Prose content must contain at least one instruction.`
+    );
+  }
+
+  // 5. Construct the skill-injected prompt
   // Use custom prompts if provided, otherwise build from skillName
   const skillPrompt = config.skillPrompt || buildSkillInjectionPrompt(config.skillName);
   const skillPromptEnd = config.skillPromptEnd || buildSkillInjectionEnd(config.skillName);
@@ -168,15 +196,15 @@ export async function executeProseExecutable(
     logger.debug('Prose prompt constructed:', {
       contentLength: proseContent.length,
       fullPromptLength: fullPrompt.length,
-      model: config.model,
+      modelName: config.modelName,
       skillName: config.skillName
     });
   }
 
-  // 5. Execute via model
-  const result = await executeProseViaModel(fullPrompt, config, env);
+  // 6. Execute via model executor
+  const result = await invokeModelExecutor(fullPrompt, config, env);
 
-  // 6. Check for skill-not-found error
+  // 7. Check for skill-not-found error
   if (result.includes(`ERROR: SKILL_NOT_FOUND: ${config.skillName}`)) {
     const skillDisplay = config.skillName === 'prose' ? 'OpenProse' : config.skillName;
     throw new Error(
@@ -189,15 +217,73 @@ export async function executeProseExecutable(
 }
 
 /**
- * Extract prose configuration from a config variable
+ * Extract and validate prose configuration from a config variable
+ * The model field must be an executable Variable (e.g., @opus from @mlld/claude)
  */
-function extractProseConfig(configVar: any): ProseConfig {
-  // Config can be an object with model, cwd, skillName, etc.
+function extractProseConfig(configVar: any, configVarName: string, env: Environment): ProseConfig {
   const value = configVar.value;
 
-  if (typeof value === 'object' && value !== null) {
+  // Handle null/undefined
+  if (value === null || value === undefined) {
+    throw new Error(
+      `Prose config @${configVarName} is ${value === null ? 'null' : 'undefined'}. ` +
+      `Expected an object with { model: @executor, skillName?: string }.`
+    );
+  }
+
+  // Handle object config
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    // Validate model is present
+    if (!value.model) {
+      throw new Error(
+        `Prose config @${configVarName} missing required 'model' field. ` +
+        `Expected: { model: @opus } where @opus is an executable from @mlld/claude.`
+      );
+    }
+
+    // Model should be a Variable (executable)
+    let modelVar: Variable;
+    let modelName: string;
+
+    if (isExecutableVariable(value.model)) {
+      // model is directly an executable Variable
+      modelVar = value.model;
+      modelName = modelVar.name || 'model';
+    } else if (typeof value.model === 'string') {
+      // model is a string reference to an executable (e.g., "opus")
+      // Look it up in the environment
+      const resolved = env.getVariable(value.model);
+      if (!resolved) {
+        throw new Error(
+          `Prose config @${configVarName}.model references unknown variable @${value.model}. ` +
+          `Import an executor like: import { @opus } from @mlld/claude`
+        );
+      }
+      if (!isExecutableVariable(resolved)) {
+        throw new Error(
+          `Prose config @${configVarName}.model must be an executable, but @${value.model} is not. ` +
+          `Use an executor like @opus from @mlld/claude.`
+        );
+      }
+      modelVar = resolved;
+      modelName = value.model;
+    } else {
+      throw new Error(
+        `Prose config @${configVarName}.model must be an executable (like @opus from @mlld/claude), ` +
+        `got ${typeof value.model}.`
+      );
+    }
+
+    // Validate skillName if provided
+    if (value.skillName !== undefined && typeof value.skillName !== 'string') {
+      throw new Error(
+        `Prose config @${configVarName}.skillName must be a string, got ${typeof value.skillName}.`
+      );
+    }
+
     return {
-      model: value.model || 'default',
+      model: modelVar,
+      modelName,
       cwd: value.cwd,
       skillName: value.skillName || 'prose',
       skillPrompt: value.skillPrompt,
@@ -207,23 +293,32 @@ function extractProseConfig(configVar: any): ProseConfig {
     };
   }
 
-  // If config is a string, treat it as model name
-  if (typeof value === 'string') {
+  // Handle executable variable directly (shorthand: prose:@opus)
+  if (isExecutableVariable(configVar)) {
     return {
-      model: value,
+      model: configVar,
+      modelName: configVar.name || configVarName,
       skillName: 'prose'
     };
   }
 
-  // Default config
-  return {
-    model: 'default',
-    skillName: 'prose'
-  };
+  // Handle arrays and other types
+  if (Array.isArray(value)) {
+    throw new Error(
+      `Prose config @${configVarName} is an array. ` +
+      `Expected: { model: @opus } where @opus is an executable.`
+    );
+  }
+
+  throw new Error(
+    `Prose config @${configVarName} has invalid type '${typeof value}'. ` +
+    `Expected an object with { model: @executor } or an executable directly.`
+  );
 }
 
 interface ProseConfig {
-  model: string;
+  model: Variable;  // Executable variable (e.g., @opus from @mlld/claude)
+  modelName: string;  // Name of the executable for error messages
   cwd?: string;
   skillName: string;
   skillPrompt?: string;
@@ -312,34 +407,70 @@ async function interpolateProseTemplate(
 }
 
 /**
- * Execute prose content via model
+ * Invoke the model executor with the wrapped prose prompt.
  *
- * For now, prose execution requires an external LLM provider.
- * Without one, we return a placeholder showing the prose was parsed successfully.
+ * The model executor (e.g., @opus from @mlld/claude) takes a prompt parameter
+ * and returns the LLM's response.
  */
-async function executeProseViaModel(
+async function invokeModelExecutor(
   prompt: string,
   config: ProseConfig,
   env: Environment
 ): Promise<string> {
-  // Check if the environment has an LLM executor registered
-  // For now, this is a placeholder that shows the prose was parsed
-  // In future versions, this will integrate with @mlld/claude or other LLM modules
+  const modelVar = config.model;
+  const modelName = config.modelName;
 
-  // Check for registered prose executor
-  const proseExecutor = (env as any).getProseExecutor?.();
-  if (proseExecutor) {
-    return proseExecutor.execute(prompt, config);
+  if (!isExecutableVariable(modelVar)) {
+    throw new Error(
+      `Prose config model is not an executable. ` +
+      `Expected an executor like @opus from @mlld/claude.`
+    );
   }
 
-  // No LLM provider available - return debug output showing the prose was parsed
-  logger.warn(
-    'Prose execution skipped - no LLM provider configured. ' +
-      'Install @mlld/claude or @mlld/prose module for actual execution.'
-  );
+  // Construct an ExecInvocation node to call the model executor with the prompt
+  // The executor signature is: exe @opus(prompt) = @prompt | cmd { claude -p ... }
+  const commandRef: CommandReference = {
+    type: 'CommandReference',
+    identifier: modelName,
+    args: [
+      {
+        type: 'VariableReference',
+        identifier: '__prose_prompt__',
+        location: null
+      } as any
+    ]
+  };
 
-  return `[PROSE PARSED - No LLM provider configured]
-Model: ${config.model}
-Skill: ${config.skillName}
-Content length: ${prompt.length} chars`;
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef,
+    location: null
+  };
+
+  // Set up the prompt as a temporary variable
+  const execEnv = env.createChild();
+  execEnv.setVariable('__prose_prompt__', createSimpleTextVariable('__prose_prompt__', prompt));
+
+  // Also make the model executor available by the name we're calling
+  // (in case it was passed as an object field rather than directly in scope)
+  if (!execEnv.getVariable(modelName)) {
+    execEnv.setVariable(modelName, modelVar);
+  }
+
+  try {
+    const result = await evaluateExecInvocation(invocation, execEnv);
+
+    // Extract the string value from the result
+    if (typeof result.value === 'string') {
+      return result.value;
+    }
+    if (result.value && typeof result.value === 'object' && 'value' in result.value) {
+      return String((result.value as any).value);
+    }
+    return String(result.value ?? '');
+  } catch (err: any) {
+    throw new Error(
+      `Prose execution via @${modelName} failed: ${err.message || err}`
+    );
+  }
 }

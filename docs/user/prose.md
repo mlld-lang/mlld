@@ -12,12 +12,24 @@ exe @function(params) = prose:@config template "path/to/file.prose.att"
 
 ## Configuration
 
-The config object specifies how prose is executed:
+The config object specifies how prose is executed. The `model` field must be an executable (from `@mlld/claude`):
 
 ```mlld
+import { @opus } from @mlld/claude
+
 var @config = {
-  model: "claude-3-opus",     // LLM model to use
-  skillName: "prose"          // interpreter skill (default: "prose" for OpenProse)
+  model: @opus,
+  skillName: "prose"
+}
+```
+
+Or use pre-built configs from `@mlld/prose`:
+
+```mlld
+import { @opus } from @mlld/prose
+
+exe @workflow(ctx) = prose:@opus {
+  session "Process @ctx"
 }
 ```
 
@@ -25,25 +37,25 @@ var @config = {
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `model` | string | required | LLM model identifier |
+| `model` | executable | required | Model executor (e.g., `@opus` from `@mlld/claude`) |
 | `skillName` | string | `"prose"` | Skill/interpreter to invoke |
 | `skillPrompt` | string | auto-generated | Custom skill injection prompt |
 | `skillPromptEnd` | string | auto-generated | Custom prompt suffix |
-| `maxTokens` | number | - | Max response tokens |
-| `temperature` | number | - | Model temperature |
 
 ## Interpreter Agnostic
 
 mlld defaults to `skillName: "prose"` which invokes [OpenProse](https://openprose.org), but you can use any interpreter:
 
 ```mlld
-// Default: OpenProse
-var @openProse = { model: "claude-3", skillName: "prose" }
+import { @opus } from @mlld/claude
 
-// Custom interpreter
-var @myInterpreter = { model: "claude-3", skillName: "myDSL" }
+>> Default: OpenProse
+var @openProse = { model: @opus, skillName: "prose" }
 
-// The skill injection prompt adapts to the skill name
+>> Custom interpreter (e.g., your own DSL)
+var @myInterpreter = { model: @opus, skillName: "myDSL" }
+
+>> The skill injection prompt adapts to the skill name
 exe @analyze(data) = prose:@myInterpreter {
   process @data
   output result
@@ -77,14 +89,17 @@ exe @analyze(data) = prose:@config "./analysis.prose"
 Use `.prose.att` (ATT-style `@var`) or `.prose.mtt` (Mustache-style `{{var}}`):
 
 ```mlld
-// ATT template
-exe @review(code) = prose:@config "./review.prose.att"
+import { @opus } from @mlld/claude
+var @config = { model: @opus }
 
-// MTT template
-exe @review(code) = prose:@config "./review.prose.mtt"
+>> ATT template
+exe @reviewAtt(code) = prose:@config "./review.prose.att"
 
-// Explicit template keyword
-exe @review(code) = prose:@config template "./review.prose.att"
+>> MTT template
+exe @reviewMtt(code) = prose:@config "./review.prose.mtt"
+
+>> Explicit template keyword
+exe @reviewExplicit(code) = prose:@config template "./review.prose.att"
 ```
 
 **review.prose.att:**
@@ -114,24 +129,39 @@ output review
 Prose executables are invoked like any other mlld executable:
 
 ```mlld
-run @summarize("Long text to summarize...")
+import { @opus } from @mlld/claude
+var @config = { model: @opus }
+exe @summarize(text) = prose:@config { session "Summarize: @text" }
 
-// Or in pipelines
-@document | @summarize() | @format()
+run @summarize("Long text to summarize...")
+```
+
+Prose executables can also be used in pipelines:
+
+```mlld
+import { @opus } from @mlld/claude
+var @config = { model: @opus }
+exe @summarize(text) = prose:@config { session "Summarize: @text" }
+var @document = "This is a long document..."
+
+show @document | @summarize()
 ```
 
 ## LLM Provider
 
-Prose execution requires an LLM provider. Without one configured, mlld returns a placeholder showing the prose was parsed successfully:
+Prose execution requires the `@mlld/claude` module (or similar) to provide the model executor. The executor calls Claude Code to run the prose through an LLM with the prose skill.
 
-```
-[PROSE PARSED - No LLM provider configured]
-Model: claude-3
-Skill: prose
-Content length: 549 chars
-```
+```mlld
+>> Import the executor
+import { @opus } from @mlld/claude
 
-To enable actual execution, install an LLM provider module like `@mlld/claude`.
+>> Use it in your config
+var @config = { model: @opus }
+
+>> Or use pre-built configs from @mlld/prose
+import { @opus } from @mlld/prose
+exe @task(ctx) = prose:@opus { session "Process @ctx" }
+```
 
 ## Error Handling
 
