@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Syntax: `exe @fn(params) = prose:@config { inline content }`
   - File-based: `exe @fn(params) = prose:@config "file.prose"`
   - Template files: `.prose.att` (ATT-style `@var`) and `.prose.mtt` (Mustache-style `{{var}}`)
+  - Config uses model executors: `{ model: @opus }` where `@opus` is from `@mlld/claude`
+  - Pre-built configs available from `@mlld/prose` module
   - Configurable interpreter via `skillName` (default: `"prose"` for OpenProse)
-  - Interpreter-agnostic: use any skill name for custom interpreters
-  - Skill injection prompts adapt to the configured skill name
   - See [docs/user/prose.md](docs/user/prose.md) for full documentation
 
 ### Changed
@@ -29,9 +29,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mlld info` shows real registry data**: Now fetches actual module metadata from registry (version, needs, license, repo, keywords) and appends the `# tldr` section
 - **Colorized CLI output**: Module info and docs display with syntax highlighting for mlld code blocks, colored headers, and formatted metadata
 - **`mlld-run` blocks use strict mode**: Code inside `mlld-run` fenced blocks now parses in strict mode (slashes optional, no prose between directives)
+- **Transitive dependency installation**: `mlld install` now automatically installs mlld module dependencies (npm-style)
+  - When installing `@alice/utils`, its `dependencies` from frontmatter are discovered and installed
+  - Recursive: transitive deps of deps are also installed
+  - All modules recorded in `mlld-lock.json` (config unchanged - only direct deps in `mlld-config.json`)
+  - Install summary shows breakdown: "3 modules installed (1 direct, 2 transitive)"
+  - Lazy runtime fetching still works as fallback for modules not pre-installed
 
 ### Fixed
 - **Module publish validation for exe declarations**: Fixed `ExportValidator` not recognizing exe declarations where the identifier is a `VariableReference` node. This caused `mlld publish` to fail with "Exported name is not declared" errors for modules like `@mlld/array` and `@mlld/string`.
+- **Module scope isolation for nested imports**: Fixed bug where importing a module that internally imports from another module would cause "variable already imported" errors. Child module scopes are now properly isolated from parent scope during import evaluation.
+- **Executable preservation in object properties**: Fixed bug where executables stored as object properties would lose their Variable wrapper during import, causing `isExecutableVariable()` to return false. Object property executables are now properly reconstructed during import.
 
 ## [2.0.0-rc79]
 
