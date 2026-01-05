@@ -7,6 +7,9 @@
  * 2. Interpolating variables in the prose content
  * 3. Wrapping with skill injection prompt
  * 4. Executing via the model executor
+ *
+ * The skill name is configurable via config.skillName (default: "prose").
+ * This allows users to use custom interpreters instead of OpenProse.
  */
 
 import type { Environment } from '../env/Environment';
@@ -17,25 +20,34 @@ import { createSimpleTextVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 
 /**
- * Default skill injection prompt for prose execution
+ * Build the skill injection prompt for a given skill name
+ * Default skill is "prose" (OpenProse), but users can specify custom interpreters
  */
-const PROSE_SKILL_INJECTION = `You have access to the OpenProse skill for processing structured prose documents.
+function buildSkillInjectionPrompt(skillName: string): string {
+  const displayName = skillName === 'prose' ? 'OpenProse' : skillName;
+  const tagName = skillName.toUpperCase();
 
-When you receive a prose document (content between <PROSE> tags), you should:
-1. Parse and interpret the OpenProse syntax
-2. Execute the instructions within the prose
-3. Return the result as specified by the prose document
+  return `You have access to the ${displayName} skill for processing structured documents.
 
-If you cannot process the prose content (e.g., OpenProse is not available), respond with:
-ERROR: SKILL_NOT_FOUND: prose
+When you receive a document (content between <${tagName}> tags), you should:
+1. Parse and interpret the ${displayName} syntax
+2. Execute the instructions within the document
+3. Return the result as specified by the document
 
-<PROSE>
+If you cannot process the content (e.g., ${displayName} skill is not available), respond with:
+ERROR: SKILL_NOT_FOUND: ${skillName}
+
+<${tagName}>
 `;
+}
 
-const PROSE_SKILL_INJECTION_END = `
-</PROSE>
+function buildSkillInjectionEnd(skillName: string): string {
+  const tagName = skillName.toUpperCase();
+  return `
+</${tagName}>
 
-Process the above prose document and return the result.`;
+Process the above document and return the result.`;
+}
 
 /**
  * Execute a prose executable
@@ -147,15 +159,17 @@ export async function executeProseExecutable(
   }
 
   // 4. Construct the skill-injected prompt
-  const skillPrompt = config.skillPrompt || PROSE_SKILL_INJECTION;
-  const skillPromptEnd = config.skillPromptEnd || PROSE_SKILL_INJECTION_END;
+  // Use custom prompts if provided, otherwise build from skillName
+  const skillPrompt = config.skillPrompt || buildSkillInjectionPrompt(config.skillName);
+  const skillPromptEnd = config.skillPromptEnd || buildSkillInjectionEnd(config.skillName);
   const fullPrompt = skillPrompt + proseContent + skillPromptEnd;
 
   if (process.env.DEBUG_EXEC) {
     logger.debug('Prose prompt constructed:', {
       contentLength: proseContent.length,
       fullPromptLength: fullPrompt.length,
-      model: config.model
+      model: config.model,
+      skillName: config.skillName
     });
   }
 
@@ -163,10 +177,11 @@ export async function executeProseExecutable(
   const result = await executeProseViaModel(fullPrompt, config, env);
 
   // 6. Check for skill-not-found error
-  if (result.includes('ERROR: SKILL_NOT_FOUND: prose')) {
+  if (result.includes(`ERROR: SKILL_NOT_FOUND: ${config.skillName}`)) {
+    const skillDisplay = config.skillName === 'prose' ? 'OpenProse' : config.skillName;
     throw new Error(
-      'Prose execution failed: OpenProse skill not available. ' +
-        'Ensure the model has access to the prose skill or install @mlld/prose module.'
+      `Prose execution failed: ${skillDisplay} skill not available. ` +
+        `Ensure the model has access to the "${config.skillName}" skill.`
     );
   }
 
