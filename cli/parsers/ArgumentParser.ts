@@ -10,7 +10,7 @@ export interface ParsedCLIArguments {
 
 export class ArgumentParser {
   private readonly commandsWithSubcommands = [
-    'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show',
+    'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'docs',
     'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps',
     'setup', 'alias', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
     'mcp', 'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor'
@@ -88,7 +88,7 @@ export class ArgumentParser {
         case '--loose':
         case '--markdown':
         case '--md':
-        case '--prose':
+        case '--prose': // hidden alias, will conflict with OpenProse in future
           options.mode = 'markdown';
           break;
         case '--home-path':

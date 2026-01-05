@@ -77,6 +77,11 @@ export class HelpSystem {
       return;
     }
 
+    if (command === 'docs') {
+      this.displayDocsHelp();
+      return;
+    }
+
     this.displayMainHelp(command, context);
   }
 
@@ -98,6 +103,27 @@ Examples:
   mlld auth login
   mlld auth status
   mlld auth logout
+    `);
+  }
+
+  private displayDocsHelp(): void {
+    console.log(`
+Usage: mlld docs <@username/module>
+
+Show documentation for a published mlld module.
+
+Displays the module's # tldr section followed by its # docs section.
+Module authors should include these sections in their module files.
+
+Options:
+  -v, --verbose        Show detailed output
+
+Examples:
+  mlld docs @adam/json-utils    # Show docs for @adam/json-utils
+  mlld docs adam/json-utils     # @ prefix is optional
+
+Related:
+  mlld info @module             # Show module metadata + tldr
     `);
   }
 
@@ -430,10 +456,11 @@ Commands:
   add-needs, needs, deps  Analyze and update module dependencies
   alias                   Create path aliases for module imports
   dev                     Inspect local module discovery
+  docs                    Show module documentation (# tldr + # docs)
   env                     Manage environment variables allowed in @INPUT
   install, i              Install mlld modules
   ls, list               List installed modules
-  info, show             Show module details
+  info, show             Show module details (includes # tldr)
   auth                    Manage GitHub authentication
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
@@ -450,7 +477,7 @@ Commands:
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
   --mode <mode>           Parser mode: strict or markdown (default: .mld strict, .mld.md/.md markdown, stdin strict)
-  --loose, --markdown, --md, --prose
+  --loose, --markdown, --md
                           Set parser mode to markdown (aliases for --mode markdown)
   -o, --output <path>     Output file path
   --stdout                Print to stdout instead of file
@@ -540,6 +567,7 @@ Configuration:
       case 'add-needs':
       case 'env':
       case 'dev':
+      case 'docs':
       case 'debug-resolution':
       case 'debug-transform':
       case 'test':

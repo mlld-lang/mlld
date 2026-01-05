@@ -280,10 +280,11 @@ MlldRunFence
       helpers.debug('MlldRunFence: Parsing content', { content: rawContent });
       
       try {
-        // Parse the inner content as mlld
+        // Parse in strict mode: slashes optional, no prose allowed between directives
         const innerParser = peg$parse;
         const parsed = innerParser(rawContent, {
           ...options,
+          mode: 'strict',
           startRule: 'Start'
         });
         
