@@ -398,14 +398,47 @@ ExeProsePattern "exe prose pattern"
 // Prose inline content - braces containing prose syntax
 // Variables are interpolated using ATT style (@var) before passing to executor
 ProseInlineContent "prose inline content"
-  = "{" content:$([^}]*) "}" {
-      // Parse for variable references in the content
-      const hasVariables = /@[a-zA-Z_]/.test(content);
-      return {
-        parts: [helpers.createNode(NodeType.Text, { content: content.trim(), location: location() })],
-        raw: content.trim(),
-        hasVariables
-      };
+  = "{" parts:ProseContentParts "}" {
+      // Build raw string from parts
+      const raw = parts.map(p => {
+        if (p.type === 'Text') return p.content || '';
+        if (p.type === 'VariableReference') return '@' + p.identifier + (p.fields ? '.' + p.fields.map(f => f.value || f.name).join('.') : '');
+        if (p.type === 'ExecInvocation') return '@' + (p.commandRef?.identifier || 'fn') + '(...)';
+        return '';
+      }).join('');
+      const hasVariables = parts.some(p => p.type === 'VariableReference' || p.type === 'ExecInvocation');
+      return { parts, raw: raw.trim(), hasVariables };
+    }
+
+// Parts inside prose block - ATT-style @var interpolation
+// Uses ProseAtInterpolation (no text fallback) + ProseTextSegment (stops at })
+ProseContentParts "prose content parts"
+  = (ProseAtInterpolation / ProseTextSegment)*
+
+// Prose-specific @var interpolation - like UnifiedAtInterpolation but WITHOUT text fallback
+// This ensures ProseTextSegment handles plain text and stops at }
+ProseAtInterpolation "prose @ interpolation"
+  = ConditionalTemplateSnippet   // @var?`...`
+  / ExecResultMethodCall         // @func(args).method(args)
+  / FieldAccessExec              // @obj.method(args)
+  / UnifiedExecInvocation        // @func(args)
+  / TemplateVariableReference    // @var (with template pipes and fields)
+  / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
+  / "@@" {                       // @@ -> literal @
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "\\@" {                      // \@ -> literal @
+      return helpers.createNode(NodeType.Text, { content: '@', location: location() });
+    }
+  / "@" !BaseIdentifier char:. { // @ followed by non-identifier (like @:)
+      return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
+    }
+  // NOTE: No text fallback here - ProseTextSegment handles plain text
+
+// Text segment for prose - stops at } and @
+ProseTextSegment "prose text segment"
+  = chars:(!("}" / "\\@" / "@") char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
 // Section pattern for exe context - handles [@file # section] [as @newheader]

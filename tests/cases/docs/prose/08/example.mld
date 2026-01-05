@@ -1,0 +1,5 @@
+import { @opus } from @mlld/prose
+
+exe @summarize(text) = prose:@opus { session "Summarize: @text" }
+
+run @summarize("Long text to summarize...")

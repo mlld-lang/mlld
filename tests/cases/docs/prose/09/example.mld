@@ -1,0 +1,6 @@
+import { @opus } from @mlld/prose
+
+exe @summarize(text) = prose:@opus { session "Summarize: @text" }
+var @document = "This is a long document..."
+
+show @document | @summarize()

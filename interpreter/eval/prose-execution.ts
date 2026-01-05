@@ -26,30 +26,18 @@ import type { ExecInvocation, CommandReference } from '@core/types';
  * Build the skill injection prompt for a given skill name
  * Default skill is "prose" (OpenProse), but users can specify custom interpreters
  */
-function buildSkillInjectionPrompt(skillName: string): string {
-  const displayName = skillName === 'prose' ? 'OpenProse' : skillName;
-  const tagName = skillName.toUpperCase();
+function buildSkillInjectionPrompt(skills: string[]): string {
+  const runSkill = skills.find(s => s.includes('run')) || skills[0];
 
-  return `You have access to the ${displayName} skill for processing structured documents.
+  return `Run /${runSkill} with this program:
 
-When you receive a document (content between <${tagName}> tags), you should:
-1. Parse and interpret the ${displayName} syntax
-2. Execute the instructions within the document
-3. Return the result as specified by the document
-
-If you cannot process the content (e.g., ${displayName} skill is not available), respond with:
-ERROR: SKILL_NOT_FOUND: ${skillName}
-
-<${tagName}>
 `;
 }
 
-function buildSkillInjectionEnd(skillName: string): string {
-  const tagName = skillName.toUpperCase();
+function buildSkillInjectionEnd(skills: string[]): string {
   return `
-</${tagName}>
 
-Process the above document and return the result.`;
+Return only the output. If the skill is unavailable, respond: ERROR: SKILLS_NOT_FOUND`;
 }
 
 /**
@@ -187,9 +175,9 @@ export async function executeProseExecutable(
   }
 
   // 5. Construct the skill-injected prompt
-  // Use custom prompts if provided, otherwise build from skillName
-  const skillPrompt = config.skillPrompt || buildSkillInjectionPrompt(config.skillName);
-  const skillPromptEnd = config.skillPromptEnd || buildSkillInjectionEnd(config.skillName);
+  // Use custom prompts if provided, otherwise build from skills list
+  const skillPrompt = config.skillPrompt || buildSkillInjectionPrompt(config.skills);
+  const skillPromptEnd = config.skillPromptEnd || buildSkillInjectionEnd(config.skills);
   const fullPrompt = skillPrompt + proseContent + skillPromptEnd;
 
   if (process.env.DEBUG_EXEC) {
@@ -197,19 +185,18 @@ export async function executeProseExecutable(
       contentLength: proseContent.length,
       fullPromptLength: fullPrompt.length,
       modelName: config.modelName,
-      skillName: config.skillName
+      skills: config.skills
     });
   }
 
   // 6. Execute via model executor
   const result = await invokeModelExecutor(fullPrompt, config, env);
 
-  // 7. Check for skill-not-found error
-  if (result.includes(`ERROR: SKILL_NOT_FOUND: ${config.skillName}`)) {
-    const skillDisplay = config.skillName === 'prose' ? 'OpenProse' : config.skillName;
+  // 7. Check for skills-not-found error
+  if (result.includes('ERROR: SKILLS_NOT_FOUND:')) {
     throw new Error(
-      `Prose execution failed: ${skillDisplay} skill not available. ` +
-        `Ensure the model has access to the "${config.skillName}" skill.`
+      `Prose execution failed: OpenProse skills not available. ` +
+        `Skills must be installed AND approved. Required skills: ${config.skills.join(', ')}`
     );
   }
 
@@ -274,18 +261,25 @@ function extractProseConfig(configVar: any, configVarName: string, env: Environm
       );
     }
 
-    // Validate skillName if provided
-    if (value.skillName !== undefined && typeof value.skillName !== 'string') {
+    // Validate skills if provided
+    if (value.skills !== undefined && !Array.isArray(value.skills)) {
       throw new Error(
-        `Prose config @${configVarName}.skillName must be a string, got ${typeof value.skillName}.`
+        `Prose config @${configVarName}.skills must be an array, got ${typeof value.skills}.`
       );
     }
+
+    // Default skills for OpenProse plugin
+    const defaultSkills = [
+      'open-prose:prose-boot',
+      'open-prose:prose-compile',
+      'open-prose:prose-run'
+    ];
 
     return {
       model: modelVar,
       modelName,
       cwd: value.cwd,
-      skillName: value.skillName || 'prose',
+      skills: value.skills || defaultSkills,
       skillPrompt: value.skillPrompt,
       skillPromptEnd: value.skillPromptEnd,
       maxTokens: value.maxTokens,
@@ -298,7 +292,11 @@ function extractProseConfig(configVar: any, configVarName: string, env: Environm
     return {
       model: configVar,
       modelName: configVar.name || configVarName,
-      skillName: 'prose'
+      skills: [
+        'open-prose:prose-boot',
+        'open-prose:prose-compile',
+        'open-prose:prose-run'
+      ]
     };
   }
 
@@ -320,7 +318,7 @@ interface ProseConfig {
   model: Variable;  // Executable variable (e.g., @opus from @mlld/claude)
   modelName: string;  // Name of the executable for error messages
   cwd?: string;
-  skillName: string;
+  skills: string[];  // Skills needed for prose execution (e.g., ["open-prose:prose-run"])
   skillPrompt?: string;
   skillPromptEnd?: string;
   maxTokens?: number;

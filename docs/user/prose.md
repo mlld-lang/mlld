@@ -2,6 +2,14 @@
 
 mlld supports prose execution - the ability to define executable functions that invoke a prose interpreter (like OpenProse) via an LLM.
 
+## Prerequisites
+
+Prose execution requires:
+
+1. **Claude Code** - The model executor uses `claude -p` to run prompts
+2. **OpenProse plugin** - Install with `/plugin install open-prose@prose` in Claude Code
+3. **Skill approval** - The first time you run prose, Claude Code will prompt you to approve the OpenProse skills
+
 ## Syntax
 
 ```mlld
@@ -10,20 +18,9 @@ exe @function(params) = prose:@config "path/to/file.prose"
 exe @function(params) = prose:@config template "path/to/file.prose.att"
 ```
 
-## Configuration
+## Quick Start
 
-The config object specifies how prose is executed. The `model` field must be an executable (from `@mlld/claude`):
-
-```mlld
-import { @opus } from @mlld/claude
-
-var @config = {
-  model: @opus,
-  skillName: "prose"
-}
-```
-
-Or use pre-built configs from `@mlld/prose`:
+Use pre-built configs from `@mlld/prose`:
 
 ```mlld
 import { @opus } from @mlld/prose
@@ -31,42 +28,67 @@ import { @opus } from @mlld/prose
 exe @workflow(ctx) = prose:@opus {
   session "Process @ctx"
 }
+
+run @workflow("some context")
+```
+
+OpenProse requires Opus - it's the only model that can reliably interpret the prose syntax.
+
+## Configuration
+
+The config object specifies how prose is executed:
+
+```mlld
+import { @claude } from @mlld/claude
+
+var @config = {
+  model: @claude("prompt", "opus", @base),
+  skills: ["open-prose:prose-boot", "open-prose:prose-compile", "open-prose:prose-run"]
+}
 ```
 
 ### Config Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `model` | executable | required | Model executor (e.g., `@opus` from `@mlld/claude`) |
-| `skillName` | string | `"prose"` | Skill/interpreter to invoke |
+| `model` | executable | required | Model executor (e.g., from `@mlld/claude`) |
+| `skills` | array | OpenProse skills | Skills to invoke for prose execution |
 | `skillPrompt` | string | auto-generated | Custom skill injection prompt |
 | `skillPromptEnd` | string | auto-generated | Custom prompt suffix |
 
-## Interpreter Agnostic
+### Default Skills
 
-mlld defaults to `skillName: "prose"` which invokes [OpenProse](https://openprose.org), but you can use any interpreter:
+When `skills` is not specified, mlld defaults to the OpenProse plugin skills:
+
+```
+open-prose:prose-boot
+open-prose:prose-compile
+open-prose:prose-run
+```
+
+## Custom Interpreters
+
+You can use any interpreter by specifying different skills:
 
 ```mlld
 import { @opus } from @mlld/claude
 
->> Default: OpenProse
-var @openProse = { model: @opus, skillName: "prose" }
+var @myInterpreter = {
+  model: @opus,
+  skills: ["my-dsl:boot", "my-dsl:run"]
+}
 
->> Custom interpreter (e.g., your own DSL)
-var @myInterpreter = { model: @opus, skillName: "myDSL" }
-
->> The skill injection prompt adapts to the skill name
 exe @analyze(data) = prose:@myInterpreter {
   process @data
   output result
 }
 ```
 
-When using a custom `skillName`, the generated prompt uses that name in the skill injection tags (e.g., `<MYDSL>...</MYDSL>`) and error messages.
-
 ## Content Sources
 
 ### Inline Content
+
+Variables are interpolated using `@var` syntax:
 
 ```mlld
 exe @summarize(text) = prose:@config {
@@ -89,27 +111,16 @@ exe @analyze(data) = prose:@config "./analysis.prose"
 Use `.prose.att` (ATT-style `@var`) or `.prose.mtt` (Mustache-style `{{var}}`):
 
 ```mlld
-import { @opus } from @mlld/claude
-var @config = { model: @opus }
+import { @opus } from @mlld/prose
 
->> ATT template
-exe @reviewAtt(code) = prose:@config "./review.prose.att"
-
->> MTT template
-exe @reviewMtt(code) = prose:@config "./review.prose.mtt"
-
->> Explicit template keyword
-exe @reviewExplicit(code) = prose:@config template "./review.prose.att"
+exe @reviewAtt(code) = prose:@opus "./review.prose.att"
+exe @reviewMtt(code) = prose:@opus "./review.prose.mtt"
 ```
 
 **review.prose.att:**
 ```
 session "Code Review"
 input @code
-context {
-  reviewer: @reviewer
-  style: @style
-}
 output review
 ```
 
@@ -117,10 +128,6 @@ output review
 ```
 session "Code Review"
 input {{code}}
-context {
-  reviewer: {{reviewer}}
-  style: {{style}}
-}
 output review
 ```
 
@@ -129,9 +136,9 @@ output review
 Prose executables are invoked like any other mlld executable:
 
 ```mlld
-import { @opus } from @mlld/claude
-var @config = { model: @opus }
-exe @summarize(text) = prose:@config { session "Summarize: @text" }
+import { @opus } from @mlld/prose
+
+exe @summarize(text) = prose:@opus { session "Summarize: @text" }
 
 run @summarize("Long text to summarize...")
 ```
@@ -139,35 +146,25 @@ run @summarize("Long text to summarize...")
 Prose executables can also be used in pipelines:
 
 ```mlld
-import { @opus } from @mlld/claude
-var @config = { model: @opus }
-exe @summarize(text) = prose:@config { session "Summarize: @text" }
+import { @opus } from @mlld/prose
+
+exe @summarize(text) = prose:@opus { session "Summarize: @text" }
 var @document = "This is a long document..."
 
 show @document | @summarize()
 ```
 
-## LLM Provider
-
-Prose execution requires the `@mlld/claude` module (or similar) to provide the model executor. The executor calls Claude Code to run the prose through an LLM with the prose skill.
-
-```mlld
->> Import the executor
-import { @opus } from @mlld/claude
-
->> Use it in your config
-var @config = { model: @opus }
-
->> Or use pre-built configs from @mlld/prose
-import { @opus } from @mlld/prose
-exe @task(ctx) = prose:@opus { session "Process @ctx" }
-```
-
 ## Error Handling
 
-If the LLM cannot process the prose (skill not available), it responds with:
+If the OpenProse skills are not available (not installed or not approved), mlld throws:
+
 ```
-ERROR: SKILL_NOT_FOUND: prose
+Prose execution failed: OpenProse skills not available.
+Skills must be installed AND approved.
+Required skills: open-prose:prose-boot, open-prose:prose-compile, open-prose:prose-run
 ```
 
-mlld catches this and throws a descriptive error indicating which skill was not found.
+To fix:
+1. Install the plugin: `/plugin install open-prose@prose` in Claude Code
+2. Run a prose script - Claude Code will prompt for skill approval
+3. Approve the skills when prompted
