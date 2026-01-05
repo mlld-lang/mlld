@@ -42,7 +42,18 @@ Where interpolation applies:
 | `js` | JavaScript | Full JS, return values |
 | `node` | Node.js | npm packages available |
 | `python` | Python | Python code |
+| `prose:@cfg` | LLM skill | Requires config, interpreter-agnostic |
 </LANGUAGE_SPECIFIERS>
+
+<PROSE_INTERPOLATION>
+
+| Source | Interpolation | Example |
+|--------|---------------|---------|
+| `prose:@cfg { inline }` | Yes (`@var`) | `prose:@cfg { analyze @data }` |
+| `"file.prose"` | No | Raw prose content |
+| `"file.prose.att"` | Yes (`@var`) | ATT-style interpolation |
+| `"file.prose.mtt"` | Yes (`{{var}}`) | MTT-style interpolation |
+</PROSE_INTERPOLATION>
 
 <BUILTIN_TRANSFORMS>
 
@@ -100,6 +111,9 @@ Where interpolation applies:
 | `.mld.md` | Markdown | Slash prefix, text as content |
 | `.att` | Template | `@var` interpolation |
 | `.mtt` | Template | `{{var}}` interpolation (escape hatch) |
+| `.prose` | Prose | No interpolation, raw content |
+| `.prose.att` | Prose | `@var` interpolation |
+| `.prose.mtt` | Prose | `{{var}}` interpolation |
 </FILE_EXTENSIONS>
 
 <ESCAPE_HATCH_TEMPLATES>

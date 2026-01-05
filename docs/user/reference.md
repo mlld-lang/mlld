@@ -101,6 +101,12 @@ exe @processData(data) = js {
   return data.map(item => item.value * 2)
 }
 
+>> Prose execution (requires config, see docs/user/prose.md)
+var @llm = { model: "claude-3", skillName: "prose" }
+exe @summarize(text) = prose:@llm { summarize @text }      << inline interpolates
+exe @review(code) = prose:@llm "./review.prose"            << .prose = no interpolation
+exe @greet(name) = prose:@llm "./greet.prose.att"          << .prose.att/.mtt interpolate
+
 >> Templates
 exe @welcome(name, role) = ::Welcome @name! Role: @role::
 exe @format(title, content) = :::
