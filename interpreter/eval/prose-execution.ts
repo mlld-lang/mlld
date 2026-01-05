@@ -103,6 +103,7 @@ export async function executeProseExecutable(
     );
   } else if (definition.contentType === 'file') {
     // File-based prose: prose:@config "file.prose"
+    // Also handles .prose.att and .prose.mtt with auto-detection
     if (!definition.pathTemplate) {
       throw new Error('File-based prose executable missing path');
     }
@@ -111,9 +112,22 @@ export async function executeProseExecutable(
       proseEnv,
       InterpolationContext.Default
     );
-    proseContent = await env.readFile(filePath);
+    const fileContent = await env.readFile(filePath);
+
+    // Check for template extensions (.prose.att or .prose.mtt)
+    const lowerPath = filePath.toLowerCase();
+    if (lowerPath.endsWith('.prose.att')) {
+      // ATT-style template: @var interpolation
+      proseContent = await parseAndInterpolateTemplate(fileContent, 'att', proseEnv);
+    } else if (lowerPath.endsWith('.prose.mtt')) {
+      // MTT-style template: {{var}} interpolation
+      proseContent = await parseAndInterpolateTemplate(fileContent, 'mtt', proseEnv);
+    } else {
+      // Plain .prose file - still interpolate @vars for convenience
+      proseContent = await interpolateProseTemplate(fileContent, proseEnv);
+    }
   } else if (definition.contentType === 'template') {
-    // Template prose: prose:@config template "file.prose.att"
+    // Explicit template prose: prose:@config template "file.prose.att"
     if (!definition.pathTemplate) {
       throw new Error('Template prose executable missing path');
     }
@@ -122,10 +136,12 @@ export async function executeProseExecutable(
       proseEnv,
       InterpolationContext.Default
     );
-    const templateContent = await env.readFile(filePath);
+    const fileContent = await env.readFile(filePath);
 
-    // Parse template with ATT syntax (@ variable interpolation)
-    proseContent = await interpolateProseTemplate(templateContent, proseEnv);
+    // Detect template style from extension
+    const lowerPath = filePath.toLowerCase();
+    const templateStyle = lowerPath.endsWith('.mtt') ? 'mtt' : 'att';
+    proseContent = await parseAndInterpolateTemplate(fileContent, templateStyle, proseEnv);
   } else {
     throw new Error(`Unknown prose content type: ${definition.contentType}`);
   }
@@ -202,7 +218,41 @@ interface ProseConfig {
 }
 
 /**
+ * Parse and interpolate a prose template using the proper grammar parser
+ * Supports both ATT (@var) and MTT ({{var}}) styles
+ */
+async function parseAndInterpolateTemplate(
+  templateContent: string,
+  style: 'att' | 'mtt',
+  env: Environment
+): Promise<string> {
+  const { parseSync } = await import('@grammar/parser');
+  const startRule = style === 'mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
+
+  let templateNodes: any[];
+  try {
+    templateNodes = parseSync(templateContent, { startRule });
+  } catch (parseErr: any) {
+    // Fallback to simple interpolation if parser fails
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Template parse failed, using fallback:', parseErr.message);
+    }
+
+    if (style === 'mtt') {
+      // Normalize {{var}} to @var for fallback interpolation
+      const normalized = templateContent.replace(/{{\s*([A-Za-z_][\w.]*)\s*}}/g, '@$1');
+      return interpolateProseTemplate(normalized, env);
+    }
+    return interpolateProseTemplate(templateContent, env);
+  }
+
+  // Interpolate the parsed template nodes
+  return interpolate(templateNodes, env, InterpolationContext.Default);
+}
+
+/**
  * Interpolate a prose template file with ATT-style variables (@var)
+ * Simple fallback interpolation when parser is not available
  */
 async function interpolateProseTemplate(
   templateContent: string,
