@@ -5,6 +5,23 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc81]
+
+### Added
+- **Prose execution**: Define executable functions that invoke a prose interpreter via LLM
+  - Syntax: `exe @fn(params) = prose:@config { inline content }`
+  - File-based: `exe @fn(params) = prose:@config "file.prose"`
+  - Template files: `.prose.att` (ATT-style `@var`) and `.prose.mtt` (Mustache-style `{{var}}`)
+  - Configurable interpreter via `skillName` (default: `"prose"` for OpenProse)
+  - Interpreter-agnostic: use any skill name for custom interpreters
+  - Skill injection prompts adapt to the configured skill name
+  - See [docs/user/prose.md](docs/user/prose.md) for full documentation
+
+### Changed
+- **Terminology**: "prose mode" renamed to "markdown mode" to avoid confusion with prose execution
+  - `.md` and `.mld.md` files use "markdown mode" (slash-prefixed directives)
+  - "prose" now refers to OpenProse/prose execution, not the file format
+
 ## [2.0.0-rc80]
 
 ### Added
