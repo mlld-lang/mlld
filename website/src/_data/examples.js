@@ -8,7 +8,7 @@ const files = fs.readdirSync(examplesDir);
 const examples = {};
 
 for (const file of files) {
-  // Support both .mld (strict mode) and .mld.md (prose mode)
+  // Support both .mld (strict mode) and .mld.md (markdown mode)
   const isMld = file.endsWith('.mld') && !file.endsWith('.mld.md');
   const isMldMd = file.endsWith('.mld.md');
 

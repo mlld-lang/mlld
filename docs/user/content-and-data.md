@@ -982,7 +982,7 @@ run cmd {echo "Welcome @name"}
 var @literal = 'Hello @name'               >> Outputs: Hello @name
 ```
 
-In markdown mode (`.mld.md` files), plain text lines are not interpolated:
+In markdown mode (`.md`, `.mld.md` files), plain text lines are not interpolated:
 ```
 Hello @name                                 >> Plain text, @name is literal
 ```

@@ -108,7 +108,7 @@ var @name = "Alice"
 show `Hello @name!`
 ```
 
-**Markdown mode (`.mld.md` or `.md` files)** - slash prefixes required:
+**Markdown mode (`.md`, `.mld.md` files)** - slash prefixes required:
 ```mlld
 /var @name = "Alice"
 /show `Hello @name!`

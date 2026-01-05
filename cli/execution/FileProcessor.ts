@@ -309,10 +309,10 @@ export class FileProcessor {
       // Read the input file
       content = await fs.readFile(cliOptions.input, 'utf8');
       // For stdin input, use cwd as the effective path base for imports
-      // Detect mode from content: if first directive uses / prefix, it's prose mode
+      // Detect mode from content: if first directive uses / prefix, it's markdown mode
       if (isStdinInput) {
-        const isProseMode = this.detectProseMode(content);
-        effectivePath = path.resolve(process.cwd(), isProseMode ? '<stdin>.mld.md' : '<stdin>.mld');
+        const isMarkdownMode = this.detectMarkdownMode(content);
+        effectivePath = path.resolve(process.cwd(), isMarkdownMode ? '<stdin>.mld.md' : '<stdin>.mld');
       } else {
         effectivePath = path.resolve(cliOptions.input);
       }
@@ -477,10 +477,10 @@ export class FileProcessor {
   }
 
   /**
-   * Detect if content uses prose mode (markdown mode with / prefixed directives).
+   * Detect if content uses markdown mode (slash-prefixed directives in .md/.mld.md files).
    * Looks at the first non-empty, non-comment line to determine mode.
    */
-  private detectProseMode(content: string): boolean {
+  private detectMarkdownMode(content: string): boolean {
     const lines = content.split('\n');
 
     for (const line of lines) {
@@ -498,7 +498,7 @@ export class FileProcessor {
       // Skip mlld comments (>>)
       if (trimmed.startsWith('>>')) continue;
 
-      // Check if line starts with / followed by a letter (prose mode directive)
+      // Check if line starts with / followed by a letter (markdown mode directive)
       if (/^\/[a-zA-Z]/.test(trimmed)) {
         return true;
       }
@@ -509,7 +509,7 @@ export class FileProcessor {
         return false;
       }
 
-      // If it's plain text (not a directive), it's likely prose mode
+      // If it's plain text (not a directive), it's likely markdown mode
       // since strict mode would error on plain text
       if (/^[a-zA-Z#*\-\[]/.test(trimmed)) {
         return true;
