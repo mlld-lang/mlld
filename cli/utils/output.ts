@@ -36,28 +36,40 @@ export class OutputFormatter {
   }
 
   static formatInstallSummary(
-    installed: number, 
-    cached: number, 
-    failed: number = 0
+    installed: number,
+    cached: number,
+    failed: number = 0,
+    options?: { directInstalled?: number; transitiveInstalled?: number }
   ): string {
     const parts: string[] = [];
-    
+
     if (installed > 0) {
-      parts.push(`${installed} module${installed !== 1 ? 's' : ''} installed`);
+      if (options?.directInstalled !== undefined && options?.transitiveInstalled !== undefined) {
+        const directPart = options.directInstalled > 0
+          ? `${options.directInstalled} direct`
+          : '';
+        const transitivePart = options.transitiveInstalled > 0
+          ? `${options.transitiveInstalled} transitive`
+          : '';
+        const breakdown = [directPart, transitivePart].filter(Boolean).join(', ');
+        parts.push(`${installed} module${installed !== 1 ? 's' : ''} installed (${breakdown})`);
+      } else {
+        parts.push(`${installed} module${installed !== 1 ? 's' : ''} installed`);
+      }
     }
-    
+
     if (cached > 0) {
       parts.push(`${cached} from cache`);
     }
-    
+
     if (failed > 0) {
       parts.push(chalk.red(`${failed} failed`));
     }
-    
+
     if (parts.length === 0) {
       return chalk.gray('No modules processed');
     }
-    
+
     return parts.join(', ');
   }
 

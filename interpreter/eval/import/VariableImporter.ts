@@ -640,6 +640,23 @@ export class VariableImporter {
         return createArrayVariable(arrayName, normalizedElements, snapshot.isComplex === true, source, arrayMetadata);
       }
 
+      // Reconstruct __executable markers back to proper ExecutableVariables
+      // This ensures isExecutableVariable() works on object properties
+      if ((value as any).__executable) {
+        const source: VariableSource = {
+          directive: 'exe',
+          syntax: 'braces',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        return this.createExecutableFromImport(
+          'property',
+          value,
+          source,
+          { isImported: true, importPath }
+        );
+      }
+
       const result: Record<string, any> = {};
       for (const [key, entry] of Object.entries(value)) {
         result[key] = this.unwrapArraySnapshots(entry, importPath);

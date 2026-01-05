@@ -1,0 +1,8 @@
+exe @greet(name) = `Hello, @name!`
+
+var @config = {
+  greeter: @greet,
+  prefix: "Config"
+}
+
+export { @config }

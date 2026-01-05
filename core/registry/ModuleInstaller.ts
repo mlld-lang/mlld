@@ -20,6 +20,16 @@ export interface ModuleSpecifier {
 
 export type InstallStatus = 'installed' | 'cached' | 'dry-run' | 'failed';
 
+export interface ModuleInstallResult {
+  module: string;
+  status: InstallStatus;
+  version?: string;
+  hash?: string;
+  error?: Error;
+  message?: string;
+  isDirect?: boolean;
+}
+
 export interface ModuleUpdateResult {
   module: string;
   previousVersion?: string;
@@ -187,10 +197,69 @@ export class ModuleInstaller {
 
   async installModules(specs: ModuleSpecifier[], options: InstallOptions = {}): Promise<ModuleInstallResult[]> {
     const results: ModuleInstallResult[] = [];
+    const installedModules = new Set<string>();
+
+    // Track which modules are direct dependencies
+    const directModules = new Set(specs.map(s => this.workspace.normalizeModuleName(s.name)));
+
+    // Install direct dependencies first
     for (const spec of specs) {
       const result = await this.installSingle(spec, options);
+      result.isDirect = true;
       results.push(result);
+      if (result.status !== 'failed') {
+        installedModules.add(this.workspace.normalizeModuleName(spec.name));
+      }
     }
+
+    // Now resolve and install transitive dependencies
+    // Keep iterating until no new modules are discovered
+    let modulesToCheck = [...specs];
+    while (modulesToCheck.length > 0) {
+      try {
+        const resolution = await this.resolveDependencies(modulesToCheck, { includeDevDependencies: false });
+
+        // Find modules in the resolution that aren't installed yet
+        const newModules: ModuleSpecifier[] = [];
+        for (const key of resolution.order) {
+          const node = resolution.modules[key];
+          const normalizedName = this.workspace.normalizeModuleName(node.module);
+          if (!installedModules.has(normalizedName)) {
+            newModules.push({
+              name: normalizedName,
+              version: node.version
+            });
+          }
+        }
+
+        if (newModules.length === 0) {
+          break;
+        }
+
+        // Install the newly discovered transitive dependencies
+        for (const spec of newModules) {
+          const result = await this.installSingle(spec, options);
+          result.isDirect = directModules.has(this.workspace.normalizeModuleName(spec.name));
+          results.push(result);
+          if (result.status !== 'failed') {
+            installedModules.add(this.workspace.normalizeModuleName(spec.name));
+          }
+        }
+
+        // Check these new modules for their dependencies
+        modulesToCheck = newModules;
+      } catch (error) {
+        // If dependency resolution fails, log warning but don't fail the install
+        const message = error instanceof Error ? error.message : String(error);
+        options.onEvent?.({
+          type: 'error',
+          module: 'dependency-resolution',
+          error: new Error(`Failed to resolve transitive dependencies: ${message}`)
+        });
+        break;
+      }
+    }
+
     return results;
   }
 

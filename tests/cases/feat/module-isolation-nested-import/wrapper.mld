@@ -1,0 +1,5 @@
+import { @value as @baseValue, @helper as @baseHelper } from "base.mld"
+
+var @combined = `@baseValue-@baseHelper`
+
+export { @combined }

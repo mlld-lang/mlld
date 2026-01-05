@@ -134,7 +134,13 @@ export class InstallCommand {
     const cached = results.filter(r => r.status === 'cached').length;
     const failed = results.filter(r => r.status === 'failed').length;
 
-    const summary = OutputFormatter.formatInstallSummary(installed, cached, failed);
+    const directInstalled = results.filter(r => r.status === 'installed' && r.isDirect).length;
+    const transitiveInstalled = results.filter(r => r.status === 'installed' && !r.isDirect).length;
+
+    const summary = OutputFormatter.formatInstallSummary(installed, cached, failed, {
+      directInstalled,
+      transitiveInstalled
+    });
     console.log(summary);
 
     if (results.some(r => r.status === 'failed') && options.verbose) {

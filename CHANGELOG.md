@@ -11,10 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Prose execution**: Define executable functions that invoke a prose interpreter via LLM
   - Syntax: `exe @fn(params) = prose:@config { inline content }`
   - File-based: `exe @fn(params) = prose:@config "file.prose"`
-  - Template files: `.prose.att` (ATT-style `@var`) and `.prose.mtt` (Mustache-style `{{var}}`)
-  - Config uses model executors: `{ model: @opus }` where `@opus` is from `@mlld/claude`
-  - Pre-built configs available from `@mlld/prose` module
-  - Configurable interpreter via `skillName` (default: `"prose"` for OpenProse)
+  - Template files: `.prose.att` (`@var`) and `.prose.mtt` (`{{var}}`); `.prose` files do not interpolate
+  - Config uses model executors: `{ model: @opus, skills: [...] }`
+  - Pre-built configs available from `@mlld/prose` public module
+  - Requires [OpenProse](https://prose.md) skill or another prose interpreter
+  - Skills must be approved in Claude Code before use
   - See [docs/user/prose.md](docs/user/prose.md) for full documentation
 
 ### Changed
@@ -40,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Module publish validation for exe declarations**: Fixed `ExportValidator` not recognizing exe declarations where the identifier is a `VariableReference` node. This caused `mlld publish` to fail with "Exported name is not declared" errors for modules like `@mlld/array` and `@mlld/string`.
 - **Module scope isolation for nested imports**: Fixed bug where importing a module that internally imports from another module would cause "variable already imported" errors. Child module scopes are now properly isolated from parent scope during import evaluation.
 - **Executable preservation in object properties**: Fixed bug where executables stored as object properties would lose their Variable wrapper during import, causing `isExecutableVariable()` to return false. Object property executables are now properly reconstructed during import.
+- **Registry publish SHA error**: Fixed "sha wasn't supplied" error when publishing new versions of existing modules. The existing tags.json SHA is now properly fetched and provided when updating.
+- **Duplicate version publish check**: `mlld publish` now checks if the specific version already exists in the registry before attempting to create a PR, preventing wasted effort on duplicate publishes.
 
 ## [2.0.0-rc79]
 
