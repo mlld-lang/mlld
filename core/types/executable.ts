@@ -16,7 +16,7 @@ import type { PathMeta } from './meta';
  */
 export interface BaseExecutable {
   /** The type of executable */
-  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline';
+  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline' | 'prose';
   /** Parameter names expected by this executable */
   paramNames: string[];
   /** Original directive type this came from (exec or text) */
@@ -110,17 +110,35 @@ export interface DataExecutable extends BaseExecutable {
 }
 
 /**
+ * Prose executable - /exe name(params) = prose:@config { ... }
+ * Executes OpenProse content via skill injection to a model
+ */
+export interface ProseExecutable extends BaseExecutable {
+  type: 'prose';
+  /** Reference to the config variable containing model settings */
+  configRef: MlldNode[];
+  /** Content type: 'inline' for {...}, 'file' for "path.prose", 'template' for template "path.prose.att" */
+  contentType: 'inline' | 'file' | 'template';
+  /** Inline prose content (for contentType='inline') */
+  contentTemplate?: MlldNode[];
+  /** Path to prose file (for contentType='file' or 'template') */
+  pathTemplate?: MlldNode[];
+  sourceDirective: 'exec';
+}
+
+/**
  * Unified executable type
  */
-export type ExecutableDefinition = 
-  | CommandExecutable 
-  | CommandRefExecutable 
-  | CodeExecutable 
+export type ExecutableDefinition =
+  | CommandExecutable
+  | CommandRefExecutable
+  | CodeExecutable
   | TemplateExecutable
   | SectionExecutable
   | ResolverExecutable
   | PipelineExecutable
-  | DataExecutable;
+  | DataExecutable
+  | ProseExecutable;
 
 /**
  * Variable that stores an executable definition
@@ -166,6 +184,10 @@ export function isPipelineExecutable(def: ExecutableDefinition): def is Pipeline
 
 export function isDataExecutable(def: ExecutableDefinition): def is DataExecutable {
   return def.type === 'data';
+}
+
+export function isProseExecutable(def: ExecutableDefinition): def is ProseExecutable {
+  return def.type === 'prose';
 }
 
 /**

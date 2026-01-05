@@ -859,13 +859,18 @@ export async function evaluateRun(
       for (const [key, value] of Object.entries(argValues)) {
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
-      
+
       const templateOutput = await interpolateWithPendingDescriptor(
         definition.template,
         InterpolationContext.Default,
         tempEnv
       );
       setOutput(templateOutput);
+    } else if (definition.type === 'prose') {
+      // Handle prose executables - prose:@config { ... }
+      const { executeProseExecutable } = await import('./prose-execution');
+      const proseResult = await executeProseExecutable(definition, argValues, env);
+      setOutput(proseResult);
     } else {
       throw new Error(`Unsupported executable type: ${definition.type}`);
     }

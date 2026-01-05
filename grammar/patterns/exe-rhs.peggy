@@ -3,7 +3,8 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 ExeRHSContent "exe assignment value"
-  = leading:LeadingParallelPipeline {
+  = ExeProsePattern               // prose:@config {...} or prose:@config "file.prose"
+  / leading:LeadingParallelPipeline {
       const pipeline = leading.withClause.pipeline || [];
       const pipelineSummary = pipeline.map(stage => {
         if (Array.isArray(stage)) {
@@ -313,6 +314,97 @@ ExeTemplateFromFilePattern "exe template-from-file pattern"
         meta: {
           pathMeta: path.meta
         }
+      };
+    }
+
+// Prose pattern for exe context - handles: prose:@config {...} or prose:@config "file.prose"
+// Prose blocks are executed by passing interpolated content to the config's model executor
+// with skill injection prompting to invoke the prose skill
+ExeProsePattern "exe prose pattern"
+  = "prose:" _ configRef:UnifiedVariableNoTail _ content:ProseInlineContent {
+      helpers.debug('ExeProsePattern matched inline', { configRef, content });
+      return {
+        subtype: 'exeProse',
+        source: 'prose',
+        values: {
+          configRef: [configRef],
+          content: content.parts,
+          contentType: 'inline'
+        },
+        raw: {
+          configRef: '@' + configRef.identifier + (configRef.fields ? '.' + configRef.fields.map(f => f.value || f.name).join('.') : ''),
+          content: content.raw,
+          contentType: 'inline'
+        },
+        meta: {
+          hasConfig: true,
+          isInline: true,
+          hasVariables: content.hasVariables || false
+        }
+      };
+    }
+  / "prose:" _ configRef:UnifiedVariableNoTail _ "template" _ path:QuotedStringPath {
+      helpers.debug('ExeProsePattern matched template file', { configRef, path });
+      return {
+        subtype: 'exeProseTemplate',
+        source: 'proseTemplate',
+        values: {
+          configRef: [configRef],
+          path: path.values.path,
+          contentType: 'template'
+        },
+        raw: {
+          configRef: '@' + configRef.identifier + (configRef.fields ? '.' + configRef.fields.map(f => f.value || f.name).join('.') : ''),
+          path: path.raw.path,
+          contentType: 'template'
+        },
+        meta: {
+          hasConfig: true,
+          isTemplate: true,
+          pathMeta: path.meta
+        }
+      };
+    }
+  / "prose:" _ configRef:UnifiedVariableNoTail _ path:QuotedStringPath {
+      helpers.debug('ExeProsePattern matched file reference', { configRef, path });
+      return {
+        subtype: 'exeProseFile',
+        source: 'proseFile',
+        values: {
+          configRef: [configRef],
+          path: path.values.path,
+          contentType: 'file'
+        },
+        raw: {
+          configRef: '@' + configRef.identifier + (configRef.fields ? '.' + configRef.fields.map(f => f.value || f.name).join('.') : ''),
+          path: path.raw.path,
+          contentType: 'file'
+        },
+        meta: {
+          hasConfig: true,
+          isFile: true,
+          pathMeta: path.meta
+        }
+      };
+    }
+  / "prose" _ !(":" _) {
+      helpers.mlldError(
+        "Prose blocks require a config reference. Use: prose:@config { ... } or prose:@config \"file.prose\"",
+        ":",
+        location()
+      );
+    }
+
+// Prose inline content - braces containing prose syntax
+// Variables are interpolated using ATT style (@var) before passing to executor
+ProseInlineContent "prose inline content"
+  = "{" content:$([^}]*) "}" {
+      // Parse for variable references in the content
+      const hasVariables = /@[a-zA-Z_]/.test(content);
+      return {
+        parts: [helpers.createNode(NodeType.Text, { content: content.trim(), location: location() })],
+        raw: content.trim(),
+        hasVariables
       };
     }
 

@@ -1,7 +1,7 @@
 import type { BaseMlldNode, DirectiveNode, ExeBlockNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable } from '@core/types/executable';
+import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable, PipelineExecutable, ProseExecutable } from '@core/types/executable';
 import { interpolate, evaluate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import {
@@ -714,7 +714,59 @@ export async function evaluateExe(
       paramNames,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
-    
+
+  } else if (directive.subtype === 'exeProse' || directive.subtype === 'exeProseFile' || directive.subtype === 'exeProseTemplate') {
+    // Handle prose executable: prose:@config { ... } or prose:@config "file.prose"
+    const configRefNodes = directive.values?.configRef;
+    if (!configRefNodes || !Array.isArray(configRefNodes) || configRefNodes.length === 0) {
+      throw new Error('Prose executable missing config reference');
+    }
+
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+
+    const contentType = directive.values?.contentType as 'inline' | 'file' | 'template';
+
+    if (contentType === 'inline') {
+      // Inline prose: prose:@config { session "..." }
+      const contentNodes = directive.values?.content;
+      if (!contentNodes) {
+        throw new Error('Inline prose executable missing content');
+      }
+      executableDef = {
+        type: 'prose',
+        configRef: configRefNodes,
+        contentType: 'inline',
+        contentTemplate: contentNodes,
+        paramNames,
+        sourceDirective: 'exec'
+      } satisfies ProseExecutable;
+    } else {
+      // File-based prose: prose:@config "file.prose" or prose:@config template "file.prose.att"
+      const pathNodes = directive.values?.path;
+      if (!pathNodes || !Array.isArray(pathNodes) || pathNodes.length === 0) {
+        throw new Error('File-based prose executable missing path');
+      }
+      executableDef = {
+        type: 'prose',
+        configRef: configRefNodes,
+        contentType,
+        pathTemplate: pathNodes,
+        paramNames,
+        sourceDirective: 'exec'
+      } satisfies ProseExecutable;
+    }
+
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Creating exe prose:', {
+        identifier,
+        paramNames,
+        contentType,
+        hasConfig: true
+      });
+    }
+
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }
@@ -734,6 +786,8 @@ export async function evaluateExe(
     source.syntax = 'template';
   } else if (executableDef.type === 'data') {
     source.syntax = 'object';
+  } else if (executableDef.type === 'prose') {
+    source.syntax = 'prose';
   }
   
   // Extract language for code executables

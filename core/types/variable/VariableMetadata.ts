@@ -35,7 +35,7 @@ export class VariableMetadataUtils {
    * Create consistent variable source metadata
    */
   static createSource(
-    syntax: 'quoted' | 'template' | 'array' | 'object' | 'command' | 'code' | 'path' | 'reference',
+    syntax: 'quoted' | 'template' | 'array' | 'object' | 'command' | 'code' | 'path' | 'reference' | 'prose',
     hasInterpolation: boolean,
     isMultiLine: boolean,
     wrapperType?: 'singleQuote' | 'doubleQuote' | 'backtick' | 'brackets'

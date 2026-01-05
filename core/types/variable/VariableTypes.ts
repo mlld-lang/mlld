@@ -37,7 +37,7 @@ export interface BaseVariable {
  */
 export interface VariableSource {
   directive: 'var'; // Always 'var' in the new system
-  syntax: 'quoted' | 'template' | 'array' | 'object' | 'command' | 'code' | 'path' | 'reference';
+  syntax: 'quoted' | 'template' | 'array' | 'object' | 'command' | 'code' | 'path' | 'reference' | 'prose';
   wrapperType?: 'singleQuote' | 'doubleQuote' | 'backtick' | 'brackets' | 'doubleColon' | 'tripleColon';
   hasInterpolation: boolean;
   isMultiLine: boolean;
