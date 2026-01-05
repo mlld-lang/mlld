@@ -99,6 +99,7 @@ jobs:
       - name: Publish packages
         if: steps.check_release.outputs.skip == 'false'
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RC_LATEST: ${{ vars.RC_LATEST }}
         run: |
           VERSION=${{ steps.check_release.outputs.version }}
