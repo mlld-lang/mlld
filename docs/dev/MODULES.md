@@ -1,8 +1,8 @@
 ---
-updated: 2025-01-10
+updated: 2026-01-04
 tags: #arch, #modules, #imports
-related-docs: docs/modules.md, docs/registry.md, docs/resolvers.md
-related-code: interpreter/eval/directives/import/*.ts, core/resolvers/*.ts, interpreter/eval/import/*.ts
+related-docs: docs/modules.md, docs/registry.md, docs/resolvers.md, docs/dev/REGISTRY.md
+related-code: interpreter/eval/directives/import/*.ts, core/resolvers/*.ts, interpreter/eval/import/*.ts, cli/commands/info.ts, cli/commands/docs.ts
 related-types: core/types { ImportDirective, ExportManifest, ModuleLockEntry }
 ---
 
@@ -204,6 +204,64 @@ interface IResolver {
 - All resolution routed through `ResolverManager.resolve`
 - Import types control caching/timing, not which resolver is selected
 
+### Registry Data Access
+
+**Registry URL**: `https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json`
+
+**Entry point**: `core/resolvers/RegistryResolver.ts`
+
+**Module Entry Structure** (from modules.json):
+```typescript
+{
+  "@mlld/array": {
+    name: "array",
+    author: "mlld",
+    about: "Array operations with native return values",
+    version: "2.0.0",
+    needs: ["node"],
+    license: "CC0",
+    source: {
+      type: "github",
+      url: "https://raw.githubusercontent.com/...",  // ← Raw content URL
+      contentHash: "sha256:...",
+      repository: { type: "git", url: "...", commit: "...", path: "..." }
+    },
+    keywords: [...],
+    availableVersions: ["2.0.0"],
+    tags: { latest: "2.0.0", stable: "2.0.0" },
+    owners: ["mlld"]
+  }
+}
+```
+
+**Key Fields**:
+- `source.url`: Raw URL to fetch module content (use for section extraction)
+- `about`: Module description
+- `version`: Current version
+- `availableVersions`: All published versions
+- `tags`: Named version aliases (latest, stable, beta)
+
+**Fetching Module Info** (`RegistryResolver.ts:379-434`):
+1. Fetch `modules.json` from registry CDN
+2. Look up `@author/module` key
+3. `source.url` points to raw module content
+
+**CLI Usage Pattern** (for `mlld info`, `mlld docs`):
+```typescript
+// Fetch modules.json
+const registry = await fetch(registryUrl).then(r => r.json());
+const entry = registry.modules[`@${author}/${module}`];
+
+// Get source URL for section extraction
+const sourceUrl = entry.source.url;
+
+// Use interpreter to extract sections
+const source = `var @tldr = <${sourceUrl} # tldr>\nshow @tldr`;
+await interpret(source, options);
+```
+
+**Private Registries**: Use `ResolverManager` for resolution - it handles both public registry and locally-configured private registries via prefix matching. Don't hardcode the public registry URL in CLI commands.
+
 ### Configuration
 
 **mlld-config.json** (`core/registry/ConfigFile.ts:10-37`)
@@ -225,6 +283,8 @@ interface IResolver {
 - Lock validation only applies to registry imports (file/URL use different mechanisms)
 - Collision detection is per-file, not global (same name from different sources in different files is fine)
 - Auto-export includes all variables except system variables (@base, @now, etc.)
+- CLI commands (`info`, `docs`) must use ResolverManager, not hardcoded registry URL, to support private registries
+- `cli/commands/info.ts` has mock data in `fetchModuleInfo()` - needs to use real registry data
 
 ## Debugging
 
