@@ -1,179 +1,241 @@
-import { RegistryManager } from '@core/registry/RegistryManager';
-import { ModuleWorkspace, ModuleInstaller, type ModuleSpecifier } from '@core/registry';
-import { renderDependencySummary } from '../utils/dependency-summary';
-import { OutputFormatter, formatModuleReference } from '../utils/output';
-import { lockFileManager } from '../utils/lock-file';
+import { formatModuleReference } from '../utils/output';
+import { interpret } from '@interpreter/index';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
 import chalk from 'chalk';
+
+const REGISTRY_URL = 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json';
 
 export interface InfoOptions {
   verbose?: boolean;
   basePath?: string;
   format?: 'text' | 'json';
-  includeDevDependencies?: boolean;
 }
 
 export interface ModuleInfo {
   name: string;
   author: string;
   description?: string;
-  gist?: string;
-  tags?: string[];
-  created?: string;
-  installed?: boolean;
   version?: string;
-  approvedAt?: string;
-  approvedBy?: string;
-  integrity?: string;
-  size?: number;
-  advisories?: Array<{
-    severity: string;
-    description: string;
-  }>;
-  dependencies?: string[];
-  repository?: string;
+  needs?: string[];
+  keywords?: string[];
   license?: string;
+  repository?: string;
+  sourceUrl?: string;
+  publishedAt?: string;
 }
 
-export class InfoCommand {
-  private registryManager: RegistryManager;
-  private workspace: ModuleWorkspace;
-  private installer: ModuleInstaller;
-  
-  constructor(basePath: string) {
-    this.workspace = new ModuleWorkspace({ projectRoot: basePath });
-    this.installer = new ModuleInstaller(this.workspace);
-    this.registryManager = new RegistryManager(basePath, {
-      enabled: true,
-      telemetry: { enabled: false }
-    });
+interface RegistryModule {
+  name: string;
+  author: string;
+  about: string;
+  version?: string;
+  needs: string[];
+  keywords?: string[];
+  license: string;
+  repo?: string;
+  source: {
+    url: string;
+    contentHash: string;
+  };
+  publishedAt?: string;
+}
+
+let registryCache: { data: any; timestamp: number } | null = null;
+const CACHE_TTL = 300000; // 5 minutes
+
+async function fetchRegistry(): Promise<Record<string, RegistryModule>> {
+  if (registryCache && Date.now() - registryCache.timestamp < CACHE_TTL) {
+    return registryCache.data.modules;
   }
 
-  async getInfo(moduleRef: string, options: InfoOptions = {}): Promise<ModuleInfo> {
-    const { username, moduleName } = formatModuleReference(moduleRef);
-    
-    // Get module info from registry
-    const moduleInfo = await this.fetchModuleInfo(username, moduleName);
-    
-    // Check if installed locally
-    const lockFile = this.registryManager.getLockFile();
-    const importPath = `mlld://${username}/${moduleName}`;
-    const lockEntry = lockFile.getImport(importPath);
-    
-    const info: ModuleInfo = {
-      name: moduleName,
-      author: username,
-      description: moduleInfo.description,
-      gist: moduleInfo.gist,
-      tags: moduleInfo.tags,
-      created: moduleInfo.created,
-      repository: moduleInfo.repository,
-      license: moduleInfo.license,
-      installed: !!lockEntry
-    };
-    
-    // Add installation details if installed
-    if (lockEntry) {
-      info.version = lockEntry.gistRevision;
-      info.approvedAt = lockEntry.approvedAt;
-      info.approvedBy = lockEntry.approvedBy;
-      info.integrity = lockEntry.integrity;
-      
-      // Try to get cached content size
-      try {
-        const cache = this.registryManager.getCache();
-        const cached = await cache.get(lockEntry.resolved, lockEntry.gistRevision);
-        if (cached) {
-          info.size = Buffer.byteLength(cached, 'utf8');
-        }
-      } catch {
-        // Ignore cache errors
-      }
+  const response = await fetch(REGISTRY_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch registry: ${response.status}`);
+  }
+
+  const data = await response.json();
+  registryCache = { data, timestamp: Date.now() };
+  return data.modules;
+}
+
+export async function getModuleInfo(moduleRef: string): Promise<ModuleInfo & { sourceUrl: string }> {
+  const { username, moduleName } = formatModuleReference(moduleRef);
+  const moduleKey = `@${username}/${moduleName}`;
+
+  const modules = await fetchRegistry();
+  const entry = modules[moduleKey];
+
+  if (!entry) {
+    throw new Error(`Module not found: ${moduleKey}`);
+  }
+
+  return {
+    name: entry.name,
+    author: entry.author,
+    description: entry.about,
+    version: entry.version,
+    needs: entry.needs,
+    keywords: entry.keywords,
+    license: entry.license,
+    repository: entry.repo,
+    sourceUrl: entry.source.url,
+    publishedAt: entry.publishedAt
+  };
+}
+
+// Simple mlld syntax highlighter for terminal
+function highlightMlld(code: string): string {
+  let result = code;
+
+  // Directives at start of line (with or without leading slash)
+  result = result.replace(/^(\/?(?:var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy))\b/gm,
+    chalk.magenta('$1'));
+
+  // Keywords
+  result = result.replace(/\b(from|as|foreach|with|to)\b/g, chalk.magenta('$1'));
+
+  // Reserved variables
+  result = result.replace(/@(INPUT|TIME|PROJECTPATH|STDIN|NOW|base)\b/g, chalk.cyan('@$1'));
+
+  // Regular variables (after reserved to not double-match)
+  result = result.replace(/@(\w+)/g, (match, name) => {
+    // Skip if already colored (reserved vars)
+    if (['INPUT', 'TIME', 'PROJECTPATH', 'STDIN', 'NOW', 'base'].includes(name)) {
+      return match;
     }
-    
-    // Check for security advisories
-    if (moduleInfo.gist) {
-      try {
-        const resolver = this.registryManager.getResolver();
-        info.advisories = await resolver.checkUserAdvisories(username, moduleName, moduleInfo.gist);
-      } catch (error) {
-        if (options.verbose) {
-          console.warn(chalk.yellow(`Warning: Could not check advisories: ${error.message}`));
-        }
-      }
+    return chalk.blue(`@${name}`);
+  });
+
+  // Strings in backticks
+  result = result.replace(/`([^`]*)`/g, chalk.green('`$1`'));
+
+  // Double-quoted strings
+  result = result.replace(/"([^"]*)"/g, chalk.green('"$1"'));
+
+  // Comments
+  result = result.replace(/(>>|<<)(.*)$/gm, chalk.gray('$1$2'));
+
+  // Alligators
+  result = result.replace(/<([^>]+)>/g, chalk.yellow('<$1>'));
+
+  // Numbers
+  result = result.replace(/\b(\d+(?:\.\d+)?)\b/g, chalk.yellow('$1'));
+
+  // Braces for code blocks
+  result = result.replace(/([{}])/g, chalk.gray('$1'));
+
+  return result;
+}
+
+// Highlight markdown with mlld code blocks
+function highlightMarkdown(text: string): string {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let inMlldBlock = false;
+  let mlldContent: string[] = [];
+
+  for (const line of lines) {
+    // Check for code block start
+    if (line.match(/^```mlld/)) {
+      inMlldBlock = true;
+      result.push(chalk.gray(line));
+      continue;
     }
-    
-    return info;
-  }
 
-  async displayInfo(moduleRef: string, options: InfoOptions = {}): Promise<void> {
-    try {
-      const info = await this.getInfo(moduleRef, options);
-      
-      if (options.format === 'json') {
-        console.log(JSON.stringify(info, null, 2));
-        return;
-      }
-      
-      // Text format
-      console.log(OutputFormatter.formatModuleInfo(info));
-      
-      // Additional verbose information
-      if (options.verbose && info.installed) {
-        console.log('\nDetailed Installation Info:');
-        if (info.integrity) {
-          console.log(`  Integrity: ${info.integrity}`);
-        }
-        if (info.size) {
-          console.log(`  Size: ${this.formatSize(info.size)}`);
-        }
-      }
-      
-    } catch (error) {
-      if (error.message.includes('not found') || error.message.includes('does not exist')) {
-        console.error(chalk.red(`Module not found: ${moduleRef}`));
-        console.log('\nSuggestions:');
-        console.log(chalk.gray('  • Check the module name spelling'));
-        console.log(chalk.gray('  • Ensure the format is: @username/module or username/module'));
-        console.log(chalk.gray(`  • Search for modules: mlld search ${moduleRef.split('/')[0] || moduleRef}`));
-      } else {
-        throw error;
-      }
+    // Check for code block end
+    if (inMlldBlock && line.match(/^```$/)) {
+      // Highlight accumulated mlld content
+      const highlighted = highlightMlld(mlldContent.join('\n'));
+      result.push(highlighted);
+      result.push(chalk.gray(line));
+      mlldContent = [];
+      inMlldBlock = false;
+      continue;
     }
-  }
 
-  private async fetchModuleInfo(username: string, moduleName: string): Promise<{
-    description?: string;
-    gist?: string;
-    tags?: string[];
-    created?: string;
-    repository?: string;
-    license?: string;
-  }> {
-    // In the real implementation, this would call the registry resolver
-    // For now, simulate fetching module information
-    
-    // Simulate some delay
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Return mock data for demonstration
-    return {
-      description: `A utility module by ${username}`,
-      gist: 'abc123def456',
-      tags: ['utility', 'helper'],
-      created: new Date().toISOString(),
-      repository: `https://github.com/${username}/${moduleName}`,
-      license: 'MIT'
-    };
-  }
-
-  private formatSize(bytes: number): string {
-    if (bytes < 1024) {
-      return `${bytes} bytes`;
-    } else if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`;
+    if (inMlldBlock) {
+      mlldContent.push(line);
     } else {
-      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      // Regular markdown
+      let processed = line;
+
+      // Headers
+      if (line.match(/^##+ /)) {
+        processed = chalk.bold.cyan(line);
+      }
+      // Bold
+      else if (line.match(/\*\*[^*]+\*\*/)) {
+        processed = line.replace(/\*\*([^*]+)\*\*/g, chalk.bold('$1'));
+      }
+      // Inline code
+      else if (line.match(/`[^`]+`/)) {
+        processed = line.replace(/`([^`]+)`/g, chalk.yellow('`$1`'));
+      }
+
+      result.push(processed);
     }
+  }
+
+  // Handle unclosed code block
+  if (mlldContent.length > 0) {
+    result.push(highlightMlld(mlldContent.join('\n')));
+  }
+
+  return result.join('\n');
+}
+
+async function fetchSection(sourceUrl: string, section: string, basePath: string): Promise<string | null> {
+  const fileSystem = new NodeFileSystem();
+  const pathService = new PathService(basePath, fileSystem);
+
+  const source = `var @content = <${sourceUrl} # ${section}>\nshow @content`;
+
+  try {
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath,
+      approveAllImports: true,
+      format: 'markdown',
+      streaming: { enabled: false }
+    });
+
+    const output = typeof result === 'string' ? result : (result as any).output;
+    return output?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function displayInfo(moduleRef: string, options: InfoOptions = {}): Promise<void> {
+  const info = await getModuleInfo(moduleRef);
+
+  if (options.format === 'json') {
+    console.log(JSON.stringify(info, null, 2));
+    return;
+  }
+
+  // Colorized text format
+  console.log();
+  console.log(`${chalk.cyan.bold(`@${info.author}/${info.name}`)} ${chalk.gray(`v${info.version || '?'}`)}`);
+  console.log(info.description || 'No description');
+  console.log();
+
+  const label = (s: string) => chalk.dim(s.padEnd(10));
+
+  if (info.needs?.length) console.log(`${label('needs')} ${info.needs.join(', ')}`);
+  if (info.license) console.log(`${label('license')} ${info.license}`);
+  if (info.repository) console.log(`${label('repo')} ${chalk.blue(info.repository)}`);
+  if (info.keywords?.length) console.log(`${label('keywords')} ${chalk.dim(info.keywords.join(', '))}`);
+  if (info.publishedAt) console.log(`${label('published')} ${new Date(info.publishedAt).toLocaleDateString()}`);
+
+  // Fetch and display tldr
+  const basePath = options.basePath || process.cwd();
+  const tldr = await fetchSection(info.sourceUrl, 'tldr', basePath);
+  if (tldr) {
+    console.log();
+    console.log(highlightMarkdown(tldr));
   }
 }
 
@@ -183,14 +245,20 @@ export async function infoCommand(moduleRef: string, options: InfoOptions = {}):
     console.log('Usage: mlld info @username/module');
     process.exit(1);
   }
-  
-  const basePath = options.basePath || process.cwd();
-  
-  // Ensure we have a lock file (for checking installation status)
-  await lockFileManager.ensureLockFile(basePath);
-  
-  const infoCmd = new InfoCommand(basePath);
-  await infoCmd.displayInfo(moduleRef, options);
+
+  try {
+    await displayInfo(moduleRef, options);
+  } catch (error: any) {
+    if (error.message?.includes('not found')) {
+      console.error(chalk.red(`Module not found: ${moduleRef}`));
+      console.log('\nSuggestions:');
+      console.log(chalk.gray('  - Check the module name spelling'));
+      console.log(chalk.gray('  - Ensure the format is: @username/module'));
+    } else {
+      console.error(chalk.red(`Error: ${error.message}`));
+    }
+    process.exit(1);
+  }
 }
 
 // CLI interface
@@ -199,34 +267,31 @@ export function createInfoCommand() {
     name: 'info',
     aliases: ['show'],
     description: 'Show detailed information about a module',
-    
+
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       const moduleRef = args[0];
-      
+
       if (!moduleRef) {
         console.error(chalk.red('Module reference is required'));
         console.log('Usage: mlld info @username/module');
         process.exit(1);
       }
-      
+
       const options: InfoOptions = {
         verbose: flags.verbose || flags.v,
         basePath: flags['base-path'] || process.cwd(),
         format: flags.format || 'text'
       };
-      
-      // Validate format
+
       if (options.format && !['text', 'json'].includes(options.format)) {
         console.error(chalk.red('Invalid format. Must be: text or json'));
         process.exit(1);
       }
-      
-      try {
-        await infoCommand(moduleRef, options);
-      } catch (error) {
-        console.error(OutputFormatter.formatError(error, { verbose: options.verbose }));
-        process.exit(1);
-      }
+
+      await infoCommand(moduleRef, options);
     }
   };
 }
+
+// Export highlighters for use by docs command
+export { highlightMarkdown, highlightMlld };

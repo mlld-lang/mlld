@@ -5,6 +5,17 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc80]
+
+### Added
+- **`mlld docs @author/module`**: New command to display module documentation, showing `# tldr` section followed by `# docs` section from published modules
+- **`mlld info` shows real registry data**: Now fetches actual module metadata from registry (version, needs, license, repo, keywords) and appends the `# tldr` section
+- **Colorized CLI output**: Module info and docs display with syntax highlighting for mlld code blocks, colored headers, and formatted metadata
+- **`mlld-run` blocks use strict mode**: Code inside `mlld-run` fenced blocks now parses in strict mode (slashes optional, no prose between directives)
+
+### Fixed
+- **Module publish validation for exe declarations**: Fixed `ExportValidator` not recognizing exe declarations where the identifier is a `VariableReference` node. This caused `mlld publish` to fail with "Exported name is not declared" errors for modules like `@mlld/array` and `@mlld/string`.
+
 ## [2.0.0-rc79]
 
 ### Added

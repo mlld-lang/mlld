@@ -1,0 +1,50 @@
+>> User Docs Coverage Checker
+>> Validates that new CHANGELOG features are covered in user documentation
+
+var @changelog = <@base/CHANGELOG.md>
+var @docsGuide = <@base/docs/dev/DOCS-USER.md>
+var @userDocs = <@base/docs/user/*.md>
+
+exe @claude(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+
+var @prompt = `
+Analyze this CHANGELOG and check if USER-FACING FEATURES from recent version(s)
+are covered in the user documentation.
+
+Per the documentation guide, user docs need coverage for:
+- New directives or features
+- New SDK methods
+- Behavior changes (not bug fixes)
+
+Do NOT flag:
+- Architecture changes (dev docs only)
+- Bug fixes
+- Performance optimizations
+- Internal refactors
+
+DOCUMENTATION STYLE GUIDE:
+@docsGuide
+
+USER DOCUMENTATION:
+@userDocs
+
+CHANGELOG:
+@changelog
+
+Return JSON with this exact structure:
+{
+  "summary": "Brief bulleted list of gaps found, one per line, using - prefix",
+  "report": "Full markdown report with all details, features, coverage status, gaps"
+}
+
+IMPORTANT: Return ONLY valid JSON, no markdown code fences.
+`
+
+var @result = @claude(@prompt) | @json.llm
+
+output @result.report to "user-docs-gaps.md"
+
+>> Output summary
+log @result.summary
+log ""
+log "Details written to user-docs-gaps.md"

@@ -1,15 +1,20 @@
 # Syntax Highlighting Generator
 
-This directory contains scripts to generate syntax highlighting files for various editors from the mlld grammar.
+Generates regex-based syntax highlighting files for various editors from the mlld grammar.
 
 ## Generated Files
 
-The following files are generated in `grammar/generated/`:
-- `mlld.tmLanguage.json` - TextMate/VSCode syntax definition
-- `mlld-markdown.injection.json` - Markdown injection grammar for TextMate/VSCode
-- `mlld.vim` - Vim syntax file
-- `markdown-mlld.vim` - Vim Markdown support
-- `prism-mlld.js` - Prism.js syntax definition
+Files are generated directly to `editors/` subdirectories:
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `prism-mlld.js` | `editors/web/` | Prism.js for websites |
+| `mlld.tmLanguage.json` | `editors/textmate/` | TextMate grammar (VSCode, Sublime, etc.) |
+| `mlld-markdown.injection.json` | `editors/textmate/` | Markdown injection grammar |
+| `mlld.vim` | `editors/vim/syntax/` | Vim syntax |
+| `markdown.vim` | `editors/vim/after/syntax/` | Vim markdown support |
+
+The TextMate grammars are also copied to `editors/vscode/syntaxes/` for the VSCode extension.
 
 ## Build Process
 
@@ -74,10 +79,23 @@ The syntax files are generated from the grammar and can cause merge conflicts wh
 
 If you're having issues with syntax highlighting:
 
-1. Check if generated files exist: `ls grammar/generated/`
+1. Check if generated files exist: `ls editors/web/ editors/textmate/`
 2. Force regenerate: `npm run build:syntax:force`
 3. Check for grammar errors: `npm run build:grammar:core`
 4. Review the build output for any errors
+
+## Maintenance
+
+When adding new syntax features:
+
+1. Update the grammar (`grammar/base/`)
+2. Update this generator (`build-syntax.js`) for regex highlighting
+3. Update the LSP visitor (`services/lsp/ASTSemanticVisitor.ts`) for semantic tokens
+4. Run `check:syntax-coverage` to validate coverage
+
+```bash
+npm run check:syntax-coverage
+```
 
 ## Architecture
 

@@ -45,16 +45,23 @@ function shouldBuildSyntax() {
     return false;
   }
   
-  // For local development, check if generated files exist
-  const generatedDir = new URL('../generated', import.meta.url).pathname;
-  if (fs.existsSync(generatedDir) && fs.readdirSync(generatedDir).length > 0) {
+  // For local development, check if generated files exist in editors/
+  const editorsDir = new URL('../../editors', import.meta.url).pathname;
+  const checkFiles = [
+    `${editorsDir}/web/prism-mlld.js`,
+    `${editorsDir}/textmate/mlld.tmLanguage.json`,
+    `${editorsDir}/vim/syntax/mlld.vim`
+  ];
+
+  const allExist = checkFiles.every(f => fs.existsSync(f));
+  if (allExist) {
     console.log('Syntax files already exist, skipping regeneration');
     console.log('Run with FORCE_SYNTAX_BUILD=true to regenerate');
     return false;
   }
-  
-  // If no generated files exist, build them
-  console.log('No syntax files found, generating...');
+
+  // If generated files missing, build them
+  console.log('Some syntax files missing, generating...');
   return true;
 }
 

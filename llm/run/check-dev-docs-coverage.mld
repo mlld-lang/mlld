@@ -1,0 +1,50 @@
+>> Dev Docs Coverage Checker
+>> Validates that new CHANGELOG features are covered in developer documentation
+
+var @changelog = <@base/CHANGELOG.md>
+var @docsGuide = <@base/docs/dev/DOCS-DEV.md>
+var @devDocs = <@base/docs/dev/*.md>
+
+exe @claude(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+
+var @prompt = `
+Analyze this CHANGELOG and check if DEVELOPER-FACING changes from recent
+version(s) are covered in the developer documentation.
+
+Per the documentation guide, dev docs need coverage for:
+- Architecture changes
+- New directives/features (implementation details)
+- New SDK methods (implementation)
+- Performance optimizations
+- Internal refactors (if significant)
+
+Do NOT flag:
+- Simple bug fixes
+- Minor tweaks
+
+DOCUMENTATION STYLE GUIDE:
+@docsGuide
+
+DEVELOPER DOCUMENTATION (docs/dev/):
+@devDocs
+
+CHANGELOG:
+@changelog
+
+Return JSON with this exact structure:
+{
+  "summary": "Brief bulleted list of gaps found, one per line, using - prefix",
+  "report": "Full markdown report with all details, changes, coverage status, gaps"
+}
+
+IMPORTANT: Return ONLY valid JSON, no markdown code fences.
+`
+
+var @result = @claude(@prompt) | @json.llm
+
+output @result.report to "dev-docs-gaps.md"
+
+>> Output summary
+log @result.summary
+log ""
+log "Details written to dev-docs-gaps.md"

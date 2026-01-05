@@ -2,6 +2,7 @@ import { registryCommand } from '../commands/registry';
 import { createInstallCommand } from '../commands/install';
 import { createLsCommand } from '../commands/ls';
 import { createInfoCommand } from '../commands/info';
+import { createDocsCommand } from '../commands/docs';
 import { createAuthCommand } from '../commands/auth';
 import { createPublishCommand } from '../commands/publish';
 import { createInitModuleCommand } from '../commands/init-module';
@@ -38,6 +39,7 @@ export class CommandDispatcher {
     this.commandMap.set('list', createLsCommand()); // Alias for ls
     this.commandMap.set('info', createInfoCommand());
     this.commandMap.set('show', createInfoCommand()); // Alias for info
+    this.commandMap.set('docs', createDocsCommand());
     this.commandMap.set('auth', createAuthCommand());
     this.commandMap.set('publish', createPublishCommand());
     this.commandMap.set('init', createInitModuleCommand());
@@ -177,6 +179,7 @@ export class CommandDispatcher {
       'install': 'Install mlld modules',
       'ls': 'List installed modules',
       'info': 'Show module details',
+      'docs': 'Show module documentation',
       'auth': 'Manage GitHub authentication',
       'publish': 'Publish module to registry',
       'init': 'Create a new mlld module',

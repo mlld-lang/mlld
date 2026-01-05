@@ -95,12 +95,12 @@
     },
     {
       "name": "meta.embedded.mlld",
-      "begin": "^(?=/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export)\\b)",
+      "begin": "^(?=/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b)",
       "end": "$",
       "patterns": [
         {
           "name": "keyword.control.directive.mlld",
-          "match": "\\G/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export)\\b"
+          "match": "\\G/(var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b"
         },
         {
           "name": "comment.line.double-slash.mlld",
@@ -517,7 +517,7 @@
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|let|var|stream|module|static|live|cached|local|cmd|in|for)\\b"
+          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\\b"
         },
         {
           "name": "support.type.guard-filter.mlld",

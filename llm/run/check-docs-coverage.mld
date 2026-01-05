@@ -1,0 +1,23 @@
+>> Unified Docs Coverage Checker
+>> Runs all three audience-specific checks
+>> For detailed per-audience analysis, run the individual scripts:
+>>   - check-user-docs-coverage.mld
+>>   - check-llm-docs-coverage.mld
+>>   - check-dev-docs-coverage.mld
+
+log "Running documentation coverage checks for all audiences..."
+log ""
+
+log "=== User Documentation ==="
+run cmd { mlld run check-user-docs-coverage.mld }
+log ""
+
+log "=== LLM Documentation ==="
+run cmd { mlld run check-llm-docs-coverage.mld }
+log ""
+
+log "=== Developer Documentation ==="
+run cmd { mlld run check-dev-docs-coverage.mld }
+log ""
+
+log "All checks complete. See *-gaps.md files for detailed reports."

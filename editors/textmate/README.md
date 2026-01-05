@@ -1,28 +1,58 @@
-# Mlld TextMate Grammar
+# mlld TextMate Grammar
 
-This directory contains TextMate grammar files for Mlld syntax highlighting.
+TextMate grammar files for mlld syntax highlighting in TextMate-compatible editors.
 
 ## Files
 
-- `mlld.tmLanguage.json` - Main Mlld syntax highlighting for `.mlld` and `.mld` files
-- `mlld-markdown.injection.json` - Injection grammar to highlight Mlld directives in Markdown files
+- `mlld.tmLanguage.json` - Main syntax for `.mld` and `.mld.md` files
+- `mlld-markdown.injection.json` - Injection grammar for mlld in Markdown
 
 ## Compatible Editors
 
-These grammar files can be used with:
-- Sublime Text
-- TextMate
-- Nova (with adaptation)
-- Any other TextMate-compatible editor
+- **Sublime Text**
+- **TextMate**
+- **Nova**
+- **BBEdit** (with TextMate bundle support)
+- **JetBrains IDEs** (via TextMate bundle plugin)
+- **Zed** (supports TextMate grammars)
 
 ## Installation
 
-Copy these files to your editor's syntax directory. The exact location varies by editor.
-
 ### Sublime Text
-- macOS: `~/Library/Application Support/Sublime Text/Packages/Mlld/`
-- Windows: `%APPDATA%\Sublime Text\Packages\Mlld\`
-- Linux: `~/.config/sublime-text/Packages/Mlld/`
+
+Copy to your Packages directory:
+
+```bash
+# macOS
+mkdir -p ~/Library/Application\ Support/Sublime\ Text/Packages/mlld/
+cp *.json ~/Library/Application\ Support/Sublime\ Text/Packages/mlld/
+
+# Linux
+mkdir -p ~/.config/sublime-text/Packages/mlld/
+cp *.json ~/.config/sublime-text/Packages/mlld/
+
+# Windows
+mkdir %APPDATA%\Sublime Text\Packages\mlld
+copy *.json %APPDATA%\Sublime Text\Packages\mlld\
+```
 
 ### TextMate
-- Create a bundle: `~/Library/Application Support/TextMate/Bundles/Mlld.tmbundle/Syntaxes/`
+
+Create a bundle:
+
+```bash
+mkdir -p ~/Library/Application\ Support/TextMate/Bundles/mlld.tmbundle/Syntaxes/
+cp mlld.tmLanguage.json ~/Library/Application\ Support/TextMate/Bundles/mlld.tmbundle/Syntaxes/
+```
+
+### Other Editors
+
+Consult your editor's documentation for importing TextMate grammars.
+
+## Regeneration
+
+These files are auto-generated from `grammar/syntax-generator/build-syntax.js`:
+
+```bash
+npm run build:syntax:force
+```

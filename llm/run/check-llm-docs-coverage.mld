@@ -1,0 +1,51 @@
+>> LLM Docs Coverage Checker
+>> Validates that new CHANGELOG features are covered in LLM documentation
+
+var @changelog = <@base/CHANGELOG.md>
+var @docsGuide = <@base/docs/dev/DOCS-LLM.md>
+var @llmDocs = <@base/docs/llm/*.txt>
+
+exe @claude(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+
+var @prompt = `
+Analyze this CHANGELOG and check if features that LLMs need to know about
+when WRITING mlld code are covered in the LLM documentation.
+
+Per the documentation guide, LLM docs need coverage for:
+- New directives or syntax features
+- New SDK methods
+- Behavior changes affecting syntax
+- New patterns
+
+Do NOT flag:
+- Architecture changes (dev docs only)
+- Bug fixes
+- Performance optimizations
+- Internal changes
+
+DOCUMENTATION STYLE GUIDE:
+@docsGuide
+
+LLM DOCUMENTATION (docs/llm/ modules):
+@llmDocs
+
+CHANGELOG:
+@changelog
+
+Return JSON with this exact structure:
+{
+  "summary": "Brief bulleted list of gaps found, one per line, using - prefix",
+  "report": "Full markdown report with all details, features, coverage status, gaps"
+}
+
+IMPORTANT: Return ONLY valid JSON, no markdown code fences.
+`
+
+var @result = @claude(@prompt) | @json.llm
+
+output @result.report to "llm-docs-gaps.md"
+
+>> Output summary
+log @result.summary
+log ""
+log "Details written to llm-docs-gaps.md"
