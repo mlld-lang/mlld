@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc81]
 
 ### Added
+- **Self-documenting help system**: `mlld howto` provides LLM-accessible documentation directly in the CLI
+  - `mlld howto` - Show topic tree of all available help
+  - `mlld howto <topic>` - Show all help for a specific topic (e.g., `mlld howto when`)
+  - `mlld howto <topic> <subtopic>` - Show specific subtopic (e.g., `mlld howto when first`)
+  - `mlld qs` / `mlld quickstart` - Quick start guide
+  - Built on atom-based documentation architecture (docs/src/atoms/) enabling DRY content reuse
+  - Pattern documented in docs/dev/HOWTO-PATTERN.md for adoption by other tools
 - **Prose execution**: Define executable functions that invoke a prose interpreter via LLM
   - Syntax: `exe @fn(params) = prose:@config { inline content }`
   - File-based: `exe @fn(params) = prose:@config "file.prose"`
