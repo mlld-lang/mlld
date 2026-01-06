@@ -10,8 +10,6 @@ related-code: [interpreter/eval/pipeline.ts, core/builtins/pipeline-builtins.ts]
 updated: 2026-01-05
 ---
 
-**Chain stages with `|`. Built-ins: `@json`, `@xml`, `@csv`, `@md`.**
-
 ```mlld
 var @users = cmd {cat users.json} | @json | @csv
 

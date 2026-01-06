@@ -4,13 +4,11 @@ title: Needs Declaration
 brief: Declare required capabilities in modules
 category: security
 parent: security
-tags: [security, capabilities, modules, permissions]
+tags: [security, needs, capabilities, modules]
 related: [modules-creating, security-guards-basics]
-related-code: [interpreter/eval/needs.ts, core/security/Capabilities.ts]
+related-code: [core/module/NeedsParser.ts]
 updated: 2026-01-05
 ---
-
-**Declare required capabilities in modules:**
 
 ```mlld
 ---

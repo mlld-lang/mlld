@@ -4,13 +4,11 @@ title: Parallel Execution Pattern
 brief: Run independent tasks concurrently
 category: patterns
 parent: patterns
-tags: [patterns, parallel, concurrency, performance]
-related: [for-parallel, pipelines-parallel, exe-blocks]
+tags: [patterns, parallel, concurrency, async]
+related: [for-parallel, pipelines-parallel]
 related-code: []
 updated: 2026-01-05
 ---
-
-**Run independent tasks concurrently:**
 
 ```mlld
 >> Parallel for

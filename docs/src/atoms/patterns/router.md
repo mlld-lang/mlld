@@ -5,12 +5,10 @@ brief: Score and route to different handlers
 category: patterns
 parent: patterns
 tags: [patterns, routing, scoring, handlers]
-related: [exe-blocks, when-first, for-block]
+related: [when-first, for-block]
 related-code: []
 updated: 2026-01-05
 ---
-
-**Score and route to different handlers:**
 
 ```mlld
 exe @router(message, handlers) = [

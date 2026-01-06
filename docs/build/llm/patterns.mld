@@ -1,0 +1,54 @@
+>> Build llms-patterns.txt from atoms
+>> This should produce output matching the original docs/llm/llms-patterns.txt
+
+>> Strip frontmatter helper
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+>> Pattern atoms (in original order)
+var @toolOrch = <@base/docs/src/atoms/patterns/tool-orchestration.md>
+var @dataPipe = <@base/docs/src/atoms/patterns/data-pipelines.md>
+var @condWork = <@base/docs/src/atoms/patterns/conditional-workflows.md>
+var @guarded = <@base/docs/src/atoms/patterns/guarded-execution.md>
+var @router = <@base/docs/src/atoms/patterns/router.md>
+var @gate = <@base/docs/src/atoms/patterns/gate.md>
+var @parallel = <@base/docs/src/atoms/patterns/parallel-execution.md>
+var @llm = <@base/docs/src/atoms/patterns/llm-integration.md>
+var @agent = <@base/docs/src/atoms/patterns/agent-definition.md>
+
+>> Build sections
+exe @wrapSection(tag, intro, content) = js {
+  return `<${tag}>\n${intro}\n\n${content}\n</${tag}>`;
+}
+
+var @toolOrchSection = @wrapSection("TOOL_ORCHESTRATION", "Coordinate multiple tools with data flow.", @strip(@toolOrch))
+var @dataPipeSection = @wrapSection("DATA_PIPELINES", "Chain transformations with validation.", @strip(@dataPipe))
+var @condWorkSection = @wrapSection("CONDITIONAL_WORKFLOWS", "Route execution based on conditions.", @strip(@condWork))
+var @guardedSection = @wrapSection("GUARDED_EXECUTION", "Validate at each step before proceeding.", @strip(@guarded))
+var @routerSection = @wrapSection("ROUTER_PATTERN", "Score and route to different handlers.", @strip(@router))
+var @gateSection = @wrapSection("GATE_PATTERN", "Validate or filter before proceeding.", @strip(@gate))
+var @parallelSection = @wrapSection("PARALLEL_EXECUTION", "Run independent tasks concurrently.", @strip(@parallel))
+var @llmSection = @wrapSection("LLM_INTEGRATION", "Call LLMs with structured prompts.", @strip(@llm))
+var @agentSection = @wrapSection("AGENT_DEFINITION", "Define agent configuration modules.", @strip(@agent))
+
+var @allSections = [
+  @toolOrchSection,
+  @dataPipeSection,
+  @condWorkSection,
+  @guardedSection,
+  @routerSection,
+  @gateSection,
+  @parallelSection,
+  @llmSection,
+  @agentSection
+]
+
+var @body = @allSections.join("\n\n")
+
+show `<MLLD_PATTERNS>
+
+@body
+
+</MLLD_PATTERNS>
+`

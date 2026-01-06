@@ -10,8 +10,6 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Chain transformations with validation:**
-
 ```mlld
 import { @fetchData, @validate, @transform } from @data/pipeline
 

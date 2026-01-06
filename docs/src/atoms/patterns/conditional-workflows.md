@@ -10,8 +10,6 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Route execution based on conditions:**
-
 ```mlld
 import { @getPR, @commentOnPR } from @company/github
 

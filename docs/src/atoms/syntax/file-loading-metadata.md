@@ -5,7 +5,7 @@ brief: Access file metadata via .mx
 category: syntax
 parent: file-loading
 tags: [files, metadata, frontmatter]
-related: [file-loading-basics, file-loading-globs]
+related: [file-loading-basics, file-loading-ast]
 related-code: [interpreter/eval/file-loading.ts, core/file-system/metadata.ts]
 updated: 2026-01-05
 ---

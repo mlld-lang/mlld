@@ -10,8 +10,6 @@ related-code: [interpreter/eval/guard.ts, core/security/Guard.ts]
 updated: 2026-01-05
 ---
 
-**Guards protect data and operations. Label sensitive data, define policies.**
-
 **Labeling data:**
 
 ```mlld

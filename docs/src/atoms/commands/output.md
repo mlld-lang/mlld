@@ -10,8 +10,6 @@ related-code: [interpreter/eval/output.ts, grammar/patterns/output.peggy]
 updated: 2026-01-05
 ---
 
-**Write data to files or streams:**
-
 ```mlld
 output @content to "out.txt"
 output @data to "config.json"

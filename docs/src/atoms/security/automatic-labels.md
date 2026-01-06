@@ -6,11 +6,9 @@ category: security
 parent: labels
 tags: [security, labels, automatic, tracking]
 related: [security-guards-basics, security-label-tracking]
-related-code: [core/security/AutomaticLabels.ts]
+related-code: [core/security/LabelTracker.ts]
 updated: 2026-01-05
 ---
-
-**System-assigned labels for tracking:**
 
 | Label | Applied To |
 |-------|------------|

@@ -10,8 +10,6 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Coordinate multiple tools with data flow:**
-
 ```mlld
 var @areas = [
   {"name": "auth", "files": ["auth/*.ts"], "tests": ["test/auth/*"]},

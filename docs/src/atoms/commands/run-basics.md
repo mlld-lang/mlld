@@ -29,8 +29,3 @@ run sh {
 run js {console.log("hello")}
 var @result = js {return 42}
 ```
-
-**Parameter syntax by language:**
-- `cmd`: interpolate with `@param`
-- `sh`: use shell variables as `$param`
-- `js/python`: parameters passed as variables

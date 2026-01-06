@@ -10,8 +10,6 @@ related-code: [interpreter/eval/append.ts, grammar/patterns/append.peggy]
 updated: 2026-01-05
 ---
 
-**Append newline-delimited records:**
-
 ```mlld
 append @record to "events.jsonl"        >> JSON object per line
 append "raw line" to "events.log"

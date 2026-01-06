@@ -4,13 +4,11 @@ title: Gate Pattern
 brief: Validate or filter before proceeding
 category: patterns
 parent: patterns
-tags: [patterns, validation, gates, filtering]
-related: [exe-blocks, when-first]
+tags: [patterns, validation, gating, filters]
+related: [when-first, exe-blocks]
 related-code: []
 updated: 2026-01-05
 ---
-
-**Validate or filter before proceeding:**
 
 ```mlld
 exe @gate(response, config) = [

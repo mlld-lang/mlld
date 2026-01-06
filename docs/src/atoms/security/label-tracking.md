@@ -5,12 +5,10 @@ brief: How labels flow through operations
 category: security
 parent: labels
 tags: [security, labels, tracking, flow]
-related: [security-automatic-labels, security-guards-basics]
-related-code: [core/security/LabelPropagation.ts]
+related: [security-guards-basics, security-automatic-labels]
+related-code: [core/security/LabelTracker.ts]
 updated: 2026-01-05
 ---
-
-**Labels flow through operations:**
 
 - Method calls: `@secret.trim()` preserves labels
 - Templates: interpolated values carry labels

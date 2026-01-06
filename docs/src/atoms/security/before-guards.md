@@ -4,13 +4,11 @@ title: Before Guards
 brief: Validate or transform input before operations
 category: security
 parent: guards
-tags: [security, guards, validation, input]
-related: [security-guards-basics, security-after-guards, security-transform]
-related-code: [interpreter/eval/guard.ts, core/security/BeforeGuard.ts]
+tags: [security, guards, input, validation]
+related: [security-guards-basics, security-after-guards]
+related-code: [interpreter/eval/guard.ts]
 updated: 2026-01-05
 ---
-
-**Validate or transform input before operations:**
 
 ```mlld
 guard @sanitize before untrusted = when [

@@ -5,12 +5,10 @@ brief: Define agent configuration modules
 category: patterns
 parent: patterns
 tags: [patterns, agents, configuration, modules]
-related: [modules-creating, modules-exporting, exe-simple]
+related: [modules-creating, frontmatter-access]
 related-code: []
 updated: 2026-01-05
 ---
-
-**Define agent configuration modules:**
 
 ```mlld
 ---

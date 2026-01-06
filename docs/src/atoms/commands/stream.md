@@ -10,8 +10,6 @@ related-code: [interpreter/eval/stream.ts, grammar/patterns/stream.peggy]
 updated: 2026-01-05
 ---
 
-**Stream output during execution:**
-
 ```mlld
 stream @claude("prompt")           >> keyword form
 stream @generateReport()           >> directive form

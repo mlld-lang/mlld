@@ -10,6 +10,4 @@ related-code: [interpreter/utils/truthiness.ts]
 updated: 2026-01-05
 ---
 
-**Truthiness:** falsy = `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`
-
-Everything else is truthy.
+Truthiness: falsy = `null`, `undefined`, `""`, `"false"`, `"0"`, `0`, `NaN`, `[]`, `{}`

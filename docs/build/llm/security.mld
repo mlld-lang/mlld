@@ -1,0 +1,58 @@
+>> Build llms-security.txt from atoms
+>> This should produce output matching the original docs/llm/llms-security.txt
+
+>> Strip frontmatter helper
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+>> Security atoms (in original order)
+var @guards = <@base/docs/src/atoms/security/guards-basics.md>
+var @beforeGuards = <@base/docs/src/atoms/security/before-guards.md>
+var @afterGuards = <@base/docs/src/atoms/security/after-guards.md>
+var @transform = <@base/docs/src/atoms/security/transform-with-allow.md>
+var @denied = <@base/docs/src/atoms/security/denied-handlers.md>
+var @autoLabels = <@base/docs/src/atoms/security/automatic-labels.md>
+var @labelTracking = <@base/docs/src/atoms/security/label-tracking.md>
+var @guardComp = <@base/docs/src/atoms/security/guard-composition.md>
+var @needs = <@base/docs/src/atoms/security/needs-declaration.md>
+
+>> Build sections
+exe @wrapSection(tag, intro, content) = js {
+  return `<${tag}>\n${intro}\n\n${content}\n</${tag}>`;
+}
+
+exe @wrapSectionNoIntro(tag, content) = js {
+  return `<${tag}>\n${content}\n</${tag}>`;
+}
+
+var @guardsSection = @wrapSection("GUARDS", "Guards protect data and operations. Label sensitive data, define policies.", @strip(@guards))
+var @beforeSection = @wrapSection("BEFORE_GUARDS", "Validate or transform input before operations.", @strip(@beforeGuards))
+var @afterSection = @wrapSection("AFTER_GUARDS", "Validate output after operations.", @strip(@afterGuards))
+var @transformSection = @wrapSection("TRANSFORM_WITH_ALLOW", "Transform data during guard evaluation.", @strip(@transform))
+var @deniedSection = @wrapSection("DENIED_HANDLERS", "Handle denied operations gracefully.", @strip(@denied))
+var @autoLabelsSection = @wrapSectionNoIntro("AUTOMATIC_LABELS", "System-assigned labels for tracking:\n\n" + @strip(@autoLabels))
+var @labelTrackingSection = @wrapSectionNoIntro("LABEL_TRACKING", "Labels flow through operations:\n\n" + @strip(@labelTracking))
+var @guardCompSection = @wrapSectionNoIntro("GUARD_COMPOSITION", "Multiple guards can apply. Resolution order:\n\n" + @strip(@guardComp))
+var @needsSection = @wrapSection("NEEDS_DECLARATION", "Declare required capabilities in modules.", @strip(@needs))
+
+var @allSections = [
+  @guardsSection,
+  @beforeSection,
+  @afterSection,
+  @transformSection,
+  @deniedSection,
+  @autoLabelsSection,
+  @labelTrackingSection,
+  @guardCompSection,
+  @needsSection
+]
+
+var @body = @allSections.join("\n\n")
+
+show `<MLLD_SECURITY>
+
+@body
+
+</MLLD_SECURITY>
+`

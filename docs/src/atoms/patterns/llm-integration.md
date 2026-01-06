@@ -5,12 +5,10 @@ brief: Call LLMs with structured prompts
 category: patterns
 parent: patterns
 tags: [patterns, llm, prompts, integration]
-related: [exe-simple, pipelines-basics, templates-basics]
+related: [exe-blocks, pipelines-basics]
 related-code: []
 updated: 2026-01-05
 ---
-
-**Call LLMs with structured prompts:**
 
 ```mlld
 import { @haiku, @sonnet } from "@lib/claude.mld"

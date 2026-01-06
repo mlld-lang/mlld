@@ -5,12 +5,12 @@ brief: Extract code definitions from source files
 category: syntax
 parent: file-loading
 tags: [files, ast, code-extraction, wildcards]
-related: [file-loading-basics, file-loading-globs]
+related: [file-loading-basics, file-loading-metadata]
 related-code: [interpreter/eval/file-loading.ts, core/ast/ast-selector.ts]
 updated: 2026-01-05
 ---
 
-**Extract code from files:**
+**AST Selection** (extract code from files):
 
 ```mlld
 >> Exact names

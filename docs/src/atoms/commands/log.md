@@ -10,8 +10,6 @@ related-code: [interpreter/eval/log.ts, grammar/patterns/log.peggy]
 updated: 2026-01-05
 ---
 
-**Syntactic sugar for `output to stdout`. Works in action contexts.**
-
 ```mlld
 log @message                        >> same as output @message to stdout
 log `Processing: @item`

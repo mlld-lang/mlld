@@ -1,0 +1,94 @@
+>> Build llms-modules.txt from atoms
+>> This should produce output matching the original docs/llm/llms-modules.txt
+
+>> Strip frontmatter helper
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+>> Standalone atoms
+var @philosophy = <@base/docs/src/atoms/modules/philosophy.md>
+
+>> Creating atoms
+var @creatingAtoms = [
+  <@base/docs/src/atoms/modules/creating.md>,
+  <@base/docs/src/atoms/modules/frontmatter-access.md>
+]
+
+>> Importing atoms
+var @importingAtoms = [
+  <@base/docs/src/atoms/modules/importing-registry.md>,
+  <@base/docs/src/atoms/modules/importing-local.md>,
+  <@base/docs/src/atoms/modules/importing-namespace.md>,
+  <@base/docs/src/atoms/modules/importing-directory.md>
+]
+
+>> Import types atoms
+var @importTypeAtoms = [
+  <@base/docs/src/atoms/modules/import-types.md>,
+  <@base/docs/src/atoms/modules/import-templates.md>
+]
+
+>> Exporting atoms
+var @exportingAtoms = [
+  <@base/docs/src/atoms/modules/exporting.md>,
+  <@base/docs/src/atoms/modules/module-patterns.md>
+]
+
+>> Other standalone atoms
+var @localDev = <@base/docs/src/atoms/modules/local-development.md>
+var @registry = <@base/docs/src/atoms/modules/registry.md>
+var @resolvers = <@base/docs/src/atoms/modules/resolvers.md>
+
+>> Strip each atom group
+var @creatingStripped = for @a in @creatingAtoms => @strip(@a)
+var @importingStripped = for @a in @importingAtoms => @strip(@a)
+var @importTypeStripped = for @a in @importTypeAtoms => @strip(@a)
+var @exportingStripped = for @a in @exportingAtoms => @strip(@a)
+
+>> Build sections
+exe @buildSection(tag, intro, items) = js {
+  const body = intro + "\n\n" + items.join("\n\n");
+  return `<${tag}>\n${body}\n</${tag}>`;
+}
+
+exe @wrapSection(tag, intro, content) = js {
+  return `<${tag}>\n${intro}\n\n${content}\n</${tag}>`;
+}
+
+exe @wrapSectionNoIntro(tag, content) = js {
+  return `<${tag}>\n${content}\n</${tag}>`;
+}
+
+var @philosophySection = @wrapSectionNoIntro("PHILOSOPHY", @strip(@philosophy))
+var @creatingSection = @buildSection("CREATING_MODULES", "Modules require frontmatter and explicit exports.", @creatingStripped)
+var @importingSection = @buildSection("IMPORTING", "Import from registry, local files, or URLs.", @importingStripped)
+var @importTypeSection = @buildSection("IMPORT_TYPES", "Control caching and resolution behavior.", @importTypeStripped)
+var @exportingSection = @buildSection("EXPORTING", "Explicit exports required (auto-export is legacy).", @exportingStripped)
+var @localDevSection = @wrapSection("LOCAL_DEVELOPMENT", "Dev modules live in `llm/modules/` (flat structure).", @strip(@localDev))
+var @registrySection = @wrapSection("REGISTRY", "Public registry at github.com/mlld-lang/registry.", @strip(@registry))
+exe @buildResolversSection(content) = js {
+  const stripped = content.replace(/^---[\s\S]*?---\n*/, '').trim();
+  return `<RESOLVERS>\nPrefixes map \`@\` references to content sources.\n\n${stripped}\n</RESOLVERS>`;
+}
+var @resolversSection = @buildResolversSection(@resolvers)
+
+var @allSections = [
+  @philosophySection,
+  @creatingSection,
+  @importingSection,
+  @importTypeSection,
+  @exportingSection,
+  @localDevSection,
+  @registrySection,
+  @resolversSection
+]
+
+var @body = @allSections.join("\n\n")
+
+show `<MLLD_MODULES>
+
+@body
+
+</MLLD_MODULES>
+`
