@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mlld qs` / `mlld quickstart` - Quick start guide
   - Built on atom-based documentation architecture (docs/src/atoms/) enabling DRY content reuse
   - Pattern documented in docs/dev/HOWTO-PATTERN.md for adoption by other tools
+  - Documentation atoms: 105 atoms extracted covering syntax, commands, modules, patterns, security, configuration, and common mistakes
+  - Git pre-commit hook auto-updates atom 'updated' dates when modified atoms are staged
 - **Prose execution**: Define executable functions that invoke a prose interpreter via LLM
   - Syntax: `exe @fn(params) = prose:@config { inline content }`
   - File-based: `exe @fn(params) = prose:@config "file.prose"`
