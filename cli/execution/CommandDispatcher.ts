@@ -21,6 +21,7 @@ import { createNvimDoctorCommand } from '../commands/nvim-doctor';
 import { createUpdateCommand } from '../commands/update';
 import { createOutdatedCommand } from '../commands/outdated';
 import { createMcpCommand } from '../commands/mcp';
+import { createHowtoCommand, createQuickstartCommand } from '../commands/howto';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -65,6 +66,10 @@ export class CommandDispatcher {
     this.commandMap.set('nvim-setup', createNvimSetupCommand());
     this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
     this.commandMap.set('nvim-doctor', createNvimDoctorCommand());
+    this.commandMap.set('howto', createHowtoCommand());
+    this.commandMap.set('ht', createHowtoCommand()); // Alias
+    this.commandMap.set('qs', createQuickstartCommand());
+    this.commandMap.set('quickstart', createQuickstartCommand()); // Alias
   }
 
   async executeCommand(
