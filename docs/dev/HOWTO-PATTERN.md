@@ -281,15 +281,15 @@ Now LLMs can run `mytool howto <feature>` to learn about your tool!
 
 ## Metadata Automation
 
-Consider adding a git pre-commit hook to update `updated` dates:
+The mlld project includes a git pre-commit hook that automatically updates the `updated` field in atom frontmatter when atoms are modified and staged. The hook is integrated with the beads pre-commit hook at `.git/hooks/pre-commit`.
 
-```bash
-#!/bin/bash
-# Update 'updated' field in changed atoms
-for file in $(git diff --cached --name-only docs/src/atoms/**/*.md); do
-  sed -i "s/^updated:.*/updated: $(date +%Y-%m-%d)/" "$file"
-  git add "$file"
-done
-```
+Key features:
+- Detects staged markdown files in `docs/src/atoms/`
+- Excludes `_index.md` files (category indexes)
+- Updates `updated: YYYY-MM-DD` to today's date
+- Automatically stages the updated file
+- Uses macOS-compatible `sed -i.bak` syntax
 
-This ensures atoms always have accurate update dates.
+This ensures atoms always have accurate update dates without manual intervention.
+
+For other projects adopting this pattern, see the atom date updating section in `.git/hooks/pre-commit` for the implementation.
