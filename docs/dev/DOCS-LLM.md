@@ -1,36 +1,58 @@
 ---
-updated: 2026-01-01
-tags: #docs, #llm, #llms-txt
-related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-USER.md
-related-code: llms.txt, docs/llm/, llm/run/llmstxt.mld
+updated: 2026-01-05
+tags: #docs, #llm, #llms-txt, #atoms
+related-docs: docs/dev/DOCS.md, docs/dev/DOCS-DEV.md, docs/dev/DOCS-USER.md, docs/dev/HOWTO-PATTERN.md
+related-code: llms.txt, docs/llm/, docs/src/atoms/, docs/build/llm/, llm/run/llmstxt.mld
 ---
 
 # llms.txt Maintenance Guide
 
 ## tldr
 
-llms.txt is a modular reference for LLMs writing mlld syntax. The documentation lives in `docs/llm/` as separate topic modules, with `llms.txt` as a brief entry point and `llms-combined.txt` as the full concatenation. All examples use **strict mode** (bare directives). Run `mlld run llmstxt` to regenerate the combined file.
+LLM docs are built from **atoms** (atomic markdown files in `docs/src/atoms/`). Build scripts in `docs/build/llm/` assemble atoms into the `docs/llm/*.txt` module files. Don't edit `docs/llm/` directly - update atoms, run build scripts.
+
+All examples use **strict mode** (bare directives). Run `mlld run llmstxt` to regenerate `llms-combined.txt`.
 
 ## File Structure
 
 ```
-llms.txt                    # Brief entry point with TOC + essential patterns
-llms-combined.txt           # Generated: all modules concatenated (run `mlld run llmstxt`)
+docs/src/atoms/             # SOURCE OF TRUTH (104 atoms)
+├── syntax/                 # Variables, templates, file loading, pipelines
+├── commands/               # run, exe, output, log, append, stream
+├── control-flow/           # when, for, foreach, while, parallel, skip
+├── modules/                # Import/export, registry, local dev
+├── patterns/               # Common workflow patterns
+├── configuration/          # SDK modes, env vars, resolvers
+├── security/               # Guards, labels, capabilities
+└── mistakes/               # Common errors and fixes
 
-docs/llm/
+docs/build/llm/             # Build scripts (assemble atoms → modules)
+├── syntax.mld
+├── commands.mld
+├── control-flow.mld
+├── modules.mld
+├── patterns.mld
+├── configuration.mld
+├── security.mld
+└── mistakes.mld
+
+docs/llm/                   # GENERATED OUTPUT (don't edit directly)
 ├── llms-overview.txt       # Purpose, mental model, two syntax modes
 ├── llms-core-rules.txt     # The 13 core rules
-├── llms-syntax.txt         # Variables, templates, file loading, methods, pipelines
-├── llms-commands.txt       # run, exe, output, log, append, stream
-├── llms-control-flow.txt   # when, for, foreach, while, parallel, skip
-├── llms-modules.txt        # Import/export, registry, local dev
-├── llms-patterns.txt       # Common workflow patterns
-├── llms-configuration.txt  # SDK modes, resolvers, env vars
-├── llms-sdk.txt            # SDK usage, execution modes, dynamic modules
-├── llms-mistakes.txt       # Common mistakes and fixes
-├── llms-security.txt       # Guards, labels, capabilities
-├── llms-reference.txt      # Quick reference tables, escape hatches
-└── llms-cookbook.txt       # Annotated real-world examples (5 recipes)
+├── llms-syntax.txt         # Built from syntax atoms
+├── llms-commands.txt       # Built from commands atoms
+├── llms-control-flow.txt   # Built from control-flow atoms
+├── llms-modules.txt        # Built from modules atoms
+├── llms-patterns.txt       # Built from patterns atoms
+├── llms-configuration.txt  # Built from configuration atoms
+├── llms-sdk.txt            # SDK usage, execution modes
+├── llms-mistakes.txt       # Built from mistakes atoms
+├── llms-security.txt       # Built from security atoms
+├── llms-reference.txt      # Quick reference tables
+└── llms-cookbook.txt       # Annotated real-world examples
+
+llms.txt                    # Brief entry point with TOC + essential patterns
+llms-combined.txt           # Generated: all modules concatenated
 
 llm/run/llmstxt.mld         # Build script to generate llms-combined.txt
 ```
@@ -39,10 +61,13 @@ llm/run/llmstxt.mld         # Build script to generate llms-combined.txt
 
 | File | Use Case |
 |------|----------|
+| `docs/src/atoms/` | Editing content (source of truth) |
+| `docs/build/llm/*.mld` | Editing how atoms are assembled |
 | `llms.txt` | Quick context, points to modules |
 | `llms-combined.txt` | Full context injection for comprehensive tasks |
 | Individual modules | Focused help on specific topics |
 | `llms-cookbook.txt` | Learning by example, real patterns |
+| `mlld howto <topic>` | CLI access to atoms |
 
 ## Principles
 
@@ -208,27 +233,76 @@ Real-world annotated examples.
 
 ### Adding a New Feature
 
-1. Determine primary module (syntax, commands, control-flow, etc.)
-2. Add with strict mode examples
-3. Update llms-reference.txt tables if applicable
-4. Consider adding to cookbook if it composes well
-5. Regenerate combined: `mlld run llmstxt`
+1. Create atom in `docs/src/atoms/<category>/<feature>.md` with frontmatter
+2. Add atom to build script in `docs/build/llm/<category>.mld`
+3. Rebuild module: `./dist/cli.cjs docs/build/llm/<category>.mld > docs/llm/llms-<category>.txt`
+4. Verify with diff: `diff docs/llm/llms-<category>.txt <original>`
+5. Update llms-reference.txt tables if applicable
+6. Consider adding to cookbook if it composes well
+7. Regenerate combined: `mlld run llmstxt`
 
 ### Adding a Common Mistake
 
-1. Add to llms-mistakes.txt with descriptive tag name
-2. Show ❌ wrong and ✅ correct
-3. Keep explanation brief
-4. Regenerate combined
+1. Create atom in `docs/src/atoms/mistakes/<mistake>.md`
+2. Show wrong and correct patterns (no ❌/✅ emoji - plain text)
+3. Add to build script: `docs/build/llm/mistakes.mld`
+4. Rebuild: `./dist/cli.cjs docs/build/llm/mistakes.mld > docs/llm/llms-mistakes.txt`
+5. Regenerate combined
 
 ### Fixing Examples
 
-1. Find the source module in docs/llm/
+1. Find the source **atom** in `docs/src/atoms/`
 2. Update with correct strict mode syntax
 3. Test example parses: `npm run ast -- 'code'`
-4. Regenerate combined
+4. Rebuild the module: `./dist/cli.cjs docs/build/llm/<category>.mld > docs/llm/llms-<category>.txt`
+5. Regenerate combined
 
-## Build Script
+### Atom Format
+
+Each atom has YAML frontmatter:
+
+```markdown
+---
+id: when-first
+title: When First (Switch-Style)
+brief: Stops at first matching condition
+category: control-flow
+parent: when
+tags: [conditionals, branching]
+related: [when-simple, when-bare]
+related-code: [interpreter/eval/when.ts]
+updated: 2026-01-05
+---
+
+Content here with code examples...
+```
+
+See [HOWTO-PATTERN.md](HOWTO-PATTERN.md) for full atom specification.
+
+## Build Scripts
+
+### Module Build Scripts
+
+Each `docs/build/llm/<category>.mld` builds one `docs/llm/llms-<category>.txt`:
+
+```bash
+# Rebuild single module
+./dist/cli.cjs docs/build/llm/syntax.mld > docs/llm/llms-syntax.txt
+
+# Rebuild all modules (example)
+for script in docs/build/llm/*.mld; do
+  name=$(basename "$script" .mld)
+  ./dist/cli.cjs "$script" > "docs/llm/llms-$name.txt"
+done
+```
+
+Build scripts:
+1. Load atoms in order from `docs/src/atoms/<category>/`
+2. Strip frontmatter from each atom
+3. Wrap each section in pseudo-XML tags
+4. Output assembled module
+
+### Combined Build Script
 
 `llm/run/llmstxt.mld` generates `llms-combined.txt`:
 
@@ -295,5 +369,6 @@ Version should match mlld release version.
 - **docs/dev/DOCS.md** - Unified documentation guide (entrypoint)
 - **docs/dev/DOCS-DEV.md** - Developer-facing documentation principles
 - **docs/dev/DOCS-USER.md** - User-facing documentation guide
+- **docs/dev/HOWTO-PATTERN.md** - Full atom pattern specification
 - **docs/user/** - Detailed user documentation
 - **tests/cases/valid/feat/** - Comprehensive test cases
