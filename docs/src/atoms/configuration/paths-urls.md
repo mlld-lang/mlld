@@ -10,7 +10,7 @@ related-code: [core/resolvers/PathResolver.ts, core/resolvers/URLResolver.ts]
 updated: 2026-01-05
 ---
 
-**Paths can be literal, interpolated, or resolver-based:**
+Paths can be literal, interpolated, or resolver-based.
 
 ```mlld
 var @dir = "./docs"

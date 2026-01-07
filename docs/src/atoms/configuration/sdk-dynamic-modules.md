@@ -10,7 +10,7 @@ related-code: [sdk/execute.ts, interpreter/env/DynamicModules.ts]
 updated: 2026-01-05
 ---
 
-**Inject runtime context without filesystem I/O:**
+Inject runtime context without filesystem I/O.
 
 ```typescript
 processMlld(template, {

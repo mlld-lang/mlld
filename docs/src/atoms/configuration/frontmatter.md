@@ -10,7 +10,7 @@ related-code: [core/frontmatter/Parser.ts]
 updated: 2026-01-05
 ---
 
-**Document metadata at file start:**
+Document metadata at file start.
 
 ```yaml
 ---

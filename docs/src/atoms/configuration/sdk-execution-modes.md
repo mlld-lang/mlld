@@ -10,7 +10,7 @@ related-code: [sdk/execute.ts, sdk/modes/]
 updated: 2026-01-05
 ---
 
-**Four modes for SDK consumers:**
+Four modes for SDK consumers:
 
 **document** (default): Returns string
 

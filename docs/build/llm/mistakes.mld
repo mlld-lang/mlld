@@ -1,0 +1,66 @@
+>> Build llms-mistakes.txt from atoms
+>> This should produce output matching the original docs/llm/llms-mistakes.txt
+
+>> Strip frontmatter helper
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+>> Mistake atoms (in original order from llms-mistakes.txt)
+var @missingAt = <@base/docs/src/atoms/mistakes/missing-at.md>
+var @slashStrict = <@base/docs/src/atoms/mistakes/slash-in-strict-mode.md>
+var @atForDirectives = <@base/docs/src/atoms/mistakes/at-for-directives.md>
+var @jsTemplate = <@base/docs/src/atoms/mistakes/js-template-syntax.md>
+var @interpolation = <@base/docs/src/atoms/mistakes/interpolation-in-text.md>
+var @fileVsString = <@base/docs/src/atoms/mistakes/file-vs-string.md>
+var @xmlVsFile = <@base/docs/src/atoms/mistakes/xml-vs-file-tags.md>
+var @nestedFunc = <@base/docs/src/atoms/mistakes/nested-func-in-shell.md>
+var @templateCollection = <@base/docs/src/atoms/mistakes/template-collection-import.md>
+var @varParallel = <@base/docs/src/atoms/mistakes/var-in-parallel-block.md>
+var @returnStatement = <@base/docs/src/atoms/mistakes/return-statement.md>
+var @missingBraces = <@base/docs/src/atoms/mistakes/missing-braces.md>
+var @complexLogic = <@base/docs/src/atoms/mistakes/complex-logic.md>
+
+>> Build sections
+exe @wrapSection(tag, content) = js {
+  return `<${tag}>\n${content}\n</${tag}>`;
+}
+
+var @missingAtSection = @wrapSection("MISTAKE_MISSING_AT", @strip(@missingAt))
+var @slashStrictSection = @wrapSection("MISTAKE_SLASH_IN_STRICT_MODE", @strip(@slashStrict))
+var @atForDirectivesSection = @wrapSection("MISTAKE_USING_AT_FOR_DIRECTIVES", @strip(@atForDirectives))
+var @jsTemplateSection = @wrapSection("MISTAKE_JS_TEMPLATE_SYNTAX", @strip(@jsTemplate))
+var @interpolationSection = @wrapSection("MISTAKE_INTERPOLATION_IN_TEXT", @strip(@interpolation))
+var @fileVsStringSection = @wrapSection("MISTAKE_FILE_VS_STRING", @strip(@fileVsString))
+var @xmlVsFileSection = @wrapSection("MISTAKE_XML_VS_FILE_TAGS", @strip(@xmlVsFile))
+var @nestedFuncSection = @wrapSection("MISTAKE_NESTED_FUNC_IN_SHELL", @strip(@nestedFunc))
+var @templateCollectionSection = @wrapSection("MISTAKE_TEMPLATE_COLLECTION_IMPORT", @strip(@templateCollection))
+var @varParallelSection = @wrapSection("MISTAKE_VAR_IN_PARALLEL_BLOCK", @strip(@varParallel))
+var @returnStatementSection = @wrapSection("MISTAKE_RETURN_STATEMENT", @strip(@returnStatement))
+var @missingBracesSection = @wrapSection("MISTAKE_MISSING_BRACES", @strip(@missingBraces))
+var @complexLogicSection = @wrapSection("MISTAKE_COMPLEX_LOGIC", @strip(@complexLogic))
+
+var @allSections = [
+  @missingAtSection,
+  @slashStrictSection,
+  @atForDirectivesSection,
+  @jsTemplateSection,
+  @interpolationSection,
+  @fileVsStringSection,
+  @xmlVsFileSection,
+  @nestedFuncSection,
+  @templateCollectionSection,
+  @varParallelSection,
+  @returnStatementSection,
+  @missingBracesSection,
+  @complexLogicSection
+]
+
+var @body = @allSections.join("\n\n")
+
+show `<MLLD_COMMON_MISTAKES>
+
+@body
+
+</MLLD_COMMON_MISTAKES>
+`

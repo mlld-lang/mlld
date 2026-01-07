@@ -10,7 +10,7 @@ related-code: [interpreter/eval/import.ts, core/env/EnvironmentVariables.ts]
 updated: 2026-01-05
 ---
 
-**Allow env vars in config, then import via `@input`.**
+Allow env vars in config, then import via `@input`.
 
 **mlld-lock.json:**
 

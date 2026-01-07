@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Commands always need braces:**
+Commands always need braces.
 
 ```mlld
 >> Wrong

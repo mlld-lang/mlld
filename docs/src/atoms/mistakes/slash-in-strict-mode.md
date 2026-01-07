@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Strict mode (.mld) uses bare directives. Markdown mode (.mld.md) uses slashes:**
+Strict mode (.mld) uses bare directives. Markdown mode (.mld.md) uses slashes.
 
 ```mlld
 >> Wrong (in .mld file)

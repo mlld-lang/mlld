@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Angle brackets load content; quotes are literal strings:**
+Angle brackets load content; quotes are literal strings.
 
 ```mlld
 var @content = <README.md>     >> loads file contents

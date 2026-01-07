@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Directives don't use `@` prefix:**
+Directives don't use `@` prefix.
 
 ```mlld
 >> Wrong

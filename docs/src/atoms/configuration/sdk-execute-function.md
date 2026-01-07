@@ -10,7 +10,7 @@ related-code: [sdk/execute.ts, sdk/state/StateManager.ts]
 updated: 2026-01-05
 ---
 
-**File-based execution with state management:**
+File-based execution with state management.
 
 ```typescript
 const result = await execute('./agent.mld', payload, {

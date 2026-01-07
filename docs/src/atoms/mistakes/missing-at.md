@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Variables always need `@` prefix:**
+Variables always need `@` prefix.
 
 ```mlld
 >> Wrong

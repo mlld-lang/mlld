@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Use `@var` not `${var}`. mlld is not JavaScript:**
+Use `@var` not `${var}`. mlld is not JavaScript.
 
 ```mlld
 >> Wrong

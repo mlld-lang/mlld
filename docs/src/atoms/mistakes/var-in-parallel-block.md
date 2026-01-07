@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Parallel blocks can't write to outer scope. Use `let`:**
+Parallel blocks can't write to outer scope. Use `let`.
 
 ```mlld
 >> Wrong

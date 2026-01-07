@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**In strict mode, plain text is an error. Use `show` or templates:**
+In strict mode, plain text is an error. Use `show` or templates.
 
 ```mlld
 >> Wrong (strict mode)

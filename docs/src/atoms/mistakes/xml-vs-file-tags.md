@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**`<thinking>` is plain text. `<file.txt>` (has `.`) is a file ref:**
+`<thinking>` is plain text. `<file.txt>` (has `.`) is a file ref.
 
 ```mlld
 >> These are plain text (no . / * @)

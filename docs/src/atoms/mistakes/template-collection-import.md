@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Template collections need parameters and directories:**
+Template collections need parameters and directories.
 
 ```mlld
 >> Wrong

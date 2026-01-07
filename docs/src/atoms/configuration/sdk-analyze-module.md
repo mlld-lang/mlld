@@ -10,7 +10,7 @@ related-code: [sdk/analyze.ts, core/analysis/ModuleAnalyzer.ts]
 updated: 2026-01-05
 ---
 
-**Static analysis without execution:**
+Static analysis without execution.
 
 ```typescript
 const analysis = await analyzeModule('./tools.mld');

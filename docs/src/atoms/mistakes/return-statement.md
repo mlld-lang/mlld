@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**mlld has no `return`. Use `=> value` in blocks:**
+mlld has no `return`. Use `=> value` in blocks.
 
 ```mlld
 >> Wrong

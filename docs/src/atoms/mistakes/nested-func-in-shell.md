@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Don't call mlld functions inside shell commands:**
+Don't call mlld functions inside shell commands.
 
 ```mlld
 >> Wrong

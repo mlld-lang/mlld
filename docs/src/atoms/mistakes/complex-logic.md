@@ -10,7 +10,7 @@ related-code: []
 updated: 2026-01-05
 ---
 
-**Move heavy logic to helpers or modules. Keep orchestration simple:**
+Move heavy logic to helpers or modules. Keep orchestration simple.
 
 ```mlld
 >> Wrong (too much logic inline)
