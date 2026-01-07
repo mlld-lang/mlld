@@ -2,13 +2,13 @@
 
 ## tldr
 
-mlld provides three control flow mechanisms: **conditionals** (`/when`), **iteration** (`/for` and `foreach`), and **pipelines** (`|`). Use `/when` for decisions, `/for` for actions per item, `foreach` for transforming collections, and pipelines for chaining transformations with retry logic.
+mlld provides three control flow mechanisms: **conditionals** (`when`), **iteration** (`for` and `foreach`), and **pipelines** (`|`). Use `when` for decisions, `for` for actions per item, `foreach` for transforming collections, and pipelines for chaining transformations with retry logic.
 
 ## Conditionals
 
 ### Basic When
 
-Use `/when` with `=>` for simple conditionals:
+Use `when` with `=>` for simple conditionals:
 
 ```mlld
 var @score = 85
@@ -17,7 +17,7 @@ when @score > 80 => show "Excellent work!"
 
 ### When First (Switch-Style)
 
-Use `/when first` to stop at the first matching condition:
+Use `when first` to stop at the first matching condition:
 
 ```mlld
 var @role = "admin"
@@ -196,7 +196,7 @@ Output:
 
 ### For Loops
 
-Use `/for` to execute actions for each item:
+Use `for` to execute actions for each item:
 
 ```mlld
 var @fruits = ["apple", "banana", "cherry"]
@@ -227,7 +227,7 @@ port: 3000
 
 ### Nested Loops
 
-Chain multiple `/for` loops for nested iteration:
+Chain multiple `for` loops for nested iteration:
 
 ```mlld
 for @x in ["red", "blue"] => for @y in [1, 2] => for @z in ["a", "b"] => show "@x-@y-@z"
@@ -351,7 +351,7 @@ Use `foreach` to transform collections with templates or executables:
 
 ```mlld
 var @names = ["Alice", "Bob", "Charlie"]
-exe @greeting(name) = :::{{name}}, welcome to the team!:::
+exe @greeting(name) = ::@name, welcome to the team!::
 var @welcomes = foreach @greeting(@names)
 show @welcomes
 ```
@@ -434,12 +434,12 @@ Multiple parameters:
 ```mlld
 var @greetings = ["Hello", "Hi", "Hey"]
 var @names = ["Alice", "Bob", "Charlie"]
-exe @custom_greeting(greet, name) = :::{{greet}}, {{name}}! Nice to see you.:::
+exe @custom_greeting(greet, name) = ::@greet, @name! Nice to see you.::
 var @messages = foreach @custom_greeting(@greetings, @names)
 show @messages
 ```
 
-Define `foreach` in `/exe` and invoke it:
+Define `foreach` in `exe` and invoke it:
 
 ```mlld
 exe @wrap(x) = `[@x]`
@@ -447,7 +447,7 @@ exe @wrapAll(items) = foreach @wrap(@items)
 show @wrapAll(["a","b"]) | @join(',')  >> => [a],[b]
 ```
 
-Use `/show foreach` with options:
+Use `show foreach` with options:
 
 ```mlld
 var @names = ["Ann","Ben"]
@@ -498,7 +498,7 @@ show @filtered  >> => ["1","2","3"]
 
 ### Template Loops (backticks and ::)
 
-Write inline `/for` loops inside templates for simple rendering tasks. The loop header and `/end` must start at line begins inside the template.
+Write inline `for` loops inside templates for simple rendering tasks. The loop header and `end` must start at line begins inside the template.
 
 Backticks:
 
@@ -525,7 +525,7 @@ show @msg
 
 Notes:
 - Loops are supported in backticks and `::…::` templates.
-- `:::…:::` and `[[…]]` templates do not support loops.
+- Alternative template syntaxes (`:::…:::`, `[[…]]`) do not support loops.
 
 ## Pipelines
 
@@ -743,7 +743,7 @@ show @result
 
 ## Error Handling
 
-mlld has no early exit (`return`/`exit`). Model different outcomes with `/when` and state:
+mlld has no early exit (`return`/`exit`). Model different outcomes with `when` and state:
 
 ```mlld
 var @validation = @validate(@input)

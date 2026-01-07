@@ -98,25 +98,18 @@ But you can't secure something if you don't build it first, so let's get back to
 
 mlld runs top to bottom. You can't redefine variables, and you need to define things before you refer to them.
 
-### Two Modes: Scripts vs Markdown
+### File Extensions
 
-mlld has two syntax modes based on file extension:
+mlld uses `.mld` files (strict mode) - directives without slashes:
 
-**Strict mode (`.mld` files)** - bare directives, no slashes:
 ```mlld
 var @name = "Alice"
 show `Hello @name!`
 ```
 
-**Markdown mode (`.md`, `.mld.md` files)** - slash prefixes required:
-```mlld
-/var @name = "Alice"
-/show `Hello @name!`
-```
-
-Most people write `.mld` scripts (strict mode). Use markdown mode when embedding mlld in documentation or other markdown files where you need text content to pass through.
-
 This documentation uses **strict mode** in all examples.
+
+> **Note**: For executable documentation that renders on GitHub, see [markdown-mode.md](markdown-mode.md) for the `.mld.md` format.
 
 ### Directives
 
@@ -176,15 +169,14 @@ mlld lets you work with a lot of different kind of content, templates, objects, 
 `".."` - single line `@var` interpolation
 `'..'` - literal text (@var is just plain text)
 
-mlld has three template flavors for different needs:
+mlld has two template flavors:
 
 ```mlld
 var @simple = `Hello @name`
 var @codeblocks = ::Run `npm test` before @action::
-var @social = :::Hey @{{twitter}} check {{link}}:::
 ```
 
-Backticks for most, `::` when you need backticks, `:::` when swimming in @-signs.
+Backticks for most, `::` when you need backticks in your content.
 
 ### Conditional execution
 

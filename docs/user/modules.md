@@ -2,7 +2,7 @@
 
 ## tldr
 
-Modules let you package and reuse mlld code. Create modules with `/export`, import with `/import`, and publish to the registry with `mlld publish`. Modules capture their environment so executables work anywhere.
+Modules let you package and reuse mlld code. Create modules with `export`, import with `import`, and publish to the registry with `mlld publish`. Modules capture their environment so executables work anywhere.
 
 ## Creating Modules
 
@@ -29,7 +29,7 @@ Save as `greetings.mld` and it's ready to import.
 
 ### Export Control
 
-`/export` declares what others can import:
+`export` declares what others can import:
 
 ```mlld
 exe @publicHelper(x) = `Value: @x`
@@ -38,11 +38,11 @@ exe @_internalHelper(x) = run {echo "@x" | tr a-z A-Z}
 export { @publicHelper }
 ```
 
-Only `@publicHelper` is accessible to importers. Without `/export`, all variables are exported (legacy behavior).
+Only `@publicHelper` is accessible to importers. Without `export`, all variables are exported (legacy behavior).
 
 ### Module Dependencies
 
-Declare what your module needs with `/needs`:
+Declare what your module needs with `needs`:
 
 ```mlld
 /needs {
@@ -413,7 +413,7 @@ mlld update @alice/utils   # Update to latest
 ```
 
 **Export not found**:
-Check `/export` directive includes the variable name.
+Check `export` directive includes the variable name.
 
 **Collision error**:
 Use namespace imports:
