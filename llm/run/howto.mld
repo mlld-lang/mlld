@@ -12,8 +12,21 @@ exe @stripFrontmatter(text) = js {
 }
 
 >> Build tree display from all categories
-exe @buildTree(allAtoms) = js {
+exe @buildTree(allAtoms, introAtom) = js {
   const lines = ['MLLD HELP TOPICS', ''];
+
+  // Show intro brief at top
+  if (introAtom) {
+    const text = typeof introAtom === 'string' ? introAtom : (introAtom.content || '');
+    const match = text.match(/^---\n([\s\S]*?)\n---/);
+    if (match) {
+      const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
+      if (briefMatch) {
+        lines.push('  intro'.padEnd(27) + briefMatch[1].trim());
+        lines.push('');
+      }
+    }
+  }
 
   const categories = [
     { name: 'syntax', atoms: allAtoms.syntax },
@@ -47,6 +60,7 @@ exe @buildTree(allAtoms) = js {
   }
 
   lines.push('Use: mlld howto <topic> for details');
+  lines.push('Use: mlld howto grep <pattern> to search');
   return lines.join('\n');
 }
 
@@ -105,6 +119,48 @@ exe @joinStripped(atoms) = js {
   }).join('\n\n');
 }
 
+>> Search atoms for pattern, return matching lines with context
+exe @grepAtoms(atoms, pattern) = js {
+  if (!pattern) return 'Usage: mlld howto grep <pattern>';
+  const results = [];
+  const regex = new RegExp(pattern, 'gi');
+
+  for (const atom of atoms) {
+    const text = typeof atom === 'string' ? atom : (atom.content || '');
+    const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) continue;
+
+    const idMatch = fmMatch[1].match(/^id:\s*(.+)$/m);
+    if (!idMatch) continue;
+    const id = idMatch[1].trim();
+    if (id.startsWith('_')) continue;
+
+    const content = text.replace(/^---[\s\S]*?---\n*/, '');
+    const lines = content.split('\n');
+    const matches = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      if (regex.test(lines[i])) {
+        matches.push('  ' + (i + 1) + ': ' + lines[i].trim());
+      }
+    }
+
+    if (matches.length > 0) {
+      results.push(id + ':');
+      results.push(...matches);
+      results.push('');
+    }
+  }
+
+  if (results.length === 0) {
+    return 'No matches for "' + pattern + '"';
+  }
+  return results.join('\n');
+}
+
+>> Load intro atom (standalone at top level)
+var @introAtom = <@base/docs/src/atoms/intro.md>
+
 >> Load atoms from all categories
 var @syntaxAtoms = <@base/docs/src/atoms/syntax/*.md>
 var @commandsAtoms = <@base/docs/src/atoms/commands/*.md>
@@ -123,6 +179,12 @@ exe @bundleAtoms(syntax, commands, controlFlow, modules, patterns, configuration
 var @allAtoms = @bundleAtoms(@syntaxAtoms, @commandsAtoms, @controlFlowAtoms, @modulesAtoms, @patternsAtoms, @configurationAtoms, @securityAtoms, @mistakesAtoms)
 var @flatAtoms = @flattenAtoms(@allAtoms)
 
+>> Add intro to flat atoms for searching
+exe @addIntro(flatAtoms, introAtom) = js {
+  return [introAtom, ...flatAtoms];
+}
+var @allFlatAtoms = @addIntro(@flatAtoms, @introAtom)
+
 >> Get topic from payload (injected by SDK via dynamicModules)
 import { @topic, @subtopic } from @payload
 
@@ -136,10 +198,12 @@ exe @buildFullId(topic, subtopic) = js {
 var @fullId = @buildFullId(@topic, @subtopic)
 var @hasTopic = @topic != ""
 var @hasSubtopic = @subtopic != ""
+var @isGrep = @topic == "grep"
+var @isIntro = @topic == "intro"
 
 >> Get matches
-var @exactMatches = @filterById(@flatAtoms, @fullId)
-var @topicMatches = @filterByTopic(@flatAtoms, @topic)
+var @exactMatches = @filterById(@allFlatAtoms, @fullId)
+var @topicMatches = @filterByTopic(@allFlatAtoms, @topic)
 
 >> Build not-found message with tree
 exe @notFoundMsg(topic, tree) = js {
@@ -148,9 +212,11 @@ exe @notFoundMsg(topic, tree) = js {
 
 >> Main output logic - use when first to ensure only one branch executes
 when first [
+  @isGrep => show @grepAtoms(@allFlatAtoms, @subtopic)
+  @isIntro => show @stripFrontmatter(@introAtom)
   @hasSubtopic && @exactMatches.length > 0 => show @joinStripped(@exactMatches)
   @hasSubtopic => show `Subtopic "@fullId" not found.`
   @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
-  @hasTopic => show @notFoundMsg(@topic, @buildTree(@allAtoms))
-  * => show @buildTree(@allAtoms)
+  @hasTopic => show @notFoundMsg(@topic, @buildTree(@allAtoms, @introAtom))
+  * => show @buildTree(@allAtoms, @introAtom)
 ]
