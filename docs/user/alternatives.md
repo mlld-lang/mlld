@@ -66,16 +66,6 @@ show @alert("123", "456", "high")
 | Pipes | Supported | Not supported |
 | Loops (`for`/`end`) | Supported | Not supported |
 
-## Double-Bracket Templates (`[[...]]`)
-
-Another alternative for heavy `@` usage:
-
-```mlld
-var @msg = [[Hey [[user]], check this out!]]
-```
-
-Same limitations as triple-colon (no file loading, pipes, or loops).
-
 ## Common Migration Patterns
 
 ### Discord Bot

@@ -1,0 +1,2 @@
+exe @alert(adminId, reporterId, severity) = template "./templates/discord-alert.mtt"
+show @alert("123", "456", "high")
