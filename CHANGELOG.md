@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `.md` and `.mld.md` files use "markdown mode" (slash-prefixed directives)
   - "prose" now refers to OpenProse/prose execution, not the file format
 
+### Fixed
+- **`mlld howto` shows all atom categories**: Fixed howto command to load atoms from all 8 categories (syntax, commands, control-flow, modules, patterns, configuration, security, mistakes) instead of only control-flow
+
 ## [2.0.0-rc80]
 
 ### Added

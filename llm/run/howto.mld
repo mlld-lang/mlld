@@ -11,28 +11,55 @@ exe @stripFrontmatter(text) = js {
   return text.replace(/^---[\s\S]*?---\n*/, '').trim();
 }
 
->> Build tree display from atoms
-exe @buildTree(atoms) = js {
-  const lines = ['MLLD HELP TOPICS', '', 'control-flow/'];
-  for (const atom of atoms) {
-    const text = typeof atom === 'string' ? atom : (atom.content || '');
-    const match = text.match(/^---\n([\s\S]*?)\n---/);
-    if (match) {
-      const idMatch = match[1].match(/^id:\s*(.+)$/m);
-      const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
-      if (idMatch) {
-        const id = idMatch[1].trim();
-        const brief = briefMatch ? briefMatch[1].trim() : '';
-        lines.push('  ' + id.padEnd(25) + brief);
+>> Build tree display from all categories
+exe @buildTree(allAtoms) = js {
+  const lines = ['MLLD HELP TOPICS', ''];
+
+  const categories = [
+    { name: 'syntax', atoms: allAtoms.syntax },
+    { name: 'commands', atoms: allAtoms.commands },
+    { name: 'control-flow', atoms: allAtoms.controlFlow },
+    { name: 'modules', atoms: allAtoms.modules },
+    { name: 'patterns', atoms: allAtoms.patterns },
+    { name: 'configuration', atoms: allAtoms.configuration },
+    { name: 'security', atoms: allAtoms.security },
+    { name: 'mistakes', atoms: allAtoms.mistakes }
+  ];
+
+  for (const cat of categories) {
+    lines.push(cat.name + '/');
+    for (const atom of cat.atoms) {
+      const text = typeof atom === 'string' ? atom : (atom.content || '');
+      const match = text.match(/^---\n([\s\S]*?)\n---/);
+      if (match) {
+        const idMatch = match[1].match(/^id:\s*(.+)$/m);
+        const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
+        if (idMatch) {
+          const id = idMatch[1].trim();
+          // Skip _index files
+          if (id.startsWith('_')) continue;
+          const brief = briefMatch ? briefMatch[1].trim() : '';
+          lines.push('  ' + id.padEnd(25) + brief);
+        }
       }
     }
+    lines.push('');
   }
-  lines.push('');
+
   lines.push('Use: mlld howto <topic> for details');
   return lines.join('\n');
 }
 
->> Filter atoms by topic (matches id or parent)
+>> Flatten allAtoms into single array
+exe @flattenAtoms(allAtoms) = js {
+  const all = [];
+  for (const key of Object.keys(allAtoms)) {
+    all.push(...allAtoms[key]);
+  }
+  return all;
+}
+
+>> Filter atoms by topic (matches id, parent, or category)
 exe @filterByTopic(atoms, topicId) = js {
   if (!topicId) return [];
   return atoms.filter(atom => {
@@ -41,9 +68,13 @@ exe @filterByTopic(atoms, topicId) = js {
     if (!match) return false;
     const idMatch = match[1].match(/^id:\s*(.+)$/m);
     const parentMatch = match[1].match(/^parent:\s*(.+)$/m);
+    const categoryMatch = match[1].match(/^category:\s*(.+)$/m);
     const id = idMatch ? idMatch[1].trim() : '';
     const parent = parentMatch ? parentMatch[1].trim() : '';
-    return id === topicId || parent === topicId;
+    const category = categoryMatch ? categoryMatch[1].trim() : '';
+    // Skip index files
+    if (id.startsWith('_')) return false;
+    return id === topicId || parent === topicId || category === topicId;
   });
 }
 
@@ -74,8 +105,23 @@ exe @joinStripped(atoms) = js {
   }).join('\n\n');
 }
 
->> Load all control-flow atoms
+>> Load atoms from all categories
+var @syntaxAtoms = <@base/docs/src/atoms/syntax/*.md>
+var @commandsAtoms = <@base/docs/src/atoms/commands/*.md>
 var @controlFlowAtoms = <@base/docs/src/atoms/control-flow/*.md>
+var @modulesAtoms = <@base/docs/src/atoms/modules/*.md>
+var @patternsAtoms = <@base/docs/src/atoms/patterns/*.md>
+var @configurationAtoms = <@base/docs/src/atoms/configuration/*.md>
+var @securityAtoms = <@base/docs/src/atoms/security/*.md>
+var @mistakesAtoms = <@base/docs/src/atoms/mistakes/*.md>
+
+>> Bundle all atoms into object for tree display
+exe @bundleAtoms(syntax, commands, controlFlow, modules, patterns, configuration, security, mistakes) = js {
+  return { syntax, commands, controlFlow, modules, patterns, configuration, security, mistakes };
+}
+
+var @allAtoms = @bundleAtoms(@syntaxAtoms, @commandsAtoms, @controlFlowAtoms, @modulesAtoms, @patternsAtoms, @configurationAtoms, @securityAtoms, @mistakesAtoms)
+var @flatAtoms = @flattenAtoms(@allAtoms)
 
 >> Get topic from payload (injected by SDK via dynamicModules)
 import { @topic, @subtopic } from @payload
@@ -92,8 +138,8 @@ var @hasTopic = @topic != ""
 var @hasSubtopic = @subtopic != ""
 
 >> Get matches
-var @exactMatches = @filterById(@controlFlowAtoms, @fullId)
-var @topicMatches = @filterByTopic(@controlFlowAtoms, @topic)
+var @exactMatches = @filterById(@flatAtoms, @fullId)
+var @topicMatches = @filterByTopic(@flatAtoms, @topic)
 
 >> Build not-found message with tree
 exe @notFoundMsg(topic, tree) = js {
@@ -105,6 +151,6 @@ when first [
   @hasSubtopic && @exactMatches.length > 0 => show @joinStripped(@exactMatches)
   @hasSubtopic => show `Subtopic "@fullId" not found.`
   @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
-  @hasTopic => show @notFoundMsg(@topic, @buildTree(@controlFlowAtoms))
-  * => show @buildTree(@controlFlowAtoms)
+  @hasTopic => show @notFoundMsg(@topic, @buildTree(@allAtoms))
+  * => show @buildTree(@allAtoms)
 ]
