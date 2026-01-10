@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Pattern documented in docs/dev/HOWTO-PATTERN.md for adoption by other tools
   - Documentation atoms: 106 atoms extracted covering intro, syntax, commands, modules, patterns, security, configuration, and common mistakes
   - Git pre-commit hook auto-updates atom 'updated' dates when modified atoms are staged
+  - Colorized terminal output: syntax-highlighted code blocks, colored headers, topic tree with colored categories and IDs
 - **Prose execution**: Define executable functions that invoke a prose interpreter via LLM
   - Syntax: `exe @fn(params) = prose:@config { inline content }`
   - File-based: `exe @fn(params) = prose:@config "file.prose"`
