@@ -17,7 +17,7 @@ mlld validate <file>       Check syntax before running
 
 ---
 
-mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps.
+mlld is an LLM scripting language for surgical context assembly, parallelization, and secure, deterministic orchestration.
 
 ## Two Syntax Modes
 
