@@ -7,6 +7,16 @@ tags: [overview, quickstart, mental-model]
 updated: 2026-01-10
 ---
 
+## Essential Commands
+
+```
+mlld howto                 Browse all documentation topics
+mlld howto grep <pattern>  Search docs for keywords
+mlld validate <file>       Check syntax before running
+```
+
+---
+
 mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps.
 
 ## Two Syntax Modes

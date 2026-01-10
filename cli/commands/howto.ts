@@ -147,54 +147,33 @@ ${chalk.bold('Options:')}
 }
 
 /**
- * Create quickstart command (qs alias)
+ * Create quickstart command (qs alias) - maps to mlld howto intro
  */
 export function createQuickstartCommand() {
   return {
     name: 'qs',
     aliases: ['quickstart'],
-    description: 'Quick start guide for mlld',
+    description: 'Quick start guide for mlld (alias for howto intro)',
 
     async execute(_args: string[], flags: Record<string, any> = {}): Promise<void> {
       if (flags.help || flags.h) {
         console.log(`
 ${chalk.bold('Usage:')} mlld qs
 
-Show the mlld quick start guide.
+Show the mlld quick start guide (alias for 'mlld howto intro').
 
-This is a condensed introduction to mlld covering:
-- Basic syntax and directives
-- Variables and templates
-- File loading
-- Control flow
-- Modules
+Covers:
+- Essential commands (howto, grep, validate)
+- Two syntax modes
+- Mental model
+- Key concepts
 
 For detailed help on specific topics, use: mlld howto <topic>
         `);
         return;
       }
 
-      // TODO: Implement quickstart content
-      // For now, show the tree and suggest next steps
-      console.log(chalk.bold('MLLD QUICK START\n'));
-      console.log(`mlld is a modular prompt scripting language for dynamically
-assembling context and orchestrating LLMs.
-
-${chalk.bold('Key concepts:')}
-  • Directives: var, show, run, exe, when, for, import, export
-  • Variables: Always @prefixed: var @name = "value"
-  • Templates: Backticks interpolate: \`Hello @name!\`
-  • File loading: Angle brackets: <README.md>, <src/*.ts>
-
-${chalk.bold('Learn more:')}
-  mlld howto              Show all help topics
-  mlld howto when         Conditionals
-  mlld howto for          Iteration
-  mlld howto exe          Executables/functions
-
-${chalk.bold('Documentation:')}
-  https://mlld.ai/docs
-`);
+      await howtoCommand({ topic: 'intro' });
     }
   };
 }
