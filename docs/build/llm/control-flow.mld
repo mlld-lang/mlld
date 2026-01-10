@@ -1,0 +1,75 @@
+>> Build llms-control-flow.txt from atoms
+>> This should produce output matching the original docs/llm/llms-control-flow.txt
+
+>> Strip frontmatter helper
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+>> When atoms
+var @whenAtoms = [
+  <@base/docs/src/atoms/control-flow/when-simple.md>,
+  <@base/docs/src/atoms/control-flow/when-bare.md>,
+  <@base/docs/src/atoms/control-flow/when-first.md>,
+  <@base/docs/src/atoms/control-flow/when-value-returning.md>,
+  <@base/docs/src/atoms/control-flow/when-blocks.md>,
+  <@base/docs/src/atoms/control-flow/when-local-vars.md>,
+  <@base/docs/src/atoms/control-flow/when-operators.md>
+]
+
+>> For atoms (core, not parallel)
+var @forAtoms = [
+  <@base/docs/src/atoms/control-flow/for-arrow.md>,
+  <@base/docs/src/atoms/control-flow/for-collection.md>,
+  <@base/docs/src/atoms/control-flow/for-block.md>,
+  <@base/docs/src/atoms/control-flow/for-filter.md>,
+  <@base/docs/src/atoms/control-flow/for-skip.md>,
+  <@base/docs/src/atoms/control-flow/for-object.md>,
+  <@base/docs/src/atoms/control-flow/for-nested.md>,
+  <@base/docs/src/atoms/control-flow/for-batch.md>
+]
+
+>> Standalone atoms
+var @parallelFor = <@base/docs/src/atoms/control-flow/for-parallel.md>
+var @foreach = <@base/docs/src/atoms/control-flow/foreach.md>
+var @while = <@base/docs/src/atoms/control-flow/while.md>
+var @noExit = <@base/docs/src/atoms/control-flow/no-early-exit.md>
+
+>> Build sections - strip each atom
+var @whenStripped = for @a in @whenAtoms => @strip(@a)
+var @forStripped = for @a in @forAtoms => @strip(@a)
+
+>> Build body with JS for clean concatenation
+exe @buildSection(tag, intro, items) = js {
+  const body = intro + "\n\n" + items.join("\n\n");
+  return `<${tag}>\n${body}\n</${tag}>`;
+}
+
+exe @wrapSection(tag, content) = js {
+  return `<${tag}>\n${content}\n</${tag}>`;
+}
+
+var @whenSection = @buildSection("WHEN_DECISIONS", "`when` handles conditionals. Three forms: simple, bare (all matches), first (switch-style).", @whenStripped)
+var @forSection = @buildSection("FOR_ITERATION", "`for` iterates over collections. Arrow form for single actions, block form for multiple.", @forStripped)
+var @parallelSection = @wrapSection("PARALLEL_FOR", @strip(@parallelFor))
+var @foreachSection = @wrapSection("FOREACH", @strip(@foreach))
+var @whileSection = @wrapSection("WHILE_LOOPS", @strip(@while))
+var @noExitSection = @wrapSection("NO_EARLY_EXIT", @strip(@noExit))
+
+var @allSections = [
+  @whenSection,
+  @forSection,
+  @parallelSection,
+  @foreachSection,
+  @whileSection,
+  @noExitSection
+]
+
+var @body = @allSections.join("\n\n")
+
+show `<MLLD_CONTROL_FLOW>
+
+@body
+
+</MLLD_CONTROL_FLOW>
+`

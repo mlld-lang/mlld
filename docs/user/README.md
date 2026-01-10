@@ -8,6 +8,7 @@ mlld is a scripting language designed to make it delightful to work with LLMs in
 - [Quickstart](./quickstart.md)
 - [Content and data](./content-and-data.md)
 - [Flow control](./flow-control.md)
+- [Prose execution](./prose.md)
 - [CLI usage](./cli.md)
 - [SDK usage](./sdk.md)
 - [Security considerations](./security.md)

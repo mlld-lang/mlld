@@ -1,5 +1,5 @@
 // Prism.js language definition for mlld
-// Supports both strict mode (.mld) and prose mode (.mld.md)
+// Supports both strict mode (.mld) and markdown mode (.mld.md)
 
 const Prism = require('prismjs');
 

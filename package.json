@@ -25,6 +25,8 @@
   "files": [
     "dist/",
     "bin/",
+    "llm/run/howto.mld",
+    "docs/src/atoms/",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",

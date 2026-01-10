@@ -10,7 +10,7 @@ Publish modules to the mlld registry with `mlld publish`. First-time modules go 
 
 1. **GitHub account** - You'll authenticate via GitHub
 2. **mlld CLI** - Install via `npm install -g mlld`
-3. **Module file** - Your `.mld`/`.mld.md` file with frontmatter and `/needs`
+3. **Module file** - Your `.mld`/`.mld.md` file with frontmatter and `needs`
 
 ### Required Metadata
 
@@ -78,7 +78,7 @@ Your module must pass validation before publishing:
 - Valid mlld directives
 
 ### Export Validation
-- `/export` directive present (recommended)
+- `export` directive present (recommended)
 - Exported names exist as variables
 - No duplicate exports
 
@@ -307,7 +307,7 @@ For private/internal modules, use local or custom resolvers. See [resolvers.md](
 
 ### Runtime Dependencies
 
-Declare runtimes with `/needs`:
+Declare runtimes with `needs`:
 
 ```mlld
 /needs {
@@ -325,7 +325,7 @@ Types:
 
 ### Package Dependencies
 
-Include package requirements in `/needs`:
+Include package requirements in `needs`:
 
 ```mlld
 /needs {
@@ -361,7 +361,7 @@ dependencies:
 mlld add-needs my-tool.mld
 ```
 
-`mlld add-needs` analyzes your module and updates the `/needs` block.
+`mlld add-needs` analyzes your module and updates the `needs` block.
 
 Analyzes your module and updates frontmatter with detected dependencies.
 
@@ -553,7 +553,7 @@ Author field must match your GitHub username.
 Only CC0 license accepted for registry.
 
 **Export not found**:
-Ensure `/export` lists match variable names.
+Ensure `export` lists match variable names.
 
 ### Publishing Errors
 
@@ -643,7 +643,7 @@ See API docs for details.
 ### From Local to Registry
 
 1. Add frontmatter with required fields
-2. Add `/export` directive
+2. Add `export` directive
 3. Run `mlld add-needs` to detect dependencies
 4. Test locally: `mlld my-tool.mld`
 5. Publish: `mlld publish my-tool.mld`

@@ -1,0 +1,69 @@
+>> Build llms-commands.txt from atoms
+>> This should produce output matching the original docs/llm/llms-commands.txt
+
+>> Strip frontmatter helper
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+>> Run atoms (order matters)
+var @runAtoms = [
+  <@base/docs/src/atoms/commands/run-basics.md>,
+  <@base/docs/src/atoms/commands/run-cwd.md>,
+  <@base/docs/src/atoms/commands/run-stdin.md>,
+  <@base/docs/src/atoms/commands/run-params.md>
+]
+
+>> Exe atoms (order matters)
+var @exeAtoms = [
+  <@base/docs/src/atoms/commands/exe-simple.md>,
+  <@base/docs/src/atoms/commands/exe-prose.md>,
+  <@base/docs/src/atoms/commands/exe-blocks.md>,
+  <@base/docs/src/atoms/commands/exe-when-first.md>,
+  <@base/docs/src/atoms/commands/exe-shadow.md>
+]
+
+>> Standalone atoms
+var @output = <@base/docs/src/atoms/commands/output.md>
+var @log = <@base/docs/src/atoms/commands/log.md>
+var @append = <@base/docs/src/atoms/commands/append.md>
+var @stream = <@base/docs/src/atoms/commands/stream.md>
+
+>> Strip each atom group
+var @runStripped = for @a in @runAtoms => @strip(@a)
+var @exeStripped = for @a in @exeAtoms => @strip(@a)
+
+>> Build sections
+exe @buildSection(tag, intro, items) = js {
+  const body = intro + "\n\n" + items.join("\n\n");
+  return `<${tag}>\n${body}\n</${tag}>`;
+}
+
+exe @wrapSection(tag, intro, content) = js {
+  return `<${tag}>\n${intro}\n\n${content}\n</${tag}>`;
+}
+
+var @runSection = @buildSection("RUN_COMMAND", "Execute shell commands or code. Language specifier determines execution context.", @runStripped)
+var @exeSection = @buildSection("EXE_EXECUTABLES", "Define reusable commands, code, templates, or multi-statement blocks.", @exeStripped)
+var @outputSection = @wrapSection("OUTPUT_DIRECTIVE", "Write data to files or streams.", @strip(@output))
+var @logSection = @wrapSection("LOG_DIRECTIVE", "Syntactic sugar for `output to stdout`. Works in action contexts.", @strip(@log))
+var @appendSection = @wrapSection("APPEND_DIRECTIVE", "Append newline-delimited records.", @strip(@append))
+var @streamSection = @wrapSection("STREAMING", "Stream output during execution.", @strip(@stream))
+
+var @allSections = [
+  @runSection,
+  @exeSection,
+  @outputSection,
+  @logSection,
+  @appendSection,
+  @streamSection
+]
+
+var @body = @allSections.join("\n\n")
+
+show `<MLLD_COMMANDS>
+
+@body
+
+</MLLD_COMMANDS>
+`

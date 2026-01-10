@@ -1,0 +1,6 @@
+import { @config } from "provider.mld"
+
+show @config.prefix
+
+var @result = @config.greeter("World")
+show @result

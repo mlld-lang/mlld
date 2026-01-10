@@ -4,9 +4,9 @@ Here's a syntax reference for mlld.
 
 ## Basic Directives
 
-### Variables (`/var`)
+### Variables (`var`)
 
-Create variables using `/var` with `@` prefix:
+Create variables using `var` with `@` prefix:
 
 ```mlld
 var @name = "Alice"
@@ -32,18 +32,17 @@ var @last2 = @numbers[-2:]  >> [4, 5]
 var @middle = @numbers[1:4]  >> [2, 3, 4]
 ```
 
-### Display (`/show`)
+### Display (`show`)
 
 Output variables and templates:
 
 ```mlld
 show @name
 show `Hello @name!`
-show ::Welcome {{user.name}} to the system!::
-show :::Social handle: @{{username}}:::
+show ::Welcome @user.name to the system!::
 ```
 
-### Commands (`/run`)
+### Commands (`run`)
 
 Execute shell commands:
 
@@ -82,7 +81,7 @@ run @list("/")
 
 `sh`, `bash`, `js`, `node`, and `python` accept the same `:/abs/path` suffix. JavaScript and Node switch `process.cwd()` to the provided directory before running code.
 
-### Executables (`/exe`)
+### Executables (`exe`)
 
 Define reusable functions and templates:
 
@@ -101,20 +100,26 @@ exe @processData(data) = js {
   return data.map(item => item.value * 2)
 }
 
+>> Prose execution (requires config, see docs/user/prose.md)
+var @llm = { model: "claude-3", skillName: "prose" }
+exe @summarize(text) = prose:@llm { summarize @text }      << inline interpolates
+exe @review(code) = prose:@llm "./review.prose"            << .prose = no interpolation
+exe @greet(name) = prose:@llm "./greet.prose.att"          << .prose.att/.mtt interpolate
+
 >> Templates
 exe @welcome(name, role) = ::Welcome @name! Role: @role::
-exe @format(title, content) = :::
->> {{title}}
+exe @format(title, content) = ::
+>> @title
 
-{{content}}
-:::
+@content
+::
 
 >> Invoke executables
 run @greet("Bob")
 var @sum = @add(10, 20)
 show @welcome("Alice", "Admin")
 
->> `foreach` in `/exe` RHS
+>> `foreach` in `exe` RHS
 exe @wrap(x) = `[@x]`
 exe @wrapAll(items) = foreach @wrap(@items)
 show @wrapAll(["a","b"]) | @join(',')  >> => [a],[b]
@@ -127,7 +132,7 @@ exe @greet(name) = [
 show @greet("World")  >> => Hello World!
 ```
 
-### Conditionals (`/when`)
+### Conditionals (`when`)
 
 Simple conditions:
 
@@ -175,7 +180,7 @@ exe @getAccess(user) = when first [
 var @access = @getAccess(@currentUser)
 ```
 
-### Iteration (`/for`)
+### Iteration (`for`)
 
 Execute actions for each item:
 
@@ -216,7 +221,7 @@ for @item in @items [
 Transform collections with `foreach`:
 
 ```mlld
-exe @greet(name) = ::Hi {{name}}!::
+exe @greet(name) = ::Hi @name!::
 var @greetings = foreach @greet(@names)
 ```
 
@@ -241,7 +246,7 @@ var @filtered = for @x in @xs => when [
 
 ### Template loops (backticks and ::)
 
-Render loops inline inside templates. The `/for` header and `/end` must start at line begins inside the template body.
+Render loops inline inside templates. The `for` header and `end` must start at line begins inside the template body.
 
 Backticks:
 
@@ -297,9 +302,9 @@ var @allDocs = <docs/*.md>
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```
 
-### Imports (`/import`)
+### Imports (`import`)
 
-Import from modules (modules should declare `/export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
+Import from modules (modules should declare `export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
 
 ```mlld
 import { @parallel, @retry } from @mlld/core
@@ -338,7 +343,7 @@ show @agents._private.who
 
 TTL durations use suffixes like 30s, 5m, 1h, 1d, or 1w (seconds, minutes, hours, days, weeks).
 
-### Output (`/output`)
+### Output (`output`)
 
 Write to files and streams:
 
@@ -350,7 +355,7 @@ output @error to stderr
 output @config to "settings.yaml" as yaml
 ```
 
-### Append (`/append`)
+### Append (`append`)
 
 Append one record per call, preserving existing file content:
 
@@ -361,15 +366,15 @@ append "raw text entry" to "events.log"
 
 `.jsonl` targets must receive valid JSON objects; anything else will use plain text. The pipeline form `| append "file.jsonl"` appends the prior stage output.
 
-### Log (`/log`)
+### Log (`log`)
 
-Syntactic sugar for `/output...to stderr`
+Syntactic sugar for `output ... to stderr`
 
-### `/stream` - Stream Output
+### `stream` - Stream Output
 
 **Purpose**: Display output with live chunks as they arrive (instead of buffering until completion)
 
-**Syntax**: `/stream <expression>`
+**Syntax**: `stream <expression>`
 
 **Example**:
 ```mlld
@@ -410,24 +415,24 @@ show @results  >> => ["L","R"]
 
 ### Templates
 
-Three template syntaxes:
+Two template syntaxes:
 
 ```mlld
 >> Backticks (primary)
 var @msg = `Hello @name, welcome!`
 
->> Double-colon (escape backticks)
+>> Double-colon (for content with backticks)
 var @doc = ::Use `npm install` to get started, @name::
-
->> Triple-colon (many @ symbols)
-var @social = :::Hey @{{handle}}, check this out!:::
 ```
 
 Interpolation rules:
 - Backticks `@var`: interpolate
-- Double quotes `"@var"`: interpolate  
+- Double-colon `::@var::`: interpolate (use when content has backticks)
+- Double quotes `"@var"`: interpolate
 - Single quotes `'@var'`: literal (no interpolation)
 - Commands `{@var}`: interpolate
+
+> **Note**: For Discord mentions (`<@userid>`) or content heavy with `@` symbols, see the `:::{{var}}:::` escape hatch syntax in the alternatives guide.
 
 ### Builtin Methods
 
@@ -588,11 +593,10 @@ Where interpolation applies:
 |---------|---------|---------|
 | Backticks | `@var` | `` `Hello @name` `` |
 | Double-colon | `@var` | `::Use @command here::` |
-| Triple-colon | `{{var}}` | `:::Hi @{{handle}}:::` |
 | Commands | `@var` | `{echo "@msg"}` |
 | Double quotes | `@var` | `"Hi @name"` |
 | Single quotes | `'@var'` | `'Hi @name'` (literal) |
-| Directives | `@var` | `/show @greeting` |
+| Directives | `@var` | `show @greeting` |
 
 ### Built-in Transformers
 

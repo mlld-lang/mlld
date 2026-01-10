@@ -82,6 +82,11 @@ export class HelpSystem {
       return;
     }
 
+    if (command === 'validate' || command === 'analyze') {
+      this.displayValidateHelp();
+      return;
+    }
+
     this.displayMainHelp(command, context);
   }
 
@@ -124,6 +129,28 @@ Examples:
 
 Related:
   mlld info @module             # Show module metadata + tldr
+    `);
+  }
+
+  private displayValidateHelp(): void {
+    console.log(`
+Usage: mlld validate <filepath> [options]
+
+Validate mlld syntax and analyze module structure without executing.
+Returns validation status, exports, imports, guards, executables, and runtime needs.
+
+Options:
+  --format <format>  Output format: json or text (default: text)
+  --ast              Include the parsed AST in output (requires --format json)
+  -h, --help         Show this help message
+
+Examples:
+  mlld validate module.mld                # Validate with text output
+  mlld validate module.mld --format json  # Validate with JSON output
+  mlld validate module.mld --ast --format json  # Include AST
+
+Aliases:
+  mlld analyze                            # Same as validate
     `);
   }
 
@@ -471,6 +498,7 @@ Commands:
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   nvim-doctor             Diagnose and fix mlld Neovim LSP configuration
+  validate, analyze       Validate mlld syntax and show module structure
   debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
 
@@ -541,6 +569,9 @@ Configuration:
   3. mlld-lock.json (project module lockfile)
 
   CLI options override configuration file settings.
+
+New to mlld? Run 'mlld quickstart' for an introduction.
+Built-in docs and examples available via 'mlld howto'.
   `);
 
     if (!command || command === 'debug-context') {
@@ -573,6 +604,8 @@ Configuration:
       case 'test':
       case 'language-server':
       case 'lsp':
+      case 'validate':
+      case 'analyze':
         return `Help available for ${command}`;
       default:
         return null;

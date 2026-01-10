@@ -5,6 +5,45 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc81]
+
+### Added
+- **Self-documenting help system**: `mlld howto` provides LLM-accessible documentation directly in the CLI
+  - `mlld howto` - Show topic tree with intro pinned at top
+  - `mlld howto intro` - Introduction with mental model and key concepts
+  - `mlld howto <topic>` - Show all help for a specific topic (e.g., `mlld howto when`)
+  - `mlld howto <topic> <subtopic>` - Show specific subtopic (e.g., `mlld howto when first`)
+  - `mlld howto grep <pattern>` - Search across all atoms for matching lines
+  - `mlld qs` / `mlld quickstart` - Quick start guide
+  - Built on atom-based documentation architecture (docs/src/atoms/) enabling DRY content reuse
+  - Pattern documented in docs/dev/HOWTO-PATTERN.md for adoption by other tools
+  - Documentation atoms: 106 atoms extracted covering intro, syntax, commands, modules, patterns, security, configuration, and common mistakes
+  - Git pre-commit hook auto-updates atom 'updated' dates when modified atoms are staged
+  - Colorized terminal output: syntax-highlighted code blocks, colored headers, topic tree with colored categories and IDs
+- **Prose execution**: Define executable functions that invoke a prose interpreter via LLM
+  - Syntax: `exe @fn(params) = prose:@config { inline content }`
+  - File-based: `exe @fn(params) = prose:@config "file.prose"`
+  - Template files: `.prose.att` (`@var`) and `.prose.mtt` (`{{var}}`); `.prose` files do not interpolate
+  - Config uses model executors: `{ model: @opus, skills: [...] }`
+  - Pre-built configs available from `@mlld/prose` public module
+  - Requires [OpenProse](https://prose.md) skill or another prose interpreter
+  - Skills must be approved in Claude Code before use
+  - See [docs/user/prose.md](docs/user/prose.md) for full documentation
+- **`mlld validate`**: Static analysis command for syntax validation without execution
+  - `mlld validate <file>` - Validate syntax and show module structure (exports, imports, executables, guards, needs)
+  - `--format json` - Machine-readable JSON output for tooling integration
+  - `--ast` - Include parsed AST in JSON output (requires `--format json`)
+  - Returns exit code 1 for invalid files, enabling CI/toolchain integration
+  - `mlld analyze` as alias
+
+### Changed
+- **Terminology**: "prose mode" renamed to "markdown mode" to avoid confusion with prose execution
+  - `.md` and `.mld.md` files use "markdown mode" (slash-prefixed directives)
+  - "prose" now refers to OpenProse/prose execution, not the file format
+
+### Fixed
+- **`mlld howto` shows all atom categories**: Fixed howto command to load atoms from all 8 categories (syntax, commands, control-flow, modules, patterns, configuration, security, mistakes) instead of only control-flow
+
 ## [2.0.0-rc80]
 
 ### Added
@@ -12,9 +51,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mlld info` shows real registry data**: Now fetches actual module metadata from registry (version, needs, license, repo, keywords) and appends the `# tldr` section
 - **Colorized CLI output**: Module info and docs display with syntax highlighting for mlld code blocks, colored headers, and formatted metadata
 - **`mlld-run` blocks use strict mode**: Code inside `mlld-run` fenced blocks now parses in strict mode (slashes optional, no prose between directives)
+- **Transitive dependency installation**: `mlld install` now automatically installs mlld module dependencies (npm-style)
+  - When installing `@alice/utils`, its `dependencies` from frontmatter are discovered and installed
+  - Recursive: transitive deps of deps are also installed
+  - All modules recorded in `mlld-lock.json` (config unchanged - only direct deps in `mlld-config.json`)
+  - Install summary shows breakdown: "3 modules installed (1 direct, 2 transitive)"
+  - Lazy runtime fetching still works as fallback for modules not pre-installed
 
 ### Fixed
 - **Module publish validation for exe declarations**: Fixed `ExportValidator` not recognizing exe declarations where the identifier is a `VariableReference` node. This caused `mlld publish` to fail with "Exported name is not declared" errors for modules like `@mlld/array` and `@mlld/string`.
+- **Module scope isolation for nested imports**: Fixed bug where importing a module that internally imports from another module would cause "variable already imported" errors. Child module scopes are now properly isolated from parent scope during import evaluation.
+- **Executable preservation in object properties**: Fixed bug where executables stored as object properties would lose their Variable wrapper during import, causing `isExecutableVariable()` to return false. Object property executables are now properly reconstructed during import.
+- **Registry publish SHA error**: Fixed "sha wasn't supplied" error when publishing new versions of existing modules. The existing tags.json SHA is now properly fetched and provided when updating.
+- **Duplicate version publish check**: `mlld publish` now checks if the specific version already exists in the registry before attempting to create a PR, preventing wasted effort on duplicate publishes.
 
 ## [2.0.0-rc79]
 

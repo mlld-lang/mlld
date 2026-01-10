@@ -269,6 +269,14 @@ export class FormatAdapterSink implements StreamSink {
         } as SDKStreamingMetadataEvent;
       }
 
+      case 'unknown':
+        // Unknown events are malformed JSON lines that couldn't be parsed
+        // For JSON streaming formats (ndjson), these are expected errors when
+        // the executor outputs non-JSON text. Skip them silently.
+        // Note: Plain text streaming (sh/bash) should NOT use streamFormat.
+        // Without streamFormat, the terminal sink handles output directly.
+        return null;
+
       default:
         return null;
     }

@@ -798,6 +798,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.moduleIsolated;
   }
 
+  setModuleIsolated(isolated: boolean): void {
+    this.moduleIsolated = isolated;
+  }
+
   setExportManifest(manifest: ExportManifest | null | undefined): void {
     this.exportManifest = manifest ?? undefined;
   }

@@ -1,9 +1,9 @@
-<MLLD_COMPLETE_GUIDE version="2.0.0-rc78">
+<MLLD_COMPLETE_GUIDE version="2.0.0-rc79">
 
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-02T22:02:29.124Z
+Generated: 2026-01-05T04:55:10.935Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -69,6 +69,8 @@ Think Docker Compose or GitHub Actions: declare what happens, don't program how.
 **Pipelines** - Chain transformations: `@data | @json | @validate`
 
 **Executables** - Reusable functions: `exe @greet(name) = `Hello @name!``
+
+**Blocks** - Multi-statement bodies with `let` for local variables: `exe @f(x) = [ let @y = @x * 2; => @y ]`
 
 **Modules** - Import/export for code reuse: `import { @helper } from @corp/utils`
 </KEY_CONCEPTS>
@@ -646,7 +648,35 @@ exe @greet(name) = `Hello @name!`
 
 >> External template file
 exe @welcome(name, role) = template "./prompts/welcome.att"
+
+>> Prose (requires config)
+exe @analyze(data) = prose:@config { session "Analyze @data" }
 ```
+
+**Prose execution** (LLM skill invocation):
+
+Prose requires a config reference specifying the model and skill:
+
+```mlld
+var @config = { model: "claude-3", skillName: "prose" }
+
+>> Inline (interpolates like templates)
+exe @summarize(text) = prose:@config { summarize @text }
+
+>> File reference (.prose files do NOT interpolate)
+exe @review(code) = prose:@config "./review.prose"
+
+>> Template files (.prose.att or .prose.mtt interpolate)
+exe @greet(name) = prose:@config "./greet.prose.att"
+```
+
+Interpolation rules:
+- `prose:@config { inline }` - interpolates `@var` like templates
+- `"file.prose"` - no interpolation, raw content
+- `"file.prose.att"` - ATT interpolation (`@var`)
+- `"file.prose.mtt"` - MTT interpolation (`{{var}}`)
+
+Default skill is `"prose"` (OpenProse). Custom interpreters via `skillName`.
 
 **Block syntax** (multi-statement bodies):
 
@@ -2200,7 +2230,18 @@ Where interpolation applies:
 | `js` | JavaScript | Full JS, return values |
 | `node` | Node.js | npm packages available |
 | `python` | Python | Python code |
+| `prose:@cfg` | LLM skill | Requires config, interpreter-agnostic |
 </LANGUAGE_SPECIFIERS>
+
+<PROSE_INTERPOLATION>
+
+| Source | Interpolation | Example |
+|--------|---------------|---------|
+| `prose:@cfg { inline }` | Yes (`@var`) | `prose:@cfg { analyze @data }` |
+| `"file.prose"` | No | Raw prose content |
+| `"file.prose.att"` | Yes (`@var`) | ATT-style interpolation |
+| `"file.prose.mtt"` | Yes (`{{var}}`) | MTT-style interpolation |
+</PROSE_INTERPOLATION>
 
 <BUILTIN_TRANSFORMS>
 
@@ -2258,6 +2299,9 @@ Where interpolation applies:
 | `.mld.md` | Markdown | Slash prefix, text as content |
 | `.att` | Template | `@var` interpolation |
 | `.mtt` | Template | `{{var}}` interpolation (escape hatch) |
+| `.prose` | Prose | No interpolation, raw content |
+| `.prose.att` | Prose | `@var` interpolation |
+| `.prose.mtt` | Prose | `{{var}}` interpolation |
 </FILE_EXTENSIONS>
 
 <ESCAPE_HATCH_TEMPLATES>
@@ -2307,6 +2351,7 @@ multiple features working together. All examples use strict mode (bare directive
 3. Agent Definition - Configuration module with frontmatter and templates
 4. Router - Complex decision logic with scoring
 5. Orchestrator - Parallel execution with routing and gating
+6. Codebase Audit - Parallel file review using Claude
 </TOC>
 
 <RECIPE_1_LLM_LIBRARY>
@@ -2633,8 +2678,58 @@ export { @routing }
 - Chained processing: route → invoke → gate → post
 </RECIPE_5_ORCHESTRATOR>
 
+<RECIPE_6_CODEBASE_AUDIT>
+A codebase audit tool using Claude for parallel file review. Demonstrates:
+- Glob patterns for file loading
+- File metadata access
+- Claude as a function via pipe + cmd
+- Parallel for loops with structured returns
+
+```mlld
+>> Claude model helper - haiku for fast, cheap reviews
+exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
+
+>> Build review prompt
+exe @buildPrompt(filename, content) = `
+Review this code for issues:
+File: @filename
+---
+@content
+---
+List 2-3 issues or "LGTM". Be concise (max 3 lines).
+`
+
+>> Load TypeScript files
+var @allFiles = <src/**/*.ts>
+
+>> Review function
+exe @reviewFile(file) = [
+  let @prompt = @buildPrompt(@file.mx.relative, @file)
+  let @review = @haiku(@prompt)
+  let @trimmed = @review.trim()
+  => { file: @file.mx.relative, review: @trimmed }
+]
+
+>> Parallel review - up to 5 concurrent
+var @reviews = for parallel(5) @f in @allFiles => @reviewFile(@f)
+
+>> Output results
+for @r in @reviews [
+  show `## @r.file`
+  show @r.review
+  show ""
+]
+```
+
+**Key patterns:**
+- `<src/**/*.ts>` - Glob pattern loads all matching files
+- `@file.mx.relative` - Access file metadata (relative path)
+- `@prompt | cmd { claude -p }` - Pipe to Claude CLI via stdin
+- `for parallel(5)` - Process up to 5 files concurrently
+</RECIPE_6_CODEBASE_AUDIT>
+
 <SUMMARY>
-These five recipes cover the most common mlld patterns:
+These six recipes cover the most common mlld patterns:
 
 | Recipe | Features Demonstrated |
 |--------|----------------------|
@@ -2643,6 +2738,7 @@ These five recipes cover the most common mlld patterns:
 | Agent Definition | Frontmatter, templates, function objects |
 | Router | Complex scoring, for-filter, object spread, nested when |
 | Orchestrator | Parallel for, directory imports, dynamic access |
+| Codebase Audit | Globs, file metadata, Claude-as-function, parallel review |
 
 For reference documentation, see the other llms-*.txt modules.
 </SUMMARY>

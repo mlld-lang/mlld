@@ -1,0 +1,3 @@
+var @value = "from-base"
+var @helper = "base-helper"
+export { @value, @helper }

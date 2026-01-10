@@ -1,8 +1,6 @@
-var @list = ::
-/for @item in @items
-- @item.name: @item.value
-/end
-::
+>> Importing template files (use exe = template instead)
+import { @tpl } from "./file.att"    >> Error
+exe @tpl(x) = template "./file.att"  >> Correct
 
->> Requirements: /for and /end at line start
->> NOT supported in :::...:::, .mtt, or "..."
+>> For template directories:
+import templates from "./templates" as @tpl(x, y)

@@ -1,0 +1,7 @@
+import { @value, @helper } from "base.mld"
+
+import { @combined } from "wrapper.mld"
+
+show @value
+show @helper
+show @combined

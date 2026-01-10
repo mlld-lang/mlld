@@ -1,22 +1,6 @@
->> Load environment-specific config
-import { NODE_ENV } from @input
-var @env = @NODE_ENV || "development"
+var @checks = for @service in ["auth", "payments", "search"] =>
+  {"service": @service, "status": "ok", "timestamp": @now}
 
->> Load base config and environment overrides
-var @baseConfig = <config/base.json>
-var @envConfig = <config/@env.json>
+for @entry in @checks => append @entry to "health.jsonl"
 
->> Merge configurations using JS
-var @config = js {
-  return Object.assign(
-    {},
-    @baseConfig.json,
-    @envConfig.json,
-    {
-      environment: @env,
-      timestamp: @now
-    }
-  )
-}
-
-output @config to "runtime-config.json" as json
+show <health.jsonl>

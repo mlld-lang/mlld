@@ -969,14 +969,39 @@ export class PublishCommand {
       );
 
       const isExistingModule = Boolean(existingModule || repoModuleInfo.exists);
-      
-      // 4. Determine if this is a first-time author
+
+      // 4. Check if this specific version already exists
+      if (isExistingModule && repoModuleInfo.isVersioned) {
+        try {
+          await octokit.repos.getContent({
+            owner: REGISTRY_OWNER,
+            repo: REGISTRY_REPO,
+            path: versionPath,
+            ref: upstreamMainRef.data.object.sha
+          });
+          // Version file exists - this version is already published
+          console.log(chalk.red(`\n✘ Version ${registryEntry.version} of @${registryEntry.author}/${registryEntry.name} is already published.`));
+          console.log(chalk.yellow(`\nTo publish a new version, update the version in your module's frontmatter.`));
+          console.log(chalk.yellow(`Current version: ${registryEntry.version}`));
+          throw new MlldError(`Version ${registryEntry.version} already exists`, {
+            code: 'VERSION_EXISTS',
+            severity: ErrorSeverity.Fatal
+          });
+        } catch (error: any) {
+          if (error.code === 'VERSION_EXISTS') {
+            throw error;
+          }
+          // Version doesn't exist yet, continue with publish
+        }
+      }
+
+      // 5. Determine if this is a first-time author
       const isFirstTimeAuthor = !isExistingModule;
-      
-      // 5. Check if this is an update (old structure)
+
+      // 6. Check if this is an update (old structure)
       const isLegacyUpdate = (existingModule && !existingModule.availableVersions) || (repoModuleInfo.exists && !repoModuleInfo.isVersioned);
-      
-      // 6. Prepare content for versioned structure
+
+      // 7. Prepare content for versioned structure
       const timestamp = new Date().toISOString();
       
       // Metadata (only for new modules)
@@ -1012,6 +1037,7 @@ export class PublishCommand {
         latest: registryEntry.version,
         stable: registryEntry.version
       };
+      let existingTagsSha: string | undefined;
 
       if (!isLegacyUpdate && isExistingModule) {
         try {
@@ -1023,6 +1049,7 @@ export class PublishCommand {
           });
 
           if (!Array.isArray(existingTagsFile.data) && 'content' in existingTagsFile.data) {
+            existingTagsSha = existingTagsFile.data.sha;
             const raw = Buffer.from(existingTagsFile.data.content, 'base64').toString('utf8');
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object') {
@@ -1087,8 +1114,8 @@ export class PublishCommand {
         });
       } else {
         // For new structure, create multiple files
-        const files = [];
-        
+        const files: Array<{ path: string; content: string; sha?: string }> = [];
+
         if (!isExistingModule) {
           // New module: create all files
           files.push({
@@ -1103,16 +1130,17 @@ export class PublishCommand {
           // Existing module (versioned): update tags with new latest/stable and add version file
           files.push({
             path: tagsPath,
-            content: JSON.stringify(tags, null, 2) + '\n'
+            content: JSON.stringify(tags, null, 2) + '\n',
+            sha: existingTagsSha
           });
         }
-        
+
         // Always create version file
         files.push({
           path: versionPath,
           content: JSON.stringify(versionData, null, 2) + '\n'
         });
-        
+
         // Create all files
         for (const file of files) {
           await octokit.repos.createOrUpdateFileContents({
@@ -1123,7 +1151,8 @@ export class PublishCommand {
               ? `Add version ${registryEntry.version} for @${registryEntry.author}/${registryEntry.name}`
               : `Add @${registryEntry.author}/${registryEntry.name}`,
             content: Buffer.from(file.content).toString('base64'),
-            branch: branchName
+            branch: branchName,
+            ...(file.sha ? { sha: file.sha } : {})
           });
         }
       }

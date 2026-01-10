@@ -1,1 +1,4 @@
-when @score > 90 => show "Excellent!"
+when [
+  @accept(@response) => "Accepted"
+  !@accept(@response) => "Rejected"
+]

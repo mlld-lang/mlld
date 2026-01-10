@@ -81,11 +81,11 @@ show @process(@configs)
 
 ## How It Works
 
-- Simple `/run cmd {...}` now auto-falls back to bash when command/env payloads are large. The script is streamed via stdin to avoid args+env limits.
-- Shell mode `/run sh {...}` injects large variables directly into the shell script instead of the environment (via heredoc), bypassing Node's limit.
+- Simple `run cmd {...}` now auto-falls back to bash when command/env payloads are large. The script is streamed via stdin to avoid args+env limits.
+- Shell mode `run sh {...}` injects large variables directly into the shell script instead of the environment (via heredoc), bypassing Node's limit.
 - Your variables work the same - just use `$varname` in shell mode.
 
-To disable auto-fallback (for debugging/policy), set `MLLD_DISABLE_SH=1`. In that mode, `/run` is strict and will error with guidance when payloads are too large.
+To disable auto-fallback (for debugging/policy), set `MLLD_DISABLE_SH=1`. In that mode, `run` is strict and will error with guidance when payloads are too large.
 
 ## When You'll Hit This
 
@@ -97,4 +97,4 @@ Common scenarios that exceed 128KB:
 
 ## Error Messages
 
-With the default auto-fallback, you should rarely see size-related errors. If `MLLD_DISABLE_SH=1` is set, `/run` will be strict and show helpful guidance when payloads are too large.
+With the default auto-fallback, you should rarely see size-related errors. If `MLLD_DISABLE_SH=1` is set, `run` will be strict and show helpful guidance when payloads are too large.

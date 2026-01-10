@@ -1,0 +1,51 @@
+>> Build llms-configuration.txt from atoms
+>> This should produce output matching the original docs/llm/llms-configuration.txt
+
+>> Strip frontmatter helper
+exe @strip(content) = js {
+  return content.replace(/^---[\s\S]*?---\n*/, '').trim();
+}
+
+>> Configuration atoms (in original order)
+var @configFiles = <@base/docs/src/atoms/configuration/config-files.md>
+var @envVars = <@base/docs/src/atoms/configuration/environment-variables.md>
+var @frontmatter = <@base/docs/src/atoms/configuration/frontmatter.md>
+var @pathsUrls = <@base/docs/src/atoms/configuration/paths-urls.md>
+var @sdkModes = <@base/docs/src/atoms/configuration/sdk-execution-modes.md>
+var @sdkDynamic = <@base/docs/src/atoms/configuration/sdk-dynamic-modules.md>
+var @sdkExecute = <@base/docs/src/atoms/configuration/sdk-execute-function.md>
+var @sdkAnalyze = <@base/docs/src/atoms/configuration/sdk-analyze-module.md>
+
+>> Build sections
+exe @wrapSection(tag, content) = js {
+  return `<${tag}>\n${content}\n</${tag}>`;
+}
+
+var @configFilesSection = @wrapSection("CONFIG_FILES", @strip(@configFiles))
+var @envVarsSection = @wrapSection("ENVIRONMENT_VARIABLES", @strip(@envVars))
+var @frontmatterSection = @wrapSection("FRONTMATTER", @strip(@frontmatter))
+var @pathsUrlsSection = @wrapSection("PATHS_AND_URLS", @strip(@pathsUrls))
+var @sdkModesSection = @wrapSection("SDK_EXECUTION_MODES", @strip(@sdkModes))
+var @sdkDynamicSection = @wrapSection("DYNAMIC_MODULE_INJECTION", @strip(@sdkDynamic))
+var @sdkExecuteSection = @wrapSection("EXECUTE_FUNCTION", @strip(@sdkExecute))
+var @sdkAnalyzeSection = @wrapSection("ANALYZE_MODULE", @strip(@sdkAnalyze))
+
+var @allSections = [
+  @configFilesSection,
+  @envVarsSection,
+  @frontmatterSection,
+  @pathsUrlsSection,
+  @sdkModesSection,
+  @sdkDynamicSection,
+  @sdkExecuteSection,
+  @sdkAnalyzeSection
+]
+
+var @body = @allSections.join("\n\n")
+
+show `<MLLD_CONFIGURATION>
+
+@body
+
+</MLLD_CONFIGURATION>
+`

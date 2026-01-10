@@ -54,7 +54,7 @@ show @header.mx.taint  >> ["secret"]
 ```
 
 Automatic taint labels:
-- `src:exec` — outputs from `/run` or `/exe`
+- `src:exec` — outputs from `run` or `exe`
 - `src:file` — loaded file content, plus `dir:/...` entries for every parent directory
 - `src:dynamic` — dynamic modules injected via `dynamicModules`
 

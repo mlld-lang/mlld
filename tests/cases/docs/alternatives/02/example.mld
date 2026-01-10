@@ -1,0 +1,3 @@
+>> Don't use ::: for normal templates
+var @msg = :::Status: {{status}}:::  >> Loses all features
+var @msg = ::Status: @status::       >> Use primary syntax

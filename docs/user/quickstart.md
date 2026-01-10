@@ -36,7 +36,7 @@ In `.mld` files, every line is either a directive or blank:
 
 - **Directives**: Commands like `var`, `show`, `for` that do things
 - **Comments**: Lines starting with `>>` are comments
-- **Prose mode**: For mixing text with code, see [Markdown Mode](markdown.md)
+- **Markdown mode**: For mixing text with code, see [Markdown Mode](markdown.md)
 
 ## Essential Directives
 

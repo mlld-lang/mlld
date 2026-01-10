@@ -344,7 +344,7 @@ show @page.mx.html                     >> Original HTML
 
 ### Creating Variables
 
-Use `/var` to create variables with different data types:
+Use `var` to create variables with different data types:
 
 ```mlld
 >> Primitives
@@ -746,26 +746,32 @@ For extracting JSON from LLM responses that may contain markdown code fences or 
 
 ### Template Syntax and Interpolation
 
-**Default to `::...::` for inline templates, `.att` files for external templates (5+ lines).** Switch to `:::...:::` or `.mtt` ONLY for Discord `<@userid>` mentions or heavy social media `@handle` usage.
+Use backticks or `::...::` for inline templates, `.att` files for external templates (5+ lines).
 
 #### Quick Reference
 
 | Syntax | Interpolation | Pipes | Loops | Use For |
 |--------|---------------|-------|-------|---------|
-| `::...::` | `@var` `<file>` `@exe()` | ✓ | ✓ | **Default inline** |
+| `` `...` `` | `@var` `<file>` `@exe()` | ✓ | ✓ | **Default inline** |
+| `::...::` | `@var` `<file>` `@exe()` | ✓ | ✓ | Content with backticks |
 | `.att` | `@var` `<file>` `@exe()` | ✓ | ✓ | **Default external (5+ lines)** |
-| `` `...` `` | `@var` `<file>` `@exe()` | ✓ | ✓ | Same as `::...::` (preference) |
 | `"..."` | `@var` `<file>` `@exe()` | ✓ | ✗ | Single-line only |
-| `:::...:::` | `{{var}}` only | ✗ | ✗ | Discord/social escape hatch |
-| `.mtt` | `{{var}}` only | ✗ | ✗ | Discord/social external |
 | `'...'` | None (literal) | ✗ | ✗ | Literal text |
 | `{...}` | `@var` `<file>` | ✗ | ✗ | Commands/code |
+
+> **Note**: For Discord mentions or content heavy with `@` symbols, see [alternatives.md](alternatives.md) for escape hatch syntax.
 
 #### Inline Templates
 
 ```mlld
->> Double-colon (default)
-var @msg = ::Hello @name!::
+>> Backticks (default)
+var @msg = `Hello @name!`
+var @multi = `
+Line 1: @var
+Line 2: @other
+`
+
+>> Double-colon (for content with backticks)
 var @doc = ::Use `npm test` before @env::
 var @report = ::
 Status: @status
@@ -773,62 +779,38 @@ Config: <@base/config.json>
 Data: @data|@json
 ::
 
->> Backticks (alternative)
-var @msg = `Hello @name!`
-var @multi = `
-Line 1: @var
-Line 2: @other
-`
-
 >> Double quotes (single-line only)
 var @path = "@base/files/@filename"
 run cmd {echo "Processing @file"}
-
->> Triple-colon (Discord/social only)
-var @alert = :::Alert <@{{adminId}}>! Issue from <@{{userId}}>:::
-var @tweet = :::Hey @{{user}}, check this! cc: @{{team1}} @{{team2}}:::
 
 >> Single quotes (literal)
 var @literal = '@name stays literal'
 ```
 
-#### External Templates (.att, .mtt)
+#### External Templates (.att)
 
 Keep reusable templates in standalone files and execute them as functions.
 
-**.att file** (templates/deploy.att):
+**templates/deploy.att:**
 ```
 Deployment: @env
 Status: @status
 Config: <@base/config/@env.json>
 ```
 
-Usage:
+**Usage:**
 ```mlld
 exe @deploy(env, status) = template "./templates/deploy.att"
 show @deploy("prod", "success")
 ```
 
-**.mtt file** (templates/discord.mtt) - for Discord/social only:
-```
-🚨 Alert <@{{adminId}}>!
-Reporter: <@{{reporterId}}>
-Severity: {{severity}}
-```
-
-Usage:
-```mlld
-exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
-```
-
 **Rules:**
 - `.att` uses `@var` and supports `<file.md>` references, pipes, and loops inside the template
-- `.mtt` uses `{{var}}` (simple mustache-style) - use ONLY for Discord/social scenarios
-- These files are not imported as modules. Use the `/exe ... = template "path"` form
+- These files are not imported as modules. Use the `exe ... = template "path"` form
 
 #### Template Loops
 
-Loops with `/for` and `/end` are supported in `::...::`, backticks, and `.att` files only:
+Loops with `for` and `end` are supported in backticks, `::...::`, and `.att` files:
 
 ```mlld
 var @list = ::
@@ -838,40 +820,17 @@ var @list = ::
 ::
 
 >> Requirements: /for and /end at line start
->> NOT supported in :::...:::, .mtt, or "..."
 ```
-
-#### Trade-offs When Using Discord/Social Escape Hatch
-
-| Feature | `::...::` / `.att` | `:::...:::` / `.mtt` |
-|---------|-------------------|----------------------|
-| `@var` interpolation | ✓ | ✗ Use `{{var}}` |
-| `<file.md>` loading | ✓ | ✗ |
-| `@exe()` calls | ✓ | ✗ |
-| Pipes `\|` | ✓ | ✗ |
-| Loops | ✓ | ✗ |
-| Discord `<@id>` | Escape `\<@id\>` | ✓ Natural |
-| Many `@handles` | Works | ✓ Cleaner |
 
 #### Common Mistakes
 
 ```mlld
->> ✗ Using {{}} in ::...::
-var @msg = ::Hello {{name}}::        >> {{name}} is literal
-var @msg = ::Hello @name::           >> ✓
-
->> ✗ Using @var in :::...:::
-var @msg = :::Hello @name:::         >> @name is literal
-var @msg = :::Hello {{name}}:::      >> ✓
-
->> ✗ Using ::: without Discord/social need
-var @msg = :::Status: {{status}}:::  >> Loses all features
-var @msg = ::Status: @status::       >> ✓ Full features
-
->> ✗ Importing template files
+>> Importing template files (use exe = template instead)
 import { @tpl } from "./file.att"    >> Error
-exe @tpl(x) = template "./file.att"  >> ✓
-import templates from "./templates" as @tpl(x, y)  >> Use this for template directories
+exe @tpl(x) = template "./file.att"  >> Correct
+
+>> For template directories:
+import templates from "./templates" as @tpl(x, y)
 ```
 
 ### Template Collections
@@ -982,7 +941,7 @@ run cmd {echo "Welcome @name"}
 var @literal = 'Hello @name'               >> Outputs: Hello @name
 ```
 
-In markdown mode (`.mld.md` files), plain text lines are not interpolated:
+In markdown mode (`.md`, `.mld.md` files), plain text lines are not interpolated:
 ```
 Hello @name                                 >> Plain text, @name is literal
 ```
@@ -1196,7 +1155,7 @@ var @result = @file.keep | @process
 
 **File Loading:**
 - Use globs for multiple files: `<docs/*.md>`
-- Check existence: `/when @config => show "Found config"`
+- Check existence: `when @config => show "Found config"`
 - Access metadata via `.mx`: `@file.mx.tokest`
 
 **Data Access:**
@@ -1205,12 +1164,12 @@ var @result = @file.keep | @process
 - Check array contents: `@list.includes("item")`
 
 **Templates:**
-- Default to `::...::` for inline (< 5 lines), `.att` files for external (5+ lines)
-- Switch to `:::...:::` or `.mtt` ONLY for Discord mentions or heavy social `@handle` usage
-- Loops (`/for`...`/end`) work in `::...::`, backticks, and `.att` only
-- Never import template files; use `/exe @name(...) = template "path.att"` form
+- Default to backticks or `::...::` for inline, `.att` files for external (5+ lines)
+- Loops (`for`...`end`) work in backticks, `::...::`, and `.att` only
+- Never import template files; use `exe @name(...) = template "path.att"` form
+- For Discord/social content with many `@` symbols, see [alternatives.md](alternatives.md)
 
 **Environment Variables:**
-- Import explicitly: `/import { API_KEY } from @input`
+- Import explicitly: `import { API_KEY } from @input`
 - Provide defaults: `@NODE_ENV || "development"`
 - Document required variables in comments

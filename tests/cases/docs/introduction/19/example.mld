@@ -1,4 +1,3 @@
 when [
-  @conditionA && @conditionB => @action()
-  @conditionA && @conditionB => @otherAction()
+  @conditionA && @conditionB => @action(); @otherAction()
 ]

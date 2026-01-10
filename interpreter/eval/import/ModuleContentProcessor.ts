@@ -923,10 +923,14 @@ export class ModuleContentProcessor {
     // For URLs, use the current directory as basePath since URLs don't have directories
     const importDir = isURL ? this.env.getBasePath() : path.dirname(resolvedPath);
     const childEnv = this.env.createChild(importDir);
-    
+
     // Set the current file path for the imported file (for error reporting)
     childEnv.setCurrentFilePath(resolvedPath);
-    
+
+    // Mark as module-isolated so imports within this module don't conflict
+    // with variables in the parent scope. See mlld-xxx for the bug report.
+    childEnv.setModuleIsolated(true);
+
     return childEnv;
   }
 

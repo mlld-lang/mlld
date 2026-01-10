@@ -2,7 +2,7 @@
 
 ## tldr
 
-Turn exported `/exe` functions into MCP tools with one command:
+Turn exported `exe` functions into MCP tools with one command:
 
 ```mlld
 exe @greet(name) = js { return `Hello ${name}`; }

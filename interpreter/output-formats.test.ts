@@ -224,20 +224,26 @@ describe('Integration Scenarios', () => {
       })).rejects.toThrow(/already defined|already exists|cannot redefine/i);
     });
     
-    it('should throw error when imported variable conflicts with existing', async () => {
-      await fileSystem.writeFile('/defs.mld', '/var @conflict = "From import"');
-      
+    it('should allow namespace imports where module has same-named internal variables', async () => {
+      // Module isolation: a module's internal @conflict should not conflict
+      // with the user's @conflict when imported via namespace
+      await fileSystem.writeFile('/defs.mld', '/var @conflict = "From import"\n/export { @conflict }');
+
       const source = `
     /var @conflict = "Original"
     /import "/defs.mld" as @defs
+    /show @conflict
+    /show @defs.conflict
 `;
-      
-      await expect(interpret(source, {
+
+      const result = await interpret(source, {
         fileSystem,
         pathService,
         format: 'markdown',
         basePath: '/'
-      })).rejects.toThrow(/already defined|already exists|cannot redefine/i);
+      });
+      expect(result).toContain('Original');
+      expect(result).toContain('From import');
     });
   });
 });

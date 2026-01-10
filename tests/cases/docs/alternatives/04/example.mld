@@ -1,0 +1,5 @@
+>> Use .mtt for Discord message templates
+exe @mentionUser(userId, message) = template "./discord/mention.mtt"
+
+>> mention.mtt contents:
+>> <@{{userId}}> {{message}}
