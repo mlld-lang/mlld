@@ -1,16 +1,10 @@
->> ✗ Using {{}} in ::...::
-var @msg = ::Hello {{name}}::        >> {{name}} is literal
-var @msg = ::Hello @name::           >> ✓
+import templates from "@base/agents" as @agents(message, context)
 
->> ✗ Using @var in :::...:::
-var @msg = :::Hello @name:::         >> @name is literal
-var @msg = :::Hello {{name}}:::      >> ✓
+>> All templates accept (message, context)
+show @agents["alice"](@msg, @mx)
+show @agents["bob"](@msg, @mx)
 
->> ✗ Using ::: without Discord/social need
-var @msg = :::Status: {{status}}:::  >> Loses all features
-var @msg = ::Status: @status::       >> ✓ Full features
-
->> ✗ Importing template files
-import { @tpl } from "./file.att"    >> Error
-exe @tpl(x) = template "./file.att"  >> ✓
-import templates from "./templates" as @tpl(x, y)  >> Use this for template directories
+>> Dynamic selection in loops
+for @name in ["alice", "bob", "charlie"] [
+  show @agents[@name](@msg, @mx)
+]

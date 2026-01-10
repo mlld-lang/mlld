@@ -1,2 +1,4 @@
-var @summary = <docs/*.md> | @extractTitles | @claude("summarize these")
-var @clean = @raw | @validate | @normalize | @format
+exe @getJSON(prompt) = when [
+  @mx.try == 1 => @claude(@prompt)
+  @mx.try > 1 => @claude("@prompt Return ONLY valid JSON. Previous attempt: @mx.hint")
+]

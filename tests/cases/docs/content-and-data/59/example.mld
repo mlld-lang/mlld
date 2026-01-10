@@ -1,6 +1,10 @@
-var @checks = for @service in ["auth", "payments", "search"] =>
-  {"service": @service, "status": "ok", "timestamp": @now}
+var @files = <docs/*.md>
 
-for @entry in @checks => append @entry to "health.jsonl"
+>> ✗ This won't work - loop variable is unwrapped text
+for @file in @files => show @file.mx.filename  >> Error: .mx on string
 
-show <health.jsonl>
+>> ✓ Access via array index
+for @i in [0, 1, 2] => show @files[@i].mx.filename
+
+>> ✓ Or use @keep helper to preserve structure
+for @file in @files.keep => show @file.mx.filename

@@ -1,5 +1,6 @@
-import templates from "@base/agents" as @agents(message, context)
-import templates from "@base/formatters" as @fmt(data)
+import "./agents" as @agents
+show @agents.party.who
 
-show @agents["alice"](@msg, @mx)    >> (message, context)
-show @fmt["json"](@result)           >> (data)
+>> Default skipDirs: ["_*", ".*"]
+import "./agents" as @agents with { skipDirs: [] }
+show @agents._private.who

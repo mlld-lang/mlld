@@ -1,1 +1,2 @@
-exe @function(var) = js {console.log(var)}
+var @simple = `Hello @name`
+var @codeblocks = ::Run `npm test` before @action::

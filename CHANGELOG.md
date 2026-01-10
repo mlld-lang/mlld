@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Requires [OpenProse](https://prose.md) skill or another prose interpreter
   - Skills must be approved in Claude Code before use
   - See [docs/user/prose.md](docs/user/prose.md) for full documentation
+- **`mlld validate`**: Static analysis command for syntax validation without execution
+  - `mlld validate <file>` - Validate syntax and show module structure (exports, imports, executables, guards, needs)
+  - `--format json` - Machine-readable JSON output for tooling integration
+  - `--ast` - Include parsed AST in JSON output (requires `--format json`)
+  - Returns exit code 1 for invalid files, enabling CI/toolchain integration
+  - `mlld analyze` as alias
 
 ### Changed
 - **Terminology**: "prose mode" renamed to "markdown mode" to avoid confusion with prose execution

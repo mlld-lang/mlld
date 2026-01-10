@@ -214,11 +214,14 @@ export async function evaluateRun(
   const streamingManager = env.getStreamingManager();
   if (streamingEnabled) {
     let adapter;
+    // Only use format adapter when streamFormat is explicitly specified
+    // This ensures FormatAdapterSink is used for JSON streaming (like claude --output-format stream-json)
+    // but plain text streaming (sh/bash) uses the terminal sink + normal output path
     if (hasStreamFormat && streamFormatValue) {
       adapter = await loadStreamAdapter(streamFormatValue);
-    }
-    if (!adapter) {
-      adapter = await getAdapter('ndjson');
+      if (!adapter) {
+        adapter = await getAdapter('ndjson');
+      }
     }
     streamingManager.configure({
       env,
@@ -848,6 +851,8 @@ export async function evaluateRun(
             workingDirectory ? { workingDirectory } : undefined,
             {
               ...executionContext,
+              streamingEnabled,
+              pipelineId,
               workingDirectory
             }
           );

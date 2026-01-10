@@ -1,10 +1,8 @@
-import templates from "@base/agents" as @agents(message, context)
+>> In the published module
+exe @alice(msg, mx) = template "alice.att"
+exe @bob(msg, mx) = template "bob.att"
+export { @alice, @bob }
 
->> All templates accept (message, context)
-show @agents["alice"](@msg, @mx)
-show @agents["bob"](@msg, @mx)
-
->> Dynamic selection in loops
-for @name in ["alice", "bob", "charlie"] [
-  show @agents[@name](@msg, @mx)
-]
+>> Import and use
+import { @alice, @bob } from @author/templates
+show @alice(@msg, @mx)

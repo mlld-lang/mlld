@@ -1,1 +1,7 @@
-exe @alert(adminId, reporterId, severity) = template "./templates/discord.mtt"
+var @list = ::
+/for @item in @items
+- @item.name: @item.value
+/end
+::
+
+>> Requirements: /for and /end at line start
