@@ -1,0 +1,119 @@
+<MLLD_GUIDE version="2.0.0-rc78">
+
+mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs.
+
+<QUICK_START>
+Two syntax modes based on file extension:
+
+**.mld (strict mode)** - Bare directives, text lines error
+**.md or .mld.md (markdown mode)** - Slash prefix required, text becomes content
+
+```mlld
+>> Strict mode example (.mld file)
+var @name = "Alice"
+exe @greet(n) = `Hello @n!`
+show @greet(@name)
+
+>> Same code in markdown mode (.mld.md file) - add / prefix
+/var @name = "Alice"
+/exe @greet(n) = `Hello @n!`
+/show @greet(@name)
+```
+
+This guide uses **strict mode** (bare directives) in all examples.
+</QUICK_START>
+
+<MODULES>
+This guide is modular. Load individual sections as needed:
+
+| Module | Contents |
+|--------|----------|
+| docs/llm/llms-overview.txt | Purpose, mental model, two modes |
+| docs/llm/llms-core-rules.txt | The 13 core rules with examples |
+| docs/llm/llms-syntax.txt | Variables, templates, file loading, methods |
+| docs/llm/llms-commands.txt | run, exe, output, log, append, stream |
+| docs/llm/llms-control-flow.txt | when, for, foreach, while, parallel |
+| docs/llm/llms-modules.txt | Import/export, registry, local dev |
+| docs/llm/llms-patterns.txt | Common workflow patterns |
+| docs/llm/llms-configuration.txt | SDK modes, resolvers, env vars |
+| docs/llm/llms-mistakes.txt | Common mistakes and fixes |
+| docs/llm/llms-security.txt | Guards, labels, capabilities |
+| docs/llm/llms-reference.txt | Quick reference tables |
+| docs/llm/llms-cookbook.txt | Annotated real-world examples |
+
+For full context injection, use `llms-combined.txt` which contains all modules.
+</MODULES>
+
+<CORE_CONCEPTS>
+**Directives** - Commands: `var`, `show`, `run`, `for`, `when`, `import`, `export`, `exe`
+
+**Variables** - Always `@` prefixed: `var @x = 1`, then use `@x`
+
+**Templates** - Backticks interpolate: `` `Hello @name` ``
+
+**File loading** - Angle brackets: `<README.md>`, `<src/*.ts>`
+
+**Executables** - Reusable functions: `exe @f(x) = ...`
+
+**Blocks** - Multi-statement bodies: `exe @f(x) = [ let @y = @x * 2; => @y ]`
+
+**Pipelines** - Chain transforms: `@data | @json | @validate`
+
+**Modules** - Code reuse: `import { @helper } from @corp/utils`
+</CORE_CONCEPTS>
+
+<ESSENTIAL_PATTERNS>
+
+**Variables and output:**
+```mlld
+var @name = "Alice"
+var @data = <config.json>
+show `Hello @name, config: @data.version`
+```
+
+**Executables with blocks:**
+```mlld
+exe @process(items) = [
+  let @validated = for @item in @items when @item.valid => @item
+  let @transformed = foreach @transform(@validated)
+  => @transformed
+]
+```
+
+**Control flow:**
+```mlld
+when first [
+  @score >= 90 => show "Excellent"
+  @score >= 70 => show "Good"
+  * => show "Needs work"
+]
+
+for @item in @items [
+  let @result = @process(@item)
+  show `Done: @result`
+]
+```
+
+**Parallel execution:**
+```mlld
+for parallel(3) @task in @tasks => @runTask(@task)
+var @results = || @fetchA() || @fetchB() || @fetchC()
+```
+
+**Modules:**
+```mlld
+import { @helper } from @corp/utils
+import "@agents" as @registry
+
+exe @myFunc(x) = @helper(@x) | @transform
+export { @myFunc }
+```
+</ESSENTIAL_PATTERNS>
+
+<SEE_ALSO>
+- Full cookbook with real-world examples: docs/llm/llms-cookbook.txt
+- Documentation: https://mlld.ai/docs
+- Source & examples: https://github.com/mlld-lang/mlld
+</SEE_ALSO>
+
+</MLLD_GUIDE>
