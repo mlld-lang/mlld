@@ -87,6 +87,10 @@ export async function howtoCommand(options: HowtoOptions = {}): Promise<void> {
   const basePath = path.dirname(path.dirname(scriptPath)); // llm/run -> project root
 
   try {
+    // Disable streaming to capture output for highlighting
+    const prevStreaming = process.env.MLLD_NO_STREAMING;
+    process.env.MLLD_NO_STREAMING = 'true';
+
     const result = await execute(scriptPath, {
       topic: options.topic || '',
       subtopic: options.subtopic || ''
@@ -96,8 +100,17 @@ export async function howtoCommand(options: HowtoOptions = {}): Promise<void> {
       timeoutMs: 30000
     }) as StructuredResult;
 
-    // Don't print result.output - the script's show directive already outputs
-    // Just let the script handle its own output
+    // Restore streaming setting
+    if (prevStreaming === undefined) {
+      delete process.env.MLLD_NO_STREAMING;
+    } else {
+      process.env.MLLD_NO_STREAMING = prevStreaming;
+    }
+
+    // Highlight and print the output
+    if (result.output) {
+      console.log(highlightMarkdown(result.output));
+    }
 
     // Clean up
     if (result.environment && 'cleanup' in result.environment) {

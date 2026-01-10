@@ -128,49 +128,96 @@ function highlightMlld(code: string): string {
   return result;
 }
 
-// Highlight markdown with mlld code blocks
+// Highlight markdown with mlld code blocks and topic tree
 function highlightMarkdown(text: string): string {
   const lines = text.split('\n');
   const result: string[] = [];
   let inMlldBlock = false;
+  let inCodeBlock = false;
   let mlldContent: string[] = [];
 
   for (const line of lines) {
-    // Check for code block start
+    // Check for mlld code block start
     if (line.match(/^```mlld/)) {
       inMlldBlock = true;
       result.push(chalk.gray(line));
       continue;
     }
 
-    // Check for code block end
-    if (inMlldBlock && line.match(/^```$/)) {
-      // Highlight accumulated mlld content
-      const highlighted = highlightMlld(mlldContent.join('\n'));
-      result.push(highlighted);
+    // Check for generic code block start
+    if (line.match(/^```/) && !inMlldBlock && !inCodeBlock) {
+      inCodeBlock = true;
       result.push(chalk.gray(line));
-      mlldContent = [];
+      continue;
+    }
+
+    // Check for code block end
+    if ((inMlldBlock || inCodeBlock) && line.match(/^```$/)) {
+      if (inMlldBlock) {
+        // Highlight accumulated mlld content
+        const highlighted = highlightMlld(mlldContent.join('\n'));
+        result.push(highlighted);
+        mlldContent = [];
+      }
+      result.push(chalk.gray(line));
       inMlldBlock = false;
+      inCodeBlock = false;
       continue;
     }
 
     if (inMlldBlock) {
       mlldContent.push(line);
+    } else if (inCodeBlock) {
+      result.push(chalk.gray(line));
     } else {
-      // Regular markdown
+      // Regular content
       let processed = line;
 
+      // Title line (e.g., "MLLD HELP TOPICS")
+      if (line.match(/^[A-Z][A-Z\s]+$/)) {
+        processed = chalk.bold(line);
+      }
+      // Category headers (e.g., "syntax/")
+      else if (line.match(/^[a-z-]+\/$/)) {
+        processed = chalk.cyan.bold(line);
+      }
+      // Topic entries (e.g., "  intro                    Description")
+      else if (line.match(/^  [a-z][\w-]+/)) {
+        // Handle entries with at least one space between ID and description
+        const match = line.match(/^(  )([a-z][\w-]+)(\s*)(.*)$/);
+        if (match) {
+          const desc = match[4] || '';
+          processed = match[1] + chalk.blue(match[2]) + match[3] + (desc ? chalk.gray(desc) : '');
+        }
+      }
+      // Usage lines
+      else if (line.match(/^Use:/)) {
+        processed = chalk.dim(line);
+      }
       // Headers
-      if (line.match(/^##+ /)) {
+      else if (line.match(/^##+ /)) {
         processed = chalk.bold.cyan(line);
       }
-      // Bold
-      else if (line.match(/\*\*[^*]+\*\*/)) {
-        processed = line.replace(/\*\*([^*]+)\*\*/g, chalk.bold('$1'));
+      // Horizontal rule
+      else if (line.match(/^---+$/)) {
+        processed = chalk.dim(line);
       }
-      // Inline code
+      // Bullet points with formatting
+      else if (line.match(/^[-*] /)) {
+        // Apply inline formatting to bullet points
+        processed = line
+          .replace(/\*\*([^*]+)\*\*/g, (_, text) => chalk.bold(text))
+          .replace(/`([^`]+)`/g, (_, code) => chalk.yellow('`' + code + '`'));
+      }
+      // Bold text
+      else if (line.match(/\*\*[^*]+\*\*/)) {
+        processed = line.replace(/\*\*([^*]+)\*\*/g, (_, text) => chalk.bold(text));
+        // Also handle inline code
+        processed = processed.replace(/`([^`]+)`/g, (_, code) => chalk.yellow('`' + code + '`'));
+      }
+      // Inline code only
       else if (line.match(/`[^`]+`/)) {
-        processed = line.replace(/`([^`]+)`/g, chalk.yellow('`$1`'));
+        processed = line.replace(/`([^`]+)`/g, (_, code) => chalk.yellow('`' + code + '`'));
       }
 
       result.push(processed);

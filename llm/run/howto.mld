@@ -14,6 +14,7 @@ exe @stripFrontmatter(text) = js {
 >> Build tree display from all categories
 exe @buildTree(allAtoms, introAtom) = js {
   const lines = ['MLLD HELP TOPICS', ''];
+  const COL_WIDTH = 36; // Wide enough for longest IDs
 
   // Show intro brief at top
   if (introAtom) {
@@ -22,7 +23,7 @@ exe @buildTree(allAtoms, introAtom) = js {
     if (match) {
       const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
       if (briefMatch) {
-        lines.push('  intro'.padEnd(27) + briefMatch[1].trim());
+        lines.push('  ' + 'intro'.padEnd(COL_WIDTH) + briefMatch[1].trim());
         lines.push('');
       }
     }
@@ -52,7 +53,7 @@ exe @buildTree(allAtoms, introAtom) = js {
           // Skip _index files
           if (id.startsWith('_')) continue;
           const brief = briefMatch ? briefMatch[1].trim() : '';
-          lines.push('  ' + id.padEnd(25) + brief);
+          lines.push('  ' + id.padEnd(COL_WIDTH) + brief);
         }
       }
     }
