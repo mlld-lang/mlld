@@ -158,3 +158,6 @@ __pycache__/
 
 .fray
 .beads
+
+# QA testing output
+qa/

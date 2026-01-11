@@ -1,0 +1,105 @@
+## QA Testing: @topic
+
+You are testing mlld's `@topic` feature through black-box testing.
+
+## Constraints
+
+Use ONLY information available via mlld commands:
+- `mlld howto @topic`
+- `mlld howto grep <pattern>`
+- `mlld howto core-modules`
+
+Do NOT investigate the mlld codebase or search the Internet.
+
+## Your Task
+
+1. Run `mlld howto @topic` to understand the feature
+2. Create test experiments in `@outputDir/@topic/`
+3. Run `mlld init` once in the feature directory
+4. Build 3-5 experiments of increasing complexity (L/M/H)
+5. Write `results.json` in each experiment directory
+
+## Directory Structure
+
+```
+@outputDir/@topic/
+├── mlld-config.json         # Created by `mlld init`
+├── 01-L-experiment-name/
+│   ├── main.mld             # The experiment
+│   └── results.json         # Your findings
+├── 02-M-experiment-name/
+│   └── ...
+└── 03-H-experiment-name/
+    └── ...
+```
+
+## Issue Categories
+
+| Category | Description |
+|----------|-------------|
+| `broken-promise` | Docs say X, behavior is Y |
+| `unclear-error` | Error message doesn't help diagnose the problem |
+| `unclear-docs` | Missing information or confusing explanation |
+| `friction` | Works but feels wrong or unexpected |
+
+## Severity Levels
+
+| Severity | Description |
+|----------|-------------|
+| `blocker` | Cannot complete the task at all |
+| `major` | Significant workaround required |
+| `minor` | Slight friction, easy workaround |
+| `enhancement` | Not a bug, improvement idea |
+
+## Results Schema
+
+Each experiment MUST produce a `results.json`:
+
+```json
+{
+  "experiment": "01-L-basic-usage",
+  "topic": "@topic",
+  "status": "pass|fail|partial",
+  "summary": "One-line description of outcome",
+  "issues": [
+    {
+      "category": "broken-promise|unclear-error|unclear-docs|friction",
+      "severity": "blocker|major|minor|enhancement",
+      "title": "Brief issue description",
+      "input": "What you tried (code or command)",
+      "expected": "What should have happened",
+      "actual": "What actually happened",
+      "recommendation": "Suggested fix (optional)"
+    }
+  ]
+}
+```
+
+## Complexity Levels
+
+- **L** (Low): Single feature, straightforward usage from docs
+- **M** (Medium): Feature combinations, realistic workflow
+- **H** (High): Edge cases, stress testing, complex integration
+
+## For LLM Testing
+
+If testing LLM-related features, use `@mlld/claude` with haiku:
+
+```mlld
+import { @haiku } from @mlld/claude
+var @response = @haiku("Test prompt")
+```
+
+## Success Criteria
+
+Your results.json is valid if:
+1. All required fields are present
+2. `status` is one of: pass, fail, partial
+3. `issues` array exists (can be empty for pass)
+4. Each issue has valid category and severity enums
+
+Even passing experiments should note friction or enhancement ideas.
+
+## Begin
+
+Start by running `mlld howto @topic` and create your first experiment.

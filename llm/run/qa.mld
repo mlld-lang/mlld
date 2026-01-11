@@ -1,0 +1,136 @@
+>> QA Testing Orchestrator
+>> Usage: mlld run qa
+>> Runs parallel QA testing across mlld howto topics
+
+import { @claude } from @mlld/claude
+
+>> Testable topics (leaf nodes from howto, excluding broad categories)
+>> These map to specific atoms that can be tested in isolation
+var @topics = [
+  >> syntax
+  "variables-basics",
+  "variables-conditional",
+  "templates-basics",
+  "templates-multiline",
+  "file-loading-basics",
+  "file-loading-sections",
+  "pipelines-basics",
+  "pipelines-chaining",
+  "escaping",
+
+  >> commands
+  "run-basics",
+  "run-params",
+  "output",
+  "log",
+  "append",
+
+  >> control-flow
+  "when-simple",
+  "when-first",
+  "for-arrow",
+  "for-parallel",
+  "foreach",
+
+  >> modules
+  "importing-registry",
+  "importing-local",
+  "exporting",
+
+  >> security
+  "guards-basics",
+
+  >> executables
+  "exe-js",
+  "exe-node"
+]
+
+>> Configuration
+var @outputDir = "@base/qa"
+var @parallelLimit = 4
+
+>> Load the prompt template
+var @promptTemplate = <@local/qa-prompt.att>
+
+>> Build prompt for a specific topic
+exe @buildPrompt(template, topic, outputDir) = js {
+  return template
+    .replace(/@topic/g, topic)
+    .replace(/@outputDir/g, outputDir);
+}
+
+>> Validate results.json schema
+exe @validateResult(jsonStr) = js {
+  try {
+    const result = JSON.parse(jsonStr);
+    const errors = [];
+
+    if (!result.experiment) errors.push("missing 'experiment' field");
+    if (!result.topic) errors.push("missing 'topic' field");
+    if (!['pass', 'fail', 'partial'].includes(result.status)) {
+      errors.push("'status' must be pass, fail, or partial");
+    }
+    if (!result.summary) errors.push("missing 'summary' field");
+    if (!Array.isArray(result.issues)) errors.push("'issues' must be an array");
+
+    const validCategories = ['broken-promise', 'unclear-error', 'unclear-docs', 'friction'];
+    const validSeverities = ['blocker', 'major', 'minor', 'enhancement'];
+
+    for (const issue of (result.issues || [])) {
+      if (!validCategories.includes(issue.category)) {
+        errors.push(`invalid category: ${issue.category}`);
+      }
+      if (!validSeverities.includes(issue.severity)) {
+        errors.push(`invalid severity: ${issue.severity}`);
+      }
+      if (!issue.title) errors.push("issue missing 'title'");
+      if (!issue.input) errors.push("issue missing 'input'");
+      if (!issue.expected) errors.push("issue missing 'expected'");
+      if (!issue.actual) errors.push("issue missing 'actual'");
+    }
+
+    return { valid: errors.length === 0, errors };
+  } catch (e) {
+    return { valid: false, errors: [`JSON parse error: ${e.message}`] };
+  }
+}
+
+>> Create output directory
+run `mkdir -p @outputDir`
+
+>> Run QA for a single topic
+exe @runTopicQA(topic, prompt, outputDir) = js {
+  // This returns the prompt - actual execution happens via @claude
+  return { topic, prompt, outputDir: `${outputDir}/${topic}` };
+}
+
+>> Process each topic
+show `Starting QA testing for @topics.length topics...`
+show `Output directory: @outputDir`
+show `Parallel limit: @parallelLimit`
+show ``
+
+var @results = for @topic in @topics => [
+  let @prompt = @buildPrompt(@promptTemplate, @topic, @outputDir)
+  let @topicDir = `@outputDir/@topic`
+
+  >> Create topic directory
+  run `mkdir -p @topicDir`
+
+  >> Run Claude with full tools for this topic
+  show `Starting: @topic`
+  let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep")
+
+  >> Return result info
+  => { topic: @topic, completed: true }
+] with { parallel: @parallelLimit }
+
+>> Summary
+show ``
+show `QA testing complete.`
+show `Tested @results.length topics`
+show ``
+show `Results in: @outputDir`
+show ``
+show `To aggregate results:`
+show `  find qa/ -name "results.json" -exec cat {} \\; | jq -s '.'`
