@@ -168,6 +168,26 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       }
       return value.value;
     }
+    // Handle imported variables with primitive values - return raw value for JS semantics
+    if (value.type === 'imported' && 'originalType' in value) {
+      const originalType = (value as any).originalType;
+      if (originalType === 'simple-text' || originalType === 'primitive') {
+        const rawValue = value.value;
+        // Return primitives directly so typeof works correctly in JS
+        if (typeof rawValue === 'number' || typeof rawValue === 'boolean' || typeof rawValue === 'string') {
+          if (target && key) {
+            recordPrimitiveMetadata(target, key, {
+              isVariable: true,
+              type: 'imported',
+              subtype: originalType,
+              mx: value.mx,
+              internal: value.internal
+            });
+          }
+          return rawValue;
+        }
+      }
+    }
     return createVariableProxy(value);
   }
 

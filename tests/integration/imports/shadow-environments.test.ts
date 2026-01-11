@@ -218,12 +218,12 @@ from Node shadow`
 /var @exports = { func: @level1Func }`,
             
             'level2.mld': `
-/import { exports } from "./level1.mld"
-/var @l1Result = @exports.func()
+/import { exports as @l1exports } from "./level1.mld"
+/var @l1Result = @l1exports.func()
 /exe @level2Func() = js { return "@l1Result->L2"; }
-/var @exports = { 
+/var @exports = {
   func: @level2Func,
-  l1: @exports
+  l1: @l1exports
 }`,
             
             'level3.mld': `
