@@ -1,0 +1,2 @@
+exe @greet(name) = cmd {echo "Hello @name"}
+exe @process(data) = js { return data.toUpperCase(); }

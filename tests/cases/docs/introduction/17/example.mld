@@ -1,5 +1,1 @@
-exe @analyze(data) = [
-  let @cleaned = @data.trim()
-  let @parsed = @cleaned | @json
-  => @parsed.result
-]
+when @score > 90 => show "Excellent!"

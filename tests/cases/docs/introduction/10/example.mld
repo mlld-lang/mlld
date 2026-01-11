@@ -1,14 +1,15 @@
-exe @haiku(prompt) = @prompt | cmd { claude -p --model haiku --tools "" }
-
-exe @reviewFile(file) = [
-  let @prompt = `Review this code for issues:\nFile: @file.mx.relative\n---\n@file\n---\nList 2-3 issues or "LGTM". Be concise.`
-  let @review = @haiku(@prompt)
-  => { file: @file.mx.relative, review: @review.trim() }
+exe @getReplyPriority(agent, msg) = [
+  let @idx = @msg.mentions.indexOf(@agent)
+  => when first [
+    @msg.from_agent == @agent => 0
+    @msg.body.startsWith("@all") => 0.8
+    @idx == 0 => 1.0
+    @idx > 0 => 0.6
+    * => 0
+  ]
 ]
 
-var @reviews = for parallel(5) @f in <src/**/*.ts> => @reviewFile(@f)
-
-for @r in @reviews [
-  show `## @r.file`
-  show @r.review
+exe @route(msg, agents) = [
+  let @scores = for @a in @agents => { agent: @a, score: @getReplyPriority(@a, @msg) }
+  => for @s in @scores when @s.score > 0.3 => @s
 ]

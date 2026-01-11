@@ -1,2 +1,4 @@
-var @simple = `Hello @name`
-var @codeblocks = ::Run `npm test` before @action::
+when [
+  @accept(@response) => "Accepted"
+  !@accept(@response) => "Rejected"
+]

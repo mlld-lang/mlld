@@ -1,2 +1,8 @@
-var @summary = <docs/*.md> | @extractTitles | @claude("summarize these")
-var @clean = @raw | @validate | @normalize | @format
+loop(endless) until @state.stop [
+  let @plan = <fix_plan.md>
+  let @task = @classify(@plan)
+  let @result = @execute(@task)
+
+  when @validate(@result) => @commit(@result)
+  continue
+]

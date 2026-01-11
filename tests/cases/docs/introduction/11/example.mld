@@ -1,15 +1,10 @@
-exe @getReplyPriority(agent, msg) = [
-  let @idx = @msg.mentions.indexOf(@agent)
-  => when first [
-    @msg.from_agent == @agent => 0
-    @msg.body.startsWith("@all") => 0.8
-    @idx == 0 => 1.0
-    @idx > 0 => 0.6
-    * => 0
-  ]
+exe @hasSubstance(response) = [
+  let @result = @haiku("Does this add value or just acknowledge? @response")
+  => @result.trim().toLowerCase().startsWith("yes")
 ]
 
-exe @route(msg, agents) = [
-  let @scores = for @a in @agents => { agent: @a, score: @getReplyPriority(@a, @msg) }
-  => for @s in @scores when @s.score > 0.3 => @s
+exe @gate(response, instruction) = when first [
+  @instruction.required => { pass: true }
+  @hasSubstance(@response) => { pass: true }
+  * => { pass: false, reason: "Response lacks substance" }
 ]

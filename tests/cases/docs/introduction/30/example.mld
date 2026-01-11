@@ -1,8 +1,8 @@
->> In @company/ai-tools.mld
-export { @smartExtract, @validate }
-exe @smartExtract(doc) = js { /* 100 lines of parsing */ }
-exe @validate(data) = js { /* schema validation */ }
+import { @opus } from @mlld/prose
 
->> In your script
-import { @smartExtract } from @company/ai-tools
-var @data = <report.pdf> | @smartExtract
+exe @research(topic) = prose:@opus {
+  session "Research @topic"
+  agent researcher model: sonnet, skills: [web-search]
+  researcher: find current information
+  output findings
+}

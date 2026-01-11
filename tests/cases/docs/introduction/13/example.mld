@@ -1,2 +1,4 @@
-var @name = "Alice"
-show `Hello @name!`
+run cmd {..}     << one-line command (| allowed but no && ; || continuation)
+run sh {..}      << multiline shell scripts, more permissive
+run js {..}      << javascript
+run node {..}    << runs node scripts

@@ -1,5 +1,8 @@
-import "file.mld"                             << everything (legacy)
-import { @helper, @validate } from "file.mld" << selective (preferred)
-import { @claude } from @mlld/claude          << public modules
-import { @internal } from @company/tools      << private modules
-import { @local } from @local/mymodule        << local development
+>> In @company/ai-tools.mld
+export { @smartExtract, @validate }
+exe @smartExtract(doc) = js { /* 100 lines of parsing */ }
+exe @validate(data) = js { /* schema validation */ }
+
+>> In your script
+import { @smartExtract } from @company/ai-tools
+var @data = <report.pdf> | @smartExtract

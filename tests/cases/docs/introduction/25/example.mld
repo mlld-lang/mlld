@@ -1,2 +1,5 @@
-var @docs = <docs/user/*.md>
-for @doc in @docs => show @doc.mx.filename
+>> Process 5 files at a time
+for parallel(5) @file in <src/*.ts> => @analyze(@file)
+
+>> Run multiple things at once
+var @results = || @fetchA() || @fetchB() || @fetchC()
