@@ -1,7 +1,10 @@
-import { @opus } from @mlld/claude
+import { @claude } from @mlld/claude
+
+>> Create a model executor
+exe @myModel(prompt) = @claude(@prompt, "opus", @base)
 
 var @myInterpreter = {
-  model: @opus,
+  model: @myModel,
   skills: ["my-dsl:boot", "my-dsl:run"]
 }
 
