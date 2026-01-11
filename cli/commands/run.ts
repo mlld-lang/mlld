@@ -310,13 +310,12 @@ Example script (llm/run/hello.mld):
         }
       }
       const isDebug = Boolean(flags.debug || flags.d);
-      if (Object.keys(payloadObj).length > 0) {
-        const payloadStr = `@payload=${JSON.stringify(payloadObj)}`;
-        if (isDebug) {
-          console.error(chalk.gray(`Payload: ${payloadStr}`));
-        }
-        inject.push(payloadStr);
+      // Always inject @payload (empty {} if no flags) so scripts can safely reference @payload.field
+      const payloadStr = `@payload=${JSON.stringify(payloadObj)}`;
+      if (isDebug && Object.keys(payloadObj).length > 0) {
+        console.error(chalk.gray(`Payload: ${payloadStr}`));
       }
+      inject.push(payloadStr);
 
       const options: RunOptions = {
         timeoutMs,

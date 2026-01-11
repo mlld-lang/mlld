@@ -206,7 +206,8 @@ async function evaluateTernaryExpression(
   env: Environment,
   context: EvaluationContext
 ): Promise<EvaluatorResult> {
-  const conditionResult = await evaluateUnifiedExpression(node.condition, env, context);
+  // Pass isCondition: true so missing field access returns undefined instead of throwing
+  const conditionResult = await evaluateUnifiedExpression(node.condition, env, { ...context, isCondition: true });
   const conditionValue = conditionResult.value;
   
   return isTruthy(conditionValue)

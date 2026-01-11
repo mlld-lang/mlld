@@ -83,3 +83,74 @@ describe('dynamic module imports', () => {
     expect(result.trim()).toBe('42');
   });
 });
+
+describe('@payload optional field access', () => {
+  it('ternary returns default when field missing from namespace import', async () => {
+    const script = `/import "@payload" as @payload
+/var @topic = @payload.topic ? @payload.topic : "default"
+/show @topic`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': {}
+      }
+    });
+
+    expect(result.trim()).toBe('default');
+  });
+
+  it('ternary returns value when field exists in namespace import', async () => {
+    const script = `/import "@payload" as @payload
+/var @topic = @payload.topic ? @payload.topic : "default"
+/show @topic`;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'foo' }
+      }
+    });
+
+    expect(result.trim()).toBe('foo');
+  });
+
+  it('handles multiple optional fields with defaults', async () => {
+    const script = `/import "@payload" as @payload
+/var @topic = @payload.topic ? @payload.topic : "default-topic"
+/var @count = @payload.count ? @payload.count : 0
+/show \`@topic:@count\``;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'test' }
+      }
+    });
+
+    expect(result.trim()).toBe('test:0');
+  });
+
+  it('destructuring import fails for missing required fields', async () => {
+    const script = `/import { @topic } from @payload
+/show @topic`;
+
+    await expect(
+      processMlld(script, {
+        dynamicModules: {
+          '@payload': {}
+        }
+      })
+    ).rejects.toThrow(/Import 'topic' not found/);
+  });
+
+  it('destructuring import succeeds for present fields', async () => {
+    const script = `/import { @topic, @count } from @payload
+/show \`@topic:@count\``;
+
+    const result = await processMlld(script, {
+      dynamicModules: {
+        '@payload': { topic: 'hello', count: 42 }
+      }
+    });
+
+    expect(result.trim()).toBe('hello:42');
+  });
+});

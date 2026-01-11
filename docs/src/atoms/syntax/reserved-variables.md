@@ -5,13 +5,15 @@ brief: Built-in system variables
 category: syntax
 parent: variables
 tags: [variables, reserved, system]
-related: [variables-basics, file-loading-metadata]
+related: [variables-basics, file-loading-metadata, syntax-payload]
 related-code: [interpreter/env/Environment.ts, core/reserved-vars.ts]
-updated: 2026-01-05
+updated: 2026-01-11
 ---
 
 - `@now` - current timestamp
 - `@input` - stdin/env (must be allowed in config)
+- `@payload` - data passed via SDK or CLI (see payload atom)
+- `@state` - mutable state for SDK integrations
 - `@base` - project root path
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)

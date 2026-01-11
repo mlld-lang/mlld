@@ -10,6 +10,8 @@
 import { @claude } from @mlld/claude
 
 >> Get filters from payload (with safe defaults)
+>> Namespace import gives us @payload as an object we can access with dot notation
+import "@payload" as @payload
 var @filterTopic = @payload.topic ? @payload.topic : ""
 var @topicsList = @payload.topics ? @payload.topics : ""
 
