@@ -11,13 +11,34 @@ Use ONLY information available via mlld commands:
 
 Do NOT investigate the mlld codebase or search the Internet.
 
+## First: Check Prior Work
+
+Before creating new experiments, check if `@outputDir/@topic/` already exists:
+
+```bash
+ls -la @outputDir/@topic/
+```
+
+### If directory exists with experiments:
+
+1. **Review existing results.json files** in each experiment directory
+2. **Assess the state:**
+   - If L-level experiments are failing with blockers → STOP. Document why in a `blocked.md` file and exit.
+   - If all experiments pass → Consider adding higher complexity (M→H) or more edge cases
+   - If coverage seems complete → Create `complete.md` explaining why no more tests needed, then exit.
+3. **Add new experiments** with the next available number (e.g., if 01-03 exist, start at 04)
+
+### If directory doesn't exist:
+
+1. Run `mlld init` in `@outputDir/@topic/`
+2. Start with L-level experiments
+
 ## Your Task
 
 1. Run `mlld howto @topic` to understand the feature
-2. Create test experiments in `@outputDir/@topic/`
-3. Run `mlld init` once in the feature directory
-4. Build 3-5 experiments of increasing complexity (L/M/H)
-5. Write `results.json` in each experiment directory
+2. Check for prior work (see above)
+3. Create NEW experiments that add value (don't redo existing work)
+4. Write `results.json` in each new experiment directory
 
 ## Directory Structure
 
@@ -29,8 +50,10 @@ Do NOT investigate the mlld codebase or search the Internet.
 │   └── results.json         # Your findings
 ├── 02-M-experiment-name/
 │   └── ...
-└── 03-H-experiment-name/
-    └── ...
+├── 03-H-experiment-name/
+│   └── ...
+├── blocked.md               # If L-level fails, explain and stop
+└── complete.md              # If no more tests add value
 ```
 
 ## Issue Categories
@@ -100,6 +123,18 @@ Your results.json is valid if:
 
 Even passing experiments should note friction or enhancement ideas.
 
+## Exit Conditions
+
+You should EXIT EARLY (without creating new experiments) if:
+
+1. **Blocked**: L-level experiments have blockers. Create `blocked.md` and stop.
+2. **Complete**: Sufficient coverage exists (L, M, H with good variety). Create `complete.md` and stop.
+3. **Diminishing returns**: Adding more tests won't reveal new information.
+
+When exiting early, briefly explain your reasoning.
+
 ## Begin
 
-Start by running `mlld howto @topic` and create your first experiment.
+1. Check if `@outputDir/@topic/` exists
+2. If exists: review prior results, decide whether to add more or exit
+3. If not: run `mlld howto @topic` and create initial experiments

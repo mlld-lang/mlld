@@ -15,10 +15,12 @@ import { execute, TimeoutError } from '@sdk/execute';
 import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { parseInjectOptions, type DynamicModuleMap } from '../utils/inject-parser';
 
 export interface RunOptions {
   timeoutMs?: number;
   debug?: boolean;
+  inject?: string[];
 }
 
 export class RunCommand {
@@ -111,11 +113,22 @@ export class RunCommand {
     console.log(chalk.gray(`Running ${path.relative(process.cwd(), scriptPath)}...\n`));
 
     try {
+      // Parse inject options into dynamic modules
+      let dynamicModules: DynamicModuleMap | undefined;
+      if (options.inject && options.inject.length > 0) {
+        dynamicModules = await parseInjectOptions(
+          options.inject,
+          this.fileSystem,
+          path.dirname(scriptPath)
+        );
+      }
+
       // Use execute for AST caching and metrics
       const result = await execute(scriptPath, undefined, {
         fileSystem: this.fileSystem,
         pathService: new PathService(),
         timeoutMs: options.timeoutMs ?? 300000, // 5 minute default
+        dynamicModules,
       }) as StructuredResult;
 
       // Output the result
@@ -229,9 +242,10 @@ Arguments:
   script-name    Name of the script to run (without .mld extension)
 
 Options:
-  -h, --help       Show this help message
-  --timeout <ms>   Script timeout in milliseconds (default: 300000 / 5 minutes)
-  --debug          Show execution metrics (timing, cache hits, effects)
+  -h, --help         Show this help message
+  --timeout <ms>     Script timeout in milliseconds (default: 300000 / 5 minutes)
+  --debug            Show execution metrics (timing, cache hits, effects)
+  --<name> <value>   Any other flag becomes payload (see below)
 
 Script Directory:
   Scripts are loaded from the directory configured in mlld-config.json.
@@ -240,10 +254,19 @@ Script Directory:
   Configure with: mlld setup
 
 Examples:
-  mlld run                        # List available scripts
-  mlld run hello                  # Run llm/run/hello.mld
-  mlld run slow-script --timeout 60000  # 60 second timeout
-  mlld run hello --debug          # Show execution metrics
+  mlld run                           # List available scripts
+  mlld run hello                     # Run llm/run/hello.mld
+  mlld run hello --debug             # Show execution metrics
+  mlld run qa --topic variables      # Pass --topic as payload
+  mlld run build --env prod --fast   # Multiple payload values
+
+Payload:
+  Unknown flags are passed to the script as @payload:
+    mlld run qa --topic foo --count 5
+  In script:
+    import { topic, count } from @payload
+    show @topic    >> "foo"
+    show @count    >> "5"
 
 Creating Scripts:
   1. Create a .mld file in your script directory
@@ -267,9 +290,38 @@ Example script (llm/run/hello.mld):
         }
       }
 
+      // Known flags that are NOT payload
+      const knownFlags = new Set(['help', 'h', 'timeout', 'debug', 'd', 'inject', 'payload', '_']);
+
+      // Collect inject/payload flags (explicit format: @key=value)
+      const inject: string[] = [];
+      if (flags.inject) {
+        inject.push(...(Array.isArray(flags.inject) ? flags.inject : [flags.inject]));
+      }
+      if (flags.payload) {
+        inject.push(...(Array.isArray(flags.payload) ? flags.payload : [flags.payload]));
+      }
+
+      // Build @payload object from unknown flags: --topic foo --count 5 => @payload={"topic":"foo","count":"5"}
+      const payloadObj: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(flags)) {
+        if (!knownFlags.has(key) && value !== undefined) {
+          payloadObj[key] = value;
+        }
+      }
+      const isDebug = Boolean(flags.debug || flags.d);
+      if (Object.keys(payloadObj).length > 0) {
+        const payloadStr = `@payload=${JSON.stringify(payloadObj)}`;
+        if (isDebug) {
+          console.error(chalk.gray(`Payload: ${payloadStr}`));
+        }
+        inject.push(payloadStr);
+      }
+
       const options: RunOptions = {
         timeoutMs,
-        debug: Boolean(flags.debug || flags.d)
+        debug: isDebug,
+        inject: inject.length > 0 ? inject : undefined
       };
 
       try {

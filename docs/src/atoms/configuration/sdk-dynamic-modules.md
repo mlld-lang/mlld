@@ -22,8 +22,24 @@ processMlld(template, {
 ```
 
 ```mlld
-var @count = @state.count + 1
+>> Import syntax (preferred)
+import { text, userId } from @payload
+show @text
+
+>> Or direct access
 var @input = @payload.text
+```
+
+CLI usage with `mlld run`:
+
+```bash
+mlld run myscript --topic foo --count 5
+```
+
+```mlld
+>> In myscript.mld
+import { topic, count } from @payload
+show `Topic: @topic, Count: @count`
 ```
 
 Dynamic imports are labeled `src:dynamic` and marked untrusted.

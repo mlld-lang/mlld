@@ -1,13 +1,27 @@
 >> QA Testing Orchestrator
->> Usage: mlld run qa
+>> Usage: mlld run qa [--topic <filter>] [--topics <list>]
 >> Runs parallel QA testing across mlld howto topics
+>> Examples:
+>>   mlld run qa                                    # Test all topics
+>>   mlld run qa --topic variables                  # Test variables-* topics
+>>   mlld run qa --topic when-simple                # Test single topic
+>>   mlld run qa --topics when-simple,for-arrow,exe-js  # Test specific list
 
 import { @claude } from @mlld/claude
 
+>> Get filters from payload (with safe defaults)
+var @filterTopic = @payload.topic ? @payload.topic : ""
+var @topicsList = @payload.topics ? @payload.topics : ""
+
 >> Testable topics (leaf nodes from howto, excluding broad categories)
 >> These map to specific atoms that can be tested in isolation
+>> Syntax: variables, templates, file-loading, pipelines, escaping
+>> Commands: run, output, log, append
+>> Control-flow: when, for, foreach
+>> Modules: importing, exporting
+>> Security: guards
+>> Executables: exe-js, exe-node
 var @topics = [
-  >> syntax
   "variables-basics",
   "variables-conditional",
   "templates-basics",
@@ -17,40 +31,46 @@ var @topics = [
   "pipelines-basics",
   "pipelines-chaining",
   "escaping",
-
-  >> commands
   "run-basics",
   "run-params",
   "output",
   "log",
   "append",
-
-  >> control-flow
   "when-simple",
   "when-first",
   "for-arrow",
   "for-parallel",
   "foreach",
-
-  >> modules
   "importing-registry",
   "importing-local",
   "exporting",
-
-  >> security
   "guards-basics",
-
-  >> executables
   "exe-js",
   "exe-node"
 ]
 
 >> Configuration
 var @outputDir = "@base/qa"
-var @parallelLimit = 4
+var @parallelLimit = 10
+
+>> Filter topics based on --topic (prefix) or --topics (comma list)
+exe @filterTopics(allTopics, filter, list) = js {
+  // --topics takes precedence: comma-separated explicit list
+  if (list && list !== '') {
+    const requested = list.split(',').map(t => t.trim());
+    return allTopics.filter(t => requested.includes(t));
+  }
+  // --topic: prefix/exact match filter
+  if (filter && filter !== '') {
+    return allTopics.filter(t => t === filter || t.startsWith(filter + '-') || t.startsWith(filter));
+  }
+  return allTopics;
+}
+
+var @activeTopics = @filterTopics(@topics, @filterTopic, @topicsList)
 
 >> Load the prompt template
-var @promptTemplate = <@local/qa-prompt.att>
+var @promptTemplate = <@base/llm/run/qa-prompt.att>
 
 >> Build prompt for a specific topic
 exe @buildPrompt(template, topic, outputDir) = js {
@@ -96,7 +116,7 @@ exe @validateResult(jsonStr) = js {
 }
 
 >> Create output directory
-run `mkdir -p @outputDir`
+run cmd {mkdir -p @outputDir}
 
 >> Run QA for a single topic
 exe @runTopicQA(topic, prompt, outputDir) = js {
@@ -104,26 +124,31 @@ exe @runTopicQA(topic, prompt, outputDir) = js {
   return { topic, prompt, outputDir: `${outputDir}/${topic}` };
 }
 
+>> Check if we have topics to test
+exe @checkTopics(topics, filter) = js {
+  if (topics.length === 0) {
+    return `No topics match filter: ${filter}`;
+  }
+  return null;
+}
+
+var @topicError = @checkTopics(@activeTopics, @filterTopic)
+when @topicError => show `@topicError\nAvailable: @topics.join(", ")`
+
 >> Process each topic
-show `Starting QA testing for @topics.length topics...`
+show `Starting QA testing for @activeTopics.length topics...`
 show `Output directory: @outputDir`
 show `Parallel limit: @parallelLimit`
 show ``
 
-var @results = for @topic in @topics => [
+var @results = for parallel(10) @topic in @activeTopics [
   let @prompt = @buildPrompt(@promptTemplate, @topic, @outputDir)
   let @topicDir = `@outputDir/@topic`
-
-  >> Create topic directory
-  run `mkdir -p @topicDir`
-
-  >> Run Claude with full tools for this topic
+  run cmd {mkdir -p @topicDir}
   show `Starting: @topic`
   let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep")
-
-  >> Return result info
-  => { topic: @topic, completed: true }
-] with { parallel: @parallelLimit }
+  => @topic
+]
 
 >> Summary
 show ``
