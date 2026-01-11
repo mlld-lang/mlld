@@ -8,6 +8,7 @@ tags: [security, guards, labels, policies]
 related: [security-before-guards, security-after-guards, security-labels]
 related-code: [interpreter/eval/guard.ts, core/security/Guard.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Labeling data:**

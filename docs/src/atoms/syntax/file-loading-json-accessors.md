@@ -8,6 +8,7 @@ tags: [json, parsing, strings]
 related: [pipelines-basics, variables-basics]
 related-code: [interpreter/eval/field-access.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **JSON string accessors** (`.data` and `.text`):

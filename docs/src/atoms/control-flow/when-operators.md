@@ -8,6 +8,7 @@ tags: [conditionals, operators]
 related: [when-first, when-bare]
 related-code: [grammar/patterns/operators.peggy]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Operators in conditions:**

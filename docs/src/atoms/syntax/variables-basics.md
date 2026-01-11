@@ -8,6 +8,7 @@ tags: [variables, primitives, arrays, objects]
 related: [variables-conditional, templates-basics, exe-simple]
 related-code: [interpreter/eval/var.ts, grammar/patterns/var.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 **var vs exe:** `var` creates values (no parameters). `exe` creates functions (takes parameters).

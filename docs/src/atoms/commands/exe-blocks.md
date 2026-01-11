@@ -8,6 +8,7 @@ tags: [functions, blocks, let, accumulation]
 related: [exe-simple, exe-when-first, for-block]
 related-code: [interpreter/eval/exe.ts, interpreter/eval/block.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Block syntax** (multi-statement bodies):

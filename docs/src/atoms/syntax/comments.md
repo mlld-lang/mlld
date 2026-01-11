@@ -8,6 +8,7 @@ tags: [comments, documentation]
 related: []
 related-code: [grammar/patterns/comment.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 Use `>>` at start of line or `<<` at end.

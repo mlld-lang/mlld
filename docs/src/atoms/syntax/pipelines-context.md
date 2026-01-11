@@ -8,6 +8,7 @@ tags: [pipelines, metadata, context]
 related: [pipelines-basics, pipelines-retry]
 related-code: [interpreter/eval/pipeline.ts, interpreter/env/PipelineContext.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Pipeline context:**

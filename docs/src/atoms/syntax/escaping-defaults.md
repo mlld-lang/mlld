@@ -8,6 +8,7 @@ tags: [escaping, defaults, null-safety]
 related: [variables-conditional, escaping-at]
 related-code: []
 updated: 2026-01-11
+qa_tier: 2
 ---
 
 **Problem:** Need default values when data might be missing.

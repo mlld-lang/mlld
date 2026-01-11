@@ -8,6 +8,7 @@ tags: [templates, loops, for]
 related: [for-block, templates-basics]
 related-code: [interpreter/eval/template.ts, interpreter/eval/for.ts]
 updated: 2026-01-11
+qa_tier: 2
 ---
 
 **Template-embedded vs top-level:** Control flow inside templates uses bare `for`/`end` at line start. Top-level directives are separate statements.

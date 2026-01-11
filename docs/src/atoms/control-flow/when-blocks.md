@@ -8,6 +8,7 @@ tags: [conditionals, blocks]
 related: [when-first, exe-block]
 related-code: [interpreter/eval/when.ts, interpreter/eval/block.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Block actions** (side effects + return):

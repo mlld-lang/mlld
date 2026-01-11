@@ -8,6 +8,7 @@ tags: [functions, reusable, templates, commands]
 related: [exe-blocks, exe-prose, run-basics, variables-basics]
 related-code: [interpreter/eval/exe.ts, grammar/patterns/exe.peggy]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **exe vs var:** `exe` defines functions (takes parameters). `var` creates values (no parameters). Use `exe` when you need to pass arguments; use `var` for computed values.

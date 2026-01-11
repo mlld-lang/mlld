@@ -8,6 +8,7 @@ tags: [output, logging, stdout, sugar]
 related: [output, for-arrow]
 related-code: [interpreter/eval/log.ts, grammar/patterns/log.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 ```mlld

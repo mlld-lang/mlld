@@ -8,6 +8,7 @@ tags: [conditionals, branching]
 related: [when-bare, when-first]
 related-code: [interpreter/eval/when.ts, grammar/patterns/when.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 **Simple form:**

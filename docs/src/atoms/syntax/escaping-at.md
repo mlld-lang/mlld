@@ -8,6 +8,7 @@ tags: [escaping, templates, special-characters]
 related: [templates-basics, escaping-defaults]
 related-code: []
 updated: 2026-01-11
+qa_tier: 1
 ---
 
 **Problem:** Need to output a literal `@` without variable interpolation.

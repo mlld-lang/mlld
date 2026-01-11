@@ -8,6 +8,7 @@ tags: [files, metadata, frontmatter]
 related: [file-loading-basics, file-loading-ast]
 related-code: [interpreter/eval/file-loading.ts, core/file-system/metadata.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Metadata fields** (via `.mx`):

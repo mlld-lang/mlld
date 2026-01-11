@@ -8,6 +8,7 @@ tags: [iteration, loops, parallel, concurrency]
 related: [for-arrow, for-block]
 related-code: [interpreter/eval/for.ts, interpreter/eval/parallel.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 Run iterations concurrently with `for parallel`.

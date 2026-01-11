@@ -8,6 +8,7 @@ tags: [execution, commands, parameters]
 related: [run-basics]
 related-code: [interpreter/eval/run.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Parameter syntax by language:**

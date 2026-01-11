@@ -8,6 +8,7 @@ tags: [files, loading, angle-brackets, globs]
 related: [file-loading-ast, file-loading-metadata, variables-basics]
 related-code: [interpreter/eval/file-loading.ts, grammar/patterns/file-loading.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 ```mlld

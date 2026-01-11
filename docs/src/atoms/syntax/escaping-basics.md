@@ -8,6 +8,7 @@ tags: [escaping, templates, special-characters]
 related: [escaping-at, escaping-defaults, templates-basics]
 related-code: []
 updated: 2026-01-11
+qa_tier: 1
 ---
 
 **Special characters:**

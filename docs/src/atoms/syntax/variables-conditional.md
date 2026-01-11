@@ -8,6 +8,7 @@ tags: [variables, conditionals, optional]
 related: [variables-basics, variables-truthiness]
 related-code: [interpreter/eval/template.ts, grammar/patterns/var.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 **Conditional inclusion** (`@var?`): omit content when variable is falsy.

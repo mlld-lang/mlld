@@ -126,3 +126,30 @@ docs/llm/                 # Generated output (don't edit directly)
 ```
 
 CLI: `mlld howto <topic> [subtopic]` shows atoms directly.
+
+## QA Testing (qa_tier)
+
+Atoms can be tagged for automated QA testing via the `qa_tier` frontmatter field:
+
+```yaml
+---
+id: variables-basics
+qa_tier: 1
+---
+```
+
+| Tier | Description | Count |
+|------|-------------|-------|
+| 1 | Core syntax - isolated, fast | ~15 |
+| 2 | Commands, control flow - needs context | ~22 |
+| 3 | Integration, patterns - complex setup | (future) |
+| absent | Skip - meta docs, SDK config, mistakes | - |
+
+**Run QA tests:**
+```bash
+mlld run qa --tier 1           # Core syntax only
+mlld run qa --tier 1,2         # Tier 1 and 2
+mlld run qa --topic variables  # Filter by prefix
+```
+
+**When adding new atoms:** Add `qa_tier: 1` or `qa_tier: 2` if the atom documents testable mlld syntax. Omit for meta/config docs.

@@ -8,6 +8,7 @@ tags: [output, append, jsonl, logging]
 related: [output, log, pipelines-basics]
 related-code: [interpreter/eval/append.ts, grammar/patterns/append.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 ```mlld

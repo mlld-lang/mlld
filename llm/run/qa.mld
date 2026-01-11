@@ -1,51 +1,43 @@
 >> QA Testing Orchestrator
->> Usage: mlld run qa [--topic <filter>] [--topics <list>]
+>> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>]
 >> Runs parallel QA testing across mlld howto topics
 >> Examples:
->>   mlld run qa                                    # Test all topics
+>>   mlld run qa --tier 1                           # Test tier 1 only (core syntax)
+>>   mlld run qa --tier 1,2                         # Test tier 1 and 2
 >>   mlld run qa --topic variables                  # Test variables-* topics
->>   mlld run qa --topic when-simple                # Test single topic
->>   mlld run qa --topics when-simple,for-arrow,exe-js  # Test specific list
+>>   mlld run qa --topics when-simple,for-arrow     # Test specific list
 
 import { @claude } from @mlld/claude
 
 >> Get filters from payload (with safe defaults)
->> Namespace import gives us @payload as an object we can access with dot notation
 import "@payload" as @payload
 var @filterTopic = @payload.topic ? @payload.topic : ""
 var @topicsList = @payload.topics ? @payload.topics : ""
+var @tierFilter = @payload.tier ? @payload.tier : ""
 
 >> Load all atoms dynamically from docs/src/atoms
 var @atomFiles = <@base/docs/src/atoms/**/*.md>
 
->> Extract topic IDs from atom frontmatter
-exe @extractTopicIds(files) = js {
+>> Extract topics with qa_tier from atom frontmatter
+>> Only atoms with qa_tier are eligible for QA testing
+exe @extractQaTopics(files, tierFilter) = js {
+  // Parse tier filter (e.g., "1" or "1,2")
+  let allowedTiers = null;
+  if (tierFilter && tierFilter !== '') {
+    allowedTiers = new Set(tierFilter.split(',').map(t => parseInt(t.trim(), 10)));
+  }
+
   return files
-    .map(f => f.fm?.id)
+    .filter(f => {
+      const tier = f.fm?.qa_tier;
+      if (!tier) return false;  // No qa_tier = skip
+      if (allowedTiers && !allowedTiers.has(tier)) return false;
+      return true;
+    })
+    .map(f => f.fm.id)
     .filter(id => id && !id.startsWith('_'));
 }
-var @allTopics = @extractTopicIds(@atomFiles)
-
->> Skip list: broad categories and special atoms not suitable for isolated QA testing
->> These are either index pages, meta docs, or require complex context
-var @skipTopics = [
-  "intro",
-  "syntax",
-  "commands",
-  "control-flow",
-  "modules",
-  "security",
-  "configuration",
-  "patterns",
-  "mistakes"
-]
-
->> Filter out skipped topics
-exe @applySkipList(topics, skip) = js {
-  const skipSet = new Set(skip);
-  return topics.filter(t => !skipSet.has(t));
-}
-var @topics = @applySkipList(@allTopics, @skipTopics)
+var @topics = @extractQaTopics(@atomFiles, @tierFilter)
 
 >> Configuration
 var @outputDir = "@base/qa"

@@ -8,6 +8,7 @@ tags: [execution, commands, shell, code]
 related: [run-cwd, run-stdin, exe-simple]
 related-code: [interpreter/eval/run.ts, grammar/patterns/run.peggy]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 **Decision tree:**

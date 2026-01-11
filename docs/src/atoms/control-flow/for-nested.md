@@ -8,6 +8,7 @@ tags: [iteration, loops]
 related: [for-arrow]
 related-code: [interpreter/eval/for.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Nested for:**

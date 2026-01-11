@@ -8,6 +8,7 @@ tags: [templates, conditionals, when]
 related: [when-simple, templates-basics]
 related-code: [interpreter/eval/template.ts, interpreter/eval/when.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **When-expressions in templates:**

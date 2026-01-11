@@ -8,6 +8,7 @@ tags: [execution, commands, cwd, directory]
 related: [run-basics]
 related-code: [interpreter/eval/run.ts, interpreter/env/WorkingDirectory.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **Working directory override:**

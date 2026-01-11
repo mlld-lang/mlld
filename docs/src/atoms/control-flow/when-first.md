@@ -8,6 +8,7 @@ tags: [conditionals, branching]
 related: [when-simple, when-bare]
 related-code: [interpreter/eval/when.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 **First form** (stops at first match, like switch):

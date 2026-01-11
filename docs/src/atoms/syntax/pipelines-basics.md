@@ -8,6 +8,7 @@ tags: [pipelines, transforms, builtins]
 related: [pipelines-context, pipelines-retry, pipelines-parallel]
 related-code: [interpreter/eval/pipeline.ts, core/builtins/pipeline-builtins.ts]
 updated: 2026-01-05
+qa_tier: 1
 ---
 
 ```mlld
