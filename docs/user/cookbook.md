@@ -322,11 +322,9 @@ Return JSON: { "task": "...", "type": "implement|fix|test" }`
   => @haiku(@prompt) | @json.llm
 ]
 
->> Build context (load only relevant specs)
+>> Build context (collect all specs)
 exe @buildContext(task, specs) = [
-  let @relevant = for @spec in @specs
-    when @task.type in @spec.mx.relative => @spec
-  => { specs: @relevant }
+  => { task: @task, specs: @specs }
 ]
 
 >> Execute the task with full agent
@@ -336,15 +334,12 @@ exe @executeTask(task, context) = @claude(`
 Implement this. Search before assuming not implemented.
 `, "sonnet", ".", "Read,Edit,Write,Bash,Grep,Glob")
 
->> Validate with tests
-exe @validate() = [
-  let @out = cmd { npm test 2>&1 }
-  => { pass: @out.exitCode == 0 }
-]
+>> Validate with tests (returns exit code)
+exe @validate() = cmd { npm test }
 
 >> The loop
 loop(endless) until @state.stop [
-  var @plan = <fix_plan.md>
+  let @plan = <fix_plan.md>
   when @plan.trim() == "" => done "complete"
 
   let @task = @classifyTask(@plan)
@@ -352,7 +347,7 @@ loop(endless) until @state.stop [
   let @result = @executeTask(@task, @context)
   let @check = @validate()
 
-  when @check.pass => run cmd { git commit -am "@task.task" && git push }
+  when @check.exitCode == 0 => run cmd { git commit -am "fix" }
   continue
 ]
 ```

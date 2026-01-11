@@ -435,7 +435,7 @@ The "Ralph Wiggum" pattern has become a major approach for autonomous coding age
 
 ```mlld
 loop(endless) until @state.stop [
-  var @plan = <fix_plan.md>
+  let @plan = <fix_plan.md>
   let @task = @classify(@plan)
   let @result = @execute(@task)
 
