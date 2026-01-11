@@ -1,4 +1,2 @@
-when [
-  @conditionA && @conditionB => @action()
-  @conditionA && @conditionB => @otherAction()
-]
+var @simple = `Hello @name`
+var @codeblocks = ::Run `npm test` before @action::

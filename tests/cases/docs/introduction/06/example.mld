@@ -1,1 +1,1 @@
-exe @function(var) = js {console.log(var)}
+show @ask() | @check

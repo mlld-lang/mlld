@@ -1,0 +1,10 @@
+exe @hasSubstance(response) = [
+  let @result = @haiku("Does this add value or just acknowledge? @response")
+  => @result.trim().toLowerCase().startsWith("yes")
+]
+
+exe @gate(response, instruction) = when first [
+  @instruction.required => { pass: true }
+  @hasSubstance(@response) => { pass: true }
+  * => { pass: false, reason: "Response lacks substance" }
+]

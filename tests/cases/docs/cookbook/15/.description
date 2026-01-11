@@ -1,0 +1,1 @@
+From cookbook.md line 314: Specs: @context.specs.join("\n") (strict mode)

@@ -17,6 +17,7 @@ var @parallel = <@base/docs/src/atoms/patterns/parallel-execution.md>
 var @llm = <@base/docs/src/atoms/patterns/llm-integration.md>
 var @agent = <@base/docs/src/atoms/patterns/agent-definition.md>
 var @prose = <@base/docs/src/atoms/patterns/prose.md>
+var @ralph = <@base/docs/src/atoms/patterns/ralph.md>
 
 >> Build sections
 exe @wrapSection(tag, intro, content) = js {
@@ -33,6 +34,7 @@ var @parallelSection = @wrapSection("PARALLEL_EXECUTION", "Run independent tasks
 var @llmSection = @wrapSection("LLM_INTEGRATION", "Call LLMs with structured prompts.", @strip(@llm))
 var @agentSection = @wrapSection("AGENT_DEFINITION", "Define agent configuration modules.", @strip(@agent))
 var @proseSection = @wrapSection("PROSE_EXECUTION", "Execute LLM-interpreted DSL skills (OpenProse and custom).", @strip(@prose))
+var @ralphSection = @wrapSection("RALPH_LOOP", "Autonomous agent loop with dynamic context assembly.", @strip(@ralph))
 
 var @allSections = [
   @toolOrchSection,
@@ -44,7 +46,8 @@ var @allSections = [
   @parallelSection,
   @llmSection,
   @agentSection,
-  @proseSection
+  @proseSection,
+  @ralphSection
 ]
 
 var @body = @allSections.join("\n\n")

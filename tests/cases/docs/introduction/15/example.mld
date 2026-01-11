@@ -1,4 +1,4 @@
-exe @getJSON(prompt) = when [
-  @mx.try == 1 => @claude(@prompt)
-  @mx.try > 1 => @claude("@prompt Return ONLY valid JSON. Previous attempt: @mx.hint")
-]
+run cmd {..}     << one-line command (| allowed but no && ; || continuation)
+run sh {..}      << multiline shell scripts, more permissive
+run js {..}      << javascript
+run node {..}    << runs node scripts

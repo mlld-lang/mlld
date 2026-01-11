@@ -1,4 +1,6 @@
-run cmd {..}       << one-line command (| allowed but no && ; || continuation, no shell scripts)
-run sh {..}    << multiline shell scripts and more permissive 
-run js {..}    << javascript
-run node {..}  << runs node scripts
+exe @check(input) = when [
+  let @review = @injcheck(@input)
+  @review.includes("APPROVE") => @input
+  @mx.try < 3 => retry "@review"
+  none => "Check failed after retries"
+]
