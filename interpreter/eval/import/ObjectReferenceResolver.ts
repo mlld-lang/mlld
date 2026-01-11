@@ -159,17 +159,8 @@ export class ObjectReferenceResolver {
       };
       return result;
     } else {
-      if (referencedVar.type === 'array') {
-        return {
-          __arraySnapshot: true,
-          value: referencedVar.value,
-          mx: referencedVar.mx,
-          internal: referencedVar.internal,
-          isComplex: (referencedVar as any).isComplex === true,
-          name: referencedVar.name
-        };
-      }
-      // For other variable types, return the value directly
+      // For all other variable types (including arrays), return the value directly
+      // This ensures object properties contain raw values, not Variable wrappers
       return referencedVar.value;
     }
   }
