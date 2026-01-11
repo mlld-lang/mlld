@@ -823,7 +823,13 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Use regular it() with explicit failure instead of it.fail()
         testFn(`INVALID: ${fixture.name} - ${issue}${shouldSkip ? ' (Skipped: Intentional partial/educational example)' : ''}`, () => {
           let errorMessage = `Test fixture "${fixture.name}" has issues: ${issue}`;
-          
+
+          // Show source info if this is a doc-extracted test
+          if (fixture.sourceInfo) {
+            errorMessage += `\n\nSource: ${fixture.sourceInfo}`;
+            errorMessage += `\nFix the original documentation file, then run: npm run build:fixtures`;
+          }
+
           // Add specific parse error details if available
           if (fixture.parseError) {
             const parseErr = fixture.parseError;
@@ -831,20 +837,20 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             if (parseErr.location) {
               errorMessage += `\nLocation: Line ${parseErr.location.start.line}, Column ${parseErr.location.start.column}`;
             }
-            
+
             // Show the problematic input around the error location
             if (fixture.input && parseErr.location) {
               const lines = fixture.input.split('\n');
               const errorLine = parseErr.location.start.line - 1;
               const startLine = Math.max(0, errorLine - 2);
               const endLine = Math.min(lines.length, errorLine + 3);
-              
+
               errorMessage += '\n\nContext:\n';
               for (let i = startLine; i < endLine; i++) {
                 const lineNum = i + 1;
                 const prefix = lineNum === parseErr.location.start.line ? '> ' : '  ';
                 errorMessage += `${prefix}${lineNum}: ${lines[i]}\n`;
-                
+
                 // Add error pointer on the error line
                 if (lineNum === parseErr.location.start.line) {
                   const spaces = ' '.repeat(parseErr.location.start.column + 3 + lineNum.toString().length);
@@ -855,7 +861,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (fixture.ast === null) {
             errorMessage += '\n\nAST is null - parsing completely failed';
           }
-          
+
           throw new Error(errorMessage);
         });
       });

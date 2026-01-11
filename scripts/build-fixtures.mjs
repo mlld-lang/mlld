@@ -559,6 +559,15 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     // No config or invalid JSON; ignore
   }
 
+  // Read .description file if present (contains source info for doc-extracted tests)
+  const descriptionPath = path.join(dirPath, '.description');
+  let sourceInfo = null;
+  try {
+    sourceInfo = (await fs.readFile(descriptionPath, 'utf-8')).trim();
+  } catch (error) {
+    // No .description file; ignore
+  }
+
   // Check for skip files
   const skipFiles = files.filter(f => f === 'skip.md' || f.startsWith('skip-') && f.endsWith('.md'));
   if (skipFiles.length > 0) {
@@ -714,7 +723,8 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         ast: ast,
         parseError: parseError,
         ...(config?.env ? { environmentVariables: config.env } : {}),
-        ...(inferredMode ? { mlldMode: inferredMode } : {})
+        ...(inferredMode ? { mlldMode: inferredMode } : {}),
+        ...(sourceInfo ? { sourceInfo } : {})
       };
       
       // Write fixture only if content changed

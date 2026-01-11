@@ -66,6 +66,26 @@ cd website && npm run build
 mlld run llmstxt
 ```
 
+## Automated Doc Testing
+
+All mlld code blocks in `docs/user/*.md` are automatically extracted and syntax-validated during `npm run build:fixtures`.
+
+**How it works:**
+1. `scripts/extract-doc-tests.mjs` extracts code blocks tagged with ` ```mlld ` or ` ```mlld:md `
+2. Each block becomes a test case in `tests/cases/docs/<docname>/<block-number>/`
+3. Tests validate syntax (parse without errors) but don't execute
+4. Test errors show source file + line number for quick fixes
+
+**When tests fail:**
+```
+Source: From introduction.md line 436: Autonomous loops (strict mode)
+Fix the original documentation file, then run: npm run build:fixtures
+```
+
+Fix the original doc file, not the generated test. Then rebuild fixtures.
+
+**Skipping invalid examples:** Place a `skip.md` file in the test case directory for intentionally invalid syntax (educational examples showing errors).
+
 ## Principles (All Docs)
 
 - **Present tense only** - No "this used to..." or "will soon..."
