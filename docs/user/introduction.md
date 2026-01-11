@@ -135,20 +135,7 @@ Talking about prompt injection sets me up to point out: **mlld can be dangerous 
 
 Thankfully, some of the earliest mlld users are brilliant security researchers who you'll find in our Discord, which is a good place to ask safety questions. And maybe I'll nerdsnipe some into thinking about better defensive strategies against prompt injection!
 
-The vibe-check-and-retry approach above is fine when the worst that happens is an LLM says something silly. But when you're working with LLMs touching private data that you don't want leaving your system, you need more sophistication. mlld has it: by labeling data and functions, mlld tracks taint and lets you guard what can go where:
-
-```mlld
-var secret @apiKey = "sk-live-12345"
-
-guard @noShellSecrets before secret = when [
-  @mx.op.type == "run" => deny "Secrets cannot appear in shell commands"
-  * => allow
-]
-
-run cmd { echo @apiKey }  >> Blocked by guard
-```
-
-See [security.md](security.md) for the full picture: data labels, taint tracking, before/after guards, and denied handlers.
+The vibe-check-and-retry approach above is fine when the worst that happens is an LLM says something silly. But when you're working with LLMs touching private data that you don't want leaving your system, you need more sophistication. mlld has guards for controlling data flow—labeling data by provenance, tracking taint, and blocking operations based on policy. See [security.md](security.md) for the full picture.
 
 ### But as an LLM would put it, *this isn't just a safety lesson--it's a whole new way of thinking about programming!*
 
@@ -236,18 +223,17 @@ But you can't secure something if you don't build it first, so let's get back to
 
 mlld runs top to bottom. Variables are immutable—you can't redefine them—and you need to define things before you refer to them. (Block-scoped `let` bindings are the exception; they exist only within their block.)
 
-### Two syntax modes
+### Syntax: `.mld` and `.md`
 
-mlld has two modes based on file extension:
-
-**`.mld` files (strict mode)** — Bare directives, no slashes:
+In `.mld` files, every line is mlld:
 ```mlld
 var @name = "Alice"
 show `Hello @name!`
 ```
 
-**`.mld.md` files (markdown mode)** — Slash prefix required, text becomes output:
-```mlld:md
+You can also run mlld inside any `.md` file by prefixing directives with `/`:
+
+```markdown
 Here's some prose that becomes output.
 
 /var @name = "Alice"
@@ -256,7 +242,7 @@ Here's some prose that becomes output.
 More prose here.
 ```
 
-This documentation uses **strict mode** in examples unless a block is marked `mlld:md`. For executable documentation that renders nicely on GitHub, see [markdown-mode.md](markdown-mode.md).
+This makes documentation executable. See [markdown-mode.md](markdown-mode.md) for details.
 
 ### Directives
 
@@ -442,6 +428,23 @@ for parallel(5) @file in <src/*.ts> => @analyze(@file)
 >> Run multiple things at once
 var @results = || @fetchA() || @fetchB() || @fetchC()
 ```
+
+### Autonomous loops (the Ralph pattern)
+
+The "Ralph Wiggum" pattern has become a major approach for autonomous coding agents: run in a loop where each iteration gets fresh context, and state persists via files. mlld makes this natural:
+
+```mlld
+loop(endless) until @state.stop [
+  var @plan = <fix_plan.md>
+  let @task = @classify(@plan)
+  let @result = @execute(@task)
+
+  when @validate(@result) => @commit(@result)
+  continue
+]
+```
+
+Each iteration: fresh context, load state from disk, do work, write state back. No accumulated garbage from previous loops. The `@state` variable is SDK-controlled, so you can start and stop Ralph loops programmatically from Node, Python, Go, or Rust. See [cookbook.md](cookbook.md) for the full pattern and [sdk.md](sdk.md) for SDK integration.
 
 ### Retries and hints
 
