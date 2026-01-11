@@ -6,7 +6,7 @@
 
 // Top-level unified expression with ternary operator (lowest precedence)
 UnifiedExpression
-  = condition:UnifiedNullish _ "?" _ trueBranch:UnifiedExpression _ ":" _ falseBranch:UnifiedExpression {
+  = condition:UnifiedNullish _ "?" _ trueBranch:TernaryBranch _ ":" _ falseBranch:TernaryBranch {
       return helpers.createNode('TernaryExpression', {
         condition,
         trueBranch,
@@ -15,6 +15,53 @@ UnifiedExpression
       });
     }
   / UnifiedNullish
+
+// Ternary branch can be a template or a regular expression
+// Templates must be tried first to avoid expression parsing issues
+TernaryBranch
+  = TernaryBacktick
+  / UnifiedExpression
+
+// Backtick template in ternary branch context - isolated from main expression parsing
+TernaryBacktick "backtick template in ternary"
+  = '`' content:TernaryBacktickContent* '`' {
+      if (content.length === 0) {
+        return {
+          content: [helpers.createNode('Literal', { value: '', valueType: 'string', location: location() })],
+          wrapperType: 'backtick',
+          hasInterpolation: false
+        };
+      }
+      if (content.length === 1 && content[0].type === 'Text') {
+        return {
+          content: [helpers.createNode('Literal', { value: content[0].content, valueType: 'string', location: location() })],
+          wrapperType: 'backtick',
+          hasInterpolation: false
+        };
+      }
+      return {
+        content: content,
+        wrapperType: 'backtick',
+        hasInterpolation: true
+      };
+    }
+
+// Content inside ternary backticks - minimal parsing to avoid interference
+TernaryBacktickContent
+  = "@" id:BaseIdentifier fields:TernaryFieldAccess* {
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / chars:(!('`' / '@') .)+ {
+      return helpers.createNode(NodeType.Text, { content: chars.map(c => c[1]).join(''), location: location() });
+    }
+
+TernaryFieldAccess
+  = "." id:BaseIdentifier {
+      return { type: 'field', value: id, location: location() };
+    }
 
 // Nullish coalescing (left-associative)
 UnifiedNullish

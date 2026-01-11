@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **`mlld howto` shows all atom categories**: Fixed howto command to load atoms from all 8 categories (syntax, commands, control-flow, modules, patterns, configuration, security, mistakes) instead of only control-flow
+- **Ternary expressions with template literals**: Fixed parse error when using backtick templates in ternary branches (e.g., `@x > 3 ? \`big: @x\` : "small"`). Templates are now properly parsed in ternary contexts without interfering with other expression parsing.
 
 ## [2.0.0-rc80]
 
