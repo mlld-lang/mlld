@@ -1,30 +1,28 @@
 ---
 id: exe-prose
-title: Exe Prose Execution
-brief: LLM skill invocation via prose
+title: Exe Prose Syntax
+brief: LLM-interpreted DSL execution syntax
 category: commands
 parent: exe
-tags: [prose, llm, skills, interpolation]
-related: [exe-simple, exe-blocks]
-related-code: [interpreter/eval/exe.ts, interpreter/eval/prose.ts]
-updated: 2026-01-05
+tags: [prose, llm, skills, interpolation, dsl]
+related: [exe-simple, exe-blocks, prose]
+related-code: [interpreter/eval/exe.ts, interpreter/eval/prose-execution.ts]
+updated: 2026-01-10
 ---
 
-**Prose execution** (LLM skill invocation):
-
-Prose requires a config reference specifying the model and skill:
+**Prose execution** invokes LLM-interpreted DSL skills (OpenProse or custom):
 
 ```mlld
-var @config = { model: "claude-3", skillName: "prose" }
+import { @opus } from @mlld/prose
 
 >> Inline (interpolates like templates)
-exe @summarize(text) = prose:@config { summarize @text }
+exe @summarize(text) = prose:@opus { summarize @text }
 
 >> File reference (.prose files do NOT interpolate)
-exe @review(code) = prose:@config "./review.prose"
+exe @review(code) = prose:@opus "./review.prose"
 
 >> Template files (.prose.att or .prose.mtt interpolate)
-exe @greet(name) = prose:@config "./greet.prose.att"
+exe @greet(name) = prose:@opus "./greet.prose.att"
 ```
 
 Interpolation rules:
@@ -33,4 +31,4 @@ Interpolation rules:
 - `"file.prose.att"` - ATT interpolation (`@var`)
 - `"file.prose.mtt"` - MTT interpolation (`{{var}}`)
 
-Default skill is `"prose"` (OpenProse). Custom interpreters via `skillName`.
+See `mlld howto prose` for setup, OpenProse syntax, and custom interpreters.
