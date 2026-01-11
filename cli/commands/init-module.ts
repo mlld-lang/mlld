@@ -574,27 +574,27 @@ export async function initModuleCommand(args: string[], options: InitModuleOptio
 
 export function createInitModuleCommand() {
   return {
-    name: 'init-module',
-    aliases: ['init'],
+    name: 'module',
+    aliases: ['mod'],
     description: 'Create a new mlld module',
-    
+
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       // Check for help flag first
       if (flags.help || flags.h) {
         console.log(`
-Usage: mlld init [options] [module-name]
+Usage: mlld module [options] [module-name]
 
 Create a new mlld module interactively.
 
 Examples:
-  mlld init                    Create a new module interactively
-  mlld init test               Create module named 'test'
-  mlld init @local/utils       Create 'utils' in configured @local/ path
-  mlld init @myorg/helper      Create 'helper' in configured @myorg/ path
-  mlld init ./path/to/test     Create module at specific path
+  mlld module                    Create a new module interactively
+  mlld module test               Create module named 'test'
+  mlld module @local/utils       Create 'utils' in configured @local/ path
+  mlld module @myorg/helper      Create 'helper' in configured @myorg/ path
+  mlld module ./path/to/test     Create module at specific path
 
 Options:
-  -n, --name <name>           Module name (for module creation)
+  -n, --name <name>           Module name
   -a, --author <author>       Author name
   -d, --about <description>   Module description
   -o, --output <path>         Output file path
@@ -605,9 +605,9 @@ Options:
   -f, --force                 Overwrite existing files
 
 More Examples:
-  mlld init --name utils --about "Utility functions"
-  mlld init test --author myorg
-  mlld init ./src/helpers.mld.md
+  mlld module --name utils --about "Utility functions"
+  mlld module test --author myorg
+  mlld mod ./src/helpers.mld.md
         `);
         return;
       }

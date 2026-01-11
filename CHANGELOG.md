@@ -5,6 +5,25 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc82]
+
+### Added
+- **`mlld howto core-modules`**: List official @mlld modules with descriptions
+  - Shows ai-cli, array, claude, env, github, prose, string modules
+  - `mlld howto @mlld/claude` shows module documentation directly
+- **`mlld init`**: Quick non-interactive project initialization
+  - Creates `mlld-config.json` and `mlld-lock.json` with sensible defaults
+  - Creates `llm/run/` (scripts) and `llm/modules/` (local modules) directories
+  - `--force` to overwrite existing config
+  - `--script-dir` and `--local-path` for customization
+  - Suggests `mlld setup` for more configuration options
+
+### Changed
+- **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)
+  - Previous `mlld init` behavior (interactive module creation) moved to `mlld module`
+  - New `mlld init` provides quick project setup (see Added above)
+  - `mlld setup` remains the interactive configuration wizard
+
 ## [2.0.0-rc81]
 
 ### Added

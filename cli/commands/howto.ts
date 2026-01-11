@@ -5,6 +5,8 @@
  *   mlld howto              # Show topic tree
  *   mlld howto when         # Show all when-related help
  *   mlld howto when first   # Show just when-first help
+ *   mlld howto core-modules # Show available core modules
+ *   mlld howto @mlld/claude # Show docs for a specific module
  *   mlld qs                 # Quick start (alias)
  */
 
@@ -15,12 +17,61 @@ import { execute } from '@sdk/execute';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { StructuredResult } from '@sdk/types';
-import { highlightMarkdown } from './info';
+import { highlightMarkdown, getModuleInfo } from './info';
+import { docsCommand } from './docs';
+
+// Core modules to show in howto core-modules (exclude internal/advanced ones)
+const CORE_MODULES = [
+  '@mlld/ai-cli',
+  '@mlld/array',
+  '@mlld/claude',
+  '@mlld/env',
+  '@mlld/github',
+  '@mlld/prose',
+  '@mlld/string'
+];
+
+const REGISTRY_URL = 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json';
 
 export interface HowtoOptions {
   topic?: string;
   subtopic?: string;
   section?: boolean;
+}
+
+/**
+ * Display the core modules list with descriptions
+ */
+async function showCoreModules(): Promise<void> {
+  console.log(chalk.bold('\nCORE MODULES\n'));
+  console.log('Official mlld modules for common tasks.\n');
+
+  const COL_WIDTH = 20;
+
+  for (const moduleRef of CORE_MODULES) {
+    try {
+      const info = await getModuleInfo(moduleRef);
+      const name = moduleRef.padEnd(COL_WIDTH);
+      console.log(`  ${chalk.cyan(name)} ${chalk.gray(info.description || '')}`);
+    } catch {
+      // If we can't fetch info, just show the name
+      console.log(`  ${chalk.cyan(moduleRef.padEnd(COL_WIDTH))} ${chalk.gray('(info unavailable)')}`);
+    }
+  }
+
+  console.log();
+  console.log(chalk.gray('Usage:'));
+  console.log(chalk.gray('  mlld howto @mlld/claude    Show module documentation'));
+  console.log(chalk.gray('  mlld docs @mlld/claude     Full documentation'));
+  console.log(chalk.gray('  mlld info @mlld/claude     Module metadata'));
+  console.log();
+}
+
+/**
+ * Check if a topic looks like a module reference
+ */
+function isModuleRef(topic: string): boolean {
+  return topic.startsWith('@') && topic.includes('/');
 }
 
 /**
@@ -76,6 +127,18 @@ async function findHowtoScript(): Promise<string | null> {
 }
 
 export async function howtoCommand(options: HowtoOptions = {}): Promise<void> {
+  // Handle core-modules topic specially
+  if (options.topic === 'core-modules' || options.topic === 'modules') {
+    await showCoreModules();
+    return;
+  }
+
+  // Handle module references (e.g., @mlld/claude)
+  if (options.topic && isModuleRef(options.topic)) {
+    await docsCommand(options.topic);
+    return;
+  }
+
   const scriptPath = await findHowtoScript();
 
   if (!scriptPath) {
@@ -151,6 +214,10 @@ ${chalk.bold('Examples:')}
   mlld howto for-parallel       Show just parallel for help
   mlld howto for-parallel -s    Show entire control-flow section
   mlld howto grep "default"     Search all docs for "default"
+
+${chalk.bold('Core Modules:')}
+  mlld howto core-modules       List all official @mlld modules
+  mlld howto @mlld/claude       Show documentation for a module
 
 ${chalk.bold('Options:')}
   -s, --section   Show entire section for the matched topic
