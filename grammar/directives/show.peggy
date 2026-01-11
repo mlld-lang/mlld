@@ -848,12 +848,12 @@ SlashShow
       const rest = input.substring(peg$currPos).trim();
       return !rest.startsWith('@') && !rest.startsWith('<');
     } {
-      helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
+      helpers.mlldError("Invalid foreach syntax in show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
     }
 
-  // Error: Generic /show syntax error (catch-all)
+  // Error: Generic show syntax error (catch-all)
   / DirectiveContext ShowKeyword {
-      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show <path # section>", "`", location());
+      helpers.mlldError("Invalid show syntax. Expected: show `template`, show @variable, show <path>, or show <path # section>", "`", location());
     }
 
 // -------------------------------------------------------------

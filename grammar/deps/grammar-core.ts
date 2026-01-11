@@ -46,7 +46,8 @@ export const DirectiveKind = {
   needs: 'needs',
   wants: 'wants',
   policy: 'policy',
-  while: 'while'
+  while: 'while',
+  loop: 'loop'
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 
@@ -178,6 +179,7 @@ export const helpers = {
 
       const nextChar = input[end];
       if (' \t\r\n'.includes(nextChar)) return true;
+      if (!/[a-zA-Z0-9_]/.test(nextChar)) return true;
     }
 
     return false;
@@ -1438,6 +1440,29 @@ export const helpers = {
       source: source,
       expression: Array.isArray(expression) ? expression : [expression],
       location: location,
+      meta
+    };
+  },
+
+  /**
+   * Creates a LoopExpression node for loop expressions in /var and /exe assignments
+   */
+  createLoopExpression(limit: any, rateMs: number | null, until: any, body: any, location: any) {
+    const meta: any = {
+      isLoopExpression: true,
+      hasLimit: limit !== null && limit !== undefined,
+      hasRate: rateMs !== null && rateMs !== undefined,
+      hasUntil: Array.isArray(until) && until.length > 0
+    };
+
+    return {
+      type: 'LoopExpression',
+      nodeId: randomUUID(),
+      limit,
+      rateMs: rateMs ?? null,
+      until: Array.isArray(until) ? until : null,
+      block: Array.isArray(body) ? body : [body],
+      location,
       meta
     };
   },

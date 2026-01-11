@@ -40,6 +40,15 @@ BooleanLiteral "Boolean Literal"
 NullLiteral "Null Literal"
   = "null" { return null; }
 
+EndlessLiteral "endless literal"
+  = "endless" ![a-zA-Z0-9_] {
+      return helpers.createNode('Literal', {
+        value: 'endless',
+        valueType: 'endless',
+        location: location()
+      });
+    }
+
 // Wildcard literal - always true in conditional contexts
 WildcardLiteral "Wildcard Literal"
   = "*" { return "*"; }

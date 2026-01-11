@@ -129,6 +129,7 @@ const allowedStartRules = [
   'Start',
   'ExeBlockBody',
   'ForBlockBody',
+  'LoopBlockBody',
   'ForBlockStatementList',
   'WhenConditionList',
   'WhenExpressionConditionList',

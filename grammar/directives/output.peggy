@@ -294,12 +294,12 @@ SlashOutput
       const rest = input.substring(peg$currPos).trim();
       return rest.length === 0 || /[^A-Z0-9_]/.test(rest[0]);
     } {
-      helpers.mlldError("Invalid environment variable name in /output directive. Expected: env:VARIABLE_NAME", "VARIABLE_NAME", location());
+      helpers.mlldError("Invalid environment variable name in output directive. Expected: env:VARIABLE_NAME", "VARIABLE_NAME", location());
     }
-    
-  // Error: Generic /output syntax error (catch-all)
+
+  // Error: Generic output syntax error (catch-all)
   / DirectiveContext OutputKeyword {
-      helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output \"path\", or /output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: /var @content = \"your text\", then use: /output @content to \"file.txt\"", "@", location());
+      helpers.mlldError("Invalid output syntax. Expected: output @variable to \"path\", output \"path\", or output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: var @content = \"your text\", then use: output @content to \"file.txt\"", "@", location());
     }
 
 // -------------------------------------------------------------
@@ -394,7 +394,7 @@ SlashLog
   
   // Error: Missing content after /log
   / DirectiveContext LogKeyword _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing content in /log directive. Expected variable or content to log.", "@", location());
+      helpers.mlldError("Missing content in log directive. Expected variable or content to log.", "@", location());
     }
     
   // Error: Invalid @ usage
@@ -402,12 +402,12 @@ SlashLog
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      helpers.mlldError("Invalid variable reference in /log directive. Variable names must start with a letter or underscore.", "identifier", location());
+      helpers.mlldError("Invalid variable reference in log directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
-    
-  // Error: Generic /log syntax error (catch-all)
+
+  // Error: Generic log syntax error (catch-all)
   / DirectiveContext LogKeyword {
-      helpers.mlldError("Invalid /log syntax. Expected: /log @variable or /log (for document output). /log is syntactic sugar for /output to stdout.", "@", location());
+      helpers.mlldError("Invalid log syntax. Expected: log @variable or log (for document output). log is syntactic sugar for output to stdout.", "@", location());
     }
 
 // Output source types

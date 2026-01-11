@@ -7,6 +7,7 @@ VarRHSContent "var assignment value"
   / ExpressionWithOperator      // Try expressions FIRST but only if operators present
   / WhenExpression              // Allow value-returning when-expressions
   / ForExpression               // for @var in @collection => expression
+  / LoopExpression              // loop(...) [ ... ]
   / ForeachCommandExpression    // foreach @command(@arrays)
   / ExecResultMethodCall        // @func(args).method(args) on exec result
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
@@ -568,6 +569,51 @@ ForExpression "for expression"
 ForExpressionBody
   = "=>" _ expr:VarRHSContent { return expr; }
   / block:ForBlockAction { return block.statements; }
+
+// LOOP EXPRESSION - loop(...) [ ... ]
+LoopExpression "loop expression"
+  = "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ block:LoopBlockAction {
+      const limit = header ? header.limit : null;
+      const rateMs = header ? header.rateMs : null;
+      const until = untilClause || null;
+      const statements = block.statements || [];
+
+      return helpers.createLoopExpression(
+        limit,
+        rateMs,
+        until,
+        statements,
+        location()
+      );
+    }
+  / "loop" _ "(" _ ")" {
+      helpers.mlldError(
+        'loop() requires a limit or endless. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        'loop(10)',
+        location()
+      );
+    }
+  / "loop" _ limit:LoopLimit _ {
+      helpers.mlldError(
+        'Missing \'(\' after loop keyword. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        '(',
+        location()
+      );
+    }
+  / "loop" _ "until" _ !WhenConditionExpression {
+      helpers.mlldError(
+        'loop until requires a condition. Expected: loop until @condition [ ... ]',
+        '@condition',
+        location()
+      );
+    }
+  / "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ !("[" / "until") {
+      helpers.mlldError(
+        'loop requires a block. Expected: loop [ ... ]',
+        '[',
+        location()
+      );
+    }
 
 ForBatchPipeline "for batch pipeline"
   = _ "=>" _ "||" _ firstParallel:ParallelSequence rest:PipelineRest* caps:PipelineParallelSpec? {

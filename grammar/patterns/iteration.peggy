@@ -51,6 +51,53 @@ ForParallelSpec
       return { parallel: true, cap: Number(cap) };
     }
 
+LoopLimit "loop limit"
+  = endless:EndlessLiteral {
+      return { kind: 'endless', value: 'endless', raw: 'endless' };
+    }
+  / cap:NumberLiteral {
+      return { kind: 'number', value: Number(cap), raw: String(cap) };
+    }
+  / variable:UnifiedVariableNoTail {
+      return {
+        kind: 'variable',
+        value: variable,
+        raw: helpers.reconstructRawString(variable)
+      };
+    }
+
+LoopHeader "loop header"
+  = "(" _ limit:LoopLimit _ rate:("," _ wait:TimeDurationLiteral)? _ ")" {
+      const wait = rate ? rate[2] : null;
+      const rateMs = wait ? helpers.ttlToSeconds(wait.value, wait.unit) * 1000 : null;
+      return {
+        limit: limit.value,
+        limitKind: limit.kind,
+        rawLimit: limit.raw,
+        rateMs,
+        hasRate: rateMs !== null
+      };
+    }
+  / "(" _ limit:LoopLimit _ "," _ !TimeDurationLiteral {
+      helpers.mlldError(
+        'Loop pacing expects a duration like 1s or 500ms.',
+        '1s',
+        location()
+      );
+    }
+  / "(" _ ")" {
+      helpers.mlldError(
+        'loop() requires a limit or endless. Expected: loop(<cap>[, <rate>])',
+        'loop(10)',
+        location()
+      );
+    }
+
+LoopUntilClause "loop until clause"
+  = _ "until" _ condition:WhenConditionExpression {
+      return condition;
+    }
+
 // Single action for for loops - uses unified effect actions
 ForSingleAction "for action"
   // Nested for directive
@@ -160,6 +207,47 @@ ForBlockStatement "for block statement"
   / ForNestedDirective
   / ForSingleAction
 
+LoopBlockStatementList "loop block statement list"
+  = leadingComments:LeadingBlockComment* _ first:LoopBlockStatement rest:(BlockStatementSeparator stmt:LoopBlockStatement { return stmt; })* trailing:BlockComments* {
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
+      const stmts = [...normalize(first), ...rest.flatMap(normalize)];
+      if (leadingComments.length > 0 && stmts.length > 0) {
+        const firstStmt = stmts[0];
+        if (firstStmt && typeof firstStmt === 'object') {
+          const existingMeta = firstStmt.meta || {};
+          stmts[0] = {
+            ...firstStmt,
+            meta: {
+              ...existingMeta,
+              comment: existingMeta.comment || leadingComments[0],
+              leadingComments: leadingComments
+            }
+          };
+        }
+      }
+      return stmts;
+    }
+  / BlockComments+ { return []; }
+
+LoopBlockReturnStatement "loop block return statement"
+  = "=>" _ {
+      helpers.mlldError(
+        'Return statements are not allowed in loop blocks. Use done or continue.',
+        'done',
+        location()
+      );
+    }
+
+LoopBlockStatement "loop block statement"
+  = LoopBlockReturnStatement
+  / LetAssignment
+  / AugmentedAssignment
+  / DoneLiteral
+  / ContinueLiteral
+  / WhenExpressionAny
+  / ForNestedDirective
+  / ForSingleAction
+
 ForBlockReturnStatement "for block return statement"
   = "=>" _ value:WhenRHSAction noise:BlockComments* {
       const normalized = Array.isArray(value) ? value.flat() : [value];
@@ -196,6 +284,13 @@ ForBlockBody "for block body"
       return {
         statements,
         returnStmt: null
+      };
+    }
+
+LoopBlockBody "loop block body"
+  = statements:LoopBlockStatementList {
+      return {
+        statements
       };
     }
 
@@ -249,6 +344,56 @@ ForBlockAction "for block action"
     } {
       helpers.mlldError(
         `Unterminated block in for action. Expected ']' to close the block.`,
+        "]",
+        location()
+      );
+    }
+
+LoopBlockAction "loop block action"
+  = "[" _ body:LoopBlockBody _ "]" {
+      const statements = body.statements || [];
+      return {
+        type: 'LoopBlock',
+        statements,
+        meta: {
+          statementCount: statements.length
+        }
+      };
+    }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'LoopBlockBody',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block in loop action. Expected ']' to close the block.`,
         "]",
         location()
       );

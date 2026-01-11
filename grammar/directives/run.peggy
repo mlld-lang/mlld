@@ -445,12 +445,12 @@ SlashRun
       // Check if we have an unclosed code block after language
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed code block in /run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
+      helpers.mlldError("Unclosed code block in run directive. Expected closing brace for " + lang + " code.", String.fromCharCode(125), location());
     }
-    
-  // Error: Generic /run syntax error (catch-all)
+
+  // Error: Generic run syntax error (catch-all)
   / DirectiveContext RunKeyword {
-      helpers.mlldError("Invalid /run syntax. Expected: /run cmd {command}, /run language {code}, or /run @exec", String.fromCharCode(123));
+      helpers.mlldError("Invalid run syntax. Expected: run cmd {command}, run language {code}, or run @exec", String.fromCharCode(123));
     }
 
 // -------------------------------------------------------------

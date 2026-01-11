@@ -105,12 +105,12 @@ SlashImport
   / DirectiveContext ImportKeyword _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      helpers.mlldError("Unclosed path bracket in /import shorthand. Expected closing bracket.", "]", location());
+      helpers.mlldError("Unclosed path bracket in import shorthand. Expected closing bracket.", "]", location());
     }
-    
-  // Error: Generic /import syntax error (catch-all)
+
+  // Error: Generic import syntax error (catch-all)
   / DirectiveContext ImportKeyword {
-      helpers.mlldError("Invalid /import syntax. Expected: /import \"path\", /import @module, or /import { items } from \"path\"", "\"", location());
+      helpers.mlldError("Invalid import syntax. Expected: import \"path\", import @module, or import { items } from \"path\"", "\"", location());
     }
 
 // Shorthand import alias must include @ prefix when provided

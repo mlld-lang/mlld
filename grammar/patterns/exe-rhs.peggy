@@ -31,6 +31,7 @@ ExeRHSContent "exe assignment value"
     }
   / WhenExpression              // when: [...] expressions for conditional execution
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
+  / LoopExpressionExe           // loop(...) [ ... ]
   / ExeForeachPattern           // foreach @command(@arrays) as executable body
   / ExeRunCommandWithStdin      // run {command} with { stdin: @var } - explicit run with stdin
   / ExeRunCommandPipeStdin      // run @var | {command} - pipe sugar stdin syntax
@@ -1018,4 +1019,48 @@ ForExpressionExe "for expression with actions"
 
 ForExpressionExeBody
   = "=>" _ action:ForExpressionAction { return action; }
-  / block:ForBlockAction { return block.statements; }
+
+// LOOP EXPRESSION - loop(...) [ ... ]
+LoopExpressionExe "loop expression"
+  = "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ block:LoopBlockAction {
+      const limit = header ? header.limit : null;
+      const rateMs = header ? header.rateMs : null;
+      const until = untilClause || null;
+      const statements = block.statements || [];
+
+      return helpers.createLoopExpression(
+        limit,
+        rateMs,
+        until,
+        statements,
+        location()
+      );
+    }
+  / "loop" _ "(" _ ")" {
+      helpers.mlldError(
+        'loop() requires a limit or endless. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        'loop(10)',
+        location()
+      );
+    }
+  / "loop" _ limit:LoopLimit _ {
+      helpers.mlldError(
+        'Missing \'(\' after loop keyword. Expected: loop(<cap>[, <rate>]) [ ... ]',
+        '(',
+        location()
+      );
+    }
+  / "loop" _ "until" _ !WhenConditionExpression {
+      helpers.mlldError(
+        'loop until requires a condition. Expected: loop until @condition [ ... ]',
+        '@condition',
+        location()
+      );
+    }
+  / "loop" _ header:LoopHeader? untilClause:LoopUntilClause? _ !("[" / "until") {
+      helpers.mlldError(
+        'loop requires a block. Expected: loop [ ... ]',
+        '[',
+        location()
+      );
+    }

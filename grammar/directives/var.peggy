@@ -228,24 +228,24 @@ SlashVar "var directive"
     
   // Error: Missing value after =
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ "=" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing value in /var directive. Expected a value after '=' for variable '@" + id + "'.", "value", location());
+      helpers.mlldError("Missing value in var directive. Expected a value after '=' for variable '@" + id + "'.", "value", location());
     }
-    
+
   // Error: Missing = after variable name
   / DirectiveContext VarKeyword _ "@" id:BaseIdentifier _ &{
       // Look ahead to see if there's content but no =
       const rest = input.substring(peg$currPos).trim();
       return rest.length > 0 && rest[0] !== '=';
     } {
-      helpers.mlldError("Invalid /var syntax. Expected '=' after variable name '@" + id + "'.", "=", location());
+      helpers.mlldError("Invalid var syntax. Expected '=' after variable name '@" + id + "'.", "=", location());
     }
-    
+
   // Error: Missing @ before variable name
   / DirectiveContext VarKeyword _ id:BaseIdentifier _ "=" {
       const varLoc = location(); // Use built-in location() function
-      helpers.mlldError("Missing '@' before variable name in /var directive. Use: /var @" + id + " = value", "@", varLoc);
+      helpers.mlldError("Missing '@' before variable name in var directive. Use: var @" + id + " = value", "@", varLoc);
     }
-    
+
   // Error: Missing variable name after @
   / DirectiveContext VarKeyword _ "@" _ &{
       // Check if next character is not a valid identifier start
@@ -253,10 +253,10 @@ SlashVar "var directive"
       return !/[a-zA-Z_]/.test(nextChar);
     } {
       const atLoc = location(); // Use built-in location() function
-      helpers.mlldError("Invalid variable name in /var directive. Variable names must start with a letter or underscore.", "identifier", atLoc);
+      helpers.mlldError("Invalid variable name in var directive. Variable names must start with a letter or underscore.", "identifier", atLoc);
     }
-    
-  // Error: Generic /var syntax error
+
+  // Error: Generic var syntax error
   / DirectiveContext VarKeyword {
-      helpers.mlldError("Invalid /var syntax. Expected: /var @name = value", "@", location());
+      helpers.mlldError("Invalid var syntax. Expected: var @name = value", "@", location());
     }

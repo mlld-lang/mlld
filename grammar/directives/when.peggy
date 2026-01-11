@@ -88,18 +88,18 @@ SlashWhen
   / WhenBlockForm
   // Error recovery: Missing => in simple form
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !"=>" {
-      helpers.mlldError("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action", "=>", location());
+      helpers.mlldError("Invalid when syntax. Expected '=>' after condition. Use: when @condition => action", "=>", location());
     }
   // Error recovery: Missing action after =>
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
-      helpers.mlldError("Missing action in /when directive. Expected a directive after '=>'.", "directive", location());
+      helpers.mlldError("Missing action in when directive. Expected a directive after '=>'.", "directive", location());
     }
   // Error recovery: deprecated 'all' modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" {
       helpers.mlldError(
         "The 'all' modifier has been removed from mlld. Use the && operator instead.\n\n" +
-        "Old syntax: /when all [@cond1 @cond2] => action\n" +
-        "New syntax: /when (@cond1 && @cond2) => action\n\n" +
+        "Old syntax: when all [@cond1 @cond2] => action\n" +
+        "New syntax: when (@cond1 && @cond2) => action\n\n" +
         "The && operator is more familiar and flexible.",
         "&&",
         location()
@@ -125,25 +125,25 @@ SlashWhen
       }
       return depth > 0; // EOF reached without closing bracket
     } {
-      helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
+      helpers.mlldError("Unclosed brackets in when directive. Expected ']' to close the condition list.", "]", location());
     }
   // Error recovery: Invalid modifier - check it's not a valid modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _
     modifier:BaseIdentifier &{ return modifier !== "first"; } _ ":"? _ "[" {
-      helpers.mlldError("Invalid /when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
+      helpers.mlldError("Invalid when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
             "For AND/OR logic, use && and || operators instead.\n\n" +
             "Examples:\n" +
-            "  /when @var first [...] => action\n" +
-            "  /when (@cond1 && @cond2) => action  (instead of 'all')\n" +
-            "  /when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
+            "  when @var first [...] => action\n" +
+            "  when (@cond1 && @cond2) => action  (instead of 'all')\n" +
+            "  when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
     }
   // Error recovery: Generic catch-all
   / DirectiveContext WhenKeyword {
-      helpers.mlldError("Invalid /when syntax. Valid forms:\\n" +
-            "  /when @condition => action          (simple form)\\n" +
-            "  /when @variable [...]              (switch form)\\n" +
-            "  /when @var first [...] => action   (block form with modifier)\\n" +
-            "  /when [...] => action               (bare block form)", "@", location());
+      helpers.mlldError("Invalid when syntax. Valid forms:\\n" +
+            "  when @condition => action          (simple form)\\n" +
+            "  when @variable [...]              (switch form)\\n" +
+            "  when @var first [...] => action   (block form with modifier)\\n" +
+            "  when [...] => action               (bare block form)", "@", location());
     }
 
 // -------------------------------------------------------------
