@@ -15,41 +15,37 @@ import "@payload" as @payload
 var @filterTopic = @payload.topic ? @payload.topic : ""
 var @topicsList = @payload.topics ? @payload.topics : ""
 
->> Testable topics (leaf nodes from howto, excluding broad categories)
->> These map to specific atoms that can be tested in isolation
->> Syntax: variables, templates, file-loading, pipelines, escaping
->> Commands: run, output, log, append
->> Control-flow: when, for, foreach
->> Modules: importing, exporting
->> Security: guards
->> Executables: exe-js, exe-node
-var @topics = [
-  "variables-basics",
-  "variables-conditional",
-  "templates-basics",
-  "templates-multiline",
-  "file-loading-basics",
-  "file-loading-sections",
-  "pipelines-basics",
-  "pipelines-chaining",
-  "escaping",
-  "run-basics",
-  "run-params",
-  "output",
-  "log",
-  "append",
-  "when-simple",
-  "when-first",
-  "for-arrow",
-  "for-parallel",
-  "foreach",
-  "importing-registry",
-  "importing-local",
-  "exporting",
-  "guards-basics",
-  "exe-js",
-  "exe-node"
+>> Load all atoms dynamically from docs/src/atoms
+var @atomFiles = <@base/docs/src/atoms/**/*.md>
+
+>> Extract topic IDs from atom frontmatter
+exe @extractTopicIds(files) = js {
+  return files
+    .map(f => f.fm?.id)
+    .filter(id => id && !id.startsWith('_'));
+}
+var @allTopics = @extractTopicIds(@atomFiles)
+
+>> Skip list: broad categories and special atoms not suitable for isolated QA testing
+>> These are either index pages, meta docs, or require complex context
+var @skipTopics = [
+  "intro",
+  "syntax",
+  "commands",
+  "control-flow",
+  "modules",
+  "security",
+  "configuration",
+  "patterns",
+  "mistakes"
 ]
+
+>> Filter out skipped topics
+exe @applySkipList(topics, skip) = js {
+  const skipSet = new Set(skip);
+  return topics.filter(t => !skipSet.has(t));
+}
+var @topics = @applySkipList(@allTopics, @skipTopics)
 
 >> Configuration
 var @outputDir = "@base/qa"
