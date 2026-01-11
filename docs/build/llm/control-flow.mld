@@ -32,6 +32,7 @@ var @forAtoms = [
 >> Standalone atoms
 var @parallelFor = <@base/docs/src/atoms/control-flow/for-parallel.md>
 var @foreach = <@base/docs/src/atoms/control-flow/foreach.md>
+var @loop = <@base/docs/src/atoms/control-flow/loop.md>
 var @while = <@base/docs/src/atoms/control-flow/while.md>
 var @noExit = <@base/docs/src/atoms/control-flow/no-early-exit.md>
 
@@ -53,6 +54,7 @@ var @whenSection = @buildSection("WHEN_DECISIONS", "`when` handles conditionals.
 var @forSection = @buildSection("FOR_ITERATION", "`for` iterates over collections. Arrow form for single actions, block form for multiple.", @forStripped)
 var @parallelSection = @wrapSection("PARALLEL_FOR", @strip(@parallelFor))
 var @foreachSection = @wrapSection("FOREACH", @strip(@foreach))
+var @loopSection = @wrapSection("LOOP_BLOCKS", @strip(@loop))
 var @whileSection = @wrapSection("WHILE_LOOPS", @strip(@while))
 var @noExitSection = @wrapSection("NO_EARLY_EXIT", @strip(@noExit))
 
@@ -61,6 +63,7 @@ var @allSections = [
   @forSection,
   @parallelSection,
   @foreachSection,
+  @loopSection,
   @whileSection,
   @noExitSection
 ]

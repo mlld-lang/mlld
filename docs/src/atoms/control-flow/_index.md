@@ -6,4 +6,4 @@ category: control-flow
 updated: 2026-01-05
 ---
 
-`when` handles conditionals. `for` and `foreach` handle iteration. `while` provides bounded loops.
+`when` handles conditionals. `for`, `foreach`, and `loop` handle iteration. `while` provides bounded pipeline loops.

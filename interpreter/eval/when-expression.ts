@@ -18,9 +18,8 @@ import { logger } from '@core/utils/logger';
 import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
 import { VariableImporter } from './import/VariableImporter';
 import { combineValues } from '../utils/value-combine';
-import { extractVariableValue } from '../utils/variable-resolution';
+import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
-import { evaluateUnifiedExpression } from './expressions';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -97,10 +96,16 @@ async function evaluateControlLiteral(
   if (Array.isArray(val)) {
     const target = val.length === 1 ? val[0] : val;
     if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {
-      const evaluated = await evaluateUnifiedExpression(target as any, env);
+      const evaluated = await evaluate(target as any, env, { isExpression: true });
+      if (isVariable(evaluated.value)) {
+        return extractVariableValue(evaluated.value, env);
+      }
       return evaluated.value;
     }
     const evaluated = await evaluate(val as any, env, { isExpression: true });
+    if (isVariable(evaluated.value)) {
+      return extractVariableValue(evaluated.value, env);
+    }
     return evaluated.value;
   }
   if (val === 'done' || val === 'continue') {

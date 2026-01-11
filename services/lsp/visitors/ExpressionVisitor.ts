@@ -23,6 +23,7 @@ export class ExpressionVisitor extends BaseVisitor {
            node.type === 'TernaryExpression' ||
            node.type === 'WhenExpression' ||
            node.type === 'ForExpression' ||
+           node.type === 'LoopExpression' ||
            node.type === 'LetAssignment' ||
            node.type === 'ExeReturn';
   }
@@ -43,6 +44,9 @@ export class ExpressionVisitor extends BaseVisitor {
         break;
       case 'ForExpression':
         this.visitForExpression(node, context);
+        break;
+      case 'LoopExpression':
+        this.visitLoopExpression(node, context);
         break;
       case 'LetAssignment':
         this.visitLetAssignment(node, context);
@@ -432,6 +436,114 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
 
+  private visitLoopExpression(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const loopIndex = nodeText.indexOf('loop');
+
+    if (loopIndex !== -1) {
+      const loopOffset = node.location.start.offset + loopIndex;
+      const loopPos = this.document.positionAt(loopOffset);
+      this.tokenBuilder.addToken({
+        line: loopPos.line,
+        char: loopPos.character,
+        length: 4,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    const headerMatch = nodeText.match(/\(([^)]*)\)/);
+    if (headerMatch && headerMatch.index !== undefined) {
+      const openOffset = node.location.start.offset + headerMatch.index;
+      const closeOffset = openOffset + headerMatch[0].length - 1;
+      this.operatorHelper.addOperatorToken(openOffset, 1);
+      this.operatorHelper.addOperatorToken(closeOffset, 1);
+
+      const inner = headerMatch[1];
+      const innerStart = openOffset + 1;
+      for (let i = 0; i < inner.length; i++) {
+        const ch = inner[i];
+        if (/\d/.test(ch)) {
+          let j = i;
+          while (j < inner.length && /\d/.test(inner[j])) j++;
+          const numPos = this.document.positionAt(innerStart + i);
+          this.tokenBuilder.addToken({
+            line: numPos.line,
+            char: numPos.character,
+            length: j - i,
+            tokenType: 'number',
+            modifiers: []
+          });
+          i = j - 1;
+          continue;
+        }
+        if (ch === ',') {
+          this.operatorHelper.addOperatorToken(innerStart + i, 1);
+        }
+      }
+
+      const endlessIndex = inner.indexOf('endless');
+      if (endlessIndex !== -1) {
+        const endlessPos = this.document.positionAt(innerStart + endlessIndex);
+        this.tokenBuilder.addToken({
+          line: endlessPos.line,
+          char: endlessPos.character,
+          length: 'endless'.length,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+    }
+
+    if (node.limit && typeof node.limit === 'object' && node.limit.type) {
+      this.mainVisitor.visitNode(node.limit, context);
+    }
+
+    const untilIndex = nodeText.indexOf('until');
+    if (untilIndex !== -1) {
+      const untilOffset = node.location.start.offset + untilIndex;
+      const untilPos = this.document.positionAt(untilOffset);
+      this.tokenBuilder.addToken({
+        line: untilPos.line,
+        char: untilPos.character,
+        length: 'until'.length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    if (node.until && Array.isArray(node.until)) {
+      for (const conditionNode of node.until) {
+        this.mainVisitor.visitNode(conditionNode, context);
+      }
+    }
+
+    const openBracketIndex = nodeText.indexOf('[');
+    if (openBracketIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + openBracketIndex,
+        1
+      );
+    }
+
+    if (node.block && Array.isArray(node.block)) {
+      for (const stmt of node.block) {
+        this.mainVisitor.visitNode(stmt, context);
+      }
+    }
+
+    const closeBracketIndex = nodeText.lastIndexOf(']');
+    if (closeBracketIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + closeBracketIndex,
+        1
+      );
+    }
+  }
+
   private visitLetAssignment(node: any, context: VisitorContext): void {
     // Tokenize "let" keyword
     const sourceText = this.document.getText();
@@ -509,4 +621,3 @@ export class ExpressionVisitor extends BaseVisitor {
     }
   }
 }
-

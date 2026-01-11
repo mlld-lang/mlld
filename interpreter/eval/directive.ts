@@ -20,6 +20,7 @@ import { evaluateVar, prepareVarAssignment, type VarAssignmentResult } from './v
 import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
 import { evaluateForDirective } from './for';
+import { evaluateLoopDirective } from './loop';
 import { evaluateExport } from './export';
 import { evaluateGuard } from './guard';
 import { evaluateNeeds, evaluateWants } from './needs';
@@ -350,6 +351,9 @@ async function dispatchDirective(
 
     case 'for':
       return await evaluateForDirective(directive as any, env);
+
+    case 'loop':
+      return await evaluateLoopDirective(directive as any, env);
 
     case 'export':
       return await evaluateExport(directive as any, env);

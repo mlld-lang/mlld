@@ -32,7 +32,7 @@ This guide is modular. Load individual sections as needed:
 | docs/llm/llms-core-rules.txt | The 13 core rules with examples |
 | docs/llm/llms-syntax.txt | Variables, templates, file loading, methods |
 | docs/llm/llms-commands.txt | run, exe, output, log, append, stream |
-| docs/llm/llms-control-flow.txt | when, for, foreach, while, parallel |
+| docs/llm/llms-control-flow.txt | when, for, foreach, loop, while, parallel |
 | docs/llm/llms-modules.txt | Import/export, registry, local dev |
 | docs/llm/llms-patterns.txt | Common workflow patterns |
 | docs/llm/llms-configuration.txt | SDK modes, resolvers, env vars |
@@ -45,7 +45,7 @@ For full context injection, use `llms-combined.txt` which contains all modules.
 </MODULES>
 
 <CORE_CONCEPTS>
-**Directives** - Commands: `var`, `show`, `run`, `for`, `when`, `import`, `export`, `exe`
+**Directives** - Commands: `var`, `show`, `run`, `for`, `loop`, `when`, `import`, `export`, `exe`
 
 **Variables** - Always `@` prefixed: `var @x = 1`, then use `@x`
 

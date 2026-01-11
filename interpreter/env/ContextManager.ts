@@ -221,6 +221,7 @@ export class ContextManager {
     const guardContext = this.peekGuardContext();
     const deniedContext = this.peekDeniedContext();
     const whileContext = this.peekGenericContext('while');
+    const loopContext = this.peekGenericContext('loop');
     const forContext = this.peekGenericContext('for');
     const parallelContext = this.peekGenericContext('parallel');
     const errorsContext = (() => {
@@ -256,6 +257,7 @@ export class ContextManager {
       op: currentOperation ?? null,
       guard: guardContext ?? (deniedContext ? {} : null),
       ...(whileContext ? { while: whileContext } : {}),
+      ...(loopContext ? { loop: loopContext } : {}),
       errors: Array.isArray(resolvedErrors) ? resolvedErrors : []
     };
 

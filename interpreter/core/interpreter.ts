@@ -738,6 +738,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     const result = await evaluateForExpression(node as any, env);
     return { value: result, env };
   }
+
+  if (node.type === 'LoopExpression') {
+    const { evaluateLoopExpression } = await import('../eval/loop');
+    const result = await evaluateLoopExpression(node as any, env);
+    return { value: result, env };
+  }
   
   // Handle data value nodes from the grammar (arrays and objects)
   if (node.type === 'array' || node.type === 'object') {

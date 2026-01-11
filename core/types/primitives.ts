@@ -244,7 +244,8 @@ export type DirectiveKind =
   | 'wants'
   | 'policy'
   | 'while'
-  | 'for';
+  | 'for'
+  | 'loop';
 
 export type DirectiveSubtype =
   // Import subtypes
@@ -257,7 +258,7 @@ export type DirectiveSubtype =
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
   // Unified exe subtypes
   | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeTemplate' | 'exeTemplateFile'
-  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeResolver' | 'exeBlock'
+  | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
   // Path subtypes
   | 'pathAssignment'
   // Run subtypes
@@ -274,6 +275,8 @@ export type DirectiveSubtype =
   | 'for'
   // While subtype
   | 'while'
+  // Loop subtype
+  | 'loop'
   // Needs/Wants subtypes
   | 'needs'
   | 'wants'

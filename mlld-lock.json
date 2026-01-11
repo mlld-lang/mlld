@@ -65,10 +65,17 @@
       "source": "registry://@mlld/claude@2.0.0",
       "integrity": "sha256:d7799fef01e57fbef8fe36c7a4a3d3c51c79c2454522699cd53fc9be1acc4a40",
       "fetchedAt": "2026-01-05T07:21:42.661Z"
+    },
+    "@mlld/prose": {
+      "version": "latest",
+      "resolved": "be87dccc163788ebf1d08bda93a4d3fcec958c6d255230421e136f8fa4a222f2",
+      "source": "registry://@mlld/prose@2.2.0",
+      "integrity": "sha256:be87dccc163788ebf1d08bda93a4d3fcec958c6d255230421e136f8fa4a222f2",
+      "fetchedAt": "2026-01-11T03:02:13.184Z"
     }
   },
   "metadata": {
     "createdAt": "2025-09-27T19:54:02.369Z",
-    "updatedAt": "2026-01-05T07:21:42.661Z"
+    "updatedAt": "2026-01-11T03:02:13.184Z"
   }
 }

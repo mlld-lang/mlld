@@ -188,6 +188,7 @@ All command directives:
 - `for` (arrow, block, collection, parallel)
 - `skip` keyword for filtering
 - `foreach`
+- `loop` blocks
 - `while` loops
 
 ### llms-modules.txt

@@ -1508,7 +1508,21 @@ async function evaluateExecInvocationInternal(
       // Primitives: pass through directly
       argValue = String(arg);
       argValueAny = arg;
-      
+
+    } else if (arg && typeof arg === 'object' && 'needsInterpolation' in arg && Array.isArray((arg as any).parts)) {
+      // Handle needsInterpolation objects from DataString with @references
+      // These are created by the grammar when parsing strings like "template @var"
+      const interpolated = await interpolateWithResultDescriptor((arg as any).parts, env, InterpolationContext.Default);
+      argValue = interpolated;
+      argValueAny = interpolated;
+
+    } else if (Array.isArray(arg) && arg.length > 0 && arg.some((item: any) => item && typeof item === 'object' && item.type === 'VariableReference')) {
+      // Handle array of template parts that need interpolation
+      // This occurs when parsing strings like "template @var" inside block let statements
+      const interpolated = await interpolateWithResultDescriptor(arg, env, InterpolationContext.Default);
+      argValue = interpolated;
+      argValueAny = interpolated;
+
     } else if (arg && typeof arg === 'object' && 'type' in arg) {
       // AST nodes: evaluate based on type
       switch (arg.type) {
@@ -2312,6 +2326,14 @@ async function evaluateExecInvocationInternal(
       // Evaluate the for expression with the parameter environment
       const { evaluateForExpression } = await import('./for');
       result = await evaluateForExpression(forExprNode, execEnv);
+    } else if (definition.language === 'mlld-loop') {
+      const loopExprNode = definition.codeTemplate[0];
+      if (!loopExprNode || loopExprNode.type !== 'LoopExpression') {
+        throw new MlldInterpreterError('mlld-loop executable missing LoopExpression node');
+      }
+
+      const { evaluateLoopExpression } = await import('./loop');
+      result = await evaluateLoopExpression(loopExprNode, execEnv);
     } else if (definition.language === 'mlld-exe-block') {
       const blockNode = Array.isArray(definition.codeTemplate)
         ? (definition.codeTemplate[0] as ExeBlockNode | undefined)

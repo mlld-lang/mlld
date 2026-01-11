@@ -62,6 +62,8 @@ After typing `/`, suggests available directives:
 - `/import` - Import from files/modules
 - `/when` - Conditional execution
 - `/for` - Iterate over collections
+- `/loop` - Block iteration
+- `/while` - Bounded pipeline iteration
 - `/output` - Define output target
 
 #### Variables
@@ -168,9 +170,9 @@ const TOKEN_TYPE_MAP = {
 
 #### Highlighted Elements
 
-- **Directives** - `/var`, `/show`, `/run`, `/while`, `/stream`, `/guard`, etc. → `keyword`
+- **Directives** - `/var`, `/show`, `/run`, `/loop`, `/while`, `/stream`, `/guard`, etc. → `keyword`
 - **Block syntax** - `[...]` brackets, `let` keyword, `=>` return arrow → `operator`/`keyword`
-- **Control flow** - `while`, `done`, `continue`, `stream` → `keyword`
+- **Control flow** - `loop`, `while`, `until`, `done`, `continue`, `stream` → `keyword`
 - **Variables** - Declaration vs reference distinction → `variable`
 - **Templates** - Different template types with proper interpolation rules:
   - Backtick templates with `@var` interpolation
@@ -203,7 +205,7 @@ The semantic token generation follows this flow:
 2. **Visit AST** → `ASTSemanticVisitor` processes each node type
 3. **Dispatch to Visitors** → Specialized visitors handle different node types:
    - `DirectiveVisitor` - Handles directives and their specific syntax
-   - `ExpressionVisitor` - Handles operators, literals, and expressions (including `for` expressions)
+   - `ExpressionVisitor` - Handles operators, literals, and expressions (including `for` and `loop`)
    - `VariableVisitor` - Handles variable references and field access
    - `FileReferenceVisitor` - Handles alligator syntax and comments
    - `ForeachVisitor` - Handles foreach command syntax

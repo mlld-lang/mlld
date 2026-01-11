@@ -96,6 +96,12 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
 
+    if (node.kind === 'loop') {
+      this.visitLoopDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
     if (node.kind === 'export') {
       this.visitExportDirective(node, context);
       this.handleDirectiveComment(node);
@@ -3229,6 +3235,114 @@ export class DirectiveVisitor extends BaseVisitor {
       for (const proc of node.values.processor) {
         this.mainVisitor.visitNode(proc, context);
       }
+    }
+  }
+
+  private visitLoopDirective(node: any, context: VisitorContext): void {
+    const values = node.values;
+    if (!values || !node.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    const headerMatch = directiveText.match(/\(([^)]*)\)/);
+    if (headerMatch && headerMatch.index !== undefined) {
+      const openOffset = node.location.start.offset + headerMatch.index;
+      const closeOffset = openOffset + headerMatch[0].length - 1;
+
+      this.operatorHelper.addOperatorToken(openOffset, 1);
+      this.operatorHelper.addOperatorToken(closeOffset, 1);
+
+      const inner = headerMatch[1];
+      const innerStart = openOffset + 1;
+      for (let i = 0; i < inner.length; i++) {
+        const ch = inner[i];
+        if (/\d/.test(ch)) {
+          let j = i;
+          while (j < inner.length && /\d/.test(inner[j])) j++;
+          const numPos = this.document.positionAt(innerStart + i);
+          this.tokenBuilder.addToken({
+            line: numPos.line,
+            char: numPos.character,
+            length: j - i,
+            tokenType: 'number',
+            modifiers: []
+          });
+          i = j - 1;
+          continue;
+        }
+        if (ch === ',') {
+          this.operatorHelper.addOperatorToken(innerStart + i, 1);
+        }
+      }
+
+      const endlessIndex = inner.indexOf('endless');
+      if (endlessIndex !== -1) {
+        const endlessPos = this.document.positionAt(innerStart + endlessIndex);
+        this.tokenBuilder.addToken({
+          line: endlessPos.line,
+          char: endlessPos.character,
+          length: 'endless'.length,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+    }
+
+    if (values.limit && typeof values.limit === 'object' && values.limit.type) {
+      this.mainVisitor.visitNode(values.limit, context);
+    }
+
+    const untilIndex = directiveText.indexOf('until');
+    if (untilIndex !== -1) {
+      const untilOffset = node.location.start.offset + untilIndex;
+      const untilPos = this.document.positionAt(untilOffset);
+      this.tokenBuilder.addToken({
+        line: untilPos.line,
+        char: untilPos.character,
+        length: 'until'.length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    if (values.until && Array.isArray(values.until)) {
+      for (const conditionNode of values.until) {
+        this.mainVisitor.visitNode(conditionNode, context);
+      }
+    }
+
+    const openBracketIndex = directiveText.indexOf('[');
+    if (openBracketIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + openBracketIndex,
+        1
+      );
+    }
+
+    if (values.block && Array.isArray(values.block)) {
+      for (const stmt of values.block) {
+        if (stmt.type === 'LetAssignment') {
+          this.visitLetAssignment(stmt, node, context);
+        } else if (stmt.type === 'AugmentedAssignment') {
+          this.visitAugmentedAssignment(stmt, node, context);
+        } else if (stmt.type === 'Directive' && stmt.kind === 'output') {
+          this.visitOutputDirective(stmt, context);
+        } else {
+          this.mainVisitor.visitNode(stmt, context);
+        }
+        if (stmt.type === 'Directive' && stmt.meta?.comment) {
+          this.handleDirectiveComment(stmt);
+        }
+      }
+    }
+
+    const closeBracketIndex = directiveText.lastIndexOf(']');
+    if (closeBracketIndex !== -1) {
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + closeBracketIndex,
+        1
+      );
     }
   }
 

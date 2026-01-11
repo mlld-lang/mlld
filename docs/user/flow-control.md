@@ -653,6 +653,52 @@ The delay is applied BETWEEN iterations (not before first or after last).
 
 Note: Use `continue` instead of `retry` in while processors. Retry is for pipeline retries, not loop iteration.
 
+### Loop Blocks (Block Iteration)
+
+Use `loop` for block-based iteration with explicit control flow:
+
+```mlld
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+show @result
+```
+
+Control keywords:
+- `done @value` - Exit loop and return the value
+- `done` - Exit loop and return null
+- `continue @value` - Next iteration with new `@input`
+- `continue` - Next iteration with unchanged `@input`
+
+`@input` is null on the first iteration.
+
+Use `until` to stop before running the body:
+
+```mlld
+loop until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show `@next`
+  continue @next
+]
+```
+
+Context variables (`@mx.loop`):
+- `@mx.loop.iteration` - Current iteration (1-based)
+- `@mx.loop.limit` - Configured cap or null for endless
+- `@mx.loop.active` - true when inside loop
+
+Pacing with `loop(limit, delay)` or `loop(endless, delay)`:
+
+```mlld
+loop(endless, 10ms) until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show "poll"
+  continue @next
+]
+```
+
 ### Parallel Pipelines
 
 Run multiple transforms concurrently within a single pipeline stage using `||`.

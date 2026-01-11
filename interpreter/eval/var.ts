@@ -852,6 +852,10 @@ export async function prepareVarAssignment(
       evalResultOverride: { value: finalVar, env }
     };
     
+  } else if (valueNode && valueNode.type === 'LoopExpression') {
+    const { evaluateLoopExpression } = await import('./loop');
+    resolvedValue = await evaluateLoopExpression(valueNode, env);
+
   } else {
     // Default case - try to interpolate as text
     if (process.env.MLLD_DEBUG === 'true') {
@@ -1079,6 +1083,27 @@ export async function prepareVarAssignment(
     const isComplex = false; // foreach results are typically simple values
     const options = applySecurityOptions();
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, options);
+
+  } else if (valueNode.type === 'LoopExpression') {
+    // Loop expressions can return any type based on done/continue behavior
+    if (isStructuredValue(resolvedValue)) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
+      } else {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
+      }
+    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
+    } else {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
+    }
 
   } else if (valueNode.type === 'WhenExpression') {
     // When expressions can return any type based on matching arm

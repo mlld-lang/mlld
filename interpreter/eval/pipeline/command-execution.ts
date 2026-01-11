@@ -45,6 +45,7 @@ export interface CommandExecutionHookOptions {
 const STRUCTURED_PIPELINE_LANGUAGES = new Set([
   'mlld-for',
   'mlld-foreach',
+  'mlld-loop',
   'js',
   'javascript',
   'node',
@@ -1038,6 +1039,22 @@ export async function executeCommandVariable(
         }
       })();
       return finalizeResult(value, { type: 'array', text });
+    } else if (execDef.language === 'mlld-loop') {
+      const loopNode = execDef.codeTemplate[0];
+      if (!loopNode || loopNode.type !== 'LoopExpression') {
+        throw new Error('mlld-loop executable missing LoopExpression node');
+      }
+      const { evaluateLoopExpression } = await import('../loop');
+      const value = await evaluateLoopExpression(loopNode, execEnv);
+      const text = (() => {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      })();
+      const type = Array.isArray(value) ? 'array' : typeof value === 'object' && value !== null ? 'object' : 'text';
+      return finalizeResult(value, { type, text });
     }
     
     // Regular JavaScript/code execution

@@ -23,6 +23,7 @@ Where interpolation applies:
 | `exe` | Define executable | `exe @f(x) = ...` |
 | `when` | Conditional | `when @x => show "yes"` |
 | `for` | Iteration | `for @x in @arr => ...` |
+| `loop` | Block iteration | `loop(10) [ ... ]` |
 | `import` | Import module | `import { @f } from @m/m` |
 | `export` | Export items | `export { @f, @g }` |
 | `output` | Write to file | `output @x to "f.txt"` |

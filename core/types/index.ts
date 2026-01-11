@@ -31,6 +31,7 @@ export * from './output';
 export * from './when';
 export * from './var'; // New unified var directive
 export * from './for'; // For loop directive and expression
+export * from './loop'; // Loop directive and expression
 export * from './guard'; // Guard directives
 export * from './policy'; // Policy directives
 export * from './load-content'; // Load content types and utilities including URL metadata
@@ -74,6 +75,7 @@ import { WhenExpressionNode } from './when';
 
 // Import ForExpression
 import { ForExpression } from './for';
+import { LoopExpression } from './loop';
 
 // Import Exe block nodes (used by when-expression actions)
 import type { ExeBlockNode, ExeReturnNode } from './exe';
@@ -112,6 +114,7 @@ export type MlldNode =
   | ConditionalArrayElementNode
   | WhenExpressionNode
   | ForExpression
+  | LoopExpression
   | ExeBlockNode
   | ExeReturnNode;
 

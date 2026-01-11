@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-11T05:05:15.218Z
+Generated: 2026-01-11T10:41:55.455Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -1033,6 +1033,51 @@ show foreach @greet(@names) with { separator: " | " }
 >> "Hi alice! | Hi bob! | Hi charlie!"
 ```
 </FOREACH>
+
+<LOOP_BLOCKS>
+Block-based iteration with explicit `done` and `continue`.
+
+```mlld
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+```
+
+**Control keywords:**
+- `done @value` - Exit loop and return value
+- `done` - Exit loop and return null
+- `continue @value` - Next iteration with new `@input`
+- `continue` - Next iteration with unchanged `@input`
+
+`@input` starts as null and updates only via `continue @value`.
+
+**Loop context** (`@mx.loop`):
+- `iteration` - Current iteration (1-based)
+- `limit` - Configured cap or null for endless
+- `active` - true when inside loop
+
+**Until clause:**
+
+```mlld
+loop until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show `@next`
+  continue @next
+]
+```
+
+**With pacing:**
+
+```mlld
+loop(endless, 10ms) until @input >= 3 [
+  let @next = (@input ?? 0) + 1
+  show "poll"
+  continue @next
+]
+```
+</LOOP_BLOCKS>
 
 <WHILE_LOOPS>
 Bounded iteration with `while`.
@@ -2321,6 +2366,7 @@ Where interpolation applies:
 | `exe` | Define executable | `exe @f(x) = ...` |
 | `when` | Conditional | `when @x => show "yes"` |
 | `for` | Iteration | `for @x in @arr => ...` |
+| `loop` | Block iteration | `loop(10) [ ... ]` |
 | `import` | Import module | `import { @f } from @m/m` |
 | `export` | Export items | `export { @f, @g }` |
 | `output` | Write to file | `output @x to "f.txt"` |

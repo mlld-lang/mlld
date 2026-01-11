@@ -686,6 +686,36 @@ export async function evaluateExe(
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
 
+  } else if (directive.subtype === 'exeLoop') {
+    // Handle loop expression executable: @exe name(params) = loop(...) [ ... ]
+    const contentNodes = directive.values?.content;
+    if (!contentNodes || !Array.isArray(contentNodes) || contentNodes.length === 0) {
+      throw new Error('Exec loop directive missing loop expression');
+    }
+
+    const loopExprNode = contentNodes[0];
+    if (!loopExprNode || loopExprNode.type !== 'LoopExpression') {
+      throw new Error('Exec loop directive content must be a LoopExpression');
+    }
+
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Creating exe loop expression:', {
+        identifier,
+        paramNames
+      });
+    }
+
+    executableDef = {
+      type: 'code',
+      codeTemplate: contentNodes,
+      language: 'mlld-loop',
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
+
   } else if (directive.subtype === 'exeBlock') {
     const statements = (directive.values as any)?.statements || [];
     const returnStmt = (directive.values as any)?.return;

@@ -205,6 +205,7 @@ export class CommandExecutorFactory {
       case 'mlld-when':
       case 'mlld-foreach':
       case 'mlld-for':
+      case 'mlld-loop':
         // Special case: mlld-native executables are handled elsewhere, not by a code executor
         // This shouldn't reach here, but return null to trigger special handling
         return null;

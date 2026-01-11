@@ -1,14 +1,9 @@
-exe @randomQuality(input) = js {
-  const values = [0.3, 0.7, 0.95, 0.2, 0.85];
-  return values[mx.try - 1] || 0.1;
+exe @left(input) = `L:@input`
+exe @right(input) = `R:@input`
+exe @combine(input) = js {
+  const [l, r] = JSON.parse(input);
+  return `${l} | ${r}`;
 }
 
-exe @validateQuality(score) = when first [
-  @score > 0.9 => `excellent: @score`
-  @score > 0.8 => `good: @score`
-  @mx.try < 5 => retry
-  none => `failed: best was @score`
-]
-
-var @result = @randomQuality | @validateQuality
-show @result
+var @out = "seed" | @left || @right | @combine
+show @out

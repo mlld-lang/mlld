@@ -1,9 +1,6 @@
-exe @left(input) = `L:@input`
-exe @right(input) = `R:@input`
-exe @combine(input) = js {
-  const [l, r] = JSON.parse(input);
-  return `${l} | ${r}`;
-}
-
-var @out = "seed" | @left || @right | @combine
-show @out
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+show @result

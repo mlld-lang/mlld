@@ -768,6 +768,25 @@ describe('Semantic Tokens', () => {
     });
   });
 
+  describe('Loop Blocks', () => {
+    it('should highlight loop directive with until', async () => {
+      const code = '/loop(3) until @done [continue]';
+      const tokens = await getSemanticTokens(code);
+
+      const directive = tokens.find(t => t.tokenType === 'keyword' && t.text === '/loop');
+      expect(directive).toBeDefined();
+
+      const untilToken = tokens.find(t => t.tokenType === 'keyword' && t.text === 'until');
+      expect(untilToken).toBeDefined();
+
+      const number = tokens.find(t => t.tokenType === 'number' && t.text === '3');
+      expect(number).toBeDefined();
+
+      const varRef = tokens.find(t => t.tokenType === 'variable' && t.text === '@done');
+      expect(varRef).toBeDefined();
+    });
+  });
+
   describe('Streaming', () => {
     it('should highlight stream directive', async () => {
       const code = '/stream @output';
