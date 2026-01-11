@@ -20,6 +20,7 @@ import { highlightMarkdown } from './info';
 export interface HowtoOptions {
   topic?: string;
   subtopic?: string;
+  section?: boolean;
 }
 
 /**
@@ -93,7 +94,8 @@ export async function howtoCommand(options: HowtoOptions = {}): Promise<void> {
 
     const result = await execute(scriptPath, {
       topic: options.topic || '',
-      subtopic: options.subtopic || ''
+      subtopic: options.subtopic || '',
+      section: options.section || false
     }, {
       fileSystem,
       pathService: new PathService(basePath, fileSystem),
@@ -134,27 +136,36 @@ export function createHowtoCommand() {
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       if (flags.help || flags.h) {
         console.log(`
-${chalk.bold('Usage:')} mlld howto [topic] [subtopic]
+${chalk.bold('Usage:')} mlld howto [topic] [subtopic] [--section]
 
 Get help on mlld language features and syntax.
 
+${chalk.bold('Sections:')} syntax, commands, control-flow, modules, patterns, configuration, security, mistakes
+
 ${chalk.bold('Examples:')}
-  mlld howto              Show all available topics
-  mlld howto when         Show all when-related help
-  mlld howto when first   Show just when-first help
-  mlld howto for          Show all for-related help
-  mlld howto for parallel Show just parallel for help
+  mlld howto                    Show all available topics
+  mlld howto syntax             Show ALL syntax help (whole section)
+  mlld howto modules            Show ALL modules help (whole section)
+  mlld howto when               Show all when-related help
+  mlld howto when first         Show just when-first help
+  mlld howto for-parallel       Show just parallel for help
+  mlld howto for-parallel -s    Show entire control-flow section
+  mlld howto grep "default"     Search all docs for "default"
 
 ${chalk.bold('Options:')}
-  -h, --help    Show this help message
+  -s, --section   Show entire section for the matched topic
+  -h, --help      Show this help message
+
+${chalk.bold('Tip:')} Use grep to find topics, then --section to get full context.
         `);
         return;
       }
 
       const topic = args[0];
       const subtopic = args[1];
+      const section = flags.section || flags.s;
 
-      await howtoCommand({ topic, subtopic });
+      await howtoCommand({ topic, subtopic, section });
     }
   };
 }

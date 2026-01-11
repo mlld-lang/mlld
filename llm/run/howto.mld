@@ -41,7 +41,7 @@ exe @buildTree(allAtoms, introAtom) = js {
   ];
 
   for (const cat of categories) {
-    lines.push(cat.name + '/');
+    lines.push(cat.name + '                              (mlld howto ' + cat.name + ' for all)');
     for (const atom of cat.atoms) {
       const text = typeof atom === 'string' ? atom : (atom.content || '');
       const match = text.match(/^---\n([\s\S]*?)\n---/);
@@ -60,8 +60,11 @@ exe @buildTree(allAtoms, introAtom) = js {
     lines.push('');
   }
 
-  lines.push('Use: mlld howto <topic> for details');
-  lines.push('Use: mlld howto grep <pattern> to search');
+  lines.push('Usage:');
+  lines.push('  mlld howto <section>           Show entire section (e.g., howto syntax)');
+  lines.push('  mlld howto <topic>             Show specific topic (e.g., howto for-parallel)');
+  lines.push('  mlld howto <topic> --section   Find topic then show its entire section');
+  lines.push('  mlld howto grep <pattern>      Search all docs for pattern');
   return lines.join('\n');
 }
 
@@ -103,6 +106,15 @@ exe @filterById(atoms, id) = js {
     const idMatch = match[1].match(/^id:\s*(.+)$/m);
     return idMatch && idMatch[1].trim() === id;
   });
+}
+
+>> Get category from an atom's frontmatter
+exe @getCategory(atom) = js {
+  const text = typeof atom === 'string' ? atom : (atom.content || '');
+  const match = text.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return '';
+  const catMatch = match[1].match(/^category:\s*(.+)$/m);
+  return catMatch ? catMatch[1].trim() : '';
 }
 
 >> Get content from atom (handles both string and object)
@@ -187,7 +199,7 @@ exe @addIntro(flatAtoms, introAtom) = js {
 var @allFlatAtoms = @addIntro(@flatAtoms, @introAtom)
 
 >> Get topic from payload (injected by SDK via dynamicModules)
-import { @topic, @subtopic } from @payload
+import { @topic, @subtopic, @section } from @payload
 
 >> Build fullId for subtopic lookup
 exe @buildFullId(topic, subtopic) = js {
@@ -201,10 +213,48 @@ var @hasTopic = @topic != ""
 var @hasSubtopic = @subtopic != ""
 var @isGrep = @topic == "grep"
 var @isIntro = @topic == "intro"
+var @wantSection = @section == true
 
 >> Get matches
 var @exactMatches = @filterById(@allFlatAtoms, @fullId)
 var @topicMatches = @filterByTopic(@allFlatAtoms, @topic)
+
+>> Get section matches when --section flag is used
+>> First, find the category of the matched atom
+exe @getSectionMatches(atoms, topicMatches, exactMatches, fullId, topic) = js {
+  // Try to find the category from exact match first, then topic matches
+  let targetAtom = null;
+  if (exactMatches && exactMatches.length > 0) {
+    targetAtom = exactMatches[0];
+  } else if (topicMatches && topicMatches.length > 0) {
+    targetAtom = topicMatches[0];
+  }
+
+  if (!targetAtom) return [];
+
+  const text = typeof targetAtom === 'string' ? targetAtom : (targetAtom.content || '');
+  const match = text.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return [];
+
+  const catMatch = match[1].match(/^category:\s*(.+)$/m);
+  if (!catMatch) return [];
+
+  const category = catMatch[1].trim();
+
+  // Filter all atoms by this category
+  return atoms.filter(atom => {
+    const t = typeof atom === 'string' ? atom : (atom.content || '');
+    const m = t.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) return false;
+    const idMatch = m[1].match(/^id:\s*(.+)$/m);
+    const cMatch = m[1].match(/^category:\s*(.+)$/m);
+    // Skip index files
+    if (idMatch && idMatch[1].trim().startsWith('_')) return false;
+    return cMatch && cMatch[1].trim() === category;
+  });
+}
+
+var @sectionMatches = @getSectionMatches(@allFlatAtoms, @topicMatches, @exactMatches, @fullId, @topic)
 
 >> Build not-found message with tree
 exe @notFoundMsg(topic, tree) = js {
@@ -215,6 +265,7 @@ exe @notFoundMsg(topic, tree) = js {
 when first [
   @isGrep => show @grepAtoms(@allFlatAtoms, @subtopic)
   @isIntro => show @stripFrontmatter(@introAtom)
+  @wantSection && @sectionMatches.length > 0 => show @joinStripped(@sectionMatches)
   @hasSubtopic && @exactMatches.length > 0 => show @joinStripped(@exactMatches)
   @hasSubtopic => show `Subtopic "@fullId" not found.`
   @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
