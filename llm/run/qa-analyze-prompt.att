@@ -8,6 +8,19 @@ You are analyzing a genuine bug to propose a fix for the QA polish flywheel.
 **Experiment**: @experiment
 **Results file**: @resultsPath
 **Reconciliation**: @reconciliationPath
+**Output file**: @experimentDir/proposed-fix.json
+
+## FIRST: Check for Existing Analysis
+
+Before doing any work, check if a valid analysis already exists:
+
+```bash
+cat @experimentDir/proposed-fix.json 2>/dev/null
+```
+
+**If the file exists and contains a complete analysis** (has `investigation`, `proposed_fixes`, and `recommendation` sections with substantive content), then your work is done. Simply confirm the analysis looks valid and exit.
+
+**If the file is missing, empty, or incomplete**, proceed with the full analysis below.
 
 ## Your Task
 

@@ -9,6 +9,25 @@ You are applying a verified fix to the mlld codebase using git worktrees for iso
 **Base branch**: @baseBranch
 **Worktree branch**: polish/@topic-@experiment
 **QA directory**: @experimentDir
+**Output file**: @experimentDir/fixed.json
+
+## FIRST: Check for Existing Work
+
+Before doing any work, check if this fix was already applied:
+
+```bash
+cat @experimentDir/fixed.json 2>/dev/null
+```
+
+**If the file exists and shows `applied: true`**, check if the worktree branch exists:
+```bash
+git branch --list polish/@topic-@experiment
+```
+
+If both exist and the fix was verified (`verified: true`), your work is done - exit.
+If `verified: false`, the fix needs triage (handled by a separate phase) - exit.
+
+**If fixed.json is missing or incomplete**, proceed with the full apply process below.
 
 ## Investigation
 
