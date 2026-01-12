@@ -10,6 +10,18 @@ A fix was applied but tests failed. Review and decide whether to retry or escala
 **Worktree branch**: @worktreeBranch
 **QA directory**: @experimentDir
 
+## FIRST: Check Current State
+
+Before doing any work, check the current state of this fix:
+
+```bash
+cat @experimentDir/fixed.json 2>/dev/null
+```
+
+**If `escalated: true`**: Already escalated for human review. Exit.
+**If `verified: true`**: Fix succeeded (perhaps after retry). Exit.
+**If `verified: false` and no `escalated` field**: Proceed with triage below.
+
 ## Error Summary
 
 @errors

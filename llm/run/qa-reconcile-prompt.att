@@ -2,6 +2,20 @@
 
 You are reviewing a QA failure to determine whether it represents a **documentation error** or a **missing feature** that should be implemented.
 
+## FIRST: Check for Existing Reconciliation
+
+Before doing any work, check if a valid reconciliation already exists:
+
+```bash
+cat @outputDir/@topic/@experiment/reconciliation.json 2>/dev/null
+```
+
+**If the file exists and contains a complete reconciliation** (has `verdict`, `action`, and `rationale` fields with substantive content), then your work is done. Simply confirm the reconciliation looks valid and exit.
+
+**If the file is missing, empty, or incomplete**, proceed with the full reconciliation below.
+
+---
+
 ### Context
 
 During a documentation reorganization, Claude may have embellished or assumed features that were never actually implemented. The QA system caught these discrepancies, but we need human-like judgment to determine:
