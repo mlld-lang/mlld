@@ -10,7 +10,7 @@ import { @claude } from @mlld/claude
 >> Payload options
 import "@payload" as @p
 var @tier = @p.tier ? @p.tier : "1"
-var @maxIterations = @p.maxIterations ? @p.maxIterations : 10
+var @maxIterations = @p.maxIterations ? @p.maxIterations * 1 : 10
 
 >> Configuration
 var @qaDir = "@base/qa"
@@ -122,12 +122,15 @@ loop until @stable || @iteration >= @maxIterations || @halted [
 
   let @analyzeLimit = @needsAnalyze.slice(0, 10)
   show `  DEBUG: analyzeLimit has @analyzeLimit.length items`
+  show `  DEBUG: entering analyze loop...`
   for parallel(10) @item in @analyzeLimit [
+    show `  DEBUG: loop body for @item.topic/@item.experiment`
     let @prompt = @buildAnalyzePrompt(@item.topic, @item.experiment, @item.resultsPath, @item.reconciliationPath, @item.experimentDir)
     show `  Analyzing: @item.topic/@item.experiment`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
     => @item.topic
   ]
+  show `  DEBUG: exited analyze loop`
 
   >> Reload proposed fixes after phase 2
   let @freshProposedFixes = <@qaDir/**/proposed-fix.json>
