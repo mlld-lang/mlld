@@ -93,6 +93,7 @@ loop until @stable || @iteration >= @maxIterations || @halted [
   show `Phase 1: Reconciling @needsReconcile.length failures...`
 
   let @reconcileLimit = @needsReconcile.slice(0, 20)
+  show `  DEBUG: reconcileLimit has @reconcileLimit.length items`
   for parallel(20) @item in @reconcileLimit [
     let @issuesJson = @item.issues ? `@item.issues` : "[]"
     let @prompt = @buildReconcilePrompt(@item.topic, @item.experiment, @item.status, @item.summary, @issuesJson, @qaDir)
@@ -120,6 +121,7 @@ loop until @stable || @iteration >= @maxIterations || @halted [
   show `Phase 2: Analyzing @needsAnalyze.length genuine bugs...`
 
   let @analyzeLimit = @needsAnalyze.slice(0, 10)
+  show `  DEBUG: analyzeLimit has @analyzeLimit.length items`
   for parallel(10) @item in @analyzeLimit [
     let @prompt = @buildAnalyzePrompt(@item.topic, @item.experiment, @item.resultsPath, @item.reconciliationPath, @item.experimentDir)
     show `  Analyzing: @item.topic/@item.experiment`
@@ -142,6 +144,7 @@ loop until @stable || @iteration >= @maxIterations || @halted [
     }
 
   show `Phase 3a: Applying @needsApply.length fixes in worktrees...`
+  show `  DEBUG: needsApply has @needsApply.length items`
 
   >> Apply fixes in parallel worktrees (limit 5 to avoid git overhead)
   for parallel(5) @item in @needsApply [
@@ -180,6 +183,7 @@ loop until @stable || @iteration >= @maxIterations || @halted [
     }
 
   show `Phase 3a.5: Triaging @needsTriage.length failed fixes...`
+  show `  DEBUG: needsTriage has @needsTriage.length items`
 
   >> Triage sequentially to avoid worktree conflicts
   for @item in @needsTriage [
@@ -240,11 +244,14 @@ loop until @stable || @iteration >= @maxIterations || @halted [
 
   >> Check if stable (no work done this iteration)
   let @workDone = @reconcileLimit.length + @analyzeLimit.length + @needsApply.length + @needsTriage.length
+  show `DEBUG: workDone=@workDone`
   when @workDone == 0 [
     let @stable = true
+    show `DEBUG: stable=true`
   ]
 
   show `Work done: @workDone items (reconcile: @reconcileLimit.length, analyze: @analyzeLimit.length, apply: @needsApply.length, triage: @needsTriage.length)`
+  show `--- End iteration @iteration ---`
   show ``
 ]
 
