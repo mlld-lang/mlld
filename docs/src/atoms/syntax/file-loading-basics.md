@@ -22,6 +22,12 @@ var @docs = <docs/**/*.md>
 show @docs.length
 for @doc in @docs => show @doc.mx.filename
 
+>> JSON globs - each item is auto-parsed
+var @configs = <configs/*.json>
+var @first = @configs[0]
+show @first.data.name                >> access parsed JSON
+show @first.mx.filename              >> file metadata still available
+
 >> With "as" template
 var @toc = <docs/*.md> as "- [<>.mx.fm.title](<>.mx.relative)"
 ```

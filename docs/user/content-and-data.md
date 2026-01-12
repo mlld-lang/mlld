@@ -313,6 +313,21 @@ show @config.json.users[0].email
 show @config.content                    >> Raw JSON string
 ```
 
+Glob-loaded JSON files are also auto-parsed - each item behaves like a single file load:
+
+```mlld
+var @configs = <configs/*.json>
+var @first = @configs[0]
+
+>> Access parsed JSON via .data
+show @first.data.apiUrl
+show @first.data.users[0].email
+
+>> File metadata still available via .mx
+show @first.mx.filename
+show @first.mx.relative
+```
+
 ### Frontmatter Access
 
 Access YAML frontmatter from markdown files:
