@@ -1,9 +1,14 @@
 var @file = <package.json>
 
->> Basic metadata
+>> Path metadata
 show @file.mx.filename                 >> "package.json"
-show @file.mx.relative                 >> "./package.json" 
+show @file.mx.relative                 >> "./package.json"
 show @file.mx.absolute                 >> Full path
+
+>> Directory metadata
+show @file.mx.dirname                  >> Parent directory name
+show @file.mx.relativeDir              >> Relative path to directory
+show @file.mx.absoluteDir              >> Absolute path to directory
 
 >> Token counting
 show @file.mx.tokest                   >> Estimated tokens (fast)

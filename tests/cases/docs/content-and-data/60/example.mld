@@ -1,8 +1,4 @@
-var @file = <config.json>
-
->> ✗ This loses metadata
-var @result = @file | @process  >> @process gets string, no .mx
-
->> ✓ Keep structured form
-exe @process(file) = `Name: @file.mx.filename, Tokens: @file.mx.tokens`
-var @result = @file.keep | @process
+var @files = <docs/*.md>
+for @file in @files => show @file.mx.filename        >> Works
+for @file in @files => show @file.json.status        >> Works
+for @file in @files => show @file.fm.title           >> Works

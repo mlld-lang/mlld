@@ -1,7 +1,10 @@
-var @file = <file.md>
-show @file.mx.relative
->> No value here
+>> Metadata works directly - no .keep needed
+var @file = <config.json>
+show @file.mx.relative                 >> Works
+show @file.json.apiKey                 >> Works
 
-var @file = <file.md>.keep
-show @file.mx.relative
->> Returns a path
+>> Use .keep when passing to JS and you need .mx inside JS
+exe @process(file) = js {
+  return file.mx.filename + ": " + file.mx.tokens + " tokens";
+}
+run @process(@file.keep)               >> .keep preserves metadata for JS
