@@ -93,9 +93,9 @@ loop until @stable || @iteration >= @maxIterations || @halted [
 
   show `Phase 1: Reconciling @needsReconcile.length failures...`
 
-  let @reconcileLimit = @needsReconcile.slice(0, 5)
+  let @reconcileLimit = @needsReconcile.slice(0, 20)
   show `  DEBUG: reconcileLimit has @reconcileLimit.length items`
-  for parallel(3, 60) @item in @reconcileLimit [
+  for parallel(20, 1m) @item in @reconcileLimit [
     let @issuesJson = @item.issues ? `@item.issues` : "[]"
     let @prompt = @buildReconcilePrompt(@item.topic, @item.experiment, @item.status, @item.summary, @issuesJson, @qaDir)
     show `  Reconciling: @item.topic/@item.experiment`
@@ -121,10 +121,10 @@ loop until @stable || @iteration >= @maxIterations || @halted [
 
   show `Phase 2: Analyzing @needsAnalyze.length genuine bugs...`
 
-  let @analyzeLimit = @needsAnalyze.slice(0, 5)
+  let @analyzeLimit = @needsAnalyze.slice(0, 10)
   show `  DEBUG: analyzeLimit has @analyzeLimit.length items`
   show `  DEBUG: entering analyze loop...`
-  for parallel(3, 60) @item in @analyzeLimit [
+  for parallel(10, 1m) @item in @analyzeLimit [
     show `  DEBUG: loop body for @item.topic/@item.experiment`
     show `  DEBUG: calling buildAnalyzePrompt...`
     let @prompt = @buildAnalyzePrompt(@item.topic, @item.experiment, @item.resultsPath, @item.reconciliationPath, @item.experimentDir)
@@ -153,8 +153,10 @@ loop until @stable || @iteration >= @maxIterations || @halted [
   show `Phase 3a: Applying @needsApply.length fixes in worktrees...`
   show `  DEBUG: needsApply has @needsApply.length items`
 
-  >> Apply fixes in parallel worktrees
-  for parallel(3, 60) @item in @needsApply [
+  >> Apply fixes in parallel worktrees (5 concurrent, 1m delay to avoid rate limits)
+  show `  DEBUG: entering apply loop...`
+  for parallel(5, 1m) @item in @needsApply [
+    show `  DEBUG: apply loop body for @item.topic/@item.experiment`
     let @fix = @item.fix
     let @prompt = @buildApplyPrompt(
       @item.topic,
@@ -170,8 +172,10 @@ loop until @stable || @iteration >= @maxIterations || @halted [
     )
     show `  Applying: @item.topic/@item.experiment`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
+    show `  DEBUG: apply @claude returned`
     => @item.topic
   ]
+  show `  DEBUG: exited apply loop`
 
   >> ========== PHASE 3a.5: TRIAGE FAILED FIXES ==========
   >> Reload fixed files to see apply results
