@@ -1,0 +1,100 @@
+## Analyze QA Failure: @topic/@experiment
+
+You are analyzing a failed QA experiment to identify root causes and propose fixes.
+
+## Context
+
+**Topic**: @topic
+**Experiment**: @experiment
+**Results file**: @resultsPath
+**Output file**: @outputPath
+
+## Your Task
+
+1. **Understand the failure**: Read the results.json and experiment.mld (if it exists)
+2. **Understand expected behavior**: Run `mlld howto @topic`
+3. **Investigate root cause**: You MAY read mlld source code to understand why this fails
+4. **Propose fixes**: Suggest concrete fixes with confidence levels
+
+## Investigation Steps
+
+1. Read the experiment results:
+   ```bash
+   cat @resultsPath
+   ```
+
+2. Check for experiment script:
+   ```bash
+   cat @experimentDir/experiment.mld 2>/dev/null || echo "No experiment.mld"
+   ```
+
+3. Understand expected behavior:
+   ```bash
+   mlld howto @topic
+   ```
+
+4. If needed, search mlld source for relevant code:
+   ```bash
+   grep -r "relevant pattern" interpreter/ grammar/
+   ```
+
+## Output Format
+
+Write your analysis to `@outputPath` with this JSON structure:
+
+```json
+{
+  "experiment": "@experiment",
+  "topic": "@topic",
+  "analysis": {
+    "root_cause": "Clear description of why this fails",
+    "root_cause_confidence": 0.85,
+    "complexity": 0.3,
+    "files_involved": ["interpreter/path/to/file.ts", "grammar/path/to/file.peggy"],
+    "requires_investigation": false
+  },
+  "proposed_fixes": [
+    {
+      "id": "fix-1",
+      "description": "Brief description of the fix",
+      "approach": "Detailed implementation steps",
+      "tradeoffs": "Potential side effects or considerations",
+      "confidence": 0.9,
+      "effort": "low"
+    }
+  ],
+  "decision": "fix-1",
+  "decision_reason": null
+}
+```
+
+## Field Guidelines
+
+### analysis
+- `root_cause_confidence`: 0-1, how certain you are about the diagnosis
+- `complexity`: 0-1, how complex the issue is (0=trivial, 1=architectural)
+- `files_involved`: List paths relative to repo root
+- `requires_investigation`: true if you couldn't determine root cause
+
+### proposed_fixes
+- `confidence`: 0-1, how likely this fix will work
+- `effort`: "low" (< 50 lines), "medium" (50-200 lines), "high" (> 200 lines)
+- Include multiple approaches if viable alternatives exist
+
+### decision
+- If your top fix has confidence >= 0.95, set `decision` to that fix's id
+- Otherwise, leave `decision` as null (human will review)
+
+## Constraints
+
+- Focus on behavioral bugs, not documentation issues
+- If the failure is documentation-only (unclear-docs with no broken-promise), set `decision` to "docs-only" and note that no code fix is needed
+- Be conservative with confidence scores
+- Include at least one fix proposal unless the issue is documentation-only
+
+## Begin
+
+1. Read the failure results
+2. Reproduce/understand the issue
+3. Investigate root cause
+4. Write proposed-fixes.json

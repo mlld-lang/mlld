@@ -1,0 +1,88 @@
+>> QA Analysis Orchestrator
+>> Usage: mlld run qa-analyze [--topic <filter>] [--limit <n>]
+>> Analyzes failed QA experiments and proposes fixes
+
+import { @claude } from @mlld/claude
+
+>> Get filters from payload
+import "@payload" as @p
+var @topicFilter = @p.topic ? @p.topic : ""
+var @limit = @p.limit ? @p.limit : 100
+
+>> Configuration
+var @qaDir = "@base/qa"
+
+>> Find all failed experiments that need analysis using shell
+>> Returns JSON array of {topic, experiment, resultsPath, experimentDir}
+exe @findFailures(qaDir, topicFilter, limit) = sh {
+  node -e "
+    const fs = require('fs');
+    const path = require('path');
+    const qaDir = '@qaDir';
+    const topicFilter = '@topicFilter';
+    const limit = parseInt('@limit');
+    const failures = [];
+
+    function walkDir(dir) {
+      if (!fs.existsSync(dir)) return;
+      for (const item of fs.readdirSync(dir)) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          walkDir(fullPath);
+        } else if (item === 'results.json') {
+          try {
+            const content = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+            const experimentDir = path.dirname(fullPath);
+            const proposedPath = path.join(experimentDir, 'proposed-fixes.json');
+            if (content.status === 'fail' &&
+                (!topicFilter || content.topic.startsWith(topicFilter)) &&
+                !fs.existsSync(proposedPath)) {
+              failures.push({
+                topic: content.topic,
+                experiment: content.experiment,
+                resultsPath: fullPath,
+                experimentDir: experimentDir
+              });
+            }
+          } catch (e) {}
+        }
+      }
+    }
+    walkDir(qaDir);
+    console.log(JSON.stringify(failures.slice(0, limit)));
+  "
+}
+
+var @jsonStr = @findFailures(@qaDir, @topicFilter, @limit)
+var @toAnalyze = @jsonStr.data
+
+>> Load prompt template
+var @promptTemplate = <@base/llm/run/qa-analyze-prompt.att>
+
+>> Build prompt by replacing placeholders
+exe @buildPrompt(tmpl, failure) = js {
+  return tmpl
+    .replace(/@topic/g, failure.topic)
+    .replace(/@experiment/g, failure.experiment)
+    .replace(/@resultsPath/g, failure.resultsPath)
+    .replace(/@experimentDir/g, failure.experimentDir)
+    .replace(/@outputPath/g, failure.experimentDir + '/proposed-fixes.json');
+}
+
+>> Report
+show `Found @toAnalyze.length failures to analyze`
+when @topicFilter => show `  (filtered by: @topicFilter)`
+show ``
+
+>> Process if there's work to do
+var @results = for parallel(5) @failure in @toAnalyze [
+  let @prompt = @buildPrompt(@promptTemplate, @failure)
+  show `Analyzing: @failure.topic/@failure.experiment`
+  let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep")
+  => `@failure.topic/@failure.experiment`
+]
+
+when @results.length > 0 => show ``
+when @results.length > 0 => show `Done. Analyzed @results.length experiments.`
+when @toAnalyze.length == 0 => show `Nothing to analyze.`
