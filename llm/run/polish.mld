@@ -44,7 +44,8 @@ var @iteration = 0
 var @stable = false
 
 >> Check for failed verification before starting - HALT if previous run broke things
-var @prevVerification = <@qaDir/verification-result.json>
+var @prevVerificationFiles = <@qaDir/verification-result.json?>
+var @prevVerification = @prevVerificationFiles.length > 0 ? @prevVerificationFiles[0] : null
 var @halted = @prevVerification && @prevVerification.status == "fail"
 
 when @halted => show `ERROR: Previous verification failed. Resolve before continuing.`
