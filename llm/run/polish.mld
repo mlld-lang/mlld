@@ -8,7 +8,6 @@ import { @claude } from @mlld/claude
 
 >> Payload options
 import "@payload" as @p
-var @empty = []
 var @tier = @p.tier ? @p.tier : "1"
 var @maxIterations = @p.maxIterations ? @p.maxIterations : 10
 
@@ -23,8 +22,7 @@ var @analyzePromptTemplate = <@base/llm/run/qa-analyze-prompt.att>
 >> === BUILD PROMPT FUNCTIONS ===
 
 exe @buildReconcilePrompt(tmpl, result) = [
-  >> Workaround for mlld-27r5: ternary with property access
-  let @issues = when first [@result.issues => `@result.issues`; * => "[]"]
+  let @issues = @result.issues ? `@result.issues` : "[]"
   let @s1 = @tmpl.replace("@topic", @result.topic)
   let @s2 = @s1.replace("@experiment", @result.experiment)
   let @s3 = @s2.replace("@status", @result.status)
@@ -44,6 +42,8 @@ exe @buildAnalyzePrompt(tmpl, item) = [
 
 exe @buildApplyPrompt(item) = `Apply this fix to the mlld codebase:
 
+## Context
+
 Topic: @item.topic
 Experiment: @item.experiment
 
@@ -58,12 +58,56 @@ Design fit: @item.fix.recommendation.design_fit
 Proposed changes:
 @item.fix.proposed_fixes
 
-Instructions:
-1. Read each file mentioned in code_changes
-2. Apply the changes exactly as specified
-3. Run relevant tests to verify: npm test
-4. Write fixed.json to @item.experimentDir/ with:
-   {"applied": true, "verified": <true if tests pass>}
+## Instructions
+
+Apply the fix in this order:
+
+### 1. Code Changes
+- Read each file in code_changes
+- Apply the changes exactly as specified
+- If changes don't apply cleanly, adapt to current code state
+
+### 2. Test Fixture (REQUIRED)
+Create the test fixture specified in test_changes:
+- Create directory: the fixture_dir path
+- Create example.md with the mlld code
+- Create expected.md with expected output
+- Run: npm run build:fixtures
+- Note: Support file names must be unique across all tests (prefix with test name)
+
+### 3. CHANGELOG.md Entry (REQUIRED)
+Add entry to CHANGELOG.md under the current unreleased version:
+- Find the topmost version section (e.g., ## [2.0.0-rc82])
+- Add under the appropriate subsection (### Fixed, ### Added, ### Changed)
+- Use format from changelog_entry field
+- If subsection doesn't exist, create it
+
+### 4. Documentation Updates (if doc_changes is not empty)
+For each item in doc_changes:
+- Edit the atom file specified
+- Make the described change
+- Only edit atoms in docs/src/atoms/ (never docs/llm/*.txt directly)
+
+### 5. Verify
+Run the full test suite:
+- npm test
+- If tests fail, fix the issues before proceeding
+
+### 6. Write Result
+Write fixed.json to @item.experimentDir/ with:
+{
+  "applied": true,
+  "verified": <true if all tests pass>,
+  "test_fixture": "<path to created fixture>",
+  "changelog_added": true,
+  "docs_updated": <true if doc_changes were applied>,
+  "errors": [] or ["list", "of", "issues"]
+}
+
+## Commit Requirements
+
+DO NOT commit yet. The fix result will be reviewed and committed in a separate step.
+If tests don't pass, still write fixed.json with verified: false and list the errors.
 `
 
 >> === MAIN LOOP ===
@@ -81,7 +125,6 @@ loop until @stable || @iteration >= @maxIterations [
   show `--- Iteration @iteration ---`
 
   >> Load all state files fresh each iteration
-  >> (workaround for mlld-egb3: do filtering at top level, not in exe)
   let @allResults = <@qaDir/**/results.json>
   let @allReconciliations = <@qaDir/**/reconciliation.json>
   let @allProposedFixes = <@qaDir/**/proposed-fix.json>
@@ -101,7 +144,7 @@ loop until @stable || @iteration >= @maxIterations [
   >> Phase 1: Find & reconcile new failures
   let @needsReconcile = for @r in @allResults
     when (@r.status == "fail" || @r.status == "partial")
-      && @reconciledDirs.includes(@r.mx.absoluteDir) == false
+      && !@reconciledDirs.includes(@r.mx.absoluteDir)
     => {
       topic: @r.topic,
       experiment: @r.experiment,
@@ -128,7 +171,7 @@ loop until @stable || @iteration >= @maxIterations [
   let @needsAnalyze = for @r in @freshReconciliations
     when @r.verdict == "genuine-bug"
       && @r.action == "implement"
-      && @analyzedDirs.includes(@r.mx.absoluteDir) == false
+      && !@analyzedDirs.includes(@r.mx.absoluteDir)
     => {
       topic: @r.topic,
       experiment: @r.experiment,
@@ -153,7 +196,7 @@ loop until @stable || @iteration >= @maxIterations [
   >> Phase 3: Find & apply auto-approved fixes
   let @needsApply = for @f in @freshProposedFixes
     when @f.recommendation.auto_approve == true
-      && @fixedDirs.includes(@f.mx.absoluteDir) == false
+      && !@fixedDirs.includes(@f.mx.absoluteDir)
     => {
       topic: @f.topic,
       experiment: @f.experiment,

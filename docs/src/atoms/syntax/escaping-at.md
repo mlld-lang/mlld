@@ -23,9 +23,10 @@ var @mention = @at("username")    >> "@username"
 >> 2. Use escape sequence in templates
 var @email = `user\@example.com`  >> "user@example.com"
 
->> 3. String concatenation
+>> 3. String concatenation via variables
 var @at = "@"
-var @handle = `@at``username`     >> "@username"
+var @name = "username"
+var @handle = `@at@name`          >> "@username"
 ```
 
 **Common use cases:**

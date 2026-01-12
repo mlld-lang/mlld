@@ -77,6 +77,24 @@ Write `proposed-fix.json` to `@outputDir/`:
           "after": "proposed code"
         }
       ],
+      "test_changes": {
+        "fixture_dir": "tests/cases/feat/<topic>/<experiment>",
+        "files": {
+          "example.md": "mlld code that exercises the fix",
+          "expected.md": "expected output"
+        },
+        "rationale": "Why this fixture tests the fix"
+      },
+      "changelog_entry": {
+        "section": "Fixed|Added|Changed",
+        "text": "**Brief title**: Description of the change"
+      },
+      "doc_changes": [
+        {
+          "atom": "docs/src/atoms/<category>/<atom>.md",
+          "change": "Description of what to update (if any)"
+        }
+      ],
       "effort": "trivial|low|medium|high",
       "tradeoffs": "Any risks or side effects"
     }
@@ -125,6 +143,62 @@ If ANY doubt, set `auto_approve: false`.
 - **low**: 10-50 lines, straightforward
 - **medium**: 50-200 lines, some complexity
 - **high**: 200+ lines or architectural changes
+
+### test_changes (REQUIRED for code fixes)
+
+Every code fix MUST have a test fixture. See docs/dev/TESTS.md for full details.
+
+- **fixture_dir**: Place in `tests/cases/feat/<topic>/<experiment>/` for new behavior
+- **files**: At minimum `example.md` (input) and `expected.md` (output)
+- **example.md**: mlld code that would have failed before the fix, now passes
+- **expected.md**: The correct output after the fix
+- **Support files**: Prefix with test name to avoid collisions (e.g., `foreach-empty-data.json`)
+
+Example:
+```json
+"test_changes": {
+  "fixture_dir": "tests/cases/feat/foreach/empty-array-handling",
+  "files": {
+    "example.md": "/var @arr = []\n/foreach @double(@arr)\n",
+    "expected.md": ""
+  },
+  "rationale": "Verifies empty arrays are handled without throwing"
+}
+```
+
+### changelog_entry (REQUIRED)
+
+Every fix MUST have a changelog entry. Follow Keep a Changelog format.
+
+- **section**: "Fixed" for bug fixes, "Added" for new features, "Changed" for behavior changes
+- **text**: Start with bold feature name, then brief description
+
+Example:
+```json
+"changelog_entry": {
+  "section": "Fixed",
+  "text": "**Empty array in foreach**: foreach now returns empty array instead of throwing when given empty input"
+}
+```
+
+### doc_changes (when applicable)
+
+Update docs when the fix changes documented behavior or fixes something the docs got wrong.
+
+- Only update atoms in `docs/src/atoms/` (never edit `docs/llm/*.txt` directly)
+- If the bug was caused by docs hallucinating a feature, note which atom needs correction
+- If the fix adds/changes behavior, note which atoms describe that behavior
+- Set to empty array `[]` if no doc changes needed (pure bug fix with correct docs)
+
+Example:
+```json
+"doc_changes": [
+  {
+    "atom": "docs/src/atoms/control-flow/foreach.md",
+    "change": "Add note that foreach handles empty arrays by returning empty array"
+  }
+]
+```
 
 ## Begin
 

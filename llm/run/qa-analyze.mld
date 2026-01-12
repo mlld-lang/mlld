@@ -9,66 +9,42 @@ import "@payload" as @p
 var @topicFilter = @p.topic ? @p.topic : ""
 var @limit = @p.limit ? @p.limit : 100
 
->> Configuration
-var @qaDir = "@base/qa"
+>> Load all results.json files via glob
+var @allResults = <@base/qa/**/results.json>
 
->> Find all failed experiments that need analysis using shell
->> Returns JSON array of {topic, experiment, resultsPath, experimentDir}
-exe @findFailures(qaDir, topicFilter, limit) = sh {
-  node -e "
-    const fs = require('fs');
-    const path = require('path');
-    const qaDir = '@qaDir';
-    const topicFilter = '@topicFilter';
-    const limit = parseInt('@limit');
-    const failures = [];
+>> Load all proposed-fixes.json to know which are already analyzed
+var @alreadyAnalyzed = <@base/qa/**/proposed-fixes.json>
 
-    function walkDir(dir) {
-      if (!fs.existsSync(dir)) return;
-      for (const item of fs.readdirSync(dir)) {
-        const fullPath = path.join(dir, item);
-        const stat = fs.statSync(fullPath);
-        if (stat.isDirectory()) {
-          walkDir(fullPath);
-        } else if (item === 'results.json') {
-          try {
-            const content = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-            const experimentDir = path.dirname(fullPath);
-            const proposedPath = path.join(experimentDir, 'proposed-fixes.json');
-            if (content.status === 'fail' &&
-                (!topicFilter || content.topic.startsWith(topicFilter)) &&
-                !fs.existsSync(proposedPath)) {
-              failures.push({
-                topic: content.topic,
-                experiment: content.experiment,
-                resultsPath: fullPath,
-                experimentDir: experimentDir
-              });
-            }
-          } catch (e) {}
-        }
-      }
-    }
-    walkDir(qaDir);
-    console.log(JSON.stringify(failures.slice(0, limit)));
-  "
-}
+>> Build set of directories that already have proposed fixes
+var @analyzedDirs = for @f in @alreadyAnalyzed => @f.mx.absoluteDir
 
-var @jsonStr = @findFailures(@qaDir, @topicFilter, @limit)
-var @toAnalyze = @jsonStr.data
+>> Filter to failed experiments without proposed fixes
+var @failures = for @r in @allResults
+  when @r.status == "fail"
+    && !@analyzedDirs.includes(@r.mx.absoluteDir)
+    && (@topicFilter == "" || @r.topic.startsWith(@topicFilter))
+  => {
+    topic: @r.topic,
+    experiment: @r.experiment,
+    resultsPath: @r.mx.absolute,
+    experimentDir: @r.mx.absoluteDir
+  }
+
+>> Apply limit
+var @toAnalyze = @failures.slice(0, @limit)
 
 >> Load prompt template
 var @promptTemplate = <@base/llm/run/qa-analyze-prompt.att>
 
 >> Build prompt by replacing placeholders
-exe @buildPrompt(tmpl, failure) = js {
-  return tmpl
-    .replace(/@topic/g, failure.topic)
-    .replace(/@experiment/g, failure.experiment)
-    .replace(/@resultsPath/g, failure.resultsPath)
-    .replace(/@experimentDir/g, failure.experimentDir)
-    .replace(/@outputPath/g, failure.experimentDir + '/proposed-fixes.json');
-}
+exe @buildPrompt(tmpl, failure) = [
+  let @s1 = @tmpl.replace("@topic", @failure.topic)
+  let @s2 = @s1.replace("@experiment", @failure.experiment)
+  let @s3 = @s2.replace("@resultsPath", @failure.resultsPath)
+  let @s4 = @s3.replace("@experimentDir", @failure.experimentDir)
+  let @outPath = `@failure.experimentDir/proposed-fixes.json`
+  => @s4.replace("@outputPath", @outPath)
+]
 
 >> Report
 show `Found @toAnalyze.length failures to analyze`
@@ -76,10 +52,10 @@ when @topicFilter => show `  (filtered by: @topicFilter)`
 show ``
 
 >> Process if there's work to do
-var @results = for parallel(5) @failure in @toAnalyze [
+var @results = for parallel(20) @failure in @toAnalyze [
   let @prompt = @buildPrompt(@promptTemplate, @failure)
   show `Analyzing: @failure.topic/@failure.experiment`
-  let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep")
+  let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep") | log
   => `@failure.topic/@failure.experiment`
 ]
 

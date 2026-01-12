@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-11T10:41:55.455Z
+Generated: 2026-01-12T07:19:24.915Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -347,6 +347,18 @@ execute(file, payload, { state: { count: 0 } });
 <VARIABLES>
 Create primitives, arrays, objects, or assign from command/code results.
 
+**var vs exe:** `var` creates values (no parameters). `exe` creates functions (takes parameters).
+
+```mlld
+var @name = "Alice"            >> value - no params
+exe @greet(who) = `Hi @who!`   >> function - takes params
+
+>> Use var for computed values, exe for reusable functions
+var @result = @greet(@name)    >> "Hi Alice!"
+```
+
+**Primitives, arrays, objects:**
+
 ```mlld
 var @n = 42
 var @price = 19.99
@@ -404,9 +416,13 @@ var @status = when [ @score > 90 => "A" * => "F" ]
 var @arr = [ 1, when [ @flag => 2 ], 3 ]
 ```
 
-**Loops in templates:**
+**Template-embedded vs top-level:** Control flow inside templates uses bare `for`/`end` at line start. Top-level directives are separate statements.
 
 ```mlld
+>> TOP-LEVEL: for as a directive (produces output directly)
+for @item in @items => show `- @item.name`
+
+>> TEMPLATE-EMBEDDED: for inside template body
 var @toc = `
 for @item in @items
 - @item.name
@@ -414,7 +430,28 @@ end
 `
 ```
 
-Note: `for` and `end` must be at line start inside template body.
+**Key differences:**
+
+| Context | Syntax | Notes |
+|---------|--------|-------|
+| Top-level | `for @x in @y => action` | Directive on own line |
+| In template | `for @x in @y` ... `end` | Must be at line start in template |
+
+**Template-embedded rules:**
+- `for` and `end` must start at column 1 of their line inside the template
+- No `=>` arrow - the lines between `for` and `end` are the body
+- Works with `when` too:
+
+```mlld
+var @report = `
+when @items.length > 0
+## Items Found
+for @item in @items
+- @item.name
+end
+end
+`
+```
 </TEMPLATES>
 
 <FILE_LOADING>
@@ -461,10 +498,22 @@ Type keywords: `fn`, `var`, `class`, `interface`, `type`, `enum`, `struct`
 
 ```mlld
 var @file = <README.md>
-show @file.mx.filename     >> "README.md"
-show @file.mx.relative     >> relative path
-show @file.mx.tokens       >> token count estimate
-show @file.mx.fm.title     >> frontmatter field
+show @file.mx.filename      >> "README.md"
+show @file.mx.relative      >> relative path from cwd
+show @file.mx.absolute      >> absolute path
+show @file.mx.dirname       >> parent directory name
+show @file.mx.relativeDir   >> relative path to directory
+show @file.mx.absoluteDir   >> absolute path to directory
+show @file.mx.tokens        >> token count estimate
+show @file.mx.fm.title      >> frontmatter field
+```
+
+**In loops** - metadata works directly:
+
+```mlld
+var @files = <docs/*.md>
+for @file in @files => show @file.mx.filename
+for @file in @files => show @file.json.status
 ```
 
 **JSON string accessors** (`.data` and `.text`):
@@ -574,6 +623,8 @@ show @x       >> also works here
 <RESERVED_VARIABLES>
 - `@now` - current timestamp
 - `@input` - stdin/env (must be allowed in config)
+- `@payload` - data passed via SDK or CLI (see payload atom)
+- `@state` - mutable state for SDK integrations
 - `@base` - project root path
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)

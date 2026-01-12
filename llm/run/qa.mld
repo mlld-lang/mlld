@@ -19,23 +19,14 @@ var @tier = @p.tier ? @p.tier : ""
 var @atomFiles = <@base/docs/src/atoms/**/*.md>
 
 >> Extract topics with qa_tier from atom frontmatter
->> Note: Uses JS because mlld's for-loop doesn't support .fm access on iteration vars
->> This is a known limitation - @files[0].fm works but for @f in @files => @f.fm doesn't
-exe @extractQaTopics(files, tierFilter) = js {
-  const tiers = tierFilter ? tierFilter.split(',') : [];
-  return files
-    .filter(f => f.fm?.qa_tier && f.fm?.id && !f.fm.id.startsWith('_'))
-    .filter(f => tiers.length === 0 || tiers.includes(String(f.fm.qa_tier)))
-    .map(f => f.fm.id);
-}
-var @allTopics = @extractQaTopics(@atomFiles, @tier)
+var @tiers = @tier ? @tier.split(",") : []
+var @allTopics = for @f in @atomFiles when @f.fm.qa_tier && @f.fm.id && !@f.fm.id.startsWith("_") && (@tiers.length == 0 || @tiers.includes(`@f.fm.qa_tier`)) => @f.fm.id
 
 >> Configuration
 var @outputDir = "@base/qa"
-var @parallelLimit = 10
+var @parallelLimit = 20
 
 >> Filter topics based on --topic (prefix) or --topics (comma list)
->> Uses native when-first and for-when instead of JS
 exe @filterTopics(all, filter, list) = when first [
   >> --topics (comma list) takes precedence
   @list => for @t in @all when @list.split(",").includes(@t) => @t
@@ -51,45 +42,10 @@ var @activeTopics = @filterTopics(@allTopics, @topic, @topics)
 var @promptTemplate = <@base/llm/run/qa-prompt.att>
 
 >> Build prompt by replacing placeholders
-exe @buildPrompt(tmpl, topic, outputDir) = js {
-  return tmpl.replace(/@topic/g, topic).replace(/@outputDir/g, outputDir);
-}
-
->> Validate results.json schema (kept as JS - complex validation logic)
-exe @validateResult(jsonStr) = js {
-  try {
-    const result = JSON.parse(jsonStr);
-    const errors = [];
-
-    if (!result.experiment) errors.push("missing 'experiment' field");
-    if (!result.topic) errors.push("missing 'topic' field");
-    if (!['pass', 'fail', 'partial'].includes(result.status)) {
-      errors.push("'status' must be pass, fail, or partial");
-    }
-    if (!result.summary) errors.push("missing 'summary' field");
-    if (!Array.isArray(result.issues)) errors.push("'issues' must be an array");
-
-    const validCategories = ['broken-promise', 'unclear-error', 'unclear-docs', 'friction'];
-    const validSeverities = ['blocker', 'major', 'minor', 'enhancement'];
-
-    for (const issue of (result.issues || [])) {
-      if (!validCategories.includes(issue.category)) {
-        errors.push(`invalid category: ${issue.category}`);
-      }
-      if (!validSeverities.includes(issue.severity)) {
-        errors.push(`invalid severity: ${issue.severity}`);
-      }
-      if (!issue.title) errors.push("issue missing 'title'");
-      if (!issue.input) errors.push("issue missing 'input'");
-      if (!issue.expected) errors.push("issue missing 'expected'");
-      if (!issue.actual) errors.push("issue missing 'actual'");
-    }
-
-    return { valid: errors.length === 0, errors };
-  } catch (e) {
-    return { valid: false, errors: [`JSON parse error: ${e.message}`] };
-  }
-}
+exe @buildPrompt(tmpl, topic, outputDir) = [
+  let @s1 = @tmpl.replace("@topic", @topic)
+  => @s1.replace("@outputDir", @outputDir)
+]
 
 >> Create output directory
 run cmd {mkdir -p @outputDir}
@@ -103,12 +59,13 @@ show `Output directory: @outputDir`
 show `Parallel limit: @parallelLimit`
 show ``
 
-var @results = for parallel(10) @t in @activeTopics [
+>> hardcoded parallel until parallel() can take vars
+var @results = for parallel(20) @t in @activeTopics [
   let @prompt = @buildPrompt(@promptTemplate, @t, @outputDir)
   let @topicDir = `@outputDir/@t`
   run cmd {mkdir -p @topicDir}
   show `Starting: @t`
-  let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep")
+  let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep") | log
   => @t
 ]
 
