@@ -1339,6 +1339,10 @@ function hasComplexValues(objOrProperties: any): boolean {
         // Spreads always need lazy evaluation
         return true;
       }
+      if (entry.type === 'conditionalPair') {
+        // Conditional pairs need lazy evaluation to check truthiness
+        return true;
+      }
       if (entry.type === 'pair') {
         const value = entry.value;
         if (value && typeof value === 'object') {

@@ -2976,16 +2976,20 @@ async function evaluateExecInvocationInternal(
         fields: [],
         rawArgs: []
       };
-      
-      // Prepend synthetic source stage and attach builtin effects consistently
-      let normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
+
+      // Attach builtin effects BEFORE prepending synthetic source
+      // This ensures effects are attached to user-defined stages, not to __source__
+      let userPipeline = node.withClause.pipeline;
       try {
         const { attachBuiltinEffects } = await import('./pipeline/effects-attachment');
-        const { functionalPipeline } = attachBuiltinEffects(normalizedPipeline as any);
-        normalizedPipeline = functionalPipeline as any;
+        const { functionalPipeline } = attachBuiltinEffects(userPipeline as any);
+        userPipeline = functionalPipeline as any;
       } catch {
         // If helper import fails, proceed without effect attachment
       }
+
+      // Prepend synthetic source stage after effect attachment
+      const normalizedPipeline = [SOURCE_STAGE, ...userPipeline];
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[exec-invocation] Creating pipeline with synthetic source:', {

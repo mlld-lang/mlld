@@ -457,19 +457,20 @@ async function prepareStructuredInput(
     );
   }
 
+  // Check for Variables that need proper resolution (including auto-execution of executables)
+  // Must come before the generic "has value/mx/internal" check to ensure resolveValue is used
+  if (value && typeof value === 'object' && 'type' in value && 'value' in value && 'name' in value) {
+    const { resolveValue, ResolutionContext } = await import('../../utils/variable-resolution');
+    const resolved = await resolveValue(value, env, ResolutionContext.PipelineInput);
+    const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
+    return finalizeWrapper(nested);
+  }
+
+  // Generic wrapper objects with value/mx/internal but not full Variables (lacks 'name')
   if (value && typeof value === 'object' && 'value' in value && ('mx' in value || 'internal' in value)) {
     const metadata = mergedMetadata(undefined);
     const nested = await prepareStructuredInput(value.value, env, metadata, providedDescriptor);
     return finalizeWrapper(nested);
-  }
-
-  if (value && typeof value === 'object') {
-    const { resolveValue, ResolutionContext } = await import('../../utils/variable-resolution');
-    if ('type' in value && 'value' in value && 'name' in value) {
-      const resolved = await resolveValue(value, env, ResolutionContext.PipelineInput);
-      const nested = await prepareStructuredInput(resolved, env, incomingMetadata, providedDescriptor);
-      return finalizeWrapper(nested);
-    }
   }
 
   if (typeof value === 'string') {

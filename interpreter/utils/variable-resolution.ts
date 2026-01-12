@@ -197,10 +197,10 @@ export async function resolveVariable(
  * @returns The raw JavaScript value
  */
 export async function extractVariableValue(
-  variable: Variable, 
+  variable: Variable,
   env: Environment
 ): Promise<VariableValue> {
-  
+
   // Type-specific resolution using type guards
   if (isPrimitive(variable)) {
     return variable.value;

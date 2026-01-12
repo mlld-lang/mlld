@@ -295,7 +295,7 @@ export class PipelineExecutor {
           attempt: nextStep.context.contextAttempt
         });
         const stageStartTime = Date.now();
-        
+
         const stageEntry = this.pipeline[nextStep.stage];
         const result = Array.isArray(stageEntry)
           ? await this.executeParallelStage(nextStep.stage, stageEntry, nextStep.input, nextStep.context)
@@ -414,6 +414,11 @@ export class PipelineExecutor {
 
     try {
       const structuredInput = this.getStageOutput(stageIndex - 1, input);
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[DEBUG executeSingleStage] stageIndex:', stageIndex, 'command:', command.rawIdentifier);
+        console.error('[DEBUG executeSingleStage] structuredInput from getStageOutput:', JSON.stringify(structuredInput?.data ?? structuredInput?.text ?? structuredInput));
+        console.error('[DEBUG executeSingleStage] structuredOutputs cache:', Array.from(this.structuredOutputs.entries()).map(([k, v]) => [k, v?.data ?? v?.text]));
+      }
       this.logStructuredStage('input', command.rawIdentifier, stageIndex, structuredInput);
       if (process.env.MLLD_DEBUG === 'true') {
         try {
@@ -460,6 +465,9 @@ export class PipelineExecutor {
       const stageOpContext = this.createPipelineOperationContext(command, stageIndex, context);
 
       const stageHookNode = this.createStageHookNode(command);
+
+      // Run pre-effects (leading effects that should run before the stage)
+      await this.runPreEffects(command, structuredInput, stageEnv!);
 
       const executeStage = async (): Promise<StageResult> => {
         let stageExecution: StageExecutionResult | undefined;
@@ -1409,6 +1417,40 @@ export class PipelineExecutor {
     }
     applySecurityDescriptorToStructuredValue(wrapper, descriptor);
     setExpressionProvenance(wrapper, descriptor);
+  }
+
+  /**
+   * Execute pre-effects (leading effects that should run before the stage).
+   * Pre-effects see @input as the output from the previous stage.
+   */
+  private async runPreEffects(
+    command: any,
+    stageInput: StructuredValue | string,
+    stageEnv: Environment
+  ): Promise<void> {
+    if (!command?.preEffects || !Array.isArray(command.preEffects) || command.preEffects.length === 0) return;
+
+    for (const effectCmd of command.preEffects) {
+      try {
+        if (!effectCmd?.rawIdentifier || !isBuiltinEffect(effectCmd.rawIdentifier)) continue;
+        await runBuiltinEffect(effectCmd, stageInput, stageEnv);
+      } catch (err) {
+        // Fail-fast on effect errors
+        if (err instanceof Error) {
+          throw new MlldCommandExecutionError(
+            `Pre-effect @${effectCmd.rawIdentifier} failed: ${err.message}`,
+            undefined,
+            {
+              command: effectCmd.rawIdentifier,
+              exitCode: 1,
+              duration: 0,
+              workingDirectory: this.env.getExecutionDirectory()
+            }
+          );
+        }
+        throw err;
+      }
+    }
   }
 
   /**
