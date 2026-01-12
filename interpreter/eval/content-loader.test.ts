@@ -9,7 +9,7 @@ import * as path from 'path';
 import minimatch from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
-import type { StructuredValueMetadata } from '../utils/structured-value';
+import { isStructuredValue, type StructuredValueMetadata } from '../utils/structured-value';
 
 function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
   expect(metadata?.source).toBe('load-content');
@@ -218,8 +218,9 @@ describe('Content Loader with Glob Support', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThan(0);
-      expect(isLoadContentResult(result[0])).toBe(true);
-      expect(result.map(item => item.relative).sort()).toEqual([
+      // Glob results are now StructuredValues with file metadata in .mx
+      expect(isStructuredValue(result[0])).toBe(true);
+      expect(result.map(item => item.mx?.relative ?? item.relative).sort()).toEqual([
         './todo/spec-a.md',
         './todo/spec-b.md'
       ]);

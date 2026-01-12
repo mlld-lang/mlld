@@ -172,6 +172,11 @@ function deriveArrayText(value: any[]): string {
     return value.map(item => item.content ?? '').join('\n\n');
   }
 
+  // For arrays of StructuredValue items (processed glob results), use .text
+  if (value.length > 0 && isStructuredValue(value[0])) {
+    return value.map(item => item.text ?? '').join('\n\n');
+  }
+
   try {
     return JSON.stringify(value);
   } catch {
@@ -228,7 +233,7 @@ export function wrapLoadContentValue(value: any): StructuredValue {
     // Preserve original variable metadata if tagged
     const variableMetadata = hasVariableMetadata(value) ? getVariableMetadata(value) : undefined;
 
-    // Aggregate security descriptors from LoadContentResult items
+    // Aggregate security descriptors from LoadContentResult items (before processing)
     const aggregatedSecurity = value.length > 0 && isLoadContentResult(value[0])
       ? value
           .map(item => buildLoadSecurityDescriptor(item))
@@ -238,6 +243,15 @@ export function wrapLoadContentValue(value: any): StructuredValue {
       : [];
     const mergedSecurity =
       aggregatedSecurity.length > 0 ? mergeDescriptors(...aggregatedSecurity) : undefined;
+
+    // Process each LoadContentResult item to ensure JSON parsing consistency
+    // This makes glob results behave the same as single file loads
+    const processedItems = value.map(item => {
+      if (isLoadContentResult(item)) {
+        return wrapLoadContentValue(item);
+      }
+      return item;
+    });
 
     const metadata = buildMetadata(
       baseMetadata,
@@ -249,7 +263,7 @@ export function wrapLoadContentValue(value: any): StructuredValue {
       ? buildMetadata(metadata, { security: mergedSecurity })
       : metadata;
 
-    return wrapStructured(value, 'array', deriveArrayText(value), finalMetadata);
+    return wrapStructured(processedItems, 'array', deriveArrayText(processedItems), finalMetadata);
   }
 
   const fallbackText =

@@ -1263,8 +1263,13 @@ function finalizeLoaderResult<T>(
   value: T,
   options?: { type?: StructuredValueType; text?: string; metadata?: StructuredValueMetadata }
 ): T | StructuredValue {
-  // ADD THIS CHECK FIRST - before any other logic
+  // Single LoadContentResult - wrap with JSON parsing
   if (isLoadContentResult(value)) {
+    return wrapLoadContentValue(value) as any;
+  }
+
+  // Array of LoadContentResult - wrap to ensure JSON parsing for each item
+  if (Array.isArray(value) && value.length > 0 && isLoadContentResult(value[0])) {
     return wrapLoadContentValue(value) as any;
   }
 

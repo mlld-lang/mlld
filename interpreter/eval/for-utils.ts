@@ -21,6 +21,11 @@ export function normalizeIterableValue(value: unknown): unknown {
   }
 
   if (isStructuredValue(value)) {
+    // Preserve StructuredValue for file-loaded items to keep .mx metadata accessible
+    // This ensures @f.mx.relative etc. works when iterating over glob results
+    if (value.mx?.filename || value.mx?.relative || value.mx?.absolute) {
+      return value;
+    }
     const normalized = normalizeIterableValue(asData(value));
     attachProvenance(normalized, value);
     return normalized;
