@@ -29,9 +29,13 @@ You are applying a verified fix to the mlld codebase using git worktrees for iso
 
 ### 1. Create Worktree
 
-Create an isolated worktree for this fix:
+Create an isolated worktree for this fix. First clean up any existing worktree from a failed previous attempt:
 
 ```bash
+# Remove existing worktree if present (from previous failed run)
+wt remove polish/@topic-@experiment -y 2>/dev/null || true
+
+# Create fresh worktree
 wt switch --create polish/@topic-@experiment --base @baseBranch -y
 ```
 

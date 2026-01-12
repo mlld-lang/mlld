@@ -30,6 +30,8 @@ exe @buildMergePrompt(baseBranch, qaDir, mergeItems) = template "./qa-merge-prom
 
 exe @buildVerifyPrompt(baseBranch, qaDir, mergeCount, iteration, mergedItems) = template "./qa-verify-prompt.att"
 
+exe @buildTriagePrompt(topic, experiment, baseBranch, worktreeBranch, experimentDir, errors) = template "./qa-triage-prompt.att"
+
 >> === MAIN LOOP ===
 
 show `=== QA Polish Flywheel ===`
@@ -41,11 +43,19 @@ show ``
 var @iteration = 0
 var @stable = false
 
->> Check for failed verification before starting
+>> Check for failed verification before starting - HALT if previous run broke things
 var @prevVerification = <@qaDir/verification-result.json>
-when @prevVerification && @prevVerification.status == "fail" => show `WARNING: Previous verification failed. See @qaDir/verification-result.json`
+var @halted = @prevVerification && @prevVerification.status == "fail"
 
-loop until @stable || @iteration >= @maxIterations [
+when @halted => show `ERROR: Previous verification failed. Resolve before continuing.`
+when @halted => show `See: @qaDir/verification-result.json`
+when @halted => show ``
+when @halted => show `Recommended actions:`
+when @halted => show `  1. Review the failures in verification-result.json`
+when @halted => show `  2. Either revert the problematic merge or fix manually`
+when @halted => show `  3. Delete verification-result.json to resume`
+
+loop until @stable || @iteration >= @maxIterations || @halted [
   let @iteration = @iteration + 1
   show `--- Iteration @iteration ---`
 
@@ -152,8 +162,41 @@ loop until @stable || @iteration >= @maxIterations [
     => @item.topic
   ]
 
+  >> ========== PHASE 3a.5: TRIAGE FAILED FIXES ==========
+  >> Reload fixed files to see apply results
+  let @postApplyFixed = <@qaDir/**/fixed.json>
+  let @needsTriage = for @f in @postApplyFixed
+    when @f.applied == true
+      && @f.verified == false
+      && !@f.escalated
+      && @f.worktree_branch
+    => {
+      topic: @f.topic,
+      experiment: @f.experiment,
+      experimentDir: @f.mx.absoluteDir,
+      worktree_branch: @f.worktree_branch,
+      errors: @f.errors
+    }
+
+  show `Phase 3a.5: Triaging @needsTriage.length failed fixes...`
+
+  >> Triage sequentially to avoid worktree conflicts
+  for @item in @needsTriage [
+    let @errorsJson = @item.errors ? `@item.errors` : "[]"
+    let @prompt = @buildTriagePrompt(
+      @item.topic,
+      @item.experiment,
+      @baseBranch,
+      @item.worktree_branch,
+      @item.experimentDir,
+      @errorsJson
+    )
+    show `  Triaging: @item.topic/@item.experiment`
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
+  ]
+
   >> ========== PHASE 3b: MERGE (Sequential) ==========
-  >> Reload fixed files to see what was applied
+  >> Reload fixed files to see triage results
   let @freshFixed = <@qaDir/**/fixed.json>
   let @needsMerge = for @f in @freshFixed
     when @f.applied == true
@@ -195,12 +238,12 @@ loop until @stable || @iteration >= @maxIterations [
   ]
 
   >> Check if stable (no work done this iteration)
-  let @workDone = @reconcileLimit.length + @analyzeLimit.length + @needsApply.length
+  let @workDone = @reconcileLimit.length + @analyzeLimit.length + @needsApply.length + @needsTriage.length
   when @workDone == 0 [
     let @stable = true
   ]
 
-  show `Work done: @workDone items`
+  show `Work done: @workDone items (reconcile: @reconcileLimit.length, analyze: @analyzeLimit.length, apply: @needsApply.length, triage: @needsTriage.length)`
   show ``
 ]
 
@@ -214,6 +257,8 @@ var @finalPassing = for @r in @finalResults when @r.status == "pass" => @r
 var @finalFailing = for @r in @finalResults when @r.status == "fail" => @r
 var @finalGenuineBugs = for @r in @finalReconciliations when @r.verdict == "genuine-bug" => @r
 var @finalMerged = for @f in @finalFixed when @f.merged == true => @f
+var @finalEscalated = for @f in @finalFixed when @f.escalated == true => @f
+var @finalPendingRetry = for @f in @finalFixed when @f.verified == false && !@f.escalated => @f
 
 show `=== Polish Complete ===`
 show `Iterations: @iteration`
@@ -227,3 +272,5 @@ show `  Reconciled: @finalReconciliations.length`
 show `  Genuine bugs: @finalGenuineBugs.length`
 show `  Analyzed: @finalProposedFixes.length`
 show `  Fixed & Merged: @finalMerged.length`
+show `  Escalated (need human): @finalEscalated.length`
+show `  Pending retry: @finalPendingRetry.length`

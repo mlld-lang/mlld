@@ -22,6 +22,7 @@ The QA polish flywheel is a multi-phase automated system for:
 | `llm/run/qa-reconcile-prompt.att` | Reconciliation prompt template |
 | `llm/run/qa-analyze-prompt.att` | Analysis prompt template |
 | `llm/run/qa-apply-prompt.att` | Worktree apply prompt template |
+| `llm/run/qa-triage-prompt.att` | Triage failed fixes prompt template |
 | `llm/run/qa-merge-prompt.att` | Merge phase prompt template |
 | `llm/run/qa-verify-prompt.att` | Verification prompt template |
 
@@ -57,11 +58,11 @@ The `template` directive auto-interpolates function parameters into the .att fil
 ┌────────────────────────────────────────────────────────────────┐
 │                    QA POLISH FLYWHEEL                          │
 │                                                                │
-│   qa.mld              polish.mld                               │
-│  ┌───────┐     ┌─────────────────────────────────────────┐    │
-│  │  QA   │────▶│ Phase 1    Phase 2    Phase 3a/b/c      │    │
-│  │ Tests │     │ Reconcile → Analyze → Apply/Merge/Verify│    │
-│  └───────┘     └─────────────────────────────────────────┘    │
+│   qa.mld              polish.mld                                        │
+│  ┌───────┐     ┌──────────────────────────────────────────────────┐    │
+│  │  QA   │────▶│ Phase 1    Phase 2    Phase 3a   3a.5  3b    3c  │    │
+│  │ Tests │     │ Reconcile → Analyze → Apply → Triage → Merge → Verify │
+│  └───────┘     └──────────────────────────────────────────────────┘    │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,6 +74,7 @@ The `template` directive auto-interpolates function parameters into the .att fil
 | 1. Reconcile | 20 | results.json (fail) | reconciliation.json |
 | 2. Analyze | 10 | reconciliation.json (genuine-bug) | proposed-fix.json |
 | 3a. Apply | 5 (worktrees) | proposed-fix.json (auto_approve) | fixed.json + worktree commit |
+| 3a.5 Triage | Sequential | fixed.json (verified=false) | fixed.json (retry or escalate) |
 | 3b. Merge | Sequential | fixed.json (verified) | merged commits |
 | 3c. Verify | Single | merged code | verification-result.json |
 
@@ -86,6 +88,10 @@ reconciliation.json
 proposed-fix.json
     ↓ recommendation.auto_approve == true
 fixed.json (worktree_branch, commit_sha)
+    ↓ verified == false?
+    │   ↓ Triage
+    │   → escalated: true (needs human)
+    │   → OR retry → verified: true
     ↓ verified == true
 fixed.json (merged: true)
     ↓
@@ -130,6 +136,7 @@ Each .att file uses `@variable` placeholders that match the exe function paramet
 | `@buildReconcilePrompt` | topic, experiment, status, summary, issues, outputDir | qa-reconcile-prompt.att |
 | `@buildAnalyzePrompt` | topic, experiment, resultsPath, reconciliationPath, experimentDir | qa-analyze-prompt.att |
 | `@buildApplyPrompt` | topic, experiment, baseBranch, experimentDir, rootCause, rootCauseLocation, fixId, confidence, designFit, proposedFixes | qa-apply-prompt.att |
+| `@buildTriagePrompt` | topic, experiment, baseBranch, worktreeBranch, experimentDir, errors | qa-triage-prompt.att |
 | `@buildMergePrompt` | baseBranch, qaDir, mergeItems | qa-merge-prompt.att |
 | `@buildVerifyPrompt` | baseBranch, qaDir, mergeCount, iteration, mergedItems | qa-verify-prompt.att |
 
@@ -141,24 +148,32 @@ Each .att file uses `@variable` placeholders that match the exe function paramet
 
 1. **Phase 3a (Apply in Worktrees)**
    - Does `wt switch --create polish/topic-experiment` work?
+   - Does worktree cleanup work when re-running after failure?
    - Can agent write fixed.json to QA dir from inside worktree?
    - Does agent return to base branch after?
 
-2. **Phase 3b (Merge)**
+2. **Phase 3a.5 (Triage)**
+   - Does triage correctly identify retry vs escalate cases?
+   - Does retry update fixed.json with verified: true?
+   - Does escalate set escalated: true?
+   - Is retry_count tracked correctly?
+
+3. **Phase 3b (Merge)**
    - Does `wt merge` work correctly?
    - Are CHANGELOG conflicts handled?
    - Is fixed.json updated with `merged: true`?
 
-3. **Phase 3c (Verify)**
+4. **Phase 3c (Verify)**
    - Does verification catch broken merges?
    - Is verification-result.json written correctly?
-   - Does loop halt on verification failure?
+   - Does loop halt on verification failure? ✓ (implemented)
 
 ### Spot-Tested (Works)
 
 - Phase logic for finding items needing reconciliation/analysis/apply
 - Template interpolation pattern
 - AST parsing of polish.mld and qa.mld
+- Verification failure halts loop (implemented)
 
 ---
 

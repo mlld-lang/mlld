@@ -1,0 +1,116 @@
+## Triage Failed Fix: @topic/@experiment
+
+A fix was applied but tests failed. Review and decide whether to retry or escalate.
+
+## Context
+
+**Topic**: @topic
+**Experiment**: @experiment
+**Base branch**: @baseBranch
+**Worktree branch**: @worktreeBranch
+**QA directory**: @experimentDir
+
+## Error Summary
+
+@errors
+
+## Your Task
+
+1. **Investigate the failure** in the worktree
+2. **Assess the situation** - is this fixable or does it need human review?
+3. **Take action** based on your assessment
+
+## Investigation Steps
+
+### 1. Switch to the Worktree
+
+```bash
+wt switch @worktreeBranch
+```
+
+### 2. Review the State
+
+```bash
+# See what was changed
+git log --oneline -3
+git diff @baseBranch...HEAD --stat
+
+# Check test output
+npm test 2>&1 | head -100
+```
+
+### 3. Read Key Files
+
+- Read `@experimentDir/proposed-fix.json` for the intended fix
+- Read `@experimentDir/fixed.json` for the error details
+- Read any test failure output
+
+### 4. Assess
+
+Consider:
+- **Simple oversight?** Missing import, typo, wrong file path
+- **Incomplete fix?** The proposed fix was on the right track but missed something
+- **Wrong approach?** The fix strategy doesn't work and needs human rethinking
+- **Test issue?** The test fixture itself might be wrong
+- **Merge conflict?** Base branch changed since analysis
+
+## Decision Criteria
+
+### Retry (action: "retry")
+
+Use if ALL are true:
+- You can identify the specific issue
+- The fix is mechanical (< 10 lines of changes)
+- High confidence the retry will succeed
+- The original fix approach is sound
+
+### Escalate (action: "escalate")
+
+Use if ANY are true:
+- The fix approach seems fundamentally wrong
+- Multiple interacting issues
+- Would require significant rework (> 50 lines)
+- You're uncertain what's wrong
+- This needs design discussion
+
+## Output
+
+### If Retry
+
+1. Make the fix in the worktree
+2. Run tests to verify
+3. If tests pass:
+   - Amend the commit: `git commit --amend -m "fix(@topic): <description>"`
+   - Get new SHA: `git rev-parse HEAD`
+4. Update `@experimentDir/fixed.json`:
+   ```json
+   {
+     ...existing fields...,
+     "verified": true,
+     "retry_count": <previous + 1>,
+     "retry_fix": "Brief description of what was fixed"
+   }
+   ```
+5. Return to base: `wt switch @baseBranch`
+
+### If Escalate
+
+1. Update `@experimentDir/fixed.json`:
+   ```json
+   {
+     ...existing fields...,
+     "escalated": true,
+     "escalation_reason": "Clear explanation of why human review is needed",
+     "investigation_notes": "What you found during investigation",
+     "suggested_approach": "Ideas for human to consider (if any)"
+   }
+   ```
+2. Return to base: `wt switch @baseBranch`
+3. Do NOT delete the worktree - human will want to inspect it
+
+## Important Notes
+
+- Be honest about your confidence - don't retry if you're unsure
+- A retry that fails again wastes tokens and time
+- Better to escalate early than thrash on a bad approach
+- The worktree preserves full context for human review
