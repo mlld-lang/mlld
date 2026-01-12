@@ -160,7 +160,7 @@ loop until @stable || @iteration >= @maxIterations [
   for parallel(20) @item in @reconcileLimit [
     let @prompt = @buildReconcilePrompt(@reconcilePromptTemplate, @item)
     show `  Reconciling: @item.topic/@item.experiment`
-    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep")
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
     => @item.topic
   ]
 
@@ -186,7 +186,7 @@ loop until @stable || @iteration >= @maxIterations [
   for parallel(10) @item in @analyzeLimit [
     let @prompt = @buildAnalyzePrompt(@analyzePromptTemplate, @item)
     show `  Analyzing: @item.topic/@item.experiment`
-    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep")
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
     => @item.topic
   ]
 
@@ -210,7 +210,7 @@ loop until @stable || @iteration >= @maxIterations [
   for @item in @needsApply [
     let @prompt = @buildApplyPrompt(@item)
     show `  Applying: @item.topic/@item.experiment`
-    let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep")
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
     => @item.topic
   ]
 

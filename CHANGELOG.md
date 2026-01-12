@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
 - **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
 - **for-when in exe blocks**: `let @result = for @x in @arr when ... => @x` now returns the array value, allowing `.length` and other array operations
+- **When block accumulation in exe**: `when (condition) [let @x += value]` now correctly evaluates the condition and executes augmented assignments inside the block
 
 ## [2.0.0-rc81]
 

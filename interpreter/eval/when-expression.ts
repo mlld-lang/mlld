@@ -13,11 +13,10 @@ import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { MlldWhenExpressionError } from '@core/errors';
 import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { evaluateCondition, conditionTargetsDenied } from './when';
+import { evaluateCondition, conditionTargetsDenied, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { logger } from '@core/utils/logger';
 import { asText, isStructuredValue, ensureStructuredValue } from '../utils/structured-value';
 import { VariableImporter } from './import/VariableImporter';
-import { combineValues } from '../utils/value-combine';
 import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
 
@@ -218,13 +217,35 @@ export async function evaluateWhenExpression(
   if (node.conditions.length === 0) {
     return buildResult(null, env);
   }
-  
+
   // Check if any condition pair has an action (filter out let assignments)
   const conditionPairs = node.conditions.filter(isConditionPair);
   const hasAnyAction = conditionPairs.some(c => c.action && c.action.length > 0);
-  if (!hasAnyAction) {
+
+  // Check if this is a "when (condition) [block]" syntax
+  // In this case, there are no condition pairs, only let/augmented assignments
+  // The boundValue holds the condition to check
+  const hasOnlyAssignments = !hasAnyAction && node.conditions.some(e => isLetAssignment(e) || isAugmentedAssignment(e));
+
+  if (!hasAnyAction && !hasOnlyAssignments) {
     logger.warn('WhenExpression has no actions defined');
     return buildResult(null, env);
+  }
+
+  // For "when (condition) [block]" syntax, check if the bound condition is truthy
+  // If falsy, skip the block entirely
+  let boundConditionIsTruthy = true;
+  if (hasBoundValue && hasOnlyAssignments) {
+    // Use evaluateCondition to properly check truthiness
+    const boundValueNode = (node as any).boundValue;
+    if (boundValueNode) {
+      boundConditionIsTruthy = await evaluateCondition([boundValueNode], env);
+    }
+
+    if (!boundConditionIsTruthy) {
+      // Condition is falsy, skip the entire block
+      return buildResult(null, accumulatedEnv);
+    }
   }
 
   // Check all actions for code blocks upfront (only condition pairs, not let assignments)
@@ -253,87 +274,15 @@ export async function evaluateWhenExpression(
   for (let i = 0; i < node.conditions.length; i++) {
     const entry = node.conditions[i];
 
-    // Handle let assignments - evaluate and store in accumulated environment
+    // Handle let assignments - use evaluateLetAssignment for consistent behavior
     if (isLetAssignment(entry)) {
-      let value: unknown;
-      // Check if value is a raw primitive (number, boolean, null, string) or contains nodes
-      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-      const isRawPrimitive = firstValue === null ||
-        typeof firstValue === 'number' ||
-        typeof firstValue === 'boolean' ||
-        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-      if (isRawPrimitive) {
-        // For raw primitives, use the value directly
-        value = entry.value.length === 1 ? firstValue : entry.value;
-      } else {
-        // For nodes, evaluate them
-        const valueResult = await evaluate(entry.value, accumulatedEnv, {
-          ...(context || {}),
-          isExpression: true
-        });
-        value = valueResult.value;
-      }
-
-      const importer = new VariableImporter();
-      const variable = importer.createVariableFromValue(
-        entry.identifier,
-        value,
-        'let',
-        undefined,
-        { env: accumulatedEnv }
-      );
-      accumulatedEnv = accumulatedEnv.createChild();
-      accumulatedEnv.setVariable(entry.identifier, variable);
+      accumulatedEnv = await evaluateLetAssignment(entry, accumulatedEnv);
       continue;
     }
 
-    // Handle augmented assignments - modify existing local variable
+    // Handle augmented assignments - use evaluateAugmentedAssignment for proper scope handling
     if (isAugmentedAssignment(entry)) {
-      // Get existing variable - must exist and be a let binding
-      const existing = accumulatedEnv.getVariable(entry.identifier);
-      if (!existing) {
-        throw new MlldWhenExpressionError(
-          `Cannot use += on undefined variable @${entry.identifier}. ` +
-          `Use "let @${entry.identifier} = ..." first.`,
-          entry.location
-        );
-      }
-
-      // Evaluate the RHS value
-      let rhsValue: unknown;
-      const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
-      const isRawPrimitive = firstValue === null ||
-        typeof firstValue === 'number' ||
-        typeof firstValue === 'boolean' ||
-        (typeof firstValue === 'string' && !('type' in (firstValue as any)));
-
-      if (isRawPrimitive) {
-        rhsValue = entry.value.length === 1 ? firstValue : entry.value;
-      } else {
-        const rhsResult = await evaluate(entry.value, accumulatedEnv, {
-          ...(context || {}),
-          isExpression: true
-        });
-        rhsValue = rhsResult.value;
-      }
-
-      // Get current value of the variable
-      const existingValue = await extractVariableValue(existing, accumulatedEnv);
-
-      // Combine values using the += semantics
-      const combined = combineValues(existingValue, rhsValue, entry.identifier);
-
-      // Update variable in local scope (use updateVariable to bypass redefinition check)
-      const importer = new VariableImporter();
-      const updatedVar = importer.createVariableFromValue(
-        entry.identifier,
-        combined,
-        'let',
-        undefined,
-        { env: accumulatedEnv }
-      );
-      accumulatedEnv.updateVariable(entry.identifier, updatedVar);
+      accumulatedEnv = await evaluateAugmentedAssignment(entry, accumulatedEnv);
       continue;
     }
 
@@ -465,12 +414,30 @@ export async function evaluateWhenExpression(
             const interpolateFn = await getInterpolateFn();
             value = await interpolateFn(wrapperCandidate.content, actionEnv, InterpolationContext.Template);
           } else {
-            // FIXED: Suppress side effects in when expressions used in /exe functions
-            // Side effects should be handled by the calling context (e.g., /show @func())
-            // Evaluate the action in normal directive context so effects stream.
-            // We avoid forcing isExpression here to preserve effect emission.
-            actionResult = await evaluate(pair.action, actionEnv, context);
-            value = actionResult.value;
+            // Handle AugmentedAssignment and LetAssignment nodes specially
+            // These are not handled by evaluate() and need direct evaluation
+            if (Array.isArray(pair.action) && pair.action.length === 1) {
+              const singleAction = pair.action[0];
+              if (singleAction && typeof singleAction === 'object' && singleAction.type === 'AugmentedAssignment') {
+                // Evaluate augmented assignment and update environment
+                const newEnv = await evaluateAugmentedAssignment(singleAction as any, actionEnv);
+                actionResult = { value: undefined, env: newEnv };
+                value = undefined;
+              } else if (singleAction && typeof singleAction === 'object' && singleAction.type === 'LetAssignment') {
+                // Evaluate let assignment and update environment
+                const newEnv = await evaluateLetAssignment(singleAction as any, actionEnv);
+                actionResult = { value: undefined, env: newEnv };
+                value = undefined;
+              } else {
+                // Normal evaluation
+                actionResult = await evaluate(pair.action, actionEnv, context);
+                value = actionResult.value;
+              }
+            } else {
+              // Normal evaluation for multi-action or other cases
+              actionResult = await evaluate(pair.action, actionEnv, context);
+              value = actionResult.value;
+            }
           }
           value = await normalizeActionValue(value, actionEnv);
           const executionEnv = actionResult?.env ?? actionEnv;
@@ -591,12 +558,12 @@ export async function evaluateWhenExpression(
     for (let i = 0; i < node.conditions.length; i++) {
       const entry = node.conditions[i];
 
-      // Skip let assignments in second pass (already processed)
-      if (isLetAssignment(entry)) {
+      // Skip let and augmented assignments in second pass (already processed)
+      if (isLetAssignment(entry) || isAugmentedAssignment(entry)) {
         continue;
       }
 
-      const pair = entry;
+      const pair = entry as WhenConditionPair;
 
       // Only process none conditions in second pass
       if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
