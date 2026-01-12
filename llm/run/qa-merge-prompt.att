@@ -1,0 +1,110 @@
+## Merge Verified Fixes from Worktrees
+
+You are merging verified fixes from worktrees into the main branch.
+
+## Context
+
+**Base branch**: @baseBranch
+**QA directory**: @qaDir
+
+## Worktrees to Merge
+
+@mergeItems
+
+## Instructions
+
+For each item in the list above where `verified == true`, merge it into @baseBranch.
+
+Process them **in order** to minimize conflicts.
+
+### For Each Fix
+
+#### 1. Switch to Worktree and Review
+
+```bash
+wt switch <worktree_branch>
+git log --oneline -3
+git diff @baseBranch...HEAD --stat
+```
+
+Verify:
+- Code changes look correct for the fix
+- Test fixture was created in tests/cases/
+- CHANGELOG.md entry exists
+- No unintended files changed
+
+#### 2. Switch Back and Merge
+
+```bash
+wt switch @baseBranch
+wt merge <worktree_branch>
+```
+
+If there are merge conflicts:
+- Resolve them carefully
+- For code conflicts: prefer the worktree's fix changes
+- For CHANGELOG conflicts: include BOTH entries (combine them)
+- After resolving: `git add . && git commit`
+
+#### 3. Record Merge Result
+
+Get the merge commit SHA:
+```bash
+git rev-parse HEAD
+```
+
+Update the fixed.json in the experiment's QA directory. Read it first, then add these fields:
+
+```json
+{
+  ...existing fields...,
+  "merged": true,
+  "merged_into": "@baseBranch",
+  "merge_commit": "<sha from git rev-parse HEAD>"
+}
+```
+
+#### 4. Remove Worktree (on success only)
+
+```bash
+wt remove <worktree_branch> -y
+```
+
+### Skip Conditions
+
+Skip merging an item if:
+- `verified == false` (tests didn't pass in worktree)
+- `merged == true` (already merged)
+- The worktree branch no longer exists
+
+For skipped items, update fixed.json:
+```json
+{
+  ...existing fields...,
+  "merged": false,
+  "skip_reason": "<reason for skipping>"
+}
+```
+
+### Handling Failures
+
+If a merge fails and cannot be resolved:
+1. Abort the merge: `git merge --abort`
+2. Update fixed.json with `"merged": false, "merge_error": "<error description>"`
+3. Continue with remaining items
+
+### Order Matters
+
+Merge in the order listed. Earlier merges may affect later ones. If you encounter:
+- Conflicting CHANGELOG entries: combine them chronologically
+- Conflicting code changes: this indicates overlapping fixes - merge carefully
+
+## Output Summary
+
+After processing all items, report:
+- Number successfully merged
+- Number skipped (with reasons)
+- Number failed (with errors)
+- Any conflicts that required manual resolution
+
+Do NOT run tests - that happens in the verification phase.

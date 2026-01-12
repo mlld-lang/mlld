@@ -1,0 +1,141 @@
+## Apply Fix in Isolated Worktree
+
+You are applying a verified fix to the mlld codebase using git worktrees for isolation.
+
+## Context
+
+**Topic**: @topic
+**Experiment**: @experiment
+**Base branch**: @baseBranch
+**Worktree branch**: polish/@topic-@experiment
+**QA directory**: @experimentDir
+
+## Investigation
+
+- **Root cause**: @rootCause
+- **Location**: @rootCauseLocation
+
+## Recommended Fix
+
+- **Fix ID**: @fixId
+- **Confidence**: @confidence
+- **Design fit**: @designFit
+
+## Proposed Changes
+
+@proposedFixes
+
+## Instructions
+
+### 1. Create Worktree
+
+Create an isolated worktree for this fix:
+
+```bash
+wt switch --create polish/@topic-@experiment --base @baseBranch -y
+```
+
+You are now in the worktree. All file operations happen here, isolated from main.
+Verify you're in the worktree:
+
+```bash
+pwd
+git branch --show-current
+```
+
+### 2. Code Changes
+
+For each item in code_changes:
+- Read the file first to understand current state
+- Apply the change as specified
+- If the code has diverged, adapt the fix to current state
+
+### 3. Test Fixture (REQUIRED)
+
+Create the test fixture from test_changes:
+- Create the fixture_dir directory
+- Create example.md with the mlld input code
+- Create expected.md with expected output
+- Run: `npm run build:fixtures`
+
+Note: Support file names must be unique across all tests (prefix with test name).
+
+### 4. CHANGELOG.md Entry (REQUIRED)
+
+Add entry to CHANGELOG.md:
+- Find the topmost version section (e.g., `## [2.0.0-rc82]`)
+- Add under the appropriate subsection (`### Fixed`, `### Added`, `### Changed`)
+- Use the changelog_entry text from the fix
+- Create subsection if it doesn't exist
+
+### 5. Documentation Updates
+
+If doc_changes is not empty:
+- Edit each atom file specified
+- Make the described change
+- Only edit atoms in `docs/src/atoms/` (never `docs/llm/*.txt` directly)
+
+### 6. Build and Test
+
+```bash
+npm run build
+npm test
+```
+
+Record whether tests pass or fail.
+
+### 7. Commit in Worktree
+
+If tests pass:
+```bash
+git add .
+git commit -m "fix(@topic): <brief description from fix>"
+```
+
+If tests fail, still commit so we can inspect:
+```bash
+git add .
+git commit -m "WIP: fix(@topic): <brief description> [tests failing]"
+```
+
+Get the commit SHA:
+```bash
+git rev-parse HEAD
+```
+
+### 8. Write Result
+
+Write fixed.json to the QA directory (NOT the worktree). The QA directory is: @experimentDir
+
+```json
+{
+  "topic": "@topic",
+  "experiment": "@experiment",
+  "applied": true,
+  "verified": <true if all tests pass, false otherwise>,
+  "worktree_branch": "polish/@topic-@experiment",
+  "test_fixture": "<path to created fixture>",
+  "changelog_added": true,
+  "docs_updated": <true if doc_changes were applied, false if empty>,
+  "commit_sha": "<sha from git rev-parse HEAD>",
+  "errors": []
+}
+```
+
+If there were errors, populate the errors array with descriptions.
+
+### 9. Return to Main
+
+Switch back to the base branch:
+
+```bash
+wt switch @baseBranch
+```
+
+## Important Notes
+
+- All code changes happen in the worktree, NOT the main repo
+- fixed.json goes to @experimentDir (in main repo's qa/ dir)
+- The worktree will be merged later by a separate merge phase
+- Even if tests fail, commit and write fixed.json so we can inspect
+- Do NOT delete the worktree - the merge phase will handle that

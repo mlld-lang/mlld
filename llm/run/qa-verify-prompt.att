@@ -1,0 +1,132 @@
+## Verify Merged Fixes
+
+You are verifying that all merged fixes work together correctly.
+
+## Context
+
+**Branch**: @baseBranch
+**QA directory**: @qaDir
+**Fixes merged this iteration**: @mergeCount
+
+## Merged Fixes
+
+@mergedItems
+
+## Instructions
+
+### 1. Ensure Clean State
+
+```bash
+wt switch @baseBranch
+git status
+```
+
+Working directory should be clean. If there are uncommitted changes, investigate before proceeding.
+
+### 2. Build
+
+```bash
+npm run build
+```
+
+If build fails:
+- Note which error occurred
+- Try to identify which merged fix likely caused it
+- Do NOT attempt to fix - record and report
+
+### 3. Run Full Test Suite
+
+```bash
+npm test 2>&1 | tee /tmp/test-output.txt
+```
+
+Capture the output for analysis.
+
+### 4. Analyze Results
+
+Parse the test output to get:
+- Total tests run
+- Tests passed
+- Tests failed
+- Tests skipped
+
+If any tests failed:
+- Note the failing test names
+- Check if they're related to the merged fixes
+- Try to identify which fix likely caused each failure
+
+### 5. Check New Fixtures
+
+For each merged fix, verify its new test fixture passes:
+
+```bash
+npm run test:case -- <fixture-path>
+```
+
+The fixture paths should be in the fixed.json files under `test_fixture`.
+
+### 6. Write Verification Result
+
+Write to @qaDir/verification-result.json:
+
+**If all tests pass:**
+```json
+{
+  "iteration": @iteration,
+  "timestamp": "<ISO timestamp>",
+  "branch": "@baseBranch",
+  "status": "pass",
+  "fixes_verified": @mergeCount,
+  "test_summary": {
+    "total": <number>,
+    "passed": <number>,
+    "failed": 0,
+    "skipped": <number>
+  },
+  "new_fixtures_verified": [
+    "<list of fixture paths that passed>"
+  ]
+}
+```
+
+**If tests fail:**
+```json
+{
+  "iteration": @iteration,
+  "timestamp": "<ISO timestamp>",
+  "branch": "@baseBranch",
+  "status": "fail",
+  "fixes_verified": @mergeCount,
+  "test_summary": {
+    "total": <number>,
+    "passed": <number>,
+    "failed": <number>,
+    "skipped": <number>
+  },
+  "failures": [
+    {
+      "test": "<test file or name>",
+      "error": "<error message summary>",
+      "likely_cause": "<which fix probably caused this, or 'unknown'>"
+    }
+  ],
+  "recommended_action": "revert" | "investigate"
+}
+```
+
+Use "revert" if you can clearly identify which fix caused the failure.
+Use "investigate" if the cause is unclear or multiple fixes may be involved.
+
+## Important Notes
+
+- Do NOT attempt to fix any issues found
+- The verification phase only reports status
+- If verification fails, the next polish iteration will halt until resolved
+- Be thorough in analyzing failures - this gates the entire polish loop
+
+## Success Criteria
+
+Verification passes (`status: "pass"`) only if:
+- `npm run build` succeeds with no errors
+- `npm test` has 0 failures
+- All new fixtures from merged fixes pass their specific tests

@@ -3,6 +3,7 @@
 >>
 >> Runs the full QA → reconcile → analyze → fix loop until stable.
 >> Auto-approves fixes where Opus confidence >= 0.9 and design_fit is high/medium.
+>> Uses git worktrees for isolated parallel fix application.
 
 import { @claude } from @mlld/claude
 
@@ -14,10 +15,16 @@ var @maxIterations = @p.maxIterations ? @p.maxIterations : 10
 >> Configuration
 var @qaDir = "@base/qa"
 
+>> Get current branch for worktree base
+var @baseBranch = sh {git branch --show-current}
+
 >> === PROMPT TEMPLATES ===
 
 var @reconcilePromptTemplate = <@base/llm/run/qa-reconcile-prompt.att>
 var @analyzePromptTemplate = <@base/llm/run/qa-analyze-prompt.att>
+var @applyPromptTemplate = <@base/llm/run/qa-apply-prompt.att>
+var @mergePromptTemplate = <@base/llm/run/qa-merge-prompt.att>
+var @verifyPromptTemplate = <@base/llm/run/qa-verify-prompt.att>
 
 >> === BUILD PROMPT FUNCTIONS ===
 
@@ -40,85 +47,49 @@ exe @buildAnalyzePrompt(tmpl, item) = [
   => @s5.replace("@experimentDir", @item.experimentDir)
 ]
 
-exe @buildApplyPrompt(item) = `Apply this fix to the mlld codebase:
+exe @buildApplyPrompt(tmpl, item, baseBranch) = [
+  let @fix = @item.fix
+  let @proposedFix = @fix.proposed_fixes[0]
+  let @s1 = @tmpl.replace("@topic", @item.topic)
+  let @s2 = @s1.replace("@experiment", @item.experiment)
+  let @s3 = @s2.replace("@baseBranch", @baseBranch)
+  let @s4 = @s3.replace("@experimentDir", @item.experimentDir)
+  let @s5 = @s4.replace("@rootCause", @fix.investigation.root_cause)
+  let @s6 = @s5.replace("@rootCauseLocation", @fix.investigation.root_cause_location)
+  let @s7 = @s6.replace("@fixId", @fix.recommendation.fix_id)
+  let @s8 = @s7.replace("@confidence", `@fix.recommendation.confidence`)
+  let @s9 = @s8.replace("@designFit", @fix.recommendation.design_fit)
+  => @s9.replace("@proposedFixes", `@fix.proposed_fixes`)
+]
 
-## Context
+exe @buildMergePrompt(tmpl, items, baseBranch, qaDir) = [
+  let @s1 = @tmpl.replace("@baseBranch", @baseBranch)
+  let @s2 = @s1.replace("@qaDir", @qaDir)
+  => @s2.replace("@mergeItems", `@items`)
+]
 
-Topic: @item.topic
-Experiment: @item.experiment
-
-Investigation:
-  Root cause: @item.fix.investigation.root_cause
-  Location: @item.fix.investigation.root_cause_location
-
-Recommended fix: @item.fix.recommendation.fix_id
-Confidence: @item.fix.recommendation.confidence
-Design fit: @item.fix.recommendation.design_fit
-
-Proposed changes:
-@item.fix.proposed_fixes
-
-## Instructions
-
-Apply the fix in this order:
-
-### 1. Code Changes
-- Read each file in code_changes
-- Apply the changes exactly as specified
-- If changes don't apply cleanly, adapt to current code state
-
-### 2. Test Fixture (REQUIRED)
-Create the test fixture specified in test_changes:
-- Create directory: the fixture_dir path
-- Create example.md with the mlld code
-- Create expected.md with expected output
-- Run: npm run build:fixtures
-- Note: Support file names must be unique across all tests (prefix with test name)
-
-### 3. CHANGELOG.md Entry (REQUIRED)
-Add entry to CHANGELOG.md under the current unreleased version:
-- Find the topmost version section (e.g., ## [2.0.0-rc82])
-- Add under the appropriate subsection (### Fixed, ### Added, ### Changed)
-- Use format from changelog_entry field
-- If subsection doesn't exist, create it
-
-### 4. Documentation Updates (if doc_changes is not empty)
-For each item in doc_changes:
-- Edit the atom file specified
-- Make the described change
-- Only edit atoms in docs/src/atoms/ (never docs/llm/*.txt directly)
-
-### 5. Verify
-Run the full test suite:
-- npm test
-- If tests fail, fix the issues before proceeding
-
-### 6. Write Result
-Write fixed.json to @item.experimentDir/ with:
-{
-  "applied": true,
-  "verified": <true if all tests pass>,
-  "test_fixture": "<path to created fixture>",
-  "changelog_added": true,
-  "docs_updated": <true if doc_changes were applied>,
-  "errors": [] or ["list", "of", "issues"]
-}
-
-## Commit Requirements
-
-DO NOT commit yet. The fix result will be reviewed and committed in a separate step.
-If tests don't pass, still write fixed.json with verified: false and list the errors.
-`
+exe @buildVerifyPrompt(tmpl, items, baseBranch, qaDir, iteration) = [
+  let @s1 = @tmpl.replace("@baseBranch", @baseBranch)
+  let @s2 = @s1.replace("@qaDir", @qaDir)
+  let @s3 = @s2.replace("@mergeCount", `@items.length`)
+  let @s4 = @s3.replace("@iteration", `@iteration`)
+  => @s4.replace("@mergedItems", `@items`)
+]
 
 >> === MAIN LOOP ===
 
 show `=== QA Polish Flywheel ===`
 show `Tier: @tier`
 show `Max iterations: @maxIterations`
+show `Base branch: @baseBranch`
 show ``
 
 var @iteration = 0
 var @stable = false
+
+>> Check for failed verification before starting
+var @prevVerification = <@qaDir/verification-result.json>
+when @prevVerification && @prevVerification.status == "fail" => show `WARNING: Previous verification failed. See @qaDir/verification-result.json`
 
 loop until @stable || @iteration >= @maxIterations [
   let @iteration = @iteration + 1
@@ -141,7 +112,7 @@ loop until @stable || @iteration >= @maxIterations [
 
   show `State: @allResults.length total, @passing.length passing, @failing.length failing`
 
-  >> Phase 1: Find & reconcile new failures
+  >> ========== PHASE 1: RECONCILE ==========
   let @needsReconcile = for @r in @allResults
     when (@r.status == "fail" || @r.status == "partial")
       && !@reconciledDirs.includes(@r.mx.absoluteDir)
@@ -167,7 +138,7 @@ loop until @stable || @iteration >= @maxIterations [
   >> Reload reconciliations after phase 1
   let @freshReconciliations = <@qaDir/**/reconciliation.json>
 
-  >> Phase 2: Find & analyze genuine bugs
+  >> ========== PHASE 2: ANALYZE ==========
   let @needsAnalyze = for @r in @freshReconciliations
     when @r.verdict == "genuine-bug"
       && @r.action == "implement"
@@ -193,7 +164,7 @@ loop until @stable || @iteration >= @maxIterations [
   >> Reload proposed fixes after phase 2
   let @freshProposedFixes = <@qaDir/**/proposed-fix.json>
 
-  >> Phase 3: Find & apply auto-approved fixes
+  >> ========== PHASE 3a: APPLY (Parallel in Worktrees) ==========
   let @needsApply = for @f in @freshProposedFixes
     when @f.recommendation.auto_approve == true
       && !@fixedDirs.includes(@f.mx.absoluteDir)
@@ -204,14 +175,56 @@ loop until @stable || @iteration >= @maxIterations [
       fix: @f
     }
 
-  show `Phase 3: Applying @needsApply.length auto-approved fixes...`
+  show `Phase 3a: Applying @needsApply.length fixes in worktrees...`
 
-  >> Apply fixes sequentially to avoid conflicts
-  for @item in @needsApply [
-    let @prompt = @buildApplyPrompt(@item)
+  >> Apply fixes in parallel worktrees (limit 5 to avoid git overhead)
+  for parallel(5) @item in @needsApply [
+    let @prompt = @buildApplyPrompt(@applyPromptTemplate, @item, @baseBranch)
     show `  Applying: @item.topic/@item.experiment`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
     => @item.topic
+  ]
+
+  >> ========== PHASE 3b: MERGE (Sequential) ==========
+  >> Reload fixed files to see what was applied
+  let @freshFixed = <@qaDir/**/fixed.json>
+  let @needsMerge = for @f in @freshFixed
+    when @f.applied == true
+      && @f.verified == true
+      && !@f.merged
+      && @f.worktree_branch
+    => {
+      topic: @f.topic,
+      experiment: @f.experiment,
+      experimentDir: @f.mx.absoluteDir,
+      worktree_branch: @f.worktree_branch,
+      commit_sha: @f.commit_sha
+    }
+
+  show `Phase 3b: Merging @needsMerge.length verified fixes...`
+
+  when @needsMerge.length > 0 [
+    let @mergePrompt = @buildMergePrompt(@mergePromptTemplate, @needsMerge, @baseBranch, @qaDir)
+    show `  Running merge phase...`
+    let @mergeResponse = @claude(@mergePrompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
+  ]
+
+  >> ========== PHASE 3c: VERIFY ==========
+  >> Reload to get merge results
+  let @postMergeFixed = <@qaDir/**/fixed.json>
+  let @justMerged = for @f in @postMergeFixed
+    when @f.merged == true
+    => {
+      topic: @f.topic,
+      experiment: @f.experiment,
+      test_fixture: @f.test_fixture,
+      merge_commit: @f.merge_commit
+    }
+
+  when @justMerged.length > 0 [
+    show `Phase 3c: Verifying @justMerged.length merged fixes...`
+    let @verifyPrompt = @buildVerifyPrompt(@verifyPromptTemplate, @justMerged, @baseBranch, @qaDir, @iteration)
+    let @verifyResponse = @claude(@verifyPrompt, "opus", @base, "Read,Bash,Glob,Grep,Write") | log
   ]
 
   >> Check if stable (no work done this iteration)
@@ -233,6 +246,7 @@ var @finalFixed = <@qaDir/**/fixed.json>
 var @finalPassing = for @r in @finalResults when @r.status == "pass" => @r
 var @finalFailing = for @r in @finalResults when @r.status == "fail" => @r
 var @finalGenuineBugs = for @r in @finalReconciliations when @r.verdict == "genuine-bug" => @r
+var @finalMerged = for @f in @finalFixed when @f.merged == true => @f
 
 show `=== Polish Complete ===`
 show `Iterations: @iteration`
@@ -245,4 +259,4 @@ show `  Failing: @finalFailing.length`
 show `  Reconciled: @finalReconciliations.length`
 show `  Genuine bugs: @finalGenuineBugs.length`
 show `  Analyzed: @finalProposedFixes.length`
-show `  Fixed: @finalFixed.length`
+show `  Fixed & Merged: @finalMerged.length`
