@@ -1,144 +1,92 @@
 # QA Polish Flywheel - Session Handoff
 
-## Session Progress (2026-01-12)
+## Current State (2026-01-12)
 
-### Commits Made This Session
+### What's Implemented
 
-1. **`88f3c7028` - fix: when block accumulation in exe functions**
-   - `when (condition) [let @x += value]` now works in exe blocks
-   - Root cause: `evaluate()` didn't handle AugmentedAssignment nodes
-   - Fix uses `evaluateAugmentedAssignment`/`evaluateLetAssignment` from when.ts
+The QA polish flywheel is a multi-phase automated system for:
+1. Running QA tests against mlld documentation
+2. Reconciling failures (doc bug vs code bug)
+3. Analyzing genuine bugs and proposing fixes
+4. Applying fixes in isolated git worktrees
+5. Merging verified fixes back to main branch
+6. Running verification tests
 
-2. **`b2ec8e575` - fix: allow directives (show, log, run) inside when blocks**
-   - Grammar fix: `ExeBlockAction` now allowed as `WhenExpressionEntry`
-   - `when condition [show "x"]` now parses in exe blocks and loops
-
-3. **`96ac27733` - feat: worktree-based parallel fix application to polish flywheel**
-   - Phase 3 split into 3a (apply in worktrees), 3b (merge), 3c (verify)
-   - New prompt templates for each phase
-
-### Spot-Test Results
-
-| Component | Status | Count |
-|-----------|--------|-------|
-| Phase 1 (Reconcile) | ✅ Works | 52 need reconciliation |
-| Phase 2 (Analyze) | ✅ Works | 4 genuine bugs need analysis |
-| Phase 3 (Apply/Merge/Verify) | ✅ Prompts ready | 10 auto-approvable |
-
----
-
-## Current State
-
-### QA Directory Stats
-```bash
-# Run these to see current state:
-find qa/ -name "results.json" | wc -l           # total experiments
-find qa/ -name "reconciliation.json" | wc -l    # reconciled
-find qa/ -name "proposed-fix.json" | wc -l      # analyzed
-find qa/ -name "fixed.json" | wc -l             # fixed
-```
-
-### Files in This Feature
+### Key Files
 
 | File | Purpose |
 |------|---------|
-| `llm/run/polish.mld` | Main flywheel orchestrator |
-| `llm/run/qa.mld` | QA test runner |
-| `llm/run/qa-reconcile.mld` | Standalone reconciliation |
-| `llm/run/qa-analyze.mld` | Standalone analysis |
+| `llm/run/qa.mld` | Runs QA tests → generates `results.json` |
+| `llm/run/polish.mld` | Main flywheel (reconcile → analyze → apply → merge → verify) |
+| `llm/run/qa-prompt.att` | QA test prompt template |
 | `llm/run/qa-reconcile-prompt.att` | Reconciliation prompt template |
 | `llm/run/qa-analyze-prompt.att` | Analysis prompt template |
 | `llm/run/qa-apply-prompt.att` | Worktree apply prompt template |
 | `llm/run/qa-merge-prompt.att` | Merge phase prompt template |
 | `llm/run/qa-verify-prompt.att` | Verification prompt template |
 
----
+### Recent Refactoring
 
-## Next Steps: Test the Full Flywheel
+Prompts now use the clean `template` pattern instead of `.replace()` chains:
 
-### 1. Verify syntax parses
-```bash
-npm run ast -- llm/run/polish.mld
+```mlld
+# Old way (deleted)
+var @promptTemplate = <@base/llm/run/qa-prompt.att>
+exe @buildPrompt(tmpl, topic, outputDir) = [
+  let @s1 = @tmpl.replace("@topic", @topic)
+  => @s1.replace("@outputDir", @outputDir)
+]
+
+# New way
+exe @buildPrompt(topic, outputDir) = template "./qa-prompt.att"
 ```
 
-### 2. Run one iteration (will use real LLM calls!)
-```bash
-mlld run polish --maxIterations 1
-```
+The `template` directive auto-interpolates function parameters into the .att file.
 
-### 3. Watch for issues in each phase
+### Deleted Files (redundant with polish.mld)
 
-**Phase 3a (Apply)** - Check that:
-- Worktrees are created: `wt list` should show `polish/*` branches
-- Agents can write to QA dir from worktree
-- fixed.json contains `worktree_branch` and `commit_sha`
-
-**Phase 3b (Merge)** - Check that:
-- Single agent processes all worktrees sequentially
-- Merges complete without conflicts (or conflicts are resolved)
-- fixed.json updated with `merged: true`
-
-**Phase 3c (Verify)** - Check that:
-- `npm test` runs on merged code
-- `verification-result.json` written to qa/ dir
-- Loop halts if verification fails
-
-### 4. Monitor costs
-Each iteration can spawn many Opus calls. Start with `--maxIterations 1`.
+- `qa-reconcile.mld` - standalone reconciliation
+- `qa-analyze.mld` - standalone analysis
+- `qa-fixes.mld` - standalone fix application
 
 ---
 
-## Architecture: Polish Flywheel
+## Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                    QA POLISH FLYWHEEL                          │
 │                                                                │
-│   Phase 1          Phase 2          Phase 3a        Phase 3b   │
-│  ┌─────────┐     ┌─────────┐     ┌───────────┐   ┌─────────┐  │
-│  │Reconcile│────▶│ Analyze │────▶│   Apply   │──▶│  Merge  │  │
-│  │ (20//)  │     │ (10//)  │     │  (5// WT) │   │ (seq)   │  │
-│  └─────────┘     └─────────┘     └───────────┘   └────┬────┘  │
-│                                                        │       │
-│                                        Phase 3c        │       │
-│                                      ┌─────────┐       │       │
-│                                      │ Verify  │◀──────┘       │
-│                                      └────┬────┘               │
-│                                           │                    │
-│                  ┌────────────────────────┘                    │
-│                  ▼                                             │
-│            ┌──────────┐                                        │
-│            │  stable? │──▶ Loop or Exit                        │
-│            └──────────┘                                        │
+│   qa.mld              polish.mld                               │
+│  ┌───────┐     ┌─────────────────────────────────────────┐    │
+│  │  QA   │────▶│ Phase 1    Phase 2    Phase 3a/b/c      │    │
+│  │ Tests │     │ Reconcile → Analyze → Apply/Merge/Verify│    │
+│  └───────┘     └─────────────────────────────────────────┘    │
 └────────────────────────────────────────────────────────────────┘
-
-Legend:
-  (20//) = parallel 20
-  (5// WT) = parallel 5 in worktrees
-  (seq) = sequential
 ```
 
 ### Phase Details
 
 | Phase | Parallel | Input | Output |
 |-------|----------|-------|--------|
+| QA (qa.mld) | 20 | howto topics | results.json |
 | 1. Reconcile | 20 | results.json (fail) | reconciliation.json |
 | 2. Analyze | 10 | reconciliation.json (genuine-bug) | proposed-fix.json |
-| 3a. Apply | 5 (worktrees) | proposed-fix.json (auto_approve) | fixed.json + worktree |
+| 3a. Apply | 5 (worktrees) | proposed-fix.json (auto_approve) | fixed.json + worktree commit |
 | 3b. Merge | Sequential | fixed.json (verified) | merged commits |
-| 3c. Verify | Single | merged commits | verification-result.json |
+| 3c. Verify | Single | merged code | verification-result.json |
 
 ### Data Flow
 
 ```
-results.json (from qa.mld)
+results.json
     ↓ status == "fail"
 reconciliation.json
     ↓ verdict == "genuine-bug" && action == "implement"
 proposed-fix.json
     ↓ recommendation.auto_approve == true
-fixed.json (in worktree)
-    ↓ verified == true && !merged
+fixed.json (worktree_branch, commit_sha)
+    ↓ verified == true
 fixed.json (merged: true)
     ↓
 verification-result.json
@@ -146,42 +94,107 @@ verification-result.json
 
 ---
 
-## Prompt File Placeholders
+## How to Run
 
-| File | Placeholders |
-|------|--------------|
-| `qa-reconcile-prompt.att` | @topic, @experiment, @status, @summary, @issues, @outputDir |
-| `qa-analyze-prompt.att` | @topic, @experiment, @resultsPath, @reconciliationPath, @experimentDir |
-| `qa-apply-prompt.att` | @topic, @experiment, @baseBranch, @experimentDir, @rootCause, @rootCauseLocation, @fixId, @confidence, @designFit, @proposedFixes |
-| `qa-merge-prompt.att` | @baseBranch, @qaDir, @mergeItems |
-| `qa-verify-prompt.att` | @baseBranch, @qaDir, @mergeCount, @iteration, @mergedItems |
+### 1. Generate QA test results (prerequisite)
+```bash
+mlld run qa --tier 1
+```
+
+### 2. Run the polish flywheel
+```bash
+mlld run polish --maxIterations 1
+```
+
+### 3. Check state
+```bash
+# Count by file type
+find qa/ -name "results.json" | wc -l
+find qa/ -name "reconciliation.json" | wc -l
+find qa/ -name "proposed-fix.json" | wc -l
+find qa/ -name "fixed.json" | wc -l
+
+# Check worktrees
+wt list
+```
 
 ---
 
-## Known Issues / TODOs
+## Template Placeholders
 
-1. **qa.mld --topic filter broken** - Use `--tier` filter instead
-2. **qa-analyze.mld typo** - References `proposed-fixes.json` but should be `proposed-fix.json`
-3. **Untested at scale** - Need to run full flywheel and observe behavior
-4. **Cost monitoring** - Each iteration spawns many Opus calls
+Each .att file uses `@variable` placeholders that match the exe function parameters:
+
+| Function | Parameters | Template |
+|----------|------------|----------|
+| `@buildPrompt` | topic, outputDir | qa-prompt.att |
+| `@buildReconcilePrompt` | topic, experiment, status, summary, issues, outputDir | qa-reconcile-prompt.att |
+| `@buildAnalyzePrompt` | topic, experiment, resultsPath, reconciliationPath, experimentDir | qa-analyze-prompt.att |
+| `@buildApplyPrompt` | topic, experiment, baseBranch, experimentDir, rootCause, rootCauseLocation, fixId, confidence, designFit, proposedFixes | qa-apply-prompt.att |
+| `@buildMergePrompt` | baseBranch, qaDir, mergeItems | qa-merge-prompt.att |
+| `@buildVerifyPrompt` | baseBranch, qaDir, mergeCount, iteration, mergedItems | qa-verify-prompt.att |
 
 ---
 
-## Quick Commands
+## What Needs Testing
+
+### Not Yet Tested End-to-End
+
+1. **Phase 3a (Apply in Worktrees)**
+   - Does `wt switch --create polish/topic-experiment` work?
+   - Can agent write fixed.json to QA dir from inside worktree?
+   - Does agent return to base branch after?
+
+2. **Phase 3b (Merge)**
+   - Does `wt merge` work correctly?
+   - Are CHANGELOG conflicts handled?
+   - Is fixed.json updated with `merged: true`?
+
+3. **Phase 3c (Verify)**
+   - Does verification catch broken merges?
+   - Is verification-result.json written correctly?
+   - Does loop halt on verification failure?
+
+### Spot-Tested (Works)
+
+- Phase logic for finding items needing reconciliation/analysis/apply
+- Template interpolation pattern
+- AST parsing of polish.mld and qa.mld
+
+---
+
+## Known Issues
+
+1. **qa.mld `--topic` filter** - Doesn't work correctly, use `--tier` instead
+2. **Cost** - Each iteration spawns many Opus calls; start with `--maxIterations 1`
+
+---
+
+## Next Steps for Next Session
+
+1. **Run a real test** of the full flywheel with 1 iteration
+2. **Watch Phase 3a/b/c** carefully for worktree issues
+3. **Check costs** after a run
+4. **Iterate on prompts** based on agent behavior
+5. **Consider adding Phase 0** - integrate qa.mld into polish.mld loop
+
+---
+
+## Quick Reference
 
 ```bash
-# Check polish.mld syntax
+# Syntax check
 npm run ast -- llm/run/polish.mld
+npm run ast -- llm/run/qa.mld
 
-# Run single iteration
+# Run QA tests
+mlld run qa --tier 1
+
+# Run polish flywheel
 mlld run polish --maxIterations 1
 
-# Check QA state
-find qa/ -name "*.json" -path "*/qa/*" | xargs -I{} basename {} | sort | uniq -c
-
-# List worktrees
+# Check worktrees
 wt list
 
-# Clean up polish worktrees (if needed)
+# Clean up polish worktrees
 wt list | grep polish | awk '{print $1}' | xargs -I{} wt remove {} -y
 ```

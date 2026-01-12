@@ -18,63 +18,17 @@ var @qaDir = "@base/qa"
 >> Get current branch for worktree base
 var @baseBranch = sh {git branch --show-current}
 
->> === PROMPT TEMPLATES ===
+>> === BUILD PROMPT FUNCTIONS (using template auto-interpolation) ===
 
-var @reconcilePromptTemplate = <@base/llm/run/qa-reconcile-prompt.att>
-var @analyzePromptTemplate = <@base/llm/run/qa-analyze-prompt.att>
-var @applyPromptTemplate = <@base/llm/run/qa-apply-prompt.att>
-var @mergePromptTemplate = <@base/llm/run/qa-merge-prompt.att>
-var @verifyPromptTemplate = <@base/llm/run/qa-verify-prompt.att>
+exe @buildReconcilePrompt(topic, experiment, status, summary, issues, outputDir) = template "./qa-reconcile-prompt.att"
 
->> === BUILD PROMPT FUNCTIONS ===
+exe @buildAnalyzePrompt(topic, experiment, resultsPath, reconciliationPath, experimentDir) = template "./qa-analyze-prompt.att"
 
-exe @buildReconcilePrompt(tmpl, result) = [
-  let @issues = @result.issues ? `@result.issues` : "[]"
-  let @s1 = @tmpl.replace("@topic", @result.topic)
-  let @s2 = @s1.replace("@experiment", @result.experiment)
-  let @s3 = @s2.replace("@status", @result.status)
-  let @s4 = @s3.replace("@summary", @result.summary)
-  let @s5 = @s4.replace("@issues", @issues)
-  => @s5.replace("@outputDir", @qaDir)
-]
+exe @buildApplyPrompt(topic, experiment, baseBranch, experimentDir, rootCause, rootCauseLocation, fixId, confidence, designFit, proposedFixes) = template "./qa-apply-prompt.att"
 
-exe @buildAnalyzePrompt(tmpl, item) = [
-  let @s1 = @tmpl.replace("@topic", @item.topic)
-  let @s2 = @s1.replace("@experiment", @item.experiment)
-  let @s3 = @s2.replace("@resultsPath", @item.resultsPath)
-  let @s4 = @s3.replace("@reconciliationPath", @item.reconciliationPath)
-  let @s5 = @s4.replace("@outputDir", @item.experimentDir)
-  => @s5.replace("@experimentDir", @item.experimentDir)
-]
+exe @buildMergePrompt(baseBranch, qaDir, mergeItems) = template "./qa-merge-prompt.att"
 
-exe @buildApplyPrompt(tmpl, item, baseBranch) = [
-  let @fix = @item.fix
-  let @proposedFix = @fix.proposed_fixes[0]
-  let @s1 = @tmpl.replace("@topic", @item.topic)
-  let @s2 = @s1.replace("@experiment", @item.experiment)
-  let @s3 = @s2.replace("@baseBranch", @baseBranch)
-  let @s4 = @s3.replace("@experimentDir", @item.experimentDir)
-  let @s5 = @s4.replace("@rootCause", @fix.investigation.root_cause)
-  let @s6 = @s5.replace("@rootCauseLocation", @fix.investigation.root_cause_location)
-  let @s7 = @s6.replace("@fixId", @fix.recommendation.fix_id)
-  let @s8 = @s7.replace("@confidence", `@fix.recommendation.confidence`)
-  let @s9 = @s8.replace("@designFit", @fix.recommendation.design_fit)
-  => @s9.replace("@proposedFixes", `@fix.proposed_fixes`)
-]
-
-exe @buildMergePrompt(tmpl, items, baseBranch, qaDir) = [
-  let @s1 = @tmpl.replace("@baseBranch", @baseBranch)
-  let @s2 = @s1.replace("@qaDir", @qaDir)
-  => @s2.replace("@mergeItems", `@items`)
-]
-
-exe @buildVerifyPrompt(tmpl, items, baseBranch, qaDir, iteration) = [
-  let @s1 = @tmpl.replace("@baseBranch", @baseBranch)
-  let @s2 = @s1.replace("@qaDir", @qaDir)
-  let @s3 = @s2.replace("@mergeCount", `@items.length`)
-  let @s4 = @s3.replace("@iteration", `@iteration`)
-  => @s4.replace("@mergedItems", `@items`)
-]
+exe @buildVerifyPrompt(baseBranch, qaDir, mergeCount, iteration, mergedItems) = template "./qa-verify-prompt.att"
 
 >> === MAIN LOOP ===
 
@@ -129,7 +83,8 @@ loop until @stable || @iteration >= @maxIterations [
 
   let @reconcileLimit = @needsReconcile.slice(0, 20)
   for parallel(20) @item in @reconcileLimit [
-    let @prompt = @buildReconcilePrompt(@reconcilePromptTemplate, @item)
+    let @issuesJson = @item.issues ? `@item.issues` : "[]"
+    let @prompt = @buildReconcilePrompt(@item.topic, @item.experiment, @item.status, @item.summary, @issuesJson, @qaDir)
     show `  Reconciling: @item.topic/@item.experiment`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
     => @item.topic
@@ -155,7 +110,7 @@ loop until @stable || @iteration >= @maxIterations [
 
   let @analyzeLimit = @needsAnalyze.slice(0, 10)
   for parallel(10) @item in @analyzeLimit [
-    let @prompt = @buildAnalyzePrompt(@analyzePromptTemplate, @item)
+    let @prompt = @buildAnalyzePrompt(@item.topic, @item.experiment, @item.resultsPath, @item.reconciliationPath, @item.experimentDir)
     show `  Analyzing: @item.topic/@item.experiment`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
     => @item.topic
@@ -179,7 +134,19 @@ loop until @stable || @iteration >= @maxIterations [
 
   >> Apply fixes in parallel worktrees (limit 5 to avoid git overhead)
   for parallel(5) @item in @needsApply [
-    let @prompt = @buildApplyPrompt(@applyPromptTemplate, @item, @baseBranch)
+    let @fix = @item.fix
+    let @prompt = @buildApplyPrompt(
+      @item.topic,
+      @item.experiment,
+      @baseBranch,
+      @item.experimentDir,
+      @fix.investigation.root_cause,
+      @fix.investigation.root_cause_location,
+      @fix.recommendation.fix_id,
+      `@fix.recommendation.confidence`,
+      @fix.recommendation.design_fit,
+      `@fix.proposed_fixes`
+    )
     show `  Applying: @item.topic/@item.experiment`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
     => @item.topic
@@ -204,7 +171,7 @@ loop until @stable || @iteration >= @maxIterations [
   show `Phase 3b: Merging @needsMerge.length verified fixes...`
 
   when @needsMerge.length > 0 [
-    let @mergePrompt = @buildMergePrompt(@mergePromptTemplate, @needsMerge, @baseBranch, @qaDir)
+    let @mergePrompt = @buildMergePrompt(@baseBranch, @qaDir, `@needsMerge`)
     show `  Running merge phase...`
     let @mergeResponse = @claude(@mergePrompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
   ]
@@ -223,7 +190,7 @@ loop until @stable || @iteration >= @maxIterations [
 
   when @justMerged.length > 0 [
     show `Phase 3c: Verifying @justMerged.length merged fixes...`
-    let @verifyPrompt = @buildVerifyPrompt(@verifyPromptTemplate, @justMerged, @baseBranch, @qaDir, @iteration)
+    let @verifyPrompt = @buildVerifyPrompt(@baseBranch, @qaDir, `@justMerged.length`, @iteration, `@justMerged`)
     let @verifyResponse = @claude(@verifyPrompt, "opus", @base, "Read,Bash,Glob,Grep,Write") | log
   ]
 

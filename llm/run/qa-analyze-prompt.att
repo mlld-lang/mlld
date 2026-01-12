@@ -51,7 +51,7 @@ Before recommending a fix, consider:
 
 ## Output Format
 
-Write `proposed-fix.json` to `@outputDir/`:
+Write `proposed-fix.json` to `@experimentDir/`:
 
 ```json
 {
