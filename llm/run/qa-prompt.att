@@ -46,8 +46,9 @@ ls -la @outputDir/@topic/
 @outputDir/@topic/
 ├── mlld-config.json         # Created by `mlld init`
 ├── 01-L-experiment-name/
-│   ├── main.mld             # The experiment
-│   └── results.json         # Your findings
+│   ├── experiment.mld       # REQUIRED: Your test script (preserved for debugging/reuse)
+│   ├── results.json         # Your findings
+│   └── [other files]        # Any support files needed by experiment.mld
 ├── 02-M-experiment-name/
 │   └── ...
 ├── 03-H-experiment-name/
@@ -55,6 +56,20 @@ ls -la @outputDir/@topic/
 ├── blocked.md               # If L-level fails, explain and stop
 └── complete.md              # If no more tests add value
 ```
+
+## IMPORTANT: Preserve Your Test Scripts
+
+**Always save `experiment.mld`** in the experiment directory BEFORE running it. This file:
+- Contains the exact mlld code you tested
+- Enables debugging failed experiments later
+- Can be converted to regression tests
+- Lets future agents refine rather than redo work
+
+Example workflow:
+1. Create `@outputDir/@topic/04-M-edge-case/experiment.mld`
+2. Write your test code to that file
+3. Run `mlld @outputDir/@topic/04-M-edge-case/experiment.mld`
+4. Record results in `results.json`
 
 ## Issue Categories
 

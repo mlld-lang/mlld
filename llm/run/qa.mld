@@ -9,67 +9,53 @@
 
 import { @claude } from @mlld/claude
 
->> Get filters from payload (with safe defaults)
-import "@payload" as @payload
-var @filterTopic = @payload.topic ? @payload.topic : ""
-var @topicsList = @payload.topics ? @payload.topics : ""
-var @tierFilter = @payload.tier ? @payload.tier : ""
+>> Get filters from payload (namespace import for optional fields)
+import "@payload" as @p
+var @topic = @p.topic ? @p.topic : ""
+var @topics = @p.topics ? @p.topics : ""
+var @tier = @p.tier ? @p.tier : ""
 
 >> Load all atoms dynamically from docs/src/atoms
 var @atomFiles = <@base/docs/src/atoms/**/*.md>
 
 >> Extract topics with qa_tier from atom frontmatter
->> Only atoms with qa_tier are eligible for QA testing
+>> Note: Uses JS because mlld's for-loop doesn't support .fm access on iteration vars
+>> This is a known limitation - @files[0].fm works but for @f in @files => @f.fm doesn't
 exe @extractQaTopics(files, tierFilter) = js {
-  // Parse tier filter (e.g., "1" or "1,2")
-  let allowedTiers = null;
-  if (tierFilter && tierFilter !== '') {
-    allowedTiers = new Set(tierFilter.split(',').map(t => parseInt(t.trim(), 10)));
-  }
-
+  const tiers = tierFilter ? tierFilter.split(',') : [];
   return files
-    .filter(f => {
-      const tier = f.fm?.qa_tier;
-      if (!tier) return false;  // No qa_tier = skip
-      if (allowedTiers && !allowedTiers.has(tier)) return false;
-      return true;
-    })
-    .map(f => f.fm.id)
-    .filter(id => id && !id.startsWith('_'));
+    .filter(f => f.fm?.qa_tier && f.fm?.id && !f.fm.id.startsWith('_'))
+    .filter(f => tiers.length === 0 || tiers.includes(String(f.fm.qa_tier)))
+    .map(f => f.fm.id);
 }
-var @topics = @extractQaTopics(@atomFiles, @tierFilter)
+var @allTopics = @extractQaTopics(@atomFiles, @tier)
 
 >> Configuration
 var @outputDir = "@base/qa"
 var @parallelLimit = 10
 
 >> Filter topics based on --topic (prefix) or --topics (comma list)
-exe @filterTopics(allTopics, filter, list) = js {
-  // --topics takes precedence: comma-separated explicit list
-  if (list && list !== '') {
-    const requested = list.split(',').map(t => t.trim());
-    return allTopics.filter(t => requested.includes(t));
-  }
-  // --topic: prefix/exact match filter
-  if (filter && filter !== '') {
-    return allTopics.filter(t => t === filter || t.startsWith(filter + '-') || t.startsWith(filter));
-  }
-  return allTopics;
-}
+>> Uses native when-first and for-when instead of JS
+exe @filterTopics(all, filter, list) = when first [
+  >> --topics (comma list) takes precedence
+  @list => for @t in @all when @list.split(",").includes(@t) => @t
+  >> --topic: prefix/exact match filter
+  @filter => for @t in @all when @t == @filter || @t.startsWith(@filter) => @t
+  >> No filter: return all
+  * => @all
+]
 
-var @activeTopics = @filterTopics(@topics, @filterTopic, @topicsList)
+var @activeTopics = @filterTopics(@allTopics, @topic, @topics)
 
->> Load the prompt template
+>> Load prompt template (not using `template` directive - it executes mlld code blocks)
 var @promptTemplate = <@base/llm/run/qa-prompt.att>
 
->> Build prompt for a specific topic
-exe @buildPrompt(template, topic, outputDir) = js {
-  return template
-    .replace(/@topic/g, topic)
-    .replace(/@outputDir/g, outputDir);
+>> Build prompt by replacing placeholders
+exe @buildPrompt(tmpl, topic, outputDir) = js {
+  return tmpl.replace(/@topic/g, topic).replace(/@outputDir/g, outputDir);
 }
 
->> Validate results.json schema
+>> Validate results.json schema (kept as JS - complex validation logic)
 exe @validateResult(jsonStr) = js {
   try {
     const result = JSON.parse(jsonStr);
@@ -108,22 +94,8 @@ exe @validateResult(jsonStr) = js {
 >> Create output directory
 run cmd {mkdir -p @outputDir}
 
->> Run QA for a single topic
-exe @runTopicQA(topic, prompt, outputDir) = js {
-  // This returns the prompt - actual execution happens via @claude
-  return { topic, prompt, outputDir: `${outputDir}/${topic}` };
-}
-
 >> Check if we have topics to test
-exe @checkTopics(topics, filter) = js {
-  if (topics.length === 0) {
-    return `No topics match filter: ${filter}`;
-  }
-  return null;
-}
-
-var @topicError = @checkTopics(@activeTopics, @filterTopic)
-when @topicError => show `@topicError\nAvailable: @topics.join(", ")`
+when @activeTopics.length == 0 => show `No topics match filter: @topic\nAvailable: @allTopics.join(", ")`
 
 >> Process each topic
 show `Starting QA testing for @activeTopics.length topics...`
@@ -131,13 +103,13 @@ show `Output directory: @outputDir`
 show `Parallel limit: @parallelLimit`
 show ``
 
-var @results = for parallel(10) @topic in @activeTopics [
-  let @prompt = @buildPrompt(@promptTemplate, @topic, @outputDir)
-  let @topicDir = `@outputDir/@topic`
+var @results = for parallel(10) @t in @activeTopics [
+  let @prompt = @buildPrompt(@promptTemplate, @t, @outputDir)
+  let @topicDir = `@outputDir/@t`
   run cmd {mkdir -p @topicDir}
-  show `Starting: @topic`
+  show `Starting: @t`
   let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep")
-  => @topic
+  => @t
 ]
 
 >> Summary
