@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--timeout` now accepts human-readable durations: `5m`, `1h`, `30s`, `2d`, or raw milliseconds
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
+### Fixed
+- **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when-first result positions
+- **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
+- **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
+- **for-when in exe blocks**: `let @result = for @x in @arr when ... => @x` now returns the array value, allowing `.length` and other array operations
+
 ## [2.0.0-rc81]
 
 ### Added

@@ -25,7 +25,7 @@ UnifiedQuote "Unified quote pattern"
 
 // Double quotes with @var and @func() interpolation
 UnifiedDoubleQuote "Double quoted string with interpolation"
-  = '"' parts:(ConditionalStringFragment / SpecialVariable / UnifiedInterpolationContent / UnifiedAtLiteral / UnifiedDoubleQuotedText)* '"' {
+  = '"' parts:(ConditionalStringFragment / SpecialVariable / TemplateUnaryNegation / UnifiedInterpolationContent / UnifiedAtLiteral / UnifiedDoubleQuotedText)* '"' {
       helpers.debug('UnifiedQuote: DoubleQuote matched', { parts });
       
       // If it's a plain string (no interpolation), create a Literal node for directive contexts
@@ -153,12 +153,23 @@ UnifiedBacktickInterpolation "Backtick interpolation content"
   = TemplateSlashForBlockBacktick    // Inline for-block
   / TemplateInlineShow               // Inline /show
   / ConditionalTemplateSnippet
+  / TemplateUnaryNegation            // !@var, !@func(), !@obj.method() - must come before text
   / UnifiedInterpolationContent      // Use shared interpolation
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
   / AngleBracketLiteral              // USE ABSTRACTED PATTERN instead of inline rule
   / UnifiedBacktickTextSegment       // Plain text
+
+// Unary negation in template contexts - allows !@var, !@func(), !@obj.method()
+TemplateUnaryNegation "template unary negation"
+  = "!" inner:(ExecResultMethodCall / FieldAccessExec / UnifiedExecInvocation / TemplateVariableReference / UnifiedReferenceNoTail) {
+      return helpers.createNode('UnaryExpression', {
+        operator: '!',
+        operand: inner,
+        location: location()
+      });
+    }
 
 // -------------------------------------------------------------
 // SUPPORTING PATTERNS (from content.peggy)
@@ -192,7 +203,7 @@ UnifiedBacktickTextSegment
 UnifiedBacktickChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / !("`" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
+  / !("`" / "!@" / "@" / (LineStartPredicate "/for") / (LineStartPredicate "/end") / &"<" FileReferenceInterpolation / &"<" AngleBracketLiteral) char:. { return char; }
 
 // Literal @ when not followed by an identifier (e.g., "@" at end of string or "@:")
 // BUT not @@ which is an escape sequence
@@ -211,7 +222,7 @@ UnifiedDoubleQuotedText
 UnifiedDoubleQuotedChar
   = StringEscapeSequence  // Handle \n, \t, etc.
   / EscapeSequence       // Handle \@, \", etc.
-  / !["@\n\r] char:. { return char; }  // Allow < characters, rely on semantic lookahead
+  / !("!@" / ["@\n\r]) char:. { return char; }  // Allow < characters, rely on semantic lookahead
 
 // Backtick slash-style for block
 TemplateSlashForBlockBacktick "slash for-block (backtick)"

@@ -124,6 +124,8 @@ UnifiedAtomicExpression
   / UnifiedArrayOperation
   / ExecResultMethodCall   // Support @func(args).method(args) in expressions
   / UnifiedReferenceNoTail  // Handles @var, @var.field, @func(), @obj.method()
+  / ArrayLiteral           // Array literals [1, 2, 3] or []
+  / DataObjectLiteral      // Object literals { key: value }
   / ExpressionString  // ExpressionString already returns a Literal node
   / value:NumberLiteral {
       // Wrap number literal in a Literal node

@@ -927,8 +927,12 @@ WhenExpressionConditionPair
     }
 
 // Actions in when expressions - for /exe context, supports both side effects and return values
+// Note: ArrayLiteral must come before ExeStatementBlock since both start with '['
+// Empty arrays [] would otherwise be parsed as empty blocks
 WhenExpressionAction
-  = block:ExeStatementBlock { return block; }
+  = ArrayLiteral           // Array literals (including empty [])
+  / DataObjectLiteral      // Object literals { key: value }
+  / block:ExeStatementBlock { return block; }
   / WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
 
 // Inline single-condition when expression (no brackets)

@@ -8,6 +8,7 @@ import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode, isLetAssignment, is
 import { VariableImporter } from './import/VariableImporter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
+import { isVariable } from '../utils/variable-resolution';
 import { logger } from '@core/utils/logger';
 import {
   isTextLike,
@@ -137,14 +138,27 @@ export async function evaluateLetAssignment(
 ): Promise<Environment> {
   const value = await evaluateAssignmentValue(entry, env);
 
-  const importer = new VariableImporter();
-  const variable = importer.createVariableFromValue(
-    entry.identifier,
-    value,
-    'let',
-    undefined,
-    { env }
-  );
+  let variable: Variable;
+
+  // If value is already a Variable (e.g., from for-expression), reuse it with updated name
+  if (isVariable(value)) {
+    variable = {
+      ...value,
+      name: entry.identifier,
+      // Ensure mx is present with required fields
+      mx: value.mx ?? { labels: [], taint: [], sources: [] }
+    };
+  } else {
+    const importer = new VariableImporter();
+    variable = importer.createVariableFromValue(
+      entry.identifier,
+      value,
+      'let',
+      undefined,
+      { env }
+    );
+  }
+
   const newEnv = env.createChild();
   newEnv.setVariable(entry.identifier, variable);
   return newEnv;

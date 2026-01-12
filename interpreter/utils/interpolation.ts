@@ -677,6 +677,13 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         }
         const strategy = EscapingStrategyFactory.getStrategy(context);
         pushPart(strategy.escape(stringValue));
+      } else if (node.type === 'UnaryExpression') {
+        // Handle unary expressions (e.g., !@var, !@arr.includes("x"))
+        const { evaluateExpression } = await import('../eval/expression');
+        const result = await evaluateExpression(node as any, env, { isExpression: true });
+        const stringValue = String(result.value);
+        const strategy = EscapingStrategyFactory.getStrategy(context);
+        pushPart(strategy.escape(stringValue));
       }
     }
     

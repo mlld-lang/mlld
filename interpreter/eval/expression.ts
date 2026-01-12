@@ -83,7 +83,17 @@ export function isTruthy(value: any): boolean {
   if (Array.isArray(value)) {
     return value.length > 0;
   }
-  
+
+  // Handle StructuredValue types (e.g., from method calls like .includes())
+  if (isStructuredValue(value)) {
+    // For boolean StructuredValues, use the actual data value
+    if (value.type === 'boolean') {
+      return value.data === true;
+    }
+    // For other StructuredValues, check their text representation
+    return isTruthy(value.data);
+  }
+
   if (typeof value === 'object') {
     return Object.keys(value).length > 0;
   }
@@ -230,13 +240,13 @@ async function evaluateTernaryExpression(node: TernaryExpression, env: Environme
  */
 async function evaluateUnaryExpression(node: UnaryExpression, env: Environment, context?: { isExpression?: boolean }): Promise<EvalResult> {
   const { operator, operand } = node;
-  
+
   if (operator === '!') {
     const operandResult = await evaluate(operand, env, { isExpression: true, ...context });
     const operandTruthy = isTruthy(operandResult.value);
     return { value: !operandTruthy, env };
   }
-  
+
   throw new Error(`Unknown unary operator: ${operator}`);
 }
 
