@@ -170,9 +170,11 @@ loop until @stable || @iteration >= @maxIterations || @halted [
       @fix.recommendation.design_fit,
       `@fix.proposed_fixes`
     )
+    show `  DEBUG: prompt built, length=@prompt.length`
     show `  Applying: @item.topic/@item.experiment`
+    show `  DEBUG: calling @claude...`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
-    show `  DEBUG: apply @claude returned`
+    show `  DEBUG: apply @claude returned: @response`
     => @item.topic
   ]
   show `  DEBUG: exited apply loop`
