@@ -56,9 +56,10 @@ when @halted => show `  1. Review the failures in verification-result.json`
 when @halted => show `  2. Either revert the problematic merge or fix manually`
 when @halted => show `  3. Delete verification-result.json to resume`
 
+show `DEBUG: before loop, iteration=@iteration, maxIterations=@maxIterations`
 loop until @stable || @iteration >= @maxIterations || @halted [
   let @iteration = @iteration + 1
-  show `--- Iteration @iteration ---`
+  show `--- Iteration @iteration (max=@maxIterations, stable=@stable) ---`
 
   >> Load all state files fresh each iteration
   let @allResults = <@qaDir/**/results.json>
@@ -125,9 +126,12 @@ loop until @stable || @iteration >= @maxIterations || @halted [
   show `  DEBUG: entering analyze loop...`
   for parallel(10) @item in @analyzeLimit [
     show `  DEBUG: loop body for @item.topic/@item.experiment`
+    show `  DEBUG: calling buildAnalyzePrompt...`
     let @prompt = @buildAnalyzePrompt(@item.topic, @item.experiment, @item.resultsPath, @item.reconciliationPath, @item.experimentDir)
+    show `  DEBUG: prompt built, length=@prompt.length`
     show `  Analyzing: @item.topic/@item.experiment`
     let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
+    show `  DEBUG: @claude returned`
     => @item.topic
   ]
   show `  DEBUG: exited analyze loop`
