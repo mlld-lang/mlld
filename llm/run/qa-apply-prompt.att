@@ -46,9 +46,11 @@ If `verified: false`, the fix needs triage (handled by a separate phase) - exit.
 
 ## Instructions
 
-### 1. Create Worktree
+### 1. Create Worktree (MANDATORY)
 
-Create an isolated worktree for this fix. First clean up any existing worktree from a failed previous attempt:
+**CRITICAL: You MUST work in a worktree, NOT the main repo.**
+
+Create an isolated worktree for this fix:
 
 ```bash
 # Remove existing worktree if present (from previous failed run)
@@ -58,22 +60,38 @@ wt remove polish/@topic-@experiment -y 2>/dev/null || true
 wt switch --create polish/@topic-@experiment --base @baseBranch -y
 ```
 
-You are now in the worktree. All file operations happen here, isolated from main.
-Verify you're in the worktree:
+### 2. Verify You Are In The Worktree
+
+**Do NOT proceed until you confirm you're in the worktree:**
 
 ```bash
-pwd
 git branch --show-current
+pwd
 ```
 
-### 2. Code Changes
+The branch MUST be `polish/@topic-@experiment`. If you're still on `@baseBranch`, STOP and fix the worktree creation.
+
+**If worktree creation fails, write this to @experimentDir/fixed.json and exit:**
+```json
+{
+  "topic": "@topic",
+  "experiment": "@experiment",
+  "applied": false,
+  "error": "Failed to create worktree",
+  "timestamp": "<ISO timestamp>"
+}
+```
+
+You are now in the worktree. All file operations happen here, isolated from main.
+
+### 3. Code Changes
 
 For each item in code_changes:
 - Read the file first to understand current state
 - Apply the change as specified
 - If the code has diverged, adapt the fix to current state
 
-### 3. Test Fixture (REQUIRED)
+### 4. Test Fixture (REQUIRED)
 
 Create the test fixture from test_changes:
 - Create the fixture_dir directory
@@ -83,7 +101,7 @@ Create the test fixture from test_changes:
 
 Note: Support file names must be unique across all tests (prefix with test name).
 
-### 4. CHANGELOG.md Entry (REQUIRED)
+### 5. CHANGELOG.md Entry (REQUIRED)
 
 Add entry to CHANGELOG.md:
 - Find the topmost version section (e.g., `## [2.0.0-rc82]`)
@@ -91,14 +109,14 @@ Add entry to CHANGELOG.md:
 - Use the changelog_entry text from the fix
 - Create subsection if it doesn't exist
 
-### 5. Documentation Updates
+### 6. Documentation Updates
 
 If doc_changes is not empty:
 - Edit each atom file specified
 - Make the described change
 - Only edit atoms in `docs/src/atoms/` (never `docs/llm/*.txt` directly)
 
-### 6. Build and Test
+### 7. Build and Test
 
 ```bash
 npm run build
@@ -107,7 +125,7 @@ npm test
 
 Record whether tests pass or fail.
 
-### 7. Commit in Worktree
+### 8. Commit in Worktree
 
 If tests pass:
 ```bash
@@ -126,7 +144,7 @@ Get the commit SHA:
 git rev-parse HEAD
 ```
 
-### 8. Write Result
+### 9. Write Result
 
 Write fixed.json to the QA directory (NOT the worktree). The QA directory is: @experimentDir
 
@@ -147,7 +165,7 @@ Write fixed.json to the QA directory (NOT the worktree). The QA directory is: @e
 
 If there were errors, populate the errors array with descriptions.
 
-### 9. Return to Main
+### 10. Return to Main
 
 Switch back to the base branch:
 
