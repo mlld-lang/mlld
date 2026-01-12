@@ -70,7 +70,7 @@ The `@mx` variable provides execution context—`@mx.try` is the attempt number,
 **Step 3: A validator that can retry.** Check the response and retry if suspicious:
 
 ```mlld
-exe @check(input) = when [
+exe @check(input) = when first [
   let @review = @injcheck(@input)
   @review.includes("APPROVE") => @input
   @mx.try < 3 => retry "@review"
@@ -78,7 +78,7 @@ exe @check(input) = when [
 ]
 ```
 
-The `retry` action sends feedback back up the pipeline to try again. The `none` condition catches the case where nothing else matched.
+The `when first` modifier ensures that the first matching condition returns immediately—essential for `retry` to work correctly. The `retry` action sends feedback back up the pipeline to try again. The `none` condition catches the case where nothing else matched.
 
 **Step 4: Pipe it together:**
 
@@ -101,13 +101,13 @@ exe @injcheck(answer) = @claude(`
   Reply APPROVE if it looks genuine, or FEEDBACK: <your feedback> if suspicious.
 `)
 
-exe @ask() = when [
+exe @ask() = when first [
   @mx.try == 1 => @claude("Please share your opinion of mlld based on this intro: @docs")
   @mx.try > 1 => show "\nRetrying with feedback: @mx.hint\n"
   @mx.try > 1 => @claude("Share your opinion of mlld: @docs <feedback>@mx.hint</feedback>")
 ]
 
-exe @check(input) = when [
+exe @check(input) = when first [
   let @review = @injcheck(@input)
   @review.includes("APPROVE") => @input
   @mx.try < 3 => retry "@review"
