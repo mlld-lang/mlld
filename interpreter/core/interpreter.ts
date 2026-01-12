@@ -251,39 +251,44 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             continue;
           }
           // Emit intents for non-directive nodes (preserves document structure with break collapsing)
+          // Skip text/newline emission when evaluating as expression (e.g., module imports)
           if (isText(n)) {
-            // If Text node contains only newlines, emit as collapsible breaks
-            if (/^\n+$/.test(n.content)) {
-              for (let i = 0; i < n.content.length; i++) {
+            if (!context?.isExpression) {
+              // If Text node contains only newlines, emit as collapsible breaks
+              if (/^\n+$/.test(n.content)) {
+                for (let i = 0; i < n.content.length; i++) {
+                  env.emitIntent({
+                    type: 'break',
+                    value: '\n',
+                    source: 'newline',
+                    visibility: 'always',
+                    collapsible: true
+                  });
+                }
+              } else {
+                const materialized = materializeDisplayValue(n.content, undefined, n.content);
                 env.emitIntent({
-                  type: 'break',
-                  value: '\n',
-                  source: 'newline',
+                  type: 'content',
+                  value: materialized.text,
+                  source: 'text',
                   visibility: 'always',
-                  collapsible: true
+                  collapsible: false
                 });
-              }
-            } else {
-              const materialized = materializeDisplayValue(n.content, undefined, n.content);
-              env.emitIntent({
-                type: 'content',
-                value: materialized.text,
-                source: 'text',
-                visibility: 'always',
-                collapsible: false
-              });
-              if (materialized.descriptor) {
-                env.recordSecurityDescriptor(materialized.descriptor);
+                if (materialized.descriptor) {
+                  env.recordSecurityDescriptor(materialized.descriptor);
+                }
               }
             }
           } else if (isNewline(n)) {
-            env.emitIntent({
-              type: 'break',
-              value: '\n',
-              source: 'newline',
-              visibility: 'always',
-              collapsible: true
-            });
+            if (!context?.isExpression) {
+              env.emitIntent({
+                type: 'break',
+                value: '\n',
+                source: 'newline',
+                visibility: 'always',
+                collapsible: true
+              });
+            }
           } else if (isCodeFence(n)) {
             // Skip CodeFence emission when evaluating as expression (e.g., module imports)
             if (!context?.isExpression) {
@@ -346,39 +351,44 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             continue;
           }
           // Emit intents for non-directive nodes (preserves document structure with break collapsing)
+          // Skip text/newline emission when evaluating as expression (e.g., module imports)
           if (isText(n)) {
-            // If Text node contains only newlines, emit as collapsible breaks
-            if (/^\n+$/.test(n.content)) {
-              for (let i = 0; i < n.content.length; i++) {
+            if (!context?.isExpression) {
+              // If Text node contains only newlines, emit as collapsible breaks
+              if (/^\n+$/.test(n.content)) {
+                for (let i = 0; i < n.content.length; i++) {
+                  env.emitIntent({
+                    type: 'break',
+                    value: '\n',
+                    source: 'newline',
+                    visibility: 'always',
+                    collapsible: true
+                  });
+                }
+              } else {
+                const materialized = materializeDisplayValue(n.content, undefined, n.content);
                 env.emitIntent({
-                  type: 'break',
-                  value: '\n',
-                  source: 'newline',
+                  type: 'content',
+                  value: materialized.text,
+                  source: 'text',
                   visibility: 'always',
-                  collapsible: true
+                  collapsible: false
                 });
-              }
-            } else {
-              const materialized = materializeDisplayValue(n.content, undefined, n.content);
-              env.emitIntent({
-                type: 'content',
-                value: materialized.text,
-                source: 'text',
-                visibility: 'always',
-                collapsible: false
-              });
-              if (materialized.descriptor) {
-                env.recordSecurityDescriptor(materialized.descriptor);
+                if (materialized.descriptor) {
+                  env.recordSecurityDescriptor(materialized.descriptor);
+                }
               }
             }
           } else if (isNewline(n)) {
-            env.emitIntent({
-              type: 'break',
-              value: '\n',
-              source: 'newline',
-              visibility: 'always',
-              collapsible: true
-            });
+            if (!context?.isExpression) {
+              env.emitIntent({
+                type: 'break',
+                value: '\n',
+                source: 'newline',
+                visibility: 'always',
+                collapsible: true
+              });
+            }
           } else if (isCodeFence(n)) {
             // Skip CodeFence emission when evaluating as expression (e.g., module imports)
             if (!context?.isExpression) {
@@ -477,14 +487,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
   
   if (isCodeFence(node)) {
-    // Emit code fence content as content intent
-    env.emitIntent({
-      type: 'content',
-      value: node.content,
-      source: 'text',
-      visibility: 'always',
-      collapsible: false
-    });
+    // Skip CodeFence emission when evaluating as expression (e.g., module imports)
+    if (!context?.isExpression) {
+      env.emitIntent({
+        type: 'content',
+        value: node.content,
+        source: 'text',
+        visibility: 'always',
+        collapsible: false
+      });
+    }
     return { value: node.content, env };
   }
   
@@ -861,8 +873,8 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
     const result = await evaluate(child, env, context);
     lastValue = result.value;
     
-    // Emit text nodes as content intents
-    if (isText(child)) {
+    // Emit text nodes as content intents (skip during imports)
+    if (isText(child) && !context?.isExpression) {
       env.emitIntent({
         type: 'content',
         value: child.content,
