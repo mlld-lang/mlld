@@ -6,7 +6,7 @@
  */
 
 import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
-import { isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
+import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -222,12 +222,17 @@ export async function evaluateWhenExpression(
   const conditionPairs = node.conditions.filter(isConditionPair);
   const hasAnyAction = conditionPairs.some(c => c.action && c.action.length > 0);
 
-  // Check if this is a "when (condition) [block]" syntax
-  // In this case, there are no condition pairs, only let/augmented assignments
-  // The boundValue holds the condition to check
-  const hasOnlyAssignments = !hasAnyAction && node.conditions.some(e => isLetAssignment(e) || isAugmentedAssignment(e));
+  // Check if we have direct actions (show, log, etc. without condition)
+  const hasDirectActions = node.conditions.some(e => isDirectAction(e));
 
-  if (!hasAnyAction && !hasOnlyAssignments) {
+  // Check if this is a "when (condition) [block]" syntax
+  // In this case, there are no condition pairs, only let/augmented assignments and/or direct actions
+  // The boundValue holds the condition to check
+  const hasOnlyAssignmentsOrDirectActions = !hasAnyAction && node.conditions.some(e =>
+    isLetAssignment(e) || isAugmentedAssignment(e) || isDirectAction(e)
+  );
+
+  if (!hasAnyAction && !hasOnlyAssignmentsOrDirectActions) {
     logger.warn('WhenExpression has no actions defined');
     return buildResult(null, env);
   }
@@ -235,7 +240,7 @@ export async function evaluateWhenExpression(
   // For "when (condition) [block]" syntax, check if the bound condition is truthy
   // If falsy, skip the block entirely
   let boundConditionIsTruthy = true;
-  if (hasBoundValue && hasOnlyAssignments) {
+  if (hasBoundValue && hasOnlyAssignmentsOrDirectActions) {
     // Use evaluateCondition to properly check truthiness
     const boundValueNode = (node as any).boundValue;
     if (boundValueNode) {
@@ -270,24 +275,44 @@ export async function evaluateWhenExpression(
     }
   }
   
-  // First pass: Evaluate entries in order (let assignments and non-none conditions)
+  // First pass: Evaluate entries in order (let assignments, direct actions, and non-none conditions)
   for (let i = 0; i < node.conditions.length; i++) {
     const entry = node.conditions[i];
 
+    // Unwrap array-wrapped entries (grammar sometimes wraps actions in arrays)
+    const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
+
     // Handle let assignments - use evaluateLetAssignment for consistent behavior
-    if (isLetAssignment(entry)) {
-      accumulatedEnv = await evaluateLetAssignment(entry, accumulatedEnv);
+    if (isLetAssignment(unwrappedEntry)) {
+      accumulatedEnv = await evaluateLetAssignment(unwrappedEntry, accumulatedEnv);
       continue;
     }
 
     // Handle augmented assignments - use evaluateAugmentedAssignment for proper scope handling
-    if (isAugmentedAssignment(entry)) {
-      accumulatedEnv = await evaluateAugmentedAssignment(entry, accumulatedEnv);
+    if (isAugmentedAssignment(unwrappedEntry)) {
+      accumulatedEnv = await evaluateAugmentedAssignment(unwrappedEntry, accumulatedEnv);
       continue;
     }
 
-    // From here on, entry is a condition pair
-    const pair = entry as WhenConditionPair;
+    // Handle direct actions (show, log, etc. without condition)
+    // These are only executed if we're in a bound-value context where the condition passed
+    if (isDirectAction(unwrappedEntry)) {
+      // Direct actions only make sense in bound-value when blocks
+      // The boundConditionIsTruthy check above ensures we only get here if condition passed
+      if (hasBoundValue && boundConditionIsTruthy) {
+        const actionEnv = accumulatedEnv.createChild();
+        setBoundValue(actionEnv);
+        // Pass the unwrapped entry (not wrapped in another array)
+        const toEvaluate = Array.isArray(entry) ? entry : [unwrappedEntry];
+        await evaluate(toEvaluate, actionEnv, context);
+        accumulatedEnv.mergeChild(actionEnv);
+        // Direct actions are side effects, don't update lastMatchValue
+      }
+      continue;
+    }
+
+    // From here on, entry is a condition pair (use unwrapped entry)
+    const pair = unwrappedEntry as WhenConditionPair;
 
     // Check if this is a none condition
     if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
@@ -558,12 +583,20 @@ export async function evaluateWhenExpression(
     for (let i = 0; i < node.conditions.length; i++) {
       const entry = node.conditions[i];
 
+      // Unwrap array-wrapped entries
+      const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
+
       // Skip let and augmented assignments in second pass (already processed)
-      if (isLetAssignment(entry) || isAugmentedAssignment(entry)) {
+      if (isLetAssignment(unwrappedEntry) || isAugmentedAssignment(unwrappedEntry)) {
         continue;
       }
 
-      const pair = entry as WhenConditionPair;
+      // Skip direct actions in second pass (already processed)
+      if (isDirectAction(unwrappedEntry)) {
+        continue;
+      }
+
+      const pair = unwrappedEntry as WhenConditionPair;
 
       // Only process none conditions in second pass
       if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
@@ -681,12 +714,13 @@ export async function peekWhenExpressionType(
   const actionTypes = new Set<import('@core/types/variable').VariableTypeDiscriminator>();
   
   for (const entry of node.conditions) {
-    // Skip let assignments - they don't produce action types
-    if (isLetAssignment(entry)) {
+    // Skip let assignments and direct actions - they don't produce action types
+    if (isLetAssignment(entry) || isAugmentedAssignment(entry) || isDirectAction(entry)) {
       continue;
     }
 
-    const pair = entry;
+    // Entry is a condition pair
+    const pair = entry as WhenConditionPair;
     if (pair.action && pair.action.length > 0) {
       // Simple heuristic based on first node type
       const firstNode = pair.action[0];

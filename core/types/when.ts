@@ -43,9 +43,9 @@ export interface AugmentedAssignmentNode extends BaseMlldNode {
 }
 
 /**
- * Union type for when block entries (let assignments, augmented assignments, and condition pairs)
+ * Union type for when block entries (let assignments, augmented assignments, condition pairs, or direct actions)
  */
-export type WhenEntry = WhenConditionPair | LetAssignmentNode | AugmentedAssignmentNode;
+export type WhenEntry = WhenConditionPair | LetAssignmentNode | AugmentedAssignmentNode | BaseMlldNode;
 
 /**
  * Type guard for let assignment nodes
@@ -62,10 +62,17 @@ export function isAugmentedAssignment(entry: WhenEntry | BaseMlldNode): entry is
 }
 
 /**
- * Type guard for condition pairs (not let or augmented assignments)
+ * Type guard for condition pairs (has explicit condition property)
  */
 export function isConditionPair(entry: WhenEntry): entry is WhenConditionPair {
-  return !isLetAssignment(entry) && !isAugmentedAssignment(entry);
+  return 'condition' in entry && Array.isArray((entry as WhenConditionPair).condition);
+}
+
+/**
+ * Type guard for direct action entries (directives like show, log without condition)
+ */
+export function isDirectAction(entry: WhenEntry): entry is BaseMlldNode {
+  return !isLetAssignment(entry) && !isAugmentedAssignment(entry) && !isConditionPair(entry);
 }
 
 /**

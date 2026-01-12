@@ -858,6 +858,7 @@ WhenBoundExpressionEntry
   = LetAssignment
   / AugmentedAssignment
   / WhenBoundExpressionConditionPair
+  / ExeBlockAction
 
 WhenBoundExpressionConditionPair
   = pattern:WhenBoundPatternExpression _ "=>" _ action:WhenExpressionAction {
@@ -912,11 +913,12 @@ WhenExpressionConditionList
     }
   / BlockComments+ { return []; }
 
-// Single entry in a when expression - let assignment, augmented assignment, or condition pair
+// Single entry in a when expression - let assignment, augmented assignment, action, or condition pair
 WhenExpressionEntry
   = LetAssignment               // let @x = value (local variable)
   / AugmentedAssignment         // @x += value (augmented assignment)
   / WhenExpressionConditionPair // condition => action
+  / ExeBlockAction              // show, log, run, etc. - imperative actions
 
 // Single condition => value pair for expressions
 WhenExpressionConditionPair
