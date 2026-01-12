@@ -1,6 +1,60 @@
 # QA Polish Flywheel - Session Handoff
 
-## Current State (2026-01-12)
+## Current State (2026-01-12 Evening)
+
+### Session Summary
+
+We've been debugging the polish flywheel to get it working end-to-end. Several issues found and fixed, but one critical blocker remains.
+
+### What's Working
+
+1. **QA Tests** (`mlld run qa --tier 1`) - Generates results.json files correctly
+2. **Phase 1 (Reconcile)** - Creates reconciliation.json files
+3. **Phase 2 (Analyze)** - Creates proposed-fix.json files with auto_approve flags
+4. **Template system** - `exe @fn(params) = template "file.att"` works after escaping fix
+
+### What's Broken (CRITICAL)
+
+**Phase 3a (Apply) - @claude calls not creating sessions**
+
+The apply loop enters, shows debug output for each item, but `@claude()` calls silently fail - no Claude sessions are created. We added debug output:
+
+```
+DEBUG: apply loop body for comments/10-H-empty-comments
+DEBUG: prompt built, length=4456
+DEBUG: calling @claude...
+```
+
+But no "Applying:" message appears and no Claude sessions spawn. The `@claude` function (from `@mlld/claude`) uses `claude -p` to invoke Claude Code. Something is preventing the invocation.
+
+**First Run Issue** - In an earlier run, agents DID create sessions but ignored worktree instructions and modified main directly. We committed those fixes (they were good) but need to understand why:
+1. That run's @claude calls worked
+2. Current run's @claude calls don't work
+
+### Fixes Applied This Session
+
+1. **Template escaping** - Code examples in .att files need `@@` to escape literal `@`
+   - Fixed in: qa-analyze-prompt.att, qa-prompt.att
+
+2. **Idempotency checks** - All phase prompts now check for existing work first
+   - Agents check if file exists and is valid before redoing work
+   - Makes flywheel resumable/restartable
+
+3. **Worktree hard gate** - Apply prompt now has mandatory worktree verification
+   - Step 1: Create worktree (MANDATORY)
+   - Step 2: Verify branch is `polish/*` before proceeding
+   - If worktree fails, write error to fixed.json and exit
+
+4. **Rate limit mitigation** - Added 10s delay between parallel agent spawns
+   - Was getting 500 errors from API with many concurrent opus calls
+   - `for parallel(N, 10s)` staggers spawns
+
+5. **Committed interpreter fixes** - Agents that ran on main produced valid fixes:
+   - Environment.ts: let binding scope fix
+   - exec-invocation.ts: effects attachment ordering
+   - executor.ts: pre-effects support
+   - var.ts: conditionalPair handling
+   - unified-processor.ts: Variable resolution ordering
 
 ### What's Implemented
 
@@ -144,53 +198,100 @@ Each .att file uses `@variable` placeholders that match the exe function paramet
 
 ## What Needs Testing
 
+### BLOCKED - @claude invocation broken
+
+Cannot test phases 3a-3c until we fix the @claude silent failure issue.
+
 ### Not Yet Tested End-to-End
 
-1. **Phase 3a (Apply in Worktrees)**
+1. **Phase 3a (Apply in Worktrees)** - BLOCKED
    - Does `wt switch --create polish/topic-experiment` work?
    - Does worktree cleanup work when re-running after failure?
    - Can agent write fixed.json to QA dir from inside worktree?
    - Does agent return to base branch after?
+   - Note: We added worktree verification step - agents must confirm branch before proceeding
 
-2. **Phase 3a.5 (Triage)**
+2. **Phase 3a.5 (Triage)** - BLOCKED
    - Does triage correctly identify retry vs escalate cases?
    - Does retry update fixed.json with verified: true?
    - Does escalate set escalated: true?
    - Is retry_count tracked correctly?
 
-3. **Phase 3b (Merge)**
+3. **Phase 3b (Merge)** - BLOCKED
    - Does `wt merge` work correctly?
    - Are CHANGELOG conflicts handled?
    - Is fixed.json updated with `merged: true`?
 
-4. **Phase 3c (Verify)**
+4. **Phase 3c (Verify)** - BLOCKED
    - Does verification catch broken merges?
    - Is verification-result.json written correctly?
    - Does loop halt on verification failure? ✓ (implemented)
 
-### Spot-Tested (Works)
+### Tested and Working
 
-- Phase logic for finding items needing reconciliation/analysis/apply
-- Template interpolation pattern
+- Phase 1 (Reconcile) - Creates reconciliation.json correctly
+- Phase 2 (Analyze) - Creates proposed-fix.json with auto_approve flags
+- Template interpolation pattern with `@@` escaping
+- Phase logic for finding items needing work
 - AST parsing of polish.mld and qa.mld
-- Verification failure halts loop (implemented)
+- Verification failure halts loop
+- Idempotency checks in prompts
 
 ---
 
 ## Known Issues
 
-1. **qa.mld `--topic` filter** - Doesn't work correctly, use `--tier` instead
-2. **Cost** - Each iteration spawns many Opus calls; start with `--maxIterations 1`
+1. **@claude calls silently failing in apply phase** - CRITICAL BLOCKER
+   - Loop body executes, template builds, but @claude() doesn't spawn sessions
+   - Need to debug why @mlld/claude module's `claude -p` invocation fails
+   - Check: Is the prompt too long? Is there a permission issue?
+
+2. **Agents ignored worktree instructions** - Fixed with hard gate, but why did they ignore?
+   - Now have mandatory verification step before proceeding
+
+3. **API rate limits** - 500 errors when spawning many opus calls
+   - Mitigated with 10s delay between spawns
+   - May need longer delay or lower concurrency
+
+4. **qa.mld `--topic` filter** - Doesn't work correctly, use `--tier` instead
+
+5. **Cost** - Each iteration spawns many Opus calls; start with `--maxIterations 1`
 
 ---
 
 ## Next Steps for Next Session
 
-1. **Run a real test** of the full flywheel with 1 iteration
-2. **Watch Phase 3a/b/c** carefully for worktree issues
-3. **Check costs** after a run
-4. **Iterate on prompts** based on agent behavior
-5. **Consider adding Phase 0** - integrate qa.mld into polish.mld loop
+### Immediate (Debug @claude failure)
+
+1. **Test @claude directly** - Does a simple `@claude("hello", "opus", @base, "Read")` work?
+   ```bash
+   echo 'import { @claude } from @mlld/claude
+   var @r = @claude("Say hello", "opus", @base, "Read")
+   show @r' > tmp/test-claude.mld && mlld tmp/test-claude.mld
+   ```
+
+2. **Check @mlld/claude module** - The module uses `claude -p` with `--allowedTools`
+   - Verify `claude -p --model opus --allowedTools "Read"` works from shell
+   - Check if there's a session/permissions issue
+
+3. **Add more logging** - Consider adding `| log` to intermediate steps to trace failure point
+
+### After @claude Works
+
+1. **Test full apply phase** - One item through worktree creation → code change → test → commit
+2. **Verify worktree isolation** - Confirm changes happen in worktree, not main
+3. **Test merge phase** - Merge a verified worktree back to main
+4. **Test verification phase** - Run build+test after merge
+
+### Future Improvements (Discussed but not implemented)
+
+1. **Haiku pre-filter** - Use haiku to validate existing analysis before spawning opus
+   - Cheaper/faster to check "is this analysis valid?" with haiku
+   - Only spawn opus if haiku says invalid
+   - Add complexity score (0-1) to prioritize human review
+
+2. **BLOCKED output** - Agents should output `BLOCKED: message` when hitting barriers
+   - Surface blockers to command-line for visibility
 
 ---
 
