@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Previous `mlld init` behavior (interactive module creation) moved to `mlld module`
   - New `mlld init` provides quick project setup (see Added above)
   - `mlld setup` remains the interactive configuration wizard
+- **`mlld run` timeout is now unlimited by default**
+  - Previously defaulted to 5 minutes (300000ms)
+  - `--timeout` now accepts human-readable durations: `5m`, `1h`, `30s`, `2d`, or raw milliseconds
+  - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ## [2.0.0-rc81]
 

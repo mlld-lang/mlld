@@ -282,14 +282,14 @@ mlld run
 mlld run my-script
 
 # Run with timeout
-mlld run long-task --timeout 60000
+mlld run long-task --timeout 10m
 
 # Show execution metrics
 mlld run my-script --debug
 ```
 
 **Options:**
-- `--timeout <ms>` - Script timeout in milliseconds (default: 300000 / 5 minutes)
+- `--timeout <duration>` - Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
 - `--debug` - Show execution metrics (timing, cache hits, effects, state writes)
 - `-h, --help` - Show help message
 

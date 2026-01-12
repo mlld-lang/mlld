@@ -37,6 +37,6 @@ var @fast = @payload.fast ? @payload.fast : false
 
 | Flag | Description |
 |------|-------------|
-| `--timeout <ms>` | Script timeout (default: 300000) |
+| `--timeout <duration>` | Script timeout (e.g., 5m, 1h, 30s) - default: unlimited |
 | `--debug` | Show execution metrics |
 | `--<name> <value>` | Payload field |

@@ -8,6 +8,7 @@ import * as path from 'path';
 import { existsSync } from 'fs';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
+import { parseDuration, formatDuration } from '@core/config/utils';
 import { ProjectConfig } from '@core/registry/ProjectConfig';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -127,7 +128,7 @@ export class RunCommand {
       const result = await execute(scriptPath, undefined, {
         fileSystem: this.fileSystem,
         pathService: new PathService(),
-        timeoutMs: options.timeoutMs ?? 300000, // 5 minute default
+        timeoutMs: options.timeoutMs, // undefined = no timeout
         dynamicModules,
       }) as StructuredResult;
 
@@ -156,7 +157,7 @@ export class RunCommand {
     } catch (error) {
       if (error instanceof TimeoutError) {
         throw new MlldError(
-          `Script timed out after ${error.timeoutMs}ms`,
+          `Script timed out after ${formatDuration(error.timeoutMs)}`,
           {
             code: 'SCRIPT_TIMEOUT',
             severity: ErrorSeverity.Fatal,
@@ -242,9 +243,9 @@ Arguments:
   script-name    Name of the script to run (without .mld extension)
 
 Options:
-  -h, --help         Show this help message
-  --timeout <ms>     Script timeout in milliseconds (default: 300000 / 5 minutes)
-  --debug            Show execution metrics (timing, cache hits, effects)
+  -h, --help              Show this help message
+  --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
+  --debug                 Show execution metrics (timing, cache hits, effects)
   --<name> <value>   Any other flag becomes payload (see below)
 
 Script Directory:
@@ -280,12 +281,17 @@ Example script (llm/run/hello.mld):
         return;
       }
 
-      // Parse timeout flag
+      // Parse timeout flag (supports durations like 5m, 1h, 30s)
       let timeoutMs: number | undefined;
       if (flags.timeout !== undefined) {
-        timeoutMs = parseInt(String(flags.timeout), 10);
-        if (isNaN(timeoutMs) || timeoutMs <= 0) {
-          console.error(chalk.red('Error: --timeout must be a positive number'));
+        try {
+          timeoutMs = parseDuration(String(flags.timeout));
+          if (timeoutMs <= 0) {
+            console.error(chalk.red('Error: --timeout must be a positive duration'));
+            process.exit(1);
+          }
+        } catch {
+          console.error(chalk.red('Error: --timeout must be a valid duration (e.g., 5m, 1h, 30s, or milliseconds)'));
           process.exit(1);
         }
       }
