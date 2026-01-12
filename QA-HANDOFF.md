@@ -1,117 +1,240 @@
-# QA Infrastructure - Session Handoff
+# QA Polish Flywheel - Session Handoff
 
-## Session Progress (2026-01-11)
+## Session Progress (2026-01-11 Evening)
 
 ### Completed
 
-1. **P0 Fix (mlld-d49g)** - Commit `fa775ade2`
-   - Added `if (!context?.isExpression)` check around CodeFence emission
-   - Fixed in both locations: `interpreter/core/interpreter.ts` lines 287-301 and 382-396
-   - **Direct execution works correctly** - `mlld script.mld` no longer outputs documentation garbage
-   - Bead closed
+1. **Removed default timeout from `mlld run`** - Commit `8f5452fed`
+   - Now unlimited by default
+   - `--timeout` accepts human-readable durations: `5m`, `1h`, `30s`
 
-2. **Created `llm/run/qa-analyze.mld`** + `llm/run/qa-analyze-prompt.att`
-   - Finds failed experiments without `proposed-fixes.json`
-   - Spawns parallel Claude agents to analyze failures
-   - Uses `sh { node -e "..." }` pattern for filesystem operations (mlld JS is sandboxed)
+2. **Created `qa-reconcile.mld`** - Pure mlld script
+   - Reviews QA failures with Opus
+   - Categorizes as: `genuine-bug`, `qa-error`, `doc-hallucination`, `missing-feature`, `unclear-docs`
+   - Outputs `reconciliation.json` per experiment
+   - 26 experiments reconciled so far
 
-3. **Created `llm/run/qa-fixes.mld`** + `llm/run/qa-fixes-prompt.att`
-   - Finds experiments with `decision` set but not `fixed`
-   - Supports `--dryrun` flag
-   - Runs fixes sequentially to avoid git conflicts
+3. **Created `polish.mld`** - The QA flywheel orchestrator
+   - Pure mlld (no js{}/sh{} blocks)
+   - Loop: reconcile → analyze → fix until stable
+   - Uses file globs and for-when filtering
 
-### Fixed: `mlld run` CodeFence Bug
+4. **Updated `qa-analyze-prompt.att`**
+   - Added confidence scoring (0.0-1.0)
+   - Added design_fit assessment (high/medium/low)
+   - Added auto_approve criteria for Opus to self-approve fixes
 
-**Commit `85005455b`** - Extended `isExpression` check to all content emission paths.
+### Key Finding: QA Results Breakdown
 
-**Root Cause:** The original CodeFence fix only covered one code path. Text nodes (markdown content between code fences), Newline nodes, and the single-node CodeFence evaluation path were all missing the `isExpression` check.
+From 26 reconciled experiments:
 
-**Fix:** Added `if (!context?.isExpression)` check to:
-- Text node emission (lines 254-278, 351-375)
-- Newline node emission (lines 282-291, 378-387)
-- Single-node CodeFence evaluation (lines 495-506)
-- Document child Text nodes (line 883)
+| Verdict | Count | Action |
+|---------|-------|--------|
+| qa-error | 14 (54%) | fix-docs |
+| genuine-bug | 8 (31%) | implement |
+| doc-hallucination | 2 (8%) | fix-docs |
+| unclear-docs | 1 | fix-docs |
+| missing-feature | 1 | fix-docs |
 
----
+**Insight**: Most "failures" were QA methodology errors or doc issues, not code bugs. The docs were embellished during reorg - promising features that don't exist.
 
-## Remaining Work
+### 8 Genuine Bugs Identified
 
-### Test QA Pipeline Scripts
-
-1. [ ] Test `mlld run qa-analyze --limit 3` on a few failures
-2. [ ] Verify `proposed-fixes.json` output format
-3. [ ] Test `mlld run qa-fixes --dryrun`
-4. [ ] Run a full fix cycle on one experiment
-
-### Run Full QA
-
-1. [ ] Run `mlld run qa --tier 1` (may need longer timeout)
-2. [ ] Review results and compare to previous run
-
----
-
-## QA Results Summary (from first run)
-
-| Metric | Count |
-|--------|-------|
-| Total experiments | 210 |
-| Pass | 163 (78%) |
-| Fail | 26 (12%) |
-| Partial | 21 (10%) |
-| Issues found | 104 |
-
-**Issue categories**: broken-promise (31), friction (31), unclear-docs (26), unclear-error (10), enhancement (6)
-
-**Topics with failures**: escaping-basics (4), foreach (3), comments (2), exe-simple (2), for-block (2), run-params (2), output (2), file-loading-basics (2)
+All trivial/low complexity:
+1. `foreach/04-M-empty-array` - Empty arrays throw error
+2. `foreach/05-M-nested-arrays` - Display formatter only 1 level deep
+3. `foreach/02-L-foreach-with-separator` - Wrong AST property path
+4. `comments/10-H-empty-comments` - Empty comments consume next line
+5. `when-blocks/06-H-empty-block` - Empty block parse error
+6. `when-blocks/05-M-side-effects` - Let in when block breaks
+7. `modules-exporting/07-H-circular-imports` - Infinite recursion
+8. `for-block/05-M-nested-for-blocks` - Nested for-blocks unsupported
 
 ---
 
-## Analysis/Fix Pipeline Design
+## Bug Filed This Session
 
-### `qa-analyze.mld`
+**mlld-egb3** (P1): for-when inside exe blocks returns wrapped object instead of array
+- `.length` fails on result
+- Workaround: do filtering at top-level var, not inside exe blocks
 
-Finds failed experiments and spawns analysis agents.
+---
 
-**Usage:**
-```bash
-mlld run qa-analyze [--topic <filter>] [--limit <n>]
+## Architecture: Polish Flywheel
+
+```
+┌────────────────────────────────────────────────────────┐
+│                    QA FLYWHEEL                         │
+│                                                        │
+│   ┌─────┐    ┌───────────┐    ┌─────────┐    ┌─────┐ │
+│   │ QA  │───▶│ Reconcile │───▶│ Analyze │───▶│ Fix │ │
+│   └──▲──┘    └───────────┘    └────┬────┘    └──┬──┘ │
+│      │                             │            │     │
+│      │         ┌───────────────────┘            │     │
+│      │         ▼                                │     │
+│      │   ┌───────────┐                          │     │
+│      │   │  Decide   │  (Opus auto if >90%)     │     │
+│      │   └─────┬─────┘                          │     │
+│      │         │                                │     │
+│      └─────────┴────────────────────────────────┘     │
+│                                                        │
+│   Stops when: no new failures, all tiers stable        │
+└────────────────────────────────────────────────────────┘
 ```
 
-**Output:** `qa/{topic}/{experiment}/proposed-fixes.json`
+### Files
 
-```json
-{
-  "experiment": "01-L-basic-usage",
-  "topic": "escaping-basics",
-  "analysis": {
-    "root_cause": "Description of why this fails",
-    "root_cause_confidence": 0.85,
-    "complexity": 0.3,
-    "files_involved": ["grammar/...", "interpreter/..."],
-    "requires_investigation": false
-  },
-  "proposed_fixes": [
-    {
-      "id": "fix-1",
-      "description": "Update grammar rule X",
-      "approach": "Detailed implementation steps",
-      "tradeoffs": "Potential side effects",
-      "confidence": 0.9,
-      "effort": "low|medium|high"
-    }
-  ],
-  "decision": "fix-1",
-  "decision_reason": null
-}
+| File | Purpose |
+|------|---------|
+| `llm/run/polish.mld` | Main flywheel orchestrator |
+| `llm/run/qa.mld` | QA test generation |
+| `llm/run/qa-reconcile.mld` | Failure categorization |
+| `llm/run/qa-reconcile-prompt.att` | Reconciliation prompt |
+| `llm/run/qa-analyze.mld` | Deep bug analysis |
+| `llm/run/qa-analyze-prompt.att` | Analysis prompt with confidence scoring |
+
+---
+
+## Remaining Work: Parallel Fix Path with Worktrees
+
+### Problem
+
+Fixes need to:
+1. Modify code
+2. Add/update tests per `docs/dev/TESTS.md`
+3. Update docs per `docs/dev/DOCS.md`
+4. Commit changes
+
+Sequential is slow. Parallel has git conflicts.
+
+### Solution: Use `wt` (worktrees)
+
+[worktrunk.dev](https://worktrunk.dev/) - Git worktree management tool
+
+**Architecture:**
+
+```
+Phase 1: Parallel Fix Application (in worktrees)
+┌─────────────────────────────────────────────────────────┐
+│  For each auto-approved fix:                            │
+│    1. wt create fix-<topic>-<experiment>                │
+│    2. Opus agent works in worktree:                     │
+│       - Apply code changes                              │
+│       - Add/update tests (per TESTS.md)                 │
+│       - Update docs if needed (per DOCS.md)             │
+│       - Run tests: npm test                             │
+│       - Commit if tests pass                            │
+│    3. Write fix-result.json with status                 │
+└─────────────────────────────────────────────────────────┘
+
+Phase 2: Sequential Merge (single Opus)
+┌─────────────────────────────────────────────────────────┐
+│  Single Opus reviews all worktrees:                     │
+│    1. List completed worktrees                          │
+│    2. For each successful fix:                          │
+│       - Review changes                                  │
+│       - Merge to main branch                            │
+│       - Resolve conflicts if any                        │
+│    3. Clean up merged worktrees                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### `qa-fixes.mld`
+### Implementation TODO
 
-Applies fixes based on `proposed-fixes.json`.
+1. [ ] Update `polish.mld` Phase 3 to use worktrees:
+   ```mlld
+   >> Create worktree for each fix
+   for parallel(10) @fix in @autoApproved [
+     run cmd {wt create fix-@fix.topic-@fix.experiment}
+     let @prompt = @buildFixPrompt(@fix, worktreePath)
+     let @result = @claude(@prompt, "opus", @worktreePath, "Read,Write,Edit,Bash,Glob,Grep")
+     => @fix
+   ]
+   ```
 
-**Usage:**
+2. [ ] Create fix prompt that includes:
+   - Code changes from proposed-fix.json
+   - Test requirements from TESTS.md
+   - Doc requirements from DOCS.md
+   - Commit message format
+   - ONLY commit if tests pass
+
+3. [ ] Add Phase 4 to `polish.mld`: Merge worktrees
+   ```mlld
+   >> Single Opus merges all successful fixes
+   let @mergePrompt = @buildMergePrompt(@completedWorktrees)
+   let @result = @claude(@mergePrompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep")
+   ```
+
+4. [ ] Update `qa-analyze-prompt.att` to output more structured code_changes:
+   ```json
+   {
+     "code_changes": [{
+       "file": "path/to/file.ts",
+       "line_start": 123,
+       "line_end": 130,
+       "before": "exact code to replace",
+       "after": "exact replacement code"
+     }],
+     "test_changes": [{
+       "type": "add_fixture",
+       "path": "tests/cases/feat/...",
+       "files": ["example.md", "expected.md"]
+     }],
+     "doc_changes": [{
+       "type": "update_atom",
+       "path": "docs/src/atoms/..."
+     }]
+   }
+   ```
+
+### Commit Requirements
+
+Fixes should ONLY be committed if:
+
+**For code changes:**
+- [ ] Tests added/updated per `docs/dev/TESTS.md`
+- [ ] New fixture in `tests/cases/` if behavior change
+- [ ] `npm test` passes
+
+**For doc changes:**
+- [ ] Updated per `docs/dev/DOCS.md`
+- [ ] LLM docs: atoms in `docs/src/atoms/`
+- [ ] User docs: `docs/user/`
+- [ ] Dev docs: `docs/dev/` if architecture change
+
+### Commit Message Format
+
+```
+fix(<topic>): <brief description>
+
+<detailed explanation>
+
+Fixes: qa/<topic>/<experiment>
+Confidence: 0.95
+Design-fit: high
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+```
+
+---
+
+## Quick Start for Next Session
+
 ```bash
-mlld run qa-fixes [--topic <filter>] [--limit <n>] [--dryrun]
+# See current state
+find qa/ -name "reconciliation.json" | wc -l  # reconciled count
+find qa/ -name "proposed-fix.json" | wc -l    # analyzed count
+
+# Continue reconciliation (74 remaining)
+mlld run qa-reconcile --limit 20
+
+# View genuine bugs pending analysis
+find qa/ -name "reconciliation.json" -exec grep -l '"verdict": "genuine-bug"' {} \; | \
+  while read f; do [ ! -f "$(dirname $f)/proposed-fix.json" ] && echo "$f"; done
+
+# Test the flywheel (1 iteration)
+mlld run polish --maxIterations 1
 ```
 
 ---
@@ -120,26 +243,17 @@ mlld run qa-fixes [--topic <filter>] [--limit <n>] [--dryrun]
 
 | Bead | P | Issue |
 |------|---|-------|
-| ~~mlld-d49g~~ | ~~P0~~ | ~~CodeFence emitted during module import~~ (FIXED - commits fa775ade2, 85005455b) |
-| mlld-cpuu | P1 | .mx.fm doesn't work on for-loop iteration variables |
-| mlld-x0dg | P2 | Standardize on .mx namespace for metadata |
-| mlld-r5cq | P2 | `!` negation in for-when conditions |
-| mlld-0tpg | P2 | Empty `[]` in when-first actions |
-| mlld-nkv6 | P2 | Destructured @payload import fails |
-| mlld-ezuw | P2 | Ternary in let assignments in exe blocks |
-| mlld-ghie | P2 | template directive executes code blocks |
-| mlld-ncyj | P3 | No toString() method |
+| mlld-egb3 | P1 | for-when inside exe blocks returns wrapped object |
+| mlld-7wx6 | P1 | Empty array [] in when-first |
+| mlld-27r5 | P1 | Ternary with method calls |
+| mlld-hat8 | P1 | Negation ! with method results |
 
 ---
 
-## Key Files
+## Design Decisions
 
-| File | Purpose |
-|------|---------|
-| `llm/run/qa.mld` | QA orchestration - spawns test agents |
-| `llm/run/qa-analyze.mld` | Analysis pipeline (NEW) |
-| `llm/run/qa-fixes.mld` | Fix pipeline (NEW) |
-| `interpreter/core/interpreter.ts` | CodeFence fix location |
-| `cli/commands/run.ts` | `mlld run` command - uses SDK execute |
-| `sdk/execute.ts` | SDK execute wrapper |
-| `interpreter/index.ts` | interpret() and output building |
+1. **Opus for reconciliation** - Needs grounded judgment, not just pattern matching
+2. **Auto-approve threshold: 90% confidence + high/medium design fit** - Conservative enough to be safe
+3. **Sequential merges** - Avoids complex conflict resolution
+4. **Worktrees for parallelism** - Clean isolation, easy cleanup
+5. **Pure mlld scripts** - Dogfooding + showcasing capabilities

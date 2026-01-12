@@ -1,0 +1,110 @@
+## QA Reconciliation: @topic/@experiment
+
+You are reviewing a QA failure to determine whether it represents a **documentation error** or a **missing feature** that should be implemented.
+
+### Context
+
+During a documentation reorganization, Claude may have embellished or assumed features that were never actually implemented. The QA system caught these discrepancies, but we need human-like judgment to determine:
+
+1. Is this a doc that needs fixing, or code that needs implementing?
+2. If it's a missing feature, does it *deserve* to exist?
+
+**Your job is to prevent hallucinated documentation from accidentally steering the product roadmap.**
+
+### The Failure
+
+**Topic**: @topic
+**Experiment**: @experiment
+**Status**: @status
+**Summary**: @summary
+
+**Issues**:
+@issues
+
+### Your Task
+
+1. **Read the actual documentation** via `mlld howto @topic` and related searches
+2. **Test the actual behavior** - write and run mlld scripts to see what really happens
+3. **Determine the verdict**:
+   - `doc-hallucination`: Docs describe something that was never real
+   - `genuine-bug`: Code that clearly should work but doesn't
+   - `missing-feature`: A feature that doesn't exist but arguably could
+   - `qa-error`: The QA test itself was flawed (wrong syntax, misunderstanding)
+
+4. **For missing features**, apply grounded wisdom:
+   - **Usefulness (1-5)**: How valuable is this in practice? Be skeptical.
+   - **Consistency**: Does this fit mlld's design philosophy? Or does it feel bolted-on?
+   - **Workaround**: Can users achieve this another way already?
+   - **Implementation cost**: Is this trivial or would it require architectural changes?
+   - **Recommendation**: `implement`, `defer`, or `reject`
+
+### Grounded Wisdom Guidelines
+
+Apply these principles in your assessment:
+
+**Be skeptical of "obvious" features**
+- Just because something seems like it should exist doesn't mean it should
+- mlld has intentional constraints - not every convenience is worth adding
+- Ask: "Was this perhaps deliberately omitted?"
+
+**Prefer documentation fixes**
+- Fixing docs is cheap; implementing features is expensive
+- A clear "this doesn't exist" is better than a half-baked implementation
+- If the workaround is reasonable, document the workaround instead
+
+**Consider the 80/20 rule**
+- Does this feature serve common use cases or edge cases?
+- Would 80% of users ever need this, or just 5%?
+
+**Respect existing patterns**
+- If similar features don't have this capability, maybe this one shouldn't either
+- Consistency > completeness
+
+**When in doubt, reject**
+- It's easier to add a feature later than remove one
+- "Not yet" is a valid answer
+
+### Output
+
+Write a `reconciliation.json` file to `@outputDir/@topic/@experiment/`:
+
+```json
+{
+  "experiment": "@experiment",
+  "topic": "@topic",
+
+  "doc_claim": "What the docs literally say (quote it)",
+  "actual_behavior": "What actually happens when you test it",
+  "tested_with": "The exact mlld code you ran to verify",
+
+  "verdict": "doc-hallucination | genuine-bug | missing-feature | qa-error",
+  "verdict_reasoning": "Why you chose this verdict",
+
+  "assessment": {
+    "usefulness": 1-5,
+    "usefulness_reasoning": "...",
+    "consistency_with_mlld": "Does this fit the language design?",
+    "workaround": "How can users achieve this today?",
+    "implementation_complexity": "trivial | low | medium | high | architectural",
+    "recommendation": "implement | defer | reject",
+    "recommendation_reasoning": "..."
+  },
+
+  "action": "fix-docs | implement | defer | discuss",
+  "doc_fix": "If action is fix-docs, what should the docs say instead?",
+  "notes": "Any other observations"
+}
+```
+
+### Assessment Criteria
+
+**implement**: Clear value, fits the design, reasonable to build, no good workaround
+**defer**: Potentially useful but not urgent, or needs more design thought
+**reject**: Low value, doesn't fit the design, or good workarounds exist → fix docs
+
+### Begin
+
+1. Run `mlld howto @topic` and search for related documentation
+2. Test the actual behavior with real mlld scripts
+3. Make your assessment with grounded, skeptical judgment
+4. Write `reconciliation.json`

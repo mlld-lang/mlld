@@ -1,26 +1,27 @@
 ## Analyze QA Failure: @topic/@experiment
 
-You are analyzing a failed QA experiment to identify root causes and propose fixes.
+You are analyzing a genuine bug to propose a fix for the QA polish flywheel.
 
 ## Context
 
 **Topic**: @topic
 **Experiment**: @experiment
 **Results file**: @resultsPath
-**Output file**: @outputPath
+**Reconciliation**: @reconciliationPath
 
 ## Your Task
 
-1. **Understand the failure**: Read the results.json and experiment.mld (if it exists)
-2. **Understand expected behavior**: Run `mlld howto @topic`
-3. **Investigate root cause**: You MAY read mlld source code to understand why this fails
-4. **Propose fixes**: Suggest concrete fixes with confidence levels
+1. **Understand the failure**: Read results.json and reconciliation.json
+2. **Deep investigation**: Read mlld source code to find the exact bug
+3. **Propose fix(es)**: Concrete implementation with code snippets
+4. **Assess confidence + design fit**: Can this be auto-approved?
 
 ## Investigation Steps
 
-1. Read the experiment results:
+1. Read the failure and reconciliation:
    ```bash
    cat @resultsPath
+   cat @reconciliationPath
    ```
 
 2. Check for experiment script:
@@ -33,68 +34,102 @@ You are analyzing a failed QA experiment to identify root causes and propose fix
    mlld howto @topic
    ```
 
-4. If needed, search mlld source for relevant code:
+4. Search mlld source for relevant code:
    ```bash
    grep -r "relevant pattern" interpreter/ grammar/
    ```
 
+5. Read specific files to understand the bug
+
+## Design Philosophy Checklist
+
+Before recommending a fix, consider:
+- **Consistency**: Does this match how similar features work in mlld?
+- **Simplicity**: Is this the minimal fix? Don't over-engineer.
+- **Intentional constraints**: Was this perhaps deliberately limited?
+- **User impact**: Common use case vs. edge case?
+
 ## Output Format
 
-Write your analysis to `@outputPath` with this JSON structure:
+Write `proposed-fix.json` to `@outputDir/`:
 
 ```json
 {
   "experiment": "@experiment",
   "topic": "@topic",
-  "analysis": {
+
+  "investigation": {
     "root_cause": "Clear description of why this fails",
-    "root_cause_confidence": 0.85,
-    "complexity": 0.3,
-    "files_involved": ["interpreter/path/to/file.ts", "grammar/path/to/file.peggy"],
-    "requires_investigation": false
+    "root_cause_location": "interpreter/path/file.ts:123",
+    "files_examined": ["file1.ts:10-50", "file2.ts:100-120"]
   },
+
   "proposed_fixes": [
     {
       "id": "fix-1",
-      "description": "Brief description of the fix",
+      "description": "Brief description",
       "approach": "Detailed implementation steps",
-      "tradeoffs": "Potential side effects or considerations",
-      "confidence": 0.9,
-      "effort": "low"
+      "code_changes": [
+        {
+          "file": "interpreter/path/file.ts",
+          "line": 123,
+          "before": "existing code",
+          "after": "proposed code"
+        }
+      ],
+      "effort": "trivial|low|medium|high",
+      "tradeoffs": "Any risks or side effects"
     }
   ],
+
+  "recommendation": {
+    "fix_id": "fix-1",
+    "confidence": 0.95,
+    "confidence_reasoning": "Exact bug location found, fix is mechanical",
+    "design_fit": "high|medium|low",
+    "design_fit_reasoning": "Matches how for-loops handle empty arrays",
+    "auto_approve": true
+  },
+
   "decision": "fix-1",
-  "decision_reason": null
+  "decision_reasoning": "Safe to auto-approve because..."
 }
 ```
 
+## Auto-Approve Criteria
+
+Set `auto_approve: true` ONLY if ALL are true:
+- `confidence >= 0.9` - Exact bug and fix identified
+- `design_fit` is "high" or "medium"
+- `effort` is "trivial" or "low"
+- No breaking changes to existing behavior
+- Fix aligns with existing mlld patterns
+
+If ANY doubt, set `auto_approve: false`.
+
 ## Field Guidelines
 
-### analysis
-- `root_cause_confidence`: 0-1, how certain you are about the diagnosis
-- `complexity`: 0-1, how complex the issue is (0=trivial, 1=architectural)
-- `files_involved`: List paths relative to repo root
-- `requires_investigation`: true if you couldn't determine root cause
+### confidence (0.0-1.0)
+- 0.95+: Exact line identified, mechanical fix
+- 0.85-0.94: Strong understanding, minor uncertainty
+- 0.70-0.84: Good hypothesis, needs verification
+- <0.70: Uncertain, needs human review
 
-### proposed_fixes
-- `confidence`: 0-1, how likely this fix will work
-- `effort`: "low" (< 50 lines), "medium" (50-200 lines), "high" (> 200 lines)
-- Include multiple approaches if viable alternatives exist
+### design_fit
+- **high**: Matches existing patterns exactly
+- **medium**: Reasonable addition, consistent with philosophy
+- **low**: Works but feels bolted-on, may need design discussion
 
-### decision
-- If your top fix has confidence >= 0.95, set `decision` to that fix's id
-- Otherwise, leave `decision` as null (human will review)
-
-## Constraints
-
-- Focus on behavioral bugs, not documentation issues
-- If the failure is documentation-only (unclear-docs with no broken-promise), set `decision` to "docs-only" and note that no code fix is needed
-- Be conservative with confidence scores
-- Include at least one fix proposal unless the issue is documentation-only
+### effort
+- **trivial**: 1-10 lines, obvious change
+- **low**: 10-50 lines, straightforward
+- **medium**: 50-200 lines, some complexity
+- **high**: 200+ lines or architectural changes
 
 ## Begin
 
-1. Read the failure results
-2. Reproduce/understand the issue
-3. Investigate root cause
-4. Write proposed-fixes.json
+1. Read failure + reconciliation
+2. Investigate source code
+3. Propose concrete fix with code snippets
+4. Assess confidence and design fit honestly
+5. Write proposed-fix.json

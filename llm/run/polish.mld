@@ -1,0 +1,205 @@
+>> QA Polish Flywheel
+>> Usage: mlld run polish [--tier 1] [--max-iterations 10]
+>>
+>> Runs the full QA → reconcile → analyze → fix loop until stable.
+>> Auto-approves fixes where Opus confidence >= 0.9 and design_fit is high/medium.
+
+import { @claude } from @mlld/claude
+
+>> Payload options
+import "@payload" as @p
+var @empty = []
+var @tier = @p.tier ? @p.tier : "1"
+var @maxIterations = @p.maxIterations ? @p.maxIterations : 10
+
+>> Configuration
+var @qaDir = "@base/qa"
+
+>> === PROMPT TEMPLATES ===
+
+var @reconcilePromptTemplate = <@base/llm/run/qa-reconcile-prompt.att>
+var @analyzePromptTemplate = <@base/llm/run/qa-analyze-prompt.att>
+
+>> === BUILD PROMPT FUNCTIONS ===
+
+exe @buildReconcilePrompt(tmpl, result) = [
+  >> Workaround for mlld-27r5: ternary with property access
+  let @issues = when first [@result.issues => `@result.issues`; * => "[]"]
+  let @s1 = @tmpl.replace("@topic", @result.topic)
+  let @s2 = @s1.replace("@experiment", @result.experiment)
+  let @s3 = @s2.replace("@status", @result.status)
+  let @s4 = @s3.replace("@summary", @result.summary)
+  let @s5 = @s4.replace("@issues", @issues)
+  => @s5.replace("@outputDir", @qaDir)
+]
+
+exe @buildAnalyzePrompt(tmpl, item) = [
+  let @s1 = @tmpl.replace("@topic", @item.topic)
+  let @s2 = @s1.replace("@experiment", @item.experiment)
+  let @s3 = @s2.replace("@resultsPath", @item.resultsPath)
+  let @s4 = @s3.replace("@reconciliationPath", @item.reconciliationPath)
+  let @s5 = @s4.replace("@outputDir", @item.experimentDir)
+  => @s5.replace("@experimentDir", @item.experimentDir)
+]
+
+exe @buildApplyPrompt(item) = `Apply this fix to the mlld codebase:
+
+Topic: @item.topic
+Experiment: @item.experiment
+
+Investigation:
+  Root cause: @item.fix.investigation.root_cause
+  Location: @item.fix.investigation.root_cause_location
+
+Recommended fix: @item.fix.recommendation.fix_id
+Confidence: @item.fix.recommendation.confidence
+Design fit: @item.fix.recommendation.design_fit
+
+Proposed changes:
+@item.fix.proposed_fixes
+
+Instructions:
+1. Read each file mentioned in code_changes
+2. Apply the changes exactly as specified
+3. Run relevant tests to verify: npm test
+4. Write fixed.json to @item.experimentDir/ with:
+   {"applied": true, "verified": <true if tests pass>}
+`
+
+>> === MAIN LOOP ===
+
+show `=== QA Polish Flywheel ===`
+show `Tier: @tier`
+show `Max iterations: @maxIterations`
+show ``
+
+var @iteration = 0
+var @stable = false
+
+loop until @stable || @iteration >= @maxIterations [
+  let @iteration = @iteration + 1
+  show `--- Iteration @iteration ---`
+
+  >> Load all state files fresh each iteration
+  >> (workaround for mlld-egb3: do filtering at top level, not in exe)
+  let @allResults = <@qaDir/**/results.json>
+  let @allReconciliations = <@qaDir/**/reconciliation.json>
+  let @allProposedFixes = <@qaDir/**/proposed-fix.json>
+  let @allFixedFiles = <@qaDir/**/fixed.json>
+
+  >> Build lookup sets
+  let @reconciledDirs = for @r in @allReconciliations => @r.mx.absoluteDir
+  let @analyzedDirs = for @f in @allProposedFixes => @f.mx.absoluteDir
+  let @fixedDirs = for @f in @allFixedFiles => @f.mx.absoluteDir
+
+  >> Count status
+  let @passing = for @r in @allResults when @r.status == "pass" => @r
+  let @failing = for @r in @allResults when @r.status == "fail" => @r
+
+  show `State: @allResults.length total, @passing.length passing, @failing.length failing`
+
+  >> Phase 1: Find & reconcile new failures
+  let @needsReconcile = for @r in @allResults
+    when (@r.status == "fail" || @r.status == "partial")
+      && @reconciledDirs.includes(@r.mx.absoluteDir) == false
+    => {
+      topic: @r.topic,
+      experiment: @r.experiment,
+      status: @r.status,
+      summary: @r.summary,
+      issues: @r.issues,
+      experimentDir: @r.mx.absoluteDir
+    }
+
+  show `Phase 1: Reconciling @needsReconcile.length failures...`
+
+  let @reconcileLimit = @needsReconcile.slice(0, 20)
+  for parallel(20) @item in @reconcileLimit [
+    let @prompt = @buildReconcilePrompt(@reconcilePromptTemplate, @item)
+    show `  Reconciling: @item.topic/@item.experiment`
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep")
+    => @item.topic
+  ]
+
+  >> Reload reconciliations after phase 1
+  let @freshReconciliations = <@qaDir/**/reconciliation.json>
+
+  >> Phase 2: Find & analyze genuine bugs
+  let @needsAnalyze = for @r in @freshReconciliations
+    when @r.verdict == "genuine-bug"
+      && @r.action == "implement"
+      && @analyzedDirs.includes(@r.mx.absoluteDir) == false
+    => {
+      topic: @r.topic,
+      experiment: @r.experiment,
+      experimentDir: @r.mx.absoluteDir,
+      resultsPath: `@r.mx.absoluteDir/results.json`,
+      reconciliationPath: @r.mx.absolute
+    }
+
+  show `Phase 2: Analyzing @needsAnalyze.length genuine bugs...`
+
+  let @analyzeLimit = @needsAnalyze.slice(0, 10)
+  for parallel(10) @item in @analyzeLimit [
+    let @prompt = @buildAnalyzePrompt(@analyzePromptTemplate, @item)
+    show `  Analyzing: @item.topic/@item.experiment`
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep")
+    => @item.topic
+  ]
+
+  >> Reload proposed fixes after phase 2
+  let @freshProposedFixes = <@qaDir/**/proposed-fix.json>
+
+  >> Phase 3: Find & apply auto-approved fixes
+  let @needsApply = for @f in @freshProposedFixes
+    when @f.recommendation.auto_approve == true
+      && @fixedDirs.includes(@f.mx.absoluteDir) == false
+    => {
+      topic: @f.topic,
+      experiment: @f.experiment,
+      experimentDir: @f.mx.absoluteDir,
+      fix: @f
+    }
+
+  show `Phase 3: Applying @needsApply.length auto-approved fixes...`
+
+  >> Apply fixes sequentially to avoid conflicts
+  for @item in @needsApply [
+    let @prompt = @buildApplyPrompt(@item)
+    show `  Applying: @item.topic/@item.experiment`
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep")
+    => @item.topic
+  ]
+
+  >> Check if stable (no work done this iteration)
+  let @workDone = @reconcileLimit.length + @analyzeLimit.length + @needsApply.length
+  when @workDone == 0 [
+    let @stable = true
+  ]
+
+  show `Work done: @workDone items`
+  show ``
+]
+
+>> Final summary
+var @finalResults = <@qaDir/**/results.json>
+var @finalReconciliations = <@qaDir/**/reconciliation.json>
+var @finalProposedFixes = <@qaDir/**/proposed-fix.json>
+var @finalFixed = <@qaDir/**/fixed.json>
+
+var @finalPassing = for @r in @finalResults when @r.status == "pass" => @r
+var @finalFailing = for @r in @finalResults when @r.status == "fail" => @r
+var @finalGenuineBugs = for @r in @finalReconciliations when @r.verdict == "genuine-bug" => @r
+
+show `=== Polish Complete ===`
+show `Iterations: @iteration`
+show `Stable: @stable`
+show ``
+show `Final state:`
+show `  Total: @finalResults.length`
+show `  Passing: @finalPassing.length`
+show `  Failing: @finalFailing.length`
+show `  Reconciled: @finalReconciliations.length`
+show `  Genuine bugs: @finalGenuineBugs.length`
+show `  Analyzed: @finalProposedFixes.length`
+show `  Fixed: @finalFixed.length`
