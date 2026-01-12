@@ -6,7 +6,7 @@
 >> Strip frontmatter from content
 exe @stripFrontmatter(text) = js {
   if (typeof text !== 'string') {
-    text = text && text.content ? text.content : String(text);
+    text = text && text.text ? text.text : String(text);
   }
   return text.replace(/^---[\s\S]*?---\n*/, '').trim();
 }
@@ -18,7 +18,7 @@ exe @buildTree(allAtoms, introAtom) = js {
 
   // Show intro brief at top
   if (introAtom) {
-    const text = typeof introAtom === 'string' ? introAtom : (introAtom.content || '');
+    const text = typeof introAtom === 'string' ? introAtom : (introAtom.text || '');
     const match = text.match(/^---\n([\s\S]*?)\n---/);
     if (match) {
       const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
@@ -43,7 +43,7 @@ exe @buildTree(allAtoms, introAtom) = js {
   for (const cat of categories) {
     lines.push(cat.name + '                              (mlld howto ' + cat.name + ' for all)');
     for (const atom of cat.atoms) {
-      const text = typeof atom === 'string' ? atom : (atom.content || '');
+      const text = typeof atom === 'string' ? atom : (atom.text || '');
       const match = text.match(/^---\n([\s\S]*?)\n---/);
       if (match) {
         const idMatch = match[1].match(/^id:\s*(.+)$/m);
@@ -81,7 +81,7 @@ exe @flattenAtoms(allAtoms) = js {
 exe @filterByTopic(atoms, topicId) = js {
   if (!topicId) return [];
   return atoms.filter(atom => {
-    const text = typeof atom === 'string' ? atom : (atom.content || '');
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
     const match = text.match(/^---\n([\s\S]*?)\n---/);
     if (!match) return false;
     const idMatch = match[1].match(/^id:\s*(.+)$/m);
@@ -100,7 +100,7 @@ exe @filterByTopic(atoms, topicId) = js {
 exe @filterById(atoms, id) = js {
   if (!id) return [];
   return atoms.filter(atom => {
-    const text = typeof atom === 'string' ? atom : (atom.content || '');
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
     const match = text.match(/^---\n([\s\S]*?)\n---/);
     if (!match) return false;
     const idMatch = match[1].match(/^id:\s*(.+)$/m);
@@ -110,7 +110,7 @@ exe @filterById(atoms, id) = js {
 
 >> Get category from an atom's frontmatter
 exe @getCategory(atom) = js {
-  const text = typeof atom === 'string' ? atom : (atom.content || '');
+  const text = typeof atom === 'string' ? atom : (atom.text || '');
   const match = text.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return '';
   const catMatch = match[1].match(/^category:\s*(.+)$/m);
@@ -120,14 +120,14 @@ exe @getCategory(atom) = js {
 >> Get content from atom (handles both string and object)
 exe @getContent(atom) = js {
   if (typeof atom === 'string') return atom;
-  if (atom && atom.content) return atom.content;
+  if (atom && atom.text) return atom.text;
   return '';
 }
 
 >> Join stripped atoms into single output
 exe @joinStripped(atoms) = js {
   return atoms.map(a => {
-    const text = typeof a === 'string' ? a : (a.content || '');
+    const text = typeof a === 'string' ? a : (a.text || '');
     return text.replace(/^---[\s\S]*?---\n*/, '').trim();
   }).join('\n\n');
 }
@@ -139,7 +139,7 @@ exe @grepAtoms(atoms, pattern) = js {
   const regex = new RegExp(pattern, 'gi');
 
   for (const atom of atoms) {
-    const text = typeof atom === 'string' ? atom : (atom.content || '');
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
     const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
     if (!fmMatch) continue;
 
@@ -232,7 +232,7 @@ exe @getSectionMatches(atoms, topicMatches, exactMatches, fullId, topic) = js {
 
   if (!targetAtom) return [];
 
-  const text = typeof targetAtom === 'string' ? targetAtom : (targetAtom.content || '');
+  const text = typeof targetAtom === 'string' ? targetAtom : (targetAtom.text || '');
   const match = text.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return [];
 
@@ -243,7 +243,7 @@ exe @getSectionMatches(atoms, topicMatches, exactMatches, fullId, topic) = js {
 
   // Filter all atoms by this category
   return atoms.filter(atom => {
-    const t = typeof atom === 'string' ? atom : (atom.content || '');
+    const t = typeof atom === 'string' ? atom : (atom.text || '');
     const m = t.match(/^---\n([\s\S]*?)\n---/);
     if (!m) return false;
     const idMatch = m[1].match(/^id:\s*(.+)$/m);
