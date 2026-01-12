@@ -95,7 +95,7 @@ loop until @stable || @iteration >= @maxIterations || @halted [
 
   let @reconcileLimit = @needsReconcile.slice(0, 5)
   show `  DEBUG: reconcileLimit has @reconcileLimit.length items`
-  for parallel(3) @item in @reconcileLimit [
+  for parallel(3, 60) @item in @reconcileLimit [
     let @issuesJson = @item.issues ? `@item.issues` : "[]"
     let @prompt = @buildReconcilePrompt(@item.topic, @item.experiment, @item.status, @item.summary, @issuesJson, @qaDir)
     show `  Reconciling: @item.topic/@item.experiment`
@@ -124,7 +124,7 @@ loop until @stable || @iteration >= @maxIterations || @halted [
   let @analyzeLimit = @needsAnalyze.slice(0, 5)
   show `  DEBUG: analyzeLimit has @analyzeLimit.length items`
   show `  DEBUG: entering analyze loop...`
-  for parallel(3) @item in @analyzeLimit [
+  for parallel(3, 60) @item in @analyzeLimit [
     show `  DEBUG: loop body for @item.topic/@item.experiment`
     show `  DEBUG: calling buildAnalyzePrompt...`
     let @prompt = @buildAnalyzePrompt(@item.topic, @item.experiment, @item.resultsPath, @item.reconciliationPath, @item.experimentDir)
@@ -154,7 +154,7 @@ loop until @stable || @iteration >= @maxIterations || @halted [
   show `  DEBUG: needsApply has @needsApply.length items`
 
   >> Apply fixes in parallel worktrees
-  for parallel(3) @item in @needsApply [
+  for parallel(3, 60) @item in @needsApply [
     let @fix = @item.fix
     let @prompt = @buildApplyPrompt(
       @item.topic,
