@@ -121,11 +121,11 @@ Each experiment MUST produce a `results.json`:
 
 ## For LLM Testing
 
-If testing LLM-related features, use `@mlld/claude` with haiku:
+If testing LLM-related features, use `@@mlld/claude` with haiku:
 
 ```mlld
-import { @haiku } from @mlld/claude
-var @response = @haiku("Test prompt")
+import { @@haiku } from @@mlld/claude
+var @@response = @@haiku("Test prompt")
 ```
 
 ## Success Criteria

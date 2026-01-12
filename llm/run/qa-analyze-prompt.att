@@ -159,7 +159,7 @@ Example:
 "test_changes": {
   "fixture_dir": "tests/cases/feat/foreach/empty-array-handling",
   "files": {
-    "example.md": "/var @arr = []\n/foreach @double(@arr)\n",
+    "example.md": "/var @@arr = []\n/foreach @@double(@@arr)\n",
     "expected.md": ""
   },
   "rationale": "Verifies empty arrays are handled without throwing"
