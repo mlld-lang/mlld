@@ -285,16 +285,19 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
               collapsible: true
             });
           } else if (isCodeFence(n)) {
-            const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitIntent({
-              type: 'content',
-              value: materialized.text,
-              source: 'text',
-              visibility: 'always',
-              collapsible: false
-            });
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // Skip CodeFence emission when evaluating as expression (e.g., module imports)
+            if (!context?.isExpression) {
+              const materialized = materializeDisplayValue(n.content, undefined, n.content);
+              env.emitIntent({
+                type: 'content',
+                value: materialized.text,
+                source: 'text',
+                visibility: 'always',
+                collapsible: false
+              });
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
             }
           } else if (isMlldRunBlock(n) && !n.error) {
             // MlldRunBlock content is evaluated, not emitted directly
@@ -310,7 +313,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping non-document node type:', { type: (n as any).type });
           }
         }
-        
+
         // Add all nodes to environment for document reconstruction
         // This enables /output directive to recreate the complete document
         if (!context?.isExpression) {
@@ -377,16 +380,19 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
               collapsible: true
             });
           } else if (isCodeFence(n)) {
-            const materialized = materializeDisplayValue(n.content, undefined, n.content);
-            env.emitIntent({
-              type: 'content',
-              value: materialized.text,
-              source: 'text',
-              visibility: 'always',
-              collapsible: false
-            });
-            if (materialized.descriptor) {
-              env.recordSecurityDescriptor(materialized.descriptor);
+            // Skip CodeFence emission when evaluating as expression (e.g., module imports)
+            if (!context?.isExpression) {
+              const materialized = materializeDisplayValue(n.content, undefined, n.content);
+              env.emitIntent({
+                type: 'content',
+                value: materialized.text,
+                source: 'text',
+                visibility: 'always',
+                collapsible: false
+              });
+              if (materialized.descriptor) {
+                env.recordSecurityDescriptor(materialized.descriptor);
+              }
             }
           } else if (isMlldRunBlock(n) && !n.error) {
             // MlldRunBlock content is evaluated, not emitted directly
@@ -404,7 +410,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
         }
       }
     }
-    
+
     // Return the last result with all its properties (including stdout, stderr, exitCode)
     if (lastResult && (lastResult.stdout !== undefined || lastResult.stderr !== undefined || lastResult.exitCode !== undefined)) {
       return lastResult;
