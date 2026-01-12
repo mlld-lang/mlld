@@ -503,7 +503,10 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             stringValue = 'null';
           } else {
             const { isPipelineInput } = await import('@core/types/variable/TypeGuards');
+            const { isLoadContentResult } = await import('@core/types/load-content');
             if (isPipelineInput(value)) {
+              stringValue = asText(value);
+            } else if (isLoadContentResult(value)) {
               stringValue = asText(value);
             } else {
               stringValue = JSON.stringify(value);

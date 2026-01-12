@@ -1,6 +1,7 @@
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from '../utils/variable-resolution';
 import { asData, isStructuredValue } from '../utils/structured-value';
+import { isLoadContentResult } from '@core/types/load-content';
 
 function attachProvenance(target: unknown, source: unknown): void {
   if (!target || typeof target !== 'object') {
@@ -29,6 +30,11 @@ export function normalizeIterableValue(value: unknown): unknown {
     const normalizedArray = value.map(item => normalizeIterableValue(item));
     attachProvenance(normalizedArray, value);
     return normalizedArray;
+  }
+
+  // Preserve LoadContentResult objects to keep lazy getters (.json, .fm) functional
+  if (isLoadContentResult(value)) {
+    return value;
   }
 
   if (value && typeof value === 'object') {

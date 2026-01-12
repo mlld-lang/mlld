@@ -68,11 +68,25 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
       }
     );
     // Preserve file metadata in .mx so @f.mx.relative etc. works
+    const absLastSlash = value.absolute.lastIndexOf('/');
+    const absoluteDir = absLastSlash === 0 ? '/' : absLastSlash > 0 ? value.absolute.substring(0, absLastSlash) : value.absolute;
+    const relLastSlash = value.relative.lastIndexOf('/');
+    const relativeDir = relLastSlash === 0 ? '/' : relLastSlash > 0 ? value.relative.substring(0, relLastSlash) : '.';
+    let dirname: string;
+    if (absoluteDir === '/') {
+      dirname = '/';
+    } else {
+      const dirLastSlash = absoluteDir.lastIndexOf('/');
+      dirname = dirLastSlash >= 0 ? absoluteDir.substring(dirLastSlash + 1) : absoluteDir;
+    }
     variable.mx = {
       ...(variable.mx ?? {}),
       filename: value.filename,
       relative: value.relative,
       absolute: value.absolute,
+      dirname,
+      relativeDir,
+      absoluteDir,
       ext: (value as any).ext ?? (value as any)._extension,
       tokest: (value as any).tokest ?? (value as any)._metrics?.tokest,
       tokens: (value as any).tokens ?? (value as any)._metrics?.tokens
@@ -112,11 +126,25 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
     const importer = new VariableImporter();
     const variable = importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
     // Copy file metadata to .mx
+    const absLastSlash = value.absolute?.lastIndexOf('/') ?? -1;
+    const absoluteDir = absLastSlash === 0 ? '/' : absLastSlash > 0 ? value.absolute!.substring(0, absLastSlash) : value.absolute;
+    const relLastSlash = value.relative?.lastIndexOf('/') ?? -1;
+    const relativeDir = relLastSlash === 0 ? '/' : relLastSlash > 0 ? value.relative!.substring(0, relLastSlash) : '.';
+    let dirname: string | undefined;
+    if (absoluteDir === '/') {
+      dirname = '/';
+    } else if (absoluteDir) {
+      const dirLastSlash = absoluteDir.lastIndexOf('/');
+      dirname = dirLastSlash >= 0 ? absoluteDir.substring(dirLastSlash + 1) : absoluteDir;
+    }
     variable.mx = {
       ...(variable.mx ?? {}),
       filename: value.filename,
       relative: value.relative,
       absolute: value.absolute,
+      dirname,
+      relativeDir,
+      absoluteDir,
       ext: (value as any).ext,
       tokest: (value as any).tokest,
       tokens: (value as any).tokens

@@ -50,20 +50,21 @@ when @file.mx.tokest > 2000 => show "File is large"
 var @name = @file.mx.filename
 ```
 
-### `.keep` alligator metadata
+### `.keep` for JS/Node boundaries
 
-If you set a variable to the value of a single-file load like `<file.md>` it will lose the rich metadata like `<file.md>.mx.relative` when passing the value.
-
-Use `<file.md>.keep` when setting as the value of a variable to preserve the structure.
+Loaded files are StructuredValues with full metadata access. The `.keep` modifier is only needed when passing to JavaScript/Node stages where you need metadata access inside the JS code:
 
 ```mlld
-var @file = <file.md>
-show @file.mx.relative
->> No value here
+>> Metadata works directly - no .keep needed
+var @file = <config.json>
+show @file.mx.relative                 >> Works
+show @file.json.apiKey                 >> Works
 
-var @file = <file.md>.keep
-show @file.mx.relative
->> Returns a path
+>> Use .keep when passing to JS and you need .mx inside JS
+exe @process(file) = js {
+  return file.mx.filename + ": " + file.mx.tokens + " tokens";
+}
+run @process(@file.keep)               >> .keep preserves metadata for JS
 ```
 
 ### Object composition with spread
@@ -271,10 +272,15 @@ Every loaded file exposes metadata through its `.mx` namespace:
 ```mlld
 var @file = <package.json>
 
->> Basic metadata
+>> Path metadata
 show @file.mx.filename                 >> "package.json"
-show @file.mx.relative                 >> "./package.json" 
+show @file.mx.relative                 >> "./package.json"
 show @file.mx.absolute                 >> Full path
+
+>> Directory metadata
+show @file.mx.dirname                  >> Parent directory name
+show @file.mx.relativeDir              >> Relative path to directory
+show @file.mx.absoluteDir              >> Absolute path to directory
 
 >> Token counting
 show @file.mx.tokest                   >> Estimated tokens (fast)
@@ -1119,36 +1125,28 @@ Each append writes one compact JSON object followed by a newline. Use `.jsonl` w
 
 ## Gotchas
 
-### Metadata Access in Loops
+### Metadata in JS/Node Stages
 
-Auto-unwrapping in iterations drops direct `.mx` access:
-
-```mlld
-var @files = <docs/*.md>
-
->> ✗ This won't work - loop variable is unwrapped text
-for @file in @files => show @file.mx.filename  >> Error: .mx on string
-
->> ✓ Access via array index
-for @i in [0, 1, 2] => show @files[@i].mx.filename
-
->> ✓ Or use @keep helper to preserve structure
-for @file in @files.keep => show @file.mx.filename
-```
-
-### Metadata in Pipelines
-
-Pipeline stages receive string input by default:
+When passing files to JavaScript stages, use `.keep` if you need metadata access inside the JS code:
 
 ```mlld
 var @file = <config.json>
 
->> ✗ This loses metadata
-var @result = @file | @process  >> @process gets string, no .mx
+>> ✗ JS receives unwrapped data by default - no .mx
+exe @process(file) = js { return file.mx.filename }  >> Error
 
->> ✓ Keep structured form
-exe @process(file) = `Name: @file.mx.filename, Tokens: @file.mx.tokens`
-var @result = @file.keep | @process
+>> ✓ Use .keep to preserve metadata for JS
+exe @process(file) = js { return file.mx.filename }
+run @process(@file.keep)                              >> Works
+```
+
+Note: In mlld templates and directives, metadata works directly without `.keep`:
+
+```mlld
+var @files = <docs/*.md>
+for @file in @files => show @file.mx.filename        >> Works
+for @file in @files => show @file.json.status        >> Works
+for @file in @files => show @file.fm.title           >> Works
 ```
 
 ## Best Practices

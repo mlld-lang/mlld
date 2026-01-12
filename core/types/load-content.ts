@@ -43,6 +43,9 @@ export interface LoadContentResult {
     filename?: string;
     relative?: string;
     absolute?: string;
+    dirname?: string;
+    relativeDir?: string;
+    absoluteDir?: string;
     url?: string;
     domain?: string;
     title?: string;

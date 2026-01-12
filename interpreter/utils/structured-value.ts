@@ -39,6 +39,9 @@ export interface StructuredValueMetadata {
   filename?: string;
   relative?: string;
   absolute?: string;
+  dirname?: string;
+  relativeDir?: string;
+  absoluteDir?: string;
   url?: string;
   domain?: string;
   title?: string;
@@ -81,6 +84,9 @@ export interface StructuredValueContext {
   filename?: string;
   relative?: string;
   absolute?: string;
+  dirname?: string;
+  relativeDir?: string;
+  absoluteDir?: string;
   url?: string;
   domain?: string;
   title?: string;
@@ -499,6 +505,9 @@ function buildVarMxFromMetadata(
   const flattenedFilename = metadata?.filename as string | undefined;
   const flattenedRelative = metadata?.relative as string | undefined;
   const flattenedAbsolute = metadata?.absolute as string | undefined;
+  const flattenedDirname = metadata?.dirname as string | undefined;
+  const flattenedRelativeDir = metadata?.relativeDir as string | undefined;
+  const flattenedAbsoluteDir = metadata?.absoluteDir as string | undefined;
   const flattenedUrl = metadata?.url as string | undefined;
   const flattenedDomain = metadata?.domain as string | undefined;
   const flattenedTitle = metadata?.title as string | undefined;
@@ -524,6 +533,9 @@ function buildVarMxFromMetadata(
     filename: flattenedFilename ?? loadResult?.filename,
     relative: flattenedRelative ?? loadResult?.relative,
     absolute: flattenedAbsolute ?? loadResult?.absolute,
+    dirname: flattenedDirname,
+    relativeDir: flattenedRelativeDir,
+    absoluteDir: flattenedAbsoluteDir,
     url: flattenedUrl ?? loadResult?.url,
     domain: flattenedDomain ?? loadResult?.domain,
     title: flattenedTitle ?? loadResult?.title,

@@ -100,11 +100,30 @@ function buildMetadata(base?: StructuredValueMetadata, extra?: StructuredValueMe
 }
 
 function extractLoadContentMetadata(result: LoadContentResult): StructuredValueMetadata {
+  // Extract directory paths
+  const absLastSlash = result.absolute.lastIndexOf('/');
+  const absoluteDir = absLastSlash === 0 ? '/' : absLastSlash > 0 ? result.absolute.substring(0, absLastSlash) : result.absolute;
+
+  const relLastSlash = result.relative.lastIndexOf('/');
+  const relativeDir = relLastSlash === 0 ? '/' : relLastSlash > 0 ? result.relative.substring(0, relLastSlash) : '.';
+
+  // dirname is just the immediate parent folder name
+  let dirname: string;
+  if (absoluteDir === '/') {
+    dirname = '/';
+  } else {
+    const dirLastSlash = absoluteDir.lastIndexOf('/');
+    dirname = dirLastSlash >= 0 ? absoluteDir.substring(dirLastSlash + 1) : absoluteDir;
+  }
+
   const metadata: StructuredValueMetadata = {
     source: 'load-content',
     filename: result.filename,
     relative: result.relative,
     absolute: result.absolute,
+    dirname,
+    relativeDir,
+    absoluteDir,
     tokest: result.tokest,
     tokens: result.tokens,
     fm: result.fm,
