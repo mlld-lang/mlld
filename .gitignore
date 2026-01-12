@@ -151,7 +151,7 @@ tmp
 .mm
 
 # Local checkout of modules repo (not a submodule)
-modules/
+/modules/
 
 __pycache__/
 

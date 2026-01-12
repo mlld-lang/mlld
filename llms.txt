@@ -49,7 +49,7 @@ For full context injection, use `llms-combined.txt` which contains all modules.
 
 **Variables** - Always `@` prefixed: `var @x = 1`, then use `@x`
 
-**Templates** - Backticks interpolate: `` `Hello @name` ``
+**Templates** - Backticks interpolate: `` `Hello @name` ``. For longer prompts: `exe @f(x) = template "file.att"`
 
 **File loading** - Angle brackets: `<README.md>`, `<src/*.ts>`
 
@@ -98,6 +98,17 @@ for @item in @items [
 ```mlld
 for parallel(3) @task in @tasks => @runTask(@task)
 var @results = || @fetchA() || @fetchB() || @fetchC()
+```
+
+**External templates (.att files):**
+```mlld
+>> For prompts longer than a few lines, use .att files
+exe @systemPrompt(context) = template "./prompts/system.att"
+exe @welcome(name, role) = template "./prompts/welcome.att"
+
+>> Template collections for directories
+import templates from "@base/agents" as @agents(message, context)
+show @agents["alice"](@msg, @ctx)
 ```
 
 **Modules:**

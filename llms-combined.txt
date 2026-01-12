@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-12T07:19:24.915Z
+Generated: 2026-01-12T15:35:08.868Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -408,6 +408,66 @@ Config: <@base/config.json>
 Data: @data|@json
 `
 ```
+
+For templates longer than a simple paragraph, use `.att` files with the `exe ... = template` pattern:
+
+```mlld
+exe @welcome(name, role) = template "./prompts/welcome.att"
+exe @systemPrompt(context) = template "./prompts/system.att"
+
+>> Call like any other function
+show @welcome("Alice", "admin")
+```
+
+The `.att` file uses `@var` for interpolation and supports full mlld syntax inside:
+
+```att
+>> prompts/welcome.att
+Hello @name!
+
+Your role: @role
+
+for @perm in @role.permissions
+- @perm
+end
+```
+
+**Key points:**
+
+- Parameters from `exe @func(params)` are automatically available as `@param` in the template
+- `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- Never load `.att` files with angle brackets - use `exe ... = template` instead
+
+**When to use external templates:**
+
+- Prompts longer than 2-3 lines
+- Templates with complex structure or loops
+- Reusable prompt components
+- Agent system prompts
+
+**Alternative syntax - .mtt files:**
+
+If `.att` syntax conflicts with your content, use `.mtt` files instead. Common case: prompts that include `@path/to/file` references for LLMs to interpret:
+
+```mlld
+exe @codeReview(files, instructions) = template "./prompts/review.mtt"
+```
+
+```mtt
+>> prompts/review.mtt - uses {{var}} syntax
+Review these files: {{files}}
+
+{{instructions}}
+
+Reference @src/utils.ts and @tests/utils.test.ts for context.
+```
+
+The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
+
+| Extension | Variable syntax | File refs | Use when |
+|-----------|----------------|-----------|----------|
+| `.att` | `@var` | `<file.md>` | Default, mlld-style |
+| `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
 
 **When-expressions in templates:**
 
@@ -1288,16 +1348,41 @@ import cached(1h) <https://feed.xml> as @feed
 import local { @dev } from @alice/experimental
 ```
 
-**Template collections:**
+**Template collections** import an entire directory of `.att` files as a callable namespace:
 
 ```mlld
 import templates from "@base/agents" as @agents(message, context)
 
+>> Access templates by name (bracket or dot notation)
 show @agents["alice"](@msg, @ctx)           >> agents/alice.att
 show @agents.support["helper"](@msg, @ctx)  >> agents/support/helper.att
 ```
 
-Template collections require parameters. All templates in directory share the signature.
+**Directory structure example:**
+
+```
+agents/
+  alice.att          >> @agents["alice"](msg, ctx)
+  bob.att            >> @agents["bob"](msg, ctx)
+  support/
+    helper.att       >> @agents.support["helper"](msg, ctx)
+    escalate.att     >> @agents.support["escalate"](msg, ctx)
+```
+
+**Key rules:**
+
+- All templates in a collection share the same parameter signature
+- Filenames with hyphens become underscores: `json-pretty.att` → `@tpl["json_pretty"]`
+- Use dot notation for directories, brackets for template names
+- Collections require parameters in the `as @name(params)` clause
+
+**When to use collections:**
+
+- Multiple templates with the same interface (agent prompts, formatters)
+- Dynamic template selection based on runtime values
+- Organizing related templates by category
+
+For single templates, use `exe @func(params) = template "file.att"` instead.
 </IMPORT_TYPES>
 
 <EXPORTING>
@@ -2174,6 +2259,28 @@ exe @tpl(x) = template "./file.att"          >> single file
 import templates from "./agents" as @agents(message, context)
 ```
 </MISTAKE_TEMPLATE_COLLECTION_IMPORT>
+
+<MISTAKE_ATT_ANGLE_BRACKET>
+Never load `.att` template files with angle brackets and manual interpolation.
+
+```mlld
+>> Wrong - loads raw text, no interpolation
+var @tpl = <prompts/welcome.att>
+var @result = @tpl.replace("@name", @userName)  >> manual, error-prone
+
+>> Correct - automatic interpolation with exe params
+exe @welcome(name) = template "./prompts/welcome.att"
+show @welcome(@userName)
+```
+
+The `exe ... = template` form:
+
+- Automatically makes function parameters available as `@param` in the template
+- Supports `for`/`when` blocks, pipes, and file references inside the template
+- Handles escaping and edge cases correctly
+
+Using angle brackets treats the `.att` file as plain text with no interpolation.
+</MISTAKE_ATT_ANGLE_BRACKET>
 
 <MISTAKE_VAR_IN_PARALLEL_BLOCK>
 Parallel blocks can't write to outer scope. Use `let`.

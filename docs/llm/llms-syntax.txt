@@ -65,6 +65,66 @@ Data: @data|@json
 `
 ```
 
+For templates longer than a simple paragraph, use `.att` files with the `exe ... = template` pattern:
+
+```mlld
+exe @welcome(name, role) = template "./prompts/welcome.att"
+exe @systemPrompt(context) = template "./prompts/system.att"
+
+>> Call like any other function
+show @welcome("Alice", "admin")
+```
+
+The `.att` file uses `@var` for interpolation and supports full mlld syntax inside:
+
+```att
+>> prompts/welcome.att
+Hello @name!
+
+Your role: @role
+
+for @perm in @role.permissions
+- @perm
+end
+```
+
+**Key points:**
+
+- Parameters from `exe @func(params)` are automatically available as `@param` in the template
+- `.att` supports `<file.md>` references, pipes, and `for`/`when` blocks
+- Never load `.att` files with angle brackets - use `exe ... = template` instead
+
+**When to use external templates:**
+
+- Prompts longer than 2-3 lines
+- Templates with complex structure or loops
+- Reusable prompt components
+- Agent system prompts
+
+**Alternative syntax - .mtt files:**
+
+If `.att` syntax conflicts with your content, use `.mtt` files instead. Common case: prompts that include `@path/to/file` references for LLMs to interpret:
+
+```mlld
+exe @codeReview(files, instructions) = template "./prompts/review.mtt"
+```
+
+```mtt
+>> prompts/review.mtt - uses {{var}} syntax
+Review these files: {{files}}
+
+{{instructions}}
+
+Reference @src/utils.ts and @tests/utils.test.ts for context.
+```
+
+The `@src/utils.ts` stays literal - mlld won't try to interpolate it.
+
+| Extension | Variable syntax | File refs | Use when |
+|-----------|----------------|-----------|----------|
+| `.att` | `@var` | `<file.md>` | Default, mlld-style |
+| `.mtt` | `{{var}}` | None | Content has `@path` or `<tag>` meant for LLMs |
+
 **When-expressions in templates:**
 
 ```mlld
