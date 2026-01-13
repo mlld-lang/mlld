@@ -1,0 +1,4 @@
+[
+  {"name": "alice", "profile": {"age": 30, "city": "NYC"}},
+  {"name": "bob", "profile": {"age": 25, "city": "LA"}}
+]

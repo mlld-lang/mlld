@@ -21,12 +21,25 @@ export function normalizeIterableValue(value: unknown): unknown {
   }
 
   if (isStructuredValue(value)) {
+    const data = asData(value);
+
+    // For arrays inside StructuredValues, extract and normalize the array
+    // This handles JSON files where the root is an array - we need to iterate
+    // over the array elements, not the StructuredValue properties
+    if (Array.isArray(data)) {
+      const normalizedArray = data.map(item => normalizeIterableValue(item));
+      attachProvenance(normalizedArray, value);
+      return normalizedArray;
+    }
+
     // Preserve StructuredValue for file-loaded items to keep .mx metadata accessible
     // This ensures @f.mx.relative etc. works when iterating over glob results
+    // (individual file entries, not arrays)
     if (value.mx?.filename || value.mx?.relative || value.mx?.absolute) {
       return value;
     }
-    const normalized = normalizeIterableValue(asData(value));
+
+    const normalized = normalizeIterableValue(data);
     attachProvenance(normalized, value);
     return normalized;
   }
