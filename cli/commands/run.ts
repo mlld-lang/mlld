@@ -198,8 +198,14 @@ export class RunCommand {
         dynamicModules,
       }) as StructuredResult;
 
-      // Output the result
-      console.log(result.output);
+      // Check if streaming was enabled - if so, skip final output since it was already streamed
+      const effectHandler = result.environment?.getEffectHandler?.();
+      const isStreaming = effectHandler?.isStreamingEnabled?.() ?? false;
+
+      // Output the result (skip if streaming already output everything)
+      if (!isStreaming) {
+        console.log(result.output);
+      }
 
       // Show metrics in debug mode
       if (options.debug && result.metrics) {
