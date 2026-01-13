@@ -192,26 +192,10 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // Extract the raw value if we have a Variable (do this BEFORE metadata check)
   let rawValue = isVariable(value) ? value.value : value;
 
-  // Check for StructuredValue - also handle cases where Symbol was lost
-  // (e.g., when nested in objects that were spread/cloned)
-  let structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
-  if (!structuredWrapper && rawValue && typeof rawValue === 'object') {
-    const rv = rawValue as Record<string, unknown>;
-    // Check if it looks like a StructuredValue that lost its Symbol
-    if (
-      typeof rv.type === 'string' &&
-      typeof rv.text === 'string' &&
-      'data' in rv &&
-      'metadata' in rv &&
-      rv.type !== 'Directive' && rv.type !== 'VariableReference' // Exclude AST nodes
-    ) {
-      // Treat as StructuredValue - unwrap through .data
-      structuredWrapper = rawValue as any;
-    }
-  }
+  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
   const structuredCtx = (structuredWrapper?.mx ?? undefined) as Record<string, unknown> | undefined;
   if (structuredWrapper) {
-    rawValue = (structuredWrapper as any).data;
+    rawValue = structuredWrapper.data;
   }
 
   // Special handling for Variable metadata properties
@@ -621,7 +605,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       accessedValue = rawValue[name];
       break;
     }
-    
+
     case 'numericField': {
       // Handle numeric property access (obj.123)
       const numKey = String(fieldValue);
@@ -817,7 +801,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   if (options?.preserveContext) {
     const accessPath = [...(options.parentPath || []), fieldName];
     const resultIsVariable = isVariable(accessedValue);
-    
+
     return {
       value: accessedValue,
       parentVariable,
@@ -852,12 +836,12 @@ export async function accessFields(
       env: options?.env,
       sourceLocation: options?.sourceLocation
     });
-    
+
     if (shouldPreserveContext) {
       // Update tracking variables
       current = (result as FieldAccessResult).value;
       path = (result as FieldAccessResult).accessPath;
-      
+
       // Update parent variable if we accessed through a Variable
       if ((result as FieldAccessResult).isVariable && isVariable((result as FieldAccessResult).value)) {
         parentVar = (result as FieldAccessResult).value;

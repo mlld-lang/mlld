@@ -154,7 +154,26 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
 
   // Otherwise, create a Variable from the value
   const importer = new VariableImporter();
-  return importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
+  const variable = importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
+
+  // DEBUG: Check what was stored
+  if (process.env.MLLD_DEBUG_SYMBOL === 'true') {
+    console.error(`[ensureVariable] CREATED variable name=${name}:`, {
+      variableType: variable.type,
+      variableValueKeys: variable.value && typeof variable.value === 'object' ? Object.keys(variable.value).slice(0, 6) : null
+    });
+    // Check nested properties in stored value
+    if (variable.value && typeof variable.value === 'object') {
+      for (const [k, v] of Object.entries(variable.value as Record<string, unknown>).slice(0, 3)) {
+        console.error(`[ensureVariable]   stored ${k}:`, {
+          isStructuredValue: isStructuredValue(v),
+          hasSymbol: v && typeof v === 'object' && (v as any)[STRUCTURED_VALUE_SYMBOL]
+        });
+      }
+    }
+  }
+
+  return variable;
 }
 
 function formatFieldPath(fields?: FieldAccessNode[]): string | null {

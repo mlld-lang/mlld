@@ -213,10 +213,10 @@ export class VariableReferenceEvaluator {
           });
           result = (fieldResult as any).value;
         } else {
-          const fieldResult = await accessField(result, field, { 
+          const fieldResult = await accessField(result, field, {
             preserveContext: true,
             env,
-            sourceLocation: (value as any)?.location 
+            sourceLocation: (value as any)?.location
           });
           result = (fieldResult as any).value;
 
@@ -396,16 +396,16 @@ export class VariableReferenceEvaluator {
           });
           result = (fieldResult as any).value;
         } else {
-          const fieldResult = await accessField(result, field, { 
+          const fieldResult = await accessField(result, field, {
             preserveContext: true,
             env,
-            sourceLocation: (value as any)?.location 
+            sourceLocation: (value as any)?.location
           });
           result = (fieldResult as any).value;
         }
       }
     }
-    
+
     return result;
   }
 

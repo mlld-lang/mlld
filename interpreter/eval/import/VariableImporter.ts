@@ -657,6 +657,13 @@ export class VariableImporter {
         );
       }
 
+      // Preserve StructuredValues as-is to keep their Symbol marker
+      // StructuredValues have type, text, data, metadata properties and need the Symbol
+      // for isStructuredValue() detection and proper field access unwrapping
+      if (isStructuredValue(value)) {
+        return value;
+      }
+
       const result: Record<string, any> = {};
       for (const [key, entry] of Object.entries(value)) {
         result[key] = this.unwrapArraySnapshots(entry, importPath);
