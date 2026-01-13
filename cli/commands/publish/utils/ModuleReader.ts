@@ -176,9 +176,11 @@ export class ModuleReader {
         filename = entryPoint;
 
         // Parse entry point for AST
+        // Use strict mode for .mld files, markdown mode for .mld.md files
+        const parserMode = filename.endsWith('.mld.md') ? 'markdown' : 'strict';
         let ast: MlldNode[];
         try {
-          ast = parseSync(directoryData.entryContent);
+          ast = parseSync(directoryData.entryContent, { mode: parserMode });
         } catch (parseError: any) {
           const errorMessage = parseError.message || 'Unknown parse error';
           const location = parseError.location
@@ -277,9 +279,11 @@ export class ModuleReader {
     }
     
     // Parse and validate basic syntax early
+    // Use strict mode for .mld files, markdown mode for .mld.md files
+    const parserMode = filename.endsWith('.mld.md') || filename.endsWith('.mlld.md') ? 'markdown' : 'strict';
     let ast: MlldNode[];
     try {
-      ast = parseSync(content);
+      ast = parseSync(content, { mode: parserMode });
     } catch (parseError: any) {
       console.log(chalk.red('✘ Invalid mlld syntax'));
       
