@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **Conditional object keys**: Object keys with conditional syntax (`"key"?: @value`) now correctly include the key when the value is truthy. Previously, conditional keys were always omitted regardless of the value's truthiness.
 - **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when-first result positions
 - **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
 - **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
