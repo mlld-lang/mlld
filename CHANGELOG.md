@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **For block return-only syntax**: `[ => @x * 2 ]` (return statement with no preceding statements) now parses correctly in for loops
 - **Conditional object keys**: Object keys with conditional syntax (`"key"?: @value`) now correctly include the key when the value is truthy. Previously, conditional keys were always omitted regardless of the value's truthiness.
 - **Conditional object fields**: Fixed bug where conditional fields (`"key"?: @var`) were silently dropped when the object contained literal values in other fields
 - **Conditional object fields**: Objects with only conditional fields (e.g., `{"key"?: @val}`) now correctly include truthy values instead of producing empty objects
@@ -51,7 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **foreach with separator**: `foreach @array with {separator: " | "}` now correctly applies the separator option
   - Property path mismatch: show.ts was accessing `foreachExpression.with` which was undefined
   - AST stores withClause at `foreachExpression.execInvocation.withClause` as array of inlineValue objects
-- **For block return-only syntax**: `[ => @x * 2 ]` (return statement with no preceding statements) now parses correctly in for loops
 - **Empty comments consuming next line**: Comments with no content (`>>` alone) no longer consume the following line as comment content
 - **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when-first result positions
 - **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
