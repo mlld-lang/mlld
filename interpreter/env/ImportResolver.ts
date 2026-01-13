@@ -534,7 +534,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   beginImport(path: string): void {
     this.importStack.add(path);
   }
-  
+
   endImport(path: string): void {
     this.importStack.delete(path);
   }
@@ -570,11 +570,11 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       getParent: () => this,
       getAllowAbsolutePaths: getAllowAbsolutePaths || this.dependencies.getAllowAbsolutePaths
     };
-    
+
     const child = new ImportResolver(childDependencies);
     // Share import stack with parent to detect circular imports across scopes
     child.importStack = this.importStack;
-    
+
     return child;
   }
 }

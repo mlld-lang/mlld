@@ -40,9 +40,6 @@ show `Max iterations: @maxIterations`
 show `Base branch: @baseBranch`
 show ``
 
-var @iteration = 0
-var @stable = false
-
 >> Check for failed verification before starting - HALT if previous run broke things
 var @prevVerificationFiles = <@qaDir/verification-result.json?>
 var @prevVerification = @prevVerificationFiles.length > 0 ? @prevVerificationFiles[0] : null
@@ -56,10 +53,14 @@ when @halted => show `  1. Review the failures in verification-result.json`
 when @halted => show `  2. Either revert the problematic merge or fix manually`
 when @halted => show `  3. Delete verification-result.json to resume`
 
-show `DEBUG: before loop, iteration=@iteration, maxIterations=@maxIterations`
-loop until @stable || @iteration >= @maxIterations || @halted [
-  let @iteration = @iteration + 1
-  show `--- Iteration @iteration (max=@maxIterations, stable=@stable) ---`
+show `DEBUG: before loop, maxIterations=@maxIterations, halted=@halted`
+var @loopResult = loop(@maxIterations) [
+  >> Check exit conditions
+  when @halted => done { iteration: 0, stable: false, halted: true }
+  when @input && @input.stable => done @input
+
+  let @iteration = @mx.loop.iteration
+  show `--- Iteration @iteration (max=@maxIterations) ---`
 
   >> Load all state files fresh each iteration
   let @allResults = <@qaDir/**/results.json>
@@ -257,15 +258,16 @@ loop until @stable || @iteration >= @maxIterations || @halted [
 
   >> Check if stable (no work done this iteration)
   let @workDone = @reconcileLimit.length + @analyzeLimit.length + @needsApply.length + @needsTriage.length
-  show `DEBUG: workDone=@workDone`
-  when @workDone == 0 [
-    let @stable = true
-    show `DEBUG: stable=true`
-  ]
+  let @isStable = @workDone == 0
+  show `DEBUG: workDone=@workDone, stable=@isStable`
 
   show `Work done: @workDone items (reconcile: @reconcileLimit.length, analyze: @analyzeLimit.length, apply: @needsApply.length, triage: @needsTriage.length)`
   show `--- End iteration @iteration ---`
   show ``
+
+  >> Exit with done when stable, otherwise continue to next iteration
+  when @isStable => done { iteration: @iteration, stable: true }
+  continue { iteration: @iteration, stable: false }
 ]
 
 >> Final summary
@@ -281,9 +283,12 @@ var @finalMerged = for @f in @finalFixed when @f.merged == true => @f
 var @finalEscalated = for @f in @finalFixed when @f.escalated == true => @f
 var @finalPendingRetry = for @f in @finalFixed when @f.verified == false && !@f.escalated => @f
 
+var @finalIteration = @loopResult.iteration ?? 0
+var @finalStable = @loopResult.stable ?? true
+
 show `=== Polish Complete ===`
-show `Iterations: @iteration`
-show `Stable: @stable`
+show `Iterations: @finalIteration`
+show `Stable: @finalStable`
 show ``
 show `Final state:`
 show `  Total: @finalResults.length`

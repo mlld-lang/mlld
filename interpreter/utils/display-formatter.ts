@@ -76,13 +76,19 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
 function normalizeArrayEntry(item: unknown): unknown {
   if (isStructuredValue(item)) {
     const data = item.data;
-    if (Array.isArray(data) || (data && typeof data === 'object')) {
+    if (Array.isArray(data)) {
+      return data.map(el => normalizeArrayEntry(el));
+    }
+    if (data && typeof data === 'object') {
       return data;
     }
     if (typeof data === 'number' || typeof data === 'boolean' || data === null) {
       return data;
     }
     return asText(item);
+  }
+  if (Array.isArray(item)) {
+    return item.map(el => normalizeArrayEntry(el));
   }
   if (item && typeof item === 'object' && typeof (item as any).text === 'string') {
     return (item as any).text;

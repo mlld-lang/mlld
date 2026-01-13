@@ -111,7 +111,7 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
       if (nodes && typeof nodes === 'object' && 'content' in nodes) {
         return nodes.content || '';
       }
-      return String(nodes || '');
+      return String(nodes ?? '');
     }
     
     const parts: string[] = [];

@@ -1,5 +1,5 @@
 ---
-description: /var assignment with bound-value when (all matching)
+description: /var assignment with bound-value when (first match semantics)
 ---
 
 /var @x = 5

@@ -355,9 +355,6 @@ function validateArrayInputs(arrays: any[][]): void {
     if (!Array.isArray(arr)) {
       throw new Error(`Argument ${i + 1} must be an array`);
     }
-    if (arr.length === 0) {
-      throw new Error(`Array ${i + 1} cannot be empty`);
-    }
   }
 }
 

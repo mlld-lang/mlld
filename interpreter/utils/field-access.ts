@@ -205,7 +205,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const fieldName = String(field.value);
 
     // Core metadata properties always come from Variable, never from data
-    const CORE_METADATA = ['type', 'isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
+    const CORE_METADATA = ['isComplex', 'source', 'metadata', 'internal', 'mx', 'raw', 'totalTokens', 'maxTokens'];
 
     if (CORE_METADATA.includes(fieldName)) {
       const metadataValue = (() => {
@@ -232,9 +232,32 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       return metadataValue;
     }
 
-    // Guard quantifiers (.all, .any, .none) - allow data to override
+    // Properties that check data first, then fall back to Variable metadata
+    // For 'type': only check data first for user data containers (object/array),
+    // since other Variable types (executable, string, etc.) have internal 'type' fields
     const GUARD_QUANTIFIERS = ['all', 'any', 'none'];
-    if (GUARD_QUANTIFIERS.includes(fieldName)) {
+    const isUserDataContainer = value.type === 'object' || value.type === 'array';
+
+    // For 'type' on non-user-data containers, ALWAYS return Variable.type
+    // (executables, strings, etc. have internal 'type' fields that shouldn't be exposed)
+    if (fieldName === 'type' && !isUserDataContainer) {
+      const metadataValue = value.type;
+      if (options?.preserveContext) {
+        return {
+          value: metadataValue,
+          parentVariable: value,
+          accessPath: [...(options.parentPath || []), fieldName],
+          isVariable: false
+        };
+      }
+      return metadataValue;
+    }
+
+    // For guard quantifiers and 'type' on user data containers, check data first
+    const shouldCheckDataFirst = GUARD_QUANTIFIERS.includes(fieldName) ||
+      (fieldName === 'type' && isUserDataContainer);
+
+    if (shouldCheckDataFirst) {
       // Check if this field exists in the actual data first
       const fieldExistsInData = rawValue && typeof rawValue === 'object' && fieldName in rawValue;
 

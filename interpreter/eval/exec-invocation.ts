@@ -1523,6 +1523,13 @@ async function evaluateExecInvocationInternal(
       argValue = interpolated;
       argValueAny = interpolated;
 
+    } else if (arg && typeof arg === 'object' && 'wrapperType' in arg && Array.isArray((arg as any).content)) {
+      // Handle backtick template literals: { content: [...], wrapperType: 'backtick' }
+      // These need interpolation to produce the final string value
+      const interpolated = await interpolateWithResultDescriptor((arg as any).content, env, InterpolationContext.Default);
+      argValue = interpolated;
+      argValueAny = interpolated;
+
     } else if (arg && typeof arg === 'object' && 'type' in arg) {
       // AST nodes: evaluate based on type
       switch (arg.type) {

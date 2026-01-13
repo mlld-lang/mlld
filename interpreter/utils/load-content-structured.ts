@@ -4,7 +4,7 @@ import {
   type LoadContentResultHTML,
   type LoadContentResultURL
 } from '@core/types/load-content';
-import { MlldError } from '@core/errors';
+import { MlldError, ErrorSeverity } from '@core/errors';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import {
@@ -51,7 +51,11 @@ function parseJsonWithContext(text: string, sourceLabel: string): unknown {
     return JSON.parse(text);
   } catch (error: any) {
     const message = error?.message ? ` (${error.message})` : '';
-    throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`);
+    throw new MlldError(`Failed to parse JSON from ${sourceLabel}${message}`, {
+      code: 'JSON_PARSE_ERROR',
+      severity: ErrorSeverity.Fatal,
+      details: { sourceLabel }
+    });
   }
 }
 
@@ -66,8 +70,13 @@ function parseJsonLines(text: string, sourceLabel: string): unknown[] {
     } catch (error: any) {
       const message = error?.message ? ` (${error.message})` : '';
       throw new MlldError(`Failed to parse JSONL from ${sourceLabel} at line ${i + 1}${message}`, {
-        line: i + 1,
-        offendingLine: line
+        code: 'JSONL_PARSE_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: {
+          sourceLabel,
+          line: i + 1,
+          offendingLine: line
+        }
       });
     }
   }

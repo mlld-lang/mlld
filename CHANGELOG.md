@@ -30,16 +30,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Conditional object keys**: Object keys with conditional syntax (`"key"?: @value`) now correctly include the key when the value is truthy. Previously, conditional keys were always omitted regardless of the value's truthiness.
+- **Conditional object fields**: Fixed bug where conditional fields (`"key"?: @var`) were silently dropped when the object contained literal values in other fields
+- **Conditional object fields**: Objects with only conditional fields (e.g., `{"key"?: @val}`) now correctly include truthy values instead of producing empty objects
+- **Conditional object fields with literals**: Fixed bug where conditional object fields (`key?: @value`) were incorrectly omitted when the object also contained literal (non-variable) values
+- **When expressions in var assignments**: Fixed when expressions without explicit `first` modifier to use first-match semantics, matching behavior in for/loop contexts
+- **Pipeline context references**: @p[-1] and similar negative index references now correctly return evaluated string outputs when pipelines start with exe calls
+- **log/output falsy values**: Boolean `false` and `0` now output correctly instead of empty string when used with `/log` or `/output`
+- **Field access on 'type' property**: When accessing `.type` on objects that have a 'type' property in their data, mlld now correctly returns the data value instead of the internal Variable type discriminator
+- **JSON/JSONL parse errors**: Invalid JSON now shows proper error messages instead of "Failed to load content"
+  - `parseJsonWithContext` and `parseJsonLines` now include required `code` and `severity` in error options
+- **Backslash-escaped characters in XML contexts**: `\@`, `\.`, `\*`, and `@@` now prevent file reference detection inside angle brackets
+  - `<input placeholder="user\@example\.com">` now treated as literal XML, not a file reference
+- **Backtick template literals in exec arguments**: `@echo(@name)` where `@name` holds a backtick literal now correctly evaluates instead of producing `[object Object]`
+- **Pipeline retry @input staleness**: Fixed bug where leading effects (like show) in pipelines saw stale @input values during retry instead of fresh values from re-executed source stages
+- **Circular imports**: Local file imports now correctly trigger circular import detection, producing a clear error message instead of infinite recursion
+- **Nested array normalization**: Nested arrays now properly normalize their contents when displayed
+  - `[[StructuredValue, StructuredValue]]` now correctly formats to `[["clean","values"]]`
+  - `normalizeArrayEntry` now recursively processes nested arrays
+- **Empty arrays in for loops**: For loops now correctly iterate zero times over empty arrays instead of throwing an error
+- **foreach with separator**: `foreach @array with {separator: " | "}` now correctly applies the separator option
+  - Property path mismatch: show.ts was accessing `foreachExpression.with` which was undefined
+  - AST stores withClause at `foreachExpression.execInvocation.withClause` as array of inlineValue objects
+- **For block return-only syntax**: `[ => @x * 2 ]` (return statement with no preceding statements) now parses correctly in for loops
+- **Empty comments consuming next line**: Comments with no content (`>>` alone) no longer consume the following line as comment content
 - **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when-first result positions
 - **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
 - **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
 - **for-when in exe blocks**: `let @result = for @x in @arr when ... => @x` now returns the array value, allowing `.length` and other array operations
 - **When block accumulation in exe**: `when (condition) [let @x += value]` now correctly evaluates the condition and executes augmented assignments inside the block
+- **let bindings in when blocks**: let bindings that shadow outer variables now work correctly instead of silently failing
 - **Glob JSON parsing**: Glob-loaded JSON files (e.g., `<*.json>`) now auto-parse like single file loads
   - `@glob[0].data.name` now works consistently with `@single.data.name`
   - `.mx` metadata preserved when iterating glob results in for loops
 - **`mlld howto` display**: Fixed atom list not showing under category headers
   - Caused by `.content` getter being lost when passing through JS function boundaries
+- **Conditional object fields**: Fixed bug where conditional pairs (`"key"?: @value`) were silently dropped when the object also contained literal string values
+- **Conditional object fields with bare var keyword**: Objects with conditional field syntax (`"key"?: @value`) now correctly include/exclude fields when using the bare `var` keyword instead of `/var`
+- **Conditional object fields with literals**: `{"key"?: "value"}` now correctly includes the field when the literal value is truthy, instead of silently omitting it
+- **Triple-colon template file references**: `<...>` inside triple-colon templates is now treated as literal text
+  - Triple-colon templates should only support `{{var}}` interpolation per the documented design
+  - Angle brackets like `<this>` no longer incorrectly parse as file references
+- **When expression null actions**: when-expressions now correctly return null when a matched action evaluates to null, instead of incorrectly falling through to the next condition
 
 ### Removed
 - **`.content` accessor on StructuredValue**: Use `.text` instead

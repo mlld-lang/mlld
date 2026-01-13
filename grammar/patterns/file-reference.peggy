@@ -25,10 +25,15 @@ FileReferenceInterpolation "file reference interpolation"
       const rest = input.substring(peg$currPos);
       const closingIndex = rest.indexOf('>');
       if (closingIndex === -1) return false; // No closing >
-      
-      const content = rest.substring(0, closingIndex).trim();
+
+      let content = rest.substring(0, closingIndex).trim();
       // Exclude HTML comments like <!-- ... -->
       if (content.startsWith('!')) return false;
+
+      // Remove escaped special characters before checking if it's a file reference
+      // This allows \@ \. \* and @@ to escape triggers in XML/HTML contexts
+      content = content.replace(/\\[@.*]/g, '').replace(/@@/g, '');
+
       // Use same validation as helpers.isFileReferenceContent: must contain . * or @
       return /[.*@]/.test(content);
     } _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:TemplatePipeChain? {

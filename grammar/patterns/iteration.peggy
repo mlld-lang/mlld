@@ -286,6 +286,12 @@ ForBlockBody "for block body"
         returnStmt: null
       };
     }
+  / leadingComments:LeadingBlockComment* _ ret:ForBlockReturnStatement {
+      return {
+        statements: [],
+        returnStmt: ret
+      };
+    }
 
 LoopBlockBody "loop block body"
   = statements:LoopBlockStatementList {

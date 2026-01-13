@@ -1,0 +1,8 @@
+---
+name: Module A
+exports: ["@fromA"]
+---
+
+/import { @fromB } from "./circular-import-file-moduleB.mld"
+
+/var @fromA = "A"

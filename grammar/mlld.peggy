@@ -126,7 +126,7 @@ LineStartComment
       const pos = offset();
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       return isAtLineStart;
-    } marker:CommentMarker _ content:CommentContent {
+    } marker:CommentMarker HWS content:CommentContent {
     return helpers.createNode(NodeType.Comment, { 
       content: content.trim(), 
       marker: marker,
@@ -135,7 +135,7 @@ LineStartComment
   }
 
 Comment
-  = marker:CommentMarker _ content:CommentContent {
+  = marker:CommentMarker HWS content:CommentContent {
     return helpers.createNode(NodeType.Comment, { 
       content: content.trim(), 
       marker: marker,
@@ -155,7 +155,7 @@ CommentContent
 
 // Inline comment pattern - for use after directive content
 InlineComment
-  = _ marker:CommentMarker _ content:CommentContent {
+  = _ marker:CommentMarker HWS content:CommentContent {
     return {
       type: 'Comment',
       marker: marker,

@@ -560,7 +560,7 @@ async function evaluateSimpleVariableSource(
     const text = JSON.stringify(value, null, 2);
     return { rawValue, text };
   } else {
-    const text = String(value || '');
+    const text = String(value ?? '');
     return { rawValue, text };
   }
 }

@@ -17,6 +17,14 @@ import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { inferMlldMode } from '@core/utils/mode';
 
+// Use a truly global import stack via globalThis to survive module reloading
+// This is necessary because child environments may have different import resolvers
+// and the module may be loaded multiple times in different bundles
+const GLOBAL_STACK_KEY = Symbol.for('mlld.globalImportStack');
+const globalImportStack: Set<string> =
+  (globalThis as any)[GLOBAL_STACK_KEY] ||
+  ((globalThis as any)[GLOBAL_STACK_KEY] = new Set<string>());
+
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
   frontmatter: Record<string, any> | null;
@@ -47,8 +55,15 @@ export class ModuleContentProcessor {
     const { resolvedPath } = resolution;
     const isURL = resolution.type === 'url';
 
-    // Begin import tracking for security
+// Check for circular imports using global stack
+    if (globalImportStack.has(resolvedPath)) {
+      throw new Error(`Circular import detected: ${resolvedPath}`);
+    }
+
+    // Begin import tracking (both global and via security validator for URL tracking)
+    globalImportStack.add(resolvedPath);
     this.securityValidator.beginImport(resolvedPath);
+
     const snapshot = this.env.getSecuritySnapshot();
     const importDescriptor = mergeDescriptors(
       snapshot
@@ -122,26 +137,30 @@ export class ModuleContentProcessor {
         resolvedPath,
         directive
       );
-
       // Check if this is a JSON file (special handling)
       if (resolvedPath.endsWith('.json')) {
-        return this.processJSONContent(parsed, directive, resolvedPath);
+        const result = await this.processJSONContent(parsed, directive, resolvedPath);
+        return result;
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
-        return this.processPlainTextContent(resolvedPath);
+        const result = await this.processPlainTextContent(resolvedPath);
+        return result;
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
-        return this.processRawTemplate(processedContent, templateSyntax, resolvedPath);
+        const result = await this.processRawTemplate(processedContent, templateSyntax, resolvedPath);
+        return result;
       }
 
-      // Process mlld content
-      return this.processMLLDContent(parsed, processedContent, resolvedPath, isURL);
+      // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
+      const result = await this.processMLLDContent(parsed, processedContent, resolvedPath, isURL);
+      return result;
     } finally {
-      // End import tracking
+      // End import tracking (both global and security validator)
+      globalImportStack.delete(resolvedPath);
       this.securityValidator.endImport(resolvedPath);
     }
   }
@@ -156,7 +175,13 @@ export class ModuleContentProcessor {
     contentType?: 'module' | 'data' | 'text',
     labels?: readonly string[]
   ): Promise<ModuleProcessingResult> {
-    // Begin import tracking for security
+    // Check for circular imports using global stack
+    if (globalImportStack.has(ref)) {
+      throw new Error(`Circular import detected: ${ref}`);
+    }
+
+    // Begin import tracking (both global and security validator)
+    globalImportStack.add(ref);
     this.securityValidator.beginImport(ref);
     const snapshot = this.env.getSecuritySnapshot();
     const importDescriptor = mergeDescriptors(
@@ -235,20 +260,23 @@ export class ModuleContentProcessor {
 
       // Check if this is a JSON file (special handling)
       if (ref.endsWith('.json')) {
-        return this.processJSONContent(parsed, directive, ref);
+        const result = await this.processJSONContent(parsed, directive, ref);
+        return result;
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
-        return this.processPlainTextContent(ref);
+        const result = await this.processPlainTextContent(ref);
+        return result;
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
-        return this.processRawTemplate(processedContent, templateSyntax, ref);
+        const result = await this.processRawTemplate(processedContent, templateSyntax, ref);
+        return result;
       }
 
-      // Process mlld content
+      // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
       const result = await this.processMLLDContent(parsed, processedContent, ref, false);
       
       if (process.env.MLLD_DEBUG === 'true') {
@@ -260,7 +288,8 @@ export class ModuleContentProcessor {
       
       return result;
     } finally {
-      // End import tracking
+      // End import tracking (both global and security validator)
+      globalImportStack.delete(ref);
       this.securityValidator.endImport(ref);
     }
   }

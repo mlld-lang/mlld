@@ -35,6 +35,7 @@ import {
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
+import { convertEntriesToProperties } from '../utils/object-compat';
 import { logger } from '@core/utils/logger';
 import {
   asText,
@@ -48,6 +49,36 @@ import { wrapExecResult } from '../utils/structured-exec';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 // Template normalization now handled in grammar - no longer needed here
 import { resolveDirectiveExecInvocation } from './directive-replay';
+
+/**
+ * Extract withClause from foreach expression AST format.
+ * Handles two AST patterns:
+ * 1. Direct `with` property from batch pipeline syntax: `foreach @fn(@arr) => | @sort with {separator: ", "}`
+ *    In this case, foreachExpression.with already contains {separator: ", "} as direct properties.
+ * 2. Nested `execInvocation.withClause` from simple foreach syntax: `foreach @arr with {separator: " | "}`
+ *    In this case, withClause is an array of inlineValue objects that need conversion.
+ */
+function extractForeachWithClause(foreachExpression: any): Record<string, any> | undefined {
+  // First check for direct 'with' property (batch pipeline syntax)
+  if (foreachExpression?.with && typeof foreachExpression.with === 'object') {
+    return foreachExpression.with;
+  }
+
+  // Then check for execInvocation.withClause (simple foreach syntax)
+  const withClause = foreachExpression?.execInvocation?.withClause;
+  if (!withClause || !Array.isArray(withClause) || withClause.length === 0) {
+    return undefined;
+  }
+
+  // withClause is array of inlineValue objects, each with value.entries
+  const inlineValue = withClause[0];
+  if (inlineValue?.type !== 'inlineValue' || inlineValue?.value?.type !== 'object') {
+    return undefined;
+  }
+
+  // Convert entries [{type:'pair', key:'separator', value:' | '}] to {separator: ' | '}
+  return convertEntriesToProperties(inlineValue.value.entries);
+}
 
 /**
  * Evaluate /show directives.
@@ -920,8 +951,8 @@ export async function evaluateShow(
     }
     
     // Parse options from with clause if present
-    const options = parseForeachOptions(foreachExpression.with);
-    
+    const options = parseForeachOptions(extractForeachWithClause(foreachExpression));
+
     // For @add, we want each result on its own line without the heavy separator
     if (!options.separator) {
       options.separator = '\n';
@@ -968,8 +999,8 @@ export async function evaluateShow(
     }
     
     // Parse options from with clause if present
-    const options = parseForeachOptions(foreachExpression.with);
-    
+    const options = parseForeachOptions(extractForeachWithClause(foreachExpression));
+
     // For @show, we want each result on its own line without the heavy separator
     if (!options.separator) {
       options.separator = '\n';

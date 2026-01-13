@@ -309,7 +309,6 @@ TemplateBodyMtt "template body for .mtt files"
   = parts:(
       TemplateInlineShow
       / UnifiedBraceInterpolation
-      / FileReferenceInterpolation
       / UnifiedTemplateTextSegment
     )* { return parts; }
 
