@@ -5,8 +5,9 @@
 import type { MlldNode, SourceLocation } from '@core/types';
 import type { ImportType } from '@core/types';
 import type { Octokit } from '@octokit/rest';
-import type { ModuleNeedsNormalized, ModuleDependencyMap } from '@core/registry';
+import type { ModuleNeedsNormalized, ModuleDependencyMap, ModuleManifest, ModuleType } from '@core/registry';
 import type { WantsTier } from '@core/policy/needs';
+import type { ModuleFile, DirectoryModuleData } from '../utils/ModuleReader';
 
 export interface RuntimeDependencies {
   node?: string;
@@ -74,6 +75,9 @@ export interface ModuleData {
   filePath: string;
   gitInfo: GitInfo;
   ast: MlldNode[];
+  isDirectory?: boolean;
+  directoryData?: DirectoryModuleData;
+  moduleType?: ModuleType;
 }
 
 export interface ExportBinding {

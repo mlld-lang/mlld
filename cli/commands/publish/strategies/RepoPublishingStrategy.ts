@@ -3,11 +3,13 @@
  */
 
 import * as crypto from 'crypto';
+import * as path from 'path';
 import chalk from 'chalk';
 import { PublishingStrategy } from '../types/PublishingStrategy';
 import { PublishContext, PublishResult, GitInfo } from '../types/PublishingTypes';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import { execSync } from 'child_process';
+import type { ModuleFile } from '../utils/ModuleReader';
 
 export class RepoPublishingStrategy implements PublishingStrategy {
   name = 'repository';
@@ -87,16 +89,26 @@ export class RepoPublishingStrategy implements PublishingStrategy {
 
   private async publishFromPublicRepo(context: PublishContext): Promise<PublishResult> {
     const gitInfo = context.module.gitInfo;
-    const sourceUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${gitInfo.relPath}`;
-    
+    const isDirectory = context.module.isDirectory && context.module.directoryData;
+
+    // For directory modules, the base path is the directory, not the entry file
+    const basePath = isDirectory
+      ? path.dirname(gitInfo.relPath!)
+      : gitInfo.relPath!;
+
+    const baseUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${basePath}`;
+
     console.log(chalk.blue(`\n📤 Publishing @${context.module.metadata.author}/${context.module.metadata.name} from public repository`));
     console.log(chalk.gray(`   Repository: ${gitInfo.owner}/${gitInfo.repo}`));
     console.log(chalk.gray(`   Remote URL: ${gitInfo.remoteUrl}`));
     console.log(chalk.gray(`   Commit SHA: ${gitInfo.sha}`));
     console.log(chalk.gray(`   Branch: ${gitInfo.branch}`));
-    console.log(chalk.gray(`   Path: ${gitInfo.relPath}`));
-    console.log(chalk.gray(`   Full URL: ${sourceUrl}`));
-    
+    console.log(chalk.gray(`   Path: ${basePath}`));
+    if (isDirectory) {
+      console.log(chalk.gray(`   Type: directory module (${context.module.directoryData!.files.length} files)`));
+    }
+    console.log(chalk.gray(`   Base URL: ${baseUrl}`));
+
     // Auto-populate repository metadata if missing
     if (!context.module.metadata.repo) {
       context.module.metadata.repo = `https://github.com/${gitInfo.owner}/${gitInfo.repo}`;
@@ -104,43 +116,75 @@ export class RepoPublishingStrategy implements PublishingStrategy {
     if (!context.module.metadata.bugs) {
       context.module.metadata.bugs = `https://github.com/${gitInfo.owner}/${gitInfo.repo}/issues`;
     }
-    
-    // Verify the URL is accessible before publishing
-    console.log(chalk.gray(`\n   Verifying URL accessibility...`));
-    try {
-      const response = await fetch(sourceUrl);
-      if (!response.ok) {
-        throw new Error(`URL returned ${response.status}: ${response.statusText}`);
-      }
-      const content = await response.text();
-      if (!content || content.length === 0) {
-        throw new Error('URL returned empty content');
-      }
-      console.log(chalk.green(`   ✓ URL is accessible (${content.length} bytes)`));
-    } catch (error) {
-      console.error(chalk.red(`   ✗ URL verification failed: ${error instanceof Error ? error.message : String(error)}`));
-      const remoteHasCommit = this.remoteContainsCommit(gitInfo);
-      const pushHint = gitInfo.remoteUrl
-        ? `Push commit ${gitInfo.sha} to ${gitInfo.remoteUrl} (branch ${gitInfo.branch}) so the URL is reachable.`
-        : 'Push the current commit to your GitHub remote so the URL is reachable.';
-      const commitHint = remoteHasCommit
-        ? `The commit exists on the remote, but the path ${gitInfo.relPath} was not found at that SHA. Confirm the file path matches the remote repository layout.`
-        : pushHint;
-      throw new MlldError(
-        `Cannot publish: Module content is not accessible at ${sourceUrl}. ${commitHint}`,
-        { code: 'REPO_URL_UNAVAILABLE', severity: ErrorSeverity.Fatal }
-      );
-    }
 
-    const registryEntry = this.createPublicRepoRegistryEntry(context, sourceUrl);
-    
-    return {
-      success: true,
-      url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
-      type: 'repository',
-      message: `Published from public repository: ${gitInfo.owner}/${gitInfo.repo}`,
-      registryEntry
-    };
+    // Verify URLs are accessible
+    console.log(chalk.gray(`\n   Verifying URL accessibility...`));
+
+    if (isDirectory) {
+      // Verify each file in the directory module
+      const files = context.module.directoryData!.files;
+      for (const file of files) {
+        const fileUrl = `${baseUrl}/${file.relativePath}`;
+        try {
+          const response = await fetch(fileUrl);
+          if (!response.ok) {
+            throw new Error(`URL returned ${response.status}: ${response.statusText}`);
+          }
+        } catch (error) {
+          console.error(chalk.red(`   ✗ File not accessible: ${file.relativePath}`));
+          throw new MlldError(
+            `Cannot publish: File ${file.relativePath} is not accessible at ${fileUrl}. Push your changes to GitHub first.`,
+            { code: 'REPO_URL_UNAVAILABLE', severity: ErrorSeverity.Fatal }
+          );
+        }
+      }
+      console.log(chalk.green(`   ✓ All ${files.length} files accessible`));
+
+      const registryEntry = this.createDirectoryRegistryEntry(context, baseUrl);
+      return {
+        success: true,
+        url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
+        type: 'repository',
+        message: `Published directory module from public repository: ${gitInfo.owner}/${gitInfo.repo}`,
+        registryEntry
+      };
+    } else {
+      // Single file module (existing behavior)
+      const sourceUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${gitInfo.relPath}`;
+      try {
+        const response = await fetch(sourceUrl);
+        if (!response.ok) {
+          throw new Error(`URL returned ${response.status}: ${response.statusText}`);
+        }
+        const content = await response.text();
+        if (!content || content.length === 0) {
+          throw new Error('URL returned empty content');
+        }
+        console.log(chalk.green(`   ✓ URL is accessible (${content.length} bytes)`));
+      } catch (error) {
+        console.error(chalk.red(`   ✗ URL verification failed: ${error instanceof Error ? error.message : String(error)}`));
+        const remoteHasCommit = this.remoteContainsCommit(gitInfo);
+        const pushHint = gitInfo.remoteUrl
+          ? `Push commit ${gitInfo.sha} to ${gitInfo.remoteUrl} (branch ${gitInfo.branch}) so the URL is reachable.`
+          : 'Push the current commit to your GitHub remote so the URL is reachable.';
+        const commitHint = remoteHasCommit
+          ? `The commit exists on the remote, but the path ${gitInfo.relPath} was not found at that SHA. Confirm the file path matches the remote repository layout.`
+          : pushHint;
+        throw new MlldError(
+          `Cannot publish: Module content is not accessible at ${sourceUrl}. ${commitHint}`,
+          { code: 'REPO_URL_UNAVAILABLE', severity: ErrorSeverity.Fatal }
+        );
+      }
+
+      const registryEntry = this.createPublicRepoRegistryEntry(context, sourceUrl);
+      return {
+        success: true,
+        url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
+        type: 'repository',
+        message: `Published from public repository: ${gitInfo.owner}/${gitInfo.repo}`,
+        registryEntry
+      };
+    }
   }
 
   private remoteContainsCommit(gitInfo: GitInfo): boolean {
@@ -205,7 +249,7 @@ export class RepoPublishingStrategy implements PublishingStrategy {
   private createPublicRepoRegistryEntry(context: PublishContext, sourceUrl: string): any {
     const gitInfo = context.module.gitInfo;
     const contentHash = crypto.createHash('sha256').update(context.module.content).digest('hex');
-    
+
     return {
       name: context.module.metadata.name,
       author: context.module.metadata.author,
@@ -228,6 +272,53 @@ export class RepoPublishingStrategy implements PublishingStrategy {
           url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
           commit: gitInfo.sha,
           path: gitInfo.relPath,
+        },
+      },
+      dependencies: this.buildDependenciesObject(context.module.metadata),
+      publishedAt: new Date().toISOString(),
+    };
+  }
+
+  private createDirectoryRegistryEntry(context: PublishContext, baseUrl: string): any {
+    const gitInfo = context.module.gitInfo;
+    const directoryData = context.module.directoryData!;
+    const manifest = directoryData.manifest;
+
+    // Compute combined content hash from all files
+    const combinedContent = directoryData.files
+      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+      .map(f => `${f.relativePath}:${crypto.createHash('sha256').update(f.content).digest('hex')}`)
+      .join('\n');
+    const contentHash = crypto.createHash('sha256').update(combinedContent).digest('hex');
+
+    // Get the directory path (parent of entry file)
+    const dirPath = path.dirname(gitInfo.relPath!);
+
+    return {
+      name: context.module.metadata.name,
+      author: context.module.metadata.author,
+      version: context.module.metadata.version || '1.0.0',
+      about: context.module.metadata.about,
+      type: manifest.type,
+      needs: context.module.metadata.needs || [],
+      repo: context.module.metadata.repo,
+      keywords: context.module.metadata.keywords || [],
+      bugs: context.module.metadata.bugs,
+      homepage: context.module.metadata.homepage,
+      license: context.module.metadata.license,
+      mlldVersion: context.module.metadata.mlldVersion || '>=0.5.0',
+      ownerGithubUserIds: [context.user.id],
+      source: {
+        type: 'directory' as const,
+        baseUrl,
+        files: directoryData.files.map(f => f.relativePath),
+        entryPoint: manifest.entry || 'index.mld',
+        contentHash,
+        repository: {
+          type: 'git',
+          url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
+          commit: gitInfo.sha,
+          path: dirPath,
         },
       },
       dependencies: this.buildDependenciesObject(context.module.metadata),

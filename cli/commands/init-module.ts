@@ -5,6 +5,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import * as readline from 'readline/promises';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
@@ -14,6 +15,9 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { ModuleType, MODULE_TYPE_PATHS } from '@core/registry/types';
+
+const VALID_MODULE_TYPES: ModuleType[] = ['library', 'app', 'command', 'skill'];
 
 export interface InitModuleOptions {
   name?: string;
@@ -25,6 +29,8 @@ export interface InitModuleOptions {
   keywords?: string;
   homepage?: string;
   force?: boolean;
+  type?: ModuleType;
+  global?: boolean;
 }
 
 export class InitModuleCommand {
@@ -495,6 +501,207 @@ export class InitModuleCommand {
     }
   }
 
+  /**
+   * Scaffold a directory-based module (app, library, command, skill)
+   */
+  async scaffoldDirectoryModule(options: InitModuleOptions): Promise<void> {
+    const moduleType = options.type!;
+    const typePaths = MODULE_TYPE_PATHS[moduleType];
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    try {
+      const fileSystem = new NodeFileSystem();
+      let projectRoot = process.cwd();
+      try {
+        projectRoot = await findProjectRoot(process.cwd(), fileSystem);
+      } catch {
+        // Fall back to current directory
+      }
+
+      // Determine base path
+      let basePath: string;
+      if (options.global) {
+        basePath = path.join(os.homedir(), typePaths.global);
+      } else {
+        basePath = path.join(projectRoot, typePaths.local);
+      }
+
+      // Get module name
+      let moduleName = options.name;
+      if (!moduleName) {
+        moduleName = await rl.question(`${moduleType} name (lowercase, hyphens allowed): `);
+      }
+
+      if (!moduleName || !moduleName.match(/^[a-z0-9-]+$/)) {
+        throw new MlldError('Invalid module name. Must be lowercase alphanumeric with hyphens.', {
+          code: 'INVALID_MODULE_NAME',
+          severity: ErrorSeverity.Fatal
+        });
+      }
+
+      const moduleDir = path.join(basePath, moduleName);
+
+      // Check if directory exists
+      if (existsSync(moduleDir) && !options.force) {
+        throw new MlldError(`Directory already exists: ${moduleDir}\nUse --force to overwrite.`, {
+          code: 'DIRECTORY_EXISTS',
+          severity: ErrorSeverity.Fatal
+        });
+      }
+
+      // Get about description
+      let about = options.about;
+      if (!about) {
+        about = await rl.question('About (brief description): ');
+      }
+
+      // Get author
+      let author = options.author;
+      if (!author) {
+        let defaultAuthor: string | undefined;
+        try {
+          const user = await this.authService.getGitHubUser();
+          if (user) defaultAuthor = user.login;
+        } catch {
+          // Try git config
+          try {
+            defaultAuthor = execSync('git config github.user', { encoding: 'utf8' }).trim();
+          } catch {
+            try {
+              const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+              const match = remoteUrl.match(/github\.com[:/]([^/]+)\/.+/);
+              if (match) defaultAuthor = match[1];
+            } catch {
+              // Ignore
+            }
+          }
+        }
+
+        if (defaultAuthor) {
+          const input = await rl.question(`Author [${defaultAuthor}]: `);
+          author = input || defaultAuthor;
+        } else {
+          author = await rl.question('Author (GitHub username): ');
+        }
+      }
+
+      // Get version
+      const version = options.version || '1.0.0';
+
+      // Create directory structure
+      await fs.mkdir(moduleDir, { recursive: true });
+
+      // Generate manifest (module.yml)
+      const manifest = `name: ${moduleName}
+author: ${author}
+type: ${moduleType}
+about: "${about}"
+version: ${version}
+license: CC0
+`;
+
+      await fs.writeFile(path.join(moduleDir, 'module.yml'), manifest);
+
+      // Generate index.mld
+      const indexContent = this.generateDirectoryIndexContent(moduleType, moduleName, about || '');
+      await fs.writeFile(path.join(moduleDir, 'index.mld'), indexContent);
+
+      // Generate README.md
+      const readmeContent = this.generateReadmeContent(moduleType, moduleName, author || '', about || '');
+      await fs.writeFile(path.join(moduleDir, 'README.md'), readmeContent);
+
+      // Report success
+      const relPath = path.relative(process.cwd(), moduleDir);
+      console.log(chalk.green(`\n✔ Created ${moduleType}: ${relPath}/`));
+      console.log(chalk.gray('\nFiles created:'));
+      console.log(chalk.gray(`  ${relPath}/module.yml`));
+      console.log(chalk.gray(`  ${relPath}/index.mld`));
+      console.log(chalk.gray(`  ${relPath}/README.md`));
+
+      // Type-specific next steps
+      console.log(chalk.gray('\nNext steps:'));
+      if (moduleType === 'app') {
+        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
+        console.log(chalk.gray(`  2. Run: mlld run ${moduleName}`));
+        console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
+      } else if (moduleType === 'library') {
+        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
+        console.log(chalk.gray(`  2. Test: mlld ${relPath}/index.mld`));
+        console.log(chalk.gray(`  3. Publish: mlld publish ${relPath}`));
+      } else if (moduleType === 'command') {
+        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
+        console.log(chalk.gray(`  2. Test in Claude Code with /${moduleName}`));
+      } else if (moduleType === 'skill') {
+        console.log(chalk.gray(`  1. Edit ${relPath}/index.mld`));
+        console.log(chalk.gray(`  2. Add to your Claude Code skills`));
+      }
+
+    } finally {
+      rl.close();
+    }
+  }
+
+  private generateDirectoryIndexContent(type: ModuleType, name: string, about: string): string {
+    if (type === 'app') {
+      return `>> ${about || name}
+>> Entry point for ${name}
+
+var @message = "Hello from ${name}!"
+show @message
+`;
+    } else if (type === 'library') {
+      return `>> ${about || name}
+>> Entry point for ${name}
+
+exe @greet(name) = \`Hello, @name!\`
+
+export { @greet }
+`;
+    } else if (type === 'command') {
+      return `>> ${about || name}
+>> Claude Code slash command
+
+var @result = "Command ${name} executed"
+show @result
+`;
+    } else {
+      return `>> ${about || name}
+>> Claude Code skill
+
+var @response = "Skill ${name} activated"
+show @response
+`;
+    }
+  }
+
+  private generateReadmeContent(type: ModuleType, name: string, author: string, about: string): string {
+    return `# ${name}
+
+${about || `A mlld ${type}.`}
+
+## tldr
+
+${type === 'library' ? `\`\`\`mlld
+import { @greet } from @${author}/${name}
+show @greet("World")
+\`\`\`` : type === 'app' ? `\`\`\`bash
+mlld run ${name}
+\`\`\`` : `Use \`/${name}\` in Claude Code.`}
+
+## docs
+
+Add detailed documentation here.
+
+## License
+
+CC0 - Public Domain
+`;
+  }
+
   private generateModuleContent(metadata: any, _patternChoice: string, needs: string[]): string {
     const frontmatter = this.formatFrontmatter(metadata);
     const needsBlock = this.formatNeedsBlock(needs);
@@ -569,7 +776,13 @@ More detailed usage examples and documentation.
 
 export async function initModuleCommand(args: string[], options: InitModuleOptions = {}): Promise<void> {
   const command = new InitModuleCommand();
-  await command.initModule(options);
+
+  // If type is specified, use directory scaffolding
+  if (options.type && VALID_MODULE_TYPES.includes(options.type)) {
+    await command.scaffoldDirectoryModule(options);
+  } else {
+    await command.initModule(options);
+  }
 }
 
 export function createInitModuleCommand() {
@@ -582,48 +795,55 @@ export function createInitModuleCommand() {
       // Check for help flag first
       if (flags.help || flags.h) {
         console.log(`
-Usage: mlld module [options] [module-name]
+Usage: mlld module [type] [name] [options]
+       mlld module [name]
 
-Create a new mlld module interactively.
+Create mlld modules - either directory-based (app, library, command, skill)
+or single-file modules for the registry.
+
+Module Types:
+  app         Runnable application      → llm/run/<name>/
+  library     Importable module         → llm/lib/<name>/
+  command     Claude slash command      → .claude/commands/<name>/
+  skill       Claude skill              → .claude/skills/<name>/
 
 Examples:
-  mlld module                    Create a new module interactively
-  mlld module test               Create module named 'test'
-  mlld module @local/utils       Create 'utils' in configured @local/ path
-  mlld module @myorg/helper      Create 'helper' in configured @myorg/ path
-  mlld module ./path/to/test     Create module at specific path
+  mlld module app myapp              Create app in llm/run/myapp/
+  mlld module library utils          Create library in llm/lib/utils/
+  mlld module command review         Create command in .claude/commands/review/
+  mlld module skill helper           Create skill in .claude/skills/helper/
+  mlld module app myapp --global     Create in ~/.mlld/run/myapp/
+
+Single-file modules (legacy):
+  mlld module mymod                  Create single-file module interactively
+  mlld module @local/utils           Create in configured @local/ path
 
 Options:
   -n, --name <name>           Module name
   -a, --author <author>       Author name
   -d, --about <description>   Module description
-  -o, --output <path>         Output file path
+  -g, --global                Install to global location (~/.mlld/)
   --version <version>         Module version (default: 1.0.0)
-  -k, --keywords <keywords>   Comma-separated keywords
-  --homepage, --url <url>     Homepage URL
-  --skip-git                  Skip git integration
   -f, --force                 Overwrite existing files
-
-More Examples:
-  mlld module --name utils --about "Utility functions"
-  mlld module test --author myorg
-  mlld mod ./src/helpers.mld.md
+  -h, --help                  Show this help message
         `);
         return;
       }
-      
-      // Extract module name from filename if provided
-      let moduleName = flags.name || flags.n;
-      let outputPath = flags.output || flags.o;
-      
-      // If first arg is provided and no output flag, treat it as the output/name
-      if (args[0] && !outputPath) {
-        outputPath = args[0];
-        
-        // Extract module name from the filename if not provided via flag
-        if (!moduleName) {
-          const basename = path.basename(args[0]);
-          // First strip module extensions
+
+      // Check if first arg is a module type
+      const firstArg = args[0];
+      let moduleType: ModuleType | undefined;
+      let moduleName: string | undefined;
+
+      if (firstArg && VALID_MODULE_TYPES.includes(firstArg as ModuleType)) {
+        moduleType = firstArg as ModuleType;
+        moduleName = args[1] || flags.name || flags.n;
+      } else {
+        // Legacy single-file module behavior
+        moduleName = flags.name || flags.n;
+        if (firstArg && !moduleName) {
+          // First arg is the module name/path
+          const basename = path.basename(firstArg);
           if (basename.endsWith('.mld.md')) {
             moduleName = basename.slice(0, -7);
           } else if (basename.endsWith('.mld')) {
@@ -631,29 +851,26 @@ More Examples:
           } else if (basename.endsWith('.mlld.md')) {
             moduleName = basename.slice(0, -8);
           } else {
-            // Strip any other file extension (e.g., .md, .txt, etc.)
             const extIndex = basename.lastIndexOf('.');
-            if (extIndex > 0) {
-              moduleName = basename.slice(0, extIndex);
-            } else {
-              moduleName = basename;
-            }
+            moduleName = extIndex > 0 ? basename.slice(0, extIndex) : basename;
           }
         }
       }
-      
+
       const options: InitModuleOptions = {
+        type: moduleType,
         name: moduleName,
         about: flags.about || flags.description || flags.d,
         author: flags.author || flags.a,
-        output: outputPath,
+        output: moduleType ? undefined : (firstArg || flags.output || flags.o),
         skipGit: flags['skip-git'] || flags['no-git'],
-        version: flags.version || flags.v,
+        version: flags.version,
         keywords: flags.keywords || flags.k,
         homepage: flags.homepage || flags.url,
         force: flags.force || flags.f,
+        global: flags.global || flags.g,
       };
-      
+
       try {
         await initModuleCommand(args, options);
       } catch (error) {

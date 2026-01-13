@@ -1,4 +1,6 @@
 import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs/promises';
 import { ModuleCache } from './ModuleCache';
 import { LockFile, type ModuleLockEntry, type LockFileOptions } from './LockFile';
 import { ProjectConfig } from './ProjectConfig';
@@ -10,6 +12,7 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parseSemVer, compareSemVer } from '@core/utils/version-checker';
 import { splitModuleNameVersion, normalizeModuleName as normalizeModuleNameUtil } from './utils/moduleNames';
+import { MODULE_TYPE_PATHS, type ModuleType } from './types';
 
 import type { DependencyResolution } from './types';
 
@@ -53,12 +56,14 @@ export type ModuleInstallerEvent =
   | { type: 'skip'; module: string; reason: 'cached' | 'dry-run' }
   | { type: 'fetch'; module: string }
   | { type: 'success'; module: string; status: 'installed' | 'cached'; hash?: string; version?: string }
+  | { type: 'directory-install'; module: string; targetDir: string; fileCount: number }
   | { type: 'error'; module: string; error: Error };
 
 export interface InstallOptions {
   force?: boolean;
   noCache?: boolean;
   dryRun?: boolean;
+  global?: boolean;
   context?: ResolverOptions['context'];
   onEvent?: (event: ModuleInstallerEvent) => void;
 }
@@ -364,6 +369,40 @@ export class ModuleInstaller {
       resolvedVersion = metadata.version ?? metadata.registryVersion ?? requestedVersion;
       source = metadata.source ?? reference;
       sourceUrl = metadata.sourceUrl ?? metadata.source;
+
+      // Handle directory module installation
+      if (metadata.isDirectory && metadata.directoryFiles) {
+        const moduleType = (metadata.moduleType as ModuleType) || 'library';
+        const simpleName = moduleName.replace(/^@[^/]+\//, '');
+
+        // Determine target directory based on type and global flag
+        const typePaths = MODULE_TYPE_PATHS[moduleType];
+        const baseDir = options.global
+          ? path.join(os.homedir(), typePaths.global)
+          : path.join(this.workspace.projectRoot, typePaths.local);
+        const targetDir = path.join(baseDir, simpleName);
+
+        if (!options.dryRun) {
+          // Create target directory
+          await fs.mkdir(targetDir, { recursive: true });
+
+          // Write all files
+          const files = metadata.directoryFiles as Record<string, string>;
+          for (const [filePath, content] of Object.entries(files)) {
+            const fullPath = path.join(targetDir, filePath);
+            const fileDir = path.dirname(fullPath);
+            await fs.mkdir(fileDir, { recursive: true });
+            await fs.writeFile(fullPath, content, 'utf-8');
+          }
+        }
+
+        emit?.({
+          type: 'directory-install',
+          module: moduleName,
+          targetDir,
+          fileCount: Object.keys(metadata.directoryFiles).length
+        });
+      }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       emit?.({ type: 'error', module: moduleName, error: err });

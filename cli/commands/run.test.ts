@@ -37,6 +37,9 @@ describe('RunCommand', () => {
     const { findProjectRoot } = await import('@core/utils/findProjectRoot');
     vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
 
+    // Default fs.stat mock - returns non-directory (overridden in specific tests)
+    vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => false } as any);
+
     runCommand = new RunCommand();
     vi.spyOn(process, 'cwd').mockReturnValue(mockCwd);
   });
@@ -76,15 +79,36 @@ describe('RunCommand', () => {
     
     it('should list .mld files without extension', async () => {
       vi.mocked(existsSync).mockReturnValue(true);
+      // Return Dirent-like objects since readdir is called with withFileTypes: true
       vi.mocked(fs.readdir).mockResolvedValue([
-        'script1.mld',
-        'script2.mld',
-        'readme.txt',
-        'data.json'
+        { name: 'script1.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'script2.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'readme.txt', isFile: () => true, isDirectory: () => false },
+        { name: 'data.json', isFile: () => true, isDirectory: () => false }
       ] as any);
 
       const scripts = await runCommand.listScripts();
-      expect(scripts).toEqual(['script1', 'script2']);
+      expect(scripts).toContain('script1');
+      expect(scripts).toContain('script2');
+    });
+
+    it('should list directory scripts with index.mld', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        if (pathStr.includes('llm/run') && !pathStr.includes('.mlld')) return true;
+        if (pathStr.endsWith('myapp/index.mld')) return true;
+        return false;
+      });
+
+      // Return Dirent-like objects
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'script1.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'myapp', isFile: () => false, isDirectory: () => true }
+      ] as any);
+
+      const scripts = await runCommand.listScripts();
+      expect(scripts).toContain('script1');
+      expect(scripts).toContain('myapp');
     });
   });
   
@@ -110,9 +134,70 @@ describe('RunCommand', () => {
     
     it('should return null when script not found', async () => {
       vi.mocked(existsSync).mockReturnValue(false);
-      
+
       const scriptPath = await runCommand.findScript('nonexistent');
       expect(scriptPath).toBeNull();
+    });
+
+    it('should find directory script with index.mld entry point', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        // Flat file doesn't exist, but directory does and has index.mld
+        if (pathStr.endsWith('myapp.mld')) return false;
+        if (pathStr.endsWith('myapp') && !pathStr.includes('.')) return true; // Directory exists
+        if (pathStr.endsWith('myapp/index.mld')) return true;
+        return false;
+      });
+
+      // Mock fs.stat to return directory for myapp
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = p.toString();
+        return {
+          isDirectory: () => pathStr.endsWith('myapp')
+        } as any;
+      });
+
+      const scriptPath = await runCommand.findScript('myapp');
+      expect(scriptPath).not.toBeNull();
+      expect(scriptPath).toContain('myapp');
+      expect(scriptPath).toContain('index.mld');
+    });
+
+    it('should prefer flat file over directory script', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        // Flat file exists
+        if (pathStr.endsWith('myapp.mld')) return true;
+        return false;
+      });
+
+      const scriptPath = await runCommand.findScript('myapp');
+      // Should find the flat file first
+      expect(scriptPath).not.toBeNull();
+      expect(scriptPath).toContain('myapp.mld');
+    });
+
+    it('should find directory script with main.mld entry point', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        if (pathStr.endsWith('myapp.mld')) return false;
+        if (pathStr.endsWith('myapp') && !pathStr.includes('.')) return true; // Directory exists
+        if (pathStr.endsWith('myapp/index.mld')) return false;
+        if (pathStr.endsWith('myapp/main.mld')) return true;
+        return false;
+      });
+
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = p.toString();
+        return {
+          isDirectory: () => pathStr.endsWith('myapp')
+        } as any;
+      });
+
+      const scriptPath = await runCommand.findScript('myapp');
+      expect(scriptPath).not.toBeNull();
+      expect(scriptPath).toContain('myapp');
+      expect(scriptPath).toContain('main.mld');
     });
   });
   
@@ -128,12 +213,17 @@ describe('RunCommand', () => {
     it('should throw error with available scripts list', async () => {
       vi.mocked(existsSync).mockImplementation((p) => {
         const pathStr = p.toString();
+        // Script directory exists but missing.mld doesn't
         if (pathStr.includes('llm/run') && !pathStr.includes('missing')) return true;
         return false;
       });
-      
-      vi.mocked(fs.readdir).mockResolvedValue(['available1.mld', 'available2.mld'] as any);
-      
+
+      // Use Dirent-like objects
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'available1.mld', isFile: () => true, isDirectory: () => false },
+        { name: 'available2.mld', isFile: () => true, isDirectory: () => false }
+      ] as any);
+
       try {
         await runCommand.run('missing');
         expect.fail('Should have thrown an error');

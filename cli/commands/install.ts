@@ -11,6 +11,7 @@ export interface InstallOptions {
   dryRun?: boolean;
   force?: boolean;
   basePath?: string;
+  global?: boolean;
 }
 
 export class InstallCommand {
@@ -90,6 +91,7 @@ export class InstallCommand {
       force: options.force,
       noCache: options.noCache,
       dryRun: options.dryRun,
+      global: options.global,
       context: 'import',
       onEvent: (event) => this.handleEvent(event, options)
     });
@@ -117,6 +119,9 @@ export class InstallCommand {
         } else if (event.status === 'cached') {
           this.progress.info(`${event.module} (cached)`);
         }
+        break;
+      case 'directory-install':
+        this.progress.info(`Installed ${event.module} to ${event.targetDir} (${event.fileCount} files)`);
         break;
       case 'error':
         this.progress.warn(`Failed to install ${event.module}: ${event.error.message}`);
@@ -196,7 +201,8 @@ export function createInstallCommand() {
         noCache: flags['no-cache'],
         dryRun: flags['dry-run'],
         force: flags.force || flags.f,
-        basePath: flags['base-path'] || process.cwd()
+        basePath: flags['base-path'] || process.cwd(),
+        global: flags.global || flags.g
       };
 
       try {

@@ -276,6 +276,68 @@ await interpret(source, options);
 - Content hashes for integrity
 - Fetch timestamps for debugging
 
+## Module Structure
+
+Modules are directories with an entry point, manifest, and optional supporting files. They support four types that install to different locations. (Single-file "packed" format is a future compilation target for gist publishing.)
+
+### Module Types & Paths
+
+| Type | Local Install | Global Install |
+|------|---------------|----------------|
+| `library` | `llm/lib/{name}/` | `~/.mlld/lib/{name}/` |
+| `app` | `llm/run/{name}/` | `~/.mlld/run/{name}/` |
+| `command` | `.claude/commands/{name}/` | `~/.claude/commands/{name}/` |
+| `skill` | `.claude/skills/{name}/` | `~/.claude/skills/{name}/` |
+
+### Directory Structure
+
+```
+mymodule/
+├── index.mld          # Entry point
+├── module.yml         # Manifest (or .yaml, .json)
+├── README.md          # Docs
+└── lib/               # Optional supporting files
+```
+
+### Key Files
+
+- **Types**: `core/registry/types.ts` - `ModuleType`, `ModuleManifest`, `MODULE_TYPE_PATHS`
+- **Manifest Detection**: `cli/commands/publish/utils/ModuleReader.ts` - `detectManifest()`, `readDirectoryModule()`
+- **Publishing**: `cli/commands/publish/strategies/RepoPublishingStrategy.ts` - `createDirectoryRegistryEntry()`
+- **Resolution**: `core/resolvers/RegistryResolver.ts` - `resolveDirectoryModule()`
+- **Installation**: `core/registry/ModuleInstaller.ts` - writes files to type-based paths
+- **Run Command**: `cli/commands/run.ts` - directory script detection with `index.mld`/`main.mld`
+- **Scaffolding**: `cli/commands/init-module.ts` - `scaffoldDirectoryModule()`
+
+### Registry Format
+
+Directory modules use `source.type: "directory"` in registry entries:
+
+```json
+{
+  "source": {
+    "type": "directory",
+    "baseUrl": "https://raw.githubusercontent.com/author/repo/sha/path/",
+    "files": ["index.mld", "module.yml", "README.md"],
+    "entryPoint": "index.mld",
+    "contentHash": "combined-hash"
+  },
+  "type": "app"
+}
+```
+
+### CLI Commands
+
+```bash
+mlld module app myapp              # Create llm/run/myapp/
+mlld module library mylib          # Create llm/lib/mylib/
+mlld module command mycmd          # Create .claude/commands/mycmd/
+mlld module skill myskill          # Create .claude/skills/myskill/
+mlld module app myapp --global     # Create ~/.mlld/run/myapp/
+mlld run myapp                     # Run directory app (finds index.mld)
+mlld install @author/mod --global  # Install globally
+```
+
 ## Gotchas
 
 - `isImporting` flag must be reset in `finally` blocks (cache hits can skip try body)

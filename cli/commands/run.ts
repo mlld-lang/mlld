@@ -5,6 +5,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import { existsSync } from 'fs';
 import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
@@ -17,6 +18,8 @@ import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { parseInjectOptions, type DynamicModuleMap } from '../utils/inject-parser';
+
+const ENTRY_POINTS = ['index.mld', 'main.mld', 'index.mld.md', 'main.mld.md'];
 
 export interface RunOptions {
   timeoutMs?: number;
@@ -48,40 +51,103 @@ export class RunCommand {
     return path.join(projectRoot, this.scriptDir);
   }
 
-  async listScripts(): Promise<string[]> {
-    const scriptDir = await this.getScriptDirectory();
-    
-    if (!existsSync(scriptDir)) {
-      return [];
-    }
-    
+  private getGlobalScriptDirectory(): string {
+    return path.join(os.homedir(), '.mlld', 'run');
+  }
+
+  private async collectScriptsFromDir(dir: string, scripts: Set<string>): Promise<void> {
+    if (!existsSync(dir)) return;
+
     try {
-      const files = await fs.readdir(scriptDir);
-      // Filter for .mld files and remove extension
-      return files
-        .filter(file => file.endsWith('.mld'))
-        .map(file => path.basename(file, '.mld'));
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith('.mld')) {
+          scripts.add(path.basename(entry.name, '.mld'));
+        } else if (entry.isDirectory()) {
+          // Check if directory has an entry point
+          for (const entryPoint of ENTRY_POINTS) {
+            if (existsSync(path.join(dir, entry.name, entryPoint))) {
+              scripts.add(entry.name);
+              break;
+            }
+          }
+        }
+      }
     } catch (error: any) {
-      cliLogger.error('Failed to list scripts', { error: error?.message || error });
-      return [];
+      cliLogger.error('Failed to list scripts from directory', { dir, error: error?.message || error });
     }
+  }
+
+  async listScripts(): Promise<string[]> {
+    const scripts = new Set<string>();
+
+    // Local scripts
+    const localDir = await this.getScriptDirectory();
+    await this.collectScriptsFromDir(localDir, scripts);
+
+    // Global scripts
+    const globalDir = this.getGlobalScriptDirectory();
+    await this.collectScriptsFromDir(globalDir, scripts);
+
+    return Array.from(scripts).sort();
+  }
+
+  private findEntryPointInDir(dirPath: string): string | null {
+    for (const entryPoint of ENTRY_POINTS) {
+      const entryPath = path.join(dirPath, entryPoint);
+      if (existsSync(entryPath)) {
+        return entryPath;
+      }
+    }
+    return null;
   }
 
   async findScript(scriptName: string): Promise<string | null> {
     const scriptDir = await this.getScriptDirectory();
-    
-    // Try with .mld extension
-    const scriptPath = path.join(scriptDir, `${scriptName}.mld`);
-    if (existsSync(scriptPath)) {
-      return scriptPath;
+    const globalDir = this.getGlobalScriptDirectory();
+
+    // 1. Try local flat file (.mld)
+    const localFlatPath = path.join(scriptDir, `${scriptName}.mld`);
+    if (existsSync(localFlatPath)) {
+      return localFlatPath;
     }
-    
-    // Try exact name (in case they included extension)
+
+    // 2. Try local directory with entry point
+    const localDirPath = path.join(scriptDir, scriptName);
+    if (existsSync(localDirPath)) {
+      const stat = await fs.stat(localDirPath);
+      if (stat.isDirectory()) {
+        const entryPath = this.findEntryPointInDir(localDirPath);
+        if (entryPath) return entryPath;
+      }
+    }
+
+    // 3. Try exact name with extension (in case they included it)
     const exactPath = path.join(scriptDir, scriptName);
-    if (existsSync(exactPath) && exactPath.endsWith('.mld')) {
+    if (existsSync(exactPath) && scriptName.endsWith('.mld')) {
       return exactPath;
     }
-    
+
+    // 4. Try global flat file
+    const globalFlatPath = path.join(globalDir, `${scriptName}.mld`);
+    if (existsSync(globalFlatPath)) {
+      return globalFlatPath;
+    }
+
+    // 5. Try global directory with entry point
+    const globalDirPath = path.join(globalDir, scriptName);
+    if (existsSync(globalDirPath)) {
+      try {
+        const stat = await fs.stat(globalDirPath);
+        if (stat.isDirectory()) {
+          const entryPath = this.findEntryPointInDir(globalDirPath);
+          if (entryPath) return entryPath;
+        }
+      } catch {
+        // Directory doesn't exist or can't be accessed
+      }
+    }
+
     return null;
   }
 
@@ -246,20 +312,31 @@ Options:
   -h, --help              Show this help message
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
-  --<name> <value>   Any other flag becomes payload (see below)
+  --<name> <value>        Any other flag becomes payload (see below)
 
-Script Directory:
-  Scripts are loaded from the directory configured in mlld-config.json.
-  Default: llm/run/
+Script Locations (checked in order):
+  1. Local flat file:     llm/run/<name>.mld
+  2. Local directory:     llm/run/<name>/index.mld
+  3. Global flat file:    ~/.mlld/run/<name>.mld
+  4. Global directory:    ~/.mlld/run/<name>/index.mld
 
-  Configure with: mlld setup
+  Configure local directory with: mlld setup
+
+Directory Scripts:
+  Scripts can be organized as directories with an entry point:
+    llm/run/my-app/
+    ├── index.mld      # Entry point (or main.mld)
+    ├── lib/           # Supporting files
+    └── prompts/       # Templates, etc.
+
+  Run with: mlld run my-app
 
 Examples:
   mlld run                           # List available scripts
   mlld run hello                     # Run llm/run/hello.mld
+  mlld run my-app                    # Run llm/run/my-app/index.mld
   mlld run hello --debug             # Show execution metrics
   mlld run qa --topic variables      # Pass --topic as payload
-  mlld run build --env prod --fast   # Multiple payload values
 
 Payload:
   Unknown flags are passed to the script as @payload:
@@ -270,13 +347,8 @@ Payload:
     show @count    >> "5"
 
 Creating Scripts:
-  1. Create a .mld file in your script directory
-  2. Write mlld code to perform tasks
-  3. Run with: mlld run <script-name>
-
-Example script (llm/run/hello.mld):
-  /var @greeting = "Hello from mlld script!"
-  /show @greeting
+  Single file:    Create llm/run/hello.mld
+  Directory app:  mlld init app hello
         `);
         return;
       }

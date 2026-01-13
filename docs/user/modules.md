@@ -54,6 +54,53 @@ Declare what your module needs with `needs`:
 
 `js`/`node`/`py` entries declare runtime packages. `sh` requests shell access; `cmd` lists required commands.
 
+### Module Structure
+
+Modules are directories with an entry point, manifest, and optional supporting files:
+
+```
+myapp/
+├── index.mld          # Entry point
+├── module.yml         # Manifest
+├── README.md          # Documentation
+└── lib/               # Supporting files
+    └── helpers.mld
+```
+
+**module.yml format:**
+```yaml
+name: myapp
+author: alice
+type: app               # library | app | command | skill
+about: "Description"
+version: 1.0.0
+license: CC0
+entry: index.mld        # Optional, defaults to index.mld
+```
+
+**Module types and their install locations:**
+
+| Type | Local | Global |
+|------|-------|--------|
+| `library` | `llm/lib/` | `~/.mlld/lib/` |
+| `app` | `llm/run/` | `~/.mlld/run/` |
+| `command` | `.claude/commands/` | `~/.claude/commands/` |
+| `skill` | `.claude/skills/` | `~/.claude/skills/` |
+
+**Create directory modules:**
+```bash
+mlld module app myapp              # → llm/run/myapp/
+mlld module library utils          # → llm/lib/utils/
+mlld module command review         # → .claude/commands/review/
+mlld module skill helper           # → .claude/skills/helper/
+mlld module app myapp --global     # → ~/.mlld/run/myapp/
+```
+
+**Run directory apps:**
+```bash
+mlld run myapp                     # Runs llm/run/myapp/index.mld
+```
+
 ## Importing Modules
 
 ### Registry Modules

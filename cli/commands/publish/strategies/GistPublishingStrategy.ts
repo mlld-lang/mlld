@@ -36,6 +36,20 @@ export class GistPublishingStrategy implements PublishingStrategy {
   }
 
   async validate(context: PublishContext): Promise<void> {
+    // Validate that directory modules can't be published as gists
+    if (context.module.isDirectory) {
+      throw new MlldError(
+        `Cannot publish directory modules as gists.\n` +
+        `GitHub gists don't support directory structures. Please use one of these alternatives:\n` +
+        `  1. Publish from a public git repository (recommended)\n` +
+        `  2. Use 'mlld pack' to bundle into a single file (coming soon)`,
+        {
+          code: 'DIRECTORY_GIST_ERROR',
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+
     // Validate that organizations can't create gists
     if (context.module.metadata.author !== context.user.login) {
       throw new MlldError(
