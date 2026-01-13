@@ -126,7 +126,7 @@ Process multiple files with consistent operations:
 
 Updated: @now
 
-@file.content | @standardizeHeadings | @addTableOfContents
+@file.text | @standardizeHeadings | @addTableOfContents
 ::
 
 /exe @standardizeHeadings(content) = js {

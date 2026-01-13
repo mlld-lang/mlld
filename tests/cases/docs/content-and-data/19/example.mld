@@ -15,5 +15,5 @@ show @file.mx.tokest                   >> Estimated tokens (fast)
 show @file.mx.tokens                   >> Exact tokens
 
 >> Content access
-show @file.content                      >> File contents (explicit)
+show @file.text                         >> File contents (explicit)
 show @file                              >> Same as above (implicit)

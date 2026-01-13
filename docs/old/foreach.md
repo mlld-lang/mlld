@@ -155,10 +155,10 @@ For extracting sections from multiple files, use the alligator glob syntax with 
 
 ```mlld
 # Extract sections from multiple files with templates
-/var @docs = <docs/*.md # Introduction> as "## <>.filename\n<>.content"
+/var @docs = <docs/*.md # Introduction> as "## <>.filename\n<>.text"
 
 # With specific paths
-/var @sections = <guide.md # Overview, api.md # Endpoints, faq.md # Troubleshooting> as "### <>.filename\n<>.content"
+/var @sections = <guide.md # Overview, api.md # Endpoints, faq.md # Troubleshooting> as "### <>.filename\n<>.text"
 
 # Dynamic section names require parameterized commands
 /exe @getSection(file, section) = <@file # @section>

@@ -287,7 +287,7 @@ show @file.mx.tokest                   >> Estimated tokens (fast)
 show @file.mx.tokens                   >> Exact tokens
 
 >> Content access
-show @file.content                      >> File contents (explicit)
+show @file.text                         >> File contents (explicit)
 show @file                              >> Same as above (implicit)
 ```
 
@@ -310,7 +310,7 @@ show @config.json.apiUrl
 show @config.json.users[0].email
 
 >> Raw content still available
-show @config.content                    >> Raw JSON string
+show @config.text                       >> Raw JSON string
 ```
 
 Glob-loaded JSON files are also auto-parsed - each item behaves like a single file load:
@@ -340,7 +340,7 @@ show @post.mx.fm.author                >> Author name
 show @post.mx.fm.tags                  >> Array of tags
 
 >> Conditional processing
-when @post.mx.fm.published => show @post.content
+when @post.mx.fm.published => show @post.text
 ```
 
 ## URL Loading
@@ -357,7 +357,7 @@ show @page.mx.status                   >> HTTP status code
 show @page.mx.title                    >> Page title (if HTML)
 
 >> HTML is converted to markdown
-show @page.content                      >> Markdown version
+show @page.text                         >> Markdown version
 show @page.mx.html                     >> Original HTML
 ```
 
@@ -500,7 +500,7 @@ show @items[1:-1]                       >> ["second", "third", "fourth"]
 
 ## Working with JSON in JavaScript Functions
 
-Use `.data` or `.json` to parse JSON strings before passing to functions. Use `.text` or `.content` to preserve strings.
+Use `.data` or `.json` to parse JSON strings before passing to functions. Use `.text` to preserve strings.
 
 ### JSON Parsing
 
@@ -533,7 +533,6 @@ exe @length(str) = js {
 
 run @length(@jsonStr)          >> Default: string
 run @length(@jsonStr.text)     >> Explicit string
-run @length(@jsonStr.content)  >> Alias for .text
 ```
 
 ### Common Use Cases
@@ -561,14 +560,14 @@ var @active = @getActive(@response.data)
 | Accessor | Returns |
 |----------|---------|
 | `.json` / `.data` | Parsed JSON object |
-| `.content` / `.text` | Raw string |
+| `.text` | Raw string |
 
 **Variables** (e.g., `var @str = '{"status": "ok"}'`):
 
 | Accessor | Returns |
 |----------|---------|
 | `.data` / `.json` | Parsed JSON object |
-| `.text` / `.content` | Original string |
+| `.text` | Original string |
 | (bare) | Original string (default) |
 
 **Command output** (e.g., `var @result = cmd {curl api.com/data}`):
@@ -576,7 +575,7 @@ var @active = @getActive(@response.data)
 | Accessor | Returns |
 |----------|---------|
 | `.data` / `.json` | Parse as JSON |
-| `.text` / `.content` | Keep as string |
+| `.text` | Keep as string |
 
 ## Built-in Methods
 

@@ -6,4 +6,3 @@ exe @length(str) = js {
 
 run @length(@jsonStr)          >> Default: string
 run @length(@jsonStr.text)     >> Explicit string
-run @length(@jsonStr.content)  >> Alias for .text

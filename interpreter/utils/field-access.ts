@@ -126,7 +126,7 @@ function createObjectUtilityMxView(
 }
 
 const STRING_JSON_ACCESSORS = new Set(['data', 'json']);
-const STRING_TEXT_ACCESSORS = new Set(['text', 'content']);
+const STRING_TEXT_ACCESSORS = new Set(['text']);
 
 /**
  * Result of field access that preserves context
@@ -481,10 +481,10 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         }
       }
       
-      // Handle StructuredValue arrays - special case for .content and .length
+      // Handle StructuredValue arrays - special case for .text and .length
       if (structuredWrapper && structuredWrapper.type === 'array') {
-        // For .content/.text, return the pre-joined text
-        if (name === 'content' || name === 'text') {
+        // For .text, return the pre-joined text
+        if (name === 'text') {
           accessedValue = structuredWrapper.text;
           break;
         }
