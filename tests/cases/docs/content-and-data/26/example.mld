@@ -1,7 +1,7 @@
-var @title = "Dr."
-var @nickname = ""
+var @tools = "json"
+var @model = ""
 
-var @greeting = "Hello @title?\"@title \"@name@nickname?\" (@nickname)\""
-show @greeting
->> With @title="Dr." and @name="Ada": "Hello Dr. Ada"
->> With @nickname="Ace": "Hello Ada (Ace)"
+>> @tools is truthy, so --tools is included
+>> @model is falsy (empty string), so --model is omitted
+run cmd { echo @tools?`--tools "@tools"` @model?`--model "@model"` done }
+>> Output: --tools "json" done

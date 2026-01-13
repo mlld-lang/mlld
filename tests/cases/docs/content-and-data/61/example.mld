@@ -1,0 +1,4 @@
+var @files = <docs/*.md>
+for @file in @files => show @file.mx.filename        >> Works
+for @file in @files => show @file.json.status        >> Works
+for @file in @files => show @file.fm.title           >> Works

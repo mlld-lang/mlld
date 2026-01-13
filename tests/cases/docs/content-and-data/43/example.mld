@@ -1,2 +1,21 @@
-exe @deploy(env, status) = template "./templates/deploy.att"
-show @deploy("prod", "success")
+>> Backticks (default)
+var @msg = `Hello @name!`
+var @multi = `
+Line 1: @var
+Line 2: @other
+`
+
+>> Double-colon (for content with backticks)
+var @doc = ::Use `npm test` before @env::
+var @report = ::
+Status: @status
+Config: <@base/config.json>
+Data: @data|@json
+::
+
+>> Double quotes (single-line only)
+var @path = "@base/files/@filename"
+run cmd {echo "Processing @file"}
+
+>> Single quotes (literal)
+var @literal = '@name stays literal'

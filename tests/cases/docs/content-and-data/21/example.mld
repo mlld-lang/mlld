@@ -1,8 +1,10 @@
-var @post = <blog/post.md>
+var @configs = <configs/*.json>
+var @first = @configs[0]
 
-show @post.mx.fm.title                 >> Post title
-show @post.mx.fm.author                >> Author name
-show @post.mx.fm.tags                  >> Array of tags
+>> Access parsed JSON via .data
+show @first.data.apiUrl
+show @first.data.users[0].email
 
->> Conditional processing
-when @post.mx.fm.published => show @post.content
+>> File metadata still available via .mx
+show @first.mx.filename
+show @first.mx.relative

@@ -1,7 +1,2 @@
-var @list = ::
-/for @item in @items
-- @item.name: @item.value
-/end
-::
-
->> Requirements: /for and /end at line start
+exe @deploy(env, status) = template "./templates/deploy.att"
+show @deploy("prod", "success")

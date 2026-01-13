@@ -1,4 +1,9 @@
-var @config = {"tools": "json", "model": ""}
+var @name = "Ada"
+var @title = ""
 
-run cmd { echo @config.tools?`--tools` @config.model?`--model` }
->> Output: --tools
+var @person = {
+  "name": @name,
+  "title"?: @title
+}
+show @person
+>> {"name": "Ada"} - title was omitted because @title is falsy

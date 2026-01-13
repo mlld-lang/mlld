@@ -1,6 +1,17 @@
-exe @process(input) = when first [
-  @input.isArray() => foreach @handle(@input)
-  @input.isObject() => @handleObject(@input)
-  @input.isString() => @handleString(@input)
-  * => "unknown type"
-]
+var @arr = [1, 2, 3]
+var @obj = {"name": "Alice"}
+var @str = "hello"
+var @num = 42
+var @bool = true
+var @nothing = null
+
+show @arr.isArray()      >> true
+show @obj.isObject()     >> true
+show @str.isString()     >> true
+show @num.isNumber()     >> true
+show @bool.isBoolean()   >> true
+show @nothing.isNull()   >> true
+
+>> isDefined() safely returns false for missing variables
+show @missing.isDefined()   >> false
+show @str.isDefined()       >> true

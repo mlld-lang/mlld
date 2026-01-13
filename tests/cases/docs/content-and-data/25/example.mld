@@ -1,7 +1,13 @@
-var @tools = "json"
-var @model = ""
+var @user = {"name": "Alice", "scores": [10, 20, 30]}
 
->> @tools is truthy, so --tools is included
->> @model is falsy (empty string), so --model is omitted
-run cmd { echo @tools?`--tools "@tools"` @model?`--model "@model"` done }
->> Output: --tools "json" done
+>> Object fields
+show @user.name                         >> "Alice"
+
+>> Array elements by index
+show @user.scores[0]                     >> 10
+show @user.scores[1]                     >> 20
+
+>> Nested access
+var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
+show @config.db.host                    >> "localhost"
+show @config.db.users[1]                 >> "guest"
