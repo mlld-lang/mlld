@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Negation with method calls in templates**: `!@arr.includes("c")` in backtick templates now evaluates correctly instead of returning string `"!false"`
 - **for-when in exe blocks**: `let @result = for @x in @arr when ... => @x` now returns the array value, allowing `.length` and other array operations
 - **When block accumulation in exe**: `when (condition) [let @x += value]` now correctly evaluates the condition and executes augmented assignments inside the block
+- **Glob JSON parsing**: Glob-loaded JSON files (e.g., `<*.json>`) now auto-parse like single file loads
+  - `@glob[0].data.name` now works consistently with `@single.data.name`
+  - `.mx` metadata preserved when iterating glob results in for loops
+- **`mlld howto` display**: Fixed atom list not showing under category headers
+  - Caused by `.content` getter being lost when passing through JS function boundaries
+
+### Removed
+- **`.content` accessor on StructuredValue**: Use `.text` instead
+  - `.content` was a non-enumerable getter alias that broke in complex data flows
+  - `.text` is now the canonical text representation accessor
+  - `LoadContentResult.content` unchanged (still holds raw file content)
 
 ## [2.0.0-rc81]
 
