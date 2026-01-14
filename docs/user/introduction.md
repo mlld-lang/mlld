@@ -557,11 +557,17 @@ Why? Because mlld wants to be written and read. We've got `when` for branching, 
 
 mlld is okay with disappointing Very Serious Programmers Who Will Certainly Not Take mlld Seriously At All. We're not here to impress anyone; we want to make doing interesting things with LLMs easy and hopefully fun. And here's the thing: inside every Very Serious Programmer is someone who remembers what it was like to fire up a blinking REPL, type in some words and have a COMPUTER TALK BACK. Now we're in an era where computers can *literally* talk back to us. And they say weird and sometimes unexpected things! So it might be useful to have a weird and unexpected language to work with them.
 
-But will we write code? Isn't code gonna be done forever being written by anyone but Claudes and GPTs and Geminis in sixteen-ish weeks? Nah.
+But will we write code? Isn't code gonna be done forever being written by anyone but Claudes and GPTs and Geminis in sixteen-ish weeks?
 
-We're going to move up the ladder of abstraction and work more on problems that programmers haven't even been used to thinking about. Roughly 99% of the world's problems are nondeterministic. We've spent the last half-century building systems that abstract away deterministic complexity. Now we have tools that are fundamentally nondeterministic—and that's a feature, not a bug. But you still need guarantees. mlld lets you wrap the weird in the reliable: validation, retries, guards, gates. The LLM can hallucinate; your system doesn't have to. Because we *can*, we *will!*
+We're going to move up the ladder of abstraction and work more on problems that programmers haven't even been used to thinking about. Because we *can*, we *will!* Because we need to! Roughly 99% of the world's problems are nondeterministic. We've spent the last half-century building systems that abstract away deterministic complexity. Now we have tools that are fundamentally nondeterministic—and that's a feature, not a bug. But you still need guarantees. mlld lets you wrap the weird in the reliable: validation, retries, guards, gates. The LLM can hallucinate; your system doesn't have to.
 
-A lot of the reasons mlld works like it does is based in the belief that some of the most interesting things people will make with LLMs will be made by people who would've never written a line of code. Could those people just vibe code things instead? Maybe. But the art of programming is not producing software, it's creating abstractions. Poets are doing programming at the completely opposite end of the deterministic/nondeterministic spectrum.
+A lot of the reasons mlld works like it does is based in three beliefs: 
+
+1. **Less scaffolding friction means more spontaneous creativity.** Is there anything mlld can do that you can't do in a popular LLM framework? No. But in all those cases, you're stuck in abstractions from pre-LLM languages that add additional boilerplate and ceremony before you can do what you want to do. That often means you *won't*.
+
+2. **The more readable, the more auditable.** Diligence is going to be job 1 of programmers and their swarms of agents. Having a language that maps more directly to the way you're reasoning about the problem increases the likelihood you *and agents* will be able to write it safely and securely.
+
+3. **Some of the most interesting things people will make with LLMs will be made by people who would've never written a line of code.** Could those people just vibe code things instead? Maybe. But the core art of programming is not producing code, it's understanding and creating abstractions. Poets are doing programming at the completely opposite end of the deterministic/nondeterministic spectrum--exactly where the future lies.
 
 mlld is made to be written and read by poets and programmers alike.
 
