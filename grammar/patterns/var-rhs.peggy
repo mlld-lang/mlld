@@ -5,7 +5,7 @@
 VarRHSContent "var assignment value"
   = LeadingParallelPipeline     // Leading || for parallel pipeline execution
   / ExpressionWithOperator      // Try expressions FIRST but only if operators present
-  / WhenExpression              // Allow value-returning when-expressions
+  / WhenExpressionAny           // Allow value-returning when-expressions (inline or bracketed)
   / ForExpression               // for @var in @collection => expression
   / LoopExpression              // loop(...) [ ... ]
   / ForeachCommandExpression    // foreach @command(@arrays)

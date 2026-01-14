@@ -341,23 +341,55 @@ export async function evaluateWhen(
 
 /**
  * Evaluates a simple when directive: @when <condition> => <action>
+ * Also handles block form: @when <condition> [block]
  */
 async function evaluateWhenSimple(
   node: WhenSimpleNode,
   env: Environment
 ): Promise<EvalResult> {
   const conditionResult = await evaluateCondition(node.values.condition, env);
-  
+
   if (process.env.DEBUG_WHEN) {
     logger.debug('When condition result:', { conditionResult });
   }
-  
+
   if (conditionResult) {
-    // Execute the action if condition is true
+    // Check if this is a block form (has isBlockForm in meta)
+    const isBlockForm = node.meta?.isBlockForm === true;
+    const actionNodes = Array.isArray(node.values.action) ? node.values.action : [node.values.action];
+
+    if (isBlockForm) {
+      // Execute block with child environment for proper scoping of let assignments
+      let childEnv = env.createChild();
+      let lastResult: EvalResult = { value: '', env: childEnv };
+
+      for (const actionNode of actionNodes) {
+        if (isLetAssignment(actionNode)) {
+          childEnv = await evaluateLetAssignment(actionNode, childEnv);
+          lastResult = { value: undefined, env: childEnv };
+        } else if (isAugmentedAssignment(actionNode)) {
+          childEnv = await evaluateAugmentedAssignment(actionNode, childEnv);
+          lastResult = { value: undefined, env: childEnv };
+        } else {
+          lastResult = await evaluate(actionNode, childEnv);
+          if (lastResult.env) {
+            childEnv = lastResult.env;
+          }
+        }
+      }
+
+      // Merge child environment nodes back to parent
+      env.mergeChild(childEnv);
+
+      // Return the last result value with the parent env
+      return { value: lastResult.value ?? '', env };
+    }
+
+    // Non-block form: execute action normally
     const result = await evaluate(node.values.action, env);
     return result;
   }
-  
+
   // Return empty string if condition is false
   return { value: '', env };
 }

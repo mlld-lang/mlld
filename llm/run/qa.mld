@@ -1,19 +1,23 @@
->> QA Testing Orchestrator
->> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>]
+>> QA Testing Orchestrator (Two-Phase)
+>> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 1|2|both]
 >> Runs parallel QA testing across mlld howto topics
+>>
+>> Phase 1 (Flail): Agents test with limited access (mlld howto only)
+>> Phase 2 (Self-Review): Agents resume and check their work against tests/cookbook
+>>
 >> Examples:
->>   mlld run qa --tier 1                           # Test tier 1 only (core syntax)
->>   mlld run qa --tier 1,2                         # Test tier 1 and 2
+>>   mlld run qa --tier 1                           # Both phases, tier 1 only
+>>   mlld run qa --tier 1 --phase 1                 # Flail phase only
+>>   mlld run qa --tier 1 --phase 2                 # Self-review only (requires prior phase 1)
 >>   mlld run qa --topic variables                  # Test variables-* topics
->>   mlld run qa --topics when-simple,for-arrow     # Test specific list
-
-import { @claude } from @mlld/claude
+>>   mlld run qa --topics when-simple,for-arrow    # Test specific list
 
 >> Get filters from payload (namespace import for optional fields)
 import "@payload" as @p
 var @topic = @p.topic ? @p.topic : ""
 var @topics = @p.topics ? @p.topics : ""
 var @tier = @p.tier ? @p.tier : ""
+var @phase = @p.phase ? @p.phase : "both"
 
 >> Load all atoms dynamically from docs/src/atoms
 var @atomFiles = <@base/docs/src/atoms/**/*.md>
@@ -38,8 +42,9 @@ exe @filterTopics(all, filter, list) = when first [
 
 var @activeTopics = @filterTopics(@allTopics, @topic, @topics)
 
->> Build prompt using template auto-interpolation
-exe @buildPrompt(topic, outputDir) = template "./qa-prompt.att"
+>> Build prompts using template auto-interpolation
+exe @buildFlailPrompt(topic, outputDir) = template "./qa-prompt.att"
+exe @buildSelfReviewPrompt(topic, outputDir) = template "./qa-self-review-prompt.att"
 
 >> Create output directory
 run cmd {mkdir -p @outputDir}
@@ -47,28 +52,146 @@ run cmd {mkdir -p @outputDir}
 >> Check if we have topics to test
 when @activeTopics.length == 0 => show `No topics match filter: @topic\nAvailable: @allTopics.join(", ")`
 
->> Process each topic
-show `Starting QA testing for @activeTopics.length topics...`
-show `Output directory: @outputDir`
-show `Parallel limit: @parallelLimit`
-show ``
+>> Determine which phases to run
+var @runPhase1 = @phase == "1" || @phase == "both"
+var @runPhase2 = @phase == "2" || @phase == "both"
 
->> hardcoded parallel until parallel() can take vars
-var @results = for parallel(20) @t in @activeTopics [
-  let @prompt = @buildPrompt(@t, @outputDir)
+>> Topics to process in each phase
+var @phase1Topics = @runPhase1 ? @activeTopics : []
+var @phase2Candidates = @runPhase2 ? @activeTopics : []
+
+>> ========== PHASE 1: FLAIL ==========
+>> Agents test with limited access, their confusion is valuable data
+
+when @runPhase1 [
+  show `=== PHASE 1: FLAIL ===`
+  show `Testing @phase1Topics.length topics with limited access...`
+  show `Output directory: @outputDir`
+  show ``
+]
+
+var @phase1Results = for parallel(20) @t in @phase1Topics [
   let @topicDir = `@outputDir/@t`
   run cmd {mkdir -p @topicDir}
-  show `Starting: @t`
-  let @response = @claude(@prompt, "sonnet", @base, "Read,Write,Bash,Glob,Grep") | log
+
+  >> Generate session ID for this topic
+  let @sessionId = cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
+
+  >> Store session info before starting
+  let @sessionInfo = { topic: @t, session_id: @sessionId, phase1_started: @now, phase1_complete: false }
+  output @sessionInfo to "@topicDir/session.json"
+
+  >> Build prompt and run with session ID
+  let @prompt = @buildFlailPrompt(@t, @outputDir)
+  show `Starting flail: @t (session: @sessionId)`
+
+  >> Run claude with specific session ID
+  let @response = @prompt | cmd:@base { claude -p --model sonnet --session-id @sessionId --allowedTools "Read,Write,Bash,Glob,Grep" } | log
+
+  >> Mark phase 1 complete
+  let @updatedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: true, phase1_finished: @now }
+  output @updatedSession to "@topicDir/session.json"
+
   => @t
 ]
 
->> Summary
-show ``
-show `QA testing complete.`
-show `Tested @results.length topics`
-show ``
+when @runPhase1 && @phase1Results.length > 0 [
+  show ``
+  show `Phase 1 complete. Tested @phase1Results.length topics.`
+  show ``
+]
+
+>> ========== PHASE 2: SELF-REVIEW ==========
+>> Agents resume their sessions and check their work
+
+when @runPhase2 [
+  show `=== PHASE 2: SELF-REVIEW ===`
+]
+
+>> Find all topics with sessions that have failing experiments
+var @sessionFiles = <@outputDir/**/session.json?>
+
+>> Filter to active topics with completed phase 1
+var @sessionsForReview = for @s in @sessionFiles when @s.phase1_complete && @phase2Candidates.includes(@s.topic) => @s
+
+>> Check each topic for failing experiments
+exe @hasFailingExperiments(topicDir) = [
+  let @results = <@topicDir/**/results.json?>
+  let @failing = for @r in @results when @r.status == "fail" || @r.status == "partial" => @r
+  => @failing.length > 0
+]
+
+var @needsReview = for @s in @sessionsForReview when @hasFailingExperiments(`@outputDir/@s.topic`) => @s
+
+when @runPhase2 [
+  show `Found @needsReview.length topics with failing experiments to review`
+  show ``
+]
+
+var @phase2Results = for parallel(10) @s in @needsReview [
+  let @topicDir = `@outputDir/@s.topic`
+  let @prompt = @buildSelfReviewPrompt(@s.topic, @outputDir)
+
+  show `Starting self-review: @s.topic (resuming session: @s.session_id)`
+
+  >> Resume the session with expanded access
+  let @response = @prompt | cmd:@base { claude -p --model sonnet --resume @s.session_id --allowedTools "Read,Write,Bash,Glob,Grep" } | log
+
+  >> Update session info
+  let @updatedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: true, phase2_finished: @now }
+  output @updatedSession to "@topicDir/session.json"
+
+  => @s.topic
+]
+
+when @runPhase2 && @phase2Results.length > 0 [
+  show ``
+  show `Phase 2 complete. Reviewed @phase2Results.length topics.`
+]
+
+when @runPhase2 && @needsReview.length == 0 [
+  show `No topics need self-review (all passing or no sessions found).`
+]
+
+when @runPhase2 [
+  show ``
+]
+
+>> ========== SUMMARY ==========
+show `=== QA COMPLETE ===`
 show `Results in: @outputDir`
 show ``
-show `To aggregate results:`
-show `  find qa/ -name "results.json" -exec cat {} \\; | jq -s '.'`
+
+>> Aggregate final state
+var @allResults = <@outputDir/**/results.json?>
+var @allSelfReviews = <@outputDir/**/self_review.json?>
+
+var @passing = for @r in @allResults when @r.status == "pass" => @r
+var @failing = for @r in @allResults when @r.status == "fail" => @r
+var @partial = for @r in @allResults when @r.status == "partial" => @r
+
+show `Experiments: @allResults.length total`
+show `  Passing: @passing.length`
+show `  Failing: @failing.length`
+show `  Partial: @partial.length`
+show `Self-reviews: @allSelfReviews.length`
+show ``
+
+>> Aggregate doc clarity insights from self-reviews
+var @docClarityItems = for @sr in @allSelfReviews when @sr.issues_reviewed => for @issue in @sr.issues_reviewed when @issue.doc_clarity && @issue.doc_clarity.issue && @issue.doc_clarity.issue != "genuine-bug" => { topic: @sr.topic, experiment: @sr.experiment, issue: @issue.doc_clarity.issue, suggestion: @issue.doc_clarity.suggestion, affected_doc: @issue.doc_clarity.affected_doc }
+
+var @qaInsufficient = for @item in @docClarityItems when @item.issue == "qa-insufficient-exploration" => @item
+var @docsClearer = for @item in @docClarityItems when @item.issue == "docs-could-be-clearer" => @item
+var @docsMisleading = for @item in @docClarityItems when @item.issue == "docs-genuinely-misleading" => @item
+
+var @clarityReport = { generated_at: @now, summary: { qa_insufficient_exploration: @qaInsufficient.length, docs_could_be_clearer: @docsClearer.length, docs_genuinely_misleading: @docsMisleading.length }, qa_prompt_feedback: @qaInsufficient, doc_clarifications: @docsClearer, doc_fixes: @docsMisleading }
+
+when @docClarityItems.length > 0 [
+  show `=== DOC CLARITY INSIGHTS ===`
+  show `QA needed more exploration: @qaInsufficient.length`
+  show `Docs could be clearer: @docsClearer.length`
+  show `Docs genuinely misleading: @docsMisleading.length`
+  show ``
+  output @clarityReport to "@outputDir/doc-clarity-report.json"
+  show `Report written to: @outputDir/doc-clarity-report.json`
+]

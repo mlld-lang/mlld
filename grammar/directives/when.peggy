@@ -32,6 +32,7 @@ WhenKeyword
 SlashWhen
   = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
+  / WhenSimpleBlockForm  // when @condition [block] - no arrow needed
   // Error recovery: deprecated 'any' modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
       helpers.mlldError(
@@ -86,9 +87,9 @@ SlashWhen
       );
     }
   / WhenBlockForm
-  // Error recovery: Missing => in simple form
-  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !"=>" {
-      helpers.mlldError("Invalid when syntax. Expected '=>' after condition. Use: when @condition => action", "=>", location());
+  // Error recovery: Missing => or [ in simple form
+  / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ !("=>" / "[") {
+      helpers.mlldError("Invalid when syntax. Expected '=>' or '[' after condition. Use: when @condition => action or when @condition [block]", "=> or [", location());
     }
   // Error recovery: Missing action after =>
   / DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ !. {
@@ -174,6 +175,92 @@ WhenSimpleForm
           action: helpers.reconstructRawString(action)
         },
         meta,
+        location()
+      );
+    }
+
+// -------------------------------------------------------------
+// SIMPLE BLOCK FORM: /when <condition> [block] (no arrow needed)
+// Example: when @needsMerge.length > 0 [let @x = ... show ...]
+// -------------------------------------------------------------
+
+WhenSimpleBlockForm
+  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ block:WhenSimpleBlockAction comment:InlineComment? {
+      helpers.debug('WhenSimpleBlockForm matched', { condition, block, comment });
+
+      const meta = {
+        hasVariables: condition.some(n => n.type === NodeType.VariableReference),
+        isBlockForm: true,
+        hasReturn: block.hasReturn
+      };
+
+      if (comment) {
+        meta.comment = comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'when',
+        'whenSimple',
+        {
+          condition: condition,
+          action: block.statements
+        },
+        {
+          condition: helpers.reconstructRawString(condition),
+          action: helpers.reconstructRawString(block.statements)
+        },
+        meta,
+        location()
+      );
+    }
+
+// Block action for WhenSimpleBlockForm - uses WhenActionBlockBody for full statement support
+WhenSimpleBlockAction "when simple block action"
+  = "[" _ body:WhenActionBlockBody _ "]" {
+      const statements = body.statements || [];
+      const returnStmt = body.returnStmt;
+      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
+      const mergedStatements = hasReturn ? [...statements, ...returnStmt] : statements;
+      return {
+        statements: mergedStatements,
+        hasReturn
+      };
+    }
+  / "[" _ {
+      const blockStart = peg$currPos;
+      const captured = helpers.captureBracketContent(input, blockStart);
+      if (!captured) return peg$FAILED;
+      helpers.reparseBlock({
+        parse: peg$parse,
+        SyntaxErrorClass: peg$SyntaxError,
+        text: captured.content,
+        startRule: 'WhenActionBlockBody',
+        baseLocation: peg$computeLocation(blockStart, blockStart),
+        grammarSource: options.grammarSource,
+        mode: options.mode
+      });
+    }
+  / "[" _ &{
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0;
+    } {
+      helpers.mlldError(
+        `Unterminated block in when directive. Expected ']' to close the block.`,
+        "]",
         location()
       );
     }
@@ -581,16 +668,65 @@ WhenActionBlock
       );
     }
 
-WhenActionBlockContent
-  = leadingComments:LeadingBlockComment* _ first:WhenBlockAction rest:(BlockStatementSeparator d:WhenBlockAction { return d; })* trailing:BlockComments* {
-      const actions = [first, ...rest].flat();
-      // Attach leading comments to first action's meta (immutable update)
-      if (leadingComments.length > 0 && actions.length > 0) {
-        const firstAction = actions[0];
-        if (firstAction && typeof firstAction === 'object') {
-          const existingMeta = firstAction.meta || {};
-          actions[0] = {
-            ...firstAction,
+// Block body for when action blocks - supports full statement list like ForBlockBody
+WhenActionBlockBody "when action block body"
+  = statements:WhenActionBlockStatementList firstReturn:(
+      BlockStatementSeparator ret:WhenActionBlockReturnStatement { return ret; }
+    / _ ret:WhenActionBlockReturnStatement { return ret; }
+    )
+    extraReturn:(BlockStatementSeparator WhenActionBlockReturnStatement { return true; })?
+    trailing:(BlockStatementSeparator WhenActionBlockStatement { return true; })? {
+      if (extraReturn) {
+        helpers.mlldError(
+          'Multiple return statements in when block. Only one return allowed as last statement.',
+          'single return',
+          location()
+        );
+      }
+      if (trailing) {
+        helpers.mlldError(
+          'Return must be the last statement in a block.',
+          'end of block',
+          location()
+        );
+      }
+      return {
+        statements,
+        returnStmt: firstReturn
+      };
+    }
+  / statements:WhenActionBlockStatementList {
+      return {
+        statements,
+        returnStmt: null
+      };
+    }
+  / leadingComments:LeadingBlockComment* _ ret:WhenActionBlockReturnStatement {
+      return {
+        statements: [],
+        returnStmt: ret
+      };
+    }
+
+// Return statement for when action blocks
+WhenActionBlockReturnStatement "when block return statement"
+  = "=>" _ value:WhenRHSAction noise:BlockComments* {
+      const normalized = Array.isArray(value) ? value.flat() : [value];
+      return normalized;
+    }
+
+// Statement list for when action blocks
+WhenActionBlockStatementList "when action block statement list"
+  = leadingComments:LeadingBlockComment* _ first:WhenActionBlockStatement rest:(BlockStatementSeparator stmt:WhenActionBlockStatement { return stmt; })* trailing:BlockComments* {
+      const normalize = (stmt) => Array.isArray(stmt) ? stmt : [stmt];
+      const stmts = [...normalize(first), ...rest.flatMap(normalize)];
+      // Attach leading comments to first statement's meta (immutable update)
+      if (leadingComments.length > 0 && stmts.length > 0) {
+        const firstStmt = stmts[0];
+        if (firstStmt && typeof firstStmt === 'object') {
+          const existingMeta = firstStmt.meta || {};
+          stmts[0] = {
+            ...firstStmt,
             meta: {
               ...existingMeta,
               comment: existingMeta.comment || leadingComments[0],
@@ -599,9 +735,25 @@ WhenActionBlockContent
           };
         }
       }
-      return actions;
+      return stmts;
     }
   / BlockComments+ { return []; }
+
+// Single statement inside a when action block
+WhenActionBlockStatement "when action block statement"
+  = LetAssignment
+  / AugmentedAssignment
+  / WhenExpressionAny
+  / ForNestedDirective
+  / WhenBlockAction
+
+WhenActionBlockContent
+  = body:WhenActionBlockBody {
+      const statements = body.statements || [];
+      const returnStmt = body.returnStmt;
+      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
+      return hasReturn ? [...statements, ...returnStmt] : statements;
+    }
 
 // Single action within a when block - supports both implicit and explicit
 WhenBlockAction

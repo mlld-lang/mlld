@@ -52,6 +52,11 @@ During a documentation reorganization, Claude may have embellished or assumed fe
    - **Implementation cost**: Is this trivial or would it require architectural changes?
    - **Recommendation**: `implement`, `defer`, or `reject`
 
+5. **For ALL verdicts**, assess documentation clarity:
+   - Could the QA agent have found the answer with more thorough exploration?
+   - Are the docs technically correct but confusing or incomplete?
+   - Would a clarifying note prevent this misunderstanding in the future?
+
 ### Grounded Wisdom Guidelines
 
 Apply these principles in your assessment:
@@ -104,11 +109,28 @@ Write a `reconciliation.json` file to `@outputDir/@topic/@experiment/`:
     "recommendation_reasoning": "..."
   },
 
+  "doc_clarity": {
+    "issue": "none | qa-insufficient-exploration | docs-could-be-clearer | docs-genuinely-misleading",
+    "explanation": "Why you chose this classification",
+    "suggestion": "Specific improvement if docs-could-be-clearer or docs-genuinely-misleading",
+    "affected_doc": "Which doc file/topic would benefit from the improvement"
+  },
+
   "action": "fix-docs | implement | defer | discuss",
   "doc_fix": "If action is fix-docs, what should the docs say instead?",
   "notes": "Any other observations"
 }
 ```
+
+### Doc Clarity Classifications
+
+**none**: The QA explored thoroughly and found a real issue; docs are clear.
+
+**qa-insufficient-exploration**: The answer was available in the docs but the QA agent didn't search deeply enough. The docs are fine; this feedback helps improve QA prompts.
+
+**docs-could-be-clearer**: Docs are technically correct but the misunderstanding is understandable. A clarifying note would help future users/agents avoid the same confusion.
+
+**docs-genuinely-misleading**: Docs actively suggest incorrect behavior or omit critical information. This needs a doc fix regardless of the verdict.
 
 ### Assessment Criteria
 

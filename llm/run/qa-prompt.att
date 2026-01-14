@@ -9,7 +9,12 @@ Use ONLY information available via mlld commands:
 - `mlld howto grep <pattern>`
 - `mlld howto core-modules`
 
-Do NOT investigate the mlld codebase or search the Internet.
+Do NOT:
+- Investigate the mlld codebase (no reading source files)
+- Search the Internet
+- Read tests/cases/ or other implementation details
+
+Your fresh perspective is valuable - we want to capture genuine first-impression friction.
 
 ## First: Check Prior Work
 

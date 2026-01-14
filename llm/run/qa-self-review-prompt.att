@@ -1,0 +1,107 @@
+## Self-Review: @topic
+
+You've just completed initial QA testing for `@topic`. Now it's time to check your own work.
+
+## What Just Happened
+
+You tested mlld's `@topic` feature with limited resources (only `mlld howto`). Some of your experiments may have hit friction or failures. **This is valuable data** - your confusion represents what real users experience.
+
+## Your Task Now
+
+Review your own results and determine:
+1. Were your assumptions correct, or did you misunderstand something?
+2. Was the information available but you missed it, or is there a genuine gap?
+3. What would have helped you avoid the confusion?
+
+## Expanded Access
+
+You now have access to additional resources:
+
+1. **Cookbook** - `docs/llm/llms-cookbook.txt`
+   Real-world patterns showing features in context
+
+2. **Test cases** - `tests/cases/`
+   Working examples that define expected behavior
+   ```bash
+   ls tests/cases/ | head -20
+   find tests/cases -name "*.mld" | head -30
+   ```
+
+3. **Test fixtures** - `tests/fixtures/`
+   Input/output examples for various scenarios
+
+## For Each Experiment with Issues
+
+Review each experiment in `@outputDir/@topic/` that has `status: "fail"` or `status: "partial"`:
+
+1. **Re-examine your assumption**: What did you think should happen?
+
+2. **Check the test cases**: Search for relevant patterns
+   ```bash
+   find tests/cases -name "*@topic*" -o -name "*<related>*"
+   grep -r "<pattern>" tests/cases/ --include="*.mld" | head -20
+   ```
+
+3. **Check the cookbook**: Does it show how this feature actually works?
+   ```bash
+   grep -A5 -B5 "<keyword>" docs/llm/llms-cookbook.txt
+   ```
+
+4. **Classify the issue**:
+   - `qa-insufficient-exploration`: You could have found the answer with more searching
+   - `docs-could-be-clearer`: Docs are correct but the misunderstanding is understandable
+   - `docs-genuinely-misleading`: Docs actively suggest wrong behavior
+   - `genuine-bug`: The behavior really is wrong (test cases confirm your expectation)
+
+## Output
+
+For each experiment directory with issues, create or update `self_review.json`:
+
+```json
+{
+  "experiment": "01-L-basic-usage",
+  "topic": "@topic",
+  "original_status": "fail|partial",
+  "reviewed": true,
+
+  "issues_reviewed": [
+    {
+      "original_issue": "Brief description from results.json",
+      "what_i_thought": "My original assumption",
+      "what_i_found": "What the test cases/cookbook revealed",
+      "evidence": "File path or grep result that clarified this",
+
+      "doc_clarity": {
+        "issue": "qa-insufficient-exploration | docs-could-be-clearer | docs-genuinely-misleading | genuine-bug",
+        "explanation": "Why I chose this classification",
+        "suggestion": "What would have helped (if docs issue)",
+        "affected_doc": "Which doc file/topic needs improvement"
+      },
+
+      "revised_verdict": "not-a-bug | doc-improvement-needed | genuine-bug",
+      "revised_severity": "none | minor | major | blocker"
+    }
+  ],
+
+  "learnings": "What I learned from this self-review",
+  "doc_improvements": ["List of specific doc improvements that would help"]
+}
+```
+
+## Guidelines
+
+**Be honest about your mistakes**: The goal is to improve the system, not to defend your original assessment. If you misunderstood, say so.
+
+**Be specific about doc improvements**: "Docs should be clearer" is not helpful. "The `for-block` doc should show that `let` only works inside blocks, not at top-level" is actionable.
+
+**Distinguish carefully**:
+- `qa-insufficient-exploration`: The answer WAS in the docs, you just didn't find it
+- `docs-could-be-clearer`: A reasonable person following the docs could make this mistake
+- `docs-genuinely-misleading`: The docs say X but the behavior is Y
+- `genuine-bug`: Test cases confirm the behavior is wrong
+
+## Begin
+
+1. List all experiment directories in `@outputDir/@topic/`
+2. For each with `status != "pass"`, perform the self-review
+3. Write `self_review.json` in each reviewed experiment directory

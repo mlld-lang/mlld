@@ -136,6 +136,7 @@ const allowedStartRules = [
   'WhenBoundExpressionConditionList',
   'GuardRuleList',
   'WhenActionBlockContent',
+  'WhenActionBlockBody',
   'TemplateBodyAtt',
   'TemplateBodyMtt'
 ];

@@ -790,21 +790,10 @@ WhenExpression "when expression"
         mode: options.mode
       });
     }
-  // Error recovery: Missing bracket after when
-  / "when" _ Expression _ WhenExprModifier? _ !"[" {
-      helpers.mlldError(
-        `Missing condition list in when expression. Expected: when @value [pattern => value, ...]`,
-        "[",
-        location()
-      );
-    }
-  / "when" _ WhenExprModifier? _ !"[" {
-      helpers.mlldError(
-        `Missing condition list in when expression. Expected: when [condition => value, ...]`,
-        "[",
-        location()
-      );
-    }
+  // Error recovery patterns removed - they were overly aggressive and prevented
+  // WhenExpressionInline from matching. The inline form (when @condition => action)
+  // handles the main use case, and specific error messages are less important than
+  // correct parsing behavior.
   // Error recovery: Unclosed bracket
   / "when" _ WhenExprModifier? _ "[" _ &{
       // Safer unclosed check for when-expressions: allow newlines; only error if EOF reached without ']'
@@ -937,7 +926,8 @@ WhenExpressionAction
   / block:ExeStatementBlock { return block; }
   / WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
 
-// Inline single-condition when expression (no brackets)
+// Inline single-condition when expression: when @condition => action
+// Block form is handled by WhenExpressionInlineBlock
 WhenExpressionInline
   = "when" _ condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
       const act = Array.isArray(action) ? action : [action];
@@ -946,9 +936,22 @@ WhenExpressionInline
     }
 
 // Alias to allow both inline and bracketed when expressions
+// WhenExpressionInlineBlock handles `when @condition [statements]` where block starts with statement keywords
+// This must come BEFORE WhenExpression to prevent WhenExpression from incorrectly parsing statement blocks
 WhenExpressionAny
-  = WhenExpressionInline
+  = WhenExpressionInlineBlock
   / WhenExpression
+  / WhenExpressionInline
+
+// Block form for when expressions: when @condition [statements with let, show, etc.]
+// This is separate from WhenExpressionInline to have higher precedence than WhenExpression
+// The lookahead ensures we only match when block starts with statement keywords
+WhenExpressionInlineBlock
+  = "when" _ condition:WhenConditionExpression _ &("[" _ ("let" / "show" / "for" / "when" / "log" / "output" / "run" / "var" / "=>" )) block:WhenSimpleBlockAction {
+      const act = block.statements;
+      const conditions = [{ condition: [condition], action: act }];
+      return helpers.createWhenExpression(conditions, null, location(), null, null, { isBlockForm: true, hasReturn: block.hasReturn });
+    }
 
 // -------------------------------------------------------------
 // FOR EXPRESSION - Iteration with directive action support for executable assignments

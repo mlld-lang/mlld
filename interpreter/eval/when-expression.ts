@@ -438,6 +438,26 @@ export async function evaluateWhenExpression(
           if (wrapperCandidate) {
             const interpolateFn = await getInterpolateFn();
             value = await interpolateFn(wrapperCandidate.content, actionEnv, InterpolationContext.Template);
+          } else if (node.meta?.isBlockForm && Array.isArray(pair.action) && pair.action.length > 1) {
+            // Block form: when @condition [statements; => value]
+            // Execute each statement sequentially, accumulating environment changes
+            let blockEnv = actionEnv;
+            let lastValue: unknown = undefined;
+            for (const actionNode of pair.action) {
+              if (isLetAssignment(actionNode)) {
+                blockEnv = await evaluateLetAssignment(actionNode as any, blockEnv);
+              } else if (isAugmentedAssignment(actionNode)) {
+                blockEnv = await evaluateAugmentedAssignment(actionNode as any, blockEnv);
+              } else {
+                const result = await evaluate(actionNode, blockEnv, context);
+                if (result.env) {
+                  blockEnv = result.env;
+                }
+                lastValue = result.value;
+              }
+            }
+            actionResult = { value: lastValue, env: blockEnv };
+            value = lastValue;
           } else {
             // Handle AugmentedAssignment and LetAssignment nodes specially
             // These are not handled by evaluate() and need direct evaluation

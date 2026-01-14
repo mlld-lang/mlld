@@ -1,0 +1,2 @@
+outer block
+inner when

@@ -45,13 +45,22 @@ var @prevVerificationFiles = <@qaDir/verification-result.json?>
 var @prevVerification = @prevVerificationFiles.length > 0 ? @prevVerificationFiles[0] : null
 var @halted = @prevVerification && @prevVerification.status == "fail"
 
-when @halted => show `ERROR: Previous verification failed. Resolve before continuing.`
-when @halted => show `See: @qaDir/verification-result.json`
-when @halted => show ``
-when @halted => show `Recommended actions:`
-when @halted => show `  1. Review the failures in verification-result.json`
-when @halted => show `  2. Either revert the problematic merge or fix manually`
-when @halted => show `  3. Delete verification-result.json to resume`
+when @halted [
+  show `ERROR: Previous verification failed. Resolve before continuing.`
+  show `See: @qaDir/verification-result.json`
+  show ``
+  show `Recommended actions:`
+  show `  1. Review the failures in verification-result.json`
+  show `  2. Either revert the problematic merge or fix manually`
+  show `  3. Delete verification-result.json to resume`
+]
+
+>> Helper to check if a self-review has genuine bugs
+exe @hasGenuineBug(selfReview) = [
+  let @bugs = for @issue in (@selfReview.issues_reviewed ? @selfReview.issues_reviewed : [])
+    when @issue.revised_verdict == "genuine-bug" => @issue
+  => @bugs.length > 0
+]
 
 show `DEBUG: before loop, maxIterations=@maxIterations, halted=@halted`
 var @loopResult = loop(@maxIterations) [
@@ -65,10 +74,13 @@ var @loopResult = loop(@maxIterations) [
   >> Load all state files fresh each iteration
   let @allResults = <@qaDir/**/results.json>
   let @allReconciliations = <@qaDir/**/reconciliation.json>
+  let @allSelfReviews = <@qaDir/**/self_review.json>
   let @allProposedFixes = <@qaDir/**/proposed-fix.json>
   let @allFixedFiles = <@qaDir/**/fixed.json>
 
   >> Build lookup sets
+  >> Self-reviews from qa.mld Phase 2 act as reconciliation
+  let @selfReviewedDirs = for @sr in @allSelfReviews when @sr.reviewed => @sr.mx.absoluteDir
   let @reconciledDirs = for @r in @allReconciliations => @r.mx.absoluteDir
   let @analyzedDirs = for @f in @allProposedFixes => @f.mx.absoluteDir
   let @fixedDirs = for @f in @allFixedFiles => @f.mx.absoluteDir
@@ -80,9 +92,11 @@ var @loopResult = loop(@maxIterations) [
   show `State: @allResults.length total, @passing.length passing, @failing.length failing`
 
   >> ========== PHASE 1: RECONCILE ==========
+  >> Skip experiments that have self_review.json (qa.mld Phase 2 already did reconciliation)
   let @needsReconcile = for @r in @allResults
     when (@r.status == "fail" || @r.status == "partial")
       && !@reconciledDirs.includes(@r.mx.absoluteDir)
+      && !@selfReviewedDirs.includes(@r.mx.absoluteDir)
     => {
       topic: @r.topic,
       experiment: @r.experiment,
@@ -92,7 +106,7 @@ var @loopResult = loop(@maxIterations) [
       experimentDir: @r.mx.absoluteDir
     }
 
-  show `Phase 1: Reconciling @needsReconcile.length failures...`
+  show `Phase 1: Reconciling @needsReconcile.length failures (skipping @selfReviewedDirs.length self-reviewed)...`
 
   let @reconcileLimit = @needsReconcile.slice(0, 20)
   show `  DEBUG: reconcileLimit has @reconcileLimit.length items`
@@ -104,11 +118,15 @@ var @loopResult = loop(@maxIterations) [
     => @item.topic
   ]
 
-  >> Reload reconciliations after phase 1
+  >> Reload reconciliations and self-reviews after phase 1
   let @freshReconciliations = <@qaDir/**/reconciliation.json>
+  let @freshSelfReviews = <@qaDir/**/self_review.json>
 
   >> ========== PHASE 2: ANALYZE ==========
-  let @needsAnalyze = for @r in @freshReconciliations
+  >> Check both reconciliation.json AND self_review.json for genuine bugs
+
+  >> From traditional reconciliation
+  let @bugsFromReconcile = for @r in @freshReconciliations
     when @r.verdict == "genuine-bug"
       && @r.action == "implement"
       && !@analyzedDirs.includes(@r.mx.absoluteDir)
@@ -117,10 +135,26 @@ var @loopResult = loop(@maxIterations) [
       experiment: @r.experiment,
       experimentDir: @r.mx.absoluteDir,
       resultsPath: `@r.mx.absoluteDir/results.json`,
-      reconciliationPath: @r.mx.absolute
+      reconciliationPath: @r.mx.absolute,
+      source: "reconciliation"
     }
 
-  show `Phase 2: Analyzing @needsAnalyze.length genuine bugs...`
+  >> From self-reviews (any issue with revised_verdict == "genuine-bug")
+  let @bugsFromSelfReview = for @sr in @freshSelfReviews
+    when @sr.reviewed && @hasGenuineBug(@sr) && !@analyzedDirs.includes(@sr.mx.absoluteDir)
+    => {
+      topic: @sr.topic,
+      experiment: @sr.experiment,
+      experimentDir: @sr.mx.absoluteDir,
+      resultsPath: `@sr.mx.absoluteDir/results.json`,
+      reconciliationPath: @sr.mx.absolute,
+      source: "self-review"
+    }
+
+  >> Combine both sources
+  let @needsAnalyze = @bugsFromReconcile.concat(@bugsFromSelfReview)
+
+  show `Phase 2: Analyzing @needsAnalyze.length genuine bugs (@bugsFromReconcile.length from reconcile, @bugsFromSelfReview.length from self-review)...`
 
   let @analyzeLimit = @needsAnalyze.slice(0, 10)
   show `  DEBUG: analyzeLimit has @analyzeLimit.length items`
@@ -300,3 +334,84 @@ show `  Analyzed: @finalProposedFixes.length`
 show `  Fixed & Merged: @finalMerged.length`
 show `  Escalated (need human): @finalEscalated.length`
 show `  Pending retry: @finalPendingRetry.length`
+
+>> ========== DOC IMPROVEMENT AGGREGATION ==========
+>> Collect insights from reconciliations AND self-reviews to improve docs and QA prompts
+
+>> From reconciliation.json (doc_clarity at top level)
+var @docClarityFromReconcile = for @r in @finalReconciliations when @r.doc_clarity && @r.doc_clarity.issue && @r.doc_clarity.issue != "none" => {
+  topic: @r.topic,
+  experiment: @r.experiment,
+  verdict: @r.verdict,
+  issue: @r.doc_clarity.issue,
+  explanation: @r.doc_clarity.explanation,
+  suggestion: @r.doc_clarity.suggestion,
+  affected_doc: @r.doc_clarity.affected_doc,
+  source: "reconciliation"
+}
+
+>> From self_review.json (doc_clarity per issue in issues_reviewed)
+var @finalSelfReviews = <@qaDir/**/self_review.json>
+var @docClarityFromSelfReview = for @sr in @finalSelfReviews
+  when @sr.issues_reviewed => for @issue in @sr.issues_reviewed
+    when @issue.doc_clarity && @issue.doc_clarity.issue && @issue.doc_clarity.issue != "genuine-bug" => {
+      topic: @sr.topic,
+      experiment: @sr.experiment,
+      verdict: @issue.revised_verdict,
+      issue: @issue.doc_clarity.issue,
+      explanation: @issue.doc_clarity.explanation,
+      suggestion: @issue.doc_clarity.suggestion,
+      affected_doc: @issue.doc_clarity.affected_doc,
+      source: "self-review"
+    }
+
+>> Combine both sources
+var @docClarityItems = @docClarityFromReconcile.concat(@docClarityFromSelfReview)
+
+var @qaInsufficientExploration = for @item in @docClarityItems when @item.issue == "qa-insufficient-exploration" => @item
+var @docsCouldBeClearer = for @item in @docClarityItems when @item.issue == "docs-could-be-clearer" => @item
+var @docsGenuinelyMisleading = for @item in @docClarityItems when @item.issue == "docs-genuinely-misleading" => @item
+
+show ``
+show `=== Doc Improvement Insights ===`
+show `  QA needs better exploration: @qaInsufficientExploration.length (improve QA prompts)`
+show `  Docs could be clearer: @docsCouldBeClearer.length (add clarifying notes)`
+show `  Docs genuinely misleading: @docsGenuinelyMisleading.length (fix docs)`
+
+>> Write aggregated doc improvement report
+var @docImprovementReport = {
+  generated_at: @mx.now,
+  summary: {
+    qa_insufficient_exploration: @qaInsufficientExploration.length,
+    docs_could_be_clearer: @docsCouldBeClearer.length,
+    docs_genuinely_misleading: @docsGenuinelyMisleading.length
+  },
+  qa_prompt_feedback: @qaInsufficientExploration,
+  doc_clarifications_needed: @docsCouldBeClearer,
+  doc_fixes_needed: @docsGenuinelyMisleading
+}
+
+when @docClarityItems.length > 0 [
+  show ``
+  show `Writing doc improvement report to @qaDir/doc-improvement-report.json`
+  output @docImprovementReport to "@qaDir/doc-improvement-report.json"
+
+  >> Show actionable items
+  when @docsGenuinelyMisleading.length > 0 [
+    show ``
+    show `ACTION REQUIRED - Docs need fixing:`
+    for @item in @docsGenuinelyMisleading => show `  - @item.topic/@item.experiment: @item.suggestion`
+  ]
+
+  when @docsCouldBeClearer.length > 0 [
+    show ``
+    show `SUGGESTED - Docs could be clearer:`
+    for @item in @docsCouldBeClearer => show `  - @item.topic/@item.experiment: @item.suggestion`
+  ]
+
+  when @qaInsufficientExploration.length > 0 [
+    show ``
+    show `QA FEEDBACK - Consider improving QA prompts to encourage exploration of:`
+    for @item in @qaInsufficientExploration => show `  - @item.affected_doc: @item.suggestion`
+  ]
+]

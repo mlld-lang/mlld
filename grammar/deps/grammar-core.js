@@ -1262,7 +1262,7 @@ export const helpers = {
     /**
      * Creates a WhenExpression node for when expressions (used in /var assignments)
      */
-    createWhenExpression(conditions, withClause, location, modifier = null, bound = null) {
+    createWhenExpression(conditions, withClause, location, modifier = null, bound = null, extraMeta = null) {
         return this.createNode(NodeType.WhenExpression, {
             conditions: conditions,
             withClause: withClause || null,
@@ -1276,7 +1276,8 @@ export const helpers = {
                 hasTailModifiers: !!withClause,
                 modifier: modifier,
                 hasBoundValue: !!bound,
-                ...(bound ? { boundIdentifier: bound.boundIdentifier } : {})
+                ...(bound ? { boundIdentifier: bound.boundIdentifier } : {}),
+                ...(extraMeta || {})
             },
             location
         });

@@ -1396,7 +1396,8 @@ export const helpers = {
     withClause: any,
     location: any,
     modifier: string | null = null,
-    bound: { boundIdentifier: string; boundValue: any } | null = null
+    bound: { boundIdentifier: string; boundValue: any } | null = null,
+    extraMeta: Record<string, any> | null = null
   ) {
     return this.createNode(NodeType.WhenExpression, {
       conditions: conditions,
@@ -1411,7 +1412,8 @@ export const helpers = {
         hasTailModifiers: !!withClause,
         modifier: modifier,
         hasBoundValue: !!bound,
-        ...(bound ? { boundIdentifier: bound.boundIdentifier } : {})
+        ...(bound ? { boundIdentifier: bound.boundIdentifier } : {}),
+        ...(extraMeta || {})
       },
       location
     });

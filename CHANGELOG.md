@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc82]
 
 ### Added
+- **`when @condition [block]`**: Conditional blocks with full statement support
+  - Execute multiple statements when condition is true: `when @ready [let @x = 1  show @x]`
+  - Supports `let`, `var`, nested `when`, `for`, and return via `=>`
+  - Consistent with `exe` and `for` block semantics
 - **`mlld howto core-modules`**: List official @mlld modules with descriptions
   - Shows ai-cli, array, claude, env, github, prose, string modules
   - `mlld howto @mlld/claude` shows module documentation directly
