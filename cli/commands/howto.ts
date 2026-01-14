@@ -37,6 +37,7 @@ export interface HowtoOptions {
   topic?: string;
   subtopic?: string;
   section?: boolean;
+  all?: boolean;
 }
 
 /**
@@ -128,7 +129,7 @@ async function findHowtoScript(): Promise<string | null> {
 
 export async function howtoCommand(options: HowtoOptions = {}): Promise<void> {
   // Handle core-modules topic specially
-  if (options.topic === 'core-modules' || options.topic === 'modules') {
+  if (options.topic === 'core-modules') {
     await showCoreModules();
     return;
   }
@@ -158,7 +159,8 @@ export async function howtoCommand(options: HowtoOptions = {}): Promise<void> {
     const result = await execute(scriptPath, {
       topic: options.topic || '',
       subtopic: options.subtopic || '',
-      section: options.section || false
+      section: options.section || false,
+      all: options.all || false
     }, {
       fileSystem,
       pathService: new PathService(basePath, fileSystem),
@@ -199,7 +201,7 @@ export function createHowtoCommand() {
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       if (flags.help || flags.h) {
         console.log(`
-${chalk.bold('Usage:')} mlld howto [topic] [subtopic] [--section]
+${chalk.bold('Usage:')} mlld howto [topic] [subtopic] [options]
 
 Get help on mlld language features and syntax.
 
@@ -207,8 +209,8 @@ ${chalk.bold('Sections:')} syntax, commands, control-flow, modules, patterns, co
 
 ${chalk.bold('Examples:')}
   mlld howto                    Show all available topics
-  mlld howto syntax             Show ALL syntax help (whole section)
-  mlld howto modules            Show ALL modules help (whole section)
+  mlld howto syntax             Show syntax topics index
+  mlld howto syntax --all       Show ALL syntax docs (full content)
   mlld howto when               Show all when-related help
   mlld howto when first         Show just when-first help
   mlld howto for-parallel       Show just parallel for help
@@ -220,10 +222,11 @@ ${chalk.bold('Core Modules:')}
   mlld howto @mlld/claude       Show documentation for a module
 
 ${chalk.bold('Options:')}
+  -a, --all       Show full content for section (default shows index)
   -s, --section   Show entire section for the matched topic
   -h, --help      Show this help message
 
-${chalk.bold('Tip:')} Use grep to find topics, then --section to get full context.
+${chalk.bold('Tip:')} Use section names to see available topics, then drill down.
         `);
         return;
       }
@@ -231,8 +234,9 @@ ${chalk.bold('Tip:')} Use grep to find topics, then --section to get full contex
       const topic = args[0];
       const subtopic = args[1];
       const section = flags.section || flags.s;
+      const all = flags.all || flags.a;
 
-      await howtoCommand({ topic, subtopic, section });
+      await howtoCommand({ topic, subtopic, section, all });
     }
   };
 }

@@ -41,7 +41,7 @@ exe @buildTree(allAtoms, introAtom) = js {
   ];
 
   for (const cat of categories) {
-    lines.push(cat.name + '                              (mlld howto ' + cat.name + ' for all)');
+    lines.push(cat.name + '                              (--all for full content)');
     for (const atom of cat.atoms) {
       const text = typeof atom === 'string' ? atom : (atom.text || '');
       const match = text.match(/^---\n([\s\S]*?)\n---/);
@@ -61,7 +61,8 @@ exe @buildTree(allAtoms, introAtom) = js {
   }
 
   lines.push('Usage:');
-  lines.push('  mlld howto <section>           Show entire section (e.g., howto syntax)');
+  lines.push('  mlld howto <section>           Show section index (e.g., howto syntax)');
+  lines.push('  mlld howto <section> --all     Show full section content');
   lines.push('  mlld howto <topic>             Show specific topic (e.g., howto for-parallel)');
   lines.push('  mlld howto <topic> --section   Find topic then show its entire section');
   lines.push('  mlld howto grep <pattern>      Search all docs for pattern');
@@ -199,12 +200,18 @@ exe @addIntro(flatAtoms, introAtom) = js {
 var @allFlatAtoms = @addIntro(@flatAtoms, @introAtom)
 
 >> Get topic from payload (injected by SDK via dynamicModules)
-import { @topic, @subtopic, @section } from @payload
+import { @topic, @subtopic, @section, @all } from @payload
 
 >> Build fullId for subtopic lookup
 exe @buildFullId(topic, subtopic) = js {
   if (!topic || !subtopic) return '';
   return topic + '-' + subtopic;
+}
+
+>> Check if topic is a section name
+exe @isSection(topic) = js {
+  const sections = ['syntax', 'commands', 'control-flow', 'modules', 'patterns', 'configuration', 'security', 'mistakes'];
+  return sections.includes(topic);
 }
 
 >> Compute values
@@ -214,6 +221,8 @@ var @hasSubtopic = @subtopic != ""
 var @isGrep = @topic == "grep"
 var @isIntro = @topic == "intro"
 var @wantSection = @section == true
+var @wantAll = @all == true
+var @isSectionTopic = @isSection(@topic)
 
 >> Get matches
 var @exactMatches = @filterById(@allFlatAtoms, @fullId)
@@ -261,6 +270,33 @@ exe @notFoundMsg(topic, tree) = js {
   return 'Topic "' + topic + '" not found.\n\n' + tree;
 }
 
+>> Build section index (list of topics in a section)
+exe @buildSectionIndex(atoms, sectionName) = js {
+  const COL_WIDTH = 36;
+  const lines = [sectionName.toUpperCase(), ''];
+
+  for (const atom of atoms) {
+    const text = typeof atom === 'string' ? atom : (atom.text || '');
+    const match = text.match(/^---\n([\s\S]*?)\n---/);
+    if (match) {
+      const idMatch = match[1].match(/^id:\s*(.+)$/m);
+      const briefMatch = match[1].match(/^brief:\s*(.+)$/m);
+      if (idMatch) {
+        const id = idMatch[1].trim();
+        if (id.startsWith('_')) continue;
+        const brief = briefMatch ? briefMatch[1].trim() : '';
+        lines.push('  ' + id.padEnd(COL_WIDTH) + brief);
+      }
+    }
+  }
+
+  lines.push('');
+  lines.push('Usage:');
+  lines.push('  mlld howto ' + sectionName + ' --all    Show full content');
+  lines.push('  mlld howto <topic>              Show specific topic');
+  return lines.join('\n');
+}
+
 >> Main output logic - use when first to ensure only one branch executes
 when first [
   @isGrep => show @grepAtoms(@allFlatAtoms, @subtopic)
@@ -268,6 +304,7 @@ when first [
   @wantSection && @sectionMatches.length > 0 => show @joinStripped(@sectionMatches)
   @hasSubtopic && @exactMatches.length > 0 => show @joinStripped(@exactMatches)
   @hasSubtopic => show `Subtopic "@fullId" not found.`
+  @isSectionTopic && !@wantAll && @topicMatches.length > 0 => show @buildSectionIndex(@topicMatches, @topic)
   @hasTopic && @topicMatches.length > 0 => show @joinStripped(@topicMatches)
   @hasTopic => show @notFoundMsg(@topic, @buildTree(@allAtoms, @introAtom))
   * => show @buildTree(@allAtoms, @introAtom)
