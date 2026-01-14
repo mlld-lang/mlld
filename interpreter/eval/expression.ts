@@ -222,9 +222,9 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
  */
 async function evaluateTernaryExpression(node: TernaryExpression, env: Environment, context?: { isExpression?: boolean }): Promise<EvalResult> {
   const { condition, trueBranch, falseBranch } = node;
-  
-  // Evaluate condition
-  const condResult = await evaluate(condition, env, { isExpression: true, ...context });
+
+  // Evaluate condition with isCondition: true so missing field access returns undefined
+  const condResult = await evaluate(condition, env, { isExpression: true, isCondition: true, ...context });
   const condTruthy = isTruthy(condResult.value);
   
   // Evaluate and return appropriate branch

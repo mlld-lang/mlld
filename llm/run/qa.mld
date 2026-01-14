@@ -20,7 +20,7 @@ var @atomFiles = <@base/docs/src/atoms/**/*.md>
 
 >> Extract topics with qa_tier from atom frontmatter
 var @tiers = @tier ? @tier.split(",") : []
-var @allTopics = for @f in @atomFiles when @f.fm.qa_tier && @f.fm.id && !@f.fm.id.startsWith("_") && (@tiers.length == 0 || @tiers.includes(`@f.fm.qa_tier`)) => @f.fm.id
+var @allTopics = for @f in @atomFiles when @f.mx.fm.qa_tier && @f.mx.fm.id && !@f.mx.fm.id.startsWith("_") && (@tiers.length == 0 || @tiers.includes(`@f.mx.fm.qa_tier`)) => @f.mx.fm.id
 
 >> Configuration
 var @outputDir = "@base/qa"

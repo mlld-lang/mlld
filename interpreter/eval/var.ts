@@ -1166,12 +1166,18 @@ export async function prepareVarAssignment(
     }
     
   } else if (directive.meta?.expressionType) {
-    // Expression results - create primitive variables for boolean/number results
+    // Expression results - create appropriate variable type based on resolved value
     if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
       const options = applySecurityOptions();
       variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
+    } else if (Array.isArray(resolvedValue)) {
+      const options = applySecurityOptions();
+      variable = createArrayVariable(identifier, resolvedValue, false, source, options);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      const options = applySecurityOptions();
+      variable = createObjectVariable(identifier, resolvedValue, false, source, options);
     } else {
-      // Expression returned non-primitive (e.g., string comparison)
+      // Expression returned string or other primitive
       const options = applySecurityOptions();
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
     }
