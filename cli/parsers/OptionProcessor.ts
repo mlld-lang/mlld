@@ -229,7 +229,7 @@ export class OptionProcessor {
       urlTimeout: 30000,
       urlMaxSize: 5242880, // 5MB
       maxOutputLines: 50,
-      showProgress: true,
+      showProgress: false,
       errorBehavior: 'continue',
       commandTimeout: 30000,
       includeVars: true,

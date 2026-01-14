@@ -35,7 +35,7 @@ export interface ICommandExecutor {
  */
 export abstract class BaseCommandExecutor implements ICommandExecutor {
   protected outputOptions: CommandExecutionOptions = {
-    showProgress: true,
+    showProgress: false,
     maxOutputLines: undefined,
     errorBehavior: 'halt',
     collectErrors: false

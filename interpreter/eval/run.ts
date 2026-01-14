@@ -989,8 +989,10 @@ export async function evaluateRun(
 
   // Emit effect only for top-level run directives (not data/RHS contexts)
   // Skip emission when using format adapter (adapter already emitted during streaming)
+  // Also skip if the output is empty (only whitespace) to avoid blank lines
   const shouldEmitFinalOutput = !hasStreamFormat || !streamingEnabled;
-  if (displayText && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef && shouldEmitFinalOutput) {
+  const hasActualOutput = displayText.trim().length > 0;
+  if (hasActualOutput && !directive.meta?.isDataValue && !directive.meta?.isEmbedded && !directive.meta?.isRHSRef && shouldEmitFinalOutput) {
     const materializedEffect = materializeDisplayValue(
       outputValue,
       undefined,

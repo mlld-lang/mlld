@@ -356,7 +356,7 @@ export class ConfigLoader {
     const outputConfig = config.output;
     
     return {
-      showProgress: outputConfig?.showProgress ?? true,
+      showProgress: outputConfig?.showProgress ?? false,
       maxOutputLines: outputConfig?.maxOutputLines ?? 50,
       errorBehavior: outputConfig?.errorBehavior ?? 'continue',
       collectErrors: outputConfig?.collectErrors ?? true,
