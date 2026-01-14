@@ -30,9 +30,17 @@ function normalizeState(value: unknown): StructuredValue {
     return value;
   }
 
-  const textValue = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  // Handle null/undefined explicitly to avoid JSON.stringify quirks
+  if (value === null) {
+    return wrapStructured(null as any, 'null' as any, 'null');
+  }
+  if (value === undefined) {
+    return wrapStructured('', 'text', '');
+  }
+
+  const textValue = typeof value === 'string' ? value : JSON.stringify(value);
   const kind: StructuredValue['type'] =
-    Array.isArray(value) ? 'array' : typeof value === 'object' && value !== null ? 'object' : 'text';
+    Array.isArray(value) ? 'array' : typeof value === 'object' ? 'object' : 'text';
   return wrapStructured(value as any, kind, textValue);
 }
 

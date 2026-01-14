@@ -112,7 +112,11 @@ export class ModuleReader {
    */
   async readDirectoryModule(dirPath: string, manifest: ModuleManifest): Promise<DirectoryModuleData> {
     const files: ModuleFile[] = [];
-    const entryPoint = manifest.entry || 'index.mld';
+    const rawEntryPoint = manifest.entry || 'index.mld';
+    // Normalize entry point: strip leading ./, normalize separators to /
+    const entryPoint = rawEntryPoint
+      .replace(/^\.\//, '')
+      .replace(/\\/g, '/');
 
     const readDir = async (currentPath: string, relativePath: string = ''): Promise<void> => {
       const entries = await fs.readdir(currentPath, { withFileTypes: true });
@@ -127,7 +131,8 @@ export class ModuleReader {
           }
         } else {
           const content = await fs.readFile(fullPath, 'utf8');
-          files.push({ relativePath: relPath, content });
+          // Normalize path separators to / for consistent comparison
+          files.push({ relativePath: relPath.replace(/\\/g, '/'), content });
         }
       }
     };

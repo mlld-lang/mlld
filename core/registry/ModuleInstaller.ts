@@ -372,7 +372,12 @@ export class ModuleInstaller {
 
       // Handle directory module installation
       if (metadata.isDirectory && metadata.directoryFiles) {
-        const moduleType = (metadata.moduleType as ModuleType) || 'library';
+        // Validate moduleType against known types, fall back to 'library'
+        const validTypes: ModuleType[] = ['library', 'app', 'command', 'skill'];
+        const rawType = metadata.moduleType as string;
+        const moduleType: ModuleType = validTypes.includes(rawType as ModuleType)
+          ? (rawType as ModuleType)
+          : 'library';
         const simpleName = moduleName.replace(/^@[^/]+\//, '');
 
         // Determine target directory based on type and global flag
@@ -380,16 +385,24 @@ export class ModuleInstaller {
         const baseDir = options.global
           ? path.join(os.homedir(), typePaths.global)
           : path.join(this.workspace.projectRoot, typePaths.local);
-        const targetDir = path.join(baseDir, simpleName);
+        const targetDir = path.resolve(baseDir, simpleName);
 
         if (!options.dryRun) {
           // Create target directory
           await fs.mkdir(targetDir, { recursive: true });
 
-          // Write all files
+          // Write all files with path sanitization to prevent directory traversal
           const files = metadata.directoryFiles as Record<string, string>;
           for (const [filePath, content] of Object.entries(files)) {
-            const fullPath = path.join(targetDir, filePath);
+            // Normalize and resolve the path
+            const normalizedPath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
+            const fullPath = path.resolve(targetDir, normalizedPath);
+
+            // Security check: ensure the resolved path is within targetDir
+            if (!fullPath.startsWith(targetDir + path.sep) && fullPath !== targetDir) {
+              throw new Error(`Security error: path "${filePath}" attempts to escape target directory`);
+            }
+
             const fileDir = path.dirname(fullPath);
             await fs.mkdir(fileDir, { recursive: true });
             await fs.writeFile(fullPath, content, 'utf-8');
