@@ -870,6 +870,9 @@ export class ImportDirectiveEvaluator {
       } catch (e) {
         return { value: result.content };
       }
+    } else if (result.contentType === 'data' && typeof result.content === 'object' && result.content !== null) {
+      // Content is already an object (e.g., from keychain resolver with executable exports)
+      return result.content;
     } else {
       return { value: result.content };
     }

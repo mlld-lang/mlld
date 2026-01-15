@@ -765,6 +765,26 @@ export async function evaluateRun(
       const result = await evaluateRun(refDirective, env, callStack);
       setOutput(result.value);
       
+    } else if (execVar.internal?.isBuiltinTransformer && execVar.internal?.transformerImplementation) {
+      // Special handling for built-in transformers (e.g., imported @keychain functions)
+      const args = directive.values?.args || [];
+      const evaluatedArgs: any[] = [];
+
+      for (const arg of args) {
+        if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
+          evaluatedArgs.push(arg);
+        } else if (arg && typeof arg === 'object' && 'type' in arg) {
+          const argValue = await interpolateWithPendingDescriptor([arg], InterpolationContext.Default);
+          evaluatedArgs.push(argValue);
+        } else {
+          evaluatedArgs.push(arg);
+        }
+      }
+
+      // Call the transformer implementation directly with all args
+      const result = await execVar.internal.transformerImplementation(evaluatedArgs);
+      setOutput(result);
+
     } else if (definition.type === 'code') {
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
@@ -775,14 +795,14 @@ export async function evaluateRun(
         tempEnv,
         { sourceLocation: directive.location, directiveType: 'run' }
       );
-      
+
       const codeParams = { ...argValues };
       const capturedEnvs = execVar.internal?.capturedShadowEnvs;
-      if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
+      if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' ||
                            definition.language === 'node' || definition.language === 'nodejs')) {
         (codeParams as any).__capturedShadowEnvs = capturedEnvs;
       }
-      
+
       // Special handling for mlld-when expressions
       if (definition.language === 'mlld-when') {
         logger.debug('🎯 mlld-when handler in run.ts CALLED');

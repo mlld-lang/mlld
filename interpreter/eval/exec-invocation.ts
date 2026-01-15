@@ -946,7 +946,12 @@ async function evaluateExecInvocationInternal(
     
     // Get the object first
     const objectRef = commandRefWithObject.objectReference;
-    const objectVar = env.getVariable(objectRef.identifier);
+    // Try regular variable first, then resolver variable (for reserved names like @keychain)
+    let objectVar = env.getVariable(objectRef.identifier);
+    if (!objectVar) {
+      // Check if it's a resolver variable (e.g., @keychain, @debug)
+      objectVar = await env.getResolverVariable(objectRef.identifier);
+    }
     if (!objectVar) {
       throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
     }
