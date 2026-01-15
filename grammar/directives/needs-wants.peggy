@@ -187,12 +187,13 @@ NeedsBooleanKey
   / "net"
   / "filesystem"
   / "fs"
+  / "keychain"
 
 CapabilityName
   = name:DataString { return name; }
   / name:BaseIdentifier &{
       const lowered = String(name).toLowerCase();
-      return !['cmd', 'node', 'js', 'python', 'py', 'ruby', 'rb', 'go', 'rust', 'sh', 'bash', 'network', 'net', 'filesystem', 'fs', 'tier', 'why'].includes(lowered);
+      return !['cmd', 'node', 'js', 'python', 'py', 'ruby', 'rb', 'go', 'rust', 'sh', 'bash', 'network', 'net', 'filesystem', 'fs', 'keychain', 'tier', 'why'].includes(lowered);
     } { return name; }
 
 // -------------------------------------------------------------
