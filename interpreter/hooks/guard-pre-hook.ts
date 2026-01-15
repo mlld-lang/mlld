@@ -442,7 +442,7 @@ export const guardPreHook: PreHook = async (
   return env.withGuardSuppression(async () => {
     const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
 
-    if (guardOverride.kind === 'disableAll' || guardOverride.kind === 'except') {
+    if (guardOverride.kind === 'disableAll' || guardOverride.kind === 'except' || guardOverride.kind === 'only') {
       const projectConfig = env.getProjectConfig();
       if (projectConfig && !projectConfig.getAllowGuardBypass()) {
         throw new MlldSecurityError(

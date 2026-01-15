@@ -50,6 +50,38 @@ describe('Guard bypass config', () => {
     ).rejects.toThrow('Guard bypass disabled by security config');
   });
 
+  it('blocks guard override with only when allowGuardBypass is false', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-guard-bypass-only-'));
+    tempDirs.push(root);
+
+    await fs.writeFile(
+      path.join(root, 'mlld-config.json'),
+      JSON.stringify({
+        security: {
+          allowGuardBypass: false
+        }
+      }),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(root, 'main.mld'),
+      [
+        '/guard @blocker before op:run = when [ * => deny "Blocked" ]',
+        '/run { echo test } with { guards: { only: ["@blocker"] } }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await expect(
+      interpret(await fs.readFile(path.join(root, 'main.mld'), 'utf8'), {
+        filePath: path.join(root, 'main.mld'),
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        approveAllImports: true
+      })
+    ).rejects.toThrow('Guard bypass disabled by security config');
+  });
+
   it('allows guard bypass when allowGuardBypass is true (explicit)', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-guard-bypass-allowed-'));
     tempDirs.push(root);

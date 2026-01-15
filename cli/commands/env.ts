@@ -3,9 +3,18 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import * as yaml from 'js-yaml';
-import { spawn } from 'child_process';
+import { randomUUID } from 'crypto';
 import type { ModuleManifest } from '@core/registry/types';
-import { MacOSKeychainProvider } from '@core/resolvers/builtin/keychain-macos';
+import { getKeychainProvider } from '@core/resolvers/builtin/KeychainResolver';
+import { interpret } from '@interpreter/index';
+import type { Environment } from '@interpreter/env/Environment';
+import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
+import type { ExecInvocation, TextNode, VariableReferenceNode } from '@core/types';
+import type { ExecutableVariable, Variable } from '@core/types/variable';
+import { isExecutableVariable } from '@core/types/variable';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { PathContextBuilder } from '@core/services/PathContextService';
 
 async function exists(filePath: string): Promise<boolean> {
   try {
@@ -16,13 +25,287 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-async function findEnvModule(name: string): Promise<string | null> {
+class EnvModuleTypeError extends Error {
+  readonly entries: Array<{ path: string; type?: string | null }>;
+
+  constructor(name: string, entries: Array<{ path: string; type?: string | null }>) {
+    super(`Module '${name}' is not an environment module.`);
+    this.name = 'EnvModuleTypeError';
+    this.entries = entries;
+  }
+}
+
+interface EnvModuleLocation {
+  name: string;
+  path: string;
+  manifest: ModuleManifest;
+  scope: 'local' | 'global';
+}
+
+interface LoadedEnvModule extends EnvModuleLocation {
+  entryPath: string;
+  source: string;
+  environment: Environment;
+  exports: Map<string, ExecutableVariable>;
+}
+
+function validateEnvName(name: string): string | null {
+  if (!name) {
+    return 'Environment name required';
+  }
+  if (name.includes('/') || name.includes('\\')) {
+    return 'Environment name cannot contain path separators';
+  }
+  if (name.includes('..')) {
+    return 'Environment name cannot contain ".."';
+  }
+  if (name.startsWith('.')) {
+    return 'Environment name cannot start with "."';
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+    return 'Environment name can only contain letters, numbers, dashes, and underscores';
+  }
+  return null;
+}
+
+function assertValidEnvName(name: string): void {
+  const error = validateEnvName(name);
+  if (!error) {
+    return;
+  }
+  console.error(chalk.red(`Error: ${error}`));
+  process.exit(1);
+}
+
+async function loadManifest(manifestPath: string): Promise<ModuleManifest | null> {
+  try {
+    const manifestContent = await fs.readFile(manifestPath, 'utf-8');
+    const manifest = yaml.load(manifestContent) as Partial<ModuleManifest> | null;
+    if (!manifest || typeof manifest !== 'object') {
+      return null;
+    }
+    return manifest as ModuleManifest;
+  } catch {
+    return null;
+  }
+}
+
+async function findEnvModule(name: string): Promise<EnvModuleLocation | null> {
   const localPath = path.join(process.cwd(), '.mlld/env', name);
   const globalPath = path.join(os.homedir(), '.mlld/env', name);
+  const candidates: Array<{ path: string; scope: 'local' | 'global' }> = [
+    { path: localPath, scope: 'local' },
+    { path: globalPath, scope: 'global' }
+  ];
+  const wrongType: Array<{ path: string; type?: string | null }> = [];
 
-  if (await exists(path.join(localPath, 'module.yml'))) return localPath;
-  if (await exists(path.join(globalPath, 'module.yml'))) return globalPath;
+  for (const candidate of candidates) {
+    const manifestPath = path.join(candidate.path, 'module.yml');
+    if (!(await exists(manifestPath))) {
+      continue;
+    }
+    const manifest = await loadManifest(manifestPath);
+    if (manifest?.type === 'environment') {
+      return {
+        name,
+        path: candidate.path,
+        manifest,
+        scope: candidate.scope
+      };
+    }
+    wrongType.push({ path: candidate.path, type: manifest?.type });
+  }
+
+  if (wrongType.length > 0) {
+    throw new EnvModuleTypeError(name, wrongType);
+  }
+
   return null;
+}
+
+function getKeychainProviderOrExit() {
+  try {
+    return getKeychainProvider();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Keychain unavailable';
+    console.error(chalk.red(message));
+    process.exit(1);
+  }
+}
+
+function normalizeExportName(name: string): string {
+  return name.startsWith('@') ? name.slice(1) : name;
+}
+
+function isBuiltinExecutable(variable: ExecutableVariable): boolean {
+  const internal = variable.internal;
+  if (!internal) return false;
+  return Boolean(internal.isSystem || internal.isBuiltinTransformer);
+}
+
+function parseExportedNamesFromSource(source: string): string[] {
+  const exportRegex = /\/export\s*\{([^}]*)\}/g;
+  const names = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = exportRegex.exec(source)) !== null) {
+    const body = match[1];
+    const parts = body.split(',');
+    for (const part of parts) {
+      let token = part.trim();
+      if (!token) {
+        continue;
+      }
+
+      const aliasIndex = token.toLowerCase().indexOf(' as ');
+      if (aliasIndex !== -1) {
+        token = token.slice(0, aliasIndex).trim();
+      }
+
+      token = normalizeExportName(token);
+      if (token) {
+        names.add(token);
+      }
+    }
+  }
+
+  return Array.from(names);
+}
+
+function attachModuleEnvironment(
+  variable: ExecutableVariable,
+  moduleEnv: Map<string, Variable>
+): void {
+  if (!variable.internal) {
+    variable.internal = {};
+  }
+  if (!variable.internal.capturedModuleEnv) {
+    variable.internal.capturedModuleEnv = moduleEnv;
+  }
+}
+
+function buildExecInvocation(
+  name: string,
+  args: string[]
+): ExecInvocation {
+  const location = {
+    start: { line: 1, column: 1, offset: 0 },
+    end: { line: 1, column: 1, offset: 0 }
+  };
+
+  const identifierNode: VariableReferenceNode = {
+    type: 'VariableReference',
+    nodeId: randomUUID(),
+    location,
+    identifier: name,
+    valueType: 'varIdentifier'
+  } as VariableReferenceNode;
+
+  const argNodes: TextNode[] = args.map(arg => ({
+    type: 'Text',
+    nodeId: randomUUID(),
+    location,
+    content: arg
+  })) as TextNode[];
+
+  const commandRef = {
+    type: 'CommandReference',
+    nodeId: randomUUID(),
+    location,
+    identifier: [identifierNode],
+    name,
+    args: argNodes
+  };
+
+  return {
+    type: 'ExecInvocation',
+    nodeId: randomUUID(),
+    location,
+    commandRef
+  } as ExecInvocation;
+}
+
+async function loadEnvironmentModule(location: EnvModuleLocation): Promise<LoadedEnvModule> {
+  const entryName = location.manifest.entry || 'index.mld';
+  const entryPath = path.join(location.path, entryName);
+
+  if (!(await exists(entryPath))) {
+    throw new Error(`Environment entry not found: ${entryPath}`);
+  }
+
+  const fileSystem = new NodeFileSystem();
+  const pathService = new PathService();
+  const source = await fs.readFile(entryPath, 'utf8');
+  const pathContext = await PathContextBuilder.fromFile(entryPath, fileSystem, {
+    invocationDirectory: process.cwd()
+  });
+
+  let environment: Environment | null = null;
+
+  await interpret(source, {
+    fileSystem,
+    pathService,
+    pathContext,
+    filePath: entryPath,
+    format: 'markdown',
+    normalizeBlankLines: true,
+    approveAllImports: true,
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
+
+  if (!environment) {
+    throw new Error(`Failed to capture environment for module: ${entryPath}`);
+  }
+
+  const exports = new Map<string, ExecutableVariable>();
+  const manifest = environment.getExportManifest();
+  const moduleEnvSnapshot = environment.captureModuleEnvironment();
+
+  if (manifest && manifest.hasEntries()) {
+    for (const rawName of manifest.getNames()) {
+      const normalizedName = normalizeExportName(rawName);
+      const variable = environment.getVariable(normalizedName);
+      if (variable && isExecutableVariable(variable) && !isBuiltinExecutable(variable)) {
+        attachModuleEnvironment(variable, moduleEnvSnapshot);
+        exports.set(normalizedName, variable);
+      }
+    }
+  }
+
+  if (exports.size === 0) {
+    const parsedNames = parseExportedNamesFromSource(source);
+    for (const rawName of parsedNames) {
+      const normalizedName = normalizeExportName(rawName);
+      const variable = environment.getVariable(normalizedName);
+      if (variable && isExecutableVariable(variable) && !isBuiltinExecutable(variable)) {
+        attachModuleEnvironment(variable, moduleEnvSnapshot);
+        exports.set(normalizedName, variable);
+      }
+    }
+  }
+
+  return {
+    ...location,
+    entryPath,
+    source,
+    environment,
+    exports
+  };
+}
+
+async function executeEnvExport(
+  module: LoadedEnvModule,
+  name: string,
+  args: string[]
+) {
+  const execVar = module.exports.get(name);
+  if (!execVar) {
+    return null;
+  }
+  const invocation = buildExecInvocation(name, args);
+  return evaluateExecInvocation(invocation, module.environment);
 }
 
 interface EnvInfo {
@@ -153,6 +436,7 @@ async function captureEnvCommand(args: string[]): Promise<void> {
     console.error('Usage: mlld env capture <name>');
     process.exit(1);
   }
+  assertValidEnvName(name);
 
   const isGlobal = args.includes('--global');
   const claudeDir = path.join(os.homedir(), '.claude');
@@ -186,7 +470,7 @@ async function captureEnvCommand(args: string[]): Promise<void> {
       const creds = JSON.parse(credsContent);
       const token = creds.oauth_token || creds.token;
       if (token) {
-        const keychain = new MacOSKeychainProvider();
+        const keychain = getKeychainProviderOrExit();
         await keychain.set('mlld-env', name, token);
         console.log(chalk.green('✓ Token stored in keychain'));
         tokenStored = true;
@@ -258,6 +542,7 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
     console.error('Usage: mlld env spawn <name> -- <command>');
     process.exit(1);
   }
+  assertValidEnvName(name);
 
   // Check for -- separator
   const separatorIndex = args.indexOf('--');
@@ -270,41 +555,35 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   const command = args.slice(separatorIndex + 1);
 
   // Find environment
-  const envDir = await findEnvModule(name);
-  if (!envDir) {
+  let envLocation: EnvModuleLocation | null = null;
+  try {
+    envLocation = await findEnvModule(name);
+  } catch (error) {
+    if (error instanceof EnvModuleTypeError) {
+      console.error(chalk.red(`Error: Module '${name}' is not an environment module.`));
+      for (const entry of error.entries) {
+        console.error(chalk.gray(`- ${entry.path} (type: ${entry.type ?? 'unknown'})`));
+      }
+      process.exit(1);
+    }
+    throw error;
+  }
+  if (!envLocation) {
     console.error(chalk.red(`Error: Environment '${name}' not found`));
     console.error(chalk.gray('Run `mlld env list` to see available environments.'));
     console.error(chalk.gray(`Or create one with: mlld env capture ${name}`));
     process.exit(1);
   }
 
-  // Get token from keychain
-  const keychain = new MacOSKeychainProvider();
-  const token = await keychain.get('mlld-env', name);
-  if (!token) {
-    console.error(chalk.red(`Error: No credentials found for '${name}'`));
-    console.error(chalk.gray(`Run: mlld env capture ${name}`));
+  const loaded = await loadEnvironmentModule(envLocation);
+  await executeEnvExport(loaded, 'mcpConfig', []);
+
+  const spawnResult = await executeEnvExport(loaded, 'spawn', command);
+  if (!spawnResult) {
+    console.error(chalk.red(`Error: Environment '${name}' does not export @spawn`));
     process.exit(1);
   }
-
-  // Spawn with env vars
-  const proc = spawn(command[0], command.slice(1), {
-    env: {
-      ...process.env,
-      CLAUDE_CODE_OAUTH_TOKEN: token,
-      CLAUDE_CONFIG_DIR: path.join(envDir, '.claude'),
-    },
-    stdio: 'inherit'
-  });
-
-  proc.on('error', (err) => {
-    console.error(chalk.red(`Error spawning command: ${err.message}`));
-    process.exit(1);
-  });
-
-  proc.on('exit', (code) => {
-    process.exit(code || 0);
-  });
+  process.exit(spawnResult.exitCode || 0);
 }
 
 async function shellEnvCommand(args: string[]): Promise<void> {
@@ -314,43 +593,37 @@ async function shellEnvCommand(args: string[]): Promise<void> {
     console.error('Usage: mlld env shell <name>');
     process.exit(1);
   }
+  assertValidEnvName(name);
 
   // Find environment
-  const envDir = await findEnvModule(name);
-  if (!envDir) {
+  let envLocation: EnvModuleLocation | null = null;
+  try {
+    envLocation = await findEnvModule(name);
+  } catch (error) {
+    if (error instanceof EnvModuleTypeError) {
+      console.error(chalk.red(`Error: Module '${name}' is not an environment module.`));
+      for (const entry of error.entries) {
+        console.error(chalk.gray(`- ${entry.path} (type: ${entry.type ?? 'unknown'})`));
+      }
+      process.exit(1);
+    }
+    throw error;
+  }
+  if (!envLocation) {
     console.error(chalk.red(`Error: Environment '${name}' not found`));
     console.error(chalk.gray('Run `mlld env list` to see available environments.'));
     console.error(chalk.gray(`Or create one with: mlld env capture ${name}`));
     process.exit(1);
   }
 
-  // Get token from keychain
-  const keychain = new MacOSKeychainProvider();
-  const token = await keychain.get('mlld-env', name);
-  if (!token) {
-    console.error(chalk.red(`Error: No credentials found for '${name}'`));
-    console.error(chalk.gray(`Run: mlld env capture ${name}`));
+  const loaded = await loadEnvironmentModule(envLocation);
+  await executeEnvExport(loaded, 'mcpConfig', []);
+  const shellResult = await executeEnvExport(loaded, 'shell', []);
+  if (!shellResult) {
+    console.error(chalk.red(`Error: Environment '${name}' does not export @shell`));
     process.exit(1);
   }
-
-  // Spawn interactive claude session
-  const proc = spawn('claude', [], {
-    env: {
-      ...process.env,
-      CLAUDE_CODE_OAUTH_TOKEN: token,
-      CLAUDE_CONFIG_DIR: path.join(envDir, '.claude'),
-    },
-    stdio: 'inherit'
-  });
-
-  proc.on('error', (err) => {
-    console.error(chalk.red(`Error starting shell: ${err.message}`));
-    process.exit(1);
-  });
-
-  proc.on('exit', (code) => {
-    process.exit(code || 0);
-  });
+  process.exit(shellResult.exitCode || 0);
 }
 
 function printEnvHelp(): void {
