@@ -7,6 +7,8 @@ import { parse } from '@grammar/parser';
 import { evaluate } from '../core/interpreter';
 import { evaluateExecInvocation } from './exec-invocation';
 import { asText, isStructuredValue } from '../utils/structured-value';
+import { createExecutableVariable } from '@core/types/variable';
+import type { VariableSource } from '@core/types/variable';
 
 describe('evaluateExecInvocation (structured)', () => {
   let env: Environment;
@@ -250,5 +252,49 @@ describe('evaluateExecInvocation (structured)', () => {
 
     const result = await evaluateExecInvocation(invocation, env);
     expect(asText(result.value)).toBe('HI-THERE');
+  });
+
+  it('labels keychain get output as secret', async () => {
+    const source: VariableSource = {
+      directive: 'var',
+      syntax: 'expression',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const execVar = createExecutableVariable(
+      'kcGet',
+      'code',
+      '',
+      ['service', 'account'],
+      'js',
+      source
+    );
+    execVar.internal = {
+      ...(execVar.internal ?? {}),
+      isBuiltinTransformer: true,
+      keychainFunction: 'get',
+      transformerImplementation: async () => 'top-secret'
+    };
+    env.setVariable('kcGet', execVar);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'kc-get',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'kc-get-ref',
+        identifier: 'kcGet',
+        args: [
+          { type: 'Text', content: 'service' } as any,
+          { type: 'Text', content: 'account' } as any
+        ]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.mx?.labels).toContain('secret');
+    expect(result.value.mx?.taint).toEqual(expect.arrayContaining(['secret', 'src:keychain']));
+    expect(result.value.mx?.sources).toContain('keychain.get');
   });
 });

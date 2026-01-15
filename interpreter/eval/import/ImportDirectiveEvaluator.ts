@@ -368,6 +368,21 @@ export class ImportDirectiveEvaluator {
       throw new Error(`Resolver '${resolverName}' not found`);
     }
 
+    if (resolverName.toLowerCase() === 'keychain') {
+      const needs = env.getModuleNeeds();
+      if (!needs?.keychain) {
+        const message = 'Keychain access requires /needs { keychain } declaration.';
+        throw new MlldImportError(message, {
+          code: 'NEEDS_UNMET',
+          details: {
+            source: '@keychain',
+            unmet: [{ capability: 'keychain', reason: message }],
+            needs: needs ?? {}
+          }
+        });
+      }
+    }
+
     // Check if resolver supports imports
     if (!resolver.capabilities.contexts.import) {
       const { ResolverError } = await import('@core/errors');

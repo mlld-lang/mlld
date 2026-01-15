@@ -18,7 +18,7 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
-import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
+import { MlldCommandExecutionError, MlldInterpreterError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
 import {
   makeSecurityDescriptor,
@@ -1295,6 +1295,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Check if it's a reserved resolver name
     if (!this.reservedNames.has(name)) {
       return undefined;
+    }
+
+    if (name === 'keychain') {
+      const needs = this.getModuleNeeds();
+      if (!needs?.keychain) {
+        throw new MlldInterpreterError(
+          'Keychain access requires /needs { keychain } declaration.',
+          { code: 'NEEDS_UNMET' }
+        );
+      }
     }
     
     // Special handling for debug variable - compute dynamically

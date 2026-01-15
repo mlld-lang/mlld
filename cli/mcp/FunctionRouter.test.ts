@@ -173,4 +173,22 @@ describe('FunctionRouter', () => {
     expect(securitySnapshot?.sources).toContain('mcp:getTime');
     expect(securitySnapshot?.labels).toContain('untrusted');
   });
+
+  it('exposes MCP taint to guards for zero-arg functions', async () => {
+    const environment = await createEnvironment(`
+      /guard @blockMcp before op:exe = when [
+        @mx.taint.includes("src:mcp") && @mx.sources.includes("mcp:getTime") => deny "MCP blocked"
+        * => allow
+      ]
+
+      /exe @getTime() = js {
+        return new Date().toISOString();
+      }
+
+      /export { @getTime }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await expect(router.executeFunction('get_time', {})).rejects.toThrow('MCP blocked');
+  });
 });

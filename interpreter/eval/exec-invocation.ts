@@ -9,9 +9,10 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import {
   isExecutableVariable,
-  VariableMetadataUtils
+  VariableMetadataUtils,
+  createSimpleTextVariable
 } from '@core/types/variable';
-import type { Variable, VariableContext } from '@core/types/variable';
+import type { Variable, VariableContext, VariableSource } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError, MlldCommandExecutionError, CircularReferenceError } from '@core/errors';
 import { CommandUtils } from '../env/CommandUtils';
@@ -37,9 +38,9 @@ import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionPr
 import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
-import type { SecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
-import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
@@ -164,6 +165,9 @@ function applyGuardTransformsToExecArgs(options: {
       continue;
     }
     const argIndex = entry.index;
+    if (argIndex < 0 || argIndex >= evaluatedArgs.length) {
+      continue;
+    }
     guardVariableCandidates[argIndex] = replacement;
     const normalizedValue = isStructuredValue(replacement.value)
       ? replacement.value.data
@@ -1409,8 +1413,31 @@ async function evaluateExecInvocationInternal(
       }
       const result = await variable.internal.transformerImplementation(evaluatedArgs);
       const normalized = normalizeTransformerResult(commandName, result);
-      const resolvedValue = normalized.value;
+      let resolvedValue = normalized.value;
       const wrapOptions = normalized.options;
+      const keychainFunction = variable.internal?.keychainFunction;
+
+      if (keychainFunction === 'get' && resolvedValue !== null && resolvedValue !== undefined) {
+        const keychainDescriptor = makeSecurityDescriptor({
+          labels: ['secret'],
+          taint: ['secret', 'src:keychain'],
+          sources: ['keychain.get']
+        });
+        const existingDescriptor = extractSecurityDescriptor(resolvedValue, {
+          recursive: true,
+          mergeArrayElements: true
+        });
+        const mergedDescriptor = existingDescriptor
+          ? env.mergeSecurityDescriptors(existingDescriptor, keychainDescriptor)
+          : keychainDescriptor;
+        if (isStructuredValue(resolvedValue)) {
+          applySecurityDescriptorToStructuredValue(resolvedValue, mergedDescriptor);
+        } else {
+          const wrapped = wrapStructured(resolvedValue);
+          applySecurityDescriptorToStructuredValue(wrapped, mergedDescriptor);
+          resolvedValue = wrapped;
+        }
+      }
 
       if (commandName && shouldTrackResolution) {
         env.endResolving(commandName);
@@ -1832,6 +1859,8 @@ async function evaluateExecInvocationInternal(
     }
   }
 
+  const mcpSecurityDescriptor = (node as any).meta?.mcpSecurity as SecurityDescriptor | undefined;
+
   const guardInputsWithMapping = materializeGuardInputsWithMapping(
     Array.from({ length: guardVariableCandidates.length }, (_unused, index) =>
       guardVariableCandidates[index] ?? evaluatedArgs[index]
@@ -1840,6 +1869,42 @@ async function evaluateExecInvocationInternal(
       nameHint: '__guard_input__'
     }
   );
+  if (mcpSecurityDescriptor) {
+    if (guardInputsWithMapping.length === 0) {
+      const guardInputSource: VariableSource = {
+        directive: 'var',
+        syntax: 'expression',
+        hasInterpolation: false,
+        isMultiLine: false
+      };
+      const syntheticInput = createSimpleTextVariable('__guard_input__', '', guardInputSource);
+      if (!syntheticInput.mx) {
+        syntheticInput.mx = {};
+      }
+      updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, mcpSecurityDescriptor);
+      if ((syntheticInput.mx as any).mxCache) {
+        delete (syntheticInput.mx as any).mxCache;
+      }
+      guardInputsWithMapping.push({ index: evaluatedArgs.length, variable: syntheticInput });
+    }
+
+    for (const entry of guardInputsWithMapping) {
+      const base = entry.variable;
+      const baseDescriptor = getVariableSecurityDescriptor(base);
+      const mergedDescriptor = baseDescriptor
+        ? env.mergeSecurityDescriptors(baseDescriptor, mcpSecurityDescriptor)
+        : mcpSecurityDescriptor;
+      const cloned = cloneVariableWithNewValue(base, base.value, stringifyGuardArg(base.value));
+      if (!cloned.mx) {
+        cloned.mx = {};
+      }
+      updateVarMxFromDescriptor(cloned.mx as VariableContext, mergedDescriptor);
+      if ((cloned.mx as any).mxCache) {
+        delete (cloned.mx as any).mxCache;
+      }
+      entry.variable = cloned;
+    }
+  }
   const guardInputs = guardInputsWithMapping.map(entry => entry.variable);
   let postHookInputs: readonly Variable[] = guardInputs;
   const hookManager = env.getHookManager();
@@ -1945,7 +2010,6 @@ async function evaluateExecInvocationInternal(
       if (mergedParamDescriptor) {
         descriptorPieces.push(mergedParamDescriptor);
       }
-      const mcpSecurityDescriptor = (node as any).meta?.mcpSecurity as SecurityDescriptor | undefined;
       if (mcpSecurityDescriptor) {
         descriptorPieces.push(mcpSecurityDescriptor);
       }

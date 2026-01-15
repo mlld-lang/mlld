@@ -783,7 +783,26 @@ export async function evaluateRun(
 
       // Call the transformer implementation directly with all args
       const result = await execVar.internal.transformerImplementation(evaluatedArgs);
-      setOutput(result);
+      const keychainFunction = execVar.internal?.keychainFunction;
+      if (keychainFunction === 'get' && result !== null && result !== undefined) {
+        const keychainDescriptor = makeSecurityDescriptor({
+          labels: ['secret'],
+          taint: ['secret', 'src:keychain'],
+          sources: ['keychain.get']
+        });
+        const existingDescriptor = extractSecurityDescriptor(result, {
+          recursive: true,
+          mergeArrayElements: true
+        });
+        const mergedDescriptor = existingDescriptor
+          ? env.mergeSecurityDescriptors(existingDescriptor, keychainDescriptor)
+          : keychainDescriptor;
+        const wrapped = wrapExecResult(result);
+        applySecurityDescriptorToStructuredValue(wrapped, mergedDescriptor);
+        setOutput(wrapped);
+      } else {
+        setOutput(result);
+      }
 
     } else if (definition.type === 'code') {
       const tempEnv = env.createChild();
