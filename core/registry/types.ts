@@ -77,7 +77,7 @@ export interface DependencyResolution {
   conflicts: DependencyConflict[];
 }
 
-export type ModuleType = 'library' | 'app' | 'command' | 'skill';
+export type ModuleType = 'library' | 'app' | 'command' | 'skill' | 'environment';
 
 export interface ModuleManifest {
   name: string;
@@ -127,4 +127,5 @@ export const MODULE_TYPE_PATHS: Record<ModuleType, { local: string; global: stri
   app: { local: 'llm/run', global: '.mlld/run' },
   command: { local: '.claude/commands', global: '.claude/commands' },
   skill: { local: '.claude/skills', global: '.claude/skills' },
+  environment: { local: '.mlld/env', global: '.mlld/env' },
 };
