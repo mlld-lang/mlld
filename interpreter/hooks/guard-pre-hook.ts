@@ -412,11 +412,14 @@ function applyGuardOverrideFilter(
   guards: GuardDefinition[],
   override: NormalizedGuardOverride
 ): GuardDefinition[] {
+  if (override.kind === 'disableAll') {
+    return guards.filter(def => def.privileged === true);
+  }
   if (override.kind === 'only') {
-    return guards.filter(def => def.name && override.names?.has(def.name));
+    return guards.filter(def => def.privileged === true || (def.name && override.names?.has(def.name)));
   }
   if (override.kind === 'except') {
-    return guards.filter(def => !def.name || !override.names?.has(def.name));
+    return guards.filter(def => def.privileged === true || !def.name || !override.names?.has(def.name));
   }
   return guards;
 }
@@ -438,10 +441,6 @@ export const guardPreHook: PreHook = async (
 
   return env.withGuardSuppression(async () => {
     const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
-    if (guardOverride.kind === 'disableAll') {
-      env.emitEffect('stderr', '[Guard Override] All guards disabled for this operation\n');
-      return { action: 'continue' };
-    }
 
     if (process.env.MLLD_DEBUG_GUARDS === '1' && operation?.name === 'emit') {
       try {
@@ -897,6 +896,53 @@ async function evaluateGuard(options: {
     attempt: options.attemptNumber,
     inputPreview
   });
+
+  if (guard.policyCondition) {
+    const policyResult = guard.policyCondition({ operation });
+    if (policyResult.decision === 'deny') {
+      const metadataBase: Record<string, unknown> = {
+        guardName: guard.name ?? null,
+        guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+        scope,
+        inputPreview,
+        guardContext: contextSnapshotForMetadata,
+        guardInput: inputVariable!,
+        reason: policyResult.reason,
+        decision: 'deny'
+      };
+      logGuardDecisionEvent({
+        guard,
+        node: options.node,
+        operation,
+        scope,
+        attempt: options.attemptNumber,
+        decision: 'deny',
+        reason: policyResult.reason,
+        hint: null,
+        inputPreview
+      });
+      return {
+        guardName: guard.name ?? null,
+        decision: 'deny',
+        timing: 'before',
+        reason: policyResult.reason,
+        metadata: metadataBase
+      };
+    }
+    return {
+      guardName: guard.name ?? null,
+      decision: 'allow',
+      timing: 'before',
+      metadata: {
+        guardName: guard.name ?? null,
+        guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+        scope,
+        inputPreview,
+        guardContext: contextSnapshotForMetadata,
+        guardInput: inputVariable!
+      }
+    };
+  }
 
   const action = await env.withGuardContext(guardContext, async () => {
     return await evaluateGuardBlock(guard.block, guardEnv);

@@ -2,6 +2,7 @@ import type { PolicyDirectiveNode, PolicyReferenceNode, PolicyUnionExpression } 
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
+import { generatePolicyGuards } from '@core/policy/guards';
 import { MlldInterpreterError } from '@core/errors';
 import { extractVariableValue } from '../utils/variable-resolution';
 import { getTextContent } from '../utils/type-guard-helpers';
@@ -42,6 +43,12 @@ export async function evaluatePolicy(
 
   env.setVariable(policyName, variable);
   env.recordPolicyConfig(policyName, merged);
+
+  const policyGuards = generatePolicyGuards(merged);
+  const registry = env.getGuardRegistry();
+  for (const guard of policyGuards) {
+    registry.registerPolicyGuard(guard);
+  }
 
   return {
     value: merged,
