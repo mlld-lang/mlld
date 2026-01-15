@@ -10,6 +10,7 @@ import { createInitModuleCommand } from '../commands/init-module';
 import { createAddNeedsCommand } from '../commands/add-needs';
 import { createSetupCommand } from '../commands/setup';
 import { createAliasCommand } from '../commands/alias';
+import { varsCommand } from '../commands/vars';
 import { envCommand } from '../commands/env';
 import { languageServerCommand } from '../commands/language-server';
 import { testCommand } from '../commands/test';
@@ -53,6 +54,7 @@ export class CommandDispatcher {
     this.commandMap.set('deps', createAddNeedsCommand()); // Alias
     this.commandMap.set('setup', createSetupCommand());
     this.commandMap.set('alias', createAliasCommand());
+    this.commandMap.set('vars', varsCommand);
     this.commandMap.set('env', envCommand);
     this.commandMap.set('language-server', languageServerCommand);
     this.commandMap.set('lsp', languageServerCommand); // Alias for language-server
@@ -93,8 +95,8 @@ export class CommandDispatcher {
       // Direct function (like registryCommand, envCommand, etc.)
       if (handler.name === 'registryCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand') {
         await handler(subcommands);
-      } else if (handler.name === 'envCommand') {
-        // envCommand expects an options object with _ property
+      } else if (handler.name === 'varsCommand' || handler.name === 'envCommand') {
+        // varsCommand and envCommand expect an options object with _ property
         await handler({ _: subcommands });
       } else {
         // Command object with execute method
@@ -197,7 +199,8 @@ export class CommandDispatcher {
       'add-needs': 'Analyze and update module dependencies',
       'setup': 'Interactive project configuration wizard',
       'alias': 'Create path aliases',
-      'env': 'Manage environment variables',
+      'vars': 'Manage environment variable permissions',
+      'env': 'Manage AI agent environments',
       'dev': 'Inspect local module discovery',
       'language-server': 'Start language server',
       'test': 'Run mlld tests',

@@ -12,6 +12,7 @@ import { createInitModuleCommand } from './commands/init-module';
 import { createAddNeedsCommand } from './commands/add-needs';
 import { createSetupCommand } from './commands/setup';
 import { createAliasCommand } from './commands/alias';
+import { varsCommand } from './commands/vars';
 import { envCommand } from './commands/env';
 import { languageServerCommand } from './commands/language-server';
 import { testCommand } from './commands/test';
