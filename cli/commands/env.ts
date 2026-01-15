@@ -1,4 +1,16 @@
 import chalk from 'chalk';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
+import * as yaml from 'js-yaml';
+import type { ModuleManifest } from '@core/registry/types';
+
+interface EnvInfo {
+  name: string;
+  about?: string;
+  version?: string;
+  path: string;
+}
 
 export interface EnvCommandOptions {
   _: string[]; // Subcommand and arguments
@@ -35,11 +47,83 @@ export async function envCommand(options: EnvCommandOptions): Promise<void> {
 }
 
 async function listEnvCommand(args: string[]): Promise<void> {
-  console.error(chalk.yellow('mlld env list: not yet implemented'));
-  console.error(chalk.gray('This will list available environment modules from:'));
-  console.error(chalk.gray('  - .mlld/env/ (local)'));
-  console.error(chalk.gray('  - ~/.mlld/env/ (global)'));
-  process.exit(1);
+  const isJson = args.includes('--json');
+
+  const localPath = path.join(process.cwd(), '.mlld/env');
+  const globalPath = path.join(os.homedir(), '.mlld/env');
+
+  const localEnvs = await scanEnvDir(localPath);
+  const globalEnvs = await scanEnvDir(globalPath);
+
+  if (isJson) {
+    console.log(JSON.stringify({
+      local: localEnvs.map(e => ({ name: e.name, about: e.about, version: e.version, path: e.path })),
+      global: globalEnvs.map(e => ({ name: e.name, about: e.about, version: e.version, path: e.path }))
+    }, null, 2));
+    return;
+  }
+
+  console.log(chalk.bold('Available environments:\n'));
+
+  if (localEnvs.length > 0) {
+    console.log(chalk.cyan(`Local (${localPath}):`));
+    for (const env of localEnvs) {
+      const about = env.about ? chalk.gray(` - ${env.about}`) : '';
+      console.log(`  ${env.name.padEnd(20)} ${env.version || ''}${about}`);
+    }
+    console.log();
+  }
+
+  if (globalEnvs.length > 0) {
+    console.log(chalk.cyan(`Global (${globalPath}):`));
+    for (const env of globalEnvs) {
+      const about = env.about ? chalk.gray(` - ${env.about}`) : '';
+      console.log(`  ${env.name.padEnd(20)} ${env.version || ''}${about}`);
+    }
+    console.log();
+  }
+
+  const total = localEnvs.length + globalEnvs.length;
+  if (total === 0) {
+    console.log(chalk.gray('No environment modules found.'));
+    console.log(chalk.gray('Use `mlld env capture <name>` to create one from ~/.claude config.'));
+  } else {
+    console.log(chalk.gray(`(${total} environment${total !== 1 ? 's' : ''} total)`));
+  }
+}
+
+async function scanEnvDir(dirPath: string): Promise<EnvInfo[]> {
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const envs: EnvInfo[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const envPath = path.join(dirPath, entry.name);
+      const manifestPath = path.join(envPath, 'module.yml');
+
+      try {
+        const manifestContent = await fs.readFile(manifestPath, 'utf-8');
+        const manifest = yaml.load(manifestContent) as Partial<ModuleManifest>;
+
+        if (manifest && manifest.type === 'environment') {
+          envs.push({
+            name: manifest.name || entry.name,
+            about: manifest.about,
+            version: manifest.version,
+            path: envPath
+          });
+        }
+      } catch {
+        // Skip invalid modules
+      }
+    }
+
+    return envs.sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
 }
 
 async function captureEnvCommand(args: string[]): Promise<void> {
