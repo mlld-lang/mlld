@@ -1,11 +1,40 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import { MlldInterpreterError } from '@core/errors';
 import {
   normalizeNeedsDeclaration,
   normalizeWantsDeclaration,
-  selectWantsTier
+  selectWantsTier,
+  type NeedsDeclaration
 } from '@core/policy/needs';
+
+interface SystemCapabilities {
+  keychain: boolean;
+  sh: boolean;
+  network: boolean;
+  filesystem: boolean;
+}
+
+function getSystemCapabilities(): SystemCapabilities {
+  return {
+    keychain: process.platform === 'darwin',
+    sh: true,
+    network: true,
+    filesystem: true
+  };
+}
+
+function validateNeedsAgainstSystem(needs: NeedsDeclaration): string[] {
+  const caps = getSystemCapabilities();
+  const unmet: string[] = [];
+
+  if (needs.keychain && !caps.keychain) {
+    unmet.push('keychain (requires macOS)');
+  }
+
+  return unmet;
+}
 
 export async function evaluateNeeds(
   directive: DirectiveNode,
@@ -15,6 +44,14 @@ export async function evaluateNeeds(
   const needs = normalizeNeedsDeclaration(needsRaw);
 
   env.recordModuleNeeds(needs);
+
+  const unmetNeeds = validateNeedsAgainstSystem(needs);
+  if (unmetNeeds.length > 0) {
+    throw new MlldInterpreterError(
+      `Module requires capabilities not available: ${unmetNeeds.join(', ')}`,
+      { code: 'NEEDS_UNMET' }
+    );
+  }
 
   return {
     value: undefined,
