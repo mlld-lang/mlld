@@ -42,12 +42,14 @@ interface PerInputCandidate {
   variable: Variable;
   labels: readonly DataLabel[];
   sources: readonly string[];
+  taint: readonly string[];
   guards: GuardDefinition[];
 }
 
 interface OperationSnapshot {
   labels: readonly DataLabel[];
   sources: readonly string[];
+  taint: readonly string[];
   aggregate: ArrayAggregateSnapshot;
   variables: readonly Variable[];
 }
@@ -723,6 +725,7 @@ function buildPerInputCandidates(
     const variable = inputs[index]!;
     const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
     const sources = Array.isArray(variable.mx?.sources) ? variable.mx.sources : [];
+    const taint = Array.isArray(variable.mx?.taint) ? variable.mx.taint : [];
 
     const seen = new Set<string>();
     const guards: GuardDefinition[] = [];
@@ -740,7 +743,7 @@ function buildPerInputCandidates(
     const filteredGuards = applyGuardOverrideFilter(guards, override);
 
     if (filteredGuards.length > 0) {
-      results.push({ index, variable, labels, sources, guards: filteredGuards });
+      results.push({ index, variable, labels, sources, taint, guards: filteredGuards });
     }
   }
 
@@ -774,6 +777,7 @@ function buildOperationSnapshot(inputs: readonly Variable[]): OperationSnapshot 
   return {
     labels: aggregate.labels,
     sources: aggregate.sources,
+    taint: aggregate.taint,
     aggregate,
     variables: inputs
   };
@@ -815,6 +819,7 @@ async function evaluateGuard(options: {
   let inputVariable: Variable;
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
+  let contextTaint: readonly string[];
   const inputPreview = buildInputPreview(scope, options.perInput, options.operationSnapshot) ?? null;
   let outputValue: unknown;
 
@@ -822,6 +827,7 @@ async function evaluateGuard(options: {
     inputVariable = cloneVariableForGuard(options.perInput.variable);
     contextLabels = options.perInput.labels;
     contextSources = options.perInput.sources;
+    contextTaint = options.perInput.taint;
     outputValue = resolveGuardValue(options.perInput.variable, inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
@@ -832,6 +838,7 @@ async function evaluateGuard(options: {
     attachArrayHelpers(inputVariable as any);
     contextLabels = options.operationSnapshot.aggregate.labels;
     contextSources = options.operationSnapshot.aggregate.sources;
+    contextTaint = options.operationSnapshot.taint;
     const primaryOutput = options.operationSnapshot.variables[0];
     outputValue = resolveGuardValue(primaryOutput, inputVariable);
   } else {
@@ -873,6 +880,7 @@ async function evaluateGuard(options: {
     output: guardOutputVariable,
     labels: contextLabels,
     sources: contextSources,
+    taint: contextTaint,
     inputPreview,
     outputPreview: buildVariablePreview(guardOutputVariable),
     hintHistory: options.attemptHistory.map(entry => entry.hint ?? null),

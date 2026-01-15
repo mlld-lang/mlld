@@ -48,6 +48,7 @@ export interface GuardContextSnapshot {
   output?: unknown;
   labels?: readonly DataLabel[];
   sources?: readonly string[];
+  taint?: readonly string[];
   inputPreview?: string | null;
   outputPreview?: string | null;
   timing?: 'before' | 'after';
@@ -251,7 +252,11 @@ export class ContextManager {
         : security
           ? Array.from(security.sources)
           : [],
-      taint: security?.taint ? Array.from(security.taint) : [],
+      taint: guardContext?.taint
+        ? Array.from(guardContext.taint)
+        : security?.taint
+          ? Array.from(security.taint)
+          : [],
       policy: security?.policy ?? null,
       operation: currentOperation ?? null,
       op: currentOperation ?? null,
