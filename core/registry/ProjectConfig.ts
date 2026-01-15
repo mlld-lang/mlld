@@ -93,6 +93,10 @@ export class ProjectConfig {
     return this.configFile.getAllowAbsolutePaths();
   }
 
+  getAllowGuardBypass(): boolean {
+    return this.configFile.getAllowGuardBypass();
+  }
+
   getScriptDir(): string | undefined {
     return this.configFile.getScriptDir();
   }

@@ -23,6 +23,7 @@ export interface ConfigFileData {
     blockedPatterns?: string[];
     allowedEnvVars?: string[];
     allowAbsolutePaths?: boolean;
+    allowGuardBypass?: boolean;
   };
 
   // Project settings
@@ -179,6 +180,11 @@ export class ConfigFile {
   getAllowAbsolutePaths(): boolean {
     this.ensureLoaded();
     return this.data!.security?.allowAbsolutePaths === true;
+  }
+
+  getAllowGuardBypass(): boolean {
+    this.ensureLoaded();
+    return this.data!.security?.allowGuardBypass !== false;
   }
 
   // Project settings

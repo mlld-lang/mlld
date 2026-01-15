@@ -23,7 +23,7 @@ import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluate } from '../core/interpreter';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { combineValues } from '../utils/value-combine';
-import { MlldWhenExpressionError } from '@core/errors';
+import { MlldWhenExpressionError, MlldSecurityError } from '@core/errors';
 import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
@@ -441,6 +441,16 @@ export const guardPreHook: PreHook = async (
 
   return env.withGuardSuppression(async () => {
     const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
+
+    if (guardOverride.kind === 'disableAll' || guardOverride.kind === 'except') {
+      const projectConfig = env.getProjectConfig();
+      if (projectConfig && !projectConfig.getAllowGuardBypass()) {
+        throw new MlldSecurityError(
+          'Guard bypass disabled by security config - guards cannot be skipped in this environment',
+          { code: 'GUARD_BYPASS_BLOCKED' }
+        );
+      }
+    }
 
     if (process.env.MLLD_DEBUG_GUARDS === '1' && operation?.name === 'emit') {
       try {
