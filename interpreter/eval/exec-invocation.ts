@@ -1389,7 +1389,53 @@ async function evaluateExecInvocationInternal(
       }
     }
 
-    // Regular transformer handling
+    // Check if this is a multi-arg builtin transformer (like keychain functions)
+    if (variable.internal?.keychainFunction) {
+      // Keychain functions need all args passed as an array
+      const evaluatedArgs: any[] = [];
+      for (const arg of args) {
+        let evalArg = arg;
+        if (evalArg && typeof evalArg === 'object' && 'type' in evalArg) {
+          const { evaluateDataValue } = await import('./data-value-evaluator');
+          evalArg = await evaluateDataValue(evalArg as any, env);
+        }
+        if (typeof evalArg === 'string') {
+          evaluatedArgs.push(evalArg);
+        } else if (evalArg && typeof evalArg === 'object') {
+          evaluatedArgs.push(await interpolateWithResultDescriptor([evalArg], env));
+        } else {
+          evaluatedArgs.push(String(evalArg));
+        }
+      }
+      const result = await variable.internal.transformerImplementation(evaluatedArgs);
+      const normalized = normalizeTransformerResult(commandName, result);
+      const resolvedValue = normalized.value;
+      const wrapOptions = normalized.options;
+
+      if (commandName && shouldTrackResolution) {
+        env.endResolving(commandName);
+      }
+
+      if (node.withClause) {
+        if (node.withClause.pipeline) {
+          const { processPipeline } = await import('./pipeline/unified-processor');
+          const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
+          const pipelineResult = await processPipeline({
+            value: pipelineInputValue,
+            env,
+            node,
+            identifier: node.identifier,
+            descriptorHint: resultSecurityDescriptor
+          });
+          return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+        } else {
+          return applyWithClause(resolvedValue, node.withClause, env);
+        }
+      }
+      return { value: resolvedValue ?? '', wrapOptions };
+    }
+
+    // Regular transformer handling (single arg)
     let inputValue = '';
     if (args.length > 0) {
       let arg: any = args[0];
@@ -1408,7 +1454,7 @@ async function evaluateExecInvocationInternal(
         inputValue = String(arg);
       }
     }
-    
+
     // Call the transformer implementation directly
     const result = await variable.internal.transformerImplementation(inputValue);
     const normalized = normalizeTransformerResult(commandName, result);

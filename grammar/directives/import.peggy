@@ -522,6 +522,24 @@ ImportPath
         }
       };
     }
+  / "@keychain"i {
+      helpers.debug('ImportPath matched @keychain');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'resolverPath',
+        values: {
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        },
+        raw: {
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'keychain'
+        }
+      };
+    }
   / SpecialVariablePath
   / ModuleReference
   / QuotedPath
