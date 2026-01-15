@@ -1,7 +1,7 @@
 # Workstream D: Keychain & Capabilities - Session Handoff
 
 ## Session ID
-87455325 (prior), current session continuing
+87455325 (prior), 366f1898 (prior), current session (dev-d)
 
 ## Completed Phases
 
@@ -44,123 +44,39 @@
   - Scans directories for `module.yml` with `type: environment`
   - Graceful handling of empty/missing directories
 
-## In Progress: Keychain Import Pattern (Phase 4.1)
+### Phase 4.1: Keychain Import Pattern (mlld-esjy) ✅
+**Commit**: `ef9b93c3c`
 
-### What's Been Implemented This Session
+- **Unquoted `@keychain` syntax now works!**
+- Syntax: `/import { get, set, delete } from @keychain`
+- Grammar: Added `@keychain` to ImportPath rule in `grammar/directives/import.peggy`
+- Multi-arg fix: Updated `interpreter/eval/exec-invocation.ts` to pass all args for keychain functions
+- All tests pass (2782 pass, 62 skipped)
 
-**Adam's decision**: Use import pattern: `/import { get, set, delete } from "@keychain"`
-
-#### Changes Made
-
-1. **KeychainResolver** (`core/resolvers/builtin/KeychainResolver.ts`)
-   - Updated to support import context
-   - Returns executable objects with `__executable: true` marker
-   - Each function has:
-     - `transformerImplementation`: async function taking args array
-     - `keychainFunction`: name of the function (get/set/delete)
-     - `isBuiltinTransformer: true`
-
-2. **ImportDirectiveEvaluator** (`interpreter/eval/import/ImportDirectiveEvaluator.ts`)
-   - Modified `fallbackResolverData()` to handle object content (not just JSON strings)
-   - Line 873-875: Returns `result.content` directly when contentType is 'data' and content is an object
-
-3. **run.ts** (`interpreter/eval/run.ts`)
-   - Added handling for `isBuiltinTransformer` executables (lines 768-786)
-   - Passes all evaluated args to `transformerImplementation`
-
-### The Problem ⚠️
-
-Import works, functions are created, but **arguments aren't passed correctly**.
-
-**Test output**:
-```
-Set result:
-Get result: l
-```
-
-Expected: `Get result: my-secret-value`
-
-**Root cause**: `interpreter/eval/exec-invocation.ts` line 1413 passes only `inputValue` (single arg) to `transformerImplementation`:
-
-```typescript
-// Line 1394-1410 only processes args[0] into inputValue
-// Line 1413:
-const result = await variable.internal.transformerImplementation(inputValue);
-```
-
-Keychain functions need ALL args: `["mlld-test", "test-account"]` or `["mlld-test", "test-account", "my-secret-value"]`
-
-### Fix Needed
-
-In `exec-invocation.ts`, modify the builtin transformer handling to:
-1. Check if the transformer has `internal.keychainFunction` (or check `paramNames.length > 1`)
-2. If so, evaluate ALL args and pass as array instead of single inputValue
-3. Otherwise, use existing single-arg behavior
-
-### Key Code Locations
-
-**exec-invocation.ts around line 1392-1413**:
-```typescript
-// Regular transformer handling
-let inputValue = '';
-if (args.length > 0) {
-  let arg: any = args[0];  // <-- ONLY FIRST ARG
-  // ... processing ...
-}
-
-// Call the transformer implementation directly
-const result = await variable.internal.transformerImplementation(inputValue);  // <-- SINGLE VALUE
-```
-
-**Needs to become** (pseudo-code):
-```typescript
-if (variable.internal?.keychainFunction) {
-  // Multi-arg handling for keychain functions
-  const evaluatedArgs = [];
-  for (const arg of args) {
-    // ... evaluate each arg ...
-    evaluatedArgs.push(argValue);
-  }
-  const result = await variable.internal.transformerImplementation(evaluatedArgs);
-} else {
-  // Existing single-arg behavior
-}
-```
-
-### Adam's Suggestion
-
-Look at how `import { @xyz } from @input` works and pattern keychain after that.
-
-## Files Modified This Session (Uncommitted)
-
-1. `core/resolvers/builtin/KeychainResolver.ts` - Import context handling
-2. `interpreter/eval/import/ImportDirectiveEvaluator.ts` - Object content handling
-3. `interpreter/eval/run.ts` - Builtin transformer handling
-4. `interpreter/eval/exec-invocation.ts` - Added resolver variable fallback (line 949-954)
-
-## Test File
-
-`tmp/keychain-import-test.mld`:
+**Working example:**
 ```mlld
 /needs { keychain }
-/import { get, set } from "@keychain"
+/import { get, set, delete } from @keychain
 
 /var @setResult = @set("mlld-test", "test-account", "my-secret-value")
 show `Set result: @setResult`
 
 /var @result = @get("mlld-test", "test-account")
-show `Get result: @result`
+show `Get result: @result`  // Outputs: my-secret-value
+
+/var @deleteResult = @delete("mlld-test", "test-account")
+show `Delete result: @deleteResult`
 ```
 
 ## Remaining Phases
 
 ### Phase 4.2: macOS keychain implementation (mlld-ut9i)
-- MacOSKeychainProvider is implemented
-- Needs integration testing once method invocation works
-- Manual test: set/get/delete with actual keychain
+- MacOSKeychainProvider is implemented in `core/resolvers/builtin/keychain-macos.ts`
+- Integration tested via import pattern ✅
+- Can mark as complete
 
 ### Phase 6.2: mlld env capture (mlld-l6n4)
-Dependencies: Keychain working
+Dependencies: Keychain working ✅
 - Extract OAuth token from `~/.claude/.credentials.json`
 - Store in keychain (`mlld-env` service, environment name as account)
 - Copy settings.json, CLAUDE.md, hooks.json (NOT credentials)
@@ -181,12 +97,12 @@ Dependencies: Phase 6.3
 
 ## Key Files
 
+- `grammar/directives/import.peggy` - @keychain import path parsing
 - `core/resolvers/builtin/KeychainResolver.ts` - Resolver with import support
 - `core/resolvers/builtin/keychain-macos.ts` - macOS provider
 - `interpreter/env/Environment.ts` - Resolver registration
-- `interpreter/eval/exec-invocation.ts` - **NEEDS FIX** for multi-arg transformers
+- `interpreter/eval/exec-invocation.ts` - Multi-arg handling for keychain functions
 - `interpreter/eval/import/ImportDirectiveEvaluator.ts` - Object content handling
-- `interpreter/eval/run.ts` - Builtin transformer handling
 
 ## Test Commands
 
@@ -195,20 +111,11 @@ Dependencies: Phase 6.3
 npx mlld tmp/keychain-import-test.mld
 
 # Test AST parsing
-npm run ast -- '/import { get } from "@keychain"'
-npm run ast -- '/var @x = @get("a", "b")'
+npm run ast -- '/import { get } from @keychain'
 
 # Run all tests
 npm test
 ```
-
-## Next Steps for New Session
-
-1. **Research** how `import { @xyz } from @input` works (per Adam's suggestion)
-2. **Fix exec-invocation.ts** to pass all args for multi-arg builtin transformers
-3. **Test keychain operations** end-to-end
-4. **Commit changes** when working
-5. **Proceed with Phase 6.2 (env capture)**
 
 ## Bead Status
 
@@ -218,8 +125,8 @@ npm test
 | mlld-8ohj | 2.3 Validation | ✅ Closed |
 | mlld-bniq | 5.1 Env type | ✅ Closed |
 | mlld-19ya | 6.1 Env list | ✅ Closed |
-| mlld-esjy | 4.1 Keychain functions | 🔄 In progress (import pattern) |
-| mlld-ut9i | 4.2 macOS impl | ⏳ Pending |
+| mlld-esjy | 4.1 Keychain functions | ✅ Complete (commit ef9b93c3c) |
+| mlld-ut9i | 4.2 macOS impl | ✅ Complete (integrated) |
 | mlld-l6n4 | 6.2 Env capture | ⏳ Pending |
 | mlld-hmw5 | 6.3 Env spawn | ⏳ Pending |
 | mlld-9rot | 6.4 Env shell | ⏳ Pending |
