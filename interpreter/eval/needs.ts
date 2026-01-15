@@ -35,7 +35,8 @@ export async function evaluateWants(
   env.recordModuleWants(wants);
 
   const policy = env.getPolicyCapabilities();
-  const match = selectWantsTier(wants, policy);
+  const policyConfig = env.getPolicySummary();
+  const match = selectWantsTier(wants, policy, policyConfig);
 
   const existingContext = env.getPolicyContext();
   const policyContext = {

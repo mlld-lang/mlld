@@ -865,6 +865,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.policyCapabilities = policy;
   }
 
+  getPolicySummary(): PolicyConfig | undefined {
+    if (this.policySummary) return this.policySummary;
+    return this.parent?.getPolicySummary();
+  }
+
   setPolicyContext(policy?: Record<string, unknown> | null): void {
     const runtime = this.ensureSecurityRuntime();
     runtime.policy = policy ?? undefined;

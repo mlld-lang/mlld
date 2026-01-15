@@ -1,6 +1,7 @@
 import { MlldInterpreterError } from '@core/errors';
 import type { PackageRequirement, PackageRequirementMap } from '@core/registry/types';
 import { parseVersionSpecifier } from '@core/registry/utils/ModuleNeeds';
+import type { PolicyConfig } from '@core/policy/union';
 
 const PACKAGE_ECOSYSTEM_ALIASES: Record<string, string> = {
   node: 'node',
@@ -19,7 +20,8 @@ const BOOLEAN_CAPABILITY_ALIASES: Record<string, string> = {
   network: 'network',
   net: 'network',
   filesystem: 'filesystem',
-  fs: 'filesystem'
+  fs: 'filesystem',
+  keychain: 'keychain'
 };
 
 export interface CommandNeedDetail {
@@ -41,6 +43,7 @@ export interface NeedsDeclaration {
   sh?: boolean;
   network?: boolean;
   filesystem?: boolean;
+  keychain?: boolean;
 }
 
 export interface WantsTier {
@@ -55,6 +58,7 @@ export interface PolicyCapabilities {
   sh?: boolean;
   network?: boolean;
   filesystem?: boolean;
+  keychain?: boolean;
 }
 
 export const ALLOW_ALL_POLICY: PolicyCapabilities = Object.freeze({
@@ -62,7 +66,8 @@ export const ALLOW_ALL_POLICY: PolicyCapabilities = Object.freeze({
   cmd: { type: 'all' },
   sh: true,
   network: true,
-  filesystem: true
+  filesystem: true,
+  keychain: true
 });
 
 export function normalizeNeedsDeclaration(raw: unknown, context: string = 'needs'): NeedsDeclaration {
@@ -110,6 +115,10 @@ export function normalizeNeedsDeclaration(raw: unknown, context: string = 'needs
     }
     if (booleanKey === 'filesystem') {
       result.filesystem = Boolean(value === undefined ? true : value) || result.filesystem === true;
+      continue;
+    }
+    if (booleanKey === 'keychain') {
+      result.keychain = Boolean(value === undefined ? true : value) || result.keychain === true;
       continue;
     }
 
@@ -199,6 +208,9 @@ export function policySatisfiesNeeds(needs: NeedsDeclaration, policy: PolicyCapa
   if (needs.filesystem && policy.filesystem !== true) {
     return false;
   }
+  if (needs.keychain && policy.keychain !== true) {
+    return false;
+  }
 
   if (needs.cmd) {
     if (!policy.cmd) {
@@ -213,14 +225,50 @@ export function policySatisfiesNeeds(needs: NeedsDeclaration, policy: PolicyCapa
   return true;
 }
 
+function isDenied(
+  capability: string,
+  deny: Record<string, string[] | true> | true
+): boolean {
+  if (deny === true) return true;
+  const denyValue = deny[capability];
+  if (denyValue === true) return true;
+  if (Array.isArray(denyValue) && denyValue.includes('*')) return true;
+  return false;
+}
+
+export function policyConfigPermitsTier(
+  tierNeeds: NeedsDeclaration,
+  policyConfig: PolicyConfig | undefined
+): boolean {
+  if (!policyConfig) return true;
+
+  if (policyConfig.deny) {
+    if (policyConfig.deny === true) return false;
+
+    if (tierNeeds.sh && isDenied('sh', policyConfig.deny)) return false;
+    if (tierNeeds.network && isDenied('network', policyConfig.deny)) return false;
+    if (tierNeeds.filesystem && isDenied('filesystem', policyConfig.deny)) return false;
+    if (tierNeeds.keychain && isDenied('keychain', policyConfig.deny)) return false;
+
+    if (tierNeeds.cmd) {
+      if (isDenied('cmd', policyConfig.deny)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 export function selectWantsTier(
   wants: WantsTier[],
-  policy: PolicyCapabilities
+  policy: PolicyCapabilities,
+  policyConfig?: PolicyConfig
 ): { tier: string; granted: NeedsDeclaration } | null {
   for (const tier of wants) {
-    if (policySatisfiesNeeds(tier.needs, policy)) {
-      return { tier: tier.tier, granted: tier.needs };
-    }
+    if (!policySatisfiesNeeds(tier.needs, policy)) continue;
+    if (!policyConfigPermitsTier(tier.needs, policyConfig)) continue;
+    return { tier: tier.tier, granted: tier.needs };
   }
   return null;
 }
@@ -250,6 +298,7 @@ export function mergeNeedsDeclarations(
     sh: base.sh || incoming.sh,
     network: base.network || incoming.network,
     filesystem: base.filesystem || incoming.filesystem,
+    keychain: base.keychain || incoming.keychain,
     cmd: mergeCommandNeeds(base.cmd, incoming.cmd)
   };
 }
