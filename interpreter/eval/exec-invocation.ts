@@ -1894,6 +1894,10 @@ async function evaluateExecInvocationInternal(
       if (mergedParamDescriptor) {
         descriptorPieces.push(mergedParamDescriptor);
       }
+      const mcpSecurityDescriptor = (node as any).meta?.mcpSecurity as SecurityDescriptor | undefined;
+      if (mcpSecurityDescriptor) {
+        descriptorPieces.push(mcpSecurityDescriptor);
+      }
       if (descriptorPieces.length > 0) {
         resultSecurityDescriptor =
           descriptorPieces.length === 1

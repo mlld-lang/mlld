@@ -5,6 +5,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { mcpNameToMlldName } from './SchemaGenerator';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 
 export interface FunctionRouterOptions {
   environment: Environment;
@@ -60,12 +61,25 @@ export class FunctionRouter {
       args: argNodes,
     };
 
+    const mcpSecurityDescriptor = this.createMcpSecurityDescriptor(name);
+
     return {
       type: 'ExecInvocation',
       nodeId: randomUUID(),
       location,
       commandRef,
+      meta: {
+        mcpSecurity: mcpSecurityDescriptor
+      }
     } as ExecInvocation;
+  }
+
+  private createMcpSecurityDescriptor(toolName: string): SecurityDescriptor {
+    return makeSecurityDescriptor({
+      labels: ['untrusted'],
+      taint: ['src:mcp'],
+      sources: [`mcp:${toolName}`]
+    });
   }
 
   private createArgumentNodes(

@@ -135,4 +135,42 @@ describe('FunctionRouter', () => {
 
     delete process.env.MLLD_TEST_VAR;
   });
+
+  it('applies src:mcp taint to function result', async () => {
+    const environment = await createEnvironment(`
+      /exe @storeResult(value) = js {
+        return { result: value, processed: true };
+      }
+
+      /export { @storeResult }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await router.executeFunction('store_result', { value: 'test-data' });
+
+    const securitySnapshot = environment.getSecuritySnapshot();
+    expect(securitySnapshot).toBeDefined();
+    expect(securitySnapshot?.taint).toContain('src:mcp');
+    expect(securitySnapshot?.sources).toContain('mcp:storeResult');
+    expect(securitySnapshot?.labels).toContain('untrusted');
+  });
+
+  it('applies src:mcp taint even for zero-arg functions', async () => {
+    const environment = await createEnvironment(`
+      /exe @getTime() = js {
+        return new Date().toISOString();
+      }
+
+      /export { @getTime }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await router.executeFunction('get_time', {});
+
+    const securitySnapshot = environment.getSecuritySnapshot();
+    expect(securitySnapshot).toBeDefined();
+    expect(securitySnapshot?.taint).toContain('src:mcp');
+    expect(securitySnapshot?.sources).toContain('mcp:getTime');
+    expect(securitySnapshot?.labels).toContain('untrusted');
+  });
 });
