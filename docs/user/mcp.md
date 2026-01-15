@@ -85,6 +85,30 @@ Tips:
   ```
   The command merges exports into a single environment so shared helpers remain available during execution.
 
+## Security Tracking
+
+MCP tool invocations carry security tracking to enable guards to detect and control operations originating from LLM requests.
+
+Every MCP tool call applies:
+- `labels: ["untrusted"]` - semantic classification for LLM data
+- `taint: ["src:mcp"]` - provenance marker for MCP origin
+- `sources: ["mcp:toolName"]` - the specific tool that was invoked
+
+Guards can inspect these:
+
+```mlld
+/guard @blockMcpExec before op:run = when [
+  @mx.taint.includes("src:mcp") => deny "Cannot execute MCP-originated data"
+  * => allow
+]
+```
+
+**Zero-arg tools**: Even tools with no parameters (like `getTime()`) carry full security tracking via an invocation-level descriptor.
+
+**Name mapping**: MCP clients use snake_case names (`create_issue`), while `@mx.op.name` shows the mlld camelCase name (`createIssue`).
+
+**Tool outputs**: Results from MCP tool calls carry both `src:mcp` (MCP origin) plus any other taint from the underlying operation (e.g., `src:exec` for command executables).
+
 ## Troubleshooting
 
 - **No tools listed**: Ensure the module exports functions with `/export { @name }`, or remove the directive to expose every executable.

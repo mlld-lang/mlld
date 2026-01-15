@@ -37,3 +37,21 @@ guard [@name] TIMING LABEL = when [...]
 
 - `TIMING`: `before`, `after`, or `always`
 - Shorthand: `for` equals `before`
+
+**Security context in guards:**
+
+Guards have access to three complementary dimensions:
+
+- `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
+- `@mx.taint` - provenance (where it came from): `src:mcp`, `src:exec`, `src:file`
+- `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
+
+Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
+
+```mlld
+guard before op:run = when [
+  @mx.taint.includes("src:mcp") => deny "Cannot execute MCP data"
+  @mx.labels.includes("secret") => deny "Secrets blocked from shell"
+  * => allow
+]
+```
