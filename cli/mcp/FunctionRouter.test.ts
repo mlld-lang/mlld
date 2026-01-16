@@ -102,6 +102,36 @@ describe('FunctionRouter', () => {
     await expect(router.executeFunction('greet', { name: 'Charlie' })).resolves.toBe('Hello Charlie');
   });
 
+  it('preserves object arguments', async () => {
+    const environment = await createEnvironment(`
+      /exe @inspect(value) = js {
+        return { kind: typeof value, foo: value.foo };
+      }
+
+      /export { @inspect }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const result = await router.executeFunction('inspect', { value: { foo: 'bar' } });
+
+    expect(JSON.parse(result)).toEqual({ kind: 'object', foo: 'bar' });
+  });
+
+  it('preserves array arguments', async () => {
+    const environment = await createEnvironment(`
+      /exe @inspect(value) = js {
+        return { isArray: Array.isArray(value), size: value.length };
+      }
+
+      /export { @inspect }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const result = await router.executeFunction('inspect', { value: [1, 2, 3] });
+
+    expect(JSON.parse(result)).toEqual({ isArray: true, size: 3 });
+  });
+
   it('throws when function is not found', async () => {
     const environment = await createEnvironment('/export { }');
     const router = new FunctionRouter({ environment });

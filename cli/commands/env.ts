@@ -506,7 +506,6 @@ entry: index.mld
 
   // Generate index.mld
   const indexMld = `/needs { keychain, cmd: [claude] }
-/wants []
 /import { get } from @keychain
 
 /var secret @token = @get("mlld-env", "${name}")

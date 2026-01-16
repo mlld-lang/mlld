@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
-import type { ExecInvocation, TextNode, VariableReferenceNode, CommandReference } from '@core/types';
+import type { ExecInvocation, TextNode, VariableReferenceNode, CommandReference, LiteralNode } from '@core/types';
+import type { DataValue, DataObjectEntry } from '@core/types/var';
 import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
@@ -17,7 +18,7 @@ interface ExecResult {
 
 type SyntheticCommandReference = Omit<CommandReference, 'identifier' | 'args'> & {
   identifier: VariableReferenceNode[];
-  args?: TextNode[];
+  args?: DataValue[];
   name: string;
 };
 
@@ -86,7 +87,7 @@ export class FunctionRouter {
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
     location: ExecInvocation['location']
-  ): TextNode[] {
+  ): DataValue[] {
     const params = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
     if (params.length === 0) {
       return [];
@@ -104,13 +105,13 @@ export class FunctionRouter {
       return [];
     }
 
-    const nodes: TextNode[] = [];
+    const nodes: DataValue[] = [];
     for (let i = 0; i <= lastProvidedIndex; i++) {
       const paramName = params[i];
       if (!Object.prototype.hasOwnProperty.call(args, paramName)) {
         throw new Error(`Parameter '${paramName}' is required`);
       }
-      nodes.push(this.createTextNode(String(args[paramName]), location));
+      nodes.push(this.createDataValue(args[paramName], location));
     }
     return nodes;
   }
@@ -135,6 +136,47 @@ export class FunctionRouter {
       location,
       content: value,
     } as TextNode;
+  }
+
+  private createLiteralNode(value: LiteralNode['value'], location: ExecInvocation['location']): LiteralNode {
+    return {
+      type: 'Literal',
+      nodeId: randomUUID(),
+      location,
+      value
+    } as LiteralNode;
+  }
+
+  private createDataValue(value: unknown, location: ExecInvocation['location']): DataValue {
+    if (value === undefined) {
+      return this.createTextNode('undefined', location);
+    }
+    if (value === null) {
+      return this.createLiteralNode(null, location);
+    }
+    if (typeof value === 'string') {
+      return this.createTextNode(value, location);
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return this.createLiteralNode(value, location);
+    }
+    if (Array.isArray(value)) {
+      return {
+        type: 'array',
+        items: value.map(item => this.createDataValue(item, location))
+      };
+    }
+    if (value && typeof value === 'object') {
+      const entries: DataObjectEntry[] = Object.entries(value as Record<string, unknown>).map(
+        ([key, entryValue]) => ({
+          type: 'pair',
+          key,
+          value: this.createDataValue(entryValue, location)
+        })
+      );
+      return { type: 'object', entries };
+    }
+    return this.createTextNode(String(value), location);
   }
 
   private createLocation(): ExecInvocation['location'] {

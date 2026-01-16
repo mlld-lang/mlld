@@ -83,7 +83,7 @@ export class DependencyDetector {
     }
     
     // For exec directives, could be code or template
-    if (node.type === 'Directive' && node.kind === 'exec') {
+    if (node.type === 'Directive' && (node.kind === 'exec' || node.kind === 'exe')) {
       // Check for code (exec with direct code)
       if (node.values?.code) {
         return node.values.code.map((n: MlldNode) => {
@@ -126,7 +126,7 @@ export class DependencyDetector {
           } else if (lang) {
             needs.add(lang);
           }
-        } else if (node.kind === 'exec') {
+        } else if (node.kind === 'exec' || node.kind === 'exe') {
           // Check if exec has direct language specification
           const execNode = node as ExecDirective;
           
@@ -266,11 +266,11 @@ export class DependencyDetector {
     const packages = new Set<string>();
     
     this.walkAST(ast, (node) => {
-      if (node.type === 'Directive' && (node.kind === 'run' || node.kind === 'exec')) {
+      if (node.type === 'Directive' && (node.kind === 'run' || node.kind === 'exec' || node.kind === 'exe')) {
         const lang = node.kind === 'run' ? this.extractRunLanguage(node as RunDirective) : null;
         
         // Process JavaScript code (both 'js' and code that would be detected as 'node')
-        if (lang === 'js' || (node.kind === 'exec' && this.containsJavaScriptRun(node))) {
+        if (lang === 'js' || ((node.kind === 'exec' || node.kind === 'exe') && this.containsJavaScriptRun(node))) {
           const code = this.extractCode(node as RunDirective | ExecDirective);
           if (code) {
             const detected = this.parseJavaScriptImports(code);
@@ -297,7 +297,7 @@ export class DependencyDetector {
    */
   private containsJavaScriptRun(node: MlldNode): boolean {
     let hasJs = false;
-    if (node.type === 'Directive' && node.kind === 'exec') {
+    if (node.type === 'Directive' && (node.kind === 'exec' || node.kind === 'exe')) {
       const execNode = node as ExecDirective;
       if (execNode.values?.template) {
         this.walkAST(execNode.values.template, (innerNode) => {
@@ -407,11 +407,11 @@ export class DependencyDetector {
     const packages = new Set<string>();
     
     this.walkAST(ast, (node) => {
-      if (node.type === 'Directive' && (node.kind === 'run' || node.kind === 'exec')) {
+      if (node.type === 'Directive' && (node.kind === 'run' || node.kind === 'exec' || node.kind === 'exe')) {
         const lang = node.kind === 'run' ? this.extractRunLanguage(node as RunDirective) : null;
         
         // Only process Python code
-        if (lang === 'py' || (node.kind === 'exec' && this.containsPythonRun(node))) {
+        if (lang === 'py' || ((node.kind === 'exec' || node.kind === 'exe') && this.containsPythonRun(node))) {
           const code = this.extractCode(node as RunDirective | ExecDirective);
           if (code) {
             const detected = this.parsePythonImports(code);
@@ -429,7 +429,7 @@ export class DependencyDetector {
    */
   private containsPythonRun(node: MlldNode): boolean {
     let hasPy = false;
-    if (node.type === 'Directive' && node.kind === 'exec') {
+    if (node.type === 'Directive' && (node.kind === 'exec' || node.kind === 'exe')) {
       const execNode = node as ExecDirective;
       if (execNode.values?.template) {
         this.walkAST(execNode.values.template, (innerNode) => {
@@ -485,11 +485,11 @@ export class DependencyDetector {
     const commands = new Set<string>();
     
     this.walkAST(ast, (node) => {
-      if (node.type === 'Directive' && (node.kind === 'run' || node.kind === 'exec')) {
+      if (node.type === 'Directive' && (node.kind === 'run' || node.kind === 'exec' || node.kind === 'exe')) {
         const lang = node.kind === 'run' ? this.extractRunLanguage(node as RunDirective) : null;
         
         // Only process shell commands
-        if (lang === 'sh' || (node.kind === 'exec' && this.containsShellRun(node))) {
+        if (lang === 'sh' || ((node.kind === 'exec' || node.kind === 'exe') && this.containsShellRun(node))) {
           const code = this.extractCode(node as RunDirective | ExecDirective);
           if (code) {
             const detected = this.parseShellCommands(code);
@@ -507,7 +507,7 @@ export class DependencyDetector {
    */
   private containsShellRun(node: MlldNode): boolean {
     let hasSh = false;
-    if (node.type === 'Directive' && node.kind === 'exec') {
+    if (node.type === 'Directive' && (node.kind === 'exec' || node.kind === 'exe')) {
       const execNode = node as ExecDirective;
       if (execNode.values?.template) {
         this.walkAST(execNode.values.template, (innerNode) => {
