@@ -9,8 +9,12 @@ export interface OperationContext {
   type: string;
   /** Optional subtype (e.g., "runExec") */
   subtype?: string;
-  /** Operation labels declared on the directive (data labels, op labels, etc.) */
+  /** Data labels declared on the directive */
   labels?: readonly string[];
+  /** Operation labels used for policy/guard matching */
+  opLabels?: readonly string[];
+  /** Operation provenance recorded on outputs */
+  sources?: readonly string[];
   /** Friendly name or identifier associated with the directive */
   name?: string;
   /** Command string (for /run) when statically known */
@@ -105,6 +109,14 @@ export class ContextManager {
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
+  }
+
+  updateOperation(update: Partial<OperationContext>): void {
+    if (this.opStack.length === 0) {
+      return;
+    }
+    const current = this.opStack[this.opStack.length - 1];
+    this.opStack[this.opStack.length - 1] = Object.freeze({ ...current, ...update });
   }
 
   popOperation(): OperationContext | undefined {

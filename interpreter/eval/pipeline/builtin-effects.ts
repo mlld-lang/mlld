@@ -7,6 +7,7 @@ import { asText } from '../../utils/structured-value';
 import type { OperationContext } from '../../env/ContextManager';
 import { materializeGuardInputs } from '../../utils/guard-inputs';
 import { getGuardTransformedInputs, handleGuardDecision } from '../../hooks/hook-decision-handler';
+import { getOperationLabels, getOperationSources } from '@core/policy/operation-labels';
 import type { EffectHookNode } from '@core/types/hooks';
 import type { Variable } from '@core/types/variable';
 import { extractVariableValue, isVariable } from '../../utils/variable-resolution';
@@ -76,12 +77,20 @@ function buildEffectOperationContext(effect: PipelineCommand): OperationContext 
   const labels = Array.isArray((effect.meta as any)?.securityLabels)
     ? ((effect.meta as any).securityLabels as string[])
     : undefined;
+  const opLabels = getOperationLabels({
+    type: type as 'show' | 'output' | 'log' | 'append'
+  });
+  const sources = getOperationSources({
+    type: type as 'show' | 'output' | 'log' | 'append'
+  });
 
   return {
     type,
     subtype: 'effect',
     name: effect.rawIdentifier,
     labels,
+    opLabels,
+    sources,
     location: (effect as any)?.location ?? (effect.meta as any)?.location ?? null,
     metadata: {
       trace: `effect:${effect.rawIdentifier ?? type}`,

@@ -1691,6 +1691,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.contextManager.withOperation(context, fn);
   }
 
+  updateOpContext(update: Partial<OperationContext>): void {
+    this.contextManager.updateOperation(update);
+  }
+
   async withPipeContext<T>(
     context: PipelineContextSnapshot,
     fn: () => Promise<T> | T

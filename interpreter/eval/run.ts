@@ -6,9 +6,11 @@ import type { ExecutableVariable, ExecutableDefinition } from '@core/types/execu
 import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
+import type { OperationContext } from '../env/ContextManager';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { deriveCommandTaint } from '@core/security/taint';
+import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
@@ -68,6 +70,29 @@ function dedentCommonIndent(src: string): string {
   }
   if (!minIndent) return src;
   return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
+}
+
+function resolveRunCodeOpType(language: string): 'sh' | 'node' | 'js' | 'py' | 'prose' | null {
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === 'bash' || normalized === 'sh' || normalized === 'shell') {
+    return 'sh';
+  }
+  if (normalized === 'node' || normalized === 'nodejs') {
+    return 'node';
+  }
+  if (normalized === 'js' || normalized === 'javascript') {
+    return 'js';
+  }
+  if (normalized === 'py' || normalized === 'python') {
+    return 'py';
+  }
+  if (normalized === 'prose') {
+    return 'prose';
+  }
+  return null;
 }
 
 /**
@@ -163,6 +188,13 @@ export async function evaluateRun(
     }
     outputValue = wrapped;
     outputText = asText(wrapped as any);
+  };
+
+  const updateOperationContext = (update: Partial<OperationContext>): void => {
+    if (context?.operationContext) {
+      Object.assign(context.operationContext, update);
+    }
+    env.updateOpContext(update);
   };
 
   setOutput('');
@@ -288,6 +320,23 @@ export async function evaluateRun(
     const command =
       preExtractedCommand ??
       (await interpolateWithPendingDescriptor(commandNodes, InterpolationContext.ShellCommand));
+
+    const parsedCommand = parseCommand(command);
+    const opLabels = getOperationLabels({
+      type: 'cmd',
+      command: parsedCommand.command,
+      subcommand: parsedCommand.subcommand
+    });
+    const opSources = getOperationSources({
+      type: 'cmd',
+      command: parsedCommand.command,
+      subcommand: parsedCommand.subcommand
+    });
+    const opUpdate: Partial<OperationContext> = { opLabels };
+    if (opSources.length > 0) {
+      opUpdate.sources = opSources;
+    }
+    updateOperationContext(opUpdate);
 
     const workingDirectory = await resolveWorkingDirectory(
       (directive.values as any)?.workingDir,
@@ -471,6 +520,16 @@ export async function evaluateRun(
     
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
+    const opType = resolveRunCodeOpType(language);
+    if (opType) {
+      const opLabels = getOperationLabels({ type: opType });
+      const opSources = getOperationSources({ type: opType });
+      const opUpdate: Partial<OperationContext> = { opLabels };
+      if (opSources.length > 0) {
+        opUpdate.sources = opSources;
+      }
+      updateOperationContext(opUpdate);
+    }
     setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
       return await env.executeCode(
         code,

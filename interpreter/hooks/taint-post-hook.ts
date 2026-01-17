@@ -21,7 +21,7 @@ export const taintPostHook: PostHook = async (
   const descriptors: SecurityDescriptor[] = [];
   collectInputDescriptors(inputs, descriptors);
   collectValueDescriptors(result.value, descriptors);
-  collectOperationLabels(operation, descriptors);
+  collectOperationDescriptors(operation, descriptors);
 
   if (descriptors.length > 0) {
     const merged = mergeDescriptors(...descriptors);
@@ -46,19 +46,25 @@ function collectInputDescriptors(
   }
 }
 
-function collectOperationLabels(
+function collectOperationDescriptors(
   operation: OperationContext | undefined,
   target: SecurityDescriptor[]
 ): void {
-  if (!operation?.labels || operation.labels.length === 0) {
-    return;
+  if (operation?.labels && operation.labels.length > 0) {
+    target.push({
+      labels: operation.labels,
+      taint: operation.labels,
+      sources: []
+    });
   }
 
-  target.push({
-    labels: operation.labels,
-    taint: operation.labels,
-    sources: []
-  });
+  if (operation?.sources && operation.sources.length > 0) {
+    target.push({
+      labels: [],
+      taint: [],
+      sources: operation.sources
+    });
+  }
 }
 
 function collectValueDescriptors(

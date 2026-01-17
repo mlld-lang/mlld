@@ -876,7 +876,7 @@ async function evaluateGuard(options: {
   injectGuardHelpers(guardEnv, {
     operation,
     labels: contextLabels,
-    operationLabels: operation.labels ?? []
+    operationLabels: operation.opLabels ?? []
   });
 
   const guardContext: GuardContextSnapshot = {
@@ -1462,6 +1462,14 @@ function buildOperationKeys(operation: OperationContext): string[] {
         if (typeof language === 'string' && language.length > 0) {
           keys.add(language.toLowerCase());
         }
+      }
+    }
+  }
+
+  if (operation.opLabels && operation.opLabels.length > 0) {
+    for (const label of operation.opLabels) {
+      if (typeof label === 'string' && label.length > 0) {
+        keys.add(label.toLowerCase());
       }
     }
   }

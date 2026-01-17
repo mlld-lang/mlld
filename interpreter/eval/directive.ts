@@ -29,6 +29,7 @@ import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluatePolicy } from './policy';
+import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
 
 /**
  * Extract trace information from a directive
@@ -311,6 +312,8 @@ function buildOperationContext(
       break;
   }
 
+  applyOperationLabels(context, directive);
+
   return context;
 }
 
@@ -447,6 +450,94 @@ function applyShowMetadata(context: OperationContext, directive: DirectiveNode):
   metadata.showSubtype = directive.subtype;
   metadata.sourceRetryable = true;
   context.metadata = metadata;
+}
+
+function applyOperationLabels(context: OperationContext, directive: DirectiveNode): void {
+  if (directive.kind === 'run') {
+    const runSubtype = directive.subtype;
+    if (runSubtype === 'runCommand') {
+      const commandPreview = context.command;
+      const parsed = commandPreview ? parseCommand(commandPreview) : {};
+      context.opLabels = getOperationLabels({
+        type: 'cmd',
+        command: parsed.command,
+        subcommand: parsed.subcommand
+      });
+      const sources = parsed.command
+        ? getOperationSources({ type: 'cmd', command: parsed.command, subcommand: parsed.subcommand })
+        : [];
+      if (sources.length > 0) {
+        context.sources = sources;
+      }
+      return;
+    }
+
+    if (runSubtype === 'runCode') {
+      const language =
+        typeof context.metadata === 'object' && context.metadata
+          ? (context.metadata as Record<string, unknown>).language
+          : undefined;
+      const opType = mapLanguageToOpType(language);
+      if (opType) {
+        context.opLabels = getOperationLabels({ type: opType });
+        context.sources = getOperationSources({ type: opType });
+      }
+      return;
+    }
+
+    return;
+  }
+
+  const opType = mapDirectiveToOpType(directive.kind);
+  if (!opType) {
+    return;
+  }
+
+  context.opLabels = getOperationLabels({ type: opType });
+  context.sources = getOperationSources({ type: opType });
+}
+
+function mapDirectiveToOpType(kind: string): ReturnType<typeof mapLanguageToOpType> | null {
+  switch (kind) {
+    case 'show':
+      return 'show';
+    case 'output':
+      return 'output';
+    case 'log':
+      return 'log';
+    case 'append':
+      return 'append';
+    case 'stream':
+      return 'stream';
+    default:
+      return null;
+  }
+}
+
+function mapLanguageToOpType(language: unknown): ReturnType<typeof mapDirectiveToOpType> | null {
+  if (typeof language !== 'string') {
+    return null;
+  }
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === 'bash' || normalized === 'sh' || normalized === 'shell') {
+    return 'sh';
+  }
+  if (normalized === 'node' || normalized === 'nodejs') {
+    return 'node';
+  }
+  if (normalized === 'js' || normalized === 'javascript') {
+    return 'js';
+  }
+  if (normalized === 'py' || normalized === 'python') {
+    return 'py';
+  }
+  if (normalized === 'prose') {
+    return 'prose';
+  }
+  return null;
 }
 
 function readStreamFlag(directive: DirectiveNode): boolean {
