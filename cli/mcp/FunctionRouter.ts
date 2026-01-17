@@ -77,7 +77,6 @@ export class FunctionRouter {
 
   private createMcpSecurityDescriptor(toolName: string): SecurityDescriptor {
     return makeSecurityDescriptor({
-      labels: ['untrusted'],
       taint: ['src:mcp'],
       sources: [`mcp:${toolName}`]
     });

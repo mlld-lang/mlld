@@ -3,9 +3,24 @@ export type PolicyLimits = {
   timeout?: number;
 };
 
+export type AuthConfig = {
+  from: string;
+  as: string;
+};
+
+export type LabelFlowRule = {
+  deny?: string[];
+  allow?: string[];
+};
+
+export type PolicyLabels = Record<string, LabelFlowRule>;
+
 export type PolicyConfig = {
+  default?: 'deny' | 'allow';
+  auth?: Record<string, AuthConfig>;
   allow?: Record<string, string[] | true> | true;
   deny?: Record<string, string[] | true> | true;
+  labels?: PolicyLabels;
   limits?: PolicyLimits;
 };
 
@@ -28,19 +43,28 @@ export function mergePolicyConfigs(
     return normalizePolicyConfig(base);
   }
 
-  const baseAllow = toAllowShape(base.allow);
-  const incomingAllow = toAllowShape(incoming.allow);
+  const normalizedBase = normalizePolicyConfig(base);
+  const normalizedIncoming = normalizePolicyConfig(incoming);
+
+  const baseAllow = toAllowShape(normalizedBase.allow);
+  const incomingAllow = toAllowShape(normalizedIncoming.allow);
   const mergedAllow = mergeAllowShapes(baseAllow, incomingAllow);
 
-  const baseDeny = toDenyShape(base.deny);
-  const incomingDeny = toDenyShape(incoming.deny);
+  const baseDeny = toDenyShape(normalizedBase.deny);
+  const incomingDeny = toDenyShape(normalizedIncoming.deny);
   const mergedDeny = mergeDenyShapes(baseDeny, incomingDeny);
 
-  const limits = mergeLimits(base.limits, incoming.limits);
+  const labels = mergePolicyLabels(normalizedBase.labels, normalizedIncoming.labels);
+  const auth = mergePolicyAuth(normalizedBase.auth, normalizedIncoming.auth);
+  const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
+  const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
 
   return {
+    ...(defaultStance ? { default: defaultStance } : {}),
+    ...(auth ? { auth } : {}),
     allow: fromAllowShape(mergedAllow),
     deny: fromDenyShape(mergedDeny),
+    ...(labels ? { labels } : {}),
     ...(limits ? { limits } : {})
   };
 }
@@ -51,8 +75,18 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   }
   const allow = config.allow !== undefined ? fromAllowShape(toAllowShape(config.allow)) : undefined;
   const deny = config.deny !== undefined ? fromDenyShape(toDenyShape(config.deny)) : undefined;
+  const labels = normalizePolicyLabels(config.labels);
+  const auth = normalizePolicyAuth(config.auth);
+  const defaultStance = normalizePolicyDefault(config.default);
   const limits = config.limits ? normalizeLimits(config.limits) : undefined;
-  return { allow, deny, ...(limits ? { limits } : {}) };
+  return {
+    ...(defaultStance ? { default: defaultStance } : {}),
+    ...(auth ? { auth } : {}),
+    allow,
+    deny,
+    ...(labels ? { labels } : {}),
+    ...(limits ? { limits } : {})
+  };
 }
 
 function toAllowShape(value: PolicyConfig['allow']): AllowShape {
@@ -222,4 +256,159 @@ function normalizeLimits(limits: PolicyLimits): PolicyLimits {
     normalized.timeout = limits.timeout;
   }
   return normalized;
+}
+
+function normalizePolicyDefault(value: PolicyConfig['default']): PolicyConfig['default'] {
+  if (value === 'allow' || value === 'deny') {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizePolicyAuth(
+  auth?: PolicyConfig['auth']
+): PolicyConfig['auth'] | undefined {
+  if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
+    return undefined;
+  }
+
+  const result: Record<string, AuthConfig> = {};
+  for (const [name, entry] of Object.entries(auth)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const from = (entry as AuthConfig).from;
+    const as = (entry as AuthConfig).as;
+    if (typeof from !== 'string' || typeof as !== 'string') {
+      continue;
+    }
+    const trimmedFrom = from.trim();
+    const trimmedAs = as.trim();
+    if (!trimmedFrom || !trimmedAs) {
+      continue;
+    }
+    result[name] = { from: trimmedFrom, as: trimmedAs };
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizePolicyLabels(
+  labels?: PolicyConfig['labels']
+): PolicyConfig['labels'] | undefined {
+  if (!labels || typeof labels !== 'object' || Array.isArray(labels)) {
+    return undefined;
+  }
+
+  const result: PolicyLabels = {};
+  for (const [label, rule] of Object.entries(labels)) {
+    const normalized = normalizeLabelRule(rule);
+    if (normalized) {
+      result[label] = normalized;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeLabelRule(raw: unknown): LabelFlowRule | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  const allow = normalizeLabelList((raw as LabelFlowRule).allow);
+  const deny = normalizeLabelList((raw as LabelFlowRule).deny);
+  if (!allow && !deny) {
+    return undefined;
+  }
+  const result: LabelFlowRule = {};
+  if (allow) {
+    result.allow = allow;
+  }
+  if (deny) {
+    result.deny = deny;
+  }
+  return result;
+}
+
+function normalizeLabelList(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map(entry => String(entry).trim())
+      .filter(entry => entry.length > 0);
+    return normalized.length > 0 ? Array.from(new Set(normalized)) : [];
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const normalized = String(value).trim();
+    return normalized ? [normalized] : [];
+  }
+  return undefined;
+}
+
+function mergePolicyLabels(
+  base?: PolicyConfig['labels'],
+  incoming?: PolicyConfig['labels']
+): PolicyConfig['labels'] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+
+  const result: PolicyLabels = { ...(base ?? {}) };
+  for (const [label, rule] of Object.entries(incoming ?? {})) {
+    if (!result[label]) {
+      result[label] = rule;
+      continue;
+    }
+
+    const current = result[label] ?? {};
+    result[label] = {
+      deny: mergeLabelListUnion(current.deny, rule.deny),
+      allow: mergeLabelListIntersection(current.allow, rule.allow)
+    };
+  }
+
+  return result;
+}
+
+function mergeLabelListUnion(a?: string[], b?: string[]): string[] | undefined {
+  if (!a && !b) {
+    return undefined;
+  }
+  return Array.from(new Set([...(a ?? []), ...(b ?? [])]));
+}
+
+function mergeLabelListIntersection(a?: string[], b?: string[]): string[] | undefined {
+  if (!a && !b) {
+    return undefined;
+  }
+  if (!a) {
+    return b;
+  }
+  if (!b) {
+    return a;
+  }
+  const set = new Set(a);
+  return b.filter(item => set.has(item));
+}
+
+function mergePolicyAuth(
+  base?: PolicyConfig['auth'],
+  incoming?: PolicyConfig['auth']
+): PolicyConfig['auth'] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  return { ...(base ?? {}), ...(incoming ?? {}) };
+}
+
+function mergePolicyDefault(
+  base?: PolicyConfig['default'],
+  incoming?: PolicyConfig['default']
+): PolicyConfig['default'] | undefined {
+  if (incoming === undefined) {
+    return base;
+  }
+  return incoming;
 }

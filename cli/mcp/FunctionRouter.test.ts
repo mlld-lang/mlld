@@ -182,7 +182,6 @@ describe('FunctionRouter', () => {
     expect(securitySnapshot).toBeDefined();
     expect(securitySnapshot?.taint).toContain('src:mcp');
     expect(securitySnapshot?.sources).toContain('mcp:storeResult');
-    expect(securitySnapshot?.labels).toContain('untrusted');
   });
 
   it('applies src:mcp taint even for zero-arg functions', async () => {
@@ -201,7 +200,6 @@ describe('FunctionRouter', () => {
     expect(securitySnapshot).toBeDefined();
     expect(securitySnapshot?.taint).toContain('src:mcp');
     expect(securitySnapshot?.sources).toContain('mcp:getTime');
-    expect(securitySnapshot?.labels).toContain('untrusted');
   });
 
   it('exposes MCP taint to guards for zero-arg functions', async () => {

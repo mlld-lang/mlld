@@ -1,5 +1,5 @@
 import type { DirectiveNode, ImportDirectiveNode } from '@core/types';
-import type { ImportType, DataLabel } from '@core/types/security';
+import type { ImportType } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { deriveImportTaint } from '@core/security/taint';
 import type { Environment } from '../../env/Environment';
@@ -1055,7 +1055,7 @@ export class ImportDirectiveEvaluator {
         : `dynamic://${source}`
       : 'dynamic://';
     return makeSecurityDescriptor({
-      labels: ['untrusted' as DataLabel],
+      labels: [],
       taint: snapshot?.taint ?? ['src:dynamic'],
       sources: snapshot?.sources && snapshot.sources.length > 0 ? snapshot.sources : [normalizedSource],
       policyContext: snapshot?.policy

@@ -25,7 +25,20 @@ describe('/policy directive', () => {
       'p1',
       createObjectVariable(
         'p1',
-        { allow: { cmd: ['echo', 'ls'] }, deny: { cmd: ['rm'] }, limits: { timeout: 1000 } },
+        {
+          allow: { cmd: ['echo', 'ls'] },
+          deny: { cmd: ['rm'] },
+          limits: { timeout: 1000 },
+          labels: {
+            'src:mcp': {
+              deny: ['op:cmd'],
+              allow: ['op:cmd:git:status', 'op:cmd:git:log']
+            }
+          },
+          auth: {
+            claude: { from: 'keychain:mlld-env/claude', as: 'ANTHROPIC_API_KEY' }
+          }
+        },
         false,
         objectSource
       )
@@ -34,7 +47,21 @@ describe('/policy directive', () => {
       'p2',
       createObjectVariable(
         'p2',
-        { allow: { cmd: ['echo'] }, deny: { cmd: ['mv'] }, limits: { timeout: 500 } },
+        {
+          allow: { cmd: ['echo'] },
+          deny: { cmd: ['mv'] },
+          limits: { timeout: 500 },
+          labels: {
+            'src:mcp': {
+              deny: ['op:cmd:git:push'],
+              allow: ['op:cmd:git:status']
+            }
+          },
+          auth: {
+            claude: { from: 'env:CLAUDE_KEY', as: 'ANTHROPIC_API_KEY' },
+            gh: { from: 'env:GH_TOKEN', as: 'GH_TOKEN' }
+          }
+        },
         false,
         objectSource
       )
@@ -49,9 +76,20 @@ describe('/policy directive', () => {
     expect(mergedValue?.allow?.cmd).toEqual(['echo']);
     expect(mergedValue?.deny?.cmd).toEqual(expect.arrayContaining(['rm', 'mv']));
     expect(mergedValue?.limits?.timeout).toBe(500);
+    expect(mergedValue?.labels?.['src:mcp']?.deny).toEqual(expect.arrayContaining(['op:cmd', 'op:cmd:git:push']));
+    expect(mergedValue?.labels?.['src:mcp']?.allow).toEqual(['op:cmd:git:status']);
+    expect(mergedValue?.auth?.claude).toEqual({
+      from: 'env:CLAUDE_KEY',
+      as: 'ANTHROPIC_API_KEY'
+    });
+    expect(mergedValue?.auth?.gh).toEqual({
+      from: 'env:GH_TOKEN',
+      as: 'GH_TOKEN'
+    });
 
     const policyContext = env.getPolicyContext();
     expect(policyContext?.configs?.allow?.cmd).toEqual(['echo']);
+    expect(policyContext?.configs?.labels?.['src:mcp']?.allow).toEqual(['op:cmd:git:status']);
     expect(policyContext?.activePolicies).toContain('merged');
   });
 
