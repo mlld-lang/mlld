@@ -5,6 +5,7 @@ import type { OperationContext, PipelineContextSnapshot } from '../../env/Contex
 import type { StructuredValue } from '../../utils/structured-value';
 import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
@@ -36,6 +37,8 @@ import type { StreamingOptions } from './streaming-options';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import { resolveWorkingDirectory } from '../../utils/working-directory';
 import { evaluateWhileStage } from '../while';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 
 interface StageExecutionResult {
   result: StructuredValue | string | { value: 'retry'; hint?: any; from?: number };
@@ -771,6 +774,36 @@ export class PipelineExecutor {
           if (d) descriptors.push(d);
         }
       });
+      const parsedCommand = parseCommand(commandText);
+      const opLabels = getOperationLabels({
+        type: 'cmd',
+        command: parsedCommand.command,
+        subcommand: parsedCommand.subcommand
+      });
+      const commandDescriptor =
+        descriptors.length > 1 ? stageEnv.mergeSecurityDescriptors(...descriptors) : descriptors[0];
+      const stdinDescriptor = extractSecurityDescriptor(structuredInput, {
+        recursive: true,
+        mergeArrayElements: true
+      });
+      const inputDescriptor =
+        commandDescriptor && stdinDescriptor
+          ? stageEnv.mergeSecurityDescriptors(commandDescriptor, stdinDescriptor)
+          : commandDescriptor ?? stdinDescriptor;
+      const inputTaint = descriptorToInputTaint(inputDescriptor);
+      if (inputTaint.length > 0) {
+        const policyEnforcer = new PolicyEnforcer(stageEnv.getPolicySummary());
+        policyEnforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels: [],
+            flowChannel: 'stdin',
+            command: parsedCommand.command
+          },
+          { env: stageEnv, sourceLocation: stage.location }
+        );
+      }
       const stdinInput = structuredInput?.text ?? '';
       const result = await stageEnv.executeCommand(
         commandText,

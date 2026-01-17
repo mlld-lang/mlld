@@ -3,6 +3,7 @@ import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
+import type { SecurityDescriptor } from '@core/types/security';
 import { createPipelineParameterVariable } from '../../utils/parameter-factory';
 import { buildPipelineStructuredValue } from '../../utils/pipeline-input';
 import {
@@ -18,6 +19,7 @@ import { wrapExecResult } from '../../utils/structured-exec';
 import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
+import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 import type { HookableNode } from '@core/types/hooks';
 import type { OperationContext } from '../../env/ContextManager';
 import { materializeGuardInputs } from '../../utils/guard-inputs';
@@ -25,6 +27,10 @@ import { handleGuardDecision } from '../../hooks/hook-decision-handler';
 import { handleExecGuardDenial } from '../guard-denial-handler';
 import type { WhenExpressionNode } from '@core/types/when';
 import { resolveWorkingDirectory } from '../../utils/working-directory';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { collectInputDescriptor, descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { resolveUsingEnv } from '@interpreter/utils/auth-injection';
 
 export type RetrySignal = { value: 'retry'; hint?: any; from?: number };
 type CommandExecutionPrimitive = string | number | boolean | null | undefined;
@@ -480,6 +486,34 @@ function resolveExecutableLanguage(commandVar: any, execDef: any): string | unde
   return undefined;
 }
 
+function resolveOpTypeFromLanguage(
+  language?: string
+): 'sh' | 'node' | 'js' | 'py' | 'prose' | null {
+  if (!language) {
+    return null;
+  }
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === 'bash' || normalized === 'sh' || normalized === 'shell') {
+    return 'sh';
+  }
+  if (normalized === 'node' || normalized === 'nodejs') {
+    return 'node';
+  }
+  if (normalized === 'js' || normalized === 'javascript') {
+    return 'js';
+  }
+  if (normalized === 'py' || normalized === 'python') {
+    return 'py';
+  }
+  if (normalized === 'prose') {
+    return 'prose';
+  }
+  return null;
+}
+
 /**
  * Resolve a command reference to an executable variable
  */
@@ -862,6 +896,69 @@ export async function executeCommandVariable(
   }
   const guardInputs = materializeGuardInputs(guardInputCandidates, { nameHint: '__pipeline_stage_input__' });
 
+  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+  const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
+  const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+  const guardDescriptor = collectInputDescriptor(guardInputs);
+  const policyLocation = operationContext?.location ?? hookOptions?.executionContext?.sourceLocation;
+
+  if (execDef.type === 'command' && execDef.commandTemplate) {
+    const { interpolate } = await import('../../core/interpreter');
+    const { InterpolationContext } = await import('../../core/interpolation-context');
+    const commandDescriptors: SecurityDescriptor[] = [];
+    const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand, {
+      collectSecurityDescriptor: descriptor => {
+        if (descriptor) {
+          commandDescriptors.push(descriptor);
+        }
+      }
+    });
+    const parsedCommand = parseCommand(command);
+    const opLabels = getOperationLabels({
+      type: 'cmd',
+      command: parsedCommand.command,
+      subcommand: parsedCommand.subcommand
+    });
+    const commandDescriptor =
+      commandDescriptors.length > 1
+        ? env.mergeSecurityDescriptors(...commandDescriptors)
+        : commandDescriptors[0];
+    const inputDescriptor = mergeInputDescriptors(guardDescriptor, commandDescriptor);
+    const inputTaint = descriptorToInputTaint(inputDescriptor);
+    if (inputTaint.length > 0) {
+      const flowChannel = execDef.withClause?.auth || execDef.withClause?.using
+        ? 'using'
+        : stdinInput !== undefined
+          ? 'stdin'
+          : 'arg';
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel,
+          command: parsedCommand.command
+        },
+        { env, sourceLocation: policyLocation }
+      );
+    }
+  } else if (execDef.type === 'code' && execDef.codeTemplate) {
+    const opType = resolveOpTypeFromLanguage(stageLanguage);
+    const opLabels = opType ? getOperationLabels({ type: opType }) : [];
+    const inputTaint = descriptorToInputTaint(guardDescriptor);
+    if (opType && inputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: policyLocation }
+      );
+    }
+  }
+
   if (hookNode && operationContext) {
     const hookManager = env.getHookManager();
     const preDecision = await hookManager.runPre(hookNode, guardInputs, env, operationContext);
@@ -899,7 +996,6 @@ export async function executeCommandVariable(
       throw error;
     }
   }
-  
   // Execute based on type
   let workingDirectory: string | undefined;
   if (execDef?.workingDir) {
@@ -916,13 +1012,21 @@ export async function executeCommandVariable(
     // Interpolate command template with parameters
     const { interpolate } = await import('../../core/interpreter');
     const { InterpolationContext } = await import('../../core/interpolation-context');
-    
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
 
     // Always pass pipeline input as stdin when available
+    const injectedEnv = await resolveUsingEnv(execEnv, execDef.withClause);
+    const commandOptions =
+      stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
+        ? {
+            ...(stdinInput !== undefined ? { input: stdinInput } : {}),
+            ...(workingDirectory ? { workingDirectory } : {}),
+            ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+          }
+        : undefined;
     let commandOutput: unknown = await env.executeCommand(
       command,
-      { input: stdinInput, ...(workingDirectory ? { workingDirectory } : {}) } as any,
+      commandOptions as any,
       executionContext
     );
 

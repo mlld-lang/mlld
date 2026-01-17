@@ -213,6 +213,8 @@ export interface EvaluationContext {
   operationContext?: OperationContext;
   /** Precomputed /var assignment (Phase C guard runner) */
   precomputedVarAssignment?: VarAssignmentResult;
+  /** Policy checks run before guard-pre for the directive */
+  policyChecked?: boolean;
 }
 
 /**

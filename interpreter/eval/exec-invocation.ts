@@ -39,11 +39,15 @@ import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
 import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { resolveUsingEnv } from '@interpreter/utils/auth-injection';
 import type { OperationContext } from '../env/ContextManager';
 import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
@@ -58,21 +62,33 @@ import { loadStreamAdapter, resolveStreamFormatValue } from '../streaming/stream
 /**
  * Resolve stdin input from expression using shared shell classification.
  */
-async function resolveStdinInput(stdinSource: unknown, env: Environment): Promise<string> {
+type ResolvedStdinInput = {
+  text: string;
+  descriptor?: SecurityDescriptor;
+};
+
+async function resolveStdinInput(
+  stdinSource: unknown,
+  env: Environment
+): Promise<ResolvedStdinInput> {
   if (stdinSource === null || stdinSource === undefined) {
-    return '';
+    return { text: '' };
   }
 
   const { evaluate } = await import('../core/interpreter');
   const result = await evaluate(stdinSource as any, env, { isExpression: true });
   let value = result.value;
+  const descriptor = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
 
   const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
   if (isVariable(value)) {
     value = await resolveValue(value, env, ResolutionContext.CommandExecution);
   }
 
-  return coerceValueForStdin(value);
+  return { text: coerceValueForStdin(value), descriptor };
 }
 
 const chainDebugEnabled = process.env.MLLD_DEBUG_CHAINING === '1';
@@ -514,7 +530,8 @@ async function evaluateExecInvocationInternal(
 
 
   try {
-  let resultSecurityDescriptor: SecurityDescriptor | undefined;
+    const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+    let resultSecurityDescriptor: SecurityDescriptor | undefined;
     const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
       if (!descriptor) {
         return;
@@ -1909,6 +1926,7 @@ async function evaluateExecInvocationInternal(
   let postHookInputs: readonly Variable[] = guardInputs;
   const hookManager = env.getHookManager();
   const execDescriptor = getVariableSecurityDescriptor(variable);
+  const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
   const operationContext: OperationContext = {
     type: 'exe',
     name: variable.name ?? commandName,
@@ -1920,6 +1938,77 @@ async function evaluateExecInvocationInternal(
       sourceRetryable: true
     }
   };
+  if (isCommandExecutable(definition)) {
+    const commandPreview = await interpolateWithResultDescriptor(
+      definition.commandTemplate,
+      execEnv,
+      InterpolationContext.ShellCommand
+    );
+    const parsedCommand = parseCommand(commandPreview);
+    const opLabels = getOperationLabels({
+      type: 'cmd',
+      command: parsedCommand.command,
+      subcommand: parsedCommand.subcommand
+    });
+    if (opLabels.length > 0) {
+      operationContext.opLabels = opLabels;
+      operationContext.command = parsedCommand.command;
+    }
+    const flowChannel =
+      definition.withClause?.auth ||
+      definition.withClause?.using ||
+      node.withClause?.auth ||
+      node.withClause?.using
+        ? 'using'
+        : 'arg';
+    const inputTaint = descriptorToInputTaint(resultSecurityDescriptor);
+    if (inputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel,
+          command: parsedCommand.command
+        },
+        { env, sourceLocation: node.location }
+      );
+    }
+    if (definition.withClause && 'stdin' in definition.withClause) {
+      const resolvedStdin = await resolveStdinInput(definition.withClause.stdin, execEnv);
+      const stdinTaint = descriptorToInputTaint(resolvedStdin.descriptor);
+      if (stdinTaint.length > 0) {
+        policyEnforcer.checkLabelFlow(
+          {
+            inputTaint: stdinTaint,
+            opLabels,
+            exeLabels,
+            flowChannel: 'stdin',
+            command: parsedCommand.command
+          },
+          { env, sourceLocation: node.location }
+        );
+      }
+    }
+  } else if (isCodeExecutable(definition)) {
+    const opType = resolveOpTypeFromLanguage(definition.language);
+    const opLabels = opType ? getOperationLabels({ type: opType }) : [];
+    if (opLabels.length > 0) {
+      operationContext.opLabels = opLabels;
+    }
+    const inputTaint = descriptorToInputTaint(resultSecurityDescriptor);
+    if (opType && inputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: node.location }
+      );
+    }
+  }
   const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
     try {
       return await hookManager.runPost(node, result, postHookInputs, env, operationContext);
@@ -2198,7 +2287,7 @@ async function evaluateExecInvocationInternal(
     //   .replace(/\\t/g, '\t')
     //   .replace(/\\r/g, '\r')
     //   .replace(/\\0/g, '\0');
-    
+
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
       logger.debug('Executing command', {
         command,
@@ -2242,6 +2331,10 @@ async function evaluateExecInvocationInternal(
       } else {
         envVars[paramName] = evaluatedArgStrings[i];
       }
+    }
+    const injectedEnv = await resolveUsingEnv(execEnv, definition.withClause, node.withClause);
+    if (Object.keys(injectedEnv).length > 0) {
+      Object.assign(envVars, injectedEnv);
     }
     
     // Check if any referenced env var is oversized; if so, optionally fallback to bash heredoc
@@ -2312,6 +2405,9 @@ async function evaluateExecInvocationInternal(
         if (!referencesParam(command, paramName)) continue;
         codeParams[paramName] = evaluatedArgs[i];
       }
+      if (Object.keys(injectedEnv).length > 0) {
+        Object.assign(codeParams, injectedEnv);
+      }
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[exec-invocation] Falling back to bash heredoc for oversized command params', {
           fallbackSnippet: fallbackCommand.slice(0, 120),
@@ -2340,9 +2436,12 @@ async function evaluateExecInvocationInternal(
     } else {
       // Check for stdin support in withClause
       let stdinInput: string | undefined;
+      let stdinDescriptor: SecurityDescriptor | undefined;
       if (definition.withClause && 'stdin' in definition.withClause) {
         // Resolve stdin input similar to run.ts
-        stdinInput = await resolveStdinInput(definition.withClause.stdin, execEnv);
+        const resolvedStdin = await resolveStdinInput(definition.withClause.stdin, execEnv);
+        stdinInput = resolvedStdin.text;
+        stdinDescriptor = resolvedStdin.descriptor;
       }
 
       // Execute the command with environment variables and optional stdin
@@ -2762,6 +2861,8 @@ async function evaluateExecInvocationInternal(
     if (!refName) {
       throw new MlldInterpreterError(`Command reference ${commandName} has no target command`);
     }
+
+    const refWithClause = mergeAuthUsingIntoWithClause(definition.withClause, node.withClause);
     
     // Look up the referenced command
     // First check in the captured module environment (for imported executables)
@@ -2842,7 +2943,7 @@ async function evaluateExecInvocationInternal(
           args: refArgs  // Pass values directly like foreach does
         },
         // Pass along the pipeline if present
-        ...(definition.withClause ? { withClause: definition.withClause } : {})
+        ...(refWithClause ? { withClause: refWithClause } : {})
       };
 
       // Recursively evaluate the referenced command in the environment that has it
@@ -2864,7 +2965,7 @@ async function evaluateExecInvocationInternal(
           args: evaluatedArgs  // Pass values directly like foreach does
         },
         // Pass along the pipeline if present
-        ...(definition.withClause ? { withClause: definition.withClause } : {})
+        ...(refWithClause ? { withClause: refWithClause } : {})
       };
 
       // Recursively evaluate the referenced command in the environment that has it
@@ -3197,6 +3298,34 @@ async function evaluateExecInvocationInternal(
   }
 }
 
+function resolveOpTypeFromLanguage(
+  language?: string
+): 'sh' | 'node' | 'js' | 'py' | 'prose' | null {
+  if (!language) {
+    return null;
+  }
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === 'bash' || normalized === 'sh' || normalized === 'shell') {
+    return 'sh';
+  }
+  if (normalized === 'node' || normalized === 'nodejs') {
+    return 'node';
+  }
+  if (normalized === 'js' || normalized === 'javascript') {
+    return 'js';
+  }
+  if (normalized === 'py' || normalized === 'python') {
+    return 'py';
+  }
+  if (normalized === 'prose') {
+    return 'prose';
+  }
+  return null;
+}
+
 type SecurityCarrier = {
   mx?: VariableContext | StructuredValueContext;
 };
@@ -3244,6 +3373,25 @@ function descriptorFromVarMx(
     return undefined;
   }
   return varMxToSecurityDescriptor(mx as VariableContext);
+}
+
+function mergeAuthUsingIntoWithClause(
+  base?: WithClause,
+  override?: WithClause
+): WithClause | undefined {
+  const auth = override?.auth ?? base?.auth;
+  const using = override?.using ?? base?.using;
+  if (!auth && !using) {
+    return base;
+  }
+  const merged: WithClause = base ? { ...base } : {};
+  if (auth) {
+    merged.auth = auth;
+  }
+  if (using) {
+    merged.using = using;
+  }
+  return merged;
 }
 
 /**

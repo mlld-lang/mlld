@@ -72,7 +72,7 @@ SlashRun
         'pipeline'
       );
     }
-  / DirectiveContext RunKeyword _ "\"" command:$([^\"]*) "\"" tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ "\"" command:$([^\"]*) "\"" using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched quoted command', { command, tail });
 
       const commandLocation = location();
@@ -107,10 +107,11 @@ SlashRun
         ...(comment ? { comment } : {})
       };
 
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      const mergedWithClause = using || tail ? { ...(using || {}), ...(tail || {}) } : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -140,7 +141,7 @@ SlashRun
         'command'
       );
     }
-  / DirectiveContext RunKeyword _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched command', { content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -158,10 +159,11 @@ SlashRun
         meta.securityLabels = labelInfo.labels;
       }
 
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      const mergedWithClause = using || tail ? { ...(using || {}), ...(tail || {}) } : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
       }
 
       const endingInfo = {
@@ -184,7 +186,7 @@ SlashRun
         content.type
       );
     }
-  / DirectiveContext RunKeyword _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched stdin pipe sugar', { stdinExpr, content, tail });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -198,6 +200,7 @@ SlashRun
 
       const withClause = {
         stdin: stdinExpr,
+        ...(using || {}),
         ...(tail || {})
       };
 
@@ -275,7 +278,7 @@ SlashRun
         'code'
       );
     }
-  / DirectiveContext RunKeyword _ commandRef:UnifiedReferenceWithTail labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
+  / DirectiveContext RunKeyword _ commandRef:UnifiedReference using:UsingClause? tail:TailModifiers? labelsSegment:(HWS DataLabelList)? comment:InlineComment? {
       helpers.debug('SlashRun matched unified command reference', { commandRef });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -357,6 +360,19 @@ SlashRun
         };
       }
 
+      const baseWithClause =
+        commandRef.type === 'ExecInvocation' || commandRef.type === 'VariableReferenceWithTail'
+          ? commandRef.withClause
+          : undefined;
+      const mergedWithClause = baseWithClause || using || tail
+        ? { ...(baseWithClause || {}), ...(using || {}), ...(tail || {}) }
+        : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
+      }
+
       if (labelInfo) {
         values.securityLabels = labelInfo.labels;
         raw.securityLabels = labelInfo.raw;
@@ -367,8 +383,13 @@ SlashRun
         ? 'runExecInvocation'
         : 'runExec';
 
+      const pipelineTail = tail && tail.pipeline
+        ? { pipeline: tail.pipeline }
+        : baseWithClause && baseWithClause.pipeline
+          ? { pipeline: baseWithClause.pipeline }
+          : null;
       const endingInfo = {
-        tail: null,
+        tail: pipelineTail,
         parallel: null,
         comment: comment || null
       };
@@ -483,7 +504,7 @@ RunDirectiveRef
         'code'
       );
     }
-  / commandRef:UnifiedReferenceNoTail {
+  / commandRef:UnifiedReferenceNoTail using:UsingClause? {
       // @ detected -> Command reference (exec) in RHS
       helpers.debug('RunDirectiveRef matched unified exec reference in RHS', { commandRef });
       
@@ -534,6 +555,17 @@ RunDirectiveRef
           isRHSRef: true
         };
       }
+
+      const baseWithClause =
+        commandRef.type === 'ExecInvocation' ? commandRef.withClause : undefined;
+      const mergedWithClause = baseWithClause || using
+        ? { ...(baseWithClause || {}), ...(using || {}) }
+        : undefined;
+      if (mergedWithClause) {
+        values.withClause = mergedWithClause;
+        raw.withClause = mergedWithClause;
+        meta.withClause = mergedWithClause;
+      }
       
       return helpers.createStructuredDirective(
         'run',
@@ -545,17 +577,24 @@ RunDirectiveRef
         'exec'
       );
     }
-  / content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  / content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       helpers.debug('RunDirectiveRef matched command in RHS', { content });
 
       return helpers.createStructuredDirective(
         'run',
         content.subtype,
-        content.values,
-        content.raw,
+        {
+          ...content.values,
+          ...(using ? { withClause: using } : {})
+        },
+        {
+          ...content.raw,
+          ...(using ? { withClause: using } : {})
+        },
         {
           ...content.meta,
-          isRHSRef: true
+          isRHSRef: true,
+          ...(using ? { withClause: using } : {})
         },
         location()
       );

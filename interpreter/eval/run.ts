@@ -15,7 +15,6 @@ import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/co
 import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
 import type { Variable } from '@core/types/variable';
-import type { Variable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { logger } from '@core/utils/logger';
 import { FormatAdapterSink } from './pipeline/stream-sinks/format-adapter';
@@ -34,6 +33,9 @@ import { varMxToSecurityDescriptor, hasSecurityVarMx } from '@core/types/variabl
 import { coerceValueForStdin } from '../utils/shell-value';
 import { resolveDirectiveExecInvocation } from './directive-replay';
 import { resolveWorkingDirectory } from '../utils/working-directory';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { resolveUsingEnv } from '@interpreter/utils/auth-injection';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -95,6 +97,21 @@ function resolveRunCodeOpType(language: string): 'sh' | 'node' | 'js' | 'py' | '
   return null;
 }
 
+function mergeAuthUsing(
+  base: WithClause | undefined,
+  override: WithClause | undefined
+): Pick<WithClause, 'auth' | 'using'> | undefined {
+  const auth = override?.auth ?? base?.auth;
+  const using = override?.using ?? base?.using;
+  if (!auth && !using) {
+    return undefined;
+  }
+  return {
+    ...(auth ? { auth } : {}),
+    ...(using ? { using } : {})
+  };
+}
+
 /**
  * Evaluate a stdin expression and coerce it into text for command execution.
  * WHY: /run supports expressions in the `with { stdin: ... }` slot that can
@@ -102,13 +119,25 @@ function resolveRunCodeOpType(language: string): 'sh' | 'node' | 'js' | 'py' | '
  * CONTEXT: Delegates final conversion to the shared shell-value helper once evaluation
  *          finishes in the command execution resolution context.
  */
-async function resolveStdinInput(stdinSource: unknown, env: Environment): Promise<string> {
+type ResolvedStdinInput = {
+  text: string;
+  descriptor?: SecurityDescriptor;
+};
+
+async function resolveStdinInput(
+  stdinSource: unknown,
+  env: Environment
+): Promise<ResolvedStdinInput> {
   if (stdinSource === null || stdinSource === undefined) {
-    return '';
+    return { text: '' };
   }
 
   const result = await evaluate(stdinSource as MlldNode | MlldNode[], env, { isExpression: true });
   let value = result.value;
+  const descriptor = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
 
   if (process.env.MLLD_DEBUG_STDIN === 'true') {
     try {
@@ -130,7 +159,7 @@ async function resolveStdinInput(stdinSource: unknown, env: Environment): Promis
     }
   }
 
-  return coerceValueForStdin(value);
+  return { text: coerceValueForStdin(value), descriptor };
 }
 
 /**
@@ -196,6 +225,9 @@ export async function evaluateRun(
     }
     env.updateOpContext(update);
   };
+
+  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+  const policyChecksEnabled = !context?.policyChecked;
 
   setOutput('');
   // Track source node to optionally enable stage-0 retry
@@ -316,10 +348,26 @@ export async function evaluateRun(
     }
     
     const preExtractedCommand = getPreExtractedRunCommand(context);
-    // Interpolate command (resolve variables) with shell command context
-    const command =
-      preExtractedCommand ??
-      (await interpolateWithPendingDescriptor(commandNodes, InterpolationContext.ShellCommand));
+    const preExtractedDescriptor = getPreExtractedRunDescriptor(context);
+    let commandDescriptor: SecurityDescriptor | undefined;
+    let command: string;
+    if (preExtractedCommand) {
+      command = preExtractedCommand;
+      commandDescriptor = preExtractedDescriptor;
+    } else {
+      const commandDescriptors: SecurityDescriptor[] = [];
+      command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand, {
+        collectSecurityDescriptor: descriptor => {
+          if (descriptor) {
+            commandDescriptors.push(descriptor);
+          }
+        }
+      });
+      commandDescriptor =
+        commandDescriptors.length > 0
+          ? env.mergeSecurityDescriptors(...commandDescriptors)
+          : undefined;
+    }
 
     const parsedCommand = parseCommand(command);
     const opLabels = getOperationLabels({
@@ -337,6 +385,20 @@ export async function evaluateRun(
       opUpdate.sources = opSources;
     }
     updateOperationContext(opUpdate);
+
+    const argTaint = descriptorToInputTaint(commandDescriptor);
+    if (policyChecksEnabled && argTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint: argTaint,
+          opLabels,
+          exeLabels: [],
+          flowChannel: 'arg',
+          command: parsedCommand.command
+        },
+        { env, sourceLocation: directive.location }
+      );
+    }
 
     const workingDirectory = await resolveWorkingDirectory(
       (directive.values as any)?.workingDir,
@@ -448,15 +510,40 @@ export async function evaluateRun(
     
     // Execute the command with context for rich error reporting
     let stdinInput: string | undefined;
+    let stdinDescriptor: SecurityDescriptor | undefined;
     if (withClause && 'stdin' in withClause) {
-      stdinInput = await resolveStdinInput(withClause.stdin, env);
+      const preExtractedStdin = getPreExtractedRunStdin(context);
+      if (preExtractedStdin) {
+        stdinInput = preExtractedStdin.text;
+        stdinDescriptor = preExtractedStdin.descriptor;
+      } else {
+        const resolvedStdin = await resolveStdinInput(withClause.stdin, env);
+        stdinInput = resolvedStdin.text;
+        stdinDescriptor = resolvedStdin.descriptor;
+      }
     }
 
+    const stdinTaint = descriptorToInputTaint(stdinDescriptor);
+    if (policyChecksEnabled && stdinTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint: stdinTaint,
+          opLabels,
+          exeLabels: [],
+          flowChannel: 'stdin',
+          command: parsedCommand.command
+        },
+        { env, sourceLocation: directive.location }
+      );
+    }
+
+    const injectedEnv = await resolveUsingEnv(env, withClause);
     const commandOptions =
-      stdinInput !== undefined || workingDirectory
+      stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
         ? {
             ...(stdinInput !== undefined ? { input: stdinInput } : {}),
-            ...(workingDirectory ? { workingDirectory } : {})
+            ...(workingDirectory ? { workingDirectory } : {}),
+            ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
           }
         : undefined;
     setOutput(await env.executeCommand(command, commandOptions, {
@@ -484,6 +571,7 @@ export async function evaluateRun(
     
     // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
     const args = directive.values?.args || [];
+    const argDescriptors: SecurityDescriptor[] = [];
     const argValues: Record<string, any> =
       args.length === 0
         ? {}
@@ -498,6 +586,9 @@ export async function evaluateRun(
                 const variable = env.getVariable(varName);
                 if (!variable) {
                   throw new Error(`Variable not found: ${varName}`);
+                }
+                if (variable.mx) {
+                  argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
                 }
 
                 // Extract the variable value
@@ -521,14 +612,29 @@ export async function evaluateRun(
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
     const opType = resolveRunCodeOpType(language);
+    let opLabels: string[] = [];
     if (opType) {
-      const opLabels = getOperationLabels({ type: opType });
+      opLabels = getOperationLabels({ type: opType });
       const opSources = getOperationSources({ type: opType });
       const opUpdate: Partial<OperationContext> = { opLabels };
       if (opSources.length > 0) {
         opUpdate.sources = opSources;
       }
       updateOperationContext(opUpdate);
+    }
+    const inputDescriptor =
+      argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
+    const inputTaint = descriptorToInputTaint(inputDescriptor);
+    if (policyChecksEnabled && opType && inputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels: [],
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: directive.location }
+      );
     }
     setOutput(await AutoUnwrapManager.executeWithPreservation(async () => {
       return await env.executeCode(
@@ -697,10 +803,14 @@ export async function evaluateRun(
         : commandName;
       throw new Error(`Executable ${fullPath} has no definition (missing executableDef)`);
     }
+
+    const execDescriptor = execVar.mx ? varMxToSecurityDescriptor(execVar.mx) : undefined;
+    const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
     
     // Get arguments from the run directive
     const args = directive.values?.args || [];
     const argValues: Record<string, string> = {};
+    const argDescriptors: SecurityDescriptor[] = [];
     
     // Map parameter names to argument values
     const paramNames = definition.paramNames as string[] | undefined;
@@ -721,6 +831,21 @@ export async function evaluateRun(
           // Primitive value from grammar
           argValue = String(arg);
         } else if (arg && typeof arg === 'object' && 'type' in arg) {
+          if (arg.type === 'VariableReference' && typeof (arg as any).identifier === 'string') {
+            const variable = env.getVariable((arg as any).identifier);
+            if (variable?.mx) {
+              argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
+            }
+          } else if (
+            arg.type === 'VariableReferenceWithTail' &&
+            (arg as any).variable &&
+            typeof (arg as any).variable.identifier === 'string'
+          ) {
+            const variable = env.getVariable((arg as any).variable.identifier);
+            if (variable?.mx) {
+              argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
+            }
+          }
           // Node object - interpolate normally
           argValue = await interpolateWithPendingDescriptor([arg], InterpolationContext.Default);
         } else {
@@ -760,6 +885,39 @@ export async function evaluateRun(
         InterpolationContext.ShellCommand,
         tempEnv
       );
+
+      const parsedCommand = parseCommand(command);
+      const opLabels = getOperationLabels({
+        type: 'cmd',
+        command: parsedCommand.command,
+        subcommand: parsedCommand.subcommand
+      });
+      const opSources = getOperationSources({
+        type: 'cmd',
+        command: parsedCommand.command,
+        subcommand: parsedCommand.subcommand
+      });
+      const opUpdate: Partial<OperationContext> = { opLabels };
+      if (opSources.length > 0) {
+        opUpdate.sources = opSources;
+      }
+      updateOperationContext(opUpdate);
+
+      const inputDescriptor =
+        argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
+      const inputTaint = descriptorToInputTaint(inputDescriptor);
+      if (policyChecksEnabled && inputTaint.length > 0) {
+        policyEnforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels,
+            flowChannel: 'arg',
+            command: parsedCommand.command
+          },
+          { env, sourceLocation: directive.location }
+        );
+      }
       
       // NEW: Security check for exec commands
       const security = env.getSecurityManager();
@@ -788,7 +946,15 @@ export async function evaluateRun(
       }
       
       // Pass context for exec command errors too
-      setOutput(await env.executeCommand(command, workingDirectory ? { workingDirectory } : undefined, {
+      const injectedEnv = await resolveUsingEnv(tempEnv, definition.withClause, withClause);
+      const commandOptions =
+        workingDirectory || Object.keys(injectedEnv).length > 0
+          ? {
+              ...(workingDirectory ? { workingDirectory } : {}),
+              ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+            }
+          : undefined;
+      setOutput(await env.executeCommand(command, commandOptions, {
         ...executionContext,
         streamingEnabled,
         pipelineId,
@@ -817,6 +983,14 @@ export async function evaluateRun(
           args: definition.commandArgs
         }
       };
+      const mergedAuthUsing = mergeAuthUsing(definition.withClause as WithClause | undefined, withClause);
+      const refWithClause = mergedAuthUsing
+        ? { ...(withClause || {}), ...mergedAuthUsing }
+        : withClause;
+      if (refWithClause) {
+        (refDirective.values as any).withClause = refWithClause;
+        refDirective.meta = { ...directive.meta, withClause: refWithClause };
+      }
       
       // Recursively evaluate the referenced command with updated call stack
       // Note: We don't add definition.commandRef here because it will be added 
@@ -879,6 +1053,26 @@ export async function evaluateRun(
       if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' ||
                            definition.language === 'node' || definition.language === 'nodejs')) {
         (codeParams as any).__capturedShadowEnvs = capturedEnvs;
+      }
+
+      const opType = resolveRunCodeOpType(definition.language ?? '');
+      const opLabels = opType ? getOperationLabels({ type: opType }) : [];
+      if (opType && opLabels.length > 0) {
+        updateOperationContext({ opLabels });
+      }
+      const inputDescriptor =
+        argDescriptors.length > 0 ? env.mergeSecurityDescriptors(...argDescriptors) : undefined;
+      const inputTaint = descriptorToInputTaint(inputDescriptor);
+      if (policyChecksEnabled && opType && inputTaint.length > 0) {
+        policyEnforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels,
+            flowChannel: 'arg'
+          },
+          { env, sourceLocation: directive.location }
+        );
       }
 
       // Special handling for mlld-when expressions
@@ -1129,6 +1323,50 @@ function getPreExtractedRunCommand(context?: EvaluationContext): string | undefi
       typeof (input as any).value === 'string'
     ) {
       return (input as any).value as string;
+    }
+  }
+  return undefined;
+}
+
+function getPreExtractedRunDescriptor(
+  context?: EvaluationContext
+): SecurityDescriptor | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const input of context.extractedInputs) {
+    if (
+      input &&
+      typeof input === 'object' &&
+      'name' in input &&
+      (input as any).name === '__run_command__'
+    ) {
+      const mx = (input as any).mx;
+      return mx ? varMxToSecurityDescriptor(mx) : undefined;
+    }
+  }
+  return undefined;
+}
+
+function getPreExtractedRunStdin(
+  context?: EvaluationContext
+): { text: string; descriptor?: SecurityDescriptor } | undefined {
+  if (!context?.extractedInputs || context.extractedInputs.length === 0) {
+    return undefined;
+  }
+  for (const input of context.extractedInputs) {
+    if (
+      input &&
+      typeof input === 'object' &&
+      'name' in input &&
+      (input as any).name === '__run_stdin__' &&
+      typeof (input as any).value === 'string'
+    ) {
+      const mx = (input as any).mx;
+      return {
+        text: (input as any).value as string,
+        descriptor: mx ? varMxToSecurityDescriptor(mx) : undefined
+      };
     }
   }
   return undefined;

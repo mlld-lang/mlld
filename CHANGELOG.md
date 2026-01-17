@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--force` to overwrite existing config
   - `--script-dir` and `--local-path` for customization
   - Suggests `mlld setup` for more configuration options
+- **Policy label flow enforcement**: Security policies now check labeled data flows through run/show/output and pipelines
+- **`using` auth injection**: `using auth:name` and `using @var as "ENV"` (plus `with { auth, using }`) pass credentials into exec/run from policy auth sources
 
 ### Changed
 - **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)
@@ -33,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`run stream @exec()` parsing**: Run directives accept stream modifiers and tail options on exec invocations
+- **After-guard retry output**: Retryable after-guard flows emit output once after a successful retry
 - **Ternary expressions with arrays/objects**: Ternary expressions returning arrays or objects (e.g., `@tier ? @tier.split(",") : []`) now preserve the actual value instead of stringifying to JSON. Previously, `[].length` would return 2 (string length of `"[]"`) instead of 0.
 - **Ternary condition field access**: Accessing missing fields in ternary conditions now returns undefined instead of throwing, enabling patterns like `@p.tier ? @p.tier : ""` for optional payload fields
 - **`run` is now silent by default**: `run` no longer shows "Running: ..." status messages or emits blank lines for commands with no output. Use `| log "message"` for custom progress logging, or `--show-progress` flag to restore old behavior

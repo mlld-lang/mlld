@@ -44,6 +44,9 @@ import {
   parseAndWrapJson,
   applySecurityDescriptorToStructuredValue
 } from '@interpreter/utils/structured-value';
+import { getOperationLabels } from '@core/policy/operation-labels';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 
 import { wrapExecResult } from '../utils/structured-exec';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -109,6 +112,7 @@ export async function evaluateShow(
   const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
   let isStreamingShow = false;
   let interpolatedDescriptor: SecurityDescriptor | undefined;
+  let sourceDescriptor: SecurityDescriptor | undefined;
   const collectInterpolatedDescriptor = (descriptor?: SecurityDescriptor): void => {
     if (!descriptor) {
       return;
@@ -252,6 +256,7 @@ export async function evaluateShow(
       if (!variable) {
         throw new Error(`Variable not found: ${varName}`);
       }
+      sourceDescriptor = descriptorFromVariable(variable);
     }
 
     // Handle all variable types using the new type guards (skip if we already have a value from template literal)
@@ -1237,6 +1242,30 @@ export async function evaluateShow(
   content = displayMaterialized.text;
   const textForWrapper = content;
 
+  if (!context?.isExpression && !context?.policyChecked) {
+    const inputDescriptor = mergeInputDescriptors(
+      interpolatedDescriptor,
+      displayMaterialized.descriptor,
+      sourceDescriptor
+    );
+    const inputTaint = descriptorToInputTaint(inputDescriptor);
+    if (inputTaint.length > 0) {
+      const opType = directive.kind === 'stream' ? 'stream' : 'show';
+      const opLabels =
+        context?.operationContext?.opLabels ?? getOperationLabels({ type: opType });
+      const enforcer = new PolicyEnforcer(env.getPolicySummary());
+      enforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels: [],
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: directiveLocation }
+      );
+    }
+  }
+
   if (process.env.MLLD_DEBUG_FIX === 'true') {
     try {
       fs.appendFileSync(
@@ -1262,6 +1291,7 @@ export async function evaluateShow(
   const resultDescriptor = mergeDescriptors(
     interpolatedDescriptor,
     displayMaterialized.descriptor,
+    sourceDescriptor,
     snapshot
       ? makeSecurityDescriptor({
           labels: snapshot.labels,

@@ -14,6 +14,8 @@ import { extractVariableValue, isVariable } from '../../utils/variable-resolutio
 import { GuardError, type GuardErrorDetails } from '@core/errors/GuardError';
 import { isGuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import type { EvalResult } from '../../core/interpreter';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { collectInputDescriptor, descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 
 // Minimal builtin effects support for pipelines. These are inline effects that
 // do not create stages and run after the owning stage succeeds.
@@ -203,6 +205,7 @@ export async function runBuiltinEffect(
   env: Environment
 ): Promise<void> {
   const hookManager = env.getHookManager();
+  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
   const operationContext = buildEffectOperationContext(effect);
   const hookNode = createEffectHookNode(effect);
 
@@ -211,6 +214,22 @@ export async function runBuiltinEffect(
     guardInputs.length > 0
       ? guardInputs
       : materializeGuardInputs([stageOutput ?? ''], { nameHint: '__effect_input__' });
+
+  const inputDescriptor = collectInputDescriptor(
+    guardInputs.length > 0 ? guardInputs : [payload]
+  );
+  const inputTaint = descriptorToInputTaint(inputDescriptor);
+  if (inputTaint.length > 0) {
+    policyEnforcer.checkLabelFlow(
+      {
+        inputTaint,
+        opLabels: operationContext.opLabels ?? [],
+        exeLabels: [],
+        flowChannel: 'arg'
+      },
+      { env, sourceLocation: operationContext.location ?? undefined }
+    );
+  }
 
   await env.withOpContext(operationContext, async () => {
     const preDecision = await hookManager.runPre(hookNode, inputs, env, operationContext);

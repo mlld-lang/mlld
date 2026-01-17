@@ -1,12 +1,14 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
+import { interpolate } from '../core/interpreter';
 import { getTextContent } from '../utils/type-guard-helpers';
 import type { OperationContext, PipelineContextSnapshot } from '../env/ContextManager';
 import type { PolicyDirectiveNode } from '@core/types/policy';
 import { extractDirectiveInputs } from './directive-inputs';
 import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
-import type { Variable } from '@core/types/variable';
+import type { Variable, VariableSource } from '@core/types/variable';
+import { createSimpleTextVariable, isExecutableVariable } from '@core/types/variable';
 import { isVariable } from '../utils/variable-resolution';
 
 // Import specific evaluators
@@ -27,9 +29,15 @@ import { evaluateNeeds, evaluateWants } from './needs';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
-import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluatePolicy } from './policy';
 import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { collectInputDescriptor, descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
+import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import { InterpolationContext } from '../core/interpolation-context';
+import type { ExecutableDefinition } from '@core/types/executable';
+import type { WithClause } from '@core/types';
 
 /**
  * Extract trace information from a directive
@@ -149,6 +157,13 @@ export async function evaluateDirective(
         } else {
           extractedInputs = await extractDirectiveInputs(directive, env);
         }
+        const policyChecked = await enforcePolicyBeforeGuards(
+          directive,
+          env,
+          extractedInputs,
+          operationContext,
+          context
+        );
         const preDecision = await hookManager.runPre(
           directive,
           extractedInputs,
@@ -173,7 +188,8 @@ export async function evaluateDirective(
           context,
           resolvedInputs,
           operationContext,
-          precomputedVarAssignment
+          precomputedVarAssignment,
+          policyChecked
         );
 
         let result = await dispatchDirective(directive, env, mergedContext);
@@ -264,14 +280,380 @@ function mergeEvaluationContext(
   baseContext: EvaluationContext | undefined,
   extractedInputs: readonly unknown[],
   operationContext: OperationContext,
-  precomputedVarAssignment?: VarAssignmentResult
+  precomputedVarAssignment?: VarAssignmentResult,
+  policyChecked?: boolean
 ): EvaluationContext {
   const extra: EvaluationContext = {
     extractedInputs,
     operationContext,
-    precomputedVarAssignment
+    precomputedVarAssignment,
+    policyChecked
   };
   return baseContext ? { ...baseContext, ...extra } : extra;
+}
+
+function resolveRunFlowChannel(withClause?: WithClause): 'using' | 'arg' {
+  if (withClause && (withClause as any).auth) {
+    return 'using';
+  }
+  if (withClause && (withClause as any).using) {
+    return 'using';
+  }
+  return 'arg';
+}
+
+function findInputVariable(
+  inputs: readonly unknown[],
+  name: string
+): Variable | undefined {
+  for (const input of inputs) {
+    if (isVariable(input) && input.name === name) {
+      return input;
+    }
+  }
+  return undefined;
+}
+
+function findExecutableInput(inputs: readonly unknown[]): Variable | undefined {
+  for (const input of inputs) {
+    if (isExecutableVariable(input)) {
+      return input;
+    }
+  }
+  return undefined;
+}
+
+async function collectExecArgValues(
+  definition: ExecutableDefinition,
+  directive: DirectiveNode,
+  env: Environment
+): Promise<{ argValues: Record<string, string>; argDescriptors: SecurityDescriptor[] }> {
+  const args = Array.isArray((directive.values as any)?.args)
+    ? ((directive.values as any).args as unknown[])
+    : [];
+  const argDescriptors: SecurityDescriptor[] = [];
+  const argValues: Record<string, string> = {};
+  const paramNames = definition.paramNames as string[] | undefined;
+  if (!paramNames || paramNames.length === 0) {
+    return { argValues, argDescriptors };
+  }
+  for (let i = 0; i < paramNames.length; i += 1) {
+    const paramName = paramNames[i];
+    const arg = args[i];
+    if (!arg) {
+      argValues[paramName] = '';
+      continue;
+    }
+    if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
+      argValues[paramName] = String(arg);
+      continue;
+    }
+    if (arg && typeof arg === 'object' && 'type' in (arg as Record<string, unknown>)) {
+      const typed = arg as { type: string; identifier?: string; variable?: { identifier?: string } };
+      if (typed.type === 'VariableReference' && typed.identifier) {
+        const variable = env.getVariable(typed.identifier);
+        if (variable?.mx) {
+          argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
+        }
+      } else if (typed.type === 'VariableReferenceWithTail' && typed.variable?.identifier) {
+        const variable = env.getVariable(typed.variable.identifier);
+        if (variable?.mx) {
+          argDescriptors.push(varMxToSecurityDescriptor(variable.mx));
+        }
+      }
+      const argValue = await interpolate([arg], env, InterpolationContext.Default, {
+        collectSecurityDescriptor: descriptor => {
+          if (descriptor) {
+            argDescriptors.push(descriptor);
+          }
+        }
+      });
+      argValues[paramName] = argValue;
+      continue;
+    }
+    argValues[paramName] = String(arg);
+  }
+  return { argValues, argDescriptors };
+}
+
+async function buildExecCommandPreview(
+  definition: ExecutableDefinition,
+  directive: DirectiveNode,
+  env: Environment
+): Promise<{ commandText: string; inputDescriptor?: SecurityDescriptor } | null> {
+  if (!definition.commandTemplate) {
+    return null;
+  }
+  const { argValues, argDescriptors } = await collectExecArgValues(definition, directive, env);
+  const tempEnv = env.createChild();
+  const paramSource: VariableSource = {
+    directive: 'run',
+    syntax: 'parameter',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  for (const [key, value] of Object.entries(argValues)) {
+    tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value, paramSource));
+  }
+  const commandDescriptors: SecurityDescriptor[] = [];
+  const commandText = await interpolate(definition.commandTemplate, tempEnv, InterpolationContext.ShellCommand, {
+    collectSecurityDescriptor: descriptor => {
+      if (descriptor) {
+        commandDescriptors.push(descriptor);
+      }
+    }
+  });
+  const argDescriptor =
+    argDescriptors.length > 1 ? env.mergeSecurityDescriptors(...argDescriptors) : argDescriptors[0];
+  const commandDescriptor =
+    commandDescriptors.length > 1
+      ? env.mergeSecurityDescriptors(...commandDescriptors)
+      : commandDescriptors[0];
+  const inputDescriptor = mergeInputDescriptors(argDescriptor, commandDescriptor);
+  return { commandText, inputDescriptor };
+}
+
+async function enforcePolicyBeforeGuards(
+  directive: DirectiveNode,
+  env: Environment,
+  extractedInputs: readonly unknown[],
+  operationContext: OperationContext,
+  context?: EvaluationContext
+): Promise<boolean> {
+  const policy = env.getPolicySummary();
+  if (!policy?.labels) {
+    return false;
+  }
+  const enforcer = new PolicyEnforcer(policy);
+  const sourceLocation = directive.location;
+
+  if (directive.kind === 'show' || directive.kind === 'stream') {
+    if (context?.isExpression) {
+      return true;
+    }
+    const inputDescriptor = collectInputDescriptor(extractedInputs);
+    const inputTaint = descriptorToInputTaint(inputDescriptor);
+    if (inputTaint.length > 0) {
+      const opType = directive.kind === 'stream' ? 'stream' : 'show';
+      const opLabels =
+        operationContext.opLabels ?? getOperationLabels({ type: opType });
+      enforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels: [],
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation }
+      );
+    }
+    return true;
+  }
+
+  if (directive.kind === 'output' || directive.kind === 'append') {
+    if (directive.kind === 'output' && !directive.meta?.hasSource) {
+      const snapshot = env.getSecuritySnapshot();
+      const descriptor = snapshot
+        ? makeSecurityDescriptor({
+            labels: snapshot.labels,
+            taint: snapshot.taint,
+            sources: snapshot.sources,
+            policyContext: snapshot.policy ? { ...snapshot.policy } : undefined
+          })
+        : undefined;
+      const inputTaint = descriptorToInputTaint(descriptor);
+      if (inputTaint.length > 0) {
+        const opLabels =
+          operationContext.opLabels ?? getOperationLabels({ type: 'output' });
+        enforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels: [],
+            flowChannel: 'arg'
+          },
+          { env, sourceLocation }
+        );
+      }
+      return true;
+    }
+
+    const inputDescriptor = collectInputDescriptor(extractedInputs);
+    const inputTaint = descriptorToInputTaint(inputDescriptor);
+    if (inputTaint.length > 0) {
+      const opType = directive.kind === 'append' ? 'append' : 'output';
+      const opLabels =
+        operationContext.opLabels ?? getOperationLabels({ type: opType });
+      enforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels: [],
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation }
+      );
+    }
+    return true;
+  }
+
+  if (directive.kind === 'run') {
+    const withClause = (directive.meta?.withClause || (directive.values as any)?.withClause) as WithClause | undefined;
+    const flowChannel = resolveRunFlowChannel(withClause);
+    const commandVar = findInputVariable(extractedInputs, '__run_command__');
+    const stdinVar = findInputVariable(extractedInputs, '__run_stdin__');
+    if (directive.subtype === 'runCommand') {
+      const commandText = typeof commandVar?.value === 'string' ? commandVar.value : '';
+      const parsed = parseCommand(commandText);
+      const opLabels = getOperationLabels({
+        type: 'cmd',
+        command: parsed.command,
+        subcommand: parsed.subcommand
+      });
+      const opSources =
+        parsed.command
+          ? getOperationSources({
+              type: 'cmd',
+              command: parsed.command,
+              subcommand: parsed.subcommand
+            })
+          : [];
+      if (opLabels.length > 0) {
+        operationContext.opLabels = opLabels;
+        env.updateOpContext({ opLabels });
+      }
+      if (opSources.length > 0) {
+        operationContext.sources = opSources;
+        env.updateOpContext({ sources: opSources });
+      }
+      const commandDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
+      const inputTaint = descriptorToInputTaint(commandDescriptor);
+      if (inputTaint.length > 0) {
+        enforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels: [],
+            flowChannel,
+            command: parsed.command
+          },
+          { env, sourceLocation }
+        );
+      }
+      const stdinDescriptor = stdinVar?.mx ? varMxToSecurityDescriptor(stdinVar.mx) : undefined;
+      const stdinTaint = descriptorToInputTaint(stdinDescriptor);
+      if (stdinTaint.length > 0) {
+        enforcer.checkLabelFlow(
+          {
+            inputTaint: stdinTaint,
+            opLabels,
+            exeLabels: [],
+            flowChannel: 'stdin',
+            command: parsed.command
+          },
+          { env, sourceLocation }
+        );
+      }
+      return true;
+    }
+
+    if (directive.subtype === 'runCode') {
+      const opLabels = operationContext.opLabels ?? [];
+      const inputDescriptor = collectInputDescriptor(extractedInputs);
+      const inputTaint = descriptorToInputTaint(inputDescriptor);
+      if (opLabels.length > 0 && inputTaint.length > 0) {
+        enforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels: [],
+            flowChannel: 'arg'
+          },
+          { env, sourceLocation }
+        );
+      }
+      return true;
+    }
+
+    if (directive.subtype === 'runExec') {
+      const execVar = findExecutableInput(extractedInputs);
+      if (!execVar || !execVar.internal?.executableDef) {
+        return false;
+      }
+      const execDescriptor = execVar.mx ? varMxToSecurityDescriptor(execVar.mx) : undefined;
+      const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+      const definition = execVar.internal.executableDef as ExecutableDefinition;
+      if (definition.type === 'command' && definition.commandTemplate) {
+        const preview = await buildExecCommandPreview(definition, directive, env);
+        if (!preview) {
+          return false;
+        }
+        const parsed = parseCommand(preview.commandText);
+        const opLabels = getOperationLabels({
+          type: 'cmd',
+          command: parsed.command,
+          subcommand: parsed.subcommand
+        });
+        const opSources =
+          parsed.command
+            ? getOperationSources({
+                type: 'cmd',
+                command: parsed.command,
+                subcommand: parsed.subcommand
+              })
+            : [];
+        if (opLabels.length > 0) {
+          operationContext.opLabels = opLabels;
+          env.updateOpContext({ opLabels });
+        }
+        if (opSources.length > 0) {
+          operationContext.sources = opSources;
+          env.updateOpContext({ sources: opSources });
+        }
+        const inputTaint = descriptorToInputTaint(preview.inputDescriptor);
+        if (inputTaint.length > 0) {
+          enforcer.checkLabelFlow(
+            {
+              inputTaint,
+              opLabels,
+              exeLabels,
+              flowChannel,
+              command: parsed.command
+            },
+            { env, sourceLocation }
+          );
+        }
+        return true;
+      }
+      if (definition.type === 'code') {
+        const opType = mapLanguageToOpType(definition.language ?? '');
+        const opLabels = opType ? getOperationLabels({ type: opType }) : [];
+        if (opLabels.length === 0) {
+          return false;
+        }
+        const { argDescriptors } = await collectExecArgValues(definition, directive, env);
+        const inputDescriptor =
+          argDescriptors.length > 1
+            ? env.mergeSecurityDescriptors(...argDescriptors)
+            : argDescriptors[0];
+        const inputTaint = descriptorToInputTaint(inputDescriptor);
+        if (inputTaint.length > 0) {
+          enforcer.checkLabelFlow(
+            {
+              inputTaint,
+              opLabels,
+              exeLabels,
+              flowChannel: 'arg'
+            },
+            { env, sourceLocation }
+          );
+        }
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function buildOperationContext(

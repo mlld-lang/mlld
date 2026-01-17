@@ -9,6 +9,9 @@ import { formatJSONL } from './output-shared';
 import { MlldDirectiveError } from '@core/errors';
 import * as path from 'path';
 import type { SecurityDescriptor } from '@core/types/security';
+import { getOperationLabels } from '@core/policy/operation-labels';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 
 interface AppendOptions {
   location?: SourceLocation;
@@ -67,6 +70,24 @@ export async function evaluateAppend(
   content = materialized.text;
   if (materialized.descriptor) {
     env.recordSecurityDescriptor(materialized.descriptor);
+  }
+
+  if (!context?.policyChecked) {
+    const inputTaint = descriptorToInputTaint(materialized.descriptor);
+    if (inputTaint.length > 0) {
+      const opLabels =
+        context?.operationContext?.opLabels ?? getOperationLabels({ type: 'append' });
+      const enforcer = new PolicyEnforcer(env.getPolicySummary());
+      enforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels: [],
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: directive.location }
+      );
+    }
   }
   const format = typeof directive.meta?.format === 'string' ? directive.meta?.format : undefined;
   await appendContentToFile(target, content, env, {

@@ -34,6 +34,8 @@ export interface WithClause {
   parallel?: number;
   delayMs?: number;
   stdin?: Expression;
+  auth?: string;
+  using?: { var: string; as: string };
   guards?: GuardOverrideOptions | false;
   stream?: boolean;
   streamFormat?: any;

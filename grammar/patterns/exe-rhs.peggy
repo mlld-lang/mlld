@@ -136,22 +136,23 @@ ExeUnifiedReference "exe unified reference"
 // Run command with stdin pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandWithStdin "exe run command with stdin"
-  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) _ withClause:WithClause {
+  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? _ withClause:WithClause {
       // Only allow with clauses that have stdin
       if (!withClause || !('stdin' in withClause)) {
         return null; // Let other patterns handle this
       }
+      const mergedWithClause = using ? { ...using, ...withClause } : withClause;
 
       return {
         subtype: 'exeCommand',
         source: 'command',
         values: {
           ...content.values,
-          withClause: withClause
+          withClause: mergedWithClause
         },
         raw: {
           ...content.raw,
-          withClause: withClause
+          withClause: mergedWithClause
         },
         meta: {
           ...content.meta,
@@ -163,8 +164,11 @@ ExeRunCommandWithStdin "exe run command with stdin"
 // Run command pipe stdin pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPipeStdin "exe run command pipe stdin"
-  = "run" _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+  = "run" _ stdinExpr:PipeStdinExpression _ "|" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? {
       const withClause = { stdin: stdinExpr };
+      if (using) {
+        Object.assign(withClause, using);
+      }
       if (tail) {
         Object.assign(withClause, tail);
       }
@@ -191,8 +195,11 @@ ExeRunCommandPipeStdin "exe run command pipe stdin"
 
 // Streaming command pattern for exe context - handles "stream cmd {command}" syntax
 ExeStreamCommandPattern "exe stream command pattern"
-  = "stream" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) tail:TailModifiers? {
+  = "stream" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? tail:TailModifiers? {
       const withClause = { stream: true };
+      if (using) {
+        Object.assign(withClause, using);
+      }
       if (tail) {
         Object.assign(withClause, tail);
       }
@@ -219,17 +226,19 @@ ExeStreamCommandPattern "exe stream command pattern"
 // Run command pattern for exe context
 // In 'run' contexts: supports both "run cmd {...}" and "run {...}" (bare brackets for backward compatibility)
 ExeRunCommandPattern "exe run command pattern"
-  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) {
+  = "run" _ content:(CmdCommandBrackets / UnifiedCommandBrackets) using:UsingClause? {
       return {
         subtype: 'exeCommand',
         source: 'command',
         values: {
-          ...content.values
+          ...content.values,
+          ...(using ? { withClause: using } : {})
         },
         raw: {
-          ...content.raw
+          ...content.raw,
+          ...(using ? { withClause: using } : {})
         },
-        meta: content.meta
+        meta: using ? { ...content.meta, withClause: using } : content.meta
       };
     }
 

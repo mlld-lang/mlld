@@ -24,6 +24,9 @@ import * as path from 'path';
 import { makeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../core/interpolation-context';
 import { resolveDirectiveExecInvocation } from './directive-replay';
+import { getOperationLabels } from '@core/policy/operation-labels';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 
 function mergeInterpolatedDescriptors(
   env: Environment,
@@ -163,6 +166,35 @@ export async function evaluateOutput(
             policyContext: snapshot.policy
           })
         : undefined);
+
+    const policyDescriptor =
+      hasSource
+        ? materializedContent.descriptor
+        : materializedContent.descriptor ?? (snapshot
+          ? makeSecurityDescriptor({
+              labels: snapshot.labels,
+              taint: snapshot.taint,
+              sources: snapshot.sources,
+              policyContext: snapshot.policy
+            })
+          : undefined);
+    if (!context?.policyChecked) {
+      const inputTaint = descriptorToInputTaint(policyDescriptor);
+      if (inputTaint.length > 0) {
+        const opLabels =
+          context?.operationContext?.opLabels ?? getOperationLabels({ type: 'output' });
+        const enforcer = new PolicyEnforcer(env.getPolicySummary());
+        enforcer.checkLabelFlow(
+          {
+            inputTaint,
+            opLabels,
+            exeLabels: [],
+            flowChannel: 'arg'
+          },
+          { env, sourceLocation: directive.location }
+        );
+      }
+    }
     
     // Handle the target
     // Check if this is a simplified structure from @when actions (has values.path instead of values.target)

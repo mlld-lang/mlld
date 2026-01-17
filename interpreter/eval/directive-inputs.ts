@@ -7,12 +7,15 @@ import {
   type SecurityDescriptor
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
-import { interpolate } from '../core/interpreter';
+import { interpolate, evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { getTextContent } from '../utils/type-guard-helpers';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { materializeGuardInputs } from '../utils/guard-inputs';
 import { replayInlineExecInvocations } from './directive-replay';
+import { coerceValueForStdin } from '../utils/shell-value';
+import { extractSecurityDescriptor } from '../utils/structured-value';
+import { isVariable, resolveValue, ResolutionContext } from '../utils/variable-resolution';
 
 type AstValue = Record<string, unknown> & { type?: string };
 
@@ -70,7 +73,8 @@ async function extractShowInputs(
   const inputs: Variable[] = [];
   const varName = resolveShowVariableName(directive);
   if (!varName) {
-    return inputs;
+    const inlineVars = collectVariablesFromNodes([directive.values as any], env);
+    return inlineVars.length > 0 ? materializeGuardInputs(inlineVars) : inputs;
   }
   const variable = env.getVariable(varName);
   if (variable) {
@@ -160,7 +164,8 @@ async function extractOutputInputs(
 
   const varName = resolveOutputVariableName(sourceNode);
   if (!varName) {
-    return [];
+    const inlineVars = collectVariablesFromNodes([sourceNode], env);
+    return inlineVars.length > 0 ? materializeGuardInputs(inlineVars) : [];
   }
 
   const variable = env.getVariable(varName);
@@ -253,7 +258,18 @@ async function extractRunInputs(
     if (mergedDescriptor) {
       env.recordSecurityDescriptor(mergedDescriptor);
     }
-    return [variable];
+    const inputs: Variable[] = [variable];
+    const stdinVariable = await extractRunStdinVariable(directive, env);
+    if (stdinVariable) {
+      inputs.push(stdinVariable);
+    }
+    return inputs;
+  }
+
+  if (directive.subtype === 'runCode') {
+    const args = Array.isArray(directive.values?.args) ? directive.values?.args : [];
+    const argVariables = collectVariablesFromNodes(args, env);
+    return materializeGuardInputs(argVariables);
   }
 
   if (
@@ -277,7 +293,10 @@ async function extractRunInputs(
       return [];
     }
     const execVar = env.getVariable(execName);
-    return execVar ? materializeGuardInputs([execVar]) : [];
+    const args = Array.isArray(directive.values?.args) ? directive.values?.args : [];
+    const argVariables = collectVariablesFromNodes(args, env);
+    const inputs = execVar ? [execVar, ...argVariables] : argVariables;
+    return materializeGuardInputs(inputs);
   }
 
   return [];
@@ -303,6 +322,42 @@ function resolveRunExecName(directive: DirectiveNode): string | undefined {
   }
 
   return undefined;
+}
+
+async function extractRunStdinVariable(
+  directive: DirectiveNode,
+  env: Environment
+): Promise<Variable | null> {
+  const withClause = (directive.meta?.withClause || directive.values?.withClause) as {
+    stdin?: unknown;
+  } | undefined;
+  if (!withClause || !('stdin' in withClause)) {
+    return null;
+  }
+  const result = await evaluate(withClause.stdin as any, env, { isExpression: true });
+  let value = result.value;
+  const descriptor = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  if (isVariable(value)) {
+    value = await resolveValue(value, env, ResolutionContext.CommandExecution);
+  }
+  const stdinText = coerceValueForStdin(value);
+  const source: VariableSource = {
+    directive: 'run',
+    syntax: 'stdin',
+    hasInterpolation: true,
+    isMultiLine: typeof stdinText === 'string' && stdinText.includes('\n')
+  };
+  const stdinVar = createSimpleTextVariable('__run_stdin__', stdinText, source, {
+    mx: descriptor || {},
+    internal: { isSystem: true }
+  });
+  if (descriptor) {
+    env.recordSecurityDescriptor(descriptor);
+  }
+  return stdinVar;
 }
 
 function extractExecInvocationArgs(invocation: ExecInvocation, env: Environment): Variable[] {

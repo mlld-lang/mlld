@@ -3,6 +3,7 @@ import { GuardRetrySignal, isGuardRetrySignal } from '@core/errors/GuardRetrySig
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import type { GuardContextSnapshot, OperationContext } from '../env/ContextManager';
 import type { Environment } from '../env/Environment';
+import { BufferedEffectHandler } from '../env/EffectHandler';
 import { appendFileSync } from 'fs';
 
 const DEFAULT_GUARD_MAX = 3;
@@ -51,6 +52,20 @@ function logAfterRetryDebug(label: string, payload: Record<string, unknown>): vo
   }
 }
 
+function shouldBufferEffects(env: Environment, operationContext?: OperationContext): boolean {
+  if (env.shouldSuppressGuards()) {
+    return false;
+  }
+  const guards = env.getGuardRegistry().getAllGuards();
+  const hasAfterGuard = guards.some(def => def.timing === 'after' || def.timing === 'always');
+  if (!hasAfterGuard) {
+    return false;
+  }
+  const streaming =
+    Boolean(operationContext?.metadata && (operationContext.metadata as Record<string, unknown>).streaming);
+  return !streaming;
+}
+
 function extractGuardRetryDetails(error: unknown): GuardRetryErrorDetails {
   if (!error || typeof error !== 'object') {
     return {};
@@ -88,11 +103,28 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       hintHistory: state.hintHistory.slice()
     };
 
+    const bufferEffects = shouldBufferEffects(options.env, options.operationContext);
+    const originalHandler = bufferEffects ? options.env.getEffectHandler() : null;
+    const bufferHandler =
+      bufferEffects && originalHandler ? new BufferedEffectHandler(originalHandler) : null;
+    if (bufferHandler && originalHandler) {
+      options.env.setEffectHandler(bufferHandler);
+    }
+
     try {
-      return await options.env
+      const result = await options.env
         .getContextManager()
         .withGenericContext('guardRetry', guardRetryContext, options.execute);
+      if (bufferHandler && originalHandler) {
+        options.env.setEffectHandler(originalHandler);
+        bufferHandler.flush();
+      }
+      return result;
     } catch (error) {
+      if (bufferHandler && originalHandler) {
+        options.env.setEffectHandler(originalHandler);
+        bufferHandler.discard();
+      }
       const isRetrySignal =
         (error instanceof GuardError && error.decision === 'retry') || isGuardRetrySignal(error);
       const debugPayload = {

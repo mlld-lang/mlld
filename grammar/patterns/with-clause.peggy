@@ -53,6 +53,12 @@ WithProperty
   / "policy" _ ":" _ policy:DataObjectLiteral {
       return ["policy", policy];
     }
+  / "auth" _ ":" _ name:AuthName {
+      return ["auth", name];
+    }
+  / "using" _ ":" _ using:UsingObject {
+      return ["using", using];
+    }
   / "parallel" _ ":" _ cap:NumberLiteral {
       return ["parallel", Number(cap)];
     }
@@ -65,6 +71,44 @@ WithProperty
     }
   / "streamFormat" _ ":" _ format:Expression {
       return ["streamFormat", format];
+    }
+
+AuthName
+  = name:BaseIdentifier { return name; }
+  / name:StringLiteral { return name; }
+
+UsingEnvName
+  = name:BaseIdentifier { return name; }
+  / name:StringLiteral { return name; }
+
+UsingVarRef
+  = "@" id:BaseIdentifier {
+      return helpers.normalizePathVar(id);
+    }
+
+UsingVarName
+  = UsingVarRef
+  / name:StringLiteral { return name; }
+
+UsingObject
+  = "{" _ "var" _ ":" _ varName:UsingVarName _ "," _ "as" _ ":" _ envName:UsingEnvName _ "}" {
+      return { var: varName, as: envName };
+    }
+  / "{" _ "as" _ ":" _ envName:UsingEnvName _ "," _ "var" _ ":" _ varName:UsingVarName _ "}" {
+      return { var: varName, as: envName };
+    }
+
+UsingClause
+  = __ "using" _ credential:UsingCredential {
+      return credential;
+    }
+
+UsingCredential
+  = "auth" _ ":" _ name:AuthName {
+      return { auth: name };
+    }
+  / varName:UsingVarRef _ "as" _ envName:UsingEnvName {
+      return { using: { var: varName, as: envName } };
     }
 
 // -------------------------------------------------------------
