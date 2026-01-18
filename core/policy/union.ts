@@ -3,6 +3,10 @@ export type PolicyLimits = {
   timeout?: number;
 };
 
+export type PolicyEnvironmentConfig = {
+  default?: string;
+};
+
 export type AuthConfig = {
   from: string;
   as: string;
@@ -21,6 +25,7 @@ export type PolicyConfig = {
   allow?: Record<string, string[] | true> | true;
   deny?: Record<string, string[] | true> | true;
   labels?: PolicyLabels;
+  env?: PolicyEnvironmentConfig;
   limits?: PolicyLimits;
 };
 
@@ -57,6 +62,7 @@ export function mergePolicyConfigs(
   const labels = mergePolicyLabels(normalizedBase.labels, normalizedIncoming.labels);
   const auth = mergePolicyAuth(normalizedBase.auth, normalizedIncoming.auth);
   const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
+  const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
 
   return {
@@ -65,6 +71,7 @@ export function mergePolicyConfigs(
     allow: fromAllowShape(mergedAllow),
     deny: fromDenyShape(mergedDeny),
     ...(labels ? { labels } : {}),
+    ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
   };
 }
@@ -78,6 +85,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const labels = normalizePolicyLabels(config.labels);
   const auth = normalizePolicyAuth(config.auth);
   const defaultStance = normalizePolicyDefault(config.default);
+  const envConfig = normalizePolicyEnv(config.env);
   const limits = config.limits ? normalizeLimits(config.limits) : undefined;
   return {
     ...(defaultStance ? { default: defaultStance } : {}),
@@ -85,8 +93,41 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     allow,
     deny,
     ...(labels ? { labels } : {}),
+    ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
   };
+}
+
+function normalizePolicyEnv(
+  config?: PolicyEnvironmentConfig
+): PolicyEnvironmentConfig | undefined {
+  if (!config) {
+    return undefined;
+  }
+  const defaultProvider =
+    typeof config.default === 'string' && config.default.trim().length > 0
+      ? config.default.trim()
+      : undefined;
+  if (!defaultProvider) {
+    return undefined;
+  }
+  return { default: defaultProvider };
+}
+
+function mergePolicyEnv(
+  base?: PolicyEnvironmentConfig,
+  incoming?: PolicyEnvironmentConfig
+): PolicyEnvironmentConfig | undefined {
+  const normalizedBase = normalizePolicyEnv(base);
+  const normalizedIncoming = normalizePolicyEnv(incoming);
+  if (!normalizedBase && !normalizedIncoming) {
+    return undefined;
+  }
+  const defaultProvider = normalizedIncoming?.default ?? normalizedBase?.default;
+  if (!defaultProvider) {
+    return undefined;
+  }
+  return { default: defaultProvider };
 }
 
 function toAllowShape(value: PolicyConfig['allow']): AllowShape {

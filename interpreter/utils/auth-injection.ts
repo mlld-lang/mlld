@@ -8,11 +8,27 @@ import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 
 type UsingConfig = { var?: unknown; as?: unknown };
 
+export type UsingEnvParts = {
+  vars: Record<string, string>;
+  secrets: Record<string, string>;
+  merged: Record<string, string>;
+};
+
 export async function resolveUsingEnv(
   env: Environment,
   ...withClauses: Array<WithClause | undefined>
 ): Promise<Record<string, string>> {
-  const envVars: Record<string, string> = {};
+  const parts = await resolveUsingEnvParts(env, ...withClauses);
+  return parts.merged;
+}
+
+export async function resolveUsingEnvParts(
+  env: Environment,
+  ...withClauses: Array<WithClause | undefined>
+): Promise<UsingEnvParts> {
+  const vars: Record<string, string> = {};
+  const secrets: Record<string, string> = {};
+  const merged: Record<string, string> = {};
 
   for (const withClause of withClauses) {
     if (!withClause) {
@@ -20,10 +36,11 @@ export async function resolveUsingEnv(
     }
 
     if (withClause.auth !== undefined) {
-      const authName = normalizeAuthName(withClause.auth);
-      const authConfig = getAuthConfig(env.getPolicySummary(), authName);
-      const authValue = await resolveAuthValue(authConfig.from, env);
-      envVars[authConfig.as] = authValue;
+      const authSecrets = await resolveAuthSecrets(env, withClause.auth);
+      for (const [key, value] of Object.entries(authSecrets)) {
+        secrets[key] = value;
+        merged[key] = value;
+      }
     }
 
     if ((withClause as { using?: UsingConfig }).using) {
@@ -37,11 +54,31 @@ export async function resolveUsingEnv(
         });
       }
       const value = await extractVariableValue(variable, env);
-      envVars[envName] = coerceValueForStdin(value);
+      const coerced = coerceValueForStdin(value);
+      vars[envName] = coerced;
+      merged[envName] = coerced;
     }
   }
 
-  return envVars;
+  return { vars, secrets, merged };
+}
+
+export async function resolveAuthSecrets(
+  env: Environment,
+  auth: unknown
+): Promise<Record<string, string>> {
+  if (auth === undefined || auth === null) {
+    return {};
+  }
+  const authNames = Array.isArray(auth) ? auth : [auth];
+  const secrets: Record<string, string> = {};
+  for (const entry of authNames) {
+    const authName = normalizeAuthName(entry);
+    const authConfig = getAuthConfig(env.getPolicySummary(), authName);
+    const authValue = await resolveAuthValue(authConfig.from, env);
+    secrets[authConfig.as] = authValue;
+  }
+  return secrets;
 }
 
 function normalizeAuthName(value: unknown): string {

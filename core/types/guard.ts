@@ -5,7 +5,7 @@ import type { DataLabel } from './security';
 
 export type GuardScope = 'perInput' | 'perOperation';
 export type GuardFilterKind = 'data' | 'operation';
-export type GuardDecisionType = 'allow' | 'deny' | 'retry' | 'prompt';
+export type GuardDecisionType = 'allow' | 'deny' | 'retry' | 'prompt' | 'env';
 export type GuardTiming = 'before' | 'after' | 'always';
 
 export interface GuardFilterNode extends BaseMlldNode {
@@ -97,6 +97,7 @@ export interface GuardResult {
   hint?: GuardHint;
   replacement?: unknown;
   labelModifications?: GuardLabelModifications;
+  envConfig?: unknown;
   metadata?: Record<string, unknown>;
   timing?: 'before' | 'after';
 }

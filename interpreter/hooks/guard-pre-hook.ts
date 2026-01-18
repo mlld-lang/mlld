@@ -38,6 +38,7 @@ import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
 import { appendFileSync } from 'fs';
 import { getExpressionProvenance } from '../utils/expression-provenance';
+import { isStructuredValue } from '../utils/structured-value';
 
 type GuardHelperImplementation = (args: readonly unknown[]) => unknown | Promise<unknown>;
 
@@ -484,6 +485,8 @@ export const guardPreHook: PreHook = async (
     const usedAttemptKeys = new Set<string>();
     let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
     let primaryMetadata: Record<string, unknown> | undefined;
+    let selectedEnvConfig: unknown | undefined;
+    let selectedEnvGuard: string | null | undefined;
 
     const transformedInputs: Variable[] = [...variableInputs];
 
@@ -512,6 +515,13 @@ export const guardPreHook: PreHook = async (
         guardTrace.push(result);
         if (result.hint) {
           hints.push(result.hint);
+        }
+        if (result.decision === 'env') {
+          if (selectedEnvConfig === undefined && result.envConfig !== undefined) {
+            selectedEnvConfig = result.envConfig;
+            selectedEnvGuard = result.guardName ?? null;
+          }
+          continue;
         }
         if (result.decision === 'allow' && currentDecision === 'allow') {
           if (result.replacement && isVariable(result.replacement as Variable)) {
@@ -565,6 +575,13 @@ export const guardPreHook: PreHook = async (
         if (result.hint) {
           hints.push(result.hint);
         }
+        if (result.decision === 'env') {
+          if (selectedEnvConfig === undefined && result.envConfig !== undefined) {
+            selectedEnvConfig = result.envConfig;
+            selectedEnvGuard = result.guardName ?? null;
+          }
+          continue;
+        }
         if (result.decision === 'allow' && currentDecision === 'allow') {
           const replacements = normalizeGuardReplacements(result.replacement);
           if (replacements.length > 0) {
@@ -604,7 +621,9 @@ export const guardPreHook: PreHook = async (
     hints,
     transformedInputs,
     primaryMetadata,
-    guardContext: aggregateContext
+    guardContext: aggregateContext,
+    envConfig: selectedEnvConfig,
+    envGuard: selectedEnvGuard
   });
     appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
     const guardName =
@@ -991,6 +1010,33 @@ async function evaluateGuard(options: {
     };
   }
 
+  if (action.decision === 'env') {
+    const envConfig = await resolveGuardEnvConfig(action, guardEnv);
+    const metadata = {
+      ...metadataBase,
+      decision: 'env',
+      envConfig
+    };
+    logGuardDecisionEvent({
+      guard,
+      node: options.node,
+      operation,
+      scope,
+      attempt: options.attemptNumber,
+      decision: 'env',
+      reason: null,
+      hint: null,
+      inputPreview
+    });
+    return {
+      guardName: guard.name ?? null,
+      decision: 'env',
+      timing: 'before',
+      envConfig,
+      metadata
+    };
+  }
+
   const metadata = buildDecisionMetadata(action, guard, {
     inputPreview,
     attempt: options.attemptNumber,
@@ -1187,6 +1233,27 @@ async function evaluateGuardReplacement(
     makeSecurityDescriptor({ sources: [`guard:${guardLabel}`] })
   );
   return cloneVariableForReplacement(inputVariable, guardDescriptor);
+}
+
+async function resolveGuardEnvConfig(
+  action: GuardActionNode,
+  guardEnv: Environment
+): Promise<unknown> {
+  if (!action.value || action.value.length === 0) {
+    throw new MlldWhenExpressionError(
+      'Guard env actions require a config value: env @config',
+      action.location
+    );
+  }
+  const result = await evaluate(action.value, guardEnv, { isExpression: true });
+  let value = result.value;
+  if (isVariable(value as Variable)) {
+    value = await extractVariableValue(value as Variable, guardEnv);
+  }
+  if (isStructuredValue(value)) {
+    return value.data;
+  }
+  return value;
 }
 
 function buildDecisionMetadata(
@@ -1545,6 +1612,8 @@ function buildAggregateMetadata(options: {
   transformedInputs?: readonly Variable[];
   primaryMetadata?: Record<string, unknown> | undefined;
   guardContext?: GuardContextSnapshot;
+  envConfig?: unknown;
+  envGuard?: string | null;
 }): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     guardResults: options.guardResults,
@@ -1562,6 +1631,13 @@ function buildAggregateMetadata(options: {
 
   if (options.guardContext) {
     metadata.guardContext = options.guardContext;
+  }
+
+  if (options.envConfig !== undefined) {
+    metadata.envConfig = options.envConfig;
+    if (options.envGuard !== undefined) {
+      metadata.envGuard = options.envGuard;
+    }
   }
 
   if (!metadata.reason && options.reasons && options.reasons.length > 0) {

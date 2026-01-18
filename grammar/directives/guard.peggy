@@ -252,7 +252,17 @@ GuardConditionExpression
   = WhenConditionExpression
 
 GuardAction
-  = "allow" options:GuardAllowWithClause value:GuardActionValue? {
+  = "env" value:GuardActionValue? {
+      if (!value) {
+        helpers.mlldError('Guard env actions require a config value: env @config', '@config', location());
+      }
+      return helpers.createNode('GuardAction', {
+        decision: 'env',
+        value: value ? value.nodes : undefined,
+        location: location()
+      });
+    }
+  / "allow" options:GuardAllowWithClause value:GuardActionValue? {
       return helpers.createNode('GuardAction', {
         decision: 'allow',
         value: value ? value.nodes : undefined,

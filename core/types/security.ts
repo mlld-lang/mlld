@@ -123,6 +123,7 @@ export const PROTECTED_LABELS: readonly DataLabel[] = [
   'secret',
   'src:mcp',
   'src:exec',
+  'src:env',
   'src:file',
   'src:network',
   'src:user',

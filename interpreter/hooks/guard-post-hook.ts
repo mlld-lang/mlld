@@ -811,6 +811,13 @@ async function evaluateGuard(options: {
     };
   }
 
+  if (action.decision === 'env') {
+    throw new MlldWhenExpressionError(
+      'Guard env actions apply only before execution',
+      action.location
+    );
+  }
+
   const metadata = buildDecisionMetadata(action, guard, {
     inputPreview,
     inputVariable,

@@ -94,6 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Source provenance taint labels apply to command outputs, URL loads, and @input resolver values
 - Guard allow actions support label modifications (`addLabels`, `removeLabels`, `warning`) with protected label enforcement
+- Guard env actions route execution through environment providers with `src:env:*` labels and `@release` lifecycle
+- `@mlld/env-docker` environment provider module
 - `/profiles` directive declares capability profiles and exposes the selected profile in `@mx.profile`
 - `mlld env` starts MCP servers from `@mcpConfig()` output and injects MCP connection env for spawned sessions
 - SDK analyze metadata includes module profiles

@@ -35,7 +35,14 @@ import { resolveDirectiveExecInvocation } from './directive-replay';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import { resolveUsingEnv } from '@interpreter/utils/auth-injection';
+import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import {
+  applyEnvironmentDefaults,
+  buildEnvironmentOutputDescriptor,
+  executeProviderCommand,
+  extractEnvironmentConfig,
+  resolveEnvironmentAuthSecrets
+} from '@interpreter/env/environment-provider';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -407,13 +414,9 @@ export async function evaluateRun(
     );
     const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
     const commandTaint = deriveCommandTaint({ command });
-    mergePendingDescriptor(
-      makeSecurityDescriptor({
-        taint: commandTaint.taint,
-        labels: commandTaint.labels,
-        sources: commandTaint.sources
-      })
-    );
+    const guardEnvConfig = extractEnvironmentConfig(context?.guardMetadata);
+    const resolvedEnvConfig = applyEnvironmentDefaults(guardEnvConfig, env.getPolicySummary());
+    mergePendingDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
 
     // Friendly pre-check for oversized simple /run command payloads
     // Rationale: Some environments may not hit ShellCommandExecutor's guard early enough.
@@ -537,22 +540,53 @@ export async function evaluateRun(
       );
     }
 
-    const injectedEnv = await resolveUsingEnv(env, withClause);
-    const commandOptions =
-      stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
-        ? {
-            ...(stdinInput !== undefined ? { input: stdinInput } : {}),
-            ...(workingDirectory ? { workingDirectory } : {}),
-            ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
-          }
-        : undefined;
-    setOutput(await env.executeCommand(command, commandOptions, {
-      ...executionContext,
-      streamingEnabled,
-      pipelineId,
-      suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true,
-      workingDirectory
-    }));
+    const usingParts = await resolveUsingEnvParts(env, withClause);
+    const envAuthSecrets = await resolveEnvironmentAuthSecrets(env, resolvedEnvConfig);
+    if (resolvedEnvConfig?.provider) {
+      const providerResult = await executeProviderCommand({
+        env,
+        providerRef: resolvedEnvConfig.provider,
+        config: resolvedEnvConfig,
+        command,
+        workingDirectory,
+        stdin: stdinInput,
+        vars: usingParts.vars,
+        secrets: {
+          ...envAuthSecrets,
+          ...usingParts.secrets
+        },
+        executionContext: {
+          ...executionContext,
+          streamingEnabled,
+          pipelineId,
+          suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true,
+          workingDirectory
+        },
+        sourceLocation: directive.location ?? null,
+        directiveType: 'run'
+      });
+      setOutput(providerResult.stdout ?? '');
+    } else {
+      const injectedEnv = {
+        ...envAuthSecrets,
+        ...usingParts.merged
+      };
+      const commandOptions =
+        stdinInput !== undefined || workingDirectory || Object.keys(injectedEnv).length > 0
+          ? {
+              ...(stdinInput !== undefined ? { input: stdinInput } : {}),
+              ...(workingDirectory ? { workingDirectory } : {}),
+              ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+            }
+          : undefined;
+      setOutput(await env.executeCommand(command, commandOptions, {
+        ...executionContext,
+        streamingEnabled,
+        pipelineId,
+        suppressTerminal: hasStreamFormat || activeStreamingOptions.suppressTerminal === true,
+        workingDirectory
+      }));
+    }
     
   } else if (directive.subtype === 'runCode') {
     // Handle code execution
@@ -920,13 +954,9 @@ export async function evaluateRun(
       }
 
       const commandTaint = deriveCommandTaint({ command });
-      mergePendingDescriptor(
-        makeSecurityDescriptor({
-          taint: commandTaint.taint,
-          labels: commandTaint.labels,
-          sources: commandTaint.sources
-        })
-      );
+      const guardEnvConfig = extractEnvironmentConfig(context?.guardMetadata);
+      const resolvedEnvConfig = applyEnvironmentDefaults(guardEnvConfig, env.getPolicySummary());
+      mergePendingDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
       
       // NEW: Security check for exec commands
       const security = env.getSecurityManager();
@@ -955,20 +985,49 @@ export async function evaluateRun(
       }
       
       // Pass context for exec command errors too
-      const injectedEnv = await resolveUsingEnv(tempEnv, definition.withClause, withClause);
-      const commandOptions =
-        workingDirectory || Object.keys(injectedEnv).length > 0
-          ? {
-              ...(workingDirectory ? { workingDirectory } : {}),
-              ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
-            }
-          : undefined;
-      setOutput(await env.executeCommand(command, commandOptions, {
-        ...executionContext,
-        streamingEnabled,
-        pipelineId,
-        workingDirectory
-      }));
+      const usingParts = await resolveUsingEnvParts(tempEnv, definition.withClause, withClause);
+      const envAuthSecrets = await resolveEnvironmentAuthSecrets(tempEnv, resolvedEnvConfig);
+      if (resolvedEnvConfig?.provider) {
+        const providerResult = await executeProviderCommand({
+          env: tempEnv,
+          providerRef: resolvedEnvConfig.provider,
+          config: resolvedEnvConfig,
+          command,
+          workingDirectory,
+          vars: usingParts.vars,
+          secrets: {
+            ...envAuthSecrets,
+            ...usingParts.secrets
+          },
+          executionContext: {
+            ...executionContext,
+            streamingEnabled,
+            pipelineId,
+            workingDirectory
+          },
+          sourceLocation: directive.location ?? null,
+          directiveType: 'run'
+        });
+        setOutput(providerResult.stdout ?? '');
+      } else {
+        const injectedEnv = {
+          ...envAuthSecrets,
+          ...usingParts.merged
+        };
+        const commandOptions =
+          workingDirectory || Object.keys(injectedEnv).length > 0
+            ? {
+                ...(workingDirectory ? { workingDirectory } : {}),
+                ...(Object.keys(injectedEnv).length > 0 ? { env: injectedEnv } : {})
+              }
+            : undefined;
+        setOutput(await env.executeCommand(command, commandOptions, {
+          ...executionContext,
+          streamingEnabled,
+          pipelineId,
+          workingDirectory
+        }));
+      }
       
     } else if (definition.type === 'commandRef') {
       // This command references another command
@@ -1004,7 +1063,7 @@ export async function evaluateRun(
       // Recursively evaluate the referenced command with updated call stack
       // Note: We don't add definition.commandRef here because it will be added 
       // at the beginning of the runExec case when processing refDirective
-      const result = await evaluateRun(refDirective, env, callStack);
+      const result = await evaluateRun(refDirective, env, callStack, context);
       setOutput(result.value);
       
     } else if (execVar.internal?.isBuiltinTransformer && execVar.internal?.transformerImplementation) {

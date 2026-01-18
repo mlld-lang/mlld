@@ -19,6 +19,7 @@ export * from './guards';
 export * from './security';
 export * from './state';
 export * from './errors';
+export * from './environment';
 
 // Re-export directive types
 export * from './import';

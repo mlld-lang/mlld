@@ -39,7 +39,6 @@ import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
-import { deriveCommandTaint } from '@core/security/taint';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -48,7 +47,14 @@ import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
-import { resolveUsingEnv } from '@interpreter/utils/auth-injection';
+import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
+import {
+  applyEnvironmentDefaults,
+  buildEnvironmentOutputDescriptor,
+  executeProviderCommand,
+  extractEnvironmentConfig,
+  resolveEnvironmentAuthSecrets
+} from '@interpreter/env/environment-provider';
 import type { OperationContext } from '../env/ContextManager';
 import { getGuardTransformedInputs, handleGuardDecision } from '../hooks/hook-decision-handler';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
@@ -2296,14 +2302,9 @@ async function evaluateExecInvocationInternal(
       });
     }
 
-    const commandTaint = deriveCommandTaint({ command });
-    mergeResultDescriptor(
-      makeSecurityDescriptor({
-        taint: commandTaint.taint,
-        labels: commandTaint.labels,
-        sources: commandTaint.sources
-      })
-    );
+    const guardEnvConfig = extractEnvironmentConfig(preDecision?.metadata);
+    const resolvedEnvConfig = applyEnvironmentDefaults(guardEnvConfig, execEnv.getPolicySummary());
+    mergeResultDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
     
     // Build environment variables from parameters for shell execution
     // Only include parameters that are referenced in the command string to avoid
@@ -2342,129 +2343,40 @@ async function evaluateExecInvocationInternal(
         envVars[paramName] = evaluatedArgStrings[i];
       }
     }
-    const injectedEnv = await resolveUsingEnv(execEnv, definition.withClause, node.withClause);
-    if (Object.keys(injectedEnv).length > 0) {
-      Object.assign(envVars, injectedEnv);
+    const usingParts = await resolveUsingEnvParts(execEnv, definition.withClause, node.withClause);
+    const envAuthSecrets = await resolveEnvironmentAuthSecrets(execEnv, resolvedEnvConfig);
+    const injectedEnv = {
+      ...envAuthSecrets,
+      ...usingParts.merged
+    };
+    const localEnvVars =
+      Object.keys(injectedEnv).length > 0
+        ? { ...envVars, ...injectedEnv }
+        : envVars;
+
+    let stdinInput: string | undefined;
+    if (definition.withClause && 'stdin' in definition.withClause) {
+      const resolvedStdin = await resolveStdinInput(definition.withClause.stdin, execEnv);
+      stdinInput = resolvedStdin.text;
     }
-    
-    // Check if any referenced env var is oversized; if so, optionally fallback to bash heredoc
-    const perVarMax = (() => {
-      const v = process.env.MLLD_MAX_SHELL_ENV_VAR_SIZE;
-      if (!v) return 128 * 1024; // 128KB default
-      const n = Number(v);
-      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
-    })();
-    const needsBashFallback = Object.values(envVars).some(v => Buffer.byteLength(v || '', 'utf8') > perVarMax);
-    const fallbackDisabled = (() => {
-      const v = (process.env.MLLD_DISABLE_COMMAND_BASH_FALLBACK || '').toLowerCase();
-      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    })();
-    
-    if (needsBashFallback && !fallbackDisabled) {
-      // Build a bash-friendly command string where param refs stay as "$name"
-      // so BashExecutor can inject them via heredoc.
-      let fallbackCommand = '';
-      try {
-        const nodes = definition.commandTemplate as any[];
-        if (Array.isArray(nodes)) {
-          for (const n of nodes) {
-            if (n && typeof n === 'object' && n.type === 'VariableReference' && typeof n.identifier === 'string' && params.includes(n.identifier)) {
-              fallbackCommand += `"$${n.identifier}"`;
-            } else if (n && typeof n === 'object' && 'content' in n) {
-              fallbackCommand += String((n as any).content || '');
-            } else if (typeof n === 'string') {
-              fallbackCommand += n;
-            } else {
-              // Fallback: interpolate conservatively for unexpected nodes
-              fallbackCommand += await interpolateWithResultDescriptor(
-                [n as any],
-                execEnv,
-                InterpolationContext.ShellCommand
-              );
-            }
-          }
-        } else {
-          fallbackCommand = command;
-        }
-      } catch {
-        fallbackCommand = command;
-      }
 
-      // Validate base command semantics (keep same security posture)
-      try {
-        CommandUtils.validateAndParseCommand(fallbackCommand);
-      } catch (error) {
-        throw new MlldCommandExecutionError(
-          error instanceof Error ? error.message : String(error),
-          context?.sourceLocation,
-          {
-            command: fallbackCommand,
-            exitCode: 1,
-            duration: 0,
-            stderr: error instanceof Error ? error.message : String(error),
-            workingDirectory: (execEnv as any).getProjectRoot?.() || '',
-            directiveType: context?.directiveType || 'run'
-          }
-        );
-      }
-
-      // Build params for bash execution using evaluated argument values, but only those referenced
-      const codeParams: Record<string, any> = {};
-      for (let i = 0; i < params.length; i++) {
-        const paramName = params[i];
-        if (!referencesParam(command, paramName)) continue;
-        codeParams[paramName] = evaluatedArgs[i];
-      }
-      if (Object.keys(injectedEnv).length > 0) {
-        Object.assign(codeParams, injectedEnv);
-      }
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[exec-invocation] Falling back to bash heredoc for oversized command params', {
-          fallbackSnippet: fallbackCommand.slice(0, 120),
-          paramCount: Object.keys(codeParams).length
-        });
-      }
-      const commandOutput = await execEnv.executeCode(
-        fallbackCommand,
-        'sh',
-        codeParams,
-        undefined,
-        workingDirectory ? { workingDirectory } : undefined,
-        {
-          directiveType: 'exec',
-          sourceLocation: node.location,
-          workingDirectory
-        }
-      );
-      // Normalize structured output when possible
-      if (typeof commandOutput === 'string') {
-        const parsed = parseAndWrapJson(commandOutput);
-        result = parsed ?? commandOutput;
-      } else {
-        result = commandOutput;
-      }
-    } else {
-      // Check for stdin support in withClause
-      let stdinInput: string | undefined;
-      let stdinDescriptor: SecurityDescriptor | undefined;
-      if (definition.withClause && 'stdin' in definition.withClause) {
-        // Resolve stdin input similar to run.ts
-        const resolvedStdin = await resolveStdinInput(definition.withClause.stdin, execEnv);
-        stdinInput = resolvedStdin.text;
-        stdinDescriptor = resolvedStdin.descriptor;
-      }
-
-      // Execute the command with environment variables and optional stdin
-      const commandOptions = stdinInput !== undefined
-        ? { env: envVars, input: stdinInput }
-        : { env: envVars };
-      if (workingDirectory) {
-        (commandOptions as any).workingDirectory = workingDirectory;
-      }
-      const commandOutput = await execEnv.executeCommand(
+    if (resolvedEnvConfig?.provider) {
+      const providerResult = await executeProviderCommand({
+        env: execEnv,
+        providerRef: resolvedEnvConfig.provider,
+        config: resolvedEnvConfig,
         command,
-        commandOptions,
-        {
+        workingDirectory,
+        stdin: stdinInput,
+        vars: {
+          ...envVars,
+          ...usingParts.vars
+        },
+        secrets: {
+          ...envAuthSecrets,
+          ...usingParts.secrets
+        },
+        executionContext: {
           directiveType: 'exec',
           streamingEnabled,
           pipelineId,
@@ -2473,15 +2385,140 @@ async function evaluateExecInvocationInternal(
           emitEffect: chunkEffect,
           workingDirectory,
           suppressTerminal: hasStreamFormat || streamingOptions.suppressTerminal === true
+        },
+        sourceLocation: node.location ?? null,
+        directiveType: 'exec'
+      });
+      const providerOutput = providerResult.stdout ?? '';
+      const parsed = parseAndWrapJson(providerOutput);
+      result = parsed ?? providerOutput;
+    } else {
+      // Check if any referenced env var is oversized; if so, optionally fallback to bash heredoc
+      const perVarMax = (() => {
+        const v = process.env.MLLD_MAX_SHELL_ENV_VAR_SIZE;
+        if (!v) return 128 * 1024; // 128KB default
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+      })();
+      const needsBashFallback = Object.values(localEnvVars).some(v => Buffer.byteLength(v || '', 'utf8') > perVarMax);
+      const fallbackDisabled = (() => {
+        const v = (process.env.MLLD_DISABLE_COMMAND_BASH_FALLBACK || '').toLowerCase();
+        return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+      })();
+
+      if (needsBashFallback && !fallbackDisabled) {
+        // Build a bash-friendly command string where param refs stay as "$name"
+        // so BashExecutor can inject them via heredoc.
+        let fallbackCommand = '';
+        try {
+          const nodes = definition.commandTemplate as any[];
+          if (Array.isArray(nodes)) {
+            for (const n of nodes) {
+              if (n && typeof n === 'object' && n.type === 'VariableReference' && typeof n.identifier === 'string' && params.includes(n.identifier)) {
+                fallbackCommand += `"$${n.identifier}"`;
+              } else if (n && typeof n === 'object' && 'content' in n) {
+                fallbackCommand += String((n as any).content || '');
+              } else if (typeof n === 'string') {
+                fallbackCommand += n;
+              } else {
+                // Fallback: interpolate conservatively for unexpected nodes
+                fallbackCommand += await interpolateWithResultDescriptor(
+                  [n as any],
+                  execEnv,
+                  InterpolationContext.ShellCommand
+                );
+              }
+            }
+          } else {
+            fallbackCommand = command;
+          }
+        } catch {
+          fallbackCommand = command;
         }
-      );
-      
-      // Normalize structured output when possible
-      if (typeof commandOutput === 'string') {
-        const parsed = parseAndWrapJson(commandOutput);
-        result = parsed ?? commandOutput;
+
+        // Validate base command semantics (keep same security posture)
+        try {
+          CommandUtils.validateAndParseCommand(fallbackCommand);
+        } catch (error) {
+          throw new MlldCommandExecutionError(
+            error instanceof Error ? error.message : String(error),
+            context?.sourceLocation,
+            {
+              command: fallbackCommand,
+              exitCode: 1,
+              duration: 0,
+              stderr: error instanceof Error ? error.message : String(error),
+              workingDirectory: (execEnv as any).getProjectRoot?.() || '',
+              directiveType: context?.directiveType || 'run'
+            }
+          );
+        }
+
+        // Build params for bash execution using evaluated argument values, but only those referenced
+        const codeParams: Record<string, any> = {};
+        for (let i = 0; i < params.length; i++) {
+          const paramName = params[i];
+          if (!referencesParam(command, paramName)) continue;
+          codeParams[paramName] = evaluatedArgs[i];
+        }
+        if (Object.keys(injectedEnv).length > 0) {
+          Object.assign(codeParams, injectedEnv);
+        }
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[exec-invocation] Falling back to bash heredoc for oversized command params', {
+            fallbackSnippet: fallbackCommand.slice(0, 120),
+            paramCount: Object.keys(codeParams).length
+          });
+        }
+        const commandOutput = await execEnv.executeCode(
+          fallbackCommand,
+          'sh',
+          codeParams,
+          undefined,
+          workingDirectory ? { workingDirectory } : undefined,
+          {
+            directiveType: 'exec',
+            sourceLocation: node.location,
+            workingDirectory
+          }
+        );
+        // Normalize structured output when possible
+        if (typeof commandOutput === 'string') {
+          const parsed = parseAndWrapJson(commandOutput);
+          result = parsed ?? commandOutput;
+        } else {
+          result = commandOutput;
+        }
       } else {
-        result = commandOutput;
+        // Execute the command with environment variables and optional stdin
+        const commandOptions = stdinInput !== undefined
+          ? { env: localEnvVars, input: stdinInput }
+          : { env: localEnvVars };
+        if (workingDirectory) {
+          (commandOptions as any).workingDirectory = workingDirectory;
+        }
+        const commandOutput = await execEnv.executeCommand(
+          command,
+          commandOptions,
+          {
+            directiveType: 'exec',
+            streamingEnabled,
+            pipelineId,
+            stageIndex: 0,
+            sourceLocation: node.location,
+            emitEffect: chunkEffect,
+            workingDirectory,
+            suppressTerminal: hasStreamFormat || streamingOptions.suppressTerminal === true
+          }
+        );
+
+        // Normalize structured output when possible
+        if (typeof commandOutput === 'string') {
+          const parsed = parseAndWrapJson(commandOutput);
+          result = parsed ?? commandOutput;
+        } else {
+          result = commandOutput;
+        }
       }
     }
 

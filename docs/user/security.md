@@ -71,6 +71,7 @@ Automatic taint labels:
 - `src:exec` — outputs from `run` or `exe`
 - `src:file` — loaded file content, plus `dir:/...` entries for every parent directory
 - `src:dynamic` — dynamic modules injected via `dynamicModules`
+- `src:env:<provider>` — outputs from environment providers
 
 Use taint in guards to block risky sources:
 
@@ -107,6 +108,7 @@ Actions:
 - `deny "reason"` - Operation blocked
 - `retry "hint"` - Retry operation (pipelines only)
 - `allow @value` - Transform and allow
+- `env @config` - Selects an execution environment
 
 ### Guard on Data Labels
 

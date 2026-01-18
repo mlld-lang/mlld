@@ -63,6 +63,20 @@ guard @redact before secret = when [
 ```
 </TRANSFORM_WITH_ALLOW>
 
+<ENV_GUARDS>
+Guards can select execution environments.
+
+```mlld
+var @sandbox = { provider: "@mlld/env-docker" }
+
+guard before op:run = when [
+  * => env @sandbox
+]
+```
+
+`env @config` selects the environment; the run evaluator applies it.
+</ENV_GUARDS>
+
 <DENIED_HANDLERS>
 Handle denied operations gracefully.
 
@@ -82,6 +96,7 @@ System-assigned labels for tracking:
 | `src:exec` | Results from `/run` and `/exe` |
 | `src:file` | File loads |
 | `src:dynamic` | Dynamic module imports |
+| `src:env:<provider>` | Environment provider outputs |
 | `dir:/path` | File directories (all parents) |
 
 **Example directory guards:**

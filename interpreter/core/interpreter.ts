@@ -215,6 +215,8 @@ export interface EvaluationContext {
   precomputedVarAssignment?: VarAssignmentResult;
   /** Policy checks run before guard-pre for the directive */
   policyChecked?: boolean;
+  /** Guard metadata from pre-hook evaluation */
+  guardMetadata?: Record<string, unknown>;
 }
 
 /**

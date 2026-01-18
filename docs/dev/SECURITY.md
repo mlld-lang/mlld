@@ -49,6 +49,7 @@ PolicyConfig = {
   allow?: Record<string, ...>;        // Capability allowlist
   deny?: Record<string, ...>;         // Capability denylist
   labels?: PolicyLabels;              // Label flow rules
+  env?: { default?: string };         // Default environment provider
   limits?: PolicyLimits;              // Resource constraints
 }
 
@@ -144,47 +145,129 @@ Environments are THE primitive for execution contexts. They unify:
 
 ### Environment Providers
 
+Providers are optional - they add isolation. Without a provider, commands run locally. `policy.env.default` supplies a default provider when an env config omits one.
+
 | Provider | Isolation | Checkpoints | Use Case |
 |----------|-----------|-------------|----------|
-| `@mlld/env-local` | None | None | Direct execution |
 | `@mlld/env-docker` | Container | Limited | Process isolation |
 | `@mlld/env-sprites` | Cloud | Native | Full isolation + state |
-| `@mlld/env-claude` | Host | Sessions | Claude Code agents |
 
 ### Usage Patterns
 
-**Environment blocks** (explicit scope):
+**Environment without provider** (local, different auth):
 ```mlld
-env @sandbox [
-  run cmd "npm test"
-]
+var @devEnv = {
+  auth: "claude-dev",
+  mcps: ["@github/issues"],
+}
 ```
 
-**Guard-triggered** (per-operation):
+**Environment with provider** (isolated):
+```mlld
+var @sandbox = {
+  provider: "@mlld/env-docker",
+  fs: { read: [".:/app"] },
+  net: "none",
+}
+```
+
+**Guard-triggered**:
 ```mlld
 guard before sandboxed = when [
-  op:cmd => env @isolatedConfig
+  op:cmd => env @sandbox
   * => deny
 ]
 ```
 
-**Composable configs**:
+Guards select environments. The guard hook returns the env config, and the run evaluator applies it.
+
+### Provider Interface
+
+Provider modules export a standard interface:
+
 ```mlld
-exe @agent(tools) = {
-  provider: "@mlld/env-claude",
-  tools: @tools,
-  auth: "claude",
+// Required: every provider exports @execute
+exe @execute(opts, command) = [
+  // opts = config minus core fields (provider, auth, taint)
+  // command = { argv, cwd, vars, secrets, stdin? }
+  // returns { stdout, stderr, exitCode, handle? }
+]
+
+// Optional: capabilities like checkpointing
+exe @checkpoint(handle, name) = [...]
+exe @release(handle) = [...]
+
+export { @execute, @checkpoint, @release }
+```
+
+**Core fields** (handled by mlld, not passed to provider):
+- `provider` → routes to module
+- `auth` → resolves credentials from keychain
+- `taint` → applies labels to output
+
+**Opts** (passed to provider): everything else (`fs`, `net`, `image`, etc.)
+
+**Command structure:**
+```mlld
+{
+  argv: ["claude", "-p", "..."],
+  cwd: "/app",
+  vars: { NODE_ENV: "production" },
+  secrets: { ANTHROPIC_API_KEY: "sk-xxx..." },
+  stdin: "optional stdin",
+}
+```
+
+**Result structure:**
+```mlld
+{
+  stdout: "...",
+  stderr: "...",
+  exitCode: 0,
+  handle: "...",
+}
+```
+
+### Provider Trust Model
+
+The `provider:` field is an **explicit trust grant**:
+
+| Module type | Gets secrets? | Why |
+|-------------|---------------|-----|
+| Regular import | No | Just code, no special privileges |
+| `provider:` designation | Yes | User explicitly trusts it |
+
+Providers receive actual secret values in `command.secrets`. This is intentional - the provider controls execution, so it must be trusted. If you don't trust a module, don't use it as a provider.
+
+```mlld
+// command structure passed to provider
+{
+  argv: ["claude", "-p", "..."],
+  cwd: "/app",
+  vars: { NODE_ENV: "production" },
+  secrets: { ANTHROPIC_API_KEY: "sk-xxx..." },  // actual values
 }
 ```
 
 ### Source Labels
 
-Data from environments gets labeled: `src:env:docker`, `src:env:sprites`, `src:env:claude`
+Data from isolated environments gets labeled:
+- `src:env:docker` - from Docker provider
+- `src:env:sprites` - from Sprites provider
+- (no provider = `src:exec` as normal)
+
+mlld core applies the source label based on provider designation.
+
+### Lifecycle
+
+- Guard-triggered env: `@release` runs after the single operation completes.
+- Env blocks: `@release` runs when the block exits.
+- Error paths: `@release` runs in a finally block.
 
 ### Key Files
 
-- Types: `core/types/environment.ts` (TBD)
-- Providers: `core/env/*.ts` (TBD)
+- Types: `core/types/environment.ts`
+- Providers: `core/env/*.mld`
 
 ## Debugging
 

@@ -190,7 +190,8 @@ export async function evaluateDirective(
           resolvedInputs,
           operationContext,
           precomputedVarAssignment,
-          policyChecked
+          policyChecked,
+          preDecision.metadata
         );
 
         let result = await dispatchDirective(directive, env, mergedContext);
@@ -282,13 +283,15 @@ function mergeEvaluationContext(
   extractedInputs: readonly unknown[],
   operationContext: OperationContext,
   precomputedVarAssignment?: VarAssignmentResult,
-  policyChecked?: boolean
+  policyChecked?: boolean,
+  guardMetadata?: Record<string, unknown>
 ): EvaluationContext {
   const extra: EvaluationContext = {
     extractedInputs,
     operationContext,
     precomputedVarAssignment,
-    policyChecked
+    policyChecked,
+    guardMetadata
   };
   return baseContext ? { ...baseContext, ...extra } : extra;
 }
