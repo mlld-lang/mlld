@@ -1,13 +1,7 @@
-guard @first before secret = when [
-  * => allow @input.trim()
-]
+exe @tagValue(timing, out, inp) = js {
+  const val = out ?? inp ?? '';
+  return `${timing}:${val}`;
+}
 
-guard @second before secret = when [
-  * => allow `safe:@input`
-]
-
-var secret @data = "  hello  "
-exe @deliver(v) = `Result: @v`
-
->> Result: safe:hello
-show @deliver(@data)
+exe @emit(v) = js { return v; }
+show @emit("test")

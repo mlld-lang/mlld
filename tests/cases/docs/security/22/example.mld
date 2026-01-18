@@ -1,10 +1,9 @@
-guard @trim before secret = when [
-  * => allow @input.trim()
+exe @redact(text) = js { return text.replace(/./g, '*'); }
+
+guard @redactSecrets before secret = when [
+  @mx.op.type == "show" => allow @redact(@input)
+  * => allow
 ]
 
-guard @wrap before secret = when [
-  * => allow `[REDACTED: @input]`
-]
-
-var secret @key = "  sk-12345  "
-show @key  >> Output: [REDACTED: sk-12345]
+var secret @key = "sk-12345"
+show @key  >> Output: *********

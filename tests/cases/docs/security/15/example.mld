@@ -1,7 +1,7 @@
-guard @redactSecrets after op:exe = when [
-  @output.includes("sk-") => allow @output.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]')
+guard @validateOutput after op:exe = when [
+  @output.includes("ERROR") => deny "Operation failed"
   * => allow
 ]
 
-exe @getStatus() = run { echo "Status: ok, key: sk-12345" }
-show @getStatus()  >> Output: Status: ok, key: [REDACTED]
+exe @query() = run { curl api.example.com/status }
+show @query()  >> Blocked if output contains ERROR

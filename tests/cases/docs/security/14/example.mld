@@ -1,7 +1,7 @@
-guard @validateOutput after op:exe = when [
-  @output.includes("ERROR") => deny "Operation failed"
-  * => allow
+guard @sanitize before untrusted = when [
+  * => allow @input.trim().slice(0, 100)
 ]
 
-exe @query() = run { curl api.example.com/status }
-show @query()  >> Blocked if output contains ERROR
+var untrusted @userInput = "  very long input...  "
+exe @process(data) = `Processed: @data`
+show @process(@userInput)  >> Input trimmed and truncated
