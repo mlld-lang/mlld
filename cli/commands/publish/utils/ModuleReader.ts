@@ -320,10 +320,10 @@ export class ModuleReader {
       author: '',
       about: '',
       license: 'CC0', // Default to CC0
-      wants: [],
+      profiles: [],
       needs: [],
       moduleNeeds: undefined,
-      moduleWants: undefined,
+      moduleProfiles: undefined,
     };
     
     // Module name comes from frontmatter 'name' field, NOT from filename
@@ -378,8 +378,8 @@ export class ModuleReader {
     
     const parsedNeeds = parseModuleMetadata(content);
     metadata.moduleNeeds = parsedNeeds.needs;
-    metadata.moduleWants = parsedNeeds.wants;
-    metadata.wants = parsedNeeds.wants.map(tier => tier.tier);
+    metadata.moduleProfiles = parsedNeeds.profiles;
+    metadata.profiles = Object.keys(parsedNeeds.profiles ?? {});
     this.applyModuleNeeds(metadata, parsedNeeds.needs);
     metadata.dependencies = parsedNeeds.dependencies;
     metadata.devDependencies = parsedNeeds.devDependencies;

@@ -29,7 +29,7 @@ describe('Import runtime validation', () => {
         pathContext,
         approveAllImports: true
       })
-    ).rejects.toThrow(/needs not satisfied/i);
+    ).rejects.toThrow(/requires capabilities not available/i);
   });
 
   it('rejects imports when requested export is missing', async () => {

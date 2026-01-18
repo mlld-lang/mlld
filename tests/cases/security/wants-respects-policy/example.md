@@ -1,11 +1,11 @@
-# Wants respects policy deny
+# Profiles respects policy deny
 
 /var @denyShell = { deny: { sh: true } }
 /policy @p = union(@denyShell)
 
-/wants [
-  { tier: "full", sh },
-  { tier: "readonly" }
-]
+/profiles {
+  full: { requires: { sh } },
+  readonly: { requires: { } }
+}
 
-/show @mx.policy.tier
+/show @mx.profile

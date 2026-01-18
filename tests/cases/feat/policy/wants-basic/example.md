@@ -1,18 +1,14 @@
-# Wants Tier Test
+# Profiles Test
 
-/wants [
-  {
-    tier: "full",
-    why: "Full capabilities",
-    cmd: [echo],
-    network,
-    sh
+/profiles {
+  full: {
+    requires: { cmd: [echo], network, sh },
+    description: "Full capabilities"
   },
-  {
-    tier: "fallback",
-    why: "Unused when full is granted",
-    cmd: [echo]
+  fallback: {
+    requires: { cmd: [echo] },
+    description: "Unused when full is granted"
   }
-]
+}
 
-/show @mx.policy.tier
+/show @mx.profile

@@ -13,7 +13,7 @@ import * as path from 'path';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { labelsForPath } from '@core/security/paths';
 import type { SerializedGuardDefinition } from '../../guards';
-import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
+import type { NeedsDeclaration, ProfilesDeclaration } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { inferMlldMode } from '@core/utils/mode';
 
@@ -31,7 +31,7 @@ export interface ModuleProcessingResult {
   childEnvironment: Environment;
   guardDefinitions: SerializedGuardDefinition[];
   moduleNeeds?: NeedsDeclaration;
-  moduleWants?: WantsTier[];
+  moduleProfiles?: ProfilesDeclaration;
   policyContext?: Record<string, unknown> | null;
 }
 
@@ -794,7 +794,7 @@ export class ModuleContentProcessor {
       const hasSubstantive = this.hasSubstantiveContent(sourceContent);
       if (!hasSubstantive) {
         const moduleNeeds = childEnv.getModuleNeeds();
-        const moduleWants = childEnv.getModuleWants();
+        const moduleProfiles = childEnv.getModuleProfiles();
         const policyContext = childEnv.getPolicyContext() ?? null;
         return {
           moduleObject,
@@ -802,7 +802,7 @@ export class ModuleContentProcessor {
           childEnvironment: childEnv,
           guardDefinitions: guards,
           moduleNeeds,
-          moduleWants,
+          moduleProfiles,
           policyContext
         };
       }
@@ -826,7 +826,7 @@ export class ModuleContentProcessor {
     }
 
     const moduleNeeds = childEnv.getModuleNeeds();
-    const moduleWants = childEnv.getModuleWants();
+    const moduleProfiles = childEnv.getModuleProfiles();
     const policyContext = childEnv.getPolicyContext() ?? null;
 
     return {
@@ -835,7 +835,7 @@ export class ModuleContentProcessor {
       childEnvironment: childEnv,
       guardDefinitions: guards,
       moduleNeeds,
-      moduleWants,
+      moduleProfiles,
       policyContext
     };
   }

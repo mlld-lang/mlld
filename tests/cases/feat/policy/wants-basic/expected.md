@@ -1,3 +1,3 @@
-# Wants Tier Test
+# Profiles Test
 
 full

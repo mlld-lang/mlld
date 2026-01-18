@@ -15,6 +15,8 @@ import { isExecutableVariable } from '@core/types/variable';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
+import { MCPOrchestrator, type McpConfig } from '../mcp/MCPOrchestrator';
+import { asData, isStructuredValue, looksLikeJsonString } from '@interpreter/utils/structured-value';
 
 async function exists(filePath: string): Promise<boolean> {
   try {
@@ -308,6 +310,54 @@ async function executeEnvExport(
   return evaluateExecInvocation(invocation, module.environment);
 }
 
+function parseMcpConfigResult(result: unknown): McpConfig | null {
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+  const value = (result as { value?: unknown }).value;
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  let raw: unknown = value;
+  if (isStructuredValue(raw)) {
+    raw = asData(raw);
+  }
+  if (typeof raw === 'string') {
+    if (!looksLikeJsonString(raw)) {
+      throw new Error('mcpConfig output is not valid JSON');
+    }
+    raw = JSON.parse(raw);
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('mcpConfig output must be an object');
+  }
+  if ('servers' in (raw as Record<string, unknown>)) {
+    const servers = (raw as Record<string, unknown>).servers;
+    if (servers !== undefined && !Array.isArray(servers)) {
+      throw new Error('mcpConfig.servers must be an array');
+    }
+  }
+  return raw as McpConfig;
+}
+
+function applyProcessEnv(env: Record<string, string>): () => void {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(env)) {
+    previous.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+  return () => {
+    for (const [key, value] of previous.entries()) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+}
+
 interface EnvInfo {
   name: string;
   about?: string;
@@ -575,14 +625,33 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   }
 
   const loaded = await loadEnvironmentModule(envLocation);
-  await executeEnvExport(loaded, 'mcpConfig', []);
+  const orchestrator = new MCPOrchestrator();
+  let restoreEnv = () => {};
+  let exitCode = 0;
 
-  const spawnResult = await executeEnvExport(loaded, 'spawn', command);
-  if (!spawnResult) {
-    console.error(chalk.red(`Error: Environment '${name}' does not export @spawn`));
-    process.exit(1);
+  try {
+    const mcpResult = await executeEnvExport(loaded, 'mcpConfig', []);
+    const mcpConfig = parseMcpConfigResult(mcpResult);
+    if (mcpConfig) {
+      const connection = await orchestrator.start(mcpConfig);
+      if (connection?.env) {
+        restoreEnv = applyProcessEnv(connection.env);
+      }
+    }
+
+    const spawnResult = await executeEnvExport(loaded, 'spawn', command);
+    if (!spawnResult) {
+      console.error(chalk.red(`Error: Environment '${name}' does not export @spawn`));
+      exitCode = 1;
+      return;
+    }
+    exitCode = spawnResult.exitCode || 0;
+  } finally {
+    restoreEnv();
+    await orchestrator.cleanup();
   }
-  process.exit(spawnResult.exitCode || 0);
+
+  process.exit(exitCode);
 }
 
 async function shellEnvCommand(args: string[]): Promise<void> {
@@ -616,13 +685,33 @@ async function shellEnvCommand(args: string[]): Promise<void> {
   }
 
   const loaded = await loadEnvironmentModule(envLocation);
-  await executeEnvExport(loaded, 'mcpConfig', []);
-  const shellResult = await executeEnvExport(loaded, 'shell', []);
-  if (!shellResult) {
-    console.error(chalk.red(`Error: Environment '${name}' does not export @shell`));
-    process.exit(1);
+  const orchestrator = new MCPOrchestrator();
+  let restoreEnv = () => {};
+  let exitCode = 0;
+
+  try {
+    const mcpResult = await executeEnvExport(loaded, 'mcpConfig', []);
+    const mcpConfig = parseMcpConfigResult(mcpResult);
+    if (mcpConfig) {
+      const connection = await orchestrator.start(mcpConfig);
+      if (connection?.env) {
+        restoreEnv = applyProcessEnv(connection.env);
+      }
+    }
+
+    const shellResult = await executeEnvExport(loaded, 'shell', []);
+    if (!shellResult) {
+      console.error(chalk.red(`Error: Environment '${name}' does not export @shell`));
+      exitCode = 1;
+      return;
+    }
+    exitCode = shellResult.exitCode || 0;
+  } finally {
+    restoreEnv();
+    await orchestrator.cleanup();
   }
-  process.exit(shellResult.exitCode || 0);
+
+  process.exit(exitCode);
 }
 
 function printEnvHelp(): void {

@@ -555,8 +555,8 @@ console.log('Network functions:', networkFunctions.map(e => e.name));
 console.log('Needs:', analysis.needs);
 // { cmd: ['git', 'gh'], node: ['@octokit/rest'] }
 
-console.log('Wants:', analysis.wants);
-// [{ tier: 'full', ... }, { tier: 'minimal', ... }]
+console.log('Profiles:', analysis.profiles);
+// { full: { requires: { cmd: [...] } }, minimal: { requires: {} } }
 
 // Get guards
 console.log('Guards:', analysis.guards);
@@ -583,7 +583,7 @@ interface ModuleAnalysis {
   // Metadata
   frontmatter?: Record<string, unknown>;
   needs?: ModuleNeeds;
-  wants?: WantsTier[];
+  profiles?: ProfilesDeclaration;
 
   // Definitions
   executables: ExecutableInfo[];

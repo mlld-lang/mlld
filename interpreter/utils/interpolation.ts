@@ -338,12 +338,12 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         
         const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
         const fields = (node as any).fields as any[] | undefined;
-        const wantsVarMx =
+        const hasMxField =
           Array.isArray(fields) &&
           fields.length > 0 &&
           fields[0]?.type === 'field' &&
           String(fields[0]?.value ?? '') === 'mx';
-        const resolutionContext = wantsVarMx ? ResolutionContext.FieldAccess : ResolutionContext.StringInterpolation;
+        const resolutionContext = hasMxField ? ResolutionContext.FieldAccess : ResolutionContext.StringInterpolation;
         
         value = await resolveVariable(variable, env, resolutionContext);
         collectDescriptor(extractInterpolationDescriptor(value));

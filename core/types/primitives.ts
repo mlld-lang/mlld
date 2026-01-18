@@ -241,7 +241,7 @@ export type DirectiveKind =
   | 'guard'
   | 'stream'
   | 'needs'
-  | 'wants'
+  | 'profiles'
   | 'policy'
   | 'while'
   | 'for'
@@ -279,7 +279,7 @@ export type DirectiveSubtype =
   | 'loop'
   // Needs/Wants subtypes
   | 'needs'
-  | 'wants'
+  | 'profiles'
   // Policy subtype
   | 'policy';
 

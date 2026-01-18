@@ -11,8 +11,8 @@ import type {
   PackageRequirement
 } from '../types';
 import { parseSync } from '@grammar/parser';
-import { normalizeNeedsDeclaration, normalizeWantsDeclaration } from '@core/policy/needs';
-import type { NeedsDeclaration, WantsTier } from '@core/policy/needs';
+import { normalizeNeedsDeclaration, normalizeProfilesDeclaration } from '@core/policy/needs';
+import type { NeedsDeclaration, ProfilesDeclaration } from '@core/policy/needs';
 import { normalizeModuleName, splitModuleNameVersion } from './moduleNames';
 
 export interface ParsedFrontmatterMetadata {
@@ -20,7 +20,7 @@ export interface ParsedFrontmatterMetadata {
   author?: string;
   version?: string;
   needs: ModuleNeedsNormalized;
-  wants: WantsTier[];
+  profiles: ProfilesDeclaration;
   dependencies: ModuleDependencyMap;
   devDependencies: ModuleDependencyMap;
   raw: Record<string, unknown>;
@@ -55,14 +55,14 @@ export function parseModuleMetadata(content: string): ParsedFrontmatterMetadata 
   assertNoLegacyNeeds(frontmatter);
 
   const needsDeclaration = extractNeedsFromContent(content);
-  const wants = extractWantsFromContent(content);
+  const profiles = extractProfilesFromContent(content);
   const needs = normalizeModuleNeeds(needsDeclaration);
   return {
     name: typeof frontmatter.name === 'string' ? frontmatter.name : undefined,
     author: typeof frontmatter.author === 'string' ? frontmatter.author : undefined,
     version: typeof frontmatter.version === 'string' ? frontmatter.version : undefined,
     needs,
-    wants: wants ?? [],
+    profiles: profiles ?? {},
     dependencies: parseDependencyMap(frontmatter.dependencies),
     devDependencies: parseDependencyMap(frontmatter.devDependencies ?? frontmatter.devdependencies),
     raw: frontmatter
@@ -108,18 +108,18 @@ function extractNeedsFromContent(content: string): NeedsDeclaration | undefined 
   }
 }
 
-function extractWantsFromContent(content: string): WantsTier[] | undefined {
+function extractProfilesFromContent(content: string): ProfilesDeclaration | undefined {
   try {
     const ast = parseSync(content);
-    const wantsNode = ast.find((node: any) => node?.kind === 'wants');
-    if (!wantsNode) {
+    const profilesNode = ast.find((node: any) => node?.kind === 'profiles');
+    if (!profilesNode) {
       return undefined;
     }
-    return normalizeWantsDeclaration((wantsNode as any).values?.wants ?? []);
+    return normalizeProfilesDeclaration((profilesNode as any).values?.profiles ?? {});
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new MlldError(`Failed to parse module for /wants: ${message}`, {
-      code: 'WANTS_PARSE_FAILED',
+    throw new MlldError(`Failed to parse module for /profiles: ${message}`, {
+      code: 'PROFILES_PARSE_FAILED',
       severity: ErrorSeverity.Fatal,
       cause: error
     });

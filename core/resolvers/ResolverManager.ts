@@ -350,9 +350,45 @@ export class ResolverManager {
   async resolve(ref: string, options?: ResolverOptions): Promise<ResolutionResult> {
     const startTime = Date.now();
 
-    // 1. Check if we have a hash for this module in lock file (skip for local files)
-    const isLocal = ref.startsWith('@local/') || ref.startsWith('local://');
-    if (this.lockFile && this.moduleCache && !isLocal) {
+    // 1. Find matching prefix by prefix
+    const { resolver, prefixConfig } = await this.findResolver(ref, options?.context);
+
+    if (!resolver) {
+      throw new MlldResolutionError(
+        `No resolver found for reference: ${ref}`,
+        { reference: ref, context: options?.context }
+      );
+    }
+
+    // Check if resolver supports the requested context
+    if (options?.context && !this.canResolveInContext(resolver, options.context)) {
+      throw new MlldResolutionError(
+        `Resolver '${resolver.name}' does not support ${options.context} operations`,
+        { reference: ref, resolverName: resolver.name, context: options.context }
+      );
+    }
+
+    // Check if resolver supports input operations
+    if (resolver.type === 'output') {
+      throw new MlldResolutionError(
+        `Resolver '${resolver.name}' does not support input operations`,
+        { reference: ref, resolverName: resolver.name }
+      );
+    }
+
+    const supportedContentTypes = Array.isArray(resolver.capabilities?.supportedContentTypes)
+      ? resolver.capabilities.supportedContentTypes
+      : [];
+    const legacyResourceType = (resolver.capabilities as { resourceType?: string } | undefined)?.resourceType;
+    const supportsModuleContent =
+      supportedContentTypes.includes('module') || legacyResourceType === 'module';
+    const isLocal = ref.startsWith('@local/') || ref.startsWith('local://') || resolver.name === 'LOCAL';
+    const isDynamic = resolver.name.toLowerCase() === 'dynamic';
+    const cacheEligible = supportsModuleContent && this.lockFile && this.moduleCache && !isLocal && !isDynamic;
+    const shouldRequireCache = supportsModuleContent && !isLocal && !isDynamic;
+
+    // 2. Check if we have a hash for this module in lock file (skip for local files)
+    if (cacheEligible) {
       // Convert reference to module name format
       const moduleName = this.refToModuleName(ref);
       const lockEntry = this.lockFile.getModule(moduleName);
@@ -410,37 +446,11 @@ export class ResolverManager {
           { reference: ref }
         );
       }
-    } else if (this.offlineMode && (!this.lockFile || !this.moduleCache)) {
+    } else if (this.offlineMode && shouldRequireCache && (!this.lockFile || !this.moduleCache)) {
       // Offline mode requires both lock file and cache
       throw new MlldResolutionError(
         'Offline mode requires lock file and cache to be configured',
         { reference: ref }
-      );
-    }
-
-    // 2. Find matching prefix by prefix
-    const { resolver, prefixConfig } = await this.findResolver(ref, options?.context);
-
-    if (!resolver) {
-      throw new MlldResolutionError(
-        `No resolver found for reference: ${ref}`,
-        { reference: ref, context: options?.context }
-      );
-    }
-
-    // Check if resolver supports the requested context
-    if (options?.context && !this.canResolveInContext(resolver, options.context)) {
-      throw new MlldResolutionError(
-        `Resolver '${resolver.name}' does not support ${options.context} operations`,
-        { reference: ref, resolverName: resolver.name, context: options.context }
-      );
-    }
-
-    // Check if resolver supports input operations
-    if (resolver.type === 'output') {
-      throw new MlldResolutionError(
-        `Resolver '${resolver.name}' does not support input operations`,
-        { reference: ref, resolverName: resolver.name }
       );
     }
 
@@ -480,6 +490,7 @@ export class ResolverManager {
       // 4. Cache the content if cache is available (but skip local files)
       if (
         this.moduleCache &&
+        supportsModuleContent &&
         content.content &&
         resolver.name !== 'LOCAL' &&
         resolver.name.toLowerCase() !== 'dynamic'

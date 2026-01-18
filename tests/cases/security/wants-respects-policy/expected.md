@@ -1,3 +1,3 @@
-# Wants respects policy deny
+# Profiles respects policy deny
 
 readonly

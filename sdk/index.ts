@@ -36,11 +36,12 @@ export type {
   GuardInfo,
   ImportInfo,
   VariableInfo,
-  WantsTier,
   ModuleStats,
   AnalysisError,
   AnalysisWarning
 } from './analyze';
+
+export type { ProfilesDeclaration } from '@core/policy/needs';
 
 // Export types
 export type { Location, Position } from '@core/types/index';

@@ -33,7 +33,7 @@ import {
 } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
 import { TaintTracker } from '@core/security';
-import { ALLOW_ALL_POLICY, mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type WantsTier } from '@core/policy/needs';
+import { ALLOW_ALL_POLICY, mergeNeedsDeclarations, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
 import { mergePolicyConfigs, type PolicyConfig, normalizePolicyConfig } from '@core/policy/union';
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
@@ -124,7 +124,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private securityManager?: SecurityManager; // Central security coordinator
   private securityRuntime?: SecurityRuntimeState;
   private moduleNeeds?: NeedsDeclaration;
-  private moduleWants?: WantsTier[];
+  private moduleProfiles?: ProfilesDeclaration;
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private policySummary?: PolicyConfig;
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
@@ -841,20 +841,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.moduleNeeds = mergeNeedsDeclarations(this.moduleNeeds, needs);
   }
 
-  getModuleWants(): WantsTier[] | undefined {
-    if (this.moduleWants) return this.moduleWants;
-    return this.parent?.getModuleWants();
+  getModuleProfiles(): ProfilesDeclaration | undefined {
+    if (this.moduleProfiles) return this.moduleProfiles;
+    return this.parent?.getModuleProfiles();
   }
 
-  recordModuleWants(wants: WantsTier[]): void {
-    if (!wants || wants.length === 0) {
+  recordModuleProfiles(profiles: ProfilesDeclaration): void {
+    if (!profiles || Object.keys(profiles).length === 0) {
       return;
     }
-    if (!this.moduleWants) {
-      this.moduleWants = [...wants];
+    if (!this.moduleProfiles) {
+      this.moduleProfiles = { ...profiles };
       return;
     }
-    this.moduleWants = [...this.moduleWants, ...wants];
+    this.moduleProfiles = { ...this.moduleProfiles, ...profiles };
   }
 
   getPolicyCapabilities(): PolicyCapabilities {

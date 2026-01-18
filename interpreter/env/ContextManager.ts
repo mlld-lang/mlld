@@ -106,6 +106,7 @@ export class ContextManager {
   private readonly deniedStack: DeniedContextSnapshot[] = [];
   private readonly genericContexts: Map<string, unknown[]> = new Map();
   private latestErrors: unknown[] = [];
+  private profile: string | null = null;
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -222,6 +223,14 @@ export class ContextManager {
     }
   }
 
+  setProfile(profile: string | null): void {
+    this.profile = profile ?? null;
+  }
+
+  getProfile(): string | null {
+    return this.profile;
+  }
+
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
     if (options.testOverride !== undefined) {
       return options.testOverride as Record<string, unknown>;
@@ -270,6 +279,7 @@ export class ContextManager {
           ? Array.from(security.taint)
           : [],
       policy: security?.policy ?? null,
+      profile: this.profile ?? null,
       operation: currentOperation ?? null,
       op: currentOperation ?? null,
       guard: guardContext ?? (deniedContext ? {} : null),

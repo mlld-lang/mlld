@@ -6,7 +6,7 @@ import type { MlldNode, SourceLocation } from '@core/types';
 import type { ImportType } from '@core/types';
 import type { Octokit } from '@octokit/rest';
 import type { ModuleNeedsNormalized, ModuleDependencyMap, ModuleManifest, ModuleType } from '@core/registry';
-import type { WantsTier } from '@core/policy/needs';
+import type { ProfilesDeclaration } from '@core/policy/needs';
 import type { ModuleFile, DirectoryModuleData } from '../utils/ModuleReader';
 
 export interface RuntimeDependencies {
@@ -40,8 +40,8 @@ export interface ModuleMetadata {
   about: string; // Renamed from description
   needs: string[]; // Required, empty array for pure mlld
   moduleNeeds?: ModuleNeedsNormalized; // Structured needs per spec
-  wants?: string[];
-  moduleWants?: WantsTier[];
+  profiles?: string[];
+  moduleProfiles?: ProfilesDeclaration;
   needsJs?: RuntimeDependencies; // Legacy detailed fields
   needsNode?: RuntimeDependencies; // Legacy detailed fields
   needsPy?: RuntimeDependencies; // Legacy detailed fields

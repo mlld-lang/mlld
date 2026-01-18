@@ -46,7 +46,7 @@
  * Metadata:
  * - frontmatter?: Record<string, unknown> - Parsed YAML frontmatter
  * - needs?: ModuleNeeds - Required capabilities (runtimes, tools, packages)
- * - wants?: WantsTier[] - Tiered capability preferences
+ * - profiles?: ProfilesDeclaration - Named profile requirements
  *
  * Definitions:
  * - exports: string[] - Exported names (from /export directives)
@@ -133,6 +133,7 @@ import type { ModuleNeeds } from '@core/registry/types';
 import { extractFrontmatter as parseFrontmatterYaml } from '@core/registry/utils/ModuleMetadata';
 import { normalizeModuleNeeds } from '@core/registry/utils/ModuleNeeds';
 import { inferMlldMode } from '@core/utils/mode';
+import { normalizeProfilesDeclaration, type ProfilesDeclaration } from '@core/policy/needs';
 
 // =============================================================================
 // Public Types
@@ -159,8 +160,8 @@ export interface ModuleAnalysis {
   /** Required capabilities (from frontmatter or /needs) */
   needs?: ModuleNeeds;
 
-  /** Tiered capability preferences (from frontmatter or /wants) */
-  wants?: WantsTier[];
+  /** Named profile requirements (from frontmatter or /profiles) */
+  profiles?: ProfilesDeclaration;
 
   // -- Definitions --
 
@@ -242,17 +243,6 @@ export interface VariableInfo {
 
   /** Security labels if any */
   labels?: DataLabel[];
-}
-
-export interface WantsTier {
-  /** Tier identifier */
-  tier: string;
-
-  /** Human-readable explanation */
-  why?: string;
-
-  /** Capabilities for this tier */
-  capabilities: Record<string, unknown>;
 }
 
 export interface ModuleStats {
@@ -362,7 +352,7 @@ export async function analyzeModule(filepath: string): Promise<ModuleAnalysis> {
   // Extract all data
   const frontmatter = extractFrontmatterFromSource(source);
   const needs = extractNeeds(frontmatter);
-  const wants = extractWants(frontmatter);
+  const profiles = extractProfiles(frontmatter, ast);
   const exports = extractExports(ast);
   const executables = extractExecutables(ast);
   const guards = extractGuards(ast);
@@ -381,7 +371,7 @@ export async function analyzeModule(filepath: string): Promise<ModuleAnalysis> {
     warnings,
     frontmatter: frontmatter ?? undefined,
     needs,
-    wants,
+    profiles,
     exports,
     executables,
     guards,
@@ -420,17 +410,38 @@ function extractNeeds(frontmatter: Record<string, unknown> | null): ModuleNeeds 
   return normalized;
 }
 
-function extractWants(frontmatter: Record<string, unknown> | null): WantsTier[] | undefined {
-  if (!frontmatter?.wants) return undefined;
+function extractProfiles(
+  frontmatter: Record<string, unknown> | null,
+  ast: MlldNode[]
+): ProfilesDeclaration | undefined {
+  const fromAst = extractProfilesFromAst(ast);
+  if (fromAst && Object.keys(fromAst).length > 0) {
+    return fromAst;
+  }
 
-  const raw = frontmatter.wants;
-  if (!Array.isArray(raw)) return undefined;
+  if (!frontmatter?.profiles) {
+    return undefined;
+  }
 
-  return raw.map(tier => ({
-    tier: tier.tier ?? 'default',
-    why: tier.why,
-    capabilities: tier
-  }));
+  try {
+    const normalized = normalizeProfilesDeclaration(frontmatter.profiles);
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractProfilesFromAst(ast: MlldNode[]): ProfilesDeclaration | undefined {
+  for (const node of ast) {
+    if (!isDirectiveNode(node) || node.kind !== 'profiles') continue;
+    const directive = node as DirectiveNode;
+    try {
+      return normalizeProfilesDeclaration((directive.values as any)?.profiles ?? {});
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function extractExports(ast: MlldNode[]): string[] {

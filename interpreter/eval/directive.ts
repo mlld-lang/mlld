@@ -25,7 +25,8 @@ import { evaluateForDirective } from './for';
 import { evaluateLoopDirective } from './loop';
 import { evaluateExport } from './export';
 import { evaluateGuard } from './guard';
-import { evaluateNeeds, evaluateWants } from './needs';
+import { evaluateNeeds } from './needs';
+import { evaluateProfiles } from './profiles';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { extractSecurityDescriptor } from '../utils/structured-value';
@@ -749,8 +750,8 @@ async function dispatchDirective(
     case 'needs':
       return await evaluateNeeds(directive, env);
 
-    case 'wants':
-      return await evaluateWants(directive, env);
+    case 'profiles':
+      return await evaluateProfiles(directive, env);
 
     case 'policy':
       return await evaluatePolicy(directive as PolicyDirectiveNode, env);

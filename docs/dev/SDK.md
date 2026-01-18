@@ -187,7 +187,7 @@ analyzeModule(filepath)
         ├─ Extract metadata:
         │   ├─ Frontmatter (YAML)
         │   ├─ /needs directives
-        │   ├─ /wants directives
+        │   ├─ /profiles directives
         │   └─ /export directives
         │
         ├─ Walk AST:

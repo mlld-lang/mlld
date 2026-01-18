@@ -245,7 +245,7 @@ Directive
     / SlashGuard    // Guard directives (security policies)
     / SlashPolicy   // Policy composition directives
     / SlashNeeds    // Needs directives (capability declarations)
-    / SlashWants    // Wants directives (capability tiers)
+    / SlashProfiles // Profiles directives (capability tiers)
     / SlashStream   // Stream directives
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
