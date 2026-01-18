@@ -89,6 +89,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `.text` is now the canonical text representation accessor
   - `LoadContentResult.content` unchanged (still holds raw file content)
 
+## [2.0.0-rc81-ab]
+
+### Added
+- Source provenance taint labels apply to command outputs, URL loads, and @input resolver values
+- Guard allow actions support label modifications (`addLabels`, `removeLabels`, `warning`) with protected label enforcement
+
+### Fixed
+- Guard override lists accept unquoted `@guard` names
+
 ## [2.0.0-rc81]
 
 ### Added

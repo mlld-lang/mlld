@@ -918,6 +918,15 @@ export async function evaluateRun(
           { env, sourceLocation: directive.location }
         );
       }
+
+      const commandTaint = deriveCommandTaint({ command });
+      mergePendingDescriptor(
+        makeSecurityDescriptor({
+          taint: commandTaint.taint,
+          labels: commandTaint.labels,
+          sources: commandTaint.sources
+        })
+      );
       
       // NEW: Security check for exec commands
       const security = env.getSecurityManager();

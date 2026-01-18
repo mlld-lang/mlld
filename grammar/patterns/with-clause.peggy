@@ -190,8 +190,14 @@ GuardOverrideNames
     }
 
 GuardOverrideName
-  = GuardOverrideSingleQuoted
+  = GuardOverrideVarRef
+  / GuardOverrideSingleQuoted
   / GuardOverrideDoubleQuoted
+
+GuardOverrideVarRef
+  = "@" id:BaseIdentifier {
+      return `@${helpers.normalizePathVar(id)}`;
+    }
 
 GuardOverrideSingleQuoted
   = "'" content:EscapedSingleStringContent "'" {

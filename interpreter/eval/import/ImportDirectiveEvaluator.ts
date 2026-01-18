@@ -1,5 +1,5 @@
 import type { DirectiveNode, ImportDirectiveNode } from '@core/types';
-import type { ImportType } from '@core/types/security';
+import type { ImportType, DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { deriveImportTaint } from '@core/security/taint';
 import type { Environment } from '../../env/Environment';
@@ -330,6 +330,24 @@ export class ImportDirectiveEvaluator {
       context: 'import',
       requestedImports
     });
+
+    const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
+    const baseDescriptor = makeSecurityDescriptor({ labels: securityLabels });
+    const sourceRef = result.mx?.source ?? '@input';
+    const taintSnapshot = deriveImportTaint({
+      importType: 'live',
+      resolverName: 'input',
+      source: sourceRef,
+      resolvedPath: sourceRef,
+      sourceType: 'input',
+      labels: result.mx?.labels
+    });
+    const taintDescriptor = makeSecurityDescriptor({
+      taint: taintSnapshot.taint,
+      labels: taintSnapshot.labels,
+      sources: taintSnapshot.sources
+    });
+    env.recordSecurityDescriptor(mergeDescriptors(baseDescriptor, taintDescriptor));
     
     let exportData: Record<string, any> = {};
     if (result.contentType === 'data' && typeof result.content === 'string') {

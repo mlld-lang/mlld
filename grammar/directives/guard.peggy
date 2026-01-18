@@ -252,10 +252,29 @@ GuardConditionExpression
   = WhenConditionExpression
 
 GuardAction
-  = "allow" value:GuardActionValue? {
+  = "allow" options:GuardAllowWithClause value:GuardActionValue? {
       return helpers.createNode('GuardAction', {
         decision: 'allow',
         value: value ? value.nodes : undefined,
+        addLabels: options?.addLabels,
+        removeLabels: options?.removeLabels,
+        warning: options?.warning,
+        location: location()
+      });
+    }
+  / "allow" value:GuardActionValue options:GuardAllowWithClause? {
+      return helpers.createNode('GuardAction', {
+        decision: 'allow',
+        value: value ? value.nodes : undefined,
+        addLabels: options?.addLabels,
+        removeLabels: options?.removeLabels,
+        warning: options?.warning,
+        location: location()
+      });
+    }
+  / "allow" {
+      return helpers.createNode('GuardAction', {
+        decision: 'allow',
         location: location()
       });
     }
@@ -290,6 +309,47 @@ GuardActionValue
         raw: text().trim()
       };
     }
+
+GuardAllowWithClause
+  = HWS "with" _ "{" _ entries:GuardAllowEntries? _ "}" {
+      const result = {};
+      if (entries) {
+        for (const [key, value] of entries) {
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+
+GuardAllowEntries
+  = first:GuardAllowEntry rest:(CommaSpace entry:GuardAllowEntry { return entry; })* {
+      return [first, ...rest];
+    }
+
+GuardAllowEntry
+  = "addLabels" _ ":" _ labels:GuardLabelList {
+      return ["addLabels", labels];
+    }
+  / "removeLabels" _ ":" _ labels:GuardLabelList {
+      return ["removeLabels", labels];
+    }
+  / "warning" _ ":" _ message:StringLiteral {
+      return ["warning", message];
+    }
+
+GuardLabelList
+  = "[" _ labels:GuardLabelItems? _ "]" {
+      return labels || [];
+    }
+
+GuardLabelItems
+  = first:GuardLabelItem rest:(CommaSpace label:GuardLabelItem { return label; })* {
+      return [first, ...rest];
+    }
+
+GuardLabelItem
+  = label:StringLiteral { return label; }
+  / label:DataLabelIdentifier { return label; }
 
 GuardActionMessage
   = _ msg:StringLiteral {

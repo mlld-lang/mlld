@@ -1,6 +1,7 @@
 import type { TypedDirectiveNode } from './base';
 import type { BaseMlldNode, DirectiveNode, SourceLocation } from './primitives';
 import type { LetAssignmentNode } from './when';
+import type { DataLabel } from './security';
 
 export type GuardScope = 'perInput' | 'perOperation';
 export type GuardFilterKind = 'data' | 'operation';
@@ -21,6 +22,14 @@ export interface GuardActionNode extends BaseMlldNode {
   message?: string;
   rawMessage?: string;
   value?: BaseMlldNode[];
+  addLabels?: DataLabel[];
+  removeLabels?: DataLabel[];
+  warning?: string;
+}
+
+export interface GuardLabelModifications {
+  addLabels?: DataLabel[];
+  removeLabels?: DataLabel[];
 }
 
 export interface GuardRuleNode extends BaseMlldNode {
@@ -87,6 +96,7 @@ export interface GuardResult {
   reason?: string;
   hint?: GuardHint;
   replacement?: unknown;
+  labelModifications?: GuardLabelModifications;
   metadata?: Record<string, unknown>;
   timing?: 'before' | 'after';
 }

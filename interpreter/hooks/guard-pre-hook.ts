@@ -18,7 +18,11 @@ import type { ArrayAggregateSnapshot, GuardInputHelper } from '@core/types/varia
 import type { DataLabel } from '@core/types/security';
 import { evaluateCondition } from '../eval/when';
 import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
-import { guardSnapshotDescriptor } from './guard-utils';
+import {
+  guardSnapshotDescriptor,
+  applyGuardLabelModifications,
+  extractGuardLabelModifications
+} from './guard-utils';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluate } from '../core/interpreter';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
@@ -28,8 +32,8 @@ import { interpreterLogger } from '@core/utils/logger';
 import type { HookableNode } from '@core/types/hooks';
 import { isDirectiveHookTarget, isEffectHookTarget, isExecHookTarget } from '@core/types/hooks';
 import { materializeGuardInputs } from '../utils/guard-inputs';
-import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
-import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import { appendGuardHistory } from './guard-shared-history';
 import { appendFileSync } from 'fs';
@@ -968,14 +972,21 @@ async function evaluateGuard(options: {
   };
 
   if (!action || action.decision === 'allow') {
+    const labelModifications = extractGuardLabelModifications(action);
+    const allowHint =
+      action?.warning
+        ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
+        : undefined;
     const replacement = await env.withGuardContext(guardContext, async () =>
       evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
     );
     return {
       guardName: guard.name ?? null,
       decision: 'allow',
-       timing: 'before',
+      timing: 'before',
       replacement,
+      hint: allowHint,
+      labelModifications,
       metadata: metadataBase
     };
   }
@@ -1147,17 +1158,35 @@ async function evaluateGuardReplacement(
   guard: GuardDefinition,
   inputVariable: Variable
 ): Promise<Variable | undefined> {
-  if (!action || action.decision !== 'allow' || !action.value || action.value.length === 0) {
+  if (!action || action.decision !== 'allow') {
     return undefined;
   }
   const { evaluate } = await import('../core/interpreter');
-  const result = await evaluate(action.value, guardEnv);
-  const descriptor =
-    inputVariable.mx && inputVariable.mx.labels
-      ? varMxToSecurityDescriptor(inputVariable.mx)
-      : makeSecurityDescriptor();
+  const labelModifications = extractGuardLabelModifications(action);
+  const baseDescriptor = inputVariable.mx
+    ? varMxToSecurityDescriptor(inputVariable.mx)
+    : makeSecurityDescriptor();
+  const modifiedDescriptor = applyGuardLabelModifications(
+    baseDescriptor,
+    labelModifications,
+    guard
+  );
   const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
-  return materializeGuardTransform(result?.value ?? result, guardLabel, descriptor);
+
+  if (action.value && action.value.length > 0) {
+    const result = await evaluate(action.value, guardEnv);
+    return materializeGuardTransform(result?.value ?? result, guardLabel, modifiedDescriptor);
+  }
+
+  if (!labelModifications) {
+    return undefined;
+  }
+
+  const guardDescriptor = mergeDescriptors(
+    modifiedDescriptor,
+    makeSecurityDescriptor({ sources: [`guard:${guardLabel}`] })
+  );
+  return cloneVariableForReplacement(inputVariable, guardDescriptor);
 }
 
 function buildDecisionMetadata(
@@ -1254,6 +1283,29 @@ function cloneVariableForGuard(variable: Variable): Variable {
       isSystem: true
     }
   };
+  if (clone.mx?.mxCache) {
+    delete clone.mx.mxCache;
+  }
+  return clone;
+}
+
+function cloneVariableForReplacement(
+  variable: Variable,
+  descriptor: SecurityDescriptor
+): Variable {
+  const clone: Variable = {
+    ...variable,
+    mx: {
+      ...(variable.mx ?? {})
+    },
+    internal: {
+      ...(variable.internal ?? {})
+    }
+  };
+  if (!clone.mx) {
+    clone.mx = {} as any;
+  }
+  updateVarMxFromDescriptor(clone.mx, descriptor);
   if (clone.mx?.mxCache) {
     delete clone.mx.mxCache;
   }

@@ -125,6 +125,17 @@ function isUrlLike(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+function isNetworkResolver(resolverName?: string): boolean {
+  if (!resolverName) {
+    return false;
+  }
+  const normalized = resolverName.toLowerCase();
+  return normalized === 'http' ||
+    normalized === 'https' ||
+    normalized === 'github' ||
+    normalized === 'registry';
+}
+
 function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): boolean {
   if (!resolvedPath) {
     return false;
@@ -147,6 +158,13 @@ function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): 
 export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const resolverName = options.resolverName?.toLowerCase();
   const resolvedPath = options.resolvedPath ?? options.source;
+  const source = options.source ?? '';
+  const isNetworkSource =
+    options.sourceType === 'url' ||
+    (resolvedPath ? isUrlLike(resolvedPath) : false) ||
+    (source ? isUrlLike(source) : false) ||
+    isNetworkResolver(resolverName);
+  const isUserSource = options.sourceType === 'input' || resolverName === 'input';
   const dirLabels =
     resolvedPath && shouldTreatAsFile(options, resolvedPath)
       ? labelsForPath(resolvedPath)
@@ -161,7 +179,9 @@ export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const taint = freezeArray<DataLabel>([
     ...explicitLabels,
     ...(resolverName === 'dynamic' ? ['src:dynamic'] : []),
-    ...(dirLabels.length > 0 ? ['src:file', ...dirLabels] : [])
+    ...(dirLabels.length > 0 ? ['src:file', ...dirLabels] : []),
+    ...(isNetworkSource ? ['src:network'] : []),
+    ...(isUserSource ? ['src:user'] : [])
   ]);
 
   return Object.freeze({

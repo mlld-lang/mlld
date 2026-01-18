@@ -23,7 +23,11 @@ import { materializeGuardInputs } from '../utils/guard-inputs';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import type { PostHook } from './HookManager';
 import type { Environment } from '../env/Environment';
-import { guardSnapshotDescriptor } from './guard-utils';
+import {
+  guardSnapshotDescriptor,
+  applyGuardLabelModifications,
+  extractGuardLabelModifications
+} from './guard-utils';
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 import type { EvalResult } from '../core/interpreter';
 import type { GuardDefinition } from '../guards/GuardRegistry';
@@ -325,18 +329,34 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         if (resultEntry.hint) {
           hints.push(resultEntry.hint);
         }
-        if (
-          resultEntry.decision === 'allow' &&
-          currentDecision === 'allow' &&
-          resultEntry.replacement
-        ) {
-          const replacements = normalizeReplacementVariables(resultEntry.replacement);
-          if (replacements.length > 0) {
-            const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
-            applyDescriptorToVariables(mergedDescriptor, replacements);
+        if (resultEntry.decision === 'allow' && currentDecision === 'allow') {
+          if (resultEntry.replacement) {
+            const replacements = normalizeReplacementVariables(resultEntry.replacement);
+            if (replacements.length > 0) {
+              const mergedDescriptor = mergeGuardDescriptor(
+                currentDescriptor,
+                replacements,
+                guard,
+                resultEntry.labelModifications
+              );
+              applyDescriptorToVariables(mergedDescriptor, replacements);
+              currentDescriptor = mergedDescriptor;
+              activeOutputs = replacements;
+              currentInput = replacements[0];
+              transformsApplied = true;
+            }
+          } else if (resultEntry.labelModifications) {
+            const mergedDescriptor = mergeGuardDescriptor(
+              currentDescriptor,
+              [],
+              guard,
+              resultEntry.labelModifications
+            );
             currentDescriptor = mergedDescriptor;
-            activeOutputs = replacements;
-            currentInput = replacements[0];
+            const targetVars = activeOutputs.length > 0 ? activeOutputs : [currentInput];
+            if (targetVars.length > 0) {
+              applyDescriptorToVariables(mergedDescriptor, targetVars);
+            }
             transformsApplied = true;
           }
         } else if (resultEntry.decision === 'deny') {
@@ -383,15 +403,35 @@ export const guardPostHook: PostHook = async (node, result, inputs, env, operati
         if (resultEntry.hint) {
           hints.push(resultEntry.hint);
         }
-        if (resultEntry.decision === 'allow' && resultEntry.replacement && currentDecision === 'allow') {
-          const replacements = normalizeReplacementVariables(resultEntry.replacement);
-          if (replacements.length > 0) {
-            const mergedDescriptor = mergeGuardDescriptor(currentDescriptor, replacements, guard);
-            applyDescriptorToVariables(mergedDescriptor, replacements);
+        if (resultEntry.decision === 'allow' && currentDecision === 'allow') {
+          if (resultEntry.replacement) {
+            const replacements = normalizeReplacementVariables(resultEntry.replacement);
+            if (replacements.length > 0) {
+              const mergedDescriptor = mergeGuardDescriptor(
+                currentDescriptor,
+                replacements,
+                guard,
+                resultEntry.labelModifications
+              );
+              applyDescriptorToVariables(mergedDescriptor, replacements);
+              currentDescriptor = mergedDescriptor;
+              activeOutputs = replacements;
+              transformsApplied = true;
+              opSnapshot = buildOperationSnapshot(activeOutputs);
+            }
+          } else if (resultEntry.labelModifications) {
+            const mergedDescriptor = mergeGuardDescriptor(
+              currentDescriptor,
+              [],
+              guard,
+              resultEntry.labelModifications
+            );
             currentDescriptor = mergedDescriptor;
-            activeOutputs = replacements;
+            const targetVars = activeOutputs.length > 0 ? activeOutputs : outputVariables;
+            if (targetVars.length > 0) {
+              applyDescriptorToVariables(mergedDescriptor, targetVars);
+            }
             transformsApplied = true;
-            opSnapshot = buildOperationSnapshot(activeOutputs);
           }
         } else if (resultEntry.decision === 'deny') {
           currentDecision = 'deny';
@@ -752,6 +792,11 @@ async function evaluateGuard(options: {
   };
 
   if (!action || action.decision === 'allow') {
+    const labelModifications = extractGuardLabelModifications(action);
+    const allowHint =
+      action?.warning
+        ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
+        : undefined;
     const replacement = await env.withGuardContext(guardContext, async () =>
       evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
     );
@@ -760,6 +805,8 @@ async function evaluateGuard(options: {
       decision: 'allow',
       timing: 'after',
       replacement,
+      hint: allowHint,
+      labelModifications,
       metadata: metadataBase
     };
   }
@@ -891,17 +938,35 @@ async function evaluateGuardReplacement(
   guard: GuardDefinition,
   inputVariable: Variable
 ): Promise<Variable | undefined> {
-  if (!action || action.decision !== 'allow' || !action.value || action.value.length === 0) {
+  if (!action || action.decision !== 'allow') {
     return undefined;
   }
   const { evaluate } = await import('../core/interpreter');
-  const result = await evaluate(action.value, guardEnv);
-  const descriptor =
-    inputVariable.mx && inputVariable.mx.labels
-      ? varMxToSecurityDescriptor(inputVariable.mx)
-      : makeSecurityDescriptor();
+  const labelModifications = extractGuardLabelModifications(action);
+  const baseDescriptor = inputVariable.mx
+    ? varMxToSecurityDescriptor(inputVariable.mx)
+    : makeSecurityDescriptor();
+  const modifiedDescriptor = applyGuardLabelModifications(
+    baseDescriptor,
+    labelModifications,
+    guard
+  );
   const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
-  return materializeGuardTransform(result?.value ?? result, guardLabel, descriptor);
+
+  if (action.value && action.value.length > 0) {
+    const result = await evaluate(action.value, guardEnv);
+    return materializeGuardTransform(result?.value ?? result, guardLabel, modifiedDescriptor);
+  }
+
+  if (!labelModifications) {
+    return undefined;
+  }
+
+  const guardDescriptor = mergeDescriptors(
+    modifiedDescriptor,
+    makeSecurityDescriptor({ sources: [`guard:${guardLabel}`] })
+  );
+  return cloneVariableWithDescriptor(inputVariable, guardDescriptor);
 }
 
 function buildDecisionMetadata(
@@ -1338,6 +1403,29 @@ function cloneVariable(variable: Variable): Variable {
   return clone;
 }
 
+function cloneVariableWithDescriptor(
+  variable: Variable,
+  descriptor: SecurityDescriptor
+): Variable {
+  const clone: Variable = {
+    ...variable,
+    mx: {
+      ...(variable.mx ?? {})
+    },
+    internal: {
+      ...(variable.internal ?? {})
+    }
+  };
+  if (!clone.mx) {
+    clone.mx = {} as any;
+  }
+  updateVarMxFromDescriptor(clone.mx, descriptor);
+  if (clone.mx?.mxCache) {
+    delete clone.mx.mxCache;
+  }
+  return clone;
+}
+
 function buildVariablePreview(variable: Variable): string | null {
   try {
     const value = (variable as any).value;
@@ -1446,7 +1534,8 @@ function extractOutputDescriptor(result: EvalResult, output?: Variable): Securit
 function mergeGuardDescriptor(
   current: SecurityDescriptor,
   replacements: readonly Variable[],
-  guard: GuardDefinition
+  guard: GuardDefinition,
+  labelModifications?: GuardResult['labelModifications']
 ): SecurityDescriptor {
   const guardSource = guard.name ?? guard.filterValue ?? 'guard';
   const descriptors: SecurityDescriptor[] = [current];
@@ -1460,7 +1549,8 @@ function mergeGuardDescriptor(
     }
   }
   descriptors.push(makeSecurityDescriptor({ sources: [`guard:${guardSource}`] }));
-  return mergeDescriptors(...descriptors);
+  const merged = mergeDescriptors(...descriptors);
+  return applyGuardLabelModifications(merged, labelModifications, guard);
 }
 
 function applyDescriptorToVariables(

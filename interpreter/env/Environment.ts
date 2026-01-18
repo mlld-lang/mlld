@@ -8,6 +8,7 @@ import {
   isPipelineInput,
   isTextLike,
 } from '@core/types/variable';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
@@ -1401,6 +1402,34 @@ export class Environment implements VariableManagerContext, ImportResolverContex
               needsResolution: false
             }
           });
+
+      const resolverMx = resolverContent.content.mx ?? resolverContent.content.metadata;
+      const resolverLabels =
+        resolverMx && Array.isArray((resolverMx as any).labels)
+          ? ((resolverMx as any).labels as DataLabel[])
+          : undefined;
+      const resolverTaint =
+        resolverMx && Array.isArray((resolverMx as any).taint)
+          ? ((resolverMx as any).taint as DataLabel[])
+          : undefined;
+      const resolverSources =
+        resolverMx && typeof (resolverMx as any).source === 'string'
+          ? ([(resolverMx as any).source] as string[])
+          : undefined;
+      if (resolverLabels || resolverTaint || resolverSources) {
+        const descriptor = makeSecurityDescriptor({
+          labels: resolverLabels,
+          taint: resolverTaint,
+          sources: resolverSources
+        });
+        if (!resolvedVar.mx) {
+          resolvedVar.mx = {} as any;
+        }
+        updateVarMxFromDescriptor(resolvedVar.mx, descriptor);
+        if ((resolvedVar.mx as any).mxCache) {
+          delete (resolvedVar.mx as any).mxCache;
+        }
+      }
       
       // Cache the resolved variable
       this.cacheManager.setResolverVariable(name, resolvedVar);

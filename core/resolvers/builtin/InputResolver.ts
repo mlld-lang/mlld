@@ -48,7 +48,8 @@ export class InputResolver implements Resolver {
     if (!config?.context || config.context === 'variable') {
       const metadata = {
         source: 'input',
-        timestamp: new Date()
+        timestamp: new Date(),
+        taint: ['src:user']
       };
       return {
         content: JSON.stringify(this.inputData, null, 2),
@@ -69,7 +70,8 @@ export class InputResolver implements Resolver {
         delete exportData._meta;
         const metadata = {
           source: 'input',
-          timestamp: new Date()
+          timestamp: new Date(),
+          taint: ['src:user']
         };
         return {
           content: JSON.stringify(exportData),
@@ -89,7 +91,8 @@ export class InputResolver implements Resolver {
       
       const metadata = {
         source: 'input',
-        timestamp: new Date()
+        timestamp: new Date(),
+        taint: ['src:user']
       };
       return {
         content: JSON.stringify(exports),

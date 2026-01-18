@@ -279,6 +279,13 @@ export async function processContentLoader(node: any, env: Environment): Promise
   try {
     // URLs can't be globs
     if (env.isURL(pathOrUrl)) {
+      const urlMetadata: StructuredValueMetadata = {
+        url: pathOrUrl,
+        security: makeSecurityDescriptor({
+          taint: ['src:network'],
+          sources: [pathOrUrl]
+        })
+      };
       // Fetch URL with metadata
       const response = await env.fetchURLWithMetadata(pathOrUrl);
       
@@ -304,10 +311,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
               env,
               node: { pipes }
             });
-            return finalizeLoaderResult(piped, { type: 'array', metadata: { url: pathOrUrl } });
+            return finalizeLoaderResult(piped, { type: 'array', metadata: urlMetadata });
           }
 
-          return finalizeLoaderResult(sections, { type: 'array', metadata: { url: pathOrUrl } });
+          return finalizeLoaderResult(sections, { type: 'array', metadata: urlMetadata });
         }
 
         const sectionName = await extractSectionName(options.section, env);
@@ -321,11 +328,11 @@ export async function processContentLoader(node: any, env: Environment): Promise
             env,
             node: { pipes }
           });
-          return finalizeLoaderResult(pipedSection, { type: 'text', metadata: { url: pathOrUrl } });
+          return finalizeLoaderResult(pipedSection, { type: 'text', metadata: urlMetadata });
         }
 
         // For URLs with sections, return plain string (backward compatibility)
-        return finalizeLoaderResult(sectionContent, { type: 'text', metadata: { url: pathOrUrl } });
+        return finalizeLoaderResult(sectionContent, { type: 'text', metadata: urlMetadata });
       }
       
       // Create rich URL result with metadata
@@ -353,10 +360,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
           headers: response.headers,
           status: response.status
         });
-        return finalizeLoaderResult(pipedResult, { type: 'object', text: asText(pipedContent), metadata: { url: pathOrUrl } });
+        return finalizeLoaderResult(pipedResult, { type: 'object', text: asText(pipedContent), metadata: urlMetadata });
       }
       
-      return finalizeLoaderResult(urlResult, { type: 'object', text: urlResult.content, metadata: { url: pathOrUrl } });
+      return finalizeLoaderResult(urlResult, { type: 'object', text: urlResult.content, metadata: urlMetadata });
     }
     
     // Handle glob patterns for file paths

@@ -88,8 +88,14 @@ function isProbablyURL(input: string): boolean {
 }
 
 function buildLoadSecurityDescriptor(result: LoadContentResult) {
-  if (!result.absolute || isProbablyURL(result.absolute)) {
+  if (!result.absolute) {
     return undefined;
+  }
+  if (isProbablyURL(result.absolute)) {
+    return makeSecurityDescriptor({
+      taint: ['src:network'],
+      sources: [result.absolute]
+    });
   }
   const dirLabels = labelsForPath(result.absolute);
   return makeSecurityDescriptor({

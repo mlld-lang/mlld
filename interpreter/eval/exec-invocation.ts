@@ -39,6 +39,7 @@ import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import { deriveCommandTaint } from '@core/security/taint';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -2294,6 +2295,15 @@ async function evaluateExecInvocationInternal(
         commandTemplate: definition.commandTemplate
       });
     }
+
+    const commandTaint = deriveCommandTaint({ command });
+    mergeResultDescriptor(
+      makeSecurityDescriptor({
+        taint: commandTaint.taint,
+        labels: commandTaint.labels,
+        sources: commandTaint.sources
+      })
+    );
     
     // Build environment variables from parameters for shell execution
     // Only include parameters that are referenced in the command string to avoid
