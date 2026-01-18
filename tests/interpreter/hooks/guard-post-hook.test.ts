@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseSync } from '@grammar/parser';
 import type { DirectiveNode, ExecInvocation } from '@core/types';
 import { GuardError } from '@core/errors/GuardError';
+import { MlldSecurityError } from '@core/errors';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
@@ -88,6 +89,113 @@ describe('guard post-hook integration', () => {
       (isStructuredValue(transformed.value) && transformed.value.text) ||
       ((transformed.value as any)?.value ?? transformed.value);
     expect(String(rawValue)).toContain('sanitized-output');
+  });
+
+  it('applies label additions from after guards', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after @bless for secret = when [ * => allow with { addLabels: ["blessed"] } ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createSecretVariable('secretVar', 'raw-output');
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    const transformed = await guardPostHook(node, result, [outputVar], env, {
+      type: 'exe',
+      name: 'emit'
+    });
+    const finalValue = transformed.value;
+    const finalVar = isVariable(finalValue) ? finalValue : undefined;
+    const mx = (finalVar ?? (isStructuredValue(finalValue) ? finalValue : undefined))?.mx;
+
+    expect(mx?.labels).toEqual(expect.arrayContaining(['secret', 'blessed']));
+    expect(mx?.taint).toEqual(expect.arrayContaining(['blessed']));
+  });
+
+  it('blocks protected label removal for non-privileged after guards', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after @bless for secret = when [ * => allow with { removeLabels: ["src:mcp"] } ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const outputVar = createSimpleTextVariable(
+      'secretVar',
+      'raw-output',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({
+          labels: ['secret'],
+          taint: ['src:mcp'],
+          sources: ['mcp:test']
+        })
+      }
+    );
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [outputVar], env, { type: 'exe', name: 'emit' })
+    ).rejects.toBeInstanceOf(MlldSecurityError);
+  });
+
+  it('allows privileged after guards to remove protected labels', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after @bless for secret = when [ * => allow with { removeLabels: ["src:mcp"] } ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const guardDef = env.getGuardRegistry().getByName('bless');
+    expect(guardDef).toBeTruthy();
+    if (guardDef) {
+      guardDef.privileged = true;
+    }
+
+    const outputVar = createSimpleTextVariable(
+      'secretVar',
+      'raw-output',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({
+          labels: ['secret'],
+          taint: ['src:mcp'],
+          sources: ['mcp:test']
+        })
+      }
+    );
+    const result = { value: outputVar, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    const transformed = await guardPostHook(node, result, [outputVar], env, {
+      type: 'exe',
+      name: 'emit'
+    });
+    const finalValue = transformed.value;
+    const finalVar = isVariable(finalValue) ? finalValue : undefined;
+    const mx = (finalVar ?? (isStructuredValue(finalValue) ? finalValue : undefined))?.mx;
+    expect(mx?.taint).not.toEqual(expect.arrayContaining(['src:mcp']));
   });
 
   it('chains allow transforms across after guards and preserves metadata', async () => {

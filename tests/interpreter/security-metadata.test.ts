@@ -219,6 +219,26 @@ describe('Security metadata propagation', () => {
     expect(structuredResult?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
   });
 
+  it('tags @input resolver variables with src:user taint', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    await env.registerBuiltinResolvers();
+
+    const resolverVar = await env.getResolverVariable('input');
+    expect(resolverVar?.mx?.taint).toEqual(expect.arrayContaining(['src:user']));
+  });
+
+  it('applies src:exec taint to /exe command output', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const exeDirective = parseSync('/exe @echo(value) = run { printf "@value" }')[0] as DirectiveNode;
+    await evaluateDirective(exeDirective, env);
+
+    const varDirective = parseSync('/var @result = @echo("hi")')[0] as DirectiveNode;
+    await evaluateDirective(varDirective, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx?.taint).toEqual(expect.arrayContaining(['src:exec']));
+  });
+
   it('applies src:file and directory labels to loaded file content', async () => {
     const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-sec-load-'));
     const nestedDir = path.join(tmpRoot, 'secrets', 'configs');

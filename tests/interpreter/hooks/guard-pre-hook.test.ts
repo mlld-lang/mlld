@@ -250,6 +250,38 @@ describe('guard pre-hook integration', () => {
     await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
   });
 
+  it('parses guard override names without quotes', async () => {
+    const env = createEnv();
+    const guardAllow = parseSync('/guard @ga for secret = when [ * => allow ]')[0] as DirectiveNode;
+    const guardDeny = parseSync(
+      '/guard @gb for secret = when [ * => deny "blocked by gb" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardAllow, env);
+    await evaluateDirective(guardDeny, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'secret-value',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'] })
+        }
+      )
+    );
+
+    const directive = parseSync(
+      '/show @secretVar with { guards: { only: [@ga] } }'
+    )[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+  });
+
   it('throws when guard override sets both only and except', async () => {
     const env = createEnv();
     env.setVariable(

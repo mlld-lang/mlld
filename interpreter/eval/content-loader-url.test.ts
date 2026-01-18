@@ -57,6 +57,8 @@ describe('Content Loader URL Metadata', () => {
       expect(metadata?.description).toBe('Example description');
       expect(metadata?.headers).toEqual(mockResponse.headers);
       expectLoadContentMetadata(metadata);
+      expect(metadata?.taint).toEqual(expect.arrayContaining(['src:network']));
+      expect(metadata?.sources).toEqual(expect.arrayContaining(['https://example.com']));
     });
 
     it('should handle JSON URLs correctly', async () => {
@@ -138,12 +140,14 @@ describe('Content Loader URL Metadata', () => {
       };
 
       const rawResult = await processContentLoader(node, env);
-      const { data: result } = unwrapStructuredForTest<string>(rawResult);
+      const { data: result, mx } = unwrapStructuredForTest<string>(rawResult);
       
       // With section extraction, should return plain string
       expect(typeof result).toBe('string');
       expect(result).toContain('Install instructions');
       expect(result).not.toContain('Usage instructions');
+      expect(mx?.taint).toEqual(expect.arrayContaining(['src:network']));
+      expect(mx?.sources).toEqual(expect.arrayContaining(['https://example.com/docs.md']));
     });
 
     it('should strip HTML correctly for text property', async () => {
