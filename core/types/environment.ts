@@ -5,14 +5,12 @@ export type EnvironmentConfig = {
   auth?: string | string[];
   taint?: DataLabel[];
   name?: string;
-  keep?: boolean;
   from?: string;
   [key: string]: unknown;
 };
 
 export type EnvironmentCreateOptions = {
   name?: string;
-  keep?: boolean;
   from?: string;
   [key: string]: unknown;
 };

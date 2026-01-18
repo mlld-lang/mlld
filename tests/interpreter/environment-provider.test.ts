@@ -113,6 +113,49 @@ describe('environment providers', () => {
     }
   });
 
+  it('skips provider release for named environments', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-env-provider-'));
+    const releasePath = path.join(tempDir, 'release-named.txt');
+
+    const env = createEnv(tempDir);
+    env.setEffectHandler(new TestEffectHandler());
+    const providerRef = registerProvider(env);
+    env.recordPolicyConfig('test', {
+      auth: {
+        token: {
+          from: 'env:TEST_TOKEN',
+          as: 'API_TOKEN'
+        }
+      }
+    });
+
+    const previousToken = process.env.TEST_TOKEN;
+    process.env.TEST_TOKEN = 'token-value';
+
+    try {
+      const source = `
+/var @envConfig = { provider: ${JSON.stringify(providerRef)}, auth: "token", name: ${JSON.stringify(releasePath)} }
+/guard before op:run = when [
+  * => env @envConfig
+]
+/run { printf "ignored" }
+`;
+
+      const result = await evaluateSource(source, env);
+      const output = asText(result?.value);
+
+      expect(output).toContain('provider');
+      expect(output).toContain('token-value');
+      expect(fs.existsSync(releasePath)).toBe(false);
+    } finally {
+      if (previousToken === undefined) {
+        delete process.env.TEST_TOKEN;
+      } else {
+        process.env.TEST_TOKEN = previousToken;
+      }
+    }
+  });
+
   it('calls provider release on error paths', async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-env-provider-'));
     const releasePath = path.join(tempDir, 'release-error.txt');

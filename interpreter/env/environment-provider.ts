@@ -201,7 +201,7 @@ function buildProviderExecutionError(options: {
 }
 
 function prepareProviderOptions(config: EnvironmentConfig): EnvironmentCreateOptions {
-  const { provider: _provider, auth: _auth, taint: _taint, ...rest } = config;
+  const { provider: _provider, auth: _auth, taint: _taint, keep: _keep, ...rest } = config as any;
   return { ...rest };
 }
 
@@ -215,7 +215,12 @@ function shouldReleaseEnvironment(
   if (override === true) {
     return true;
   }
-  return config.keep !== true;
+  return !hasNamedEnvironment(config);
+}
+
+function hasNamedEnvironment(config: EnvironmentConfig): boolean {
+  const name = (config as any).name;
+  return typeof name === 'string' && name.trim().length > 0;
 }
 
 async function callProviderCreate(

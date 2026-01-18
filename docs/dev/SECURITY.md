@@ -212,7 +212,7 @@ export { @create, @execute, @release, @snapshot }
 - No name → create anonymous, `{ envName: <auto-id>, created: true }`
 
 **Release behavior:**
-- When `keep` is true, mlld skips `@release` for that execution
+- When `name` is set, mlld treats the environment as reusable and skips `@release` by default
 
 **Core fields** (handled by mlld, not passed to provider):
 - `provider` → routes to module

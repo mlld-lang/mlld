@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `mlld init` provides quick project setup (see Added above)
   - `mlld setup` remains the interactive configuration wizard
 - Environment providers use `@create` + `@execute` + `@release` with `envName`; `@checkpoint` is now `@snapshot`
+- Named environment configs skip release by default; `keep` is ignored
 - **`mlld run` timeout is now unlimited by default**
   - Previously defaulted to 5 minutes (300000ms)
   - `--timeout` now accepts human-readable durations: `5m`, `1h`, `30s`, `2d`, or raw milliseconds
