@@ -1,5 +1,11 @@
 import type { DirectiveNode, ExecInvocation, SourceLocation } from '@core/types';
-import type { EnvironmentConfig, EnvironmentCommand, EnvironmentResult } from '@core/types/environment';
+import type {
+  EnvironmentConfig,
+  EnvironmentCreateOptions,
+  EnvironmentCreateResult,
+  EnvironmentCommand,
+  EnvironmentResult
+} from '@core/types/environment';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { PolicyConfig } from '@core/policy/union';
 import type { Environment } from './Environment';
@@ -30,9 +36,10 @@ import { resolveAuthSecrets } from '@interpreter/utils/auth-injection';
 type EnvironmentProviderHandle = {
   ref: string;
   env: Environment;
+  create: unknown;
   execute: unknown;
-  checkpoint?: unknown;
-  release?: unknown;
+  snapshot?: unknown;
+  release: unknown;
 };
 
 const providerCache = new WeakMap<Environment, Map<string, EnvironmentProviderHandle>>();
@@ -125,6 +132,7 @@ export async function executeProviderCommand(options: {
   executionContext?: CommandExecutionContext;
   sourceLocation?: SourceLocation | null;
   directiveType?: string;
+  release?: boolean;
 }): Promise<EnvironmentResult> {
   const provider = await getEnvironmentProvider(options.env, options.providerRef);
   const { providerRef, config, command, workingDirectory, stdin } = options;
@@ -138,35 +146,13 @@ export async function executeProviderCommand(options: {
     ...(stdin !== undefined ? { stdin } : {})
   };
 
-  const { providerOptions, executionEnv } = prepareProviderInvocation(provider, config);
-
-  const invocation: ExecInvocation = {
-    type: 'ExecInvocation',
-    commandRef: {
-      identifier: [{ type: 'VariableReference', identifier: 'execute' }],
-      args: [
-        { type: 'VariableReference', identifier: '__env_opts' },
-        { type: 'VariableReference', identifier: '__env_command' }
-      ]
-    }
-  };
-
   const start = Date.now();
-  let handle: unknown;
+  const providerOptions = prepareProviderOptions(config);
+  let envName: string | null = null;
   try {
-    const result = await provider.env.withGuardSuppression(async () => {
-      executionEnv.setVariable(
-        '__env_opts',
-        createObjectVariable('__env_opts', providerOptions, false, PROVIDER_ARG_SOURCE, PROVIDER_ARG_INTERNAL)
-      );
-      executionEnv.setVariable(
-        '__env_command',
-        createObjectVariable('__env_command', envCommand as any, false, PROVIDER_ARG_SOURCE, PROVIDER_ARG_INTERNAL)
-      );
-      return evaluateExecInvocation(invocation, executionEnv);
-    });
-    const normalized = normalizeEnvironmentResult(result.value);
-    handle = normalized.handle;
+    const createResult = await callProviderCreate(provider, providerOptions);
+    envName = createResult.envName;
+    const normalized = await callProviderExecute(provider, envName, envCommand);
     if ((normalized.exitCode ?? 0) !== 0) {
       throw buildProviderExecutionError({
         command,
@@ -181,8 +167,8 @@ export async function executeProviderCommand(options: {
     }
     return normalized;
   } finally {
-    if (provider.release) {
-      await callProviderRelease(provider, handle);
+    if (envName && shouldReleaseEnvironment(config, options.release)) {
+      await callProviderRelease(provider, envName);
     }
   }
 }
@@ -214,38 +200,118 @@ function buildProviderExecutionError(options: {
   );
 }
 
-function prepareProviderInvocation(
-  provider: EnvironmentProviderHandle,
-  config: EnvironmentConfig
-): { providerOptions: Record<string, unknown>; executionEnv: Environment } {
+function prepareProviderOptions(config: EnvironmentConfig): EnvironmentCreateOptions {
   const { provider: _provider, auth: _auth, taint: _taint, ...rest } = config;
-  const providerOptions = { ...rest };
+  return { ...rest };
+}
+
+function shouldReleaseEnvironment(
+  config: EnvironmentConfig,
+  override?: boolean
+): boolean {
+  if (override === false) {
+    return false;
+  }
+  if (override === true) {
+    return true;
+  }
+  return config.keep !== true;
+}
+
+async function callProviderCreate(
+  provider: EnvironmentProviderHandle,
+  options: EnvironmentCreateOptions
+): Promise<EnvironmentCreateResult> {
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'create' }],
+      args: [{ type: 'VariableReference', identifier: '__env_opts' }]
+    }
+  };
+  const createEnv = provider.env.createChild();
+  createEnv.setVariable(
+    '__env_opts',
+    createObjectVariable('__env_opts', options, false, PROVIDER_ARG_SOURCE, PROVIDER_ARG_INTERNAL)
+  );
+  const result = await provider.env.withGuardSuppression(async () => {
+    return evaluateExecInvocation(invocation, createEnv);
+  });
+  return normalizeEnvironmentCreateResult(result.value);
+}
+
+async function callProviderExecute(
+  provider: EnvironmentProviderHandle,
+  envName: string,
+  envCommand: EnvironmentCommand
+): Promise<EnvironmentResult> {
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'execute' }],
+      args: [
+        { type: 'VariableReference', identifier: '__env_name' },
+        { type: 'VariableReference', identifier: '__env_command' }
+      ]
+    }
+  };
   const executionEnv = provider.env.createChild();
-  return { providerOptions, executionEnv };
+  executionEnv.setVariable(
+    '__env_name',
+    createProviderArgumentVariable('__env_name', envName)
+  );
+  executionEnv.setVariable(
+    '__env_command',
+    createObjectVariable('__env_command', envCommand as any, false, PROVIDER_ARG_SOURCE, PROVIDER_ARG_INTERNAL)
+  );
+  const result = await provider.env.withGuardSuppression(async () => {
+    return evaluateExecInvocation(invocation, executionEnv);
+  });
+  return normalizeEnvironmentResult(result.value);
 }
 
 async function callProviderRelease(
   provider: EnvironmentProviderHandle,
-  handle: unknown
+  envName: string
 ): Promise<void> {
-  if (!provider.release) {
-    return;
-  }
   const releaseInvocation: ExecInvocation = {
     type: 'ExecInvocation',
     commandRef: {
       identifier: [{ type: 'VariableReference', identifier: 'release' }],
-      args: [{ type: 'VariableReference', identifier: '__env_handle' }]
+      args: [{ type: 'VariableReference', identifier: '__env_name' }]
     }
   };
   const releaseEnv = provider.env.createChild();
   releaseEnv.setVariable(
-    '__env_handle',
-    createProviderArgumentVariable('__env_handle', handle ?? null)
+    '__env_name',
+    createProviderArgumentVariable('__env_name', envName)
   );
   await provider.env.withGuardSuppression(async () => {
     await evaluateExecInvocation(releaseInvocation, releaseEnv);
   });
+}
+
+function normalizeEnvironmentCreateResult(value: unknown): EnvironmentCreateResult {
+  let candidate = value;
+  if (isStructuredValue(candidate)) {
+    candidate = candidate.data;
+  }
+  if (candidate === undefined || candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    throw new MlldInterpreterError('Environment provider @create must return an object', {
+      code: 'ENV_PROVIDER_CREATE_RESULT_INVALID'
+    });
+  }
+  const envNameValue = (candidate as any).envName;
+  if (!envNameValue || typeof envNameValue !== 'string') {
+    throw new MlldInterpreterError('Environment provider @create must return envName', {
+      code: 'ENV_PROVIDER_CREATE_ENVNAME_INVALID'
+    });
+  }
+  const createdValue = (candidate as any).created;
+  return {
+    envName: envNameValue,
+    created: typeof createdValue === 'boolean' ? createdValue : true
+  };
 }
 
 function normalizeEnvironmentResult(value: unknown): EnvironmentResult {
@@ -268,13 +334,11 @@ function normalizeEnvironmentResult(value: unknown): EnvironmentResult {
   const stdoutValue = (candidate as any).stdout;
   const stderrValue = (candidate as any).stderr;
   const exitCodeValue = (candidate as any).exitCode;
-  const handle = (candidate as any).handle;
 
   return {
     stdout: stdoutValue !== undefined ? String(stdoutValue) : '',
     stderr: stderrValue !== undefined ? String(stderrValue) : '',
-    exitCode: typeof exitCodeValue === 'number' ? exitCodeValue : 0,
-    handle
+    exitCode: typeof exitCodeValue === 'number' ? exitCodeValue : 0
   };
 }
 
@@ -366,14 +430,33 @@ async function loadEnvironmentProvider(
   );
 
   const moduleObject = processingResult.moduleObject || {};
+  if (!('create' in moduleObject)) {
+    throw new MlldInterpreterError('Environment provider must export @create', {
+      code: 'ENV_PROVIDER_CREATE_MISSING',
+      details: { provider: ref }
+    });
+  }
   if (!('execute' in moduleObject)) {
     throw new MlldInterpreterError('Environment provider must export @execute', {
       code: 'ENV_PROVIDER_EXEC_MISSING',
       details: { provider: ref }
     });
   }
+  if (!('release' in moduleObject)) {
+    throw new MlldInterpreterError('Environment provider must export @release', {
+      code: 'ENV_PROVIDER_RELEASE_MISSING',
+      details: { provider: ref }
+    });
+  }
 
   const providerEnv = processingResult.childEnvironment;
+  const createVar = providerEnv.getVariable('create');
+  if (!createVar || !isExecutableVariable(createVar)) {
+    throw new MlldInterpreterError('Environment provider export @create is not executable', {
+      code: 'ENV_PROVIDER_CREATE_INVALID',
+      details: { provider: ref }
+    });
+  }
   const executeVar = providerEnv.getVariable('execute');
   if (!executeVar || !isExecutableVariable(executeVar)) {
     throw new MlldInterpreterError('Environment provider export @execute is not executable', {
@@ -382,17 +465,17 @@ async function loadEnvironmentProvider(
     });
   }
 
-  const checkpointVar =
-    'checkpoint' in moduleObject ? providerEnv.getVariable('checkpoint') : undefined;
-  if (checkpointVar && !isExecutableVariable(checkpointVar)) {
-    throw new MlldInterpreterError('Environment provider export @checkpoint is not executable', {
-      code: 'ENV_PROVIDER_CHECKPOINT_INVALID',
+  const snapshotVar =
+    'snapshot' in moduleObject ? providerEnv.getVariable('snapshot') : undefined;
+  if (snapshotVar && !isExecutableVariable(snapshotVar)) {
+    throw new MlldInterpreterError('Environment provider export @snapshot is not executable', {
+      code: 'ENV_PROVIDER_SNAPSHOT_INVALID',
       details: { provider: ref }
     });
   }
 
-  const releaseVar = 'release' in moduleObject ? providerEnv.getVariable('release') : undefined;
-  if (releaseVar && !isExecutableVariable(releaseVar)) {
+  const releaseVar = providerEnv.getVariable('release');
+  if (!releaseVar || !isExecutableVariable(releaseVar)) {
     throw new MlldInterpreterError('Environment provider export @release is not executable', {
       code: 'ENV_PROVIDER_RELEASE_INVALID',
       details: { provider: ref }
@@ -402,8 +485,9 @@ async function loadEnvironmentProvider(
   return {
     ref,
     env: providerEnv,
+    create: createVar,
     execute: executeVar,
-    checkpoint: checkpointVar,
+    snapshot: snapshotVar,
     release: releaseVar
   };
 }

@@ -4,7 +4,22 @@ export type EnvironmentConfig = {
   provider?: string;
   auth?: string | string[];
   taint?: DataLabel[];
+  name?: string;
+  keep?: boolean;
+  from?: string;
   [key: string]: unknown;
+};
+
+export type EnvironmentCreateOptions = {
+  name?: string;
+  keep?: boolean;
+  from?: string;
+  [key: string]: unknown;
+};
+
+export type EnvironmentCreateResult = {
+  envName: string;
+  created: boolean;
 };
 
 export type EnvironmentCommand = {
@@ -19,5 +34,4 @@ export type EnvironmentResult = {
   stdout?: string;
   stderr?: string;
   exitCode?: number;
-  handle?: unknown;
 };

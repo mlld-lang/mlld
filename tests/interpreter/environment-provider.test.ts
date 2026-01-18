@@ -18,7 +18,16 @@ function createEnv(root: string): Environment {
 }
 
 function registerProvider(env: Environment): string {
-  const content = `exe @execute(opts, command) = node {
+  const content = `exe @create(opts) = node {
+  const releasePath = typeof opts?.releasePath === 'string' ? opts.releasePath : '';
+  const envName = releasePath
+    ? (opts?.fail ? 'fail:' + releasePath : releasePath)
+    : (opts?.name || 'mock-env-' + Date.now());
+  return { envName, created: true };
+}
+
+exe @execute(envName, command) = node {
+  const shouldFail = typeof envName === 'string' && envName.startsWith('fail:');
   const stdout = [
     'provider',
     command?.secrets?.API_TOKEN || ''
@@ -27,20 +36,20 @@ function registerProvider(env: Environment): string {
   return {
     stdout,
     stderr: '',
-    exitCode: opts?.fail ? 1 : 0,
-    handle: opts?.releasePath || null
+    exitCode: shouldFail ? 1 : 0
   };
 }
 
-exe @release(handle) = node {
+exe @release(envName) = node {
   const fs = require('fs');
-  if (handle) {
-    fs.writeFileSync(handle, 'released');
+  if (envName) {
+    const path = String(envName).startsWith('fail:') ? String(envName).slice(5) : String(envName);
+    fs.writeFileSync(path, 'released');
   }
   return '';
 }
 
-export { @execute, @release }
+export { @create, @execute, @release }
 `;
   const ref = '@mock/env-mock';
   env.registerDynamicModules({ [ref]: content }, { source: 'test' });

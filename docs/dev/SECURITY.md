@@ -141,13 +141,13 @@ Environments are THE primitive for execution contexts. They unify:
 - **Credentials** - Auth configuration
 - **Isolation** - Filesystem, network, resource boundaries
 - **Capabilities** - Available tools, MCPs, operations
-- **State** - Checkpoints, session resume (provider-dependent)
+- **State** - Snapshots, session resume (provider-dependent)
 
 ### Environment Providers
 
 Providers are optional - they add isolation. Without a provider, commands run locally. `policy.env.default` supplies a default provider when an env config omits one.
 
-| Provider | Isolation | Checkpoints | Use Case |
+| Provider | Isolation | Snapshots | Use Case |
 |----------|-----------|-------------|----------|
 | `@mlld/env-docker` | Container | Limited | Process isolation |
 | `@mlld/env-sprites` | Cloud | Native | Full isolation + state |
@@ -186,26 +186,40 @@ Guards select environments. The guard hook returns the env config, and the run e
 Provider modules export a standard interface:
 
 ```mlld
-// Required: every provider exports @execute
-exe @execute(opts, command) = [
+// Required: create environment, execute in it, release it
+exe @create(opts) = [
   // opts = config minus core fields (provider, auth, taint)
-  // command = { argv, cwd, vars, secrets, stdin? }
-  // returns { stdout, stderr, exitCode, handle? }
+  // Returns: { envName, created: bool }
 ]
 
-// Optional: capabilities like checkpointing
-exe @checkpoint(handle, name) = [...]
-exe @release(handle) = [...]
+exe @execute(envName, command) = [
+  // envName from @create
+  // command = { argv, cwd, vars, secrets, stdin? }
+  // Returns: { stdout, stderr, exitCode }
+]
 
-export { @execute, @checkpoint, @release }
+exe @release(envName) = [...]
+
+// Optional: snapshotting
+exe @snapshot(envName, name) = [...]
+
+export { @create, @execute, @release, @snapshot }
 ```
+
+**createOrExists semantics in @create:**
+- `opts.name` specified + exists → `{ envName: opts.name, created: false }`
+- `opts.name` specified + not exists → create, `{ envName, created: true }`
+- No name → create anonymous, `{ envName: <auto-id>, created: true }`
+
+**Release behavior:**
+- When `keep` is true, mlld skips `@release` for that execution
 
 **Core fields** (handled by mlld, not passed to provider):
 - `provider` → routes to module
 - `auth` → resolves credentials from keychain
 - `taint` → applies labels to output
 
-**Opts** (passed to provider): everything else (`fs`, `net`, `image`, etc.)
+**Opts** (passed to @create): everything else (`fs`, `net`, `image`, etc.)
 
 **Command structure:**
 ```mlld
@@ -224,7 +238,6 @@ export { @execute, @checkpoint, @release }
   stdout: "...",
   stderr: "...",
   exitCode: 0,
-  handle: "...",
 }
 ```
 
@@ -238,16 +251,6 @@ The `provider:` field is an **explicit trust grant**:
 | `provider:` designation | Yes | User explicitly trusts it |
 
 Providers receive actual secret values in `command.secrets`. This is intentional - the provider controls execution, so it must be trusted. If you don't trust a module, don't use it as a provider.
-
-```mlld
-// command structure passed to provider
-{
-  argv: ["claude", "-p", "..."],
-  cwd: "/app",
-  vars: { NODE_ENV: "production" },
-  secrets: { ANTHROPIC_API_KEY: "sk-xxx..." },  // actual values
-}
-```
 
 ### Source Labels
 
