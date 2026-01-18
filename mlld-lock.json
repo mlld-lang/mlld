@@ -72,10 +72,17 @@
       "source": "registry://@mlld/prose@2.2.0",
       "integrity": "sha256:be87dccc163788ebf1d08bda93a4d3fcec958c6d255230421e136f8fa4a222f2",
       "fetchedAt": "2026-01-11T03:02:13.184Z"
+    },
+    "@input": {
+      "version": "latest",
+      "resolved": "16fc5d8c3d1ff319210850f760ecc5338e13df0b6828cdf5a786514f8bf9593c",
+      "source": "input",
+      "integrity": "sha256:16fc5d8c3d1ff319210850f760ecc5338e13df0b6828cdf5a786514f8bf9593c",
+      "fetchedAt": "2026-01-18T01:32:51.827Z"
     }
   },
   "metadata": {
     "createdAt": "2025-09-27T19:54:02.369Z",
-    "updatedAt": "2026-01-11T03:02:13.184Z"
+    "updatedAt": "2026-01-18T01:32:51.827Z"
   }
 }

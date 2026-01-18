@@ -1,6 +1,6 @@
 ---
-updated: 2026-01-16
-tags: #security, #policy, #labels, #guards
+updated: 2026-01-17
+tags: #security, #policy, #labels, #guards, #environments
 related-docs: todo/spec-security-2026-v3.md
 related-code: core/policy/*.ts, interpreter/policy/*.ts, interpreter/hooks/*-hook.ts
 related-types: core/types/security.ts { SecurityDescriptor, DataLabel }
@@ -12,10 +12,11 @@ related-types: core/types/security.ts { SecurityDescriptor, DataLabel }
 
 mlld prevents prompt injection consequences via label flow control. You can't stop LLMs from being tricked, but you can prevent tricked LLMs from causing harm.
 
-Three layers:
+Four layers:
 - **Labels** track what data IS (`secret`) and where it CAME FROM (`src:mcp`)
 - **Policy** declares what CAN happen (`secret` → deny `op:show`)
 - **Guards** enforce with full context (complex validation logic)
+- **Environments** provide execution contexts with isolation and state management
 
 Labels propagate automatically. Policy checks are non-bypassable. Guards are optional and bypassable.
 
@@ -132,6 +133,58 @@ When multiple policies compose:
 - **using bypasses deny** - By design. Credentials in env vars, not command strings
 - **Guard label modification** - Affects OUTPUT only. Next operation sees modified labels
 - **Protected labels** - Only privileged guards can remove `src:*` or `secret`
+
+## Environments
+
+Environments are THE primitive for execution contexts. They unify:
+- **Credentials** - Auth configuration
+- **Isolation** - Filesystem, network, resource boundaries
+- **Capabilities** - Available tools, MCPs, operations
+- **State** - Checkpoints, session resume (provider-dependent)
+
+### Environment Providers
+
+| Provider | Isolation | Checkpoints | Use Case |
+|----------|-----------|-------------|----------|
+| `@mlld/env-local` | None | None | Direct execution |
+| `@mlld/env-docker` | Container | Limited | Process isolation |
+| `@mlld/env-sprites` | Cloud | Native | Full isolation + state |
+| `@mlld/env-claude` | Host | Sessions | Claude Code agents |
+
+### Usage Patterns
+
+**Environment blocks** (explicit scope):
+```mlld
+env @sandbox [
+  run cmd "npm test"
+]
+```
+
+**Guard-triggered** (per-operation):
+```mlld
+guard before sandboxed = when [
+  op:cmd => env @isolatedConfig
+  * => deny
+]
+```
+
+**Composable configs**:
+```mlld
+exe @agent(tools) = {
+  provider: "@mlld/env-claude",
+  tools: @tools,
+  auth: "claude",
+}
+```
+
+### Source Labels
+
+Data from environments gets labeled: `src:env:docker`, `src:env:sprites`, `src:env:claude`
+
+### Key Files
+
+- Types: `core/types/environment.ts` (TBD)
+- Providers: `core/env/*.ts` (TBD)
 
 ## Debugging
 
