@@ -3,7 +3,8 @@ import type { OperationContext, GuardContextSnapshot } from '@interpreter/env/Co
 import type { GuardScope } from '@core/types/guard';
 import type { Environment } from '@interpreter/env/Environment';
 import type { GuardHint, GuardResult } from '@core/types/guard';
-import { MlldError, ErrorSeverity, type BaseErrorDetails } from './MlldError';
+import { ErrorSeverity, type BaseErrorDetails } from './MlldError';
+import { MlldDenialError, type DenialContext } from './denial';
 
 export interface GuardErrorDetails extends BaseErrorDetails {
   guardName?: string | null;
@@ -44,7 +45,7 @@ export interface GuardErrorOptions {
   timing?: 'before' | 'after';
 }
 
-export class GuardError extends MlldError {
+export class GuardError extends MlldDenialError {
   public readonly decision: 'deny' | 'retry';
   public readonly retryHint?: string | null;
   public readonly reason?: string | null;
@@ -55,6 +56,7 @@ export class GuardError extends MlldError {
       ...options,
       reason: resolvedReason
     });
+    const denialContext = buildGuardDenialContext(options, resolvedReason);
 
     const details: GuardErrorDetails = {
       guardName: options.guardName ?? null,
@@ -74,8 +76,8 @@ export class GuardError extends MlldError {
       hints: options.hints
     };
 
-    super(resolvedMessage, {
-      code: 'GUARD_ERROR',
+    super(denialContext, {
+      message: resolvedMessage,
       severity: ErrorSeverity.Fatal,
       details,
       sourceLocation: options.sourceLocation ?? undefined,
@@ -142,4 +144,36 @@ function formatOperationLabel(operation?: OperationContext): string | null {
   const base = operation.type.startsWith('/') ? operation.type : `/${operation.type}`;
   const subtype = operation.subtype ? ` (${operation.subtype})` : '';
   return `${base}${subtype}`;
+}
+
+function buildGuardDenialContext(options: GuardErrorOptions, reason: string): DenialContext {
+  const operationType = options.operation?.type ?? 'operation';
+  const description =
+    options.operation?.command ??
+    options.operation?.target ??
+    options.operation?.name ??
+    '';
+  const labels = {
+    input: Array.isArray(options.operation?.labels)
+      ? options.operation!.labels.map(label => String(label))
+      : [],
+    operation: Array.isArray(options.operation?.opLabels)
+      ? options.operation!.opLabels.map(label => String(label))
+      : []
+  };
+  const hasLabels = labels.input.length > 0 || labels.operation.length > 0;
+
+  return {
+    code: 'GUARD_DENIED',
+    operation: {
+      type: operationType,
+      description: description
+    },
+    blocker: {
+      type: 'guard',
+      name: formatGuardLabel(options.guardName ?? null, options.guardFilter)
+    },
+    ...(hasLabels ? { labels } : {}),
+    reason
+  };
 }

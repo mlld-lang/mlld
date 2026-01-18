@@ -1,4 +1,4 @@
-import { MlldError } from './MlldError';
+import { MlldError, ErrorSeverity } from './MlldError';
 import type { SourceLocation } from '@core/types';
 
 /**
@@ -11,7 +11,15 @@ export class MlldDependencyError extends MlldError {
     public readonly mismatched: string[],
     location?: SourceLocation
   ) {
-    super(message, location);
+    super(message, {
+      code: 'DEPENDENCY_UNMET',
+      severity: ErrorSeverity.Fatal,
+      details: {
+        missing,
+        mismatched
+      },
+      sourceLocation: location
+    });
     this.name = 'MlldDependencyError';
   }
   

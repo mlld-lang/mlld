@@ -19,6 +19,8 @@ export { MlldCommandExecutionError } from './MlldCommandExecutionError';
 export type { CommandExecutionDetails } from './MlldCommandExecutionError';
 export { MlldDependencyError } from './MlldDependencyError';
 export { MlldConditionError } from './MlldConditionError';
+export { MlldDenialError } from './denial';
+export type { DenialContext, DenialCode } from './denial';
 export { ResolverError, ResolverErrorCode } from './ResolverError';
 export type { ResolverErrorDetails } from './ResolverError';
 export { MlldWhenExpressionError } from './MlldWhenExpressionError';

@@ -17,6 +17,20 @@ run cmd { echo @apiKey }  >> Blocked by guard
 
 Inline effects (`| output`, `| show`, `| append`, `| log`) use the same guard path as directives. Guard filters `op:output`/`op:show`/`op:append`/`op:log` cover both inline effects and directives.
 
+## Standard Policies
+
+mlld ships standard policy modules for common environments:
+
+- `@mlld/production` - strict defaults for production
+- `@mlld/development` - permissive defaults for development
+- `@mlld/sandbox` - maximum restriction defaults for untrusted code
+
+Use them with `/import policy`:
+
+```mlld
+/import policy @prod from "@mlld/production"
+```
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:
