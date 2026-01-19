@@ -7,8 +7,13 @@ import { astLocationToSourceLocation } from '@core/types';
 import {
   createExecutableVariable,
   createSimpleTextVariable,
+  createArrayVariable,
+  createObjectVariable,
+  createPrimitiveVariable,
+  createStructuredValueVariable,
   VariableMetadataUtils,
-  type VariableSource
+  type VariableSource,
+  type VariableFactoryInitOptions
 } from '@core/types/variable';
 // import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
@@ -26,8 +31,9 @@ import {
   type CapabilityContext,
   type SecurityDescriptor
 } from '@core/types/security';
-import { asData, asText, isStructuredValue } from '../utils/structured-value';
+import { asData, asText, isStructuredValue, extractSecurityDescriptor } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 
 /**
  * Evaluate an exe block sequentially with local scope for let/+= assignments.
@@ -402,6 +408,73 @@ export async function evaluateExe(
       paramNames,
       sourceDirective: 'exec'
     };
+  } else if (directive.subtype === 'exeValue') {
+    const valueNode = directive.values?.value;
+    if (!valueNode) {
+      throw new Error('Exec value directive missing value');
+    }
+    const valueResult = await evaluate(valueNode as any, env, { isExpression: true });
+    const resolvedValue = valueResult.value;
+    const resolvedDescriptor = extractSecurityDescriptor(resolvedValue, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const combinedDescriptor =
+      resolvedDescriptor && descriptor
+        ? env.mergeSecurityDescriptors(resolvedDescriptor, descriptor)
+        : resolvedDescriptor || descriptor;
+    const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
+    const source: VariableSource = {
+      directive: 'var',
+      syntax: 'reference',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const options: VariableFactoryInitOptions = {
+      mx: { definedAt: location },
+      internal: {}
+    };
+    const metadata = VariableMetadataUtils.applySecurityMetadata(undefined, {
+      labels: securityLabels,
+      existingDescriptor: combinedDescriptor,
+      capability: capabilityContext
+    });
+    if (metadata?.security) {
+      updateVarMxFromDescriptor(options.mx ?? (options.mx = {}), metadata.security);
+    }
+    if (metadata) {
+      options.metadata = metadata;
+    }
+
+    let variable;
+    if (resolvedValue && typeof resolvedValue === 'object' && (resolvedValue as any).__executable) {
+      const execDef = (resolvedValue as any).executableDef ?? (resolvedValue as any).value;
+      variable = createExecutableVariable(
+        identifier,
+        'command',
+        '',
+        execDef?.paramNames || [],
+        undefined,
+        source,
+        {
+          ...options,
+          internal: { ...(options.internal ?? {}), executableDef: execDef }
+        }
+      );
+    } else if (isStructuredValue(resolvedValue)) {
+      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
+    } else if (typeof resolvedValue === 'number' || typeof resolvedValue === 'boolean' || resolvedValue === null) {
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
+    } else if (Array.isArray(resolvedValue)) {
+      variable = createArrayVariable(identifier, resolvedValue, false, source, options);
+    } else if (resolvedValue && typeof resolvedValue === 'object') {
+      variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
+    } else {
+      variable = createSimpleTextVariable(identifier, String(resolvedValue ?? ''), source, options);
+    }
+
+    env.setVariable(identifier, variable);
+    return { value: resolvedValue, env };
   } else if (directive.subtype === 'exeCode') {
     /**
      * Handle code executable definitions

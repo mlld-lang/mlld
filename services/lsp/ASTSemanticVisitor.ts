@@ -98,6 +98,7 @@ export class ASTSemanticVisitor {
     this.registerVisitor('BinaryExpression', expressionVisitor);
     this.registerVisitor('UnaryExpression', expressionVisitor);
     this.registerVisitor('TernaryExpression', expressionVisitor);
+    this.registerVisitor('NewExpression', expressionVisitor);
     this.registerVisitor('WhenExpression', expressionVisitor);
     this.registerVisitor('ForExpression', expressionVisitor);
     this.registerVisitor('Literal', literalVisitor);

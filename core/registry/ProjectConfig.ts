@@ -105,6 +105,14 @@ export class ProjectConfig {
     await this.configFile.setScriptDir(scriptDir);
   }
 
+  getNodePackageManager(): string | undefined {
+    return this.configFile.getNodePackageManager();
+  }
+
+  async setNodePackageManager(manager?: string): Promise<void> {
+    await this.configFile.setNodePackageManager(manager);
+  }
+
   isDevMode(): boolean {
     return this.configFile.isDevMode();
   }

@@ -48,7 +48,7 @@ class MlldSyntaxGenerator {
       whenKeyword: 'when\\s*:',
       whenArrow: '=>',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted)\\b',
+      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\\b',
       // Block keywords (inside [...] blocks)
       blockKeywords: '\\b(let|done|continue|skip)\\b',
       // Wildcard in when blocks

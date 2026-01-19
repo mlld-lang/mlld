@@ -57,6 +57,11 @@ export async function evaluateUnifiedExpression(
       case 'Text':
         // Handle text nodes that might appear in expressions
         return createEvaluatorResult(node.content);
+      case 'NewExpression': {
+        const { evaluateNewExpression } = await import('./new-expression');
+        const value = await evaluateNewExpression(node, env);
+        return createEvaluatorResult(value);
+      }
       default:
         // For all other node types, delegate to the standard evaluator
         const result = await evaluate(node, env, expressionContext);
@@ -274,7 +279,8 @@ export function isUnifiedExpressionNode(node: any): boolean {
     'TernaryExpression',
     'ArrayFilterExpression',
     'ArraySliceExpression',
-    'Literal'
+    'Literal',
+    'NewExpression'
   ].includes(node.type);
 }
 

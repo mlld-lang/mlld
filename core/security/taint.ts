@@ -118,7 +118,7 @@ export interface ImportTaintOptions {
   source?: string;
   labels?: readonly DataLabel[];  // From resolver mx
   resolvedPath?: string;
-  sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input';
+  sourceType?: 'file' | 'url' | 'module' | 'resolver' | 'input' | 'node';
 }
 
 function isUrlLike(value: string): boolean {
@@ -146,6 +146,9 @@ function shouldTreatAsFile(options: ImportTaintOptions, resolvedPath?: string): 
   if (options.sourceType === 'module' || options.sourceType === 'input') {
     return false;
   }
+  if (options.sourceType === 'node') {
+    return false;
+  }
   if (isUrlLike(resolvedPath)) {
     return false;
   }
@@ -159,6 +162,7 @@ export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
   const resolverName = options.resolverName?.toLowerCase();
   const resolvedPath = options.resolvedPath ?? options.source;
   const source = options.source ?? '';
+  const isNodeSource = options.sourceType === 'node';
   const isNetworkSource =
     options.sourceType === 'url' ||
     (resolvedPath ? isUrlLike(resolvedPath) : false) ||
@@ -181,6 +185,7 @@ export function deriveImportTaint(options: ImportTaintOptions): TaintSnapshot {
     ...(resolverName === 'dynamic' ? ['src:dynamic'] : []),
     ...(dirLabels.length > 0 ? ['src:file', ...dirLabels] : []),
     ...(isNetworkSource ? ['src:network'] : []),
+    ...(isNodeSource ? ['src:node'] : []),
     ...(isUserSource ? ['src:user'] : [])
   ]);
 

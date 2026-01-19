@@ -2132,8 +2132,37 @@ export class DirectiveVisitor extends BaseVisitor {
     // Handle import source (path or namespace)
     if (values.path && Array.isArray(values.path) && values.path.length > 0) {
       const pathNode = values.path[0];
-      
-      if (directive.meta?.path?.isModule) {
+
+      if (directive.meta?.path?.isNodeImport) {
+        const nodeMatch = directiveText.match(/\bnode\b/);
+        if (nodeMatch && nodeMatch.index !== undefined) {
+          const nodeOffset = directive.location.start.offset + nodeMatch.index;
+          const nodePosition = this.document.positionAt(nodeOffset);
+          this.tokenBuilder.addToken({
+            line: nodePosition.line,
+            char: nodePosition.character,
+            length: 4,
+            tokenType: 'keyword',
+            modifiers: []
+          });
+        }
+
+        const fullPath = pathNode?.content || '';
+        if (fullPath) {
+          const specIndex = directiveText.indexOf(fullPath);
+          if (specIndex !== -1) {
+            const specOffset = directive.location.start.offset + specIndex;
+            const specPosition = this.document.positionAt(specOffset);
+            this.tokenBuilder.addToken({
+              line: specPosition.line,
+              char: specPosition.character,
+              length: fullPath.length,
+              tokenType: 'variable',
+              modifiers: []
+            });
+          }
+        }
+      } else if (directive.meta?.path?.isModule) {
         // Module import like @mlld/github or @corp/utils
         // Parse the module path to handle multi-segment paths
         const fullPath = pathNode?.content || '';

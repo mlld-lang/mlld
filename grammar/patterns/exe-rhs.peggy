@@ -3,7 +3,8 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 ExeRHSContent "exe assignment value"
-  = ExeProsePattern               // prose:@config {...} or prose:@config "file.prose"
+  = ExeNewExpression              // new @Class(...) constructor expression
+  / ExeProsePattern               // prose:@config {...} or prose:@config "file.prose"
   / leading:LeadingParallelPipeline {
       const pipeline = leading.withClause.pipeline || [];
       const pipelineSummary = pipeline.map(stage => {
@@ -47,6 +48,23 @@ ExeRHSContent "exe assignment value"
   / ExeStatementBlock           // [ ... ] - statement block for exe definitions
   / ExeResolverPattern          // @resolver/path - resolver patterns
   / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
+
+ExeNewExpression "exe new expression"
+  = expr:NewExpression {
+      return {
+        subtype: 'exeValue',
+        source: 'expression',
+        values: {
+          value: expr
+        },
+        raw: {
+          value: text()
+        },
+        meta: {
+          isNewExpression: true
+        }
+      };
+    }
 
 // -------------------------------------------------------------
 // EXE-SPECIFIC RHS PATTERNS

@@ -14,6 +14,7 @@ import {
   createSimpleTextVariable,
   createInterpolatedTextVariable,
   createTemplateVariable,
+  createExecutableVariable,
   createArrayVariable,
   createObjectVariable,
   createFileContentVariable,
@@ -93,6 +94,8 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
     baseSource.syntax = 'path'; // sections are path-based
     baseSource.wrapperType = 'brackets';
   } else if (valueNode.type === 'VariableReference') {
+    baseSource.syntax = 'reference';
+  } else if (valueNode.type === 'NewExpression') {
     baseSource.syntax = 'reference';
   } else if (directive.meta?.wrapperType) {
     // Use wrapper type from directive metadata
@@ -775,6 +778,10 @@ export async function prepareVarAssignment(
     resolvedValue = result.value;
     
     // Infer variable type from result
+
+  } else if (valueNode && valueNode.type === 'NewExpression') {
+    const { evaluateNewExpression } = await import('./new-expression');
+    resolvedValue = await evaluateNewExpression(valueNode as any, env);
     
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
@@ -993,6 +1000,26 @@ export async function prepareVarAssignment(
       resolvedValueDescriptor
     );
     variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
+
+  } else if (resolvedValue && typeof resolvedValue === 'object' && (resolvedValue as any).__executable) {
+    const execDef = (resolvedValue as any).executableDef ?? (resolvedValue as any).value;
+    const options = applySecurityOptions(
+      {
+        internal: {
+          executableDef: execDef
+        }
+      },
+      resolvedValueDescriptor
+    );
+    variable = createExecutableVariable(
+      identifier,
+      'command',
+      '',
+      execDef?.paramNames || [],
+      undefined,
+      source,
+      options
+    );
 
   } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values - we need to preserve their types

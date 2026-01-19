@@ -19,6 +19,7 @@ import { VariableMetadataUtils } from '@core/types/variable';
 import type { DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { isNodeProxy } from '@interpreter/utils/node-interop';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
@@ -613,12 +614,19 @@ export class VariableImporter {
     );
   }
 
-  private unwrapArraySnapshots(value: any, importPath: string): any {
+  private unwrapArraySnapshots(value: any, importPath: string, seen = new WeakSet<object>()): any {
     if (Array.isArray(value)) {
-      return value.map(item => this.unwrapArraySnapshots(item, importPath));
+      return value.map(item => this.unwrapArraySnapshots(item, importPath, seen));
     }
 
     if (value && typeof value === 'object') {
+      if (isNodeProxy(value)) {
+        return value;
+      }
+      if (seen.has(value as object)) {
+        return value;
+      }
+      seen.add(value as object);
       if ((value as any).__arraySnapshot) {
         const snapshot = value as { value: any[]; metadata?: Record<string, any>; isComplex?: boolean; name?: string };
         const source: VariableSource = {
@@ -634,7 +642,7 @@ export class VariableImporter {
           originalName: snapshot.name
         };
         const normalizedElements = Array.isArray(snapshot.value)
-          ? snapshot.value.map(item => this.unwrapArraySnapshots(item, importPath))
+          ? snapshot.value.map(item => this.unwrapArraySnapshots(item, importPath, seen))
           : [];
         const arrayName = snapshot.name || 'imported_array';
         return createArrayVariable(arrayName, normalizedElements, snapshot.isComplex === true, source, arrayMetadata);
@@ -666,7 +674,7 @@ export class VariableImporter {
 
       const result: Record<string, any> = {};
       for (const [key, entry] of Object.entries(value)) {
-        result[key] = this.unwrapArraySnapshots(entry, importPath);
+        result[key] = this.unwrapArraySnapshots(entry, importPath, seen);
       }
       return result;
     }
@@ -1023,7 +1031,7 @@ export class VariableImporter {
   /**
    * Check if a value contains complex AST nodes that need evaluation
    */
-  private hasComplexContent(value: any): boolean {
+  private hasComplexContent(value: any, seen = new WeakSet<object>()): boolean {
     if (value === null || typeof value !== 'object') {
       return false;
     }
@@ -1032,6 +1040,15 @@ export class VariableImporter {
     if (this.isVariableLike(value)) {
       return false;
     }
+
+    if (isNodeProxy(value)) {
+      return false;
+    }
+
+    if (seen.has(value as object)) {
+      return false;
+    }
+    seen.add(value as object);
 
     // Check if this is an AST node with a type
     if (value.type) {
@@ -1045,12 +1062,12 @@ export class VariableImporter {
     
     // Recursively check arrays
     if (Array.isArray(value)) {
-      return value.some(item => this.hasComplexContent(item));
+      return value.some(item => this.hasComplexContent(item, seen));
     }
     
     // Recursively check object properties
     for (const prop of Object.values(value)) {
-      if (this.hasComplexContent(prop)) {
+      if (this.hasComplexContent(prop, seen)) {
         return true;
       }
     }

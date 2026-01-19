@@ -10,6 +10,7 @@ VarRHSContent "var assignment value"
   / LoopExpression              // loop(...) [ ... ]
   / ForeachCommandExpression    // foreach @command(@arrays)
   / ExecResultMethodCall        // @func(args).method(args) on exec result
+  / NewExpression               // new @Class(...) constructor expression
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally

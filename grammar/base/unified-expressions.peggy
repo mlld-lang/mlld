@@ -121,6 +121,7 @@ UnifiedUnaryExpression
 UnifiedAtomicExpression
   = WhenExpression                 // Treat when as atomic expression
   / ForeachCommandExpression       // Treat foreach as atomic expression
+  / NewExpression                  // new @Class(...) constructor expression
   / UnifiedArrayOperation
   / ExecResultMethodCall   // Support @func(args).method(args) in expressions
   / UnifiedReferenceNoTail  // Handles @var, @var.field, @func(), @obj.method()
@@ -161,6 +162,24 @@ UnifiedAtomicExpression
     }
   / NoneLiteral  // NoneLiteral already returns a properly formatted Literal node
   / DeniedLiteral  // DeniedLiteral maps to @mx.denied during evaluation
+
+NewExpression "new expression"
+  = "new" _ target:NewExpressionTarget "(" args:CommandArgumentList? _ ")" {
+      return helpers.createNode('NewExpression', {
+        target,
+        args: args || [],
+        location: location()
+      });
+    }
+
+NewExpressionTarget "new expression target"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
 
 // Method call on the result of an exec invocation
 // Example: @helper(@input).includes("APPROVE")

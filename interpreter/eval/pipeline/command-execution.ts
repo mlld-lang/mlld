@@ -1,7 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { CommandExecutionContext } from '../../env/ErrorUtils';
 import type { PipelineCommand, VariableSource } from '@core/types';
-import { MlldCommandExecutionError } from '@core/errors';
+import { MlldCommandExecutionError, MlldInterpreterError } from '@core/errors';
 import { createPipelineInputVariable, createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
 import { createPipelineParameterVariable } from '../../utils/parameter-factory';
@@ -22,6 +22,7 @@ import { normalizeTransformerResult } from '../../utils/transformer-result';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { logger } from '@core/utils/logger';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
+import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '../../utils/node-interop';
 import type { HookableNode } from '@core/types/hooks';
 import type { HookDecision } from '../../hooks/HookManager';
 import type { OperationContext } from '../../env/ContextManager';
@@ -483,6 +484,9 @@ function isPipelineContextCandidate(value: unknown): boolean {
 
 function resolveExecutableLanguage(commandVar: any, execDef: any): string | undefined {
   if (execDef?.language) return String(execDef.language);
+  if (execDef?.type === 'nodeFunction' || execDef?.type === 'nodeClass') {
+    return 'node';
+  }
   const metadataDef = commandVar?.internal?.executableDef;
   if (metadataDef?.language) {
     return String(metadataDef.language);
@@ -745,6 +749,22 @@ export async function executeCommandVariable(
     };
     throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(varInfo, null, 2)}`);
   }
+
+  let boundArgs: unknown[] = [];
+  let baseParamNames: string[] = [];
+  let paramNames: string[] = [];
+
+  if (execDef?.type === 'partial') {
+    boundArgs = Array.isArray(execDef.boundArgs) ? execDef.boundArgs : [];
+    baseParamNames = Array.isArray(execDef.base?.paramNames) ? execDef.base.paramNames : [];
+    paramNames = Array.isArray(execDef.paramNames)
+      ? execDef.paramNames
+      : baseParamNames.slice(boundArgs.length);
+    execDef = execDef.base;
+  } else {
+    baseParamNames = Array.isArray(execDef?.paramNames) ? execDef.paramNames : [];
+    paramNames = baseParamNames;
+  }
   
   let whenExprNode: WhenExpressionNode | null = null;
   if (execDef?.language === 'mlld-when' && Array.isArray(execDef.codeTemplate) && execDef.codeTemplate.length > 0) {
@@ -763,9 +783,9 @@ export async function executeCommandVariable(
   const stageLanguage = resolveExecutableLanguage(commandVar, execDef);
   
   // Parameter binding for executable functions
-  if (execDef.paramNames) {
-    for (let i = 0; i < execDef.paramNames.length; i++) {
-      const paramName = execDef.paramNames[i];
+  if (paramNames.length > 0) {
+    for (let i = 0; i < paramNames.length; i++) {
+      const paramName = paramNames[i];
       // In pipelines, explicit args bind starting from the SECOND parameter
       // First parameter always gets @input (stdinInput) implicitly
       const argIndex = pipelineCtx !== undefined && stdinInput !== undefined ? i - 1 : i;
@@ -885,6 +905,19 @@ export async function executeCommandVariable(
     }
   }
 
+  if (boundArgs.length > 0 && baseParamNames.length > 0) {
+    for (let i = 0; i < boundArgs.length && i < baseParamNames.length; i++) {
+      const paramName = baseParamNames[i];
+      const normalizedValue = normalizePipelineParameterValue(boundArgs[i]);
+      assignPipelineParameter(execEnv, {
+        name: paramName,
+        value: normalizedValue,
+        pipelineStage: pipelineCtx?.stage,
+        markPipelineContext: isPipelineContextCandidate(normalizedValue)
+      });
+    }
+  }
+
   const hookNode = hookOptions?.hookNode;
   const operationContext = hookOptions?.operationContext;
   let preDecision: HookDecision | undefined;
@@ -897,8 +930,8 @@ export async function executeCommandVariable(
   if (stageInputs.length > 0) {
     guardInputCandidates.push(...stageInputs);
   }
-  if (Array.isArray(execDef?.paramNames)) {
-    for (const paramName of execDef.paramNames) {
+  if (baseParamNames.length > 0) {
+    for (const paramName of baseParamNames) {
       const paramVar = execEnv.getVariable(paramName);
       if (paramVar) {
         guardInputCandidates.push(paramVar);
@@ -958,6 +991,20 @@ export async function executeCommandVariable(
     const opLabels = opType ? getOperationLabels({ type: opType }) : [];
     const inputTaint = descriptorToInputTaint(guardDescriptor);
     if (opType && inputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: policyLocation }
+      );
+    }
+  } else if (execDef.type === 'nodeFunction') {
+    const opLabels = getOperationLabels({ type: 'node' });
+    const inputTaint = descriptorToInputTaint(guardDescriptor);
+    if (inputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -1277,6 +1324,47 @@ export async function executeCommandVariable(
     }
 
     return finalizeResult(result);
+  } else if (execDef.type === 'nodeFunction') {
+    const errorLocation = hookOptions?.executionContext?.sourceLocation ?? commandVar?.mx?.definedAt;
+    let callArgs: unknown[];
+    if (baseParamNames.length > 0) {
+      callArgs = baseParamNames.map(paramName => execEnv.getVariable(paramName)?.value);
+    } else {
+      callArgs = [...boundArgs];
+      if (pipelineCtx !== undefined && stdinInput !== undefined) {
+        callArgs.push(structuredInput ?? stdinInput);
+      }
+      callArgs.push(...args.map(arg => normalizePipelineParameterValue(arg)));
+    }
+    const jsArgs = callArgs.map(arg => toJsValue(arg));
+    let output = execDef.fn.apply(execDef.thisArg ?? undefined, jsArgs);
+    if (output && typeof output === 'object' && typeof (output as any).then === 'function') {
+      output = await output;
+    }
+
+    if (isEventEmitter(output) && !(output && typeof (output as any).then === 'function')) {
+      throw new MlldInterpreterError(
+        `Node function '${commandVar?.name ?? 'anonymous'}' returns an EventEmitter and requires subscriptions`,
+        'exec',
+        errorLocation
+      );
+    }
+    if (isLegacyStream(output)) {
+      throw new MlldInterpreterError(
+        `Node function '${commandVar?.name ?? 'anonymous'}' returns a legacy stream without async iterator support`,
+        'exec',
+        errorLocation
+      );
+    }
+
+    const wrapped = wrapNodeValue(output, { moduleName: execDef.moduleName });
+    return finalizeResult(wrapped);
+  } else if (execDef.type === 'nodeClass') {
+    throw new MlldInterpreterError(
+      `Node class '${commandVar?.name ?? 'anonymous'}' requires new`,
+      'exec',
+      hookOptions?.executionContext?.sourceLocation ?? commandVar?.mx?.definedAt
+    );
   } else if (execDef.type === 'template' && execDef.template) {
     // Interpolate template
     const { interpolate } = await import('../../core/interpreter');

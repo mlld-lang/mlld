@@ -4,7 +4,19 @@ import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
-import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable, isPipelineExecutable, isDataExecutable } from '@core/types/executable';
+import {
+  isCommandExecutable,
+  isCodeExecutable,
+  isTemplateExecutable,
+  isCommandRefExecutable,
+  isSectionExecutable,
+  isResolverExecutable,
+  isPipelineExecutable,
+  isDataExecutable,
+  isNodeFunctionExecutable,
+  isNodeClassExecutable,
+  isPartialExecutable
+} from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import {
@@ -38,6 +50,7 @@ import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionPr
 import type { StructuredValueContext } from '../utils/structured-value';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
+import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '../utils/node-interop';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 import { normalizeTransformerResult } from '../utils/transformer-result';
@@ -1541,9 +1554,14 @@ async function evaluateExecInvocationInternal(
   }
   
   // Get the full executable definition from metadata
-  const definition = variable.internal?.executableDef as ExecutableDefinition;
+  let definition = variable.internal?.executableDef as ExecutableDefinition;
   if (!definition) {
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
+  }
+  const isPartial = isPartialExecutable(definition);
+  const boundArgs = isPartial && Array.isArray(definition.boundArgs) ? definition.boundArgs : [];
+  if (isPartial) {
+    definition = definition.base;
   }
   if (process.env.DEBUG_EXEC === 'true' && commandName === 'pipe') {
     // Debug aid for pipeline identity scenarios
@@ -1859,6 +1877,15 @@ async function evaluateExecInvocationInternal(
       }
     }
   }
+
+  if (boundArgs.length > 0) {
+    const boundArgStrings = boundArgs.map(arg => stringifyGuardArg(arg));
+    evaluatedArgs.unshift(...boundArgs);
+    evaluatedArgStrings.unshift(...boundArgStrings);
+    originalVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
+    guardVariableCandidates.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
+    expressionSourceVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
+  }
   
   const guardHelperImpl =
     (variable.internal as any)?.guardHelperImplementation;
@@ -1871,7 +1898,7 @@ async function evaluateExecInvocationInternal(
     return createEvalResult(helperResult, env);
   }
 
-  for (let i = 0; i < args.length; i++) {
+  for (let i = 0; i < guardVariableCandidates.length; i++) {
     if (!guardVariableCandidates[i] && expressionSourceVariables[i]) {
       const source = expressionSourceVariables[i]!;
       const cloned = cloneVariableWithNewValue(
@@ -2005,6 +2032,23 @@ async function evaluateExecInvocationInternal(
     }
     const inputTaint = descriptorToInputTaint(resultSecurityDescriptor);
     if (opType && inputTaint.length > 0) {
+      policyEnforcer.checkLabelFlow(
+        {
+          inputTaint,
+          opLabels,
+          exeLabels,
+          flowChannel: 'arg'
+        },
+        { env, sourceLocation: node.location }
+      );
+    }
+  } else if (isNodeFunctionExecutable(definition)) {
+    const opLabels = getOperationLabels({ type: 'node' });
+    if (opLabels.length > 0) {
+      operationContext.opLabels = opLabels;
+    }
+    const inputTaint = descriptorToInputTaint(resultSecurityDescriptor);
+    if (inputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -2164,8 +2208,44 @@ async function evaluateExecInvocationInternal(
     );
   }
   
+  // Handle node function executables
+  if (isNodeFunctionExecutable(definition)) {
+    const jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
+    let output = definition.fn.apply(definition.thisArg ?? undefined, jsArgs);
+    if (output && typeof output === 'object' && typeof (output as any).then === 'function') {
+      output = await output;
+    }
+
+    if (isEventEmitter(output) && !(output && typeof (output as any).then === 'function')) {
+      throw new MlldInterpreterError(
+        `Node function '${commandName}' returns an EventEmitter and requires subscriptions`,
+        'exec',
+        nodeSourceLocation
+      );
+    }
+    if (isLegacyStream(output)) {
+      throw new MlldInterpreterError(
+        `Node function '${commandName}' returns a legacy stream without async iterator support`,
+        'exec',
+        nodeSourceLocation
+      );
+    }
+
+    const wrapped = wrapNodeValue(output, { moduleName: definition.moduleName });
+    if (isStructuredValue(wrapped) && resultSecurityDescriptor) {
+      applySecurityDescriptorToStructuredValue(wrapped, resultSecurityDescriptor);
+    }
+    result = wrapped;
+
+  } else if (isNodeClassExecutable(definition)) {
+    throw new MlldInterpreterError(
+      `Node class '${commandName}' requires new`,
+      'exec',
+      nodeSourceLocation
+    );
+
   // Handle template executables
-  if (isTemplateExecutable(definition)) {
+  } else if (isTemplateExecutable(definition)) {
     // Interpolate the template with the bound parameters
     const templateResult = await interpolateWithResultDescriptor(definition.template, execEnv);
     if (isStructuredValue(templateResult)) {

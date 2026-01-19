@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { spawn } from 'child_process';
 import { ModuleInstaller, ModuleWorkspace, type ModuleSpecifier, type ModuleInstallResult, type ModuleInstallerEvent } from '@core/registry';
 import { renderDependencySummary } from '../utils/dependency-summary';
 import { ProgressIndicator } from '../utils/progress';
@@ -130,6 +131,52 @@ export class InstallCommand {
         break;
     }
   }
+
+  private async maybeRunNodePackageManager(
+    results: ModuleInstallResult[],
+    options: InstallOptions
+  ): Promise<void> {
+    if (options.dryRun || options.global) {
+      return;
+    }
+    if (results.some(result => result.status === 'failed')) {
+      return;
+    }
+    const installed = results.some(result => result.status === 'installed');
+    if (!installed) {
+      return;
+    }
+    const manager = this.workspace.projectConfig.getNodePackageManager();
+    if (!manager) {
+      return;
+    }
+    const trimmed = manager.trim();
+    if (!trimmed) {
+      return;
+    }
+    const command = /\s/.test(trimmed) ? trimmed : `${trimmed} install`;
+    console.log(chalk.cyan(`Running ${command}`));
+    await this.runNodePackageManager(command);
+    console.log(chalk.green(`Finished ${command}`));
+  }
+
+  private async runNodePackageManager(command: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(command, {
+        cwd: this.workspace.projectRoot,
+        stdio: 'inherit',
+        shell: true
+      });
+      child.on('error', reject);
+      child.on('exit', code => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Command failed with exit code ${code ?? 'unknown'}`));
+      });
+    });
+  }
   private async report(
     results: ModuleInstallResult[],
     options: InstallOptions,
@@ -180,6 +227,8 @@ export class InstallCommand {
         }
       }
     }
+
+    await this.maybeRunNodePackageManager(results, options);
   }
 }
 

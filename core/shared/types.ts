@@ -239,6 +239,7 @@ export enum NodeType {
   BINARY_EXPRESSION = 'BinaryExpression',
   TERNARY_EXPRESSION = 'TernaryExpression',
   UNARY_EXPRESSION = 'UnaryExpression',
+  NEW_EXPRESSION = 'NewExpression',
   NEGATION = 'Negation',
   EXEC_INVOCATION = 'ExecInvocation',
   FILE_REFERENCE = 'FileReference'

@@ -9,6 +9,7 @@ import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { ModuleContentProcessor, type ModuleProcessingResult } from './ModuleContentProcessor';
 import { VariableImporter } from './VariableImporter';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
+import { normalizeNodeModuleExports, resolveNodeModule, wrapNodeExport } from '../../utils/node-interop';
 import { MlldImportError, ErrorSeverity } from '@core/errors';
 // createVariableFromValue is now part of VariableImporter
 import { interpolate } from '../../core/interpreter';
@@ -135,6 +136,9 @@ export class ImportDirectiveEvaluator {
       
       case 'module':
         return this.evaluateModuleImport(resolution, directive, env);
+
+      case 'node':
+        return this.evaluateNodeImport(resolution, directive, env);
       
       case 'file':
       case 'url':
@@ -178,6 +182,7 @@ export class ImportDirectiveEvaluator {
   private inferImportType(resolution: ImportResolution): ImportType {
     switch (resolution.type) {
       case 'module':
+      case 'node':
         return 'module';
       case 'file':
         return 'static';
@@ -214,7 +219,7 @@ export class ImportDirectiveEvaluator {
 
     switch (type) {
       case 'module':
-        if (resolution.type !== 'module') {
+        if (resolution.type !== 'module' && resolution.type !== 'node') {
           throw new MlldImportError("Import type 'module' requires a registry module reference.", {
             code: 'IMPORT_TYPE_MISMATCH',
             details: { importType: type, resolvedType: resolution.type }
@@ -524,6 +529,40 @@ export class ImportDirectiveEvaluator {
     }
 
     throw new Error(`Unable to resolve module import: ${resolution.resolvedPath}`);
+  }
+
+  /**
+   * Handle node package imports
+   */
+  private async evaluateNodeImport(
+    resolution: ImportResolution,
+    directive: DirectiveNode,
+    env: Environment
+  ): Promise<EvalResult> {
+    const packageName = resolution.packageName ?? resolution.resolvedPath;
+    const { module, spec } = await resolveNodeModule(packageName, env);
+    const moduleExports = normalizeNodeModuleExports(module);
+    const moduleObject: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(moduleExports)) {
+      moduleObject[key] = wrapNodeExport(value, { name: key, moduleName: spec });
+    }
+
+    const childEnv = env.createChild();
+    childEnv.setCurrentFilePath(`node:${spec}`);
+    childEnv.setModuleIsolated(true);
+
+    const processingResult: ModuleProcessingResult = {
+      moduleObject,
+      frontmatter: null,
+      childEnvironment: childEnv,
+      guardDefinitions: []
+    };
+
+    this.validateModuleResult(processingResult, directive, `node:${spec}`);
+    await this.variableImporter.importVariables(processingResult, directive, env);
+    this.applyPolicyImportContext(directive, env, `node:${spec}`);
+
+    return { value: undefined, env };
   }
 
   /**

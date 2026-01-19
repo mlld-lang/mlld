@@ -29,6 +29,7 @@ export interface ConfigFileData {
   // Project settings
   scriptDir?: string;
   mode?: 'development' | 'production';
+  nodePackageManager?: string;
 
   // Development settings
   dev?: {
@@ -196,6 +197,22 @@ export class ConfigFile {
   async setScriptDir(scriptDir: string): Promise<void> {
     this.ensureLoaded();
     this.data!.scriptDir = scriptDir;
+    this.isDirty = true;
+    await this.save();
+  }
+
+  getNodePackageManager(): string | undefined {
+    this.ensureLoaded();
+    return this.data!.nodePackageManager;
+  }
+
+  async setNodePackageManager(manager?: string): Promise<void> {
+    this.ensureLoaded();
+    if (manager && manager.trim().length > 0) {
+      this.data!.nodePackageManager = manager;
+    } else {
+      delete this.data!.nodePackageManager;
+    }
     this.isDirty = true;
     await this.save();
   }

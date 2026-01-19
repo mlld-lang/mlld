@@ -18,6 +18,7 @@ import type {
   BinaryExpression,
   TernaryExpression,
   UnaryExpression,
+  NewExpression,
   FieldAccessNode,
   ArraySliceNode,
   ArrayFilterNode,
@@ -158,6 +159,10 @@ export function isTernaryExpression(node: any): node is TernaryExpression {
 
 export function isUnaryExpression(node: any): node is UnaryExpression {
   return node?.type === 'UnaryExpression';
+}
+
+export function isNewExpression(node: any): node is NewExpression {
+  return node?.type === 'NewExpression';
 }
 
 /**

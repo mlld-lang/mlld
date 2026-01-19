@@ -16,7 +16,7 @@ import type { PathMeta } from './meta';
  */
 export interface BaseExecutable {
   /** The type of executable */
-  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline' | 'prose';
+  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline' | 'data' | 'prose' | 'nodeFunction' | 'nodeClass' | 'partial';
   /** Parameter names expected by this executable */
   paramNames: string[];
   /** Original directive type this came from (exec or text) */
@@ -127,6 +127,39 @@ export interface ProseExecutable extends BaseExecutable {
 }
 
 /**
+ * Node function executable - wraps a JS function for mlld invocation
+ */
+export interface NodeFunctionExecutable extends BaseExecutable {
+  type: 'nodeFunction';
+  name: string;
+  fn: (...args: unknown[]) => unknown;
+  thisArg?: unknown;
+  moduleName?: string;
+  sourceDirective: 'exec';
+}
+
+/**
+ * Node class executable - wraps a JS constructor for constructor expressions
+ */
+export interface NodeClassExecutable extends BaseExecutable {
+  type: 'nodeClass';
+  name: string;
+  constructorFn: new (...args: unknown[]) => unknown;
+  moduleName?: string;
+  sourceDirective: 'exec';
+}
+
+/**
+ * Partial executable - pre-binds arguments for a base executable
+ */
+export interface PartialExecutable extends BaseExecutable {
+  type: 'partial';
+  base: ExecutableDefinition;
+  boundArgs: unknown[];
+  sourceDirective: 'exec';
+}
+
+/**
  * Unified executable type
  */
 export type ExecutableDefinition =
@@ -138,7 +171,10 @@ export type ExecutableDefinition =
   | ResolverExecutable
   | PipelineExecutable
   | DataExecutable
-  | ProseExecutable;
+  | ProseExecutable
+  | NodeFunctionExecutable
+  | NodeClassExecutable
+  | PartialExecutable;
 
 /**
  * Variable that stores an executable definition
@@ -188,6 +224,18 @@ export function isDataExecutable(def: ExecutableDefinition): def is DataExecutab
 
 export function isProseExecutable(def: ExecutableDefinition): def is ProseExecutable {
   return def.type === 'prose';
+}
+
+export function isNodeFunctionExecutable(def: ExecutableDefinition): def is NodeFunctionExecutable {
+  return def.type === 'nodeFunction';
+}
+
+export function isNodeClassExecutable(def: ExecutableDefinition): def is NodeClassExecutable {
+  return def.type === 'nodeClass';
+}
+
+export function isPartialExecutable(def: ExecutableDefinition): def is PartialExecutable {
+  return def.type === 'partial';
 }
 
 /**

@@ -64,6 +64,7 @@ import {
   BinaryExpression,
   TernaryExpression,
   UnaryExpression,
+  NewExpression,
   TemplateForBlockNode,
   TemplateInlineShowNode,
   ConditionalTemplateSnippetNode,
@@ -108,6 +109,7 @@ export type MlldNode =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
+  | NewExpression
   | TemplateForBlockNode
   | TemplateInlineShowNode
   | ConditionalTemplateSnippetNode

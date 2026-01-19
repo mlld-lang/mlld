@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Execute multiple statements when condition is true: `when @ready [let @x = 1  show @x]`
   - Supports `let`, `var`, nested `when`, `for`, and return via `=>`
   - Consistent with `exe` and `for` block semantics
+- **Node module imports**: `import { @x } from node @package` auto-wraps exports, supports `new` constructor expressions, and streams async iterables
 - **`mlld howto core-modules`**: List official @mlld modules with descriptions
   - Shows ai-cli, array, claude, env, github, prose, string modules
   - `mlld howto @mlld/claude` shows module documentation directly
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mlld setup` remains the interactive configuration wizard
 - Environment providers use `@create` + `@execute` + `@release` with `envName`; `@checkpoint` is now `@snapshot`
 - Named environment configs skip release by default; `keep` is ignored
+- `nodePackageManager` config option runs the configured package manager after `mlld install`
 - **`mlld run` timeout is now unlimited by default**
   - Previously defaulted to 5 minutes (300000ms)
   - `--timeout` now accepts human-readable durations: `5m`, `1h`, `30s`, `2d`, or raw milliseconds

@@ -116,6 +116,20 @@ describe('Import Directive Syntax Tests', () => {
       expect(isImportSelectedDirective(result)).toBe(true);
     });
 
+    it('should parse a node import source', async () => {
+      const input = '/import { join } from node @path';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importSelected');
+      expect(result.source).toBe('path');
+      expect(result.values.path[0].content).toBe('@path');
+      expect(result.raw.path).toBe('@path');
+      expect(result.meta.path.isNodeImport).toBe(true);
+      expect(result.meta.path.package).toBe('@path');
+    });
+
     it('should support @-prefixed selected imports', async () => {
       const input = '/import {@this, @that} from @author/module';
       const result = (await parse(input)).ast[0];

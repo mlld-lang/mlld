@@ -568,6 +568,9 @@ Configuration:
   2. mlld-config.json (project config)
   3. mlld-lock.json (project module lockfile)
 
+  Config keys:
+  - nodePackageManager: command to run after mlld install (e.g., npm, pnpm, yarn, bun, or "pnpm install")
+
   CLI options override configuration file settings.
 
 New to mlld? Run 'mlld quickstart' for an introduction.

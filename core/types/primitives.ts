@@ -257,7 +257,7 @@ export type DirectiveSubtype =
   // Unified show subtypes
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
   // Unified exe subtypes
-  | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeTemplate' | 'exeTemplateFile'
+  | 'exe' | 'exeCommand' | 'exeCode' | 'exeData' | 'exeValue' | 'exeTemplate' | 'exeTemplateFile'
   | 'exeSection' | 'exeWhen' | 'exeForeach' | 'exeFor' | 'exeLoop' | 'exeResolver' | 'exeBlock'
   // Path subtypes
   | 'pathAssignment'
@@ -365,11 +365,18 @@ export interface UnaryExpression extends BaseMlldNode {
   operand: Expression;
 }
 
+export interface NewExpression extends BaseMlldNode {
+  type: 'NewExpression';
+  target: VariableReferenceNode;
+  args: BaseMlldNode[];
+}
+
 // Union type for all expression nodes
 export type Expression =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
+  | NewExpression
   | VariableReferenceNode
   | VariableReferenceWithTailNode
   | LiteralNode

@@ -112,6 +112,13 @@ export class DependencyDetector {
     
     this.walkAST(ast, (node) => {
       if (node.type === 'Directive') {
+        if (node.kind === 'import') {
+          const importMeta = (node as any).meta?.path;
+          if (importMeta?.isNodeImport || importMeta?.sourceType === 'node') {
+            needs.add('node');
+            hasNodeDependencies = true;
+          }
+        }
         if (node.kind === 'run') {
           const lang = this.extractRunLanguage(node as RunDirective);
           if (lang === 'js') {
@@ -287,9 +294,28 @@ export class DependencyDetector {
    * Detect Node.js packages from AST
    */
   detectNodePackages(ast: MlldNode[]): string[] {
-    // For now, this is the same as detectJavaScriptPackages
-    // In the future, we might want to filter out browser-only packages
-    return this.detectJavaScriptPackages(ast);
+    const packages = new Set<string>(this.detectJavaScriptPackages(ast));
+    this.walkAST(ast, (node) => {
+      if (node.type !== 'Directive' || node.kind !== 'import') {
+        return;
+      }
+      const importMeta = (node as any).meta?.path;
+      if (!importMeta?.isNodeImport && importMeta?.sourceType !== 'node') {
+        return;
+      }
+      const rawPackage = importMeta?.package;
+      if (!rawPackage || typeof rawPackage !== 'string') {
+        return;
+      }
+      const normalized = rawPackage.startsWith('@') ? rawPackage.slice(1) : rawPackage;
+      const stripped = normalized.startsWith('node:') ? normalized.slice('node:'.length) : normalized;
+      const topLevel = stripped.split('/')[0];
+      if (this.nodeBuiltins.has(topLevel)) {
+        return;
+      }
+      packages.add(rawPackage);
+    });
+    return Array.from(packages).sort();
   }
 
   /**

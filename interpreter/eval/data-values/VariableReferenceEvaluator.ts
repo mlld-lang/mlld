@@ -81,6 +81,10 @@ export class VariableReferenceEvaluator {
     if (value && typeof value === 'object' && value.type === 'ExecInvocation') {
       return true;
     }
+
+    if (value && typeof value === 'object' && value.type === 'NewExpression') {
+      return true;
+    }
     
     // Handle runExec nodes (run @command() in object context)
     if (value && typeof value === 'object' && value.type === 'runExec' && 'invocation' in value) {
@@ -114,6 +118,11 @@ export class VariableReferenceEvaluator {
     // Handle raw VariableReference nodes (not wrapped in array)
     if (value && typeof value === 'object' && value.type === 'VariableReference') {
       return await this.evaluateRawVariableReference(value, env);
+    }
+
+    if (value && typeof value === 'object' && value.type === 'NewExpression') {
+      const { evaluateNewExpression } = await import('../new-expression');
+      return evaluateNewExpression(value as any, env);
     }
     
     // Handle variable references with tail modifiers (pipelines, etc.)

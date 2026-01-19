@@ -42,6 +42,7 @@ export interface ExeRaw {
   command?: string;
   lang?: string;
   code?: string;
+  value?: string;
   withClause?: WithClause;
   securityLabels?: string;
   statements?: string;
@@ -57,6 +58,7 @@ export interface ExeMeta {
   hasVariables?: boolean;
   language?: string;
   isMultiLine?: boolean;
+  isNewExpression?: boolean;
   metadata?: {
     type?: string;
     [key: string]: unknown;
@@ -83,6 +85,7 @@ export type ExeSubtype =
   | 'exeCommand'
   | 'exeCode'
   | 'exeData'
+  | 'exeValue'
   | 'exeTemplate'
   | 'exeTemplateFile'
   | 'exeSection'
@@ -103,6 +106,7 @@ export interface ExeValues {
   command?: ContentNodeArray;
   lang?: TextNodeArray;
   code?: ContentNodeArray;
+  value?: BaseMlldNode;
   withClause?: WithClause;
   securityLabels?: DataLabel[];
   statements?: BaseMlldNode[];

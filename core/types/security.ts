@@ -126,6 +126,7 @@ export const PROTECTED_LABELS: readonly DataLabel[] = [
   'src:env',
   'src:file',
   'src:network',
+  'src:node',
   'src:user',
   'src:jail',
   'src:dynamic'

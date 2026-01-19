@@ -414,7 +414,8 @@ CachedImportType
 
 // Import path - handles special @input source, module references, and regular paths
 ImportPath
-  = "@payload"i {
+  = NodeImportPath
+  / "@payload"i {
       helpers.debug('ImportPath matched @payload');
       const matched = text();
       return {
@@ -545,6 +546,36 @@ ImportPath
   / QuotedPath
   / ImportAlligatorAdapter
   // REMOVED: PathExpression - bracket syntax no longer supported
+
+NodeImportPath "node import"
+  = "node" _ spec:NodePackageSpec {
+      helpers.debug('NodeImportPath matched', { spec });
+      const rawPath = spec.raw;
+      const pathNode = helpers.createNode(NodeType.Text, { content: rawPath, location: location() });
+      return {
+        type: 'path',
+        subtype: 'nodePath',
+        values: {
+          path: [pathNode]
+        },
+        raw: {
+          path: rawPath
+        },
+        meta: {
+          isNodeImport: true,
+          package: rawPath
+        }
+      };
+    }
+
+NodePackageSpec "node package specifier"
+  = "@" name:NodePackageName rest:("/" part:NodePackageName { return part; })* {
+      const parts = [name, ...rest];
+      return { raw: `@${parts.join('/')}`, parts };
+    }
+
+NodePackageName
+  = $([a-zA-Z0-9][a-zA-Z0-9._-]*)
 
 // Adapter to use AlligatorExpression for imports
 ImportAlligatorAdapter

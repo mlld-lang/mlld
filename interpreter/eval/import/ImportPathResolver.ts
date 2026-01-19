@@ -4,7 +4,7 @@ import type { Environment } from '../../env/Environment';
 import { interpolate } from '../../core/interpreter';
 
 export interface ImportResolution {
-  type: 'file' | 'url' | 'module' | 'resolver' | 'input';
+  type: 'file' | 'url' | 'module' | 'resolver' | 'input' | 'node';
   resolvedPath: string;
   expectedHash?: string;
   resolverName?: string;
@@ -13,6 +13,7 @@ export interface ImportResolution {
   importType?: ImportType;
   cacheDurationMs?: number;
   preferLocal?: boolean;
+  packageName?: string;
 }
 
 type ContentNodeArray = ContentNode[];
@@ -259,6 +260,10 @@ export class ImportPathResolver {
       }
     }
 
+    if (directive.meta?.path?.isNodeImport) {
+      return this.handleNodeImport(importPath, directive, sectionName);
+    }
+
     // Check if this is a module reference (@prefix/ pattern)
     if (importPath.startsWith('@')) {
       return this.handleModuleReference(importPath, directive, sectionName);
@@ -276,6 +281,23 @@ export class ImportPathResolver {
 
     // Handle file path
     return this.handleFileImport(importPath, directive, sectionName);
+  }
+
+  /**
+   * Handle node package imports (node @pkg)
+   */
+  private async handleNodeImport(
+    importPath: string,
+    directive: DirectiveNode,
+    sectionName?: string
+  ): Promise<ImportResolution> {
+    const packageName = directive.meta?.path?.package || importPath;
+    return {
+      type: 'node',
+      resolvedPath: packageName,
+      packageName,
+      sectionName
+    };
   }
 
   /**

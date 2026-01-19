@@ -21,6 +21,7 @@ export class ExpressionVisitor extends BaseVisitor {
     return node.type === 'BinaryExpression' ||
            node.type === 'UnaryExpression' ||
            node.type === 'TernaryExpression' ||
+           node.type === 'NewExpression' ||
            node.type === 'WhenExpression' ||
            node.type === 'ForExpression' ||
            node.type === 'LoopExpression' ||
@@ -39,6 +40,9 @@ export class ExpressionVisitor extends BaseVisitor {
       case 'TernaryExpression':
         this.visitTernaryExpression(node, context);
         break;
+      case 'NewExpression':
+        this.visitNewExpression(node, context);
+        break;
       case 'WhenExpression':
         this.visitWhenExpression(node, context);
         break;
@@ -54,6 +58,27 @@ export class ExpressionVisitor extends BaseVisitor {
       case 'ExeReturn':
         this.visitExeReturn(node, context);
         break;
+    }
+  }
+
+  private visitNewExpression(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+    this.tokenBuilder.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: 3,
+      tokenType: 'keyword',
+      modifiers: []
+    });
+
+    if (node.target) {
+      this.mainVisitor.visitNode(node.target, context);
+    }
+
+    if (Array.isArray(node.args)) {
+      for (const arg of node.args) {
+        this.mainVisitor.visitNode(arg, context);
+      }
     }
   }
   
