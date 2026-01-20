@@ -36,6 +36,11 @@ export class HelpSystem {
       this.displayEnvHelp();
       return;
     }
+
+    if (command === 'keychain') {
+      this.displayKeychainHelp();
+      return;
+    }
     
     if (command === 'debug-resolution') {
       this.displayDebugResolutionHelp();
@@ -352,6 +357,29 @@ allowed. The allowed list is stored in mlld-config.json.
     `);
   }
 
+  private displayKeychainHelp(): void {
+    console.log(`
+Usage: mlld keychain <command> [options]
+
+Manage project keychain entries under mlld-env-{projectname}.
+
+Commands:
+  add <name>               Add or update a keychain entry (prompts for value)
+  add <name> --value <v>   Add or update with explicit value
+  rm <name>                Remove a keychain entry
+  list                     List entry names
+  get <name>               Print entry value
+  import <file.env>        Import entries from a .env file
+
+Examples:
+  mlld keychain add ANTHROPIC_API_KEY
+  mlld keychain add ANTHROPIC_API_KEY --value sk-...
+  mlld keychain list
+  mlld keychain get ANTHROPIC_API_KEY
+  mlld keychain import .env
+    `);
+  }
+
   private displayDebugResolutionHelp(): void {
     console.log(`
 Usage: mlld debug-resolution [options] <input-file>
@@ -482,6 +510,7 @@ Commands:
   init                    Create a new mlld module
   add-needs, needs, deps  Analyze and update module dependencies
   alias                   Create path aliases for module imports
+  keychain                Manage project keychain entries
   dev                     Inspect local module discovery
   docs                    Show module documentation (# tldr + # docs)
   env                     Manage environment variables allowed in @INPUT
