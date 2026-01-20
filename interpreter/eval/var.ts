@@ -34,6 +34,7 @@ import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@i
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
+import { maybeAutosignVariable } from './auto-sign';
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -1389,6 +1390,7 @@ export async function evaluateVar(
   const assignment =
     context?.precomputedVarAssignment ?? (await prepareVarAssignment(directive, env));
   env.setVariable(assignment.identifier, assignment.variable);
+  await maybeAutosignVariable(assignment.identifier, assignment.variable, env);
   return assignment.evalResultOverride ?? { value: '', env };
 }
 
