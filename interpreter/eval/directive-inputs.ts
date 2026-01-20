@@ -398,6 +398,15 @@ function collectVariablesFromNodes(nodes: readonly unknown[], env: Environment):
   return Array.from(bucket.values());
 }
 
+export function collectVariableIdentifiersFromNodes(nodes: readonly unknown[]): string[] {
+  const seen = new Set<string>();
+  const visited = new WeakSet<object>();
+  for (const node of nodes) {
+    visitNodeForIdentifiers(node as AstValue, seen, visited);
+  }
+  return Array.from(seen);
+}
+
 function findExecInvocation(candidate: unknown): ExecInvocation | undefined {
   if (!candidate || typeof candidate !== 'object') {
     return undefined;
@@ -424,6 +433,62 @@ function findExecInvocation(candidate: unknown): ExecInvocation | undefined {
     }
   }
   return undefined;
+}
+
+function visitNodeForIdentifiers(
+  node: AstValue | undefined,
+  bucket: Set<string>,
+  seen: WeakSet<object>
+): void {
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+  if (seen.has(node)) {
+    return;
+  }
+  seen.add(node);
+
+  switch (node.type) {
+    case 'VariableReference':
+      addIdentifier(node.identifier, bucket);
+      break;
+    case 'VariableReferenceWithTail':
+      visitNodeForIdentifiers(node.variable as AstValue, bucket, seen);
+      break;
+    case 'TemplateVariable':
+      addIdentifier(node.identifier, bucket);
+      break;
+    case 'ExecInvocation': {
+      const commandRef = (node as { commandRef?: AstValue & { args?: unknown[]; objectReference?: AstValue } }).commandRef;
+      if (commandRef?.objectReference) {
+        visitNodeForIdentifiers(commandRef.objectReference as AstValue, bucket, seen);
+      }
+      const execArgs = commandRef?.args ?? [];
+      for (const arg of execArgs) {
+        visitNodeForIdentifiers(arg as AstValue, bucket, seen);
+      }
+      break;
+    }
+  }
+
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        visitNodeForIdentifiers(entry as AstValue, bucket, seen);
+      }
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      visitNodeForIdentifiers(value as AstValue, bucket, seen);
+    }
+  }
+}
+
+function addIdentifier(identifier: unknown, bucket: Set<string>): void {
+  if (typeof identifier !== 'string' || bucket.has(identifier)) {
+    return;
+  }
+  bucket.add(identifier);
 }
 
 function visitNodeForVariables(

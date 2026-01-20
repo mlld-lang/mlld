@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Policy defaults**: `defaults.unlabeled` and `defaults.rules` enforce built-in label flow rules, including `untrusted-llms-get-influenced`
 - **Named policies**: `/policy @name = { ... }` defines policy objects for export/import
 - **`using` auth injection**: `using auth:name` and `using @var as "ENV"` (plus `with { auth, using }`) pass credentials into exec/run from policy auth sources
+- **Policy defaults `autosign`**: Sign template content or variables selected by name patterns
+- **Policy defaults `autoverify`**: Prepend verify instructions for signed variables passed to llm-labeled executables and set `MLLD_VERIFY_VARS`
 
 ### Changed
 - **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)

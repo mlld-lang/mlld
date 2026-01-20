@@ -655,6 +655,46 @@ show @safe  >> Retries once, then succeeds
 
 Retry budget is shared across guard chain (max 3 attempts).
 
+## Signing and Verification
+
+Sign a prompt or template and verify it in another step:
+
+```mlld
+var @auditPrompt = `Review @input for policy issues.`
+sign @auditPrompt
+verify @auditPrompt
+```
+
+Autosign supports template categories and variable patterns:
+
+```mlld
+var @policyConfig = { defaults: { autosign: ["templates"] } }
+policy @p = union(@policyConfig)
+
+exe @auditPrompt(input) = template "./audit.att"
+```
+
+```mlld
+var @policyConfig = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
+policy @p = union(@policyConfig)
+```
+
+Autoverify prepends verification instructions for signed variables passed to llm-labeled executables and sets `MLLD_VERIFY_VARS`:
+
+```mlld
+var @policyConfig = { defaults: { autoverify: true } }
+policy @p = union(@policyConfig)
+
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+```
+
+Custom instructions use a template path:
+
+```mlld
+var @policyConfig = { defaults: { autoverify: "./verify.att" } }
+policy @p = union(@policyConfig)
+```
+
 ## Best Practices
 
 **Label sensitive data early:**

@@ -153,6 +153,50 @@ Multiple guards can apply. Resolution order:
 Guards are non-reentrant (won't trigger on their own operations).
 </GUARD_COMPOSITION>
 
+<SIGN_VERIFY>
+Sign a variable and verify it:
+
+```mlld
+var @auditPrompt = `Review @input`
+sign @auditPrompt
+verify @auditPrompt
+```
+
+`mlld verify auditPrompt` reads signatures from disk and reports verification status.
+</SIGN_VERIFY>
+
+<AUTOSIGN>
+Autosign covers templates and variable name patterns.
+
+```mlld
+var @policyConfig = { defaults: { autosign: ["templates"] } }
+policy @p = union(@policyConfig)
+```
+
+```mlld
+var @policyConfig = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
+policy @p = union(@policyConfig)
+```
+</AUTOSIGN>
+
+<AUTOVERIFY>
+Autoverify prepends verification instructions for signed variables passed to llm-labeled executables.
+
+```mlld
+var @policyConfig = { defaults: { autoverify: true } }
+policy @p = union(@policyConfig)
+
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+```
+
+```mlld
+var @policyConfig = { defaults: { autoverify: "./verify.att" } }
+policy @p = union(@policyConfig)
+```
+
+Autoverify sets `MLLD_VERIFY_VARS` to signed variable names (without `@`).
+</AUTOVERIFY>
+
 <NEEDS_DECLARATION>
 Declare required capabilities in modules.
 

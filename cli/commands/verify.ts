@@ -7,17 +7,23 @@ export interface VerifyOptions {
   vars?: string[];
 }
 
-function parseVarList(raw: string): string[] {
-  return raw
-    .split(/[\s,]+/)
+function normalizeVarList(names: string[]): string[] {
+  return names
     .map(item => item.trim())
     .filter(Boolean)
     .map(name => (name.startsWith('@') ? name.slice(1) : name));
 }
 
+function parseVarList(raw: string): string[] {
+  return normalizeVarList(raw.split(/[\s,]+/));
+}
+
 export async function verifyCommand(options: VerifyOptions = {}): Promise<void> {
   const envVars = process.env.MLLD_VERIFY_VARS || '';
-  const names = options.vars && options.vars.length > 0 ? options.vars : parseVarList(envVars);
+  const names =
+    options.vars && options.vars.length > 0
+      ? normalizeVarList(options.vars)
+      : parseVarList(envVars);
 
   if (names.length === 0) {
     console.error('MLLD_VERIFY_VARS is not set and no variables are provided.');
