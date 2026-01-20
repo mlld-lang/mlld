@@ -62,6 +62,7 @@ import { contentIntent, breakIntent, progressIntent, errorIntent } from '@interp
 import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
 import { StreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
 import { ExportManifest } from '../eval/import/ExportManifest';
+import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import {
   ContextManager,
   type PipelineContextSnapshot,
@@ -1306,6 +1307,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
           { code: 'NEEDS_UNMET' }
         );
       }
+      enforceKeychainAccess(this);
     }
     
     // Special handling for debug variable - compute dynamically

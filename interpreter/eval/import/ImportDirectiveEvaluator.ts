@@ -16,6 +16,7 @@ import { interpolate } from '../../core/interpreter';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import type { NeedsDeclaration, CommandNeeds } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import * as path from 'path';
@@ -404,6 +405,7 @@ export class ImportDirectiveEvaluator {
           }
         });
       }
+      enforceKeychainAccess(env);
     }
 
     // Check if resolver supports imports

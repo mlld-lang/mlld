@@ -38,6 +38,10 @@ describe('initCommand', () => {
     );
     expect(fs.writeFile).toHaveBeenCalledWith(
       '/test/project/mlld-config.json',
+      expect.stringContaining('"projectname": "project"')
+    );
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      '/test/project/mlld-config.json',
       expect.stringContaining('"scriptDir": "llm/run"')
     );
   });

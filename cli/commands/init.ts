@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
 import chalk from 'chalk';
+import { normalizeProjectName } from '@core/utils/project-name';
 
 export interface InitOptions {
   force?: boolean;
@@ -39,6 +40,8 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const configPath = path.join(cwd, 'mlld-config.json');
   const lockPath = path.join(cwd, 'mlld-lock.json');
+  const baseName = path.basename(cwd);
+  const projectname = normalizeProjectName(baseName) || 'mlld-project';
 
   // Check for existing config
   if (existsSync(configPath) && !options.force) {
@@ -50,6 +53,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   // Build config with any overrides
   const config = {
     ...DEFAULT_CONFIG,
+    projectname,
     scriptDir: options.scriptDir || DEFAULT_CONFIG.scriptDir
   };
 

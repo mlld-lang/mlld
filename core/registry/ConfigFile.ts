@@ -27,6 +27,7 @@ export interface ConfigFileData {
   };
 
   // Project settings
+  projectname?: string;
   scriptDir?: string;
   mode?: 'development' | 'production';
   nodePackageManager?: string;
@@ -189,6 +190,16 @@ export class ConfigFile {
   }
 
   // Project settings
+  getProjectName(): string | undefined {
+    this.ensureLoaded();
+    const name = this.data!.projectname;
+    if (typeof name !== 'string') {
+      return undefined;
+    }
+    const trimmed = name.trim();
+    return trimmed ? trimmed : undefined;
+  }
+
   getScriptDir(): string | undefined {
     this.ensureLoaded();
     return this.data!.scriptDir;
