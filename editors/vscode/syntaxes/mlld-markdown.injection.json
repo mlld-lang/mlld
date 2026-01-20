@@ -22,7 +22,7 @@
       "contentName": "source.mlld.embedded",
       "patterns": [
         {
-          "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b)",
+          "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy|sign|verify)\\b)",
           "end": "$",
           "name": "meta.embedded.line.mlld",
           "beginCaptures": {
@@ -485,7 +485,7 @@
       ]
     },
     {
-      "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy)\\b)",
+      "begin": "^((var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy|sign|verify)\\b)",
       "end": "$",
       "name": "meta.embedded.block.mlld",
       "beginCaptures": {
