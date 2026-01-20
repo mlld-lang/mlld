@@ -28,8 +28,55 @@ mlld ships standard policy modules for common environments:
 Use them with `/import policy`:
 
 ```mlld
-/import policy @prod from "@mlld/production"
+import policy @prod from "@mlld/production"
 ```
+
+## Signing and Verification
+
+Use `sign` and `verify` to bind content to a signature:
+
+```mlld
+var @prompt = ::Review @input::
+sign @prompt by "alice" with sha256
+verify @prompt
+```
+
+Policy defaults can auto-sign templates or variables and auto-verify prompts passed to `llm`-labeled executables:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autosign: ["templates"],
+    autoverify: true
+  }
+}
+policy @p = union(@policyConfig)
+
+var @auditPrompt = ::Review @input::
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+```
+
+Auto-sign variable name patterns with glob syntax:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autosign: { variables: ["@*Prompt", "@*Instructions"] }
+  }
+}
+```
+
+Auto-verify supports custom instructions:
+
+```mlld
+var @policyConfig = {
+  defaults: {
+    autoverify: "./verify.att"
+  }
+}
+```
+
+When autoverify is enabled and a signed prompt reaches an `llm` exe, mlld injects `MLLD_VERIFY_VARS` and prepends verification instructions to the prompt. `MLLD_VERIFY_VARS` lists variable names without the `@` sigil. Autoverify implicitly allows `cmd:mlld:verify`.
 
 ## Data Labels
 
@@ -90,7 +137,7 @@ Guards enforce policies on labeled data or operations.
 ### Basic Guard Syntax
 
 ```
-/guard [@name] TIMING LABEL = when [
+guard [@name] TIMING LABEL = when [
   CONDITION => ACTION
   * => allow
 ]
@@ -101,7 +148,7 @@ Where:
 - `TIMING` is required: `before`, `after`, or `always`
 - `LABEL` is a data label (`secret`, `pii`) or operation filter (`op:run`, `op:exe`)
 
-**Syntactic sugar:** `/guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
+**Syntactic sugar:** `guard [@name] for LABEL = when [...]` is equivalent to `before` timing. Using explicit `before` is recommended for clarity.
 
 Actions:
 - `allow` - Operation proceeds
