@@ -159,6 +159,7 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
     template: string;
   };
   templateAst?: any[];
+  templateRaw?: string;
   configType?: string;
   itemType?: string;
   wasEvaluated?: boolean;

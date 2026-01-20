@@ -121,6 +121,7 @@ export const DATA_LABELS: readonly DataLabel[] = [
 
 export const PROTECTED_LABELS: readonly DataLabel[] = [
   'secret',
+  'untrusted',
   'src:mcp',
   'src:exec',
   'src:env',

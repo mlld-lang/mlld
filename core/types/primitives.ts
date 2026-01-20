@@ -245,7 +245,9 @@ export type DirectiveKind =
   | 'policy'
   | 'while'
   | 'for'
-  | 'loop';
+  | 'loop'
+  | 'sign'
+  | 'verify';
 
 export type DirectiveSubtype =
   // Import subtypes
@@ -281,7 +283,10 @@ export type DirectiveSubtype =
   | 'needs'
   | 'profiles'
   // Policy subtype
-  | 'policy';
+  | 'policy'
+  // Signing subtypes
+  | 'sign'
+  | 'verify';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

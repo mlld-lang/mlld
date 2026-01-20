@@ -38,6 +38,7 @@ export * from './policy'; // Policy directives
 export * from './load-content'; // Load content types and utilities including URL metadata
 export * from './while'; // While directives and stages
 export * from './control'; // Control literals (done/continue)
+export * from './label-modification';
 
 // Parser modes
 export * from './mode';
@@ -81,6 +82,7 @@ import { LoopExpression } from './loop';
 
 // Import Exe block nodes (used by when-expression actions)
 import type { ExeBlockNode, ExeReturnNode } from './exe';
+import type { LabelModificationNode } from './label-modification';
 
 /**
  * Unified AST node type - MlldNode
@@ -119,7 +121,8 @@ export type MlldNode =
   | ForExpression
   | LoopExpression
   | ExeBlockNode
-  | ExeReturnNode;
+  | ExeReturnNode
+  | LabelModificationNode;
 
 // =========================================================================
 // VARIABLE TYPES
