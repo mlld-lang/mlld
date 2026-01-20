@@ -7,6 +7,17 @@ export type PolicyEnvironmentConfig = {
   default?: string;
 };
 
+export type PolicyTrustStance = 'trusted' | 'untrusted';
+export type PolicyTrustConflict = 'warn' | 'error' | 'silent';
+
+export type PolicyDefaults = {
+  unlabeled?: PolicyTrustStance;
+  rules?: string[];
+  autosign?: unknown;
+  autoverify?: unknown;
+  trustconflict?: PolicyTrustConflict;
+};
+
 export type AuthConfig = {
   from: string;
   as: string;
@@ -20,6 +31,7 @@ export type LabelFlowRule = {
 export type PolicyLabels = Record<string, LabelFlowRule>;
 
 export type PolicyConfig = {
+  defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
   auth?: Record<string, AuthConfig>;
   allow?: Record<string, string[] | true> | true;
@@ -62,10 +74,12 @@ export function mergePolicyConfigs(
   const labels = mergePolicyLabels(normalizedBase.labels, normalizedIncoming.labels);
   const auth = mergePolicyAuth(normalizedBase.auth, normalizedIncoming.auth);
   const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
+  const defaults = mergePolicyDefaults(normalizedBase.defaults, normalizedIncoming.defaults);
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
 
   return {
+    ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
     allow: fromAllowShape(mergedAllow),
@@ -85,9 +99,11 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const labels = normalizePolicyLabels(config.labels);
   const auth = normalizePolicyAuth(config.auth);
   const defaultStance = normalizePolicyDefault(config.default);
+  const defaults = normalizePolicyDefaults(config.defaults);
   const envConfig = normalizePolicyEnv(config.env);
   const limits = config.limits ? normalizeLimits(config.limits) : undefined;
   return {
+    ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
     allow,
@@ -112,6 +128,184 @@ function normalizePolicyEnv(
     return undefined;
   }
   return { default: defaultProvider };
+}
+
+function normalizePolicyDefaults(
+  defaults?: PolicyConfig['defaults']
+): PolicyConfig['defaults'] | undefined {
+  if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) {
+    return undefined;
+  }
+  const unlabeled = normalizePolicyUnlabeled(defaults.unlabeled);
+  const rules = normalizeStringList(defaults.rules);
+  const autosign = normalizeAutosign(defaults.autosign);
+  const autoverify = normalizeAutoverify(defaults.autoverify);
+  const trustconflict = normalizeTrustConflict(defaults.trustconflict);
+  const result: PolicyDefaults = {};
+  if (unlabeled) {
+    result.unlabeled = unlabeled;
+  }
+  if (rules) {
+    result.rules = rules;
+  }
+  if (autosign !== undefined) {
+    result.autosign = autosign;
+  }
+  if (autoverify !== undefined) {
+    result.autoverify = autoverify;
+  }
+  if (trustconflict) {
+    result.trustconflict = trustconflict;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizePolicyUnlabeled(
+  value: PolicyDefaults['unlabeled']
+): PolicyDefaults['unlabeled'] | undefined {
+  if (value === 'trusted' || value === 'untrusted') {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeTrustConflict(
+  value: PolicyDefaults['trustconflict']
+): PolicyDefaults['trustconflict'] | undefined {
+  if (value === 'warn' || value === 'error' || value === 'silent') {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeAutosign(value: PolicyDefaults['autosign']): PolicyDefaults['autosign'] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return normalizeStringList(value) ?? [];
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (value && typeof value === 'object') {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeAutoverify(value: PolicyDefaults['autoverify']): PolicyDefaults['autoverify'] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : undefined;
+  }
+  if (value && typeof value === 'object') {
+    return value;
+  }
+  return undefined;
+}
+
+function mergePolicyDefaults(
+  base?: PolicyConfig['defaults'],
+  incoming?: PolicyConfig['defaults']
+): PolicyConfig['defaults'] | undefined {
+  const normalizedBase = normalizePolicyDefaults(base);
+  const normalizedIncoming = normalizePolicyDefaults(incoming);
+  if (!normalizedBase && !normalizedIncoming) {
+    return undefined;
+  }
+  const unlabeled = mergePolicyUnlabeled(
+    normalizedBase?.unlabeled,
+    normalizedIncoming?.unlabeled
+  );
+  const rules = mergeStringLists(normalizedBase?.rules, normalizedIncoming?.rules);
+  const autosign = mergeAutosign(normalizedBase?.autosign, normalizedIncoming?.autosign);
+  const autoverify = normalizedIncoming?.autoverify ?? normalizedBase?.autoverify;
+  const trustconflict = normalizedIncoming?.trustconflict ?? normalizedBase?.trustconflict;
+  const result: PolicyDefaults = {};
+  if (unlabeled) {
+    result.unlabeled = unlabeled;
+  }
+  if (rules) {
+    result.rules = rules;
+  }
+  if (autosign !== undefined) {
+    result.autosign = autosign;
+  }
+  if (autoverify !== undefined) {
+    result.autoverify = autoverify;
+  }
+  if (trustconflict) {
+    result.trustconflict = trustconflict;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function mergePolicyUnlabeled(
+  base?: PolicyDefaults['unlabeled'],
+  incoming?: PolicyDefaults['unlabeled']
+): PolicyDefaults['unlabeled'] | undefined {
+  if (incoming === 'untrusted' || base === 'untrusted') {
+    return 'untrusted';
+  }
+  if (incoming === 'trusted') {
+    return 'trusted';
+  }
+  return base;
+}
+
+function mergeAutosign(
+  base?: PolicyDefaults['autosign'],
+  incoming?: PolicyDefaults['autosign']
+): PolicyDefaults['autosign'] | undefined {
+  if (incoming === undefined) {
+    return base;
+  }
+  if (base === undefined) {
+    return incoming;
+  }
+  if (Array.isArray(base) && Array.isArray(incoming)) {
+    return mergeStringLists(base, incoming) ?? [];
+  }
+  if (isPlainObject(base) && isPlainObject(incoming)) {
+    return { ...base, ...incoming };
+  }
+  return incoming;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map(entry => String(entry).trim())
+      .filter(entry => entry.length > 0);
+    return normalized.length > 0 ? Array.from(new Set(normalized)) : [];
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const normalized = String(value).trim();
+    return normalized ? [normalized] : [];
+  }
+  return undefined;
+}
+
+function mergeStringLists(base?: string[], incoming?: string[]): string[] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  return Array.from(new Set([...(base ?? []), ...(incoming ?? [])]));
 }
 
 function mergePolicyEnv(

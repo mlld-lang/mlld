@@ -1,4 +1,6 @@
-import type { PolicyConfig } from './union';
+import type { PolicyConfig, PolicyLabels } from './union';
+import { isBuiltinPolicyRuleName } from './builtin-rules';
+import { resolveInputTaint } from './input-taint';
 
 export type FlowChannel = 'arg' | 'stdin' | 'using';
 
@@ -74,8 +76,7 @@ export function checkLabelFlow(
   ctx: FlowContext,
   policy?: PolicyConfig
 ): LabelFlowCheckResult {
-  const labelRules = policy?.labels;
-  if (!labelRules) {
+  if (!policy) {
     return { allowed: true };
   }
 
@@ -83,7 +84,8 @@ export function checkLabelFlow(
     return { allowed: true };
   }
 
-  const inputTaint = normalizeList(ctx.inputTaint);
+  const resolvedInput = resolveInputTaint(ctx.inputTaint, policy);
+  const inputTaint = resolvedInput.effective;
   if (inputTaint.length === 0) {
     return { allowed: true };
   }
@@ -95,6 +97,17 @@ export function checkLabelFlow(
   if (opTargets.length === 0) {
     return { allowed: true };
   }
+
+  const builtInResult = checkBuiltinPolicyRules(
+    inputTaint,
+    opTargets,
+    normalizeRuleList(policy.defaults?.rules)
+  );
+  if (builtInResult) {
+    return builtInResult;
+  }
+
+  const labelRules: PolicyLabels = policy.labels ?? {};
 
   for (const label of inputTaint) {
     const rule = labelRules[label];
@@ -120,5 +133,106 @@ export function checkLabelFlow(
     }
   }
 
+  if (resolvedInput.applyUntrustedDefault) {
+    let allowMatched = false;
+    for (const label of resolvedInput.raw) {
+      const rule = labelRules[label];
+      const allowRules = normalizeList(rule?.allow);
+      if (allowRules.length === 0) {
+        continue;
+      }
+      allowMatched = true;
+      const allowMatch = findBestMatch(opTargets, allowRules);
+      if (!allowMatch) {
+        return {
+          allowed: false,
+          reason: `Label '${label}' is not explicitly allowed for this operation`,
+          rule: `policy.labels.${label}.allow`,
+          label
+        };
+      }
+    }
+    if (!allowMatched) {
+      return {
+        allowed: false,
+        reason: 'Unlabeled data requires explicit allow rules when defaults.unlabeled is untrusted',
+        rule: 'policy.defaults.unlabeled'
+      };
+    }
+  }
+
   return { allowed: true };
+}
+
+function normalizeRuleList(value: unknown): string[] {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return normalizeList(value.map(entry => String(entry)));
+  }
+  return normalizeList([String(value)]);
+}
+
+function hasTargetLabel(targets: readonly string[], label: string): boolean {
+  return Boolean(findBestMatch(targets, [label]));
+}
+
+function checkBuiltinPolicyRules(
+  inputTaint: readonly string[],
+  opTargets: readonly string[],
+  rules: readonly string[]
+): LabelFlowCheckResult | null {
+  const enabledRules = rules.filter(rule => isBuiltinPolicyRuleName(rule));
+  if (enabledRules.length === 0) {
+    return null;
+  }
+
+  const hasSecret = inputTaint.includes('secret');
+  const hasSensitive = inputTaint.includes('sensitive');
+  const hasUntrusted = inputTaint.includes('untrusted');
+  const hasExfil = hasTargetLabel(opTargets, 'exfil');
+  const hasDestructive = hasTargetLabel(opTargets, 'destructive');
+  const hasPrivileged = hasTargetLabel(opTargets, 'privileged');
+
+  for (const rule of enabledRules) {
+    if (rule === 'no-secret-exfil' && hasSecret && hasExfil) {
+      return {
+        allowed: false,
+        reason: "Label 'secret' cannot flow to 'exfil'",
+        rule: 'policy.defaults.rules.no-secret-exfil',
+        label: 'secret',
+        matched: 'exfil'
+      };
+    }
+    if (rule === 'no-sensitive-exfil' && hasSensitive && hasUntrusted && hasExfil) {
+      return {
+        allowed: false,
+        reason: "Label 'sensitive' cannot flow to 'exfil' when untrusted",
+        rule: 'policy.defaults.rules.no-sensitive-exfil',
+        label: 'sensitive',
+        matched: 'exfil'
+      };
+    }
+    if (rule === 'no-untrusted-destructive' && hasUntrusted && hasDestructive) {
+      return {
+        allowed: false,
+        reason: "Label 'untrusted' cannot flow to 'destructive'",
+        rule: 'policy.defaults.rules.no-untrusted-destructive',
+        label: 'untrusted',
+        matched: 'destructive'
+      };
+    }
+    if (rule === 'no-untrusted-privileged' && hasUntrusted && hasPrivileged) {
+      return {
+        allowed: false,
+        reason: "Label 'untrusted' cannot flow to 'privileged'",
+        rule: 'policy.defaults.rules.no-untrusted-privileged',
+        label: 'untrusted',
+        matched: 'privileged'
+      };
+    }
+  }
+
+  return null;
 }
