@@ -20,8 +20,7 @@ const BOOLEAN_CAPABILITY_ALIASES: Record<string, string> = {
   network: 'network',
   net: 'network',
   filesystem: 'filesystem',
-  fs: 'filesystem',
-  keychain: 'keychain'
+  fs: 'filesystem'
 };
 
 export interface CommandNeedDetail {
@@ -43,7 +42,6 @@ export interface NeedsDeclaration {
   sh?: boolean;
   network?: boolean;
   filesystem?: boolean;
-  keychain?: boolean;
 }
 
 export interface ProfileDefinition {
@@ -59,7 +57,6 @@ export interface PolicyCapabilities {
   sh?: boolean;
   network?: boolean;
   filesystem?: boolean;
-  keychain?: boolean;
 }
 
 export const ALLOW_ALL_POLICY: PolicyCapabilities = Object.freeze({
@@ -67,8 +64,7 @@ export const ALLOW_ALL_POLICY: PolicyCapabilities = Object.freeze({
   cmd: { type: 'all' },
   sh: true,
   network: true,
-  filesystem: true,
-  keychain: true
+  filesystem: true
 });
 
 export function normalizeNeedsDeclaration(raw: unknown, context: string = 'needs'): NeedsDeclaration {
@@ -116,10 +112,6 @@ export function normalizeNeedsDeclaration(raw: unknown, context: string = 'needs
     }
     if (booleanKey === 'filesystem') {
       result.filesystem = Boolean(value === undefined ? true : value) || result.filesystem === true;
-      continue;
-    }
-    if (booleanKey === 'keychain') {
-      result.keychain = Boolean(value === undefined ? true : value) || result.keychain === true;
       continue;
     }
 
@@ -203,9 +195,6 @@ export function policySatisfiesNeeds(needs: NeedsDeclaration, policy: PolicyCapa
   if (needs.filesystem && policy.filesystem !== true) {
     return false;
   }
-  if (needs.keychain && policy.keychain !== true) {
-    return false;
-  }
 
   if (needs.cmd) {
     if (!policy.cmd) {
@@ -259,7 +248,6 @@ export function policyConfigPermitsNeeds(
     if (needs.sh && isDenied('sh', policyConfig.deny)) return false;
     if (needs.network && isDenied('network', policyConfig.deny)) return false;
     if (needs.filesystem && isDenied('filesystem', policyConfig.deny)) return false;
-    if (needs.keychain && isDenied('keychain', policyConfig.deny)) return false;
 
     if (needs.cmd) {
       if (isDenied('cmd', policyConfig.deny)) {
@@ -310,7 +298,6 @@ export function mergeNeedsDeclarations(
     sh: base.sh || incoming.sh,
     network: base.network || incoming.network,
     filesystem: base.filesystem || incoming.filesystem,
-    keychain: base.keychain || incoming.keychain,
     cmd: mergeCommandNeeds(base.cmd, incoming.cmd)
   };
 }

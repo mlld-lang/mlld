@@ -12,7 +12,6 @@ import { DefaultDependencyChecker, checkDependencies } from './dependencies';
 import { spawnSync } from 'child_process';
 
 interface SystemCapabilities {
-  keychain: boolean;
   sh: boolean;
   network: boolean;
   filesystem: boolean;
@@ -20,7 +19,6 @@ interface SystemCapabilities {
 
 function getSystemCapabilities(): SystemCapabilities {
   return {
-    keychain: process.platform === 'darwin',
     sh: true,
     network: true,
     filesystem: true
@@ -30,10 +28,6 @@ function getSystemCapabilities(): SystemCapabilities {
 function validateNeedsAgainstSystem(needs: NeedsDeclaration): string[] {
   const caps = getSystemCapabilities();
   const unmet: string[] = [];
-
-  if (needs.keychain && !caps.keychain) {
-    unmet.push('keychain (requires macOS)');
-  }
 
   if (needs.sh && !isCommandAvailable('sh')) {
     unmet.push('sh (shell executable not available)');

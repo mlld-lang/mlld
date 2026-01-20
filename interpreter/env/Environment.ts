@@ -62,7 +62,6 @@ import { contentIntent, breakIntent, progressIntent, errorIntent } from '@interp
 import { defaultStreamingOptions, type StreamingOptions } from '../eval/pipeline/streaming-options';
 import { StreamBus, type StreamEvent } from '../eval/pipeline/stream-bus';
 import { ExportManifest } from '../eval/import/ExportManifest';
-import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import {
   ContextManager,
   type PipelineContextSnapshot,
@@ -1300,14 +1299,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     if (name === 'keychain') {
-      const needs = this.getModuleNeeds();
-      if (!needs?.keychain) {
-        throw new MlldInterpreterError(
-          'Keychain access requires /needs { keychain } declaration.',
-          { code: 'NEEDS_UNMET' }
-        );
-      }
-      enforceKeychainAccess(this);
+      throw new MlldInterpreterError(
+        'Direct keychain access is not available. Use policy.auth with using auth:*.',
+        { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
+      );
     }
     
     // Special handling for debug variable - compute dynamically

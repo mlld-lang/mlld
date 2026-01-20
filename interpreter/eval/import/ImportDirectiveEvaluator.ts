@@ -16,7 +16,6 @@ import { interpolate } from '../../core/interpreter';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import type { NeedsDeclaration, CommandNeeds } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
-import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import * as path from 'path';
@@ -393,19 +392,10 @@ export class ImportDirectiveEvaluator {
     }
 
     if (resolverName.toLowerCase() === 'keychain') {
-      const needs = env.getModuleNeeds();
-      if (!needs?.keychain) {
-        const message = 'Keychain access requires /needs { keychain } declaration.';
-        throw new MlldImportError(message, {
-          code: 'NEEDS_UNMET',
-          details: {
-            source: '@keychain',
-            unmet: [{ capability: 'keychain', reason: message }],
-            needs: needs ?? {}
-          }
-        });
-      }
-      enforceKeychainAccess(env);
+      throw new MlldImportError(
+        'Direct keychain imports are not available. Use policy.auth with using auth:*.',
+        { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
+      );
     }
 
     // Check if resolver supports imports
