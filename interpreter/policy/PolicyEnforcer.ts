@@ -1,7 +1,9 @@
 import type { PolicyConfig } from '@core/policy/union';
+import { shouldAddInfluencedLabel } from '@core/policy/builtin-rules';
 import type { SourceLocation } from '@core/types';
 import { MlldDenialError, type DenialContext } from '@core/errors/denial';
 import { checkLabelFlow, type FlowContext } from '@core/policy/label-flow';
+import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '@interpreter/env/Environment';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 
@@ -16,7 +18,7 @@ export class PolicyEnforcer {
     ctx: FlowContext,
     options?: { env?: Environment; sourceLocation?: SourceLocation }
   ): void {
-    if (!this.policy?.labels) {
+    if (!this.policy) {
       return;
     }
 
@@ -30,6 +32,22 @@ export class PolicyEnforcer {
       sourceLocation: options?.sourceLocation,
       env: options?.env
     });
+  }
+
+  applyOutputPolicyLabels(
+    descriptor: SecurityDescriptor | undefined,
+    ctx: { inputTaint: readonly string[]; exeLabels: readonly string[] }
+  ): SecurityDescriptor | undefined {
+    if (!this.policy) {
+      return descriptor;
+    }
+    if (!shouldAddInfluencedLabel(this.policy, ctx.inputTaint, ctx.exeLabels)) {
+      return descriptor;
+    }
+    const influencedDescriptor = makeSecurityDescriptor({ labels: ['influenced'] });
+    return descriptor
+      ? mergeDescriptors(descriptor, influencedDescriptor)
+      : influencedDescriptor;
   }
 }
 

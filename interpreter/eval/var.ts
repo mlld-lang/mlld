@@ -887,6 +887,9 @@ export async function prepareVarAssignment(
   const source = createVariableSource(valueNode, directive);
   const baseCtx: Partial<VariableContext> = { definedAt: location };
   const baseInternal: Partial<VariableInternalMetadata> = {};
+  if (typeof directive.meta?.rawTemplate === 'string') {
+    baseInternal.templateRaw = directive.meta.rawTemplate;
+  }
 
   const cloneFactoryOptions = (
     overrides?: Partial<VariableFactoryInitOptions>
