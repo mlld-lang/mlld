@@ -492,6 +492,7 @@ Commands:
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
   run                     Run mlld scripts from script directory
+  verify                  Verify signed variables from MLLD_VERIFY_VARS
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
   serve                   Expose mlld functions as MCP tools over stdio

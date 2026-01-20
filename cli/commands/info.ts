@@ -89,7 +89,7 @@ function highlightMlld(code: string): string {
   let result = code;
 
   // Directives at start of line (with or without leading slash)
-  result = result.replace(/^(\/?(?:var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy))\b/gm,
+  result = result.replace(/^(\/?(?:var|show|stream|run|exe|path|import|when|output|append|for|log|guard|export|policy|sign|verify))\b/gm,
     chalk.magenta('$1'));
 
   // Keywords

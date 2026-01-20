@@ -25,6 +25,7 @@ import { createOutdatedCommand } from '../commands/outdated';
 import { createMcpCommand } from '../commands/mcp';
 import { createHowtoCommand, createQuickstartCommand } from '../commands/howto';
 import { createValidateCommand } from '../commands/analyze';
+import { createVerifyCommand } from '../commands/verify';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -77,6 +78,7 @@ export class CommandDispatcher {
     this.commandMap.set('quickstart', createQuickstartCommand()); // Alias
     this.commandMap.set('validate', createValidateCommand());
     this.commandMap.set('analyze', createValidateCommand()); // Alias
+    this.commandMap.set('verify', createVerifyCommand());
   }
 
   async executeCommand(
@@ -205,6 +207,7 @@ export class CommandDispatcher {
       'language-server': 'Start language server',
       'test': 'Run mlld tests',
       'run': 'Run mlld scripts',
+      'verify': 'Verify signed variables from MLLD_VERIFY_VARS',
       'error-test': 'Test error handling',
       'clean': 'Remove modules from lock file and cache',
       'update': 'Update installed modules to latest versions',
