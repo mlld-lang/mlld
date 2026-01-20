@@ -29,6 +29,7 @@ import { astLocationToSourceLocation } from '@core/types';
 import type { SourceLocation } from '@core/types';
 import type { SerializedGuardDefinition } from '../../guards';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { generatePolicyGuards } from '@core/policy/guards';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -848,7 +849,13 @@ export class VariableImporter {
         targetEnv.registerSerializedGuards(guardDefinitions);
       }
       if (directive.subtype === 'importPolicy') {
-        targetEnv.recordPolicyConfig(alias, namespaceObject);
+        const policyConfig = this.resolveImportedPolicyConfig(namespaceObject, alias);
+        targetEnv.recordPolicyConfig(alias, policyConfig);
+        const guards = generatePolicyGuards(policyConfig);
+        const registry = targetEnv.getGuardRegistry();
+        for (const guard of guards) {
+          registry.registerPolicyGuard(guard);
+        }
       }
       return;
     }
@@ -868,8 +875,13 @@ export class VariableImporter {
       targetEnv.registerSerializedGuards(guardDefinitions);
     }
     if (directive.subtype === 'importPolicy') {
-      const policyConfig = (namespaceObject as any)?.config ?? namespaceObject;
+      const policyConfig = this.resolveImportedPolicyConfig(namespaceObject, alias);
       targetEnv.recordPolicyConfig(alias, policyConfig);
+      const guards = generatePolicyGuards(policyConfig);
+      const registry = targetEnv.getGuardRegistry();
+      for (const guard of guards) {
+        registry.registerPolicyGuard(guard);
+      }
     }
   }
 
@@ -927,6 +939,20 @@ export class VariableImporter {
       return trimmed.replace(/^['"]|['"]$/g, '');
     }
     return fallback;
+  }
+
+  private resolveImportedPolicyConfig(namespaceObject: unknown, alias: string): unknown {
+    if (!namespaceObject || typeof namespaceObject !== 'object' || Array.isArray(namespaceObject)) {
+      return namespaceObject;
+    }
+    const candidate = namespaceObject as Record<string, unknown>;
+    if (alias && Object.prototype.hasOwnProperty.call(candidate, alias)) {
+      return candidate[alias];
+    }
+    if (candidate.config !== undefined && candidate.config !== null) {
+      return candidate.config;
+    }
+    return namespaceObject;
   }
 
   /**
