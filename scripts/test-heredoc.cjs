@@ -82,12 +82,11 @@ const tests = [];
 tests.push({
   name: 'Small variable without heredoc',
   env: { MLLD_BASH_HEREDOC: '0' },
-  script: `
-/var @data = "Hello World"
-/exe @echo(msg) = sh {
+  script: `var @data = "Hello World"
+exe @echo(msg) = sh {
   echo "Received: $msg"
 }
-/show @echo(@data)
+show @echo(@data)
 `,
   expected: 'Received: Hello World',
   shouldPass: true
@@ -97,12 +96,11 @@ tests.push({
 tests.push({
   name: 'Medium variable (100KB) without heredoc',
   env: { MLLD_BASH_HEREDOC: '0' },
-  script: `
-/var @data = \`${'x'.repeat(100000)}\`
-/exe @count(msg) = sh {
+  script: `var @data = \`${'x'.repeat(100000)}\`
+exe @count(msg) = sh {
   echo "Length: $(echo -n \"$msg\" | wc -c | tr -d '[:space:]')"
 }
-/show @count(@data)
+show @count(@data)
 `,
   expected: 'Length: 100000',
   shouldPass: true
@@ -111,18 +109,17 @@ tests.push({
 // Test 3: Large variable with heredoc enabled
 tests.push({
   name: 'Large variable (200KB) with heredoc',
-  env: { 
+  env: {
     MLLD_BASH_HEREDOC: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '131072' // 128KB threshold
   },
-  script: `
-/var @data = \`${'y'.repeat(200000)}\`
-/exe @verify(content) = sh {
+  script: `var @data = \`${'y'.repeat(200000)}\`
+exe @verify(content) = sh {
   echo "Length: $(echo -n \"$content\" | wc -c | tr -d '[:space:]')"
   echo "First char: $(echo -n "$content" | head -c 1)"
   echo "Last char: $(echo -n "$content" | tail -c 1)"
 }
-/show @verify(@data)
+show @verify(@data)
 `,
   expected: ['Length: 200000', 'First char: y', 'Last char: y'],
   shouldPass: true
@@ -131,15 +128,14 @@ tests.push({
 // Test 4: Multiple large variables with heredoc
 tests.push({
   name: 'Multiple large variables with heredoc',
-  env: { 
+  env: {
     MLLD_BASH_HEREDOC: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '65536' // 64KB threshold
   },
-  script: `
-/var @data1 = \`${'a'.repeat(70000)}\`
-/var @data2 = \`${'b'.repeat(70000)}\`
-/var @data3 = \`${'c'.repeat(70000)}\`
-/exe @multi(x, y, z) = sh {
+  script: `var @data1 = \`${'a'.repeat(70000)}\`
+var @data2 = \`${'b'.repeat(70000)}\`
+var @data3 = \`${'c'.repeat(70000)}\`
+exe @multi(x, y, z) = sh {
   echo "X length: $(echo -n \"$x\" | wc -c | tr -d '[:space:]')"
   echo "Y length: $(echo -n \"$y\" | wc -c | tr -d '[:space:]')"
   echo "Z length: $(echo -n \"$z\" | wc -c | tr -d '[:space:]')"
@@ -147,7 +143,7 @@ tests.push({
   echo "Y char: $(echo -n "$y" | head -c 1)"
   echo "Z char: $(echo -n "$z" | head -c 1)"
 }
-/show @multi(@data1, @data2, @data3)
+show @multi(@data1, @data2, @data3)
 `,
   expected: [
     'X length: 70000',
@@ -163,18 +159,17 @@ tests.push({
 // Test 5: Debug output verification
 tests.push({
   name: 'Debug output shows heredoc usage',
-  env: { 
+  env: {
     MLLD_BASH_HEREDOC: '1',
     // Use MLLD_DEBUG_BASH_SCRIPT to avoid CLI resetting MLLD_DEBUG
     MLLD_DEBUG_BASH_SCRIPT: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '1000' // Very low threshold
   },
-  script: `
-/var @data = \`${'z'.repeat(2000)}\`
-/exe @test(msg) = sh {
+  script: `var @data = \`${'z'.repeat(2000)}\`
+exe @test(msg) = sh {
   echo "Got it"
 }
-/show @test(@data)
+show @test(@data)
 `,
   expected: 'Got it',
   shouldPass: true,
@@ -185,17 +180,16 @@ tests.push({
 // Test 6: Content with potential EOF marker collision
 tests.push({
   name: 'Content with EOF-like strings',
-  env: { 
+  env: {
     MLLD_BASH_HEREDOC: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '100'
   },
-  script: `
-/var @data = \`${'x'.repeat(50)}MLLD_EOF_test${'y'.repeat(50)}\`
-/exe @check(content) = sh {
+  script: `var @data = \`${'x'.repeat(50)}MLLD_EOF_test${'y'.repeat(50)}\`
+exe @check(content) = sh {
   echo "Length: $(echo -n \"$content\" | wc -c | tr -d '[:space:]')"
   echo "Contains marker: $(echo "$content" | grep -o "MLLD_EOF_test" || echo "not found")"
 }
-/show @check(@data)
+show @check(@data)
 `,
   expected: ['Length: 113', 'Contains marker: MLLD_EOF_test'],
   shouldPass: true
@@ -204,17 +198,16 @@ tests.push({
 // Test 7: Extremely large variable (1MB) with heredoc
 tests.push({
   name: 'Very large variable (1MB) with heredoc',
-  env: { 
+  env: {
     MLLD_BASH_HEREDOC: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '131072'
   },
-  script: `
-/var @huge = \`${'m'.repeat(1000000)}\`
-/exe @process(data) = sh {
+  script: `var @huge = \`${'m'.repeat(1000000)}\`
+exe @process(data) = sh {
   echo "Size: $(echo -n \"$data\" | wc -c | tr -d '[:space:]')"
   echo "MD5: $(echo -n "$data" | md5sum | cut -d' ' -f1)"
 }
-/show @process(@huge)
+show @process(@huge)
 `,
   expected: (output) => {
     // Check size is correct
@@ -233,10 +226,9 @@ tests.push({
     MLLD_BASH_HEREDOC: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '131072'
   },
-  script: `
-/var @huge = \`${'n'.repeat(200000)}\`
-/exe @echo_it2(big) = sh { echo "$big" bar }
-/show @echo_it2(@huge)
+  script: `var @huge = \`${'n'.repeat(200000)}\`
+exe @echo_it2(big) = sh { echo "$big" bar }
+show @echo_it2(@huge)
 `,
   expected: (output) => {
     // Ensure a substantial slice of the payload is present and the trailing marker remains
@@ -246,17 +238,16 @@ tests.push({
   shouldPass: true
 });
 
-// Test 7.6: Ensure both /show and /run produce output with fallback for large payloads
+// Test 7.6: Ensure both show and run produce output with fallback for large payloads
 tests.push({
   name: 'Show and Run consistent output for large var fallback',
   env: {
     MLLD_BASH_HEREDOC: '1'
   },
-  script: `
-/var @huge = \`${'n'.repeat(200000)}\`
-/exe @echo_it2(big) = sh { echo "$big" bar }
-/show @echo_it2(@huge)
-/run @echo_it2(@huge)
+  script: `var @huge = \`${'n'.repeat(200000)}\`
+exe @echo_it2(big) = sh { echo "$big" bar }
+show @echo_it2(@huge)
+run @echo_it2(@huge)
 `,
   expected: (output) => {
     const bigSlice = 'n'.repeat(20000);
@@ -269,7 +260,7 @@ tests.push({
 // Test 8: Load from file and pass to bash
 tests.push({
   name: 'Load large file and process with heredoc',
-  env: { 
+  env: {
     MLLD_BASH_HEREDOC: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '65536'
   },
@@ -278,13 +269,12 @@ tests.push({
     const content = 'test'.repeat(50000); // 200KB
     createTestFile('large.txt', content);
   },
-  script: `
-/var @filedata = <large.txt>
-/exe @analyze(content) = sh {
+  script: `var @filedata = <large.txt>
+exe @analyze(content) = sh {
   echo "File size: $(echo -n \"$content\" | wc -c | tr -d '[:space:]')"
   echo "First word: $(echo "$content" | head -c 4)"
 }
-/show @analyze(@filedata.text)
+show @analyze(@filedata.text)
 `,
   expected: ['File size: 200000', 'First word: test'],
   shouldPass: true
@@ -355,18 +345,15 @@ for (const test of tests) {
 // Test the actual issue from #404
 console.log(`\n${colors.cyan}═══ Issue #404 Regression Test ═══${colors.reset}\n`);
 
-const issue404Script = `
-# Original issue: 215KB variable passed to bash
-/run sh {
+const issue404Script = `run sh {
   head -c 215920 < /dev/zero | tr '\\0' 'a' > /tmp/issue404.txt
 }
-/var @file = </tmp/issue404.txt>
-/var @content = \`@file.content\`
-/exe @echo_it(big_arg) = sh {
+var @content = </tmp/issue404.txt>
+exe @echo_it(big_arg) = sh {
   echo "why doesn't this echo show?"
 }
-/show @echo_it(@content)
-/run {rm -f /tmp/issue404.txt}
+show @echo_it(@content)
+run {rm -f /tmp/issue404.txt}
 `;
 
 log.info('Testing original issue #404 scenario...');

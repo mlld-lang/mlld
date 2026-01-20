@@ -1,13 +1,7 @@
-guard @first before secret = when [
-  * => allow @input.trim()
+guard @redactSecrets after op:exe = when [
+  @output.includes("sk-") => allow @output.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]')
+  * => allow
 ]
 
-guard @second before secret = when [
-  * => allow `safe:@input`
-]
-
-var secret @data = "  hello  "
-exe @deliver(v) = `Result: @v`
-
->> Result: safe:hello
-show @deliver(@data)
+exe @getStatus() = run { echo "Status: ok, key: sk-12345" }
+show @getStatus()  >> Output: Status: ok, key: [REDACTED]

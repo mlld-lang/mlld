@@ -20,19 +20,17 @@ describe('Bash heredoc integration', () => {
   });
 
   it('reproduces large variable heredoc issue', async () => {
-    const script = `
-/run sh {
+    const script = `run sh {
   head -c 215920 < /dev/zero | tr '\\0' 'a' > big.txt
 }
-/var @file = <big.txt>
-/var @content = @file.content
-/exe @shell_echo(arg) = sh { echo "shell executed" }
-/exe @native_echo(arg) = sh { echo "node executed" }
-/show @shell_echo(@content)
-/show @native_echo(@content)
-/run @native_echo(@content)
-/show @content.length()
-/run { rm -f big.txt }
+var @content = <big.txt>
+exe @shell_echo(arg) = sh { echo "shell executed" }
+exe @native_echo(arg) = sh { echo "node executed" }
+show @shell_echo(@content)
+show @native_echo(@content)
+run @native_echo(@content)
+show @content.length()
+run { rm -f big.txt }
 `;
 
     const scriptPath = path.join(projectDir, 'large-variable.mld');

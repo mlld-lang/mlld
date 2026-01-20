@@ -1,7 +1,7 @@
-exe @tagValue(timing, out, inp) = js {
-  const val = out ?? inp ?? '';
-  return `${timing}:${val}`;
-}
+guard @validateOutput after op:exe = when [
+  @output.includes("ERROR") => deny "Operation failed"
+  * => allow
+]
 
-exe @emit(v) = js { return v; }
-show @emit("test")
+exe @query() = run { curl api.example.com/status }
+show @query()  >> Blocked if output contains ERROR

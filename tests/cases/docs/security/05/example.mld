@@ -1,2 +1,5 @@
-var secret @data = "sensitive"
-show @data.mx.labels  >> ["secret"]
+/var @policyConfig = {
+  defaults: {
+    autosign: { variables: ["@*Prompt", "@*Instructions"] }
+  }
+}

@@ -1,6 +1,8 @@
-guard @validateJson after op:exe = when [
-  @isValidJson(@output) => allow
-  * => deny "LLM did not return valid JSON"
+guard @validateInput before op:exe = when [
+  @input.length > 1000 => deny "Input too large"
+  @input.includes("<script") => deny "Potentially malicious input"
+  * => allow
 ]
 
-exe @isValidJson(text) = js { try { JSON.parse(text); return true; } catch { return false; } }
+exe @process(data) = run { echo "@data" }
+show @process("<script>alert('xss')</script>")  >> Blocked

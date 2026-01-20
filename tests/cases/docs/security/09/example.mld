@@ -1,5 +1,2 @@
-guard @noShell before op:run = when [
-  * => deny "Shell access disabled"
-]
-
-run cmd { ls }  >> Blocked
+var secret @data = "sensitive"
+show @data.mx.labels  >> ["secret"]
