@@ -1,6 +1,7 @@
 import type { TypedDirectiveNode } from './base';
 import type { DirectiveNode, SourceLocation } from './primitives';
 import type { TextNode } from './values';
+import type { DataObjectValue } from './var';
 
 export interface PolicyReferenceNode {
   type: 'ref';
@@ -14,14 +15,16 @@ export interface PolicyUnionExpression {
   location?: SourceLocation;
 }
 
+export type PolicyExpression = PolicyUnionExpression | DataObjectValue;
+
 export interface PolicyDirectiveValues {
   name: TextNode[];
-  expr: PolicyUnionExpression;
+  expr: PolicyExpression;
 }
 
 export interface PolicyDirectiveRaw {
   name: string;
-  expr: PolicyUnionExpression;
+  expr: PolicyExpression;
 }
 
 export interface PolicyDirectiveMeta {

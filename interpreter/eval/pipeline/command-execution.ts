@@ -963,6 +963,14 @@ export async function executeCommandVariable(
       command: parsedCommand.command,
       subcommand: parsedCommand.subcommand
     });
+    if (operationContext) {
+      operationContext.command = command;
+      operationContext.opLabels = opLabels;
+      const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
+      metadata.commandPreview = command;
+      operationContext.metadata = metadata;
+    }
+    env.updateOpContext({ command, opLabels });
     const commandDescriptor =
       commandDescriptors.length > 1
         ? env.mergeSecurityDescriptors(...commandDescriptors)

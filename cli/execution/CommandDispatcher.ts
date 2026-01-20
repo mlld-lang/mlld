@@ -10,6 +10,7 @@ import { createInitModuleCommand } from '../commands/init-module';
 import { createAddNeedsCommand } from '../commands/add-needs';
 import { createSetupCommand } from '../commands/setup';
 import { createAliasCommand } from '../commands/alias';
+import { createKeychainCommand } from '../commands/keychain';
 import { varsCommand } from '../commands/vars';
 import { envCommand } from '../commands/env';
 import { languageServerCommand } from '../commands/language-server';
@@ -55,6 +56,7 @@ export class CommandDispatcher {
     this.commandMap.set('deps', createAddNeedsCommand()); // Alias
     this.commandMap.set('setup', createSetupCommand());
     this.commandMap.set('alias', createAliasCommand());
+    this.commandMap.set('keychain', createKeychainCommand());
     this.commandMap.set('vars', varsCommand);
     this.commandMap.set('env', envCommand);
     this.commandMap.set('language-server', languageServerCommand);
@@ -201,6 +203,7 @@ export class CommandDispatcher {
       'add-needs': 'Analyze and update module dependencies',
       'setup': 'Interactive project configuration wizard',
       'alias': 'Create path aliases',
+      'keychain': 'Manage project keychain entries',
       'vars': 'Manage environment variable permissions',
       'env': 'Manage AI agent environments',
       'dev': 'Inspect local module discovery',

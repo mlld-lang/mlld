@@ -5,6 +5,7 @@ import { MlldInterpreterError } from '@core/errors';
 import { getKeychainProvider } from '@core/resolvers/builtin/KeychainResolver';
 import { coerceValueForStdin } from '@interpreter/utils/shell-value';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 
 type UsingConfig = { var?: unknown; as?: unknown };
 
@@ -121,13 +122,7 @@ async function resolveAuthValue(source: string, env: Environment): Promise<strin
         code: 'KEYCHAIN_PATH_INVALID'
       });
     }
-    const needs = env.getModuleNeeds();
-    if (!needs?.keychain) {
-      throw new MlldInterpreterError(
-        'Keychain access requires /needs { keychain } declaration.',
-        { code: 'NEEDS_UNMET' }
-      );
-    }
+    enforceKeychainAccess(env);
     const provider = getKeychainProvider();
     const value = await provider.get(service, account);
     if (value === null || value === undefined) {

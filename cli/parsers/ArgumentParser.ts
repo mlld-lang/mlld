@@ -12,7 +12,7 @@ export class ArgumentParser {
   private readonly commandsWithSubcommands = [
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'docs',
     'publish', 'init', 'module', 'mod', 'add-needs', 'needs', 'deps',
-    'setup', 'alias', 'vars', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
+    'setup', 'alias', 'keychain', 'vars', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
     'mcp', 'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor', 'verify',
     'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze'
   ];

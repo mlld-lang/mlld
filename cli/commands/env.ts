@@ -555,20 +555,25 @@ entry: index.mld
   console.log(chalk.green('✓ Created module.yml'));
 
   // Generate index.mld
-  const indexMld = `/needs { keychain, cmd: [claude] }
-/import { get } from @keychain
+  const indexMld = `/needs { cmd: [claude] }
+/policy @env = {
+  auth: {
+    claude: { from: "keychain:mlld-env/${name}", as: "CLAUDE_CODE_OAUTH_TOKEN" }
+  },
+  capabilities: {
+    danger: ["@keychain"]
+  }
+}
 
-/var secret @token = @get("mlld-env", "${name}")
-
-/exe @spawn(prompt) = \\
-  CLAUDE_CODE_OAUTH_TOKEN=@token \\
+/exe @spawn(prompt) = run { \\
   CLAUDE_CONFIG_DIR=@fm.dir/.claude \\
   claude -p @prompt
+} using auth:claude
 
-/exe @shell() = \\
-  CLAUDE_CODE_OAUTH_TOKEN=@token \\
+/exe @shell() = run { \\
   CLAUDE_CONFIG_DIR=@fm.dir/.claude \\
   claude
+} using auth:claude
 
 /export { @spawn, @shell }
 `;

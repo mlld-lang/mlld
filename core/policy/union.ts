@@ -1,3 +1,5 @@
+import { normalizeCommandPatternEntry, parseFsPatternEntry } from './capability-patterns';
+
 export type PolicyLimits = {
   maxTokens?: number;
   timeout?: number;
@@ -30,12 +32,35 @@ export type LabelFlowRule = {
 
 export type PolicyLabels = Record<string, LabelFlowRule>;
 
+export type PolicyFilesystemRules = {
+  read?: string[];
+  write?: string[];
+};
+
+export type PolicyNetworkRules = {
+  domains?: string[];
+};
+
+export type PolicyCapabilityValue =
+  | true
+  | string[]
+  | PolicyFilesystemRules
+  | PolicyNetworkRules;
+
+export type PolicyCapabilitiesConfig = {
+  allow?: Record<string, PolicyCapabilityValue> | string[] | true;
+  deny?: Record<string, PolicyCapabilityValue> | string[] | true;
+  danger?: string[] | string;
+};
+
 export type PolicyConfig = {
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
   auth?: Record<string, AuthConfig>;
-  allow?: Record<string, string[] | true> | true;
-  deny?: Record<string, string[] | true> | true;
+  allow?: Record<string, PolicyCapabilityValue> | string[] | true;
+  deny?: Record<string, PolicyCapabilityValue> | string[] | true;
+  danger?: string[] | string;
+  capabilities?: PolicyCapabilitiesConfig;
   labels?: PolicyLabels;
   env?: PolicyEnvironmentConfig;
   limits?: PolicyLimits;
@@ -43,11 +68,22 @@ export type PolicyConfig = {
 
 type AllowShape =
   | { type: 'wildcard' }
-  | { type: 'map'; entries: Map<string, Set<string>> };
+  | { type: 'map'; entries: Map<string, CapabilityEntry> };
 
 type DenyShape =
   | { type: 'wildcard' }
-  | { type: 'map'; entries: Map<string, Set<string>> };
+  | { type: 'map'; entries: Map<string, CapabilityEntry> };
+
+type PolicyFilesystemRuleSet = {
+  read?: Set<string>;
+  write?: Set<string>;
+};
+
+type PolicyNetworkRuleSet = {
+  domains?: Set<string>;
+};
+
+type CapabilityEntry = Set<string> | PolicyFilesystemRuleSet | PolicyNetworkRuleSet;
 
 export function mergePolicyConfigs(
   base: PolicyConfig | undefined,
@@ -77,6 +113,7 @@ export function mergePolicyConfigs(
   const defaults = mergePolicyDefaults(normalizedBase.defaults, normalizedIncoming.defaults);
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
+  const danger = mergePolicyDanger(normalizedBase.danger as string[] | undefined, normalizedIncoming.danger as string[] | undefined);
 
   return {
     ...(defaults ? { defaults } : {}),
@@ -84,6 +121,7 @@ export function mergePolicyConfigs(
     ...(auth ? { auth } : {}),
     allow: fromAllowShape(mergedAllow),
     deny: fromDenyShape(mergedDeny),
+    ...(danger && danger.length > 0 ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
@@ -94,20 +132,40 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   if (!config) {
     return {};
   }
-  const allow = config.allow !== undefined ? fromAllowShape(toAllowShape(config.allow)) : undefined;
-  const deny = config.deny !== undefined ? fromDenyShape(toDenyShape(config.deny)) : undefined;
+  const allowSources: Array<PolicyConfig['allow']> = [];
+  const denySources: Array<PolicyConfig['deny']> = [];
+  if (config.allow !== undefined) {
+    allowSources.push(config.allow);
+  }
+  if (config.capabilities?.allow !== undefined) {
+    allowSources.push(config.capabilities.allow);
+  }
+  if (config.deny !== undefined) {
+    denySources.push(config.deny);
+  }
+  if (config.capabilities?.deny !== undefined) {
+    denySources.push(config.capabilities.deny);
+  }
+  const allow = allowSources.length > 0
+    ? fromAllowShape(allowSources.map(toAllowShape).reduce(mergeAllowShapes))
+    : undefined;
+  const deny = denySources.length > 0
+    ? fromDenyShape(denySources.map(toDenyShape).reduce(mergeDenyShapes))
+    : undefined;
   const labels = normalizePolicyLabels(config.labels);
   const auth = normalizePolicyAuth(config.auth);
   const defaultStance = normalizePolicyDefault(config.default);
   const defaults = normalizePolicyDefaults(config.defaults);
   const envConfig = normalizePolicyEnv(config.env);
   const limits = config.limits ? normalizeLimits(config.limits) : undefined;
+  const danger = normalizePolicyDanger(config.capabilities?.danger ?? config.danger);
   return {
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
     allow,
     deny,
+    ...(danger ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
@@ -158,6 +216,14 @@ function normalizePolicyDefaults(
     result.trustconflict = trustconflict;
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizePolicyDanger(value: unknown): string[] | undefined {
+  const list = normalizeStringList(value);
+  if (!list || list.length === 0) {
+    return undefined;
+  }
+  return list;
 }
 
 function normalizePolicyUnlabeled(
@@ -248,6 +314,17 @@ function mergePolicyDefaults(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function mergePolicyDanger(base?: string[], incoming?: string[]): string[] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  if (!base || !incoming) {
+    return [];
+  }
+  const incomingSet = new Set(incoming);
+  return base.filter(entry => incomingSet.has(entry));
+}
+
 function mergePolicyUnlabeled(
   base?: PolicyDefaults['unlabeled'],
   incoming?: PolicyDefaults['unlabeled']
@@ -301,6 +378,182 @@ function normalizeStringList(value: unknown): string[] | undefined {
   return undefined;
 }
 
+function normalizeFilesystemRules(value: unknown): PolicyFilesystemRules | undefined {
+  if (value === true || value === '*' || value === 'all') {
+    return { read: ['**'], write: ['**'] };
+  }
+  if (Array.isArray(value) || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const list = normalizeStringList(value);
+    if (list === undefined) {
+      return undefined;
+    }
+    return { read: list, write: list };
+  }
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const read = normalizeFilesystemRuleList((value as { read?: unknown }).read);
+  const write = normalizeFilesystemRuleList((value as { write?: unknown }).write);
+  const result: PolicyFilesystemRules = {};
+  if (read !== undefined) {
+    result.read = read;
+  }
+  if (write !== undefined) {
+    result.write = write;
+    result.read = mergeStringLists(result.read, write) ?? result.read;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeFilesystemRuleList(value: unknown): string[] | undefined {
+  if (value === true || value === '*' || value === 'all') {
+    return ['**'];
+  }
+  const list = normalizeStringList(value);
+  if (!list) {
+    return list;
+  }
+  const normalized = list
+    .map(entry => {
+      const parsed = parseFsPatternEntry(entry);
+      if (parsed) {
+        return parsed.pattern;
+      }
+      if (entry === '*' || entry === '**') {
+        return '**';
+      }
+      return entry;
+    })
+    .filter(entry => entry.length > 0);
+  return normalized.length > 0 ? normalized : [];
+}
+
+function normalizeNetworkRules(value: unknown): PolicyNetworkRules | undefined {
+  if (value === true || value === '*' || value === 'all') {
+    return { domains: ['*'] };
+  }
+  if (Array.isArray(value) || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const list = normalizeStringList(value);
+    if (list === undefined) {
+      return undefined;
+    }
+    return { domains: list };
+  }
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const domains = normalizeNetworkRuleList((value as { domains?: unknown }).domains);
+  const result: PolicyNetworkRules = {};
+  if (domains !== undefined) {
+    result.domains = domains;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeNetworkRuleList(value: unknown): string[] | undefined {
+  if (value === true || value === '*' || value === 'all') {
+    return ['*'];
+  }
+  return normalizeStringList(value);
+}
+
+function collectCapabilityEntriesFromList(entries: Map<string, CapabilityEntry>, rawEntries: unknown[]): void {
+  for (const entry of rawEntries) {
+    const normalized = String(entry).trim();
+    if (!normalized) {
+      continue;
+    }
+    const commandPattern = normalizeCommandPatternEntry(normalized);
+    if (commandPattern) {
+      addCommandPattern(entries, commandPattern);
+      continue;
+    }
+    const fsPattern = parseFsPatternEntry(normalized);
+    if (fsPattern) {
+      addFilesystemPattern(entries, fsPattern.mode, fsPattern.pattern);
+      continue;
+    }
+    entries.set(normalized, new Set(['*']));
+  }
+}
+
+function addCommandPattern(entries: Map<string, CapabilityEntry>, pattern: string): void {
+  const existing = entries.get('cmd');
+  if (existing instanceof Set) {
+    existing.add(pattern);
+    return;
+  }
+  entries.set('cmd', new Set([pattern]));
+}
+
+function addFilesystemPattern(
+  entries: Map<string, CapabilityEntry>,
+  mode: 'read' | 'write',
+  pattern: string
+): void {
+  const existing = entries.get('filesystem');
+  const rules: PolicyFilesystemRuleSet = isFilesystemRuleSet(existing) ? existing : {};
+  if (mode === 'write') {
+    const write = rules.write ?? new Set<string>();
+    write.add(pattern);
+    rules.write = write;
+    const read = rules.read ?? new Set<string>();
+    read.add(pattern);
+    rules.read = read;
+  } else {
+    const read = rules.read ?? new Set<string>();
+    read.add(pattern);
+    rules.read = read;
+  }
+  entries.set('filesystem', rules);
+}
+
+function toFilesystemRuleSet(rules: PolicyFilesystemRules): PolicyFilesystemRuleSet {
+  return {
+    ...(rules.read !== undefined ? { read: new Set(rules.read) } : {}),
+    ...(rules.write !== undefined ? { write: new Set(rules.write) } : {})
+  };
+}
+
+function fromFilesystemRuleSet(set: PolicyFilesystemRuleSet): PolicyFilesystemRules | undefined {
+  const result: PolicyFilesystemRules = {};
+  if (set.read !== undefined) {
+    result.read = Array.from(set.read);
+  }
+  if (set.write !== undefined) {
+    result.write = Array.from(set.write);
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function toNetworkRuleSet(rules: PolicyNetworkRules): PolicyNetworkRuleSet {
+  return {
+    ...(rules.domains !== undefined ? { domains: new Set(rules.domains) } : {})
+  };
+}
+
+function fromNetworkRuleSet(set: PolicyNetworkRuleSet): PolicyNetworkRules | undefined {
+  const result: PolicyNetworkRules = {};
+  if (set.domains !== undefined) {
+    result.domains = Array.from(set.domains);
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function isFilesystemRuleSet(value: CapabilityEntry): value is PolicyFilesystemRuleSet {
+  if (!value || value instanceof Set) {
+    return false;
+  }
+  return 'read' in value || 'write' in value;
+}
+
+function isNetworkRuleSet(value: CapabilityEntry): value is PolicyNetworkRuleSet {
+  if (!value || value instanceof Set) {
+    return false;
+  }
+  return 'domains' in value;
+}
+
 function mergeStringLists(base?: string[], incoming?: string[]): string[] | undefined {
   if (!base && !incoming) {
     return undefined;
@@ -329,20 +582,37 @@ function toAllowShape(value: PolicyConfig['allow']): AllowShape {
     return { type: 'wildcard' };
   }
 
-  const entries = new Map<string, Set<string>>();
+  const entries = new Map<string, CapabilityEntry>();
   if (Array.isArray(value)) {
-    entries.set('default', new Set(value.map(String)));
+    collectCapabilityEntriesFromList(entries, value);
     return { type: 'map', entries };
   }
 
   if (value && typeof value === 'object') {
     for (const [key, raw] of Object.entries(value)) {
-      if (raw === true || raw === '*' || raw === 'all') {
-        entries.set(key, new Set(['*']));
+      const normalizedKey = key === 'fs' ? 'filesystem' : key;
+      if (normalizedKey === 'filesystem') {
+        const rules = normalizeFilesystemRules(raw);
+        if (rules) {
+          entries.set('filesystem', toFilesystemRuleSet(rules));
+        }
         continue;
       }
-      const vals = Array.isArray(raw) ? raw.map(String) : [String(raw)];
-      entries.set(key, new Set(vals));
+      if (normalizedKey === 'network') {
+        const rules = normalizeNetworkRules(raw);
+        if (rules) {
+          entries.set('network', toNetworkRuleSet(rules));
+        }
+        continue;
+      }
+      if (raw === true || raw === '*' || raw === 'all') {
+        entries.set(normalizedKey, new Set(['*']));
+        continue;
+      }
+      const vals = normalizeStringList(raw);
+      if (vals !== undefined) {
+        entries.set(normalizedKey, new Set(vals));
+      }
     }
     return { type: 'map', entries };
   }
@@ -354,12 +624,28 @@ function fromAllowShape(shape: AllowShape): PolicyConfig['allow'] {
   if (shape.type === 'wildcard') {
     return true;
   }
-  const result: Record<string, string[]> = {};
+  const result: Record<string, PolicyCapabilityValue> = {};
   for (const [key, values] of shape.entries.entries()) {
-    if (values.has('*')) {
-      result[key] = ['*'];
-    } else {
-      result[key] = Array.from(values);
+    if (values instanceof Set) {
+      if (values.has('*')) {
+        result[key] = ['*'];
+      } else {
+        result[key] = Array.from(values);
+      }
+      continue;
+    }
+    if (isFilesystemRuleSet(values)) {
+      const rules = fromFilesystemRuleSet(values);
+      if (rules) {
+        result[key] = rules;
+      }
+      continue;
+    }
+    if (isNetworkRuleSet(values)) {
+      const rules = fromNetworkRuleSet(values);
+      if (rules) {
+        result[key] = rules;
+      }
     }
   }
   return result;
@@ -369,24 +655,15 @@ function mergeAllowShapes(a: AllowShape, b: AllowShape): AllowShape {
   if (a.type === 'wildcard') return b;
   if (b.type === 'wildcard') return a;
 
-  const entries = new Map<string, Set<string>>();
-  for (const [key, aSet] of a.entries.entries()) {
-    const bSet = b.entries.get(key);
-    if (!bSet) {
+  const entries = new Map<string, CapabilityEntry>();
+  for (const [key, aEntry] of a.entries.entries()) {
+    const bEntry = b.entries.get(key);
+    if (!bEntry) {
       continue;
     }
-    if (aSet.has('*')) {
-      entries.set(key, new Set(bSet));
-    } else if (bSet.has('*')) {
-      entries.set(key, new Set(aSet));
-    } else {
-      const intersection = new Set<string>();
-      for (const val of aSet) {
-        if (bSet.has(val)) {
-          intersection.add(val);
-        }
-      }
-      entries.set(key, intersection);
+    const merged = mergeAllowEntry(aEntry, bEntry);
+    if (merged) {
+      entries.set(key, merged);
     }
   }
 
@@ -398,20 +675,37 @@ function toDenyShape(value: PolicyConfig['deny']): DenyShape {
     return { type: 'wildcard' };
   }
 
-  const entries = new Map<string, Set<string>>();
+  const entries = new Map<string, CapabilityEntry>();
   if (Array.isArray(value)) {
-    entries.set('default', new Set(value.map(String)));
+    collectCapabilityEntriesFromList(entries, value);
     return { type: 'map', entries };
   }
 
   if (value && typeof value === 'object') {
     for (const [key, raw] of Object.entries(value)) {
-      if (raw === true || raw === '*' || raw === 'all') {
-        entries.set(key, new Set(['*']));
+      const normalizedKey = key === 'fs' ? 'filesystem' : key;
+      if (normalizedKey === 'filesystem') {
+        const rules = normalizeFilesystemRules(raw);
+        if (rules) {
+          entries.set('filesystem', toFilesystemRuleSet(rules));
+        }
         continue;
       }
-      const vals = Array.isArray(raw) ? raw.map(String) : [String(raw)];
-      entries.set(key, new Set(vals));
+      if (normalizedKey === 'network') {
+        const rules = normalizeNetworkRules(raw);
+        if (rules) {
+          entries.set('network', toNetworkRuleSet(rules));
+        }
+        continue;
+      }
+      if (raw === true || raw === '*' || raw === 'all') {
+        entries.set(normalizedKey, new Set(['*']));
+        continue;
+      }
+      const vals = normalizeStringList(raw);
+      if (vals !== undefined) {
+        entries.set(normalizedKey, new Set(vals));
+      }
     }
     return { type: 'map', entries };
   }
@@ -423,12 +717,28 @@ function fromDenyShape(shape: DenyShape): PolicyConfig['deny'] {
   if (shape.type === 'wildcard') {
     return true;
   }
-  const result: Record<string, string[]> = {};
+  const result: Record<string, PolicyCapabilityValue> = {};
   for (const [key, values] of shape.entries.entries()) {
-    if (values.has('*')) {
-      result[key] = ['*'];
-    } else {
-      result[key] = Array.from(values);
+    if (values instanceof Set) {
+      if (values.has('*')) {
+        result[key] = ['*'];
+      } else {
+        result[key] = Array.from(values);
+      }
+      continue;
+    }
+    if (isFilesystemRuleSet(values)) {
+      const rules = fromFilesystemRuleSet(values);
+      if (rules) {
+        result[key] = rules;
+      }
+      continue;
+    }
+    if (isNetworkRuleSet(values)) {
+      const rules = fromNetworkRuleSet(values);
+      if (rules) {
+        result[key] = rules;
+      }
     }
   }
   return result;
@@ -439,27 +749,160 @@ function mergeDenyShapes(a: DenyShape, b: DenyShape): DenyShape {
     return { type: 'wildcard' };
   }
 
-  const entries = new Map<string, Set<string>>();
-  for (const [key, set] of a.entries.entries()) {
-    entries.set(key, new Set(set));
+  const entries = new Map<string, CapabilityEntry>();
+  for (const [key, entry] of a.entries.entries()) {
+    entries.set(key, cloneEntry(entry));
   }
 
-  for (const [key, set] of b.entries.entries()) {
+  for (const [key, entry] of b.entries.entries()) {
     const existing = entries.get(key);
     if (!existing) {
-      entries.set(key, new Set(set));
+      entries.set(key, cloneEntry(entry));
       continue;
     }
-    if (existing.has('*') || set.has('*')) {
-      entries.set(key, new Set(['*']));
-      continue;
-    }
-    for (const val of set) {
-      existing.add(val);
+    const merged = mergeDenyEntry(existing, entry);
+    if (merged) {
+      entries.set(key, merged);
     }
   }
 
   return { type: 'map', entries };
+}
+
+function mergeAllowEntry(aEntry: CapabilityEntry, bEntry: CapabilityEntry): CapabilityEntry | undefined {
+  if (aEntry instanceof Set && bEntry instanceof Set) {
+    if (aEntry.has('*')) return new Set(bEntry);
+    if (bEntry.has('*')) return new Set(aEntry);
+    const intersection = new Set<string>();
+    for (const val of aEntry) {
+      if (bEntry.has(val)) {
+        intersection.add(val);
+      }
+    }
+    return intersection;
+  }
+  if (isFilesystemRuleSet(aEntry) && isFilesystemRuleSet(bEntry)) {
+    return mergeFilesystemAllow(aEntry, bEntry);
+  }
+  if (isNetworkRuleSet(aEntry) && isNetworkRuleSet(bEntry)) {
+    return mergeNetworkAllow(aEntry, bEntry);
+  }
+  return undefined;
+}
+
+function mergeDenyEntry(aEntry: CapabilityEntry, bEntry: CapabilityEntry): CapabilityEntry | undefined {
+  if (aEntry instanceof Set && bEntry instanceof Set) {
+    if (aEntry.has('*') || bEntry.has('*')) {
+      return new Set(['*']);
+    }
+    const merged = new Set<string>(aEntry);
+    for (const val of bEntry) {
+      merged.add(val);
+    }
+    return merged;
+  }
+  if (isFilesystemRuleSet(aEntry) && isFilesystemRuleSet(bEntry)) {
+    return mergeFilesystemDeny(aEntry, bEntry);
+  }
+  if (isNetworkRuleSet(aEntry) && isNetworkRuleSet(bEntry)) {
+    return mergeNetworkDeny(aEntry, bEntry);
+  }
+  return undefined;
+}
+
+function mergeFilesystemAllow(a: PolicyFilesystemRuleSet, b: PolicyFilesystemRuleSet): PolicyFilesystemRuleSet {
+  return {
+    ...(mergeAllowPatternSet(a.read, b.read) !== undefined
+      ? { read: mergeAllowPatternSet(a.read, b.read) }
+      : {}),
+    ...(mergeAllowPatternSet(a.write, b.write) !== undefined
+      ? { write: mergeAllowPatternSet(a.write, b.write) }
+      : {})
+  };
+}
+
+function mergeFilesystemDeny(a: PolicyFilesystemRuleSet, b: PolicyFilesystemRuleSet): PolicyFilesystemRuleSet {
+  return {
+    ...(mergeDenyPatternSet(a.read, b.read) !== undefined
+      ? { read: mergeDenyPatternSet(a.read, b.read) }
+      : {}),
+    ...(mergeDenyPatternSet(a.write, b.write) !== undefined
+      ? { write: mergeDenyPatternSet(a.write, b.write) }
+      : {})
+  };
+}
+
+function mergeNetworkAllow(a: PolicyNetworkRuleSet, b: PolicyNetworkRuleSet): PolicyNetworkRuleSet {
+  return {
+    ...(mergeAllowPatternSet(a.domains, b.domains) !== undefined
+      ? { domains: mergeAllowPatternSet(a.domains, b.domains) }
+      : {})
+  };
+}
+
+function mergeNetworkDeny(a: PolicyNetworkRuleSet, b: PolicyNetworkRuleSet): PolicyNetworkRuleSet {
+  return {
+    ...(mergeDenyPatternSet(a.domains, b.domains) !== undefined
+      ? { domains: mergeDenyPatternSet(a.domains, b.domains) }
+      : {})
+  };
+}
+
+function mergeAllowPatternSet(a?: Set<string>, b?: Set<string>): Set<string> | undefined {
+  if (!a || !b) {
+    return undefined;
+  }
+  if (a.has('*')) {
+    return new Set(b);
+  }
+  if (b.has('*')) {
+    return new Set(a);
+  }
+  const intersection = new Set<string>();
+  for (const val of a) {
+    if (b.has(val)) {
+      intersection.add(val);
+    }
+  }
+  return intersection;
+}
+
+function mergeDenyPatternSet(a?: Set<string>, b?: Set<string>): Set<string> | undefined {
+  if (!a && !b) {
+    return undefined;
+  }
+  if (!a) {
+    return new Set(b);
+  }
+  if (!b) {
+    return new Set(a);
+  }
+  if (a.has('*') || b.has('*')) {
+    return new Set(['*']);
+  }
+  const merged = new Set<string>(a);
+  for (const val of b) {
+    merged.add(val);
+  }
+  return merged;
+}
+
+function cloneEntry(entry: CapabilityEntry): CapabilityEntry {
+  if (entry instanceof Set) {
+    return new Set(entry);
+  }
+  if (isFilesystemRuleSet(entry)) {
+    return {
+      ...(entry.read ? { read: new Set(entry.read) } : {}),
+      ...(entry.write ? { write: new Set(entry.write) } : {})
+    };
+  }
+  if (isNetworkRuleSet(entry)) {
+    return {
+      ...(entry.domains ? { domains: new Set(entry.domains) } : {})
+    };
+  }
+  return entry;
 }
 
 function mergeLimits(a?: PolicyLimits, b?: PolicyLimits): PolicyLimits | undefined {

@@ -60,6 +60,7 @@ import { handleExecGuardDenial } from './guard-denial-handler';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { resolveUsingEnvParts } from '@interpreter/utils/auth-injection';
 import {
   applyEnvironmentDefaults,
@@ -1986,8 +1987,11 @@ async function evaluateExecInvocationInternal(
     });
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
-      operationContext.command = parsedCommand.command;
+      operationContext.command = commandPreview;
     }
+    const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
+    metadata.commandPreview = commandPreview;
+    operationContext.metadata = metadata;
     const flowChannel =
       definition.withClause?.auth ||
       definition.withClause?.using ||
@@ -3121,7 +3125,7 @@ async function evaluateExecInvocationInternal(
     const sectionName = await interpolateWithResultDescriptor(definition.sectionTemplate, execEnv);
     
     // Read the file content
-    const fileContent = await execEnv.readFile(filePath);
+    const fileContent = await readFileWithPolicy(execEnv, filePath, nodeSourceLocation ?? undefined);
     
     // Extract the section using llmxml or fallback to basic extraction
     const llmxmlInstance = env.getLlmxml();

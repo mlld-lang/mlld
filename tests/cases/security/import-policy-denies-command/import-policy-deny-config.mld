@@ -1,0 +1,7 @@
+# Imported policy config
+
+/var @config = {
+  deny: { cmd: ["echo"] }
+}
+
+/export { @config }

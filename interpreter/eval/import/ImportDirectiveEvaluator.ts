@@ -392,18 +392,10 @@ export class ImportDirectiveEvaluator {
     }
 
     if (resolverName.toLowerCase() === 'keychain') {
-      const needs = env.getModuleNeeds();
-      if (!needs?.keychain) {
-        const message = 'Keychain access requires /needs { keychain } declaration.';
-        throw new MlldImportError(message, {
-          code: 'NEEDS_UNMET',
-          details: {
-            source: '@keychain',
-            unmet: [{ capability: 'keychain', reason: message }],
-            needs: needs ?? {}
-          }
-        });
-      }
+      throw new MlldImportError(
+        'Direct keychain imports are not available. Use policy.auth with using auth:*.',
+        { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
+      );
     }
 
     // Check if resolver supports imports

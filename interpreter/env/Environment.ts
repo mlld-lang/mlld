@@ -1299,13 +1299,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     if (name === 'keychain') {
-      const needs = this.getModuleNeeds();
-      if (!needs?.keychain) {
-        throw new MlldInterpreterError(
-          'Keychain access requires /needs { keychain } declaration.',
-          { code: 'NEEDS_UNMET' }
-        );
-      }
+      throw new MlldInterpreterError(
+        'Direct keychain access is not available. Use policy.auth with using auth:*.',
+        { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
+      );
     }
     
     // Special handling for debug variable - compute dynamically

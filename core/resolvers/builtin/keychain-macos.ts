@@ -48,6 +48,44 @@ export class MacOSKeychainProvider implements KeychainProvider {
     }
   }
 
+  async list(service: string): Promise<string[]> {
+    const output = await this.exec('security', ['dump-keychain']);
+    const accounts = new Set<string>();
+    let currentService: string | null = null;
+    let currentAccount: string | null = null;
+
+    const flush = () => {
+      if (currentService === service && currentAccount) {
+        accounts.add(currentAccount);
+      }
+    };
+
+    for (const line of output.split('\n')) {
+      if (line.startsWith('keychain:') || line.startsWith('class:') || line.trim() === '') {
+        if (currentService || currentAccount) {
+          flush();
+          currentService = null;
+          currentAccount = null;
+        }
+        continue;
+      }
+
+      const serviceMatch = line.match(/\"svce\"<blob>=\"([^\"]*)\"/);
+      if (serviceMatch) {
+        currentService = serviceMatch[1];
+        continue;
+      }
+
+      const accountMatch = line.match(/\"acct\"<blob>=\"([^\"]*)\"/);
+      if (accountMatch) {
+        currentAccount = accountMatch[1];
+      }
+    }
+
+    flush();
+    return Array.from(accounts).sort();
+  }
+
   private async exec(command: string, args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
       const proc = spawn(command, args);

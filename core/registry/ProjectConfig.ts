@@ -4,6 +4,7 @@ import { LockFile } from './LockFile';
 import { ConfigFile } from './ConfigFile';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import type { PrefixConfig } from '@core/resolvers/types';
+import { normalizeProjectName } from '@core/utils/project-name';
 
 /**
  * Unified manager for mlld-config.json and mlld-lock.json
@@ -97,6 +98,10 @@ export class ProjectConfig {
     return this.configFile.getAllowGuardBypass();
   }
 
+  getProjectName(): string | undefined {
+    return this.configFile.getProjectName();
+  }
+
   getScriptDir(): string | undefined {
     return this.configFile.getScriptDir();
   }
@@ -175,7 +180,10 @@ export class ProjectConfig {
 
     // Create default config if it doesn't exist
     if (!fs.existsSync(configPath)) {
+      const baseName = path.basename(this.projectRoot);
+      const projectname = normalizeProjectName(baseName) || 'mlld-project';
       const defaultConfig = {
+        projectname,
         dependencies: {},
         resolvers: {
           prefixes: []

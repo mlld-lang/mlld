@@ -18,6 +18,7 @@ import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionPr
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -520,7 +521,7 @@ export class VariableReferenceEvaluator {
   private async evaluatePathNode(value: any, env: Environment): Promise<any> {
     // Resolve path segments and read file
     const resolvedPath = await interpolateAndRecord(value.segments || [], env);
-    const content = await env.fileSystem.readFile(resolvedPath);
+    const content = await readFileWithPolicy(env, resolvedPath);
     return content;
   }
 

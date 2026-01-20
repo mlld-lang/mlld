@@ -19,8 +19,10 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { createSimpleTextVariable, isExecutableVariable } from '@core/types/variable';
 import type { Variable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
+import { MlldSecurityError } from '@core/errors';
 import { evaluateExecInvocation } from './exec-invocation';
 import type { ExecInvocation, CommandReference } from '@core/types';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 /**
  * Build the skill injection prompt for a given skill name
@@ -118,8 +120,11 @@ export async function executeProseExecutable(
 
     let fileContent: string;
     try {
-      fileContent = await env.readFile(filePath);
+      fileContent = await readFileWithPolicy(env, filePath);
     } catch (err: any) {
+      if (err instanceof MlldSecurityError) {
+        throw err;
+      }
       throw new Error(
         `Failed to read prose file "${filePath}": ${err.message || err}`
       );
@@ -150,8 +155,11 @@ export async function executeProseExecutable(
 
     let fileContent: string;
     try {
-      fileContent = await env.readFile(filePath);
+      fileContent = await readFileWithPolicy(env, filePath);
     } catch (err: any) {
+      if (err instanceof MlldSecurityError) {
+        throw err;
+      }
       throw new Error(
         `Failed to read prose template "${filePath}": ${err.message || err}`
       );

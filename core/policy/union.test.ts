@@ -34,4 +34,60 @@ describe('PolicyConfig defaults', () => {
       ['no-secret-exfil', 'no-untrusted-destructive'].sort()
     );
   });
+
+  it('normalizes autosign autoverify and trustconflict', () => {
+    const config = normalizePolicyConfig({
+      defaults: {
+        autosign: ['templates', '  ', 'templates'],
+        autoverify: true,
+        trustconflict: 'warn'
+      }
+    } as PolicyConfig);
+
+    expect(config.defaults?.autosign).toEqual(['templates']);
+    expect(config.defaults?.autoverify).toBe(true);
+    expect(config.defaults?.trustconflict).toBe('warn');
+  });
+});
+
+describe('PolicyConfig capabilities', () => {
+  it('expands allow list shorthand entries', () => {
+    const config = normalizePolicyConfig({
+      allow: ['cmd', 'js']
+    } as PolicyConfig);
+
+    expect(config.allow).toEqual({
+      cmd: ['*'],
+      js: ['*']
+    });
+  });
+
+  it('intersects allow with capabilities allow', () => {
+    const config = normalizePolicyConfig({
+      allow: ['cmd:git:*', 'cmd:npm:*'],
+      capabilities: { allow: ['cmd:git:*'] }
+    } as PolicyConfig);
+
+    expect((config.allow as { cmd?: string[] })?.cmd).toEqual(['git:*']);
+  });
+
+  it('unions deny with capabilities deny', () => {
+    const config = normalizePolicyConfig({
+      deny: ['cmd:npm:*'],
+      capabilities: { deny: ['cmd:git:*'] }
+    } as PolicyConfig);
+
+    const cmd = (config.deny as { cmd?: string[] })?.cmd ?? [];
+    expect(cmd.sort()).toEqual(['git:*', 'npm:*'].sort());
+  });
+
+  it('parses fs patterns into filesystem rules', () => {
+    const config = normalizePolicyConfig({
+      allow: ['fs:r:@base/tmp/**', 'fs:w:@base/dist/**']
+    } as PolicyConfig);
+
+    const filesystem = (config.allow as { filesystem?: { read?: string[]; write?: string[] } })?.filesystem ?? {};
+    expect(filesystem.read).toEqual(expect.arrayContaining(['@base/tmp/**', '@base/dist/**']));
+    expect(filesystem.write).toEqual(expect.arrayContaining(['@base/dist/**']));
+  });
 });

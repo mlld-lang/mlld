@@ -78,6 +78,27 @@ var @policyConfig = {
 
 When autoverify is enabled and a signed prompt reaches an `llm` exe, mlld injects `MLLD_VERIFY_VARS` and prepends verification instructions to the prompt. `MLLD_VERIFY_VARS` lists variable names without the `@` sigil. Autoverify implicitly allows `cmd:mlld:verify`.
 
+## Named Policies
+
+Define a policy object and export it:
+
+```mlld
+/policy @production = {
+  defaults: { unlabeled: "untrusted" },
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
+}
+/export { @production }
+```
+
+Import it like any other policy module:
+
+```mlld
+/import policy @production from "./policies.mld"
+```
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:

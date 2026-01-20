@@ -1,2 +1,2 @@
-/needs { keychain }
-/show "Has keychain access"
+/needs { cmd: [node] }
+/show "Has node access"

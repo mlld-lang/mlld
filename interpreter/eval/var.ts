@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import type { DirectiveNode, VarValue, VariableNodeArray } from '@core/types';
+import type { DirectiveNode, SourceLocation, VarValue, VariableNodeArray } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
@@ -33,6 +33,7 @@ import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/sec
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -154,8 +155,7 @@ async function interpolateAndCollect(
  */
 export async function prepareVarAssignment(
   directive: DirectiveNode,
-  env: Environment,
-  context?: EvaluationContext
+  env: Environment
 ): Promise<VarAssignmentResult> {
   // Extract identifier from array
   const identifierNodes = directive.values?.identifier as VariableNodeArray | undefined;
@@ -180,6 +180,10 @@ export async function prepareVarAssignment(
     identifier,
     location: directive.location
   };
+  const sourceLocation = astLocationToSourceLocation(
+    directive.location,
+    env.getCurrentFilePath()
+  );
 
   let resolvedSecurityDescriptor: SecurityDescriptor | undefined;
   const mergeResolvedDescriptor = (descriptor?: SecurityDescriptor): void => {
@@ -358,7 +362,7 @@ export async function prepareVarAssignment(
             processedItems.push(item.content);
           } else if (typeof item === 'object' && item.type) {
             // Other node types - evaluate them
-            const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, context);
+            const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, sourceLocation);
             processedItems.push(evaluated);
           } else {
             // Primitive values
@@ -408,7 +412,7 @@ export async function prepareVarAssignment(
             }
             
             for (const item of (propValue.items || [])) {
-              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, context);
+              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, sourceLocation);
               processedArray.push(evaluated);
             }
             processedObject[key] = processedArray;
@@ -423,7 +427,7 @@ export async function prepareVarAssignment(
                     nestedEntry.value,
                     env,
                     mergeResolvedDescriptor,
-                    context
+                    sourceLocation
                   );
                 }
               }
@@ -435,19 +439,14 @@ export async function prepareVarAssignment(
                   nestedValue,
                   env,
                   mergeResolvedDescriptor,
-                  context
+                  sourceLocation
                 );
               }
             }
             processedObject[key] = nestedObj;
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
-            processedObject[key] = await evaluateArrayItem(
-              propValue,
-              env,
-              mergeResolvedDescriptor,
-              context
-            );
+            processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor, sourceLocation);
           } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray(propValue.parts)) {
             // Handle strings with @references that need interpolation
             processedObject[key] = await interpolateWithSecurity(propValue.parts);
@@ -470,7 +469,7 @@ export async function prepareVarAssignment(
             // Handle array values in objects
             const processedArray = [];
             for (const item of (propValue.items || [])) {
-              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, context);
+              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, sourceLocation);
               processedArray.push(evaluated);
             }
             processedObject[key] = processedArray;
@@ -486,7 +485,7 @@ export async function prepareVarAssignment(
                       nestedEntry.value,
                       env,
                       mergeResolvedDescriptor,
-                      context
+                      sourceLocation
                     );
                   }
                 }
@@ -496,7 +495,7 @@ export async function prepareVarAssignment(
                     nestedValue,
                     env,
                     mergeResolvedDescriptor,
-                    context
+                    sourceLocation
                   );
                 }
               }
@@ -504,12 +503,7 @@ export async function prepareVarAssignment(
             processedObject[key] = nestedObj;
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
-            processedObject[key] = await evaluateArrayItem(
-              propValue,
-              env,
-              mergeResolvedDescriptor,
-              context
-            );
+            processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor, sourceLocation);
           } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray((propValue as any).parts)) {
             // Handle strings with @references that need interpolation
             processedObject[key] = await interpolateWithSecurity((propValue as any).parts);
@@ -528,7 +522,7 @@ export async function prepareVarAssignment(
     const sectionName = await interpolateWithSecurity(valueNode.section);
     
     // Read file and extract section
-    const fileContent = await env.readFile(filePath);
+    const fileContent = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
     const { llmxmlInstance } = await import('../utils/llmxml-instance');
     
     try {
@@ -583,7 +577,7 @@ export async function prepareVarAssignment(
   } else if (valueNode.type === 'path') {
     // Path dereference: [README.md]
     const filePath = await interpolateWithSecurity(valueNode.segments);
-    resolvedValue = await env.readFile(filePath);
+    resolvedValue = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
     
   } else if (valueNode.type === 'code') {
     // Code execution: run js { ... } or js { ... }
@@ -787,7 +781,7 @@ export async function prepareVarAssignment(
       ...valueNode,
       meta: { ...(valueNode.meta || {}), modifier: 'first' as const }
     };
-    const whenResult = await evaluateWhenExpression(nodeWithFirst as any, env, context);
+    const whenResult = await evaluateWhenExpression(nodeWithFirst as any, env);
     resolvedValue = whenResult.value;
     
   } else if (valueNode && valueNode.type === 'ExeBlock') {
@@ -839,11 +833,11 @@ export async function prepareVarAssignment(
     const hasFieldAccess = varWithTail.variable.fields && varWithTail.variable.fields.length > 0;
     
     // Use appropriate resolution context
-    const resolutionContext = needsPipelineExtraction && !hasFieldAccess 
+    const context = needsPipelineExtraction && !hasFieldAccess 
       ? ResolutionContext.PipelineInput 
       : ResolutionContext.FieldAccess;
     
-    const resolvedVar = await resolveVariable(sourceVar, env, resolutionContext);
+    const resolvedVar = await resolveVariable(sourceVar, env, context);
     let result = resolvedVar;
     
     // Apply field access if present
@@ -1393,7 +1387,7 @@ export async function evaluateVar(
   context?: EvaluationContext
 ): Promise<EvalResult> {
   const assignment =
-    context?.precomputedVarAssignment ?? (await prepareVarAssignment(directive, env, context));
+    context?.precomputedVarAssignment ?? (await prepareVarAssignment(directive, env));
   env.setVariable(assignment.identifier, assignment.variable);
   return assignment.evalResultOverride ?? { value: '', env };
 }
@@ -1534,7 +1528,7 @@ async function evaluateArrayItem(
   item: any,
   env: Environment,
   collectDescriptor?: DescriptorCollector,
-  context?: EvaluationContext
+  sourceLocation?: SourceLocation
 ): Promise<any> {
   if (!item || typeof item !== 'object') {
     return item;
@@ -1620,7 +1614,7 @@ async function evaluateArrayItem(
       if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
         continue;
       }
-      nestedObj[key] = await evaluateArrayItem(value, env, collectDescriptor, context);
+      nestedObj[key] = await evaluateArrayItem(value, env, collectDescriptor, sourceLocation);
     }
     return nestedObj;
   }
@@ -1630,14 +1624,14 @@ async function evaluateArrayItem(
       // Evaluate when-expression inside arrays/objects
       {
         const { evaluateWhenExpression } = await import('./when-expression');
-        const res = await evaluateWhenExpression(item as any, env, context);
+        const res = await evaluateWhenExpression(item as any, env);
         return res.value as any;
       }
     case 'array':
       // Nested array
       const nestedItems = [];
       for (const nestedItem of (item.items || [])) {
-        nestedItems.push(await evaluateArrayItem(nestedItem, env, collectDescriptor, context));
+        nestedItems.push(await evaluateArrayItem(nestedItem, env, collectDescriptor, sourceLocation));
       }
       return nestedItems;
 
@@ -1652,7 +1646,7 @@ async function evaluateArrayItem(
               entry.value,
               env,
               collectDescriptor,
-              context
+              sourceLocation
             );
           }
           // Spreads shouldn't be in simple objects (isComplex would be true)
@@ -1665,7 +1659,7 @@ async function evaluateArrayItem(
             propValue,
             env,
             collectDescriptor,
-            context
+            sourceLocation
           );
         }
       }
@@ -1689,7 +1683,7 @@ async function evaluateArrayItem(
     case 'path':
       // Path node in array - read the file content
       const filePath = await interpolateAndCollect(item.segments || [item], env, collectDescriptor);
-      const fileContent = await env.readFile(filePath);
+      const fileContent = await readFileWithPolicy(env, filePath, sourceLocation);
       return fileContent;
 
     case 'SectionExtraction':
@@ -1700,7 +1694,7 @@ async function evaluateArrayItem(
         env,
         collectDescriptor
       );
-      const sectionFileContent = await env.readFile(sectionFilePath);
+      const sectionFileContent = await readFileWithPolicy(env, sectionFilePath, sourceLocation);
       
       // Use standard section extraction
       const { extractSection } = await import('./show');
@@ -1730,7 +1724,7 @@ async function evaluateArrayItem(
           if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
             continue;
           }
-          plainObj[key] = await evaluateArrayItem(value, env, collectDescriptor, context);
+          plainObj[key] = await evaluateArrayItem(value, env, collectDescriptor, sourceLocation);
         }
         return plainObj;
       }

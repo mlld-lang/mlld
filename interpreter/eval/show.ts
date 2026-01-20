@@ -37,6 +37,7 @@ import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evalua
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { convertEntriesToProperties } from '../utils/object-compat';
 import { logger } from '@core/utils/logger';
+import { MlldSecurityError } from '@core/errors';
 import {
   asText,
   assertStructuredValue,
@@ -47,6 +48,7 @@ import {
 import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 import { wrapExecResult } from '../utils/structured-exec';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -350,8 +352,11 @@ export async function evaluateShow(
       const isURL = variable.value.isURL || /^https?:\/\//.test(pathValue);
       
       try {
-        value = await env.readFile(pathValue);
-      } catch (error) {
+        value = await readFileWithPolicy(env, pathValue, directiveLocation ?? undefined);
+      } catch (error: any) {
+        if (error instanceof MlldSecurityError) {
+          throw error;
+        }
         // Try test hook override if available
         try {
           if (isURL) {
@@ -631,7 +636,7 @@ export async function evaluateShow(
     if (env.isURL(resolvedPath)) {
       content = await env.fetchURL(resolvedPath);
     } else {
-      content = await env.readFile(resolvedPath);
+      content = await readFileWithPolicy(env, resolvedPath, directiveLocation ?? undefined);
     }
     
   } else if (directive.subtype === 'showPathSection') {
@@ -667,7 +672,7 @@ export async function evaluateShow(
     if (env.isURL(resolvedPath)) {
       fileContent = await env.fetchURL(resolvedPath);
     } else {
-      fileContent = await env.readFile(resolvedPath);
+      fileContent = await readFileWithPolicy(env, resolvedPath, directiveLocation ?? undefined);
     }
     
     // Extract the section using llmxml

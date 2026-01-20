@@ -931,7 +931,14 @@ async function evaluateGuard(options: {
   });
 
   if (guard.policyCondition) {
-    const policyResult = guard.policyCondition({ operation });
+    const policyInput = options.perInput
+      ? {
+          labels: options.perInput.labels,
+          taint: options.perInput.taint,
+          sources: options.perInput.sources
+        }
+      : undefined;
+    const policyResult = guard.policyCondition({ operation, input: policyInput });
     if (policyResult.decision === 'deny') {
       const metadataBase: Record<string, unknown> = {
         guardName: guard.name ?? null,
