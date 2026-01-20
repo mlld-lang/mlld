@@ -64,8 +64,8 @@ describe('PolicyConfig capabilities', () => {
 
   it('intersects allow with capabilities allow', () => {
     const config = normalizePolicyConfig({
-      allow: { cmd: ['git:*', 'npm:*'] },
-      capabilities: { allow: { cmd: ['git:*'] } }
+      allow: ['cmd:git:*', 'cmd:npm:*'],
+      capabilities: { allow: ['cmd:git:*'] }
     } as PolicyConfig);
 
     expect((config.allow as { cmd?: string[] })?.cmd).toEqual(['git:*']);
@@ -73,11 +73,21 @@ describe('PolicyConfig capabilities', () => {
 
   it('unions deny with capabilities deny', () => {
     const config = normalizePolicyConfig({
-      deny: { cmd: ['npm:*'] },
-      capabilities: { deny: { cmd: ['git:*'] } }
+      deny: ['cmd:npm:*'],
+      capabilities: { deny: ['cmd:git:*'] }
     } as PolicyConfig);
 
     const cmd = (config.deny as { cmd?: string[] })?.cmd ?? [];
     expect(cmd.sort()).toEqual(['git:*', 'npm:*'].sort());
+  });
+
+  it('parses fs patterns into filesystem rules', () => {
+    const config = normalizePolicyConfig({
+      allow: ['fs:r:@base/tmp/**', 'fs:w:@base/dist/**']
+    } as PolicyConfig);
+
+    const filesystem = (config.allow as { filesystem?: { read?: string[]; write?: string[] } })?.filesystem ?? {};
+    expect(filesystem.read).toEqual(expect.arrayContaining(['@base/tmp/**', '@base/dist/**']));
+    expect(filesystem.write).toEqual(expect.arrayContaining(['@base/dist/**']));
   });
 });

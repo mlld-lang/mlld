@@ -1,11 +1,9 @@
 # Policy denies filesystem write
 
 /var @policyConfig = {
-  allow: {
-    filesystem: {
-      write: ["@base/tmp/**"]
-    }
-  }
+  allow: [
+    "fs:w:@base/tmp/**"
+  ]
 }
 
 /policy @p = union(@policyConfig)

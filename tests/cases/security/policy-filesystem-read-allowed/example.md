@@ -1,11 +1,9 @@
 # Policy allows filesystem read
 
 /var @policyConfig = {
-  allow: {
-    filesystem: {
-      read: ["@base/policy-fs-allowed.txt"]
-    }
-  }
+  allow: [
+    "fs:r:@base/policy-fs-allowed.txt"
+  ]
 }
 
 /policy @p = union(@policyConfig)

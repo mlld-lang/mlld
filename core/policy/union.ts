@@ -1,3 +1,5 @@
+import { normalizeCommandPatternEntry, parseFsPatternEntry } from './capability-patterns';
+
 export type PolicyLimits = {
   maxTokens?: number;
   timeout?: number;
@@ -353,7 +355,7 @@ function normalizeStringList(value: unknown): string[] | undefined {
 
 function normalizeFilesystemRules(value: unknown): PolicyFilesystemRules | undefined {
   if (value === true || value === '*' || value === 'all') {
-    return { read: ['*'], write: ['*'] };
+    return { read: ['**'], write: ['**'] };
   }
   if (Array.isArray(value) || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     const list = normalizeStringList(value);
@@ -373,15 +375,32 @@ function normalizeFilesystemRules(value: unknown): PolicyFilesystemRules | undef
   }
   if (write !== undefined) {
     result.write = write;
+    result.read = mergeStringLists(result.read, write) ?? result.read;
   }
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function normalizeFilesystemRuleList(value: unknown): string[] | undefined {
   if (value === true || value === '*' || value === 'all') {
-    return ['*'];
+    return ['**'];
   }
-  return normalizeStringList(value);
+  const list = normalizeStringList(value);
+  if (!list) {
+    return list;
+  }
+  const normalized = list
+    .map(entry => {
+      const parsed = parseFsPatternEntry(entry);
+      if (parsed) {
+        return parsed.pattern;
+      }
+      if (entry === '*' || entry === '**') {
+        return '**';
+      }
+      return entry;
+    })
+    .filter(entry => entry.length > 0);
+  return normalized.length > 0 ? normalized : [];
 }
 
 function normalizeNetworkRules(value: unknown): PolicyNetworkRules | undefined {
@@ -411,6 +430,57 @@ function normalizeNetworkRuleList(value: unknown): string[] | undefined {
     return ['*'];
   }
   return normalizeStringList(value);
+}
+
+function collectCapabilityEntriesFromList(entries: Map<string, CapabilityEntry>, rawEntries: unknown[]): void {
+  for (const entry of rawEntries) {
+    const normalized = String(entry).trim();
+    if (!normalized) {
+      continue;
+    }
+    const commandPattern = normalizeCommandPatternEntry(normalized);
+    if (commandPattern) {
+      addCommandPattern(entries, commandPattern);
+      continue;
+    }
+    const fsPattern = parseFsPatternEntry(normalized);
+    if (fsPattern) {
+      addFilesystemPattern(entries, fsPattern.mode, fsPattern.pattern);
+      continue;
+    }
+    entries.set(normalized, new Set(['*']));
+  }
+}
+
+function addCommandPattern(entries: Map<string, CapabilityEntry>, pattern: string): void {
+  const existing = entries.get('cmd');
+  if (existing instanceof Set) {
+    existing.add(pattern);
+    return;
+  }
+  entries.set('cmd', new Set([pattern]));
+}
+
+function addFilesystemPattern(
+  entries: Map<string, CapabilityEntry>,
+  mode: 'read' | 'write',
+  pattern: string
+): void {
+  const existing = entries.get('filesystem');
+  const rules: PolicyFilesystemRuleSet = isFilesystemRuleSet(existing) ? existing : {};
+  if (mode === 'write') {
+    const write = rules.write ?? new Set<string>();
+    write.add(pattern);
+    rules.write = write;
+    const read = rules.read ?? new Set<string>();
+    read.add(pattern);
+    rules.read = read;
+  } else {
+    const read = rules.read ?? new Set<string>();
+    read.add(pattern);
+    rules.read = read;
+  }
+  entries.set('filesystem', rules);
 }
 
 function toFilesystemRuleSet(rules: PolicyFilesystemRules): PolicyFilesystemRuleSet {
@@ -489,39 +559,34 @@ function toAllowShape(value: PolicyConfig['allow']): AllowShape {
 
   const entries = new Map<string, CapabilityEntry>();
   if (Array.isArray(value)) {
-    for (const entry of value) {
-      const key = String(entry).trim();
-      if (!key) {
-        continue;
-      }
-      entries.set(key, new Set(['*']));
-    }
+    collectCapabilityEntriesFromList(entries, value);
     return { type: 'map', entries };
   }
 
   if (value && typeof value === 'object') {
     for (const [key, raw] of Object.entries(value)) {
-      if (key === 'filesystem') {
+      const normalizedKey = key === 'fs' ? 'filesystem' : key;
+      if (normalizedKey === 'filesystem') {
         const rules = normalizeFilesystemRules(raw);
         if (rules) {
-          entries.set(key, toFilesystemRuleSet(rules));
+          entries.set('filesystem', toFilesystemRuleSet(rules));
         }
         continue;
       }
-      if (key === 'network') {
+      if (normalizedKey === 'network') {
         const rules = normalizeNetworkRules(raw);
         if (rules) {
-          entries.set(key, toNetworkRuleSet(rules));
+          entries.set('network', toNetworkRuleSet(rules));
         }
         continue;
       }
       if (raw === true || raw === '*' || raw === 'all') {
-        entries.set(key, new Set(['*']));
+        entries.set(normalizedKey, new Set(['*']));
         continue;
       }
       const vals = normalizeStringList(raw);
       if (vals !== undefined) {
-        entries.set(key, new Set(vals));
+        entries.set(normalizedKey, new Set(vals));
       }
     }
     return { type: 'map', entries };
@@ -587,39 +652,34 @@ function toDenyShape(value: PolicyConfig['deny']): DenyShape {
 
   const entries = new Map<string, CapabilityEntry>();
   if (Array.isArray(value)) {
-    for (const entry of value) {
-      const key = String(entry).trim();
-      if (!key) {
-        continue;
-      }
-      entries.set(key, new Set(['*']));
-    }
+    collectCapabilityEntriesFromList(entries, value);
     return { type: 'map', entries };
   }
 
   if (value && typeof value === 'object') {
     for (const [key, raw] of Object.entries(value)) {
-      if (key === 'filesystem') {
+      const normalizedKey = key === 'fs' ? 'filesystem' : key;
+      if (normalizedKey === 'filesystem') {
         const rules = normalizeFilesystemRules(raw);
         if (rules) {
-          entries.set(key, toFilesystemRuleSet(rules));
+          entries.set('filesystem', toFilesystemRuleSet(rules));
         }
         continue;
       }
-      if (key === 'network') {
+      if (normalizedKey === 'network') {
         const rules = normalizeNetworkRules(raw);
         if (rules) {
-          entries.set(key, toNetworkRuleSet(rules));
+          entries.set('network', toNetworkRuleSet(rules));
         }
         continue;
       }
       if (raw === true || raw === '*' || raw === 'all') {
-        entries.set(key, new Set(['*']));
+        entries.set(normalizedKey, new Set(['*']));
         continue;
       }
       const vals = normalizeStringList(raw);
       if (vals !== undefined) {
-        entries.set(key, new Set(vals));
+        entries.set(normalizedKey, new Set(vals));
       }
     }
     return { type: 'map', entries };

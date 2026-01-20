@@ -3,7 +3,7 @@ import type { PolicyConfig } from './union';
 import type { PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
-import * as shellQuote from 'shell-quote';
+import { getCommandTokens, matchesCommandPatterns, normalizeCommandPatternEntry } from './capability-patterns';
 
 export interface PolicyGuardSpec {
   name: string;
@@ -90,9 +90,6 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
   const allow = policy.allow;
   const deny = policy.deny;
   const allowListActive = allow !== undefined && allow !== true;
-  if (!deny && !allowListActive) {
-    return guards;
-  }
 
   if (deny === true) {
     guards.push({
@@ -112,28 +109,26 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
   }
 
   const denyMap = deny && deny !== true && typeof deny === 'object' && !Array.isArray(deny) ? deny : undefined;
-  if (allowListActive || (denyMap && denyMap['cmd'])) {
-    guards.push({
-      name: '__policy_cmd_access',
-      filterKind: 'operation',
-      filterValue: 'op:cmd',
-      scope: 'perOperation',
-      block: makeGuardBlock(),
-      timing: 'before',
-      privileged: true,
-      policyCondition: ({ operation }) => {
-        const commandText = getOperationCommandText(operation);
-        const decision = evaluateCommandAccess(policy, commandText);
-        if (decision.allowed) {
-          return { decision: 'allow' };
-        }
-        return {
-          decision: 'deny',
-          reason: decision.reason ?? `Command '${decision.commandName}' denied by policy`
-        };
+  guards.push({
+    name: '__policy_cmd_access',
+    filterKind: 'operation',
+    filterValue: 'op:cmd',
+    scope: 'perOperation',
+    block: makeGuardBlock(),
+    timing: 'before',
+    privileged: true,
+    policyCondition: ({ operation }) => {
+      const commandText = getOperationCommandText(operation);
+      const decision = evaluateCommandAccess(policy, commandText);
+      if (decision.allowed) {
+        return { decision: 'allow' };
       }
-    });
-  }
+      return {
+        decision: 'deny',
+        reason: decision.reason ?? `Command '${decision.commandName}' denied by policy`
+      };
+    }
+  });
 
   if (denyMap && isDenied('sh', denyMap)) {
     guards.push({
@@ -215,11 +210,17 @@ function normalizeCommandPatternList(value: unknown): { all: boolean; patterns: 
   if (value === undefined || value === null) {
     return { all: false, patterns: [] };
   }
-  const list = Array.isArray(value)
-    ? normalizeList(value.map(entry => String(entry)))
-    : normalizeList([String(value)]);
-  const all = list.includes('*');
-  const patterns = list.filter(entry => entry !== '*');
+  const entries = Array.isArray(value) ? value : [value];
+  const normalized = normalizeList(entries.map(entry => {
+    const raw = String(entry).trim();
+    if (!raw) {
+      return '';
+    }
+    const commandPattern = normalizeCommandPatternEntry(raw);
+    return commandPattern ?? raw;
+  }));
+  const all = normalized.includes('*');
+  const patterns = normalized.filter(entry => entry !== '*');
   return { all, patterns };
 }
 
@@ -237,53 +238,6 @@ function getOperationCommandText(operation: {
   return operation.command ?? '';
 }
 
-function normalizeShellToken(token: unknown): string | null {
-  if (typeof token === 'string') {
-    return token;
-  }
-  if (!token || typeof token !== 'object') {
-    return null;
-  }
-  const entry = token as { op?: string; pattern?: string };
-  if (entry.op === 'glob' && typeof entry.pattern === 'string') {
-    return entry.pattern;
-  }
-  return null;
-}
-
-function tokenizeCommand(commandString: string): string[] {
-  if (!commandString) {
-    return [];
-  }
-  const parsed = shellQuote.parse(commandString);
-  return parsed
-    .map(normalizeShellToken)
-    .filter((token): token is string => typeof token === 'string' && token.length > 0);
-}
-
-function isEnvAssignment(token: string): boolean {
-  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
-}
-
-function normalizeCommandToken(token: string): string {
-  const trimmed = token.trim();
-  if (!trimmed) {
-    return '';
-  }
-  const parts = trimmed.split('/');
-  const base = parts[parts.length - 1] || trimmed;
-  return base.toLowerCase();
-}
-
-function getCommandTokens(commandString: string): string[] {
-  const raw = tokenizeCommand(commandString);
-  let index = 0;
-  while (index < raw.length && isEnvAssignment(raw[index])) {
-    index += 1;
-  }
-  return raw.slice(index).map(normalizeCommandToken).filter(Boolean);
-}
-
 function getCommandName(commandTokens: string[], commandText: string): string {
   if (commandTokens.length > 0) {
     return commandTokens[0]!;
@@ -295,50 +249,34 @@ function getCommandName(commandTokens: string[], commandText: string): string {
   return trimmed.split(/\s+/)[0] ?? 'command';
 }
 
-function parseCommandPattern(pattern: string): { tokens: string[]; allowExtra: boolean } {
-  const tokens = getCommandTokens(pattern);
-  if (tokens.length === 0) {
-    return { tokens, allowExtra: false };
+function extractCommandPatterns(
+  value: PolicyConfig['allow'] | PolicyConfig['deny'] | undefined
+): { all: boolean; patterns: string[] } | undefined {
+  if (!value || value === true) {
+    return undefined;
   }
-  let allowExtra = false;
-  const last = tokens[tokens.length - 1]!;
-  if (last === '*') {
-    tokens.pop();
-    allowExtra = true;
-  } else if (last.endsWith(':*')) {
-    tokens[tokens.length - 1] = last.slice(0, -2);
-    allowExtra = true;
-  }
-  if (!allowExtra && tokens.length === 1) {
-    allowExtra = true;
-  }
-  return { tokens, allowExtra };
-}
-
-function matchesCommandPattern(commandTokens: string[], pattern: string): boolean {
-  const { tokens: patternTokens, allowExtra } = parseCommandPattern(pattern);
-  if (patternTokens.length === 0) {
-    return false;
-  }
-  if (commandTokens.length < patternTokens.length) {
-    return false;
-  }
-  for (let i = 0; i < patternTokens.length; i++) {
-    if (commandTokens[i] !== patternTokens[i]) {
-      return false;
+  if (Array.isArray(value)) {
+    const patterns = normalizeList(value.map(entry => {
+      const raw = String(entry).trim();
+      if (!raw) {
+        return '';
+      }
+      return normalizeCommandPatternEntry(raw) ?? '';
+    })).filter(Boolean);
+    if (patterns.length === 0) {
+      return undefined;
     }
+    const all = patterns.includes('*');
+    return { all, patterns: patterns.filter(entry => entry !== '*') };
   }
-  if (!allowExtra && commandTokens.length !== patternTokens.length) {
-    return false;
+  if (typeof value === 'object') {
+    const raw = (value as Record<string, unknown>).cmd;
+    if (raw === undefined) {
+      return undefined;
+    }
+    return normalizeCommandPatternList(raw);
   }
-  return true;
-}
-
-function matchesCommandPatterns(commandTokens: string[], patterns: string[]): boolean {
-  if (patterns.length === 0) {
-    return false;
-  }
-  return patterns.some(pattern => matchesCommandPattern(commandTokens, pattern));
+  return undefined;
 }
 
 export function evaluateCommandAccess(policy: PolicyConfig, commandText: string): CommandAccessDecision {
@@ -358,31 +296,28 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       reason: 'All operations denied by policy'
     };
   }
+
   const denyMap =
     deny && deny !== true && typeof deny === 'object' && !Array.isArray(deny)
       ? deny
       : undefined;
-  const denyValue = denyMap?.cmd;
-  if (denyValue !== undefined) {
-    const denyPatterns = normalizeCommandPatternList(denyValue);
-    if (denyPatterns.all || matchesCommandPatterns(commandTokens, denyPatterns.patterns)) {
-      return {
-        allowed: false,
-        commandName,
-        reason: `Command '${commandName}' denied by policy`
-      };
-    }
+  const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
+  if (denyPatterns && (denyPatterns.all || matchesCommandPatterns(commandTokens, denyPatterns.patterns))) {
+    return {
+      allowed: false,
+      commandName,
+      reason: `Command '${commandName}' denied by policy`
+    };
   }
   if (allowListActive) {
-    const allowValue = allowMap?.cmd;
-    if (allowValue === undefined) {
+    const allowPatterns = extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined);
+    if (!allowPatterns) {
       return {
         allowed: false,
         commandName,
         reason: `Command '${commandName}' denied by policy`
       };
     }
-    const allowPatterns = normalizeCommandPatternList(allowValue);
     if (!allowPatterns.all && !matchesCommandPatterns(commandTokens, allowPatterns.patterns)) {
       return {
         allowed: false,

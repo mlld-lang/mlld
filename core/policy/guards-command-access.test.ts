@@ -5,7 +5,7 @@ import type { PolicyConfig } from './union';
 describe('evaluateCommandAccess', () => {
   it('allows exact command matches without extra args', () => {
     const policy: PolicyConfig = {
-      allow: { cmd: ['git status'] }
+      allow: ['cmd:git:status']
     };
 
     const allowed = evaluateCommandAccess(policy, 'git status');
@@ -17,7 +17,7 @@ describe('evaluateCommandAccess', () => {
 
   it('allows wildcard suffix patterns', () => {
     const policy: PolicyConfig = {
-      allow: { cmd: ['git status:*'] }
+      allow: ['cmd:git:status:*']
     };
 
     const allowed = evaluateCommandAccess(policy, 'git status -s');
@@ -29,7 +29,7 @@ describe('evaluateCommandAccess', () => {
 
   it('enforces allow list for unlisted commands', () => {
     const policy: PolicyConfig = {
-      allow: { cmd: ['git:*'] }
+      allow: ['cmd:git:*']
     };
 
     const denied = evaluateCommandAccess(policy, 'curl https://example.com');
@@ -39,11 +39,12 @@ describe('evaluateCommandAccess', () => {
 
   it('denies matching commands before allow list', () => {
     const policy: PolicyConfig = {
-      allow: { cmd: ['npm:*'] },
-      deny: { cmd: ['npm install:*'] }
+      allow: ['cmd:npm:*'],
+      deny: ['cmd:npm:install:*']
     };
 
     const denied = evaluateCommandAccess(policy, 'npm install express');
     expect(denied.allowed).toBe(false);
   });
+
 });
