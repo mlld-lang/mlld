@@ -2,6 +2,7 @@ import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types
 import type { PolicyConfig } from './union';
 import type { PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
+import { parseCommand } from '@core/policy/operation-labels';
 
 export interface PolicyGuardSpec {
   name: string;
@@ -45,6 +46,25 @@ function makeGuardBlock(): GuardBlockNode {
   };
 }
 
+function isAutoverifyEnabled(policy: PolicyConfig): boolean {
+  return Boolean(policy.defaults?.autoverify);
+}
+
+function isMlldVerifyCommand(operation: { command?: string; metadata?: Record<string, unknown> }): boolean {
+  const metadataPreview = operation.metadata?.commandPreview;
+  const preview =
+    typeof metadataPreview === 'string'
+      ? metadataPreview
+      : typeof operation.command === 'string'
+        ? operation.command
+        : '';
+  if (!preview) {
+    return false;
+  }
+  const parsed = parseCommand(preview);
+  return parsed.command === 'mlld' && parsed.subcommand === 'verify';
+}
+
 export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
   const guards: PolicyGuardSpec[] = [];
 
@@ -61,10 +81,15 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
       block: makeGuardBlock(),
       timing: 'before',
       privileged: true,
-      policyCondition: () => ({
-        decision: 'deny',
-        reason: 'All operations denied by policy'
-      })
+      policyCondition: ({ operation }) => {
+        if (isAutoverifyEnabled(policy) && isMlldVerifyCommand(operation)) {
+          return { decision: 'allow' };
+        }
+        return {
+          decision: 'deny',
+          reason: 'All operations denied by policy'
+        };
+      }
     });
     return guards;
   }
@@ -81,6 +106,9 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
       timing: 'before',
       privileged: true,
       policyCondition: ({ operation }) => {
+        if (isAutoverifyEnabled(policy) && isMlldVerifyCommand(operation)) {
+          return { decision: 'allow' };
+        }
         const command = operation.command?.trim() ?? '';
         const firstWord = command.split(/\s+/)[0] ?? '';
         if (firstWord === 'sh' || firstWord === 'bash' || firstWord.endsWith('/sh') || firstWord.endsWith('/bash')) {
@@ -101,6 +129,9 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
       timing: 'before',
       privileged: true,
       policyCondition: ({ operation }) => {
+        if (isAutoverifyEnabled(policy) && isMlldVerifyCommand(operation)) {
+          return { decision: 'allow' };
+        }
         const command = operation.command?.trim() ?? '';
         const firstWord = command.split(/\s+/)[0] ?? '';
         const networkCommands = ['curl', 'wget', 'nc', 'netcat', 'ssh', 'scp', 'rsync', 'ftp', 'telnet'];
@@ -123,10 +154,15 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         block: makeGuardBlock(),
         timing: 'before',
         privileged: true,
-        policyCondition: () => ({
-          decision: 'deny',
-          reason: 'All commands denied by policy'
-        })
+        policyCondition: ({ operation }) => {
+          if (isAutoverifyEnabled(policy) && isMlldVerifyCommand(operation)) {
+            return { decision: 'allow' };
+          }
+          return {
+            decision: 'deny',
+            reason: 'All commands denied by policy'
+          };
+        }
       });
     } else if (Array.isArray(cmdDeny) && cmdDeny.length > 0) {
       const deniedCommands = cmdDeny.map(c => String(c).toLowerCase());
@@ -139,6 +175,9 @@ export function generatePolicyGuards(policy: PolicyConfig): PolicyGuardSpec[] {
         timing: 'before',
         privileged: true,
         policyCondition: ({ operation }) => {
+          if (isAutoverifyEnabled(policy) && isMlldVerifyCommand(operation)) {
+            return { decision: 'allow' };
+          }
           const command = operation.command?.trim() ?? '';
           const firstWord = (command.split(/\s+/)[0] ?? '').toLowerCase();
           const baseName = firstWord.split('/').pop() ?? firstWord;
