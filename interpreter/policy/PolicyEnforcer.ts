@@ -41,13 +41,47 @@ export class PolicyEnforcer {
     if (!this.policy) {
       return descriptor;
     }
+    const baseDescriptor = this.applyDefaultTrustLabel(descriptor);
     if (!shouldAddInfluencedLabel(this.policy, ctx.inputTaint, ctx.exeLabels)) {
-      return descriptor;
+      return baseDescriptor;
     }
     const influencedDescriptor = makeSecurityDescriptor({ labels: ['influenced'] });
-    return descriptor
-      ? mergeDescriptors(descriptor, influencedDescriptor)
+    return baseDescriptor
+      ? mergeDescriptors(baseDescriptor, influencedDescriptor)
       : influencedDescriptor;
+  }
+
+  applyDefaultTrustLabel(descriptor: SecurityDescriptor | undefined): SecurityDescriptor | undefined {
+    if (!this.policy) {
+      return descriptor;
+    }
+    const defaultTrust = this.policy.defaults?.unlabeled;
+    if (!defaultTrust || !descriptor) {
+      return descriptor;
+    }
+    const labels = Array.isArray(descriptor.labels) ? descriptor.labels : [];
+    const taint = Array.isArray(descriptor.taint) ? descriptor.taint : [];
+    const sources = Array.isArray(descriptor.sources) ? descriptor.sources : [];
+    if (labels.length === 0 && taint.length === 0 && sources.length === 0) {
+      return descriptor;
+    }
+    const hasUserLabel = [...labels, ...taint].some(label => {
+      if (label.startsWith('src:') || label.startsWith('dir:')) {
+        return false;
+      }
+      if (label === defaultTrust) {
+        return false;
+      }
+      return true;
+    });
+    if (hasUserLabel) {
+      return descriptor;
+    }
+    if (labels.includes(defaultTrust) || taint.includes(defaultTrust)) {
+      return descriptor;
+    }
+    const trustDescriptor = makeSecurityDescriptor({ labels: [defaultTrust] });
+    return mergeDescriptors(descriptor, trustDescriptor);
   }
 }
 

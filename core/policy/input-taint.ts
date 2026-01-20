@@ -8,6 +8,7 @@ export type ResolvedInputTaint = {
 };
 
 const SOURCE_PREFIX = 'src:';
+const DIR_PREFIX = 'dir:';
 
 function normalizeList(values?: readonly string[]): string[] {
   if (!values) {
@@ -26,8 +27,19 @@ function normalizeList(values?: readonly string[]): string[] {
   return result;
 }
 
-function hasUserLabels(values: readonly string[]): boolean {
-  return values.some(label => !label.startsWith(SOURCE_PREFIX));
+function isSystemLabel(label: string, defaults?: PolicyConfig['defaults']): boolean {
+  if (label.startsWith(SOURCE_PREFIX) || label.startsWith(DIR_PREFIX)) {
+    return true;
+  }
+  const defaultStance = defaults?.unlabeled;
+  if (defaultStance && label === defaultStance) {
+    return true;
+  }
+  return false;
+}
+
+function hasUserLabels(values: readonly string[], policy?: PolicyConfig): boolean {
+  return values.some(label => !isSystemLabel(label, policy?.defaults));
 }
 
 export function resolveInputTaint(
@@ -35,7 +47,7 @@ export function resolveInputTaint(
   policy?: PolicyConfig
 ): ResolvedInputTaint {
   const raw = normalizeList(inputTaint);
-  const isUnlabeled = raw.length > 0 && !hasUserLabels(raw);
+  const isUnlabeled = raw.length > 0 && !hasUserLabels(raw, policy);
   const applyUntrustedDefault =
     policy?.defaults?.unlabeled === 'untrusted' && isUnlabeled;
   const effective = applyUntrustedDefault && !raw.includes('untrusted')

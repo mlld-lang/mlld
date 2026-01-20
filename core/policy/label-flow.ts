@@ -134,14 +134,12 @@ export function checkLabelFlow(
   }
 
   if (resolvedInput.applyUntrustedDefault) {
-    let allowMatched = false;
     for (const label of resolvedInput.raw) {
       const rule = labelRules[label];
       const allowRules = normalizeList(rule?.allow);
       if (allowRules.length === 0) {
         continue;
       }
-      allowMatched = true;
       const allowMatch = findBestMatch(opTargets, allowRules);
       if (!allowMatch) {
         return {
@@ -151,13 +149,6 @@ export function checkLabelFlow(
           label
         };
       }
-    }
-    if (!allowMatched) {
-      return {
-        allowed: false,
-        reason: 'Unlabeled data requires explicit allow rules when defaults.unlabeled is untrusted',
-        rule: 'policy.defaults.unlabeled'
-      };
     }
   }
 

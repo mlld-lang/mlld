@@ -1,5 +1,6 @@
 import { Environment } from '@interpreter/env/Environment';
-import { MlldError } from '@core/errors';
+import { MlldError, MlldDirectiveError, MlldSecurityError } from '@core/errors';
+import type { SourceLocation } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl } from './load-content';
@@ -7,7 +8,6 @@ import { wrapLoadContentValue } from '../utils/load-content-structured';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
 import { extractAst, extractNames, hasNameListPattern, hasContentPattern, type AstResult, type AstPattern } from './ast-extractor';
-import { MlldDirectiveError } from '@core/errors';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
@@ -19,6 +19,8 @@ import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } fro
 import { labelsForPath } from '@core/security/paths';
 import { extractVariableValue } from '../utils/variable-resolution';
 import { isLoadContentResult } from '@core/types/load-content';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -40,6 +42,19 @@ async function interpolateAndRecord(
     env.recordSecurityDescriptor(merged);
   }
   return text;
+}
+
+async function readFileWithPolicy(
+  pathOrUrl: string,
+  env: Environment,
+  sourceLocation?: SourceLocation
+): Promise<string> {
+  if (env.isURL(pathOrUrl)) {
+    return env.readFile(pathOrUrl);
+  }
+  const resolvedPath = await env.resolvePath(pathOrUrl);
+  enforceFilesystemAccess(env, 'read', resolvedPath, sourceLocation);
+  return env.readFile(resolvedPath);
 }
 /**
  * Check if a path contains glob patterns
@@ -75,6 +90,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
   }
 
   const { source, options, pipes, ast } = node;
+  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+  const sourceLocation = node.location ?? undefined;
 
   if (!source) {
     throw new MlldError('Content loader expression missing source', {
@@ -187,7 +204,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
           const fileList = Array.isArray(matches) ? matches : [];
           for (const filePath of fileList) {
             try {
-              const content = await env.readFile(filePath);
+              const content = await readFileWithPolicy(filePath, env, sourceLocation);
               const names = extractNames(content, filePath, filter);
               if (names.length > 0) {
                 results.push({
@@ -197,7 +214,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
                   absolute: filePath
                 });
               }
-            } catch {
+            } catch (error: any) {
+              if (error instanceof MlldSecurityError) {
+                throw error;
+              }
               // skip unreadable files
             }
           }
@@ -205,7 +225,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
         }
 
         // Single file - return plain string array
-        const content = await env.readFile(pathOrUrl);
+        const content = await readFileWithPolicy(pathOrUrl, env, sourceLocation);
         return extractNames(content, pathOrUrl, filter);
       };
 
@@ -237,7 +257,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
         const fileList = Array.isArray(matches) ? matches : [];
         for (const filePath of fileList) {
           try {
-            const content = await env.readFile(filePath);
+            const content = await readFileWithPolicy(filePath, env, sourceLocation);
             const extracted = extractAst(content, filePath, astPatterns);
             for (const entry of extracted) {
               if (entry) {
@@ -246,14 +266,17 @@ export async function processContentLoader(node: any, env: Environment): Promise
                 aggregated.push(null);
               }
             }
-          } catch {
+          } catch (error: any) {
+            if (error instanceof MlldSecurityError) {
+              throw error;
+            }
             // skip unreadable files
           }
         }
         return aggregated;
       }
 
-      const content = await env.readFile(pathOrUrl);
+      const content = await readFileWithPolicy(pathOrUrl, env, sourceLocation);
       return extractAst(content, pathOrUrl, astPatterns);
     };
 
@@ -279,12 +302,13 @@ export async function processContentLoader(node: any, env: Environment): Promise
   try {
     // URLs can't be globs
     if (env.isURL(pathOrUrl)) {
+      const urlDescriptor = makeSecurityDescriptor({
+        taint: ['src:network'],
+        sources: [pathOrUrl]
+      });
       const urlMetadata: StructuredValueMetadata = {
         url: pathOrUrl,
-        security: makeSecurityDescriptor({
-          taint: ['src:network'],
-          sources: [pathOrUrl]
-        })
+        security: policyEnforcer.applyDefaultTrustLabel(urlDescriptor) ?? urlDescriptor
       };
       // Fetch URL with metadata
       const response = await env.fetchURLWithMetadata(pathOrUrl);
@@ -368,7 +392,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
     
     // Handle glob patterns for file paths
     if (isGlob) {
-      const results = await loadGlobPattern(pathOrUrl, options, env);
+      const results = await loadGlobPattern(pathOrUrl, options, env, sourceLocation);
       
       // Apply transform if specified
       if (hasTransform && options.transform) {
@@ -406,12 +430,20 @@ export async function processContentLoader(node: any, env: Environment): Promise
     
     // Single file loading
     const resolvedFilePath = await env.resolvePath(pathOrUrl);
-    const fileSecurityDescriptor = makeSecurityDescriptor({
+    const fileDescriptor = makeSecurityDescriptor({
       taint: ['src:file', ...labelsForPath(resolvedFilePath)],
       sources: [resolvedFilePath]
     });
+    const fileSecurityDescriptor = policyEnforcer.applyDefaultTrustLabel(fileDescriptor) ?? fileDescriptor;
     const securityMetadata = { security: fileSecurityDescriptor };
-    const result = await loadSingleFile(pathOrUrl, options, env, pipes, resolvedFilePath);
+    const result = await loadSingleFile(
+      pathOrUrl,
+      options,
+      env,
+      pipes,
+      resolvedFilePath,
+      sourceLocation
+    );
 
     // Handle array results (from section-list patterns)
     if (Array.isArray(result)) {
@@ -476,6 +508,9 @@ export async function processContentLoader(node: any, env: Environment): Promise
       metadata: securityMetadata
     });
   } catch (error: any) {
+    if (error instanceof MlldSecurityError) {
+      throw error;
+    }
     if (process.env.DEBUG_CONTENT_LOADER) {
       console.log(`ERROR in processContentLoader: ${error.message}`);
       console.log(`Error stack:`, error.stack);
@@ -518,11 +553,13 @@ async function loadSingleFile(
   options: any,
   env: Environment,
   pipes?: any[],
-  resolvedPathOverride?: string
+  resolvedPathOverride?: string,
+  sourceLocation?: SourceLocation
 ): Promise<LoadContentResult | string | string[]> {
   const hasPipes = pipes && pipes.length > 0;
   const resolvedPath = resolvedPathOverride ?? (await env.resolvePath(filePath));
   // Let Environment handle path resolution and fuzzy matching
+  enforceFilesystemAccess(env, 'read', resolvedPath, sourceLocation);
   const rawContent = await env.readFile(resolvedPath);
   
   // Check if this is an HTML file and convert to Markdown
@@ -641,7 +678,12 @@ async function loadSingleFile(
 /**
  * Load files matching a glob pattern
  */
-async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[] | string[]> {
+async function loadGlobPattern(
+  pattern: string,
+  options: any,
+  env: Environment,
+  sourceLocation?: SourceLocation
+): Promise<LoadContentResult[] | string[]> {
   const relativeBase = getRelativeBasePath(env);
   let globCwd = env.getFileDirectory();
   let globPattern = pattern;
@@ -681,7 +723,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   
   for (const filePath of matches) {
     try {
-      const rawContent = await env.readFile(filePath);
+      const rawContent = await readFileWithPolicy(filePath, env, sourceLocation);
       
       // Check if this is an HTML file
       if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
@@ -823,6 +865,9 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
         }
       }
     } catch (error: any) {
+      if (error instanceof MlldSecurityError) {
+        throw error;
+      }
       // Skip files that can't be read
       continue;
     }
@@ -1272,12 +1317,22 @@ function finalizeLoaderResult<T>(
 ): T | StructuredValue {
   // Single LoadContentResult - wrap with JSON parsing
   if (isLoadContentResult(value)) {
-    return wrapLoadContentValue(value) as any;
+    const structured = wrapLoadContentValue(value) as StructuredValue;
+    const metadata = mergeMetadata(structured.metadata, options?.metadata);
+    if (!metadata || metadata === structured.metadata) {
+      return structured as any;
+    }
+    return wrapStructured(structured, structured.type, structured.text, metadata) as any;
   }
 
   // Array of LoadContentResult - wrap to ensure JSON parsing for each item
   if (Array.isArray(value) && value.length > 0 && isLoadContentResult(value[0])) {
-    return wrapLoadContentValue(value) as any;
+    const structured = wrapLoadContentValue(value) as StructuredValue;
+    const metadata = mergeMetadata(structured.metadata, options?.metadata);
+    if (!metadata || metadata === structured.metadata) {
+      return structured as any;
+    }
+    return wrapStructured(structured, structured.type, structured.text, metadata) as any;
   }
 
   if (isStructuredValue(value)) {

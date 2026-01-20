@@ -190,6 +190,7 @@ export async function evaluateRun(
   let outputText: string;
   let pendingOutputDescriptor: SecurityDescriptor | undefined;
   let lastOutputDescriptor: SecurityDescriptor | undefined;
+  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
   const mergePendingDescriptor = (descriptor?: SecurityDescriptor): void => {
     if (!descriptor) {
       return;
@@ -216,8 +217,13 @@ export async function evaluateRun(
       const descriptor = existingDescriptor
         ? env.mergeSecurityDescriptors(existingDescriptor, pendingOutputDescriptor)
         : pendingOutputDescriptor;
-      applySecurityDescriptorToStructuredValue(wrapped, descriptor);
-      lastOutputDescriptor = descriptor;
+      const defaultedDescriptor = policyEnforcer.applyDefaultTrustLabel(descriptor);
+      if (defaultedDescriptor) {
+        applySecurityDescriptorToStructuredValue(wrapped, defaultedDescriptor);
+        lastOutputDescriptor = defaultedDescriptor;
+      } else {
+        lastOutputDescriptor = undefined;
+      }
       pendingOutputDescriptor = undefined;
     } else {
       lastOutputDescriptor = undefined;
@@ -233,7 +239,6 @@ export async function evaluateRun(
     env.updateOpContext(update);
   };
 
-  const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
   const policyChecksEnabled = !context?.policyChecked;
 
   setOutput('');
@@ -387,7 +392,7 @@ export async function evaluateRun(
       command: parsedCommand.command,
       subcommand: parsedCommand.subcommand
     });
-    const opUpdate: Partial<OperationContext> = { opLabels };
+    const opUpdate: Partial<OperationContext> = { opLabels, command };
     if (opSources.length > 0) {
       opUpdate.sources = opSources;
     }
@@ -931,7 +936,7 @@ export async function evaluateRun(
         command: parsedCommand.command,
         subcommand: parsedCommand.subcommand
       });
-      const opUpdate: Partial<OperationContext> = { opLabels };
+      const opUpdate: Partial<OperationContext> = { opLabels, command };
       if (opSources.length > 0) {
         opUpdate.sources = opSources;
       }

@@ -11,9 +11,23 @@ export type PolicyConditionResult =
   | { decision: 'allow' }
   | { decision: 'deny'; reason: string };
 
-export type PolicyConditionFn = (context: {
-  operation: { type?: string; subtype?: string; command?: string; metadata?: Record<string, unknown> };
-}) => PolicyConditionResult;
+export type PolicyConditionContext = {
+  operation: {
+    type?: string;
+    subtype?: string;
+    command?: string;
+    metadata?: Record<string, unknown>;
+    opLabels?: readonly string[];
+    labels?: readonly string[];
+  };
+  input?: {
+    labels?: readonly string[];
+    taint?: readonly string[];
+    sources?: readonly string[];
+  };
+};
+
+export type PolicyConditionFn = (context: PolicyConditionContext) => PolicyConditionResult;
 
 export interface GuardDefinition {
   id: string;
