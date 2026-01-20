@@ -226,7 +226,7 @@ function renderTail(tail: any): string {
   return '';
 }
 
-function getSignatureContent(variable: Variable): string {
+export function getSignatureContent(variable: Variable): string {
   if (variable.type === 'template') {
     const raw = variable.internal?.templateRaw;
     if (typeof raw === 'string') {
@@ -240,6 +240,18 @@ function getSignatureContent(variable: Variable): string {
     }
     if (typeof variable.value === 'string') {
       return variable.value;
+    }
+  }
+  if (variable.type === 'executable') {
+    const execDef = (variable.internal as any)?.executableDef;
+    if (execDef && typeof execDef === 'object' && execDef.type === 'template') {
+      const templateNodes = execDef.template ?? (variable.value as any)?.template;
+      if (Array.isArray(templateNodes)) {
+        return reconstructRawString(templateNodes);
+      }
+      if (typeof templateNodes === 'string') {
+        return templateNodes;
+      }
     }
   }
   return coerceToString(variable.value);

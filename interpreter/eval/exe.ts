@@ -34,6 +34,7 @@ import {
 import { asData, asText, isStructuredValue, extractSecurityDescriptor } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { maybeAutosignVariable } from './auto-sign';
 
 /**
  * Evaluate an exe block sequentially with local scope for let/+= assignments.
@@ -972,6 +973,7 @@ export async function evaluateExe(
     }
     
     env.setVariable(identifier, variable);
+    await maybeAutosignVariable(identifier, variable, env);
     
     // Return the executable definition (no output for variable definitions)
     return { value: executableDef, env };

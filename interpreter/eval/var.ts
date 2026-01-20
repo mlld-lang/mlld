@@ -33,6 +33,7 @@ import { createCapabilityContext, makeSecurityDescriptor } from '@core/types/sec
 import { isStructuredValue, asText, asData, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { maybeAutosignVariable } from './auto-sign';
 
 export interface VarAssignmentResult {
   identifier: string;
@@ -154,7 +155,8 @@ async function interpolateAndCollect(
  */
 export async function prepareVarAssignment(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: EvaluationContext
 ): Promise<VarAssignmentResult> {
   // Extract identifier from array
   const identifierNodes = directive.values?.identifier as VariableNodeArray | undefined;
@@ -357,7 +359,7 @@ export async function prepareVarAssignment(
             processedItems.push(item.content);
           } else if (typeof item === 'object' && item.type) {
             // Other node types - evaluate them
-            const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor);
+            const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, context);
             processedItems.push(evaluated);
           } else {
             // Primitive values
@@ -407,7 +409,7 @@ export async function prepareVarAssignment(
             }
             
             for (const item of (propValue.items || [])) {
-              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor);
+              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, context);
               processedArray.push(evaluated);
             }
             processedObject[key] = processedArray;
@@ -418,20 +420,35 @@ export async function prepareVarAssignment(
             if (propValue.entries) {
               for (const nestedEntry of propValue.entries) {
                 if (nestedEntry.type === 'pair') {
-                  nestedObj[nestedEntry.key] = await evaluateArrayItem(nestedEntry.value, env, mergeResolvedDescriptor);
+                  nestedObj[nestedEntry.key] = await evaluateArrayItem(
+                    nestedEntry.value,
+                    env,
+                    mergeResolvedDescriptor,
+                    context
+                  );
                 }
               }
             }
             // Handle properties format (legacy)
             else if (propValue.properties) {
               for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
-                nestedObj[nestedKey] = await evaluateArrayItem(nestedValue, env, mergeResolvedDescriptor);
+                nestedObj[nestedKey] = await evaluateArrayItem(
+                  nestedValue,
+                  env,
+                  mergeResolvedDescriptor,
+                  context
+                );
               }
             }
             processedObject[key] = nestedObj;
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
-            processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
+            processedObject[key] = await evaluateArrayItem(
+              propValue,
+              env,
+              mergeResolvedDescriptor,
+              context
+            );
           } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray(propValue.parts)) {
             // Handle strings with @references that need interpolation
             processedObject[key] = await interpolateWithSecurity(propValue.parts);
@@ -454,7 +471,7 @@ export async function prepareVarAssignment(
             // Handle array values in objects
             const processedArray = [];
             for (const item of (propValue.items || [])) {
-              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor);
+              const evaluated = await evaluateArrayItem(item, env, mergeResolvedDescriptor, context);
               processedArray.push(evaluated);
             }
             processedObject[key] = processedArray;
@@ -466,19 +483,34 @@ export async function prepareVarAssignment(
               if (propValue.entries) {
                 for (const nestedEntry of propValue.entries) {
                   if (nestedEntry.type === 'pair') {
-                    nestedObj[nestedEntry.key] = await evaluateArrayItem(nestedEntry.value, env, mergeResolvedDescriptor);
+                    nestedObj[nestedEntry.key] = await evaluateArrayItem(
+                      nestedEntry.value,
+                      env,
+                      mergeResolvedDescriptor,
+                      context
+                    );
                   }
                 }
               } else if (propValue.properties) {
                 for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
-                  nestedObj[nestedKey] = await evaluateArrayItem(nestedValue, env, mergeResolvedDescriptor);
+                  nestedObj[nestedKey] = await evaluateArrayItem(
+                    nestedValue,
+                    env,
+                    mergeResolvedDescriptor,
+                    context
+                  );
                 }
               }
             }
             processedObject[key] = nestedObj;
           } else if (propValue && typeof propValue === 'object' && propValue.type) {
             // Handle other node types (load-content, VariableReference, etc.)
-            processedObject[key] = await evaluateArrayItem(propValue, env, mergeResolvedDescriptor);
+            processedObject[key] = await evaluateArrayItem(
+              propValue,
+              env,
+              mergeResolvedDescriptor,
+              context
+            );
           } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray((propValue as any).parts)) {
             // Handle strings with @references that need interpolation
             processedObject[key] = await interpolateWithSecurity((propValue as any).parts);
@@ -756,7 +788,7 @@ export async function prepareVarAssignment(
       ...valueNode,
       meta: { ...(valueNode.meta || {}), modifier: 'first' as const }
     };
-    const whenResult = await evaluateWhenExpression(nodeWithFirst as any, env);
+    const whenResult = await evaluateWhenExpression(nodeWithFirst as any, env, context);
     resolvedValue = whenResult.value;
     
   } else if (valueNode && valueNode.type === 'ExeBlock') {
@@ -808,11 +840,11 @@ export async function prepareVarAssignment(
     const hasFieldAccess = varWithTail.variable.fields && varWithTail.variable.fields.length > 0;
     
     // Use appropriate resolution context
-    const context = needsPipelineExtraction && !hasFieldAccess 
+    const resolutionContext = needsPipelineExtraction && !hasFieldAccess 
       ? ResolutionContext.PipelineInput 
       : ResolutionContext.FieldAccess;
     
-    const resolvedVar = await resolveVariable(sourceVar, env, context);
+    const resolvedVar = await resolveVariable(sourceVar, env, resolutionContext);
     let result = resolvedVar;
     
     // Apply field access if present
@@ -1362,8 +1394,9 @@ export async function evaluateVar(
   context?: EvaluationContext
 ): Promise<EvalResult> {
   const assignment =
-    context?.precomputedVarAssignment ?? (await prepareVarAssignment(directive, env));
+    context?.precomputedVarAssignment ?? (await prepareVarAssignment(directive, env, context));
   env.setVariable(assignment.identifier, assignment.variable);
+  await maybeAutosignVariable(assignment.identifier, assignment.variable, env);
   return assignment.evalResultOverride ?? { value: '', env };
 }
 
@@ -1502,7 +1535,8 @@ function hasComplexArrayItems(items: any[]): boolean {
 async function evaluateArrayItem(
   item: any,
   env: Environment,
-  collectDescriptor?: DescriptorCollector
+  collectDescriptor?: DescriptorCollector,
+  context?: EvaluationContext
 ): Promise<any> {
   if (!item || typeof item !== 'object') {
     return item;
@@ -1588,7 +1622,7 @@ async function evaluateArrayItem(
       if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
         continue;
       }
-      nestedObj[key] = await evaluateArrayItem(value, env, collectDescriptor);
+      nestedObj[key] = await evaluateArrayItem(value, env, collectDescriptor, context);
     }
     return nestedObj;
   }
@@ -1598,14 +1632,14 @@ async function evaluateArrayItem(
       // Evaluate when-expression inside arrays/objects
       {
         const { evaluateWhenExpression } = await import('./when-expression');
-        const res = await evaluateWhenExpression(item as any, env);
+        const res = await evaluateWhenExpression(item as any, env, context);
         return res.value as any;
       }
     case 'array':
       // Nested array
       const nestedItems = [];
       for (const nestedItem of (item.items || [])) {
-        nestedItems.push(await evaluateArrayItem(nestedItem, env, collectDescriptor));
+        nestedItems.push(await evaluateArrayItem(nestedItem, env, collectDescriptor, context));
       }
       return nestedItems;
 
@@ -1616,7 +1650,12 @@ async function evaluateArrayItem(
       if (item.entries) {
         for (const entry of item.entries) {
           if (entry.type === 'pair') {
-            processedObject[entry.key] = await evaluateArrayItem(entry.value, env, collectDescriptor);
+            processedObject[entry.key] = await evaluateArrayItem(
+              entry.value,
+              env,
+              collectDescriptor,
+              context
+            );
           }
           // Spreads shouldn't be in simple objects (isComplex would be true)
         }
@@ -1624,7 +1663,12 @@ async function evaluateArrayItem(
       // Handle properties format (legacy)
       else if (item.properties) {
         for (const [key, propValue] of Object.entries(item.properties)) {
-          processedObject[key] = await evaluateArrayItem(propValue, env, collectDescriptor);
+          processedObject[key] = await evaluateArrayItem(
+            propValue,
+            env,
+            collectDescriptor,
+            context
+          );
         }
       }
       return processedObject;
@@ -1688,7 +1732,7 @@ async function evaluateArrayItem(
           if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
             continue;
           }
-          plainObj[key] = await evaluateArrayItem(value, env, collectDescriptor);
+          plainObj[key] = await evaluateArrayItem(value, env, collectDescriptor, context);
         }
         return plainObj;
       }

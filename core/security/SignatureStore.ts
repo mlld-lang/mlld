@@ -69,6 +69,27 @@ export class SignatureStore {
     return record;
   }
 
+  async signIfChanged(
+    varName: string,
+    content: string,
+    options?: { method?: SignatureMethod; signedby?: string; signedat?: string }
+  ): Promise<SignatureRecord> {
+    const method = options?.method ?? DEFAULT_METHOD;
+    if (method !== 'sha256') {
+      throw new Error(`Unsupported signing method: ${method}`);
+    }
+    const nextHash = this.computeHash(method, content);
+    const existing = await this.readSignature(varName);
+    if (existing && existing.hash === nextHash) {
+      const contentPath = this.contentPath(varName);
+      if (!(await this.fileSystem.exists(contentPath))) {
+        await this.fileSystem.writeFile(contentPath, content);
+      }
+      return existing;
+    }
+    return this.sign(varName, content, { ...options, method });
+  }
+
   async verify(varName: string, content?: string): Promise<SignatureVerificationResult> {
     const signature = await this.readSignature(varName);
     const template = await this.readContent(varName);
