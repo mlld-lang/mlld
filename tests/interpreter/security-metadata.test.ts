@@ -22,6 +22,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { evaluateShow } from '@interpreter/eval/show';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { getAllDirsInPath } from '@core/security/paths';
+import { MlldSecurityError } from '@core/errors';
 
 describe('Security metadata propagation', () => {
   it('attaches descriptors when evaluating /var directives', async () => {
@@ -180,6 +181,50 @@ describe('Security metadata propagation', () => {
 
     const resultVar = env.getVariable('result');
     expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('applies return label modifications with trust asymmetry', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const sourceDirective = parseSync('/var trusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => untrusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await evaluateVar(invocation, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toContain('untrusted');
+    expect(resultVar?.mx.labels).not.toContain('trusted');
+
+    const dataVar = env.getVariable('data');
+    expect(dataVar?.mx.labels).toContain('trusted');
+    expect(dataVar?.mx.labels).not.toContain('untrusted');
+  });
+
+  it('keeps both trust labels on conflict', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const sourceDirective = parseSync('/var untrusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => trusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await evaluateVar(invocation, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['untrusted', 'trusted']));
+  });
+
+  it('blocks unprivileged return label removal', async () => {
+    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const exeDirective = parseSync('/exe @strip() = [ => !pii "value" ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @strip()')[0] as DirectiveNode;
+    await expect(evaluateVar(invocation, env)).rejects.toBeInstanceOf(MlldSecurityError);
   });
 
   it('merges descriptors during template interpolation', async () => {

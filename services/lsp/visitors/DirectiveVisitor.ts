@@ -3406,6 +3406,8 @@ export class DirectiveVisitor extends BaseVisitor {
       case 'append':
       case 'log':
       case 'stream':
+      case 'sign':
+      case 'verify':
         return 'directiveAction';
 
       // Everything else (for/when/while/import/export/etc)

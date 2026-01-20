@@ -256,6 +256,9 @@ export class ASTSemanticVisitor {
           case 'ExeReturn':
             this.visitExeReturn(node, actualContext);
             break;
+          case 'LabelModification':
+            this.visitChildren(node, actualContext);
+            break;
           default:
             console.warn(`Unknown node type: ${node.type}`);
             this.visitChildren(node, actualContext);
