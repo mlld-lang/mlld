@@ -34,6 +34,7 @@ import {
 import { asData, asText, isStructuredValue, extractSecurityDescriptor } from '../utils/structured-value';
 import { InterpolationContext } from '../core/interpolation-context';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 /**
  * Evaluate an exe block sequentially with local scope for let/+= assignments.
@@ -162,6 +163,10 @@ export async function evaluateExe(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
+  const sourceLocation = astLocationToSourceLocation(
+    directive.location,
+    env.getCurrentFilePath()
+  );
   // Handle environment declaration first
   if (directive.subtype === 'environment') {
     // Handle @exec js = { ... }
@@ -596,7 +601,7 @@ export async function evaluateExe(
     }
     
     // Read file content relative to current env and parse with template body rules
-    const fileContent = await env.readFile(filePath);
+    const fileContent = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
     const { parseSync } = await import('@grammar/parser');
     const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
     let templateNodes: any[];

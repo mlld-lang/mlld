@@ -12,6 +12,7 @@ import type { SecurityDescriptor } from '@core/types/security';
 import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 
 interface AppendOptions {
   location?: SourceLocation;
@@ -107,6 +108,7 @@ export async function appendContentToFile(
   options: AppendOptions
 ): Promise<void> {
   const resolvedPath = await resolveAppendPath(target, env);
+  enforceFilesystemAccess(env, 'write', resolvedPath, options.location ?? undefined);
   const directiveKind = options.directiveKind ?? 'append';
   const { payload, format } = formatAppendPayload(resolvedPath, content, {
     location: options.location,

@@ -222,12 +222,28 @@ export function policySatisfiesNeeds(needs: NeedsDeclaration, policy: PolicyCapa
 
 function isDenied(
   capability: string,
-  deny: Record<string, string[] | true> | true
+  deny: PolicyConfig['deny']
 ): boolean {
   if (deny === true) return true;
+  if (!deny || typeof deny !== 'object' || Array.isArray(deny)) {
+    return false;
+  }
   const denyValue = deny[capability];
   if (denyValue === true) return true;
-  if (Array.isArray(denyValue) && denyValue.includes('*')) return true;
+  if (Array.isArray(denyValue)) {
+    return denyValue.includes('*');
+  }
+  if (denyValue && typeof denyValue === 'object' && !Array.isArray(denyValue)) {
+    const entries = Object.values(denyValue as Record<string, unknown>);
+    for (const entry of entries) {
+      if (entry === true) {
+        return true;
+      }
+      if (Array.isArray(entry) && entry.includes('*')) {
+        return true;
+      }
+    }
+  }
   return false;
 }
 

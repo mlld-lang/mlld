@@ -6,12 +6,13 @@ import type { StructuredValue } from '../../utils/structured-value';
 import type { SecurityDescriptor, DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
+import { evaluateCommandAccess } from '@core/policy/guards';
 
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
 import { createStageEnvironment } from './context-builder';
 import { GuardError } from '@core/errors/GuardError';
-import { MlldCommandExecutionError } from '@core/errors';
+import { MlldCommandExecutionError, MlldSecurityError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
@@ -780,6 +781,28 @@ export class PipelineExecutor {
         command: parsedCommand.command,
         subcommand: parsedCommand.subcommand
       });
+      if (operationContext) {
+        operationContext.command = commandText;
+        operationContext.opLabels = opLabels;
+        const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
+        metadata.commandPreview = commandText;
+        operationContext.metadata = metadata;
+      }
+      stageEnv.updateOpContext({ command: commandText, opLabels });
+      const policySummary = stageEnv.getPolicySummary();
+      if (policySummary) {
+        const decision = evaluateCommandAccess(policySummary, commandText);
+        if (!decision.allowed) {
+          throw new MlldSecurityError(
+            decision.reason ?? `Command '${decision.commandName}' denied by policy`,
+            {
+              code: 'POLICY_CAPABILITY_DENIED',
+              sourceLocation: stage.location,
+              env: stageEnv
+            }
+          );
+        }
+      }
       const commandDescriptor =
         descriptors.length > 1 ? stageEnv.mergeSecurityDescriptors(...descriptors) : descriptors[0];
       const stdinDescriptor = extractSecurityDescriptor(structuredInput, {

@@ -4,6 +4,8 @@ import { createObjectVariable, createArrayVariable } from '@core/types/variable'
 import { interpolate } from '../../core/interpreter';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
+import { MlldSecurityError } from '@core/errors';
+import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -224,8 +226,7 @@ export class ForeachSectionEvaluator {
         
         // 7. Read file and extract section from file
         // Resolve the path relative to the current file
-        const resolvedPath = await env.resolvePath(pathValue);
-        const fileContent = await env.readFile(resolvedPath);
+        const fileContent = await readFileWithPolicy(env, pathValue);
         
         // Extract the section using llmxml
         const { llmxmlInstance } = await import('../../utils/llmxml-instance');
@@ -261,6 +262,9 @@ export class ForeachSectionEvaluator {
         }
         
       } catch (error) {
+        if (error instanceof MlldSecurityError) {
+          throw error;
+        }
         // Include iteration context in error message
         const itemInfo = typeof item === 'object' && item !== null 
           ? Object.keys(item).slice(0, 3).map(k => `${k}: ${JSON.stringify(item[k])}`).join(', ')

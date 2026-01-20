@@ -27,6 +27,7 @@ import { resolveDirectiveExecInvocation } from './directive-replay';
 import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { enforceFilesystemAccess } from '@interpreter/policy/filesystem-policy';
 
 function mergeInterpolatedDescriptors(
   env: Environment,
@@ -727,6 +728,8 @@ async function outputToFile(
   if (!path.isAbsolute(targetPath)) {
     targetPath = path.resolve(env.getBasePath(), targetPath);
   }
+
+  enforceFilesystemAccess(env, 'write', targetPath, directive.location ?? undefined);
   
   // Write the file using the environment's file system
   const fileSystem = (env as any).fileSystem;
