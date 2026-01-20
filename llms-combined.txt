@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-20T16:24:31.416Z
+Generated: 2026-01-20T18:19:55.953Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -2418,7 +2418,10 @@ Define and import policy objects.
 ```mlld
 policy @production = {
   defaults: { unlabeled: "untrusted" },
-  capabilities: { allow: { cmd: ["git:*"] } }
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
 }
 export { @production }
 

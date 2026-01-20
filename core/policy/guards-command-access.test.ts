@@ -47,4 +47,26 @@ describe('evaluateCommandAccess', () => {
     expect(denied.allowed).toBe(false);
   });
 
+  it('denies dangerous commands without allow.danger', () => {
+    const policy: PolicyConfig = {
+      allow: ['cmd:git:*']
+    };
+
+    const denied = evaluateCommandAccess(policy, 'git push origin --force');
+    expect(denied.allowed).toBe(false);
+    expect(denied.reason).toBe('Dangerous capability requires allow.danger');
+  });
+
+  it('allows dangerous commands with allow.danger', () => {
+    const policy: PolicyConfig = {
+      allow: ['cmd:git:*'],
+      capabilities: {
+        danger: ['cmd:git:push:*:--force']
+      }
+    };
+
+    const allowed = evaluateCommandAccess(policy, 'git push origin --force');
+    expect(allowed.allowed).toBe(true);
+  });
+
 });

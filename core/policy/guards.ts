@@ -4,6 +4,7 @@ import type { PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import { getCommandTokens, matchesCommandPatterns, normalizeCommandPatternEntry } from './capability-patterns';
+import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries } from './danger';
 
 export interface PolicyGuardSpec {
   name: string;
@@ -294,6 +295,15 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       allowed: false,
       commandName,
       reason: 'All operations denied by policy'
+    };
+  }
+
+  const dangerEntries = normalizeDangerEntries(policy.danger ?? policy.capabilities?.danger);
+  if (isDangerousCommand(commandTokens) && !isDangerAllowedForCommand(dangerEntries, commandTokens)) {
+    return {
+      allowed: false,
+      commandName,
+      reason: 'Dangerous capability requires allow.danger'
     };
   }
 

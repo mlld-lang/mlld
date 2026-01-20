@@ -50,6 +50,7 @@ export type PolicyCapabilityValue =
 export type PolicyCapabilitiesConfig = {
   allow?: Record<string, PolicyCapabilityValue> | string[] | true;
   deny?: Record<string, PolicyCapabilityValue> | string[] | true;
+  danger?: string[] | string;
 };
 
 export type PolicyConfig = {
@@ -58,6 +59,7 @@ export type PolicyConfig = {
   auth?: Record<string, AuthConfig>;
   allow?: Record<string, PolicyCapabilityValue> | string[] | true;
   deny?: Record<string, PolicyCapabilityValue> | string[] | true;
+  danger?: string[] | string;
   capabilities?: PolicyCapabilitiesConfig;
   labels?: PolicyLabels;
   env?: PolicyEnvironmentConfig;
@@ -111,6 +113,7 @@ export function mergePolicyConfigs(
   const defaults = mergePolicyDefaults(normalizedBase.defaults, normalizedIncoming.defaults);
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
+  const danger = mergePolicyDanger(normalizedBase.danger as string[] | undefined, normalizedIncoming.danger as string[] | undefined);
 
   return {
     ...(defaults ? { defaults } : {}),
@@ -118,6 +121,7 @@ export function mergePolicyConfigs(
     ...(auth ? { auth } : {}),
     allow: fromAllowShape(mergedAllow),
     deny: fromDenyShape(mergedDeny),
+    ...(danger && danger.length > 0 ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
@@ -154,12 +158,14 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const defaults = normalizePolicyDefaults(config.defaults);
   const envConfig = normalizePolicyEnv(config.env);
   const limits = config.limits ? normalizeLimits(config.limits) : undefined;
+  const danger = normalizePolicyDanger(config.capabilities?.danger ?? config.danger);
   return {
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
     ...(auth ? { auth } : {}),
     allow,
     deny,
+    ...(danger ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(envConfig ? { env: envConfig } : {}),
     ...(limits ? { limits } : {})
@@ -210,6 +216,14 @@ function normalizePolicyDefaults(
     result.trustconflict = trustconflict;
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizePolicyDanger(value: unknown): string[] | undefined {
+  const list = normalizeStringList(value);
+  if (!list || list.length === 0) {
+    return undefined;
+  }
+  return list;
 }
 
 function normalizePolicyUnlabeled(
@@ -298,6 +312,17 @@ function mergePolicyDefaults(
     result.trustconflict = trustconflict;
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function mergePolicyDanger(base?: string[], incoming?: string[]): string[] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  if (!base || !incoming) {
+    return [];
+  }
+  const incomingSet = new Set(incoming);
+  return base.filter(entry => incomingSet.has(entry));
 }
 
 function mergePolicyUnlabeled(

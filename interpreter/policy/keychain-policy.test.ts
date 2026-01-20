@@ -23,4 +23,24 @@ describe('enforceKeychainAccess', () => {
     expect(() => enforceKeychainAccess(env)).toThrow('projectname');
   });
 
+  it('throws when allow.danger is missing', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({ projectname: 'demo' }, null, 2)
+    );
+    const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
+    env.recordPolicyConfig('policy', {});
+    expect(() => enforceKeychainAccess(env)).toThrow('allow.danger');
+  });
+
+  it('allows access with allow.danger', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'mlld-config.json'),
+      JSON.stringify({ projectname: 'demo' }, null, 2)
+    );
+    const env = new Environment(new NodeFileSystem(), new PathService(), tempDir);
+    env.recordPolicyConfig('policy', { capabilities: { danger: ['@keychain'] } });
+    expect(() => enforceKeychainAccess(env)).not.toThrow();
+  });
+
 });

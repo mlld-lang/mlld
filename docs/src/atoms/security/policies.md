@@ -13,7 +13,10 @@ updated: 2026-01-05
 ```mlld
 policy @production = {
   defaults: { unlabeled: "untrusted" },
-  capabilities: { allow: { cmd: ["git:*"] } }
+  capabilities: {
+    allow: ["cmd:git:*"],
+    danger: ["@keychain"]
+  }
 }
 export { @production }
 

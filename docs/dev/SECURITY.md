@@ -46,8 +46,9 @@ Labels propagate automatically. Policy checks are non-bypassable. Guards are opt
 PolicyConfig = {
   default?: 'deny' | 'allow';         // Unlabeled data behavior
   auth?: Record<string, AuthConfig>;  // Credential paths
-  allow?: Record<string, ...>;        // Capability allowlist
-  deny?: Record<string, ...>;         // Capability denylist
+  allow?: Record<string, ...> | string[];  // Capability allowlist
+  deny?: Record<string, ...> | string[];   // Capability denylist
+  danger?: string[];                       // Dangerous capability allowlist
   labels?: PolicyLabels;              // Label flow rules
   env?: { default?: string };         // Default environment provider
   limits?: PolicyLimits;              // Resource constraints

@@ -4,6 +4,7 @@ import type { PolicyConfig, PolicyFilesystemRules } from '@core/policy/union';
 import type { SourceLocation } from '@core/types';
 import { MlldSecurityError } from '@core/errors';
 import { matchesFsPattern, parseFsPatternEntry } from '@core/policy/capability-patterns';
+import { isDangerAllowedForFilesystem, isDangerousFilesystem, normalizeDangerEntries } from '@core/policy/danger';
 
 export type FilesystemAccessMode = 'read' | 'write';
 
@@ -23,8 +24,20 @@ export function enforceFilesystemAccess(
   const allowAll = allow === true;
   const allowRules = allowAll ? undefined : extractFilesystemRules(allow);
   const denyRules = extractFilesystemRules(deny);
+  const dangerEntries = normalizeDangerEntries(policy.danger ?? policy.capabilities?.danger);
   const basePath = env.getProjectRoot();
   const homeDir = homedir();
+
+  if (
+    isDangerousFilesystem(mode, targetPath, basePath, homeDir) &&
+    !isDangerAllowedForFilesystem(dangerEntries, mode, targetPath, basePath, homeDir)
+  ) {
+    throw new MlldSecurityError('Dangerous capability requires allow.danger', {
+      code: 'POLICY_CAPABILITY_DENIED',
+      sourceLocation,
+      env
+    });
+  }
 
   if (allowListActive && !allowAll) {
     if (!allowRules || !matchesFilesystemRules(allowRules, mode, env, targetPath)) {
