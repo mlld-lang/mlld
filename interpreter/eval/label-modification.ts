@@ -1,6 +1,7 @@
 import type { LabelModificationNode, LabelModifierToken } from '@core/types/label-modification';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
+import type { PolicyConfig } from '@core/policy/union';
 import {
   isProtectedLabel,
   makeSecurityDescriptor,
@@ -9,6 +10,7 @@ import {
 } from '@core/types/security';
 import { MlldSecurityError } from '@core/errors';
 import { logger } from '@core/utils/logger';
+import { appendAuditEvent } from '@core/security/AuditLogger';
 import {
   extractSecurityDescriptor,
   ensureStructuredValue,
@@ -17,10 +19,12 @@ import {
 } from '../utils/structured-value';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
-type PrivilegeContext = {
+type LabelModificationContext = {
   privileged: boolean;
   location?: LabelModificationNode['location'];
   env?: Environment;
+  policy?: PolicyConfig;
+  varName?: string;
 };
 
 function isFactualLabel(label: string): boolean {
@@ -30,7 +34,7 @@ function isFactualLabel(label: string): boolean {
 function requirePrivilege(
   operation: string,
   labels: DataLabel[] | undefined,
-  context: PrivilegeContext
+  context: LabelModificationContext
 ): void {
   if (context.privileged) {
     return;
@@ -58,20 +62,101 @@ function requirePrivilege(
   );
 }
 
-function warnTrustConflict(modifier: LabelModifierToken, location?: LabelModificationNode['location']): void {
-  if (modifier.kind !== 'trusted') {
-    return;
-  }
-  logger.warn('Trusted label conflicts with untrusted; both labels remain', {
-    location
-  });
+function collectVariableIdentifiers(nodes: LabelModificationNode['value']): string[] {
+  const identifiers = new Set<string>();
+  const seen = new WeakSet<object>();
+
+  const visit = (node: unknown): void => {
+    if (!node) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(item => visit(item));
+      return;
+    }
+    if (typeof node !== 'object') {
+      return;
+    }
+    if (seen.has(node)) {
+      return;
+    }
+    seen.add(node);
+
+    const typed = node as {
+      type?: string;
+      identifier?: string;
+      variable?: { identifier?: string };
+    };
+
+    if (typed.type === 'VariableReference' && typeof typed.identifier === 'string') {
+      identifiers.add(typed.identifier);
+      return;
+    }
+
+    if (typed.type === 'VariableReferenceWithTail' && typed.variable?.identifier) {
+      identifiers.add(typed.variable.identifier);
+      return;
+    }
+
+    Object.values(node).forEach(value => visit(value));
+  };
+
+  visit(nodes);
+  return Array.from(identifiers);
 }
 
-function applyLabelModifiers(
+function formatAuditVarName(identifiers: string[]): string | undefined {
+  if (identifiers.length === 0) {
+    return undefined;
+  }
+  return identifiers.map(identifier => `@${identifier}`).join(', ');
+}
+
+async function warnTrustConflict(
+  varName: string | undefined,
+  policy: PolicyConfig | undefined,
+  context: { location?: LabelModificationNode['location']; env?: Environment }
+): Promise<void> {
+  const mode = policy?.defaults?.trustconflict ?? 'warn';
+  const target = varName ?? 'value';
+  const auditEnv = context.env;
+
+  if (auditEnv) {
+    await appendAuditEvent(auditEnv.getFileSystemService(), auditEnv.getProjectRoot(), {
+      event: 'conflict',
+      var: varName,
+      labels: ['trusted', 'untrusted'],
+      resolved: 'untrusted'
+    });
+  }
+
+  if (mode === 'error') {
+    throw new MlldSecurityError(
+      `Trust conflict: Cannot add 'trusted' to already untrusted ${target}`,
+      {
+        code: 'TRUST_CONFLICT',
+        sourceLocation: context.location,
+        env: context.env,
+        details: {
+          var: varName,
+          mode
+        }
+      }
+    );
+  }
+
+  if (mode === 'warn') {
+    logger.warn(`Trust conflict on ${target}: both trusted and untrusted`, {
+      location: context.location
+    });
+  }
+}
+
+async function applyLabelModifiers(
   descriptor: SecurityDescriptor,
   modifiers: LabelModifierToken[],
-  context: PrivilegeContext
-): SecurityDescriptor {
+  context: LabelModificationContext
+): Promise<SecurityDescriptor> {
   const labelSet = new Set<DataLabel>(descriptor.labels ?? []);
   const taintSet = new Set<DataLabel>(descriptor.taint ?? []);
 
@@ -112,7 +197,10 @@ function applyLabelModifiers(
       }
       case 'trusted': {
         if (labelSet.has('untrusted') || taintSet.has('untrusted')) {
-          warnTrustConflict(modifier, context.location);
+          await warnTrustConflict(context.varName, context.policy, {
+            location: context.location,
+            env: context.env
+          });
         }
         labelSet.add('trusted');
         taintSet.add('trusted');
@@ -252,10 +340,13 @@ export async function evaluateLabelModification(
   const nodeDescriptor = extractDescriptorFromNodes(node.value, nextEnv);
   const baseDescriptor = valueDescriptor ?? nodeDescriptor ?? makeSecurityDescriptor();
 
-  const modifiedDescriptor = applyLabelModifiers(baseDescriptor, node.modifiers, {
+  const auditVarName = formatAuditVarName(collectVariableIdentifiers(node.value));
+  const modifiedDescriptor = await applyLabelModifiers(baseDescriptor, node.modifiers, {
     privileged: Boolean(context?.privileged),
     location: node.location,
-    env: nextEnv
+    env: nextEnv,
+    policy: nextEnv.getPolicySummary(),
+    varName: auditVarName
   });
 
   const modifiedValue = applyDescriptorToValue(value, modifiedDescriptor);

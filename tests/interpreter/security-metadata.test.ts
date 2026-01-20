@@ -24,6 +24,19 @@ import { createSimpleTextVariable } from '@core/types/variable';
 import { getAllDirsInPath } from '@core/security/paths';
 import { MlldSecurityError } from '@core/errors';
 
+async function readAuditEvents(
+  fileSystem: MemoryFileSystem,
+  projectRoot: string
+): Promise<Record<string, unknown>[]> {
+  const auditPath = path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
+  const contents = await fileSystem.readFile(auditPath);
+  return contents
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as Record<string, unknown>);
+}
+
 describe('Security metadata propagation', () => {
   it('attaches descriptors when evaluating /var directives', async () => {
     const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
@@ -204,7 +217,9 @@ describe('Security metadata propagation', () => {
   });
 
   it('keeps both trust labels on conflict', async () => {
-    const env = new Environment(new NodeFileSystem(), new PathService(), process.cwd());
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
     const sourceDirective = parseSync('/var untrusted @data = "ok"')[0] as DirectiveNode;
     await evaluateVar(sourceDirective, env);
 
@@ -216,6 +231,68 @@ describe('Security metadata propagation', () => {
 
     const resultVar = env.getVariable('result');
     expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['untrusted', 'trusted']));
+
+    const events = await readAuditEvents(fileSystem, projectRoot);
+    const conflict = events.find(event => event.event === 'conflict');
+    expect(conflict).toMatchObject({
+      event: 'conflict',
+      var: '@data',
+      labels: ['trusted', 'untrusted'],
+      resolved: 'untrusted'
+    });
+  });
+
+  it('throws on trust conflict in error mode', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    env.recordPolicyConfig('test', { defaults: { trustconflict: 'error' } });
+
+    const sourceDirective = parseSync('/var untrusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => trusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await expect(evaluateVar(invocation, env)).rejects.toMatchObject({ code: 'TRUST_CONFLICT' });
+
+    const events = await readAuditEvents(fileSystem, projectRoot);
+    const conflict = events.find(event => event.event === 'conflict');
+    expect(conflict).toMatchObject({
+      event: 'conflict',
+      var: '@data',
+      labels: ['trusted', 'untrusted'],
+      resolved: 'untrusted'
+    });
+  });
+
+  it('keeps both trust labels in silent mode', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    env.recordPolicyConfig('test', { defaults: { trustconflict: 'silent' } });
+
+    const sourceDirective = parseSync('/var untrusted @data = "ok"')[0] as DirectiveNode;
+    await evaluateVar(sourceDirective, env);
+
+    const exeDirective = parseSync('/exe @tag() = [ => trusted @data ]')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocation = parseSync('/var @result = @tag()')[0] as DirectiveNode;
+    await evaluateVar(invocation, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['untrusted', 'trusted']));
+
+    const events = await readAuditEvents(fileSystem, projectRoot);
+    const conflict = events.find(event => event.event === 'conflict');
+    expect(conflict).toMatchObject({
+      event: 'conflict',
+      var: '@data',
+      labels: ['trusted', 'untrusted'],
+      resolved: 'untrusted'
+    });
   });
 
   it('blocks unprivileged return label removal', async () => {

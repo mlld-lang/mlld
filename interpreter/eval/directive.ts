@@ -156,7 +156,7 @@ export async function evaluateDirective(
         let precomputedVarAssignment: VarAssignmentResult | undefined;
 
         if (directive.kind === 'var') {
-          precomputedVarAssignment = await prepareVarAssignment(directive, env);
+          precomputedVarAssignment = await prepareVarAssignment(directive, env, context);
           extractedInputs = [precomputedVarAssignment.variable];
         } else {
           extractedInputs = await extractDirectiveInputs(directive, env);
