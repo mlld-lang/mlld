@@ -1,9 +1,9 @@
-<MLLD_COMPLETE_GUIDE version="2.0.0-rc81">
+<MLLD_COMPLETE_GUIDE version="2.0.0-rc81-ab">
 
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-12T15:35:08.868Z
+Generated: 2026-01-20T16:24:31.416Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -121,12 +121,13 @@ exe @calc(x) = js { return x * 2 }
 </RULE_3_COMMANDS_NEED_BRACES>
 
 <RULE_4_OUTPUT_SOURCES>
-Only these produce output: `show`, `run`, `output`. Everything else mutates state.
+Only `show` and `output` produce output. `run` executes silently (use `show run cmd {...}` to display command output).
 
 ```mlld
 var @secret = "hidden"      >> no output
-show `Visible`
-run cmd {echo "Also visible"}
+show `Visible`              >> output
+run cmd {echo "silent"}     >> no output (executes but doesn't display)
+show run cmd {echo "loud"}  >> output
 ```
 </RULE_4_OUTPUT_SOURCES>
 
@@ -2391,7 +2392,39 @@ guard [@name] TIMING LABEL = when [...]
 
 - `TIMING`: `before`, `after`, or `always`
 - Shorthand: `for` equals `before`
+
+**Security context in guards:**
+
+Guards have access to three complementary dimensions:
+
+- `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
+- `@mx.taint` - provenance (where it came from): `src:mcp`, `src:exec`, `src:file`
+- `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
+
+Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
+
+```mlld
+guard before op:run = when [
+  @mx.taint.includes("src:mcp") => deny "Cannot execute MCP data"
+  @mx.labels.includes("secret") => deny "Secrets blocked from shell"
+  * => allow
+]
+```
 </GUARDS>
+
+<POLICIES>
+Define and import policy objects.
+
+```mlld
+policy @production = {
+  defaults: { unlabeled: "untrusted" },
+  capabilities: { allow: { cmd: ["git:*"] } }
+}
+export { @production }
+
+import policy @production from "./policies.mld"
+```
+</POLICIES>
 
 <BEFORE_GUARDS>
 Validate or transform input before operations.
@@ -2444,6 +2477,7 @@ System-assigned labels for tracking:
 | `src:exec` | Results from `/run` and `/exe` |
 | `src:file` | File loads |
 | `src:dynamic` | Dynamic module imports |
+| `src:env:<provider>` | Environment provider outputs |
 | `dir:/path` | File directories (all parents) |
 
 **Example directory guards:**

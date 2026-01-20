@@ -1,4 +1,1 @@
-import { @secretProtection } from "./guards/secrets.mld"
-
-var secret @key = "sk-12345"
-run cmd { echo @key }  >> Protected by imported guard
+show @data with { guards: { only: ["@specific"] } }

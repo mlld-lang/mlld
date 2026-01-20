@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Suggests `mlld setup` for more configuration options
 - **Policy label flow enforcement**: Security policies now check labeled data flows through run/show/output and pipelines
 - **Policy defaults**: `defaults.unlabeled` and `defaults.rules` enforce built-in label flow rules, including `untrusted-llms-get-influenced`
+- **Named policies**: `/policy @name = { ... }` defines policy objects for export/import
 - **`using` auth injection**: `using auth:name` and `using @var as "ENV"` (plus `with { auth, using }`) pass credentials into exec/run from policy auth sources
 
 ### Changed
@@ -88,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Triple-colon templates should only support `{{var}}` interpolation per the documented design
   - Angle brackets like `<this>` no longer incorrectly parse as file references
 - **When expression null actions**: when-expressions now correctly return null when a matched action evaluates to null, instead of incorrectly falling through to the next condition
+- **Policy capability allow lists**: command and filesystem allow lists enforce wildcard and `@base`-relative patterns
 
 ### Removed
 - **`.content` accessor on StructuredValue**: Use `.text` instead

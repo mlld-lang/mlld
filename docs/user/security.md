@@ -31,6 +31,24 @@ Use them with `/import policy`:
 /import policy @prod from "@mlld/production"
 ```
 
+## Named Policies
+
+Define a policy object and export it:
+
+```mlld
+/policy @production = {
+  defaults: { unlabeled: "untrusted" },
+  capabilities: { allow: { cmd: ["git:*"] } }
+}
+/export { @production }
+```
+
+Import it like any other policy module:
+
+```mlld
+/import policy @production from "./policies.mld"
+```
+
 ## Data Labels
 
 Mark data as sensitive by adding labels to variable declarations:

@@ -1,7 +1,7 @@
-guard @redactSecrets after op:exe = when [
-  @output.includes("sk-") => allow @output.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]')
-  * => allow
+guard @sanitize before untrusted = when [
+  * => allow @input.trim().slice(0, 100)
 ]
 
-exe @getStatus() = run { echo "Status: ok, key: sk-12345" }
-show @getStatus()  >> Output: Status: ok, key: [REDACTED]
+var untrusted @userInput = "  very long input...  "
+exe @process(data) = `Processed: @data`
+show @process(@userInput)  >> Input trimmed and truncated

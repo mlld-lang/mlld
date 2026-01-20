@@ -1,13 +1,9 @@
-exe @sanitize(text) = js {
-  return text
-    .replace(/<script[^>]*>.*?<\/script>/gi, '')
-    .replace(/javascript:/gi, '')
-    .trim();
+exe @isValidJson(text) = js {
+  try { JSON.parse(text); return true; }
+  catch { return false; }
 }
 
-guard @sanitizeUntrusted before untrusted = when [
-  * => allow @sanitize(@input)
+guard @validateJson after op:exe = when [
+  @mx.op.name == "llmCall" && !@isValidJson(@output) => deny "Invalid JSON from LLM"
+  * => allow
 ]
-
-var untrusted @userInput = "<script>alert('xss')</script>Hello"
-show @userInput  >> Output: Hello (sanitized)

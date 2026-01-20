@@ -93,6 +93,23 @@ describe('/policy directive', () => {
     expect(policyContext?.activePolicies).toContain('merged');
   });
 
+  it('accepts object literal policy expressions', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCurrentFilePath('/policy.mld');
+
+    const directive = parseSync('/policy @local = { allow: { cmd: ["echo"] } }')[0] as PolicyDirectiveNode;
+    await evaluateDirective(directive, env);
+
+    const localVar = env.getVariable('local');
+    const localValue = localVar ? await extractVariableValue(localVar, env) : null;
+
+    expect(localValue?.allow?.cmd).toEqual(['echo']);
+
+    const policyContext = env.getPolicyContext();
+    expect(policyContext?.configs?.allow?.cmd).toEqual(['echo']);
+    expect(policyContext?.activePolicies).toContain('local');
+  });
+
   it('scopes with-clause policy overrides to import execution', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
