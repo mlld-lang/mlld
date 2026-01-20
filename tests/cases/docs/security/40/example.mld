@@ -1,0 +1,2 @@
+var @policyConfig = { defaults: { autosign: { variables: ["@*Prompt", "@*Instructions"] } } }
+policy @p = union(@policyConfig)

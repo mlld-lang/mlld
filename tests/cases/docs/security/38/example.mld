@@ -1,2 +1,3 @@
-var secret @apiKey = <.env>
-var pii @userData = <users.json>
+var @auditPrompt = `Review @input for policy issues.`
+sign @auditPrompt
+verify @auditPrompt

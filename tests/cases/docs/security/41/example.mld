@@ -1,5 +1,4 @@
-exe @handler(value) = when [
-  denied => show "Operation blocked: @mx.guard.reason"
-  denied => "fallback-value"
-  * => @value
-]
+var @policyConfig = { defaults: { autoverify: true } }
+policy @p = union(@policyConfig)
+
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
