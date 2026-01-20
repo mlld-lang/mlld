@@ -1,4 +1,4 @@
-var @policyConfig = { defaults: { autoverify: true } }
+var @policyConfig = { defaults: { autosign: ["templates"] } }
 policy @p = union(@policyConfig)
 
-exe llm @audit() = run cmd { claude -p "@auditPrompt" }
+exe @auditPrompt(input) = template "./audit.att"

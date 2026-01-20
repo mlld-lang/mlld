@@ -1,1 +1,1 @@
-/import policy @prod from "@mlld/production"
+import policy @prod from "@mlld/production"

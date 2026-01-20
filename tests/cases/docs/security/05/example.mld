@@ -1,4 +1,4 @@
-/var @policyConfig = {
+var @policyConfig = {
   defaults: {
     autosign: { variables: ["@*Prompt", "@*Instructions"] }
   }

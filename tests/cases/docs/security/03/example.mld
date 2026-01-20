@@ -1,3 +1,3 @@
-/var @prompt = ::Review @input::
-/sign @prompt by "alice" with sha256
-/verify @prompt
+var @prompt = ::Review @input::
+sign @prompt by "alice" with sha256
+verify @prompt

@@ -1,0 +1,4 @@
+var @policyConfig = { defaults: { autoverify: true } }
+policy @p = union(@policyConfig)
+
+exe llm @audit() = run cmd { claude -p "@auditPrompt" }
