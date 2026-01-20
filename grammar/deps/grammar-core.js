@@ -44,7 +44,9 @@ export const DirectiveKind = {
     profiles: 'profiles',
     policy: 'policy',
     while: 'while',
-    loop: 'loop'
+    loop: 'loop',
+    sign: 'sign',
+    verify: 'verify'
 };
 let warningCollector = null;
 export const helpers = {

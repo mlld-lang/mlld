@@ -47,7 +47,9 @@ export const DirectiveKind = {
   profiles: 'profiles',
   policy: 'policy',
   while: 'while',
-  loop: 'loop'
+  loop: 'loop',
+  sign: 'sign',
+  verify: 'verify'
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 

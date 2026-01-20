@@ -32,6 +32,7 @@ SlashVar "var directive"
         
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        metaInfo.rawTemplate = value.raw || helpers.reconstructRawString(processedValue);
         
         // Check if template has a pipeline attached (only condensed pipes immediately after template)
         if (value.withClause) {

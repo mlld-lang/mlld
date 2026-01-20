@@ -244,6 +244,8 @@ Directive
     / SlashWhen     // When directives (conditional execution)
     / SlashGuard    // Guard directives (security policies)
     / SlashPolicy   // Policy composition directives
+    / SlashSign     // Sign directives (signature storage)
+    / SlashVerify   // Verify directives (signature checks)
     / SlashNeeds    // Needs directives (capability declarations)
     / SlashProfiles // Profiles directives (capability tiers)
     / SlashStream   // Stream directives

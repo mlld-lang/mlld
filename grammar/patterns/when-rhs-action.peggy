@@ -4,8 +4,12 @@
 // Generates regular directive nodes (same as when.peggy) that get evaluated through normal evaluate() chain
 // Used in both /when and /exe...when RHS contexts
 
-// Main pattern - try error recovery first, then side-effect actions, then pure values
+// Main pattern - parse standard actions first, then label modifications
 WhenRHSAction "when RHS action"
+  = WhenRHSActionBase
+  / LabelModificationAction
+
+WhenRHSActionBase "when RHS action base"
   = WhenRHSExeDefinitionError  // Error recovery FIRST - before ExecInvocationPattern can match
   / LetAssignment              // Allow let @x = value inside when actions
   / AugmentedAssignment        // Allow @x += (or let @x +=) inside when actions
@@ -19,6 +23,34 @@ WhenRHSAction "when RHS action"
   / WhenRHSVariableReference  // Allow @var (optionally with pipelines) as value-returning action
   / WhenRHSRetryAction
   / VarRHSContent  // Pure values (fallback)
+
+LabelModificationAction
+  = mods:ReturnLabelModifierList ws:[ \t]+ value:WhenRHSActionBase {
+      const normalized = Array.isArray(value) ? value.flat() : [value];
+      return helpers.createNode('LabelModification', {
+        modifiers: mods,
+        value: normalized,
+        raw: text(),
+        location: location()
+      });
+    }
+
+ReturnLabelModifierList
+  = first:ReturnLabelModifier rest:(HWS "," HWS mod:ReturnLabelModifier { return mod; })* {
+      return [first, ...rest];
+    }
+
+ReturnLabelModifier
+  = "clear!" ![a-zA-Z0-9_] { return { kind: 'clear' }; }
+  / "trusted!" ![a-zA-Z0-9_] { return { kind: 'bless' }; }
+  / "trusted" ![a-zA-Z0-9_] { return { kind: 'trusted' }; }
+  / "untrusted" ![a-zA-Z0-9_] { return { kind: 'untrusted' }; }
+  / "!" label:ReturnLabelIdentifier { return { kind: 'remove', label }; }
+  / label:ReturnLabelIdentifier { return { kind: 'add', label }; }
+
+ReturnLabelIdentifier
+  = label:DataLabelIdentifier { return label; }
+  / label:StringLiteral { return label; }
 
 // Command action - explicit cmd { ... } in when actions
 WhenRHSCommandAction
