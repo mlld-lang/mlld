@@ -2158,6 +2158,18 @@ async function evaluateExecInvocationInternal(
           descriptorPieces.length === 1
             ? descriptorPieces[0]
             : env.mergeSecurityDescriptors(...descriptorPieces);
+      }
+      const outputDescriptor = policyEnforcer.applyOutputPolicyLabels(
+        resultSecurityDescriptor,
+        {
+          inputTaint: descriptorToInputTaint(resultSecurityDescriptor),
+          exeLabels
+        }
+      );
+      if (outputDescriptor) {
+        resultSecurityDescriptor = outputDescriptor;
+      }
+      if (resultSecurityDescriptor) {
         env.recordSecurityDescriptor(resultSecurityDescriptor);
       }
 

@@ -1220,7 +1220,9 @@ async function evaluateGuardReplacement(
   const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
 
   if (action.value && action.value.length > 0) {
-    const result = await evaluate(action.value, guardEnv);
+    const result = await evaluate(action.value, guardEnv, {
+      privileged: guard.privileged === true
+    });
     return materializeGuardTransform(result?.value ?? result, guardLabel, modifiedDescriptor);
   }
 

@@ -39,6 +39,7 @@ import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/sec
 import { InterpolationContext } from '../core/interpolation-context';
 import type { ExecutableDefinition } from '@core/types/executable';
 import type { WithClause } from '@core/types';
+import { evaluateSign, evaluateVerify } from './sign-verify';
 
 /**
  * Extract trace information from a directive
@@ -55,6 +56,8 @@ function extractTraceInfo(directive: DirectiveNode): {
   switch (directive.kind) {
     case 'path':
     case 'var':
+    case 'sign':
+    case 'verify':
       // /path @varName = ... or /var @varName = ...
       const identifierNodes = directive.values?.identifier;
       if (identifierNodes && Array.isArray(identifierNodes) && identifierNodes.length > 0) {
@@ -758,6 +761,12 @@ async function dispatchDirective(
 
     case 'policy':
       return await evaluatePolicy(directive as PolicyDirectiveNode, env);
+
+    case 'sign':
+      return await evaluateSign(directive, env);
+
+    case 'verify':
+      return await evaluateVerify(directive, env);
 
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

@@ -207,6 +207,8 @@ export interface EvaluationContext {
   isCondition?: boolean;
   /** Whether we're evaluating an expression (affects variable resolution) */
   isExpression?: boolean;
+  /** Whether label modification operations are privileged */
+  privileged?: boolean;
   /** Pre-evaluated directive inputs supplied by hook extraction */
   extractedInputs?: readonly unknown[];
   /** Operation context captured for the active directive */
@@ -711,6 +713,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     const { evaluateNewExpression } = await import('../eval/new-expression');
     const value = await evaluateNewExpression(node as any, env);
     return { value, env };
+  }
+
+  if (node.type === 'LabelModification') {
+    const { evaluateLabelModification } = await import('../eval/label-modification');
+    return evaluateLabelModification(node as any, env, context);
   }
 
   // Handle expression nodes

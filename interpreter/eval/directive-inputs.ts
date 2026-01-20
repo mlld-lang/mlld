@@ -37,6 +37,9 @@ export async function extractDirectiveInputs(
       return extractOutputInputs(directive, env);
     case 'run':
       return extractRunInputs(directive, env);
+    case 'sign':
+    case 'verify':
+      return extractIdentifierInputs(directive, env);
 
     default:
       return [];
@@ -131,6 +134,27 @@ function resolveShowVariableName(directive: DirectiveNode): string | undefined {
   }
 
   return undefined;
+}
+
+async function extractIdentifierInputs(
+  directive: DirectiveNode,
+  env: Environment
+): Promise<readonly Variable[]> {
+  const identifierNode = Array.isArray(directive.values?.identifier)
+    ? directive.values?.identifier?.[0]
+    : (directive.values as any)?.identifier;
+  if (!identifierNode) {
+    return [];
+  }
+  const name = getTextContent(identifierNode) || (identifierNode as any).identifier;
+  if (!name) {
+    return [];
+  }
+  const variable = env.getVariable(name);
+  if (!variable) {
+    return [];
+  }
+  return materializeGuardInputs([variable]);
 }
 
 async function extractOutputInputs(

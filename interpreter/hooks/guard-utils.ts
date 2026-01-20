@@ -50,17 +50,23 @@ export function applyGuardLabelModifications(
   const removeLabels = modifications.removeLabels ?? [];
   if (removeLabels.length > 0 && guard.privileged !== true) {
     const guardLabel = guard.name ?? guard.filterValue ?? 'guard';
-    for (const label of removeLabels) {
-      if (isProtectedLabel(label)) {
-        throw new MlldSecurityError(
-          `Guard ${guardLabel} cannot remove protected label '${label}'`,
-          {
-            code: 'PROTECTED_LABEL_REMOVAL',
-            details: { label, guard: guardLabel }
-          }
-        );
-      }
+    const protectedLabel = removeLabels.find(label => isProtectedLabel(label));
+    if (protectedLabel) {
+      throw new MlldSecurityError(
+        `Guard ${guardLabel} cannot remove protected label '${protectedLabel}'`,
+        {
+          code: 'PROTECTED_LABEL_REMOVAL',
+          details: { label: protectedLabel, guard: guardLabel }
+        }
+      );
     }
+    throw new MlldSecurityError(
+      `Guard ${guardLabel} cannot remove labels without privilege`,
+      {
+        code: 'LABEL_PRIVILEGE_REQUIRED',
+        details: { labels: removeLabels, guard: guardLabel }
+      }
+    );
   }
 
   if ((modifications.addLabels?.length ?? 0) === 0 && removeLabels.length === 0) {
