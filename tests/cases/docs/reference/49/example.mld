@@ -1,0 +1,9 @@
+>> Define helpers
+exe @double(n) = js { return n * 2 }
+exe @triple(n) = js { return n * 3 }
+
+>> Expose to all js blocks
+exe js = { double, triple }
+
+>> Now all js blocks can use them
+var @result = js { double(5) + triple(3) }  >> 19

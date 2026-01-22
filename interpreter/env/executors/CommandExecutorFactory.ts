@@ -2,7 +2,7 @@ import type { CommandExecutionOptions, ICommandExecutor } from './BaseCommandExe
 import { ShellCommandExecutor } from './ShellCommandExecutor';
 import { JavaScriptExecutor, type ShadowEnvironment } from './JavaScriptExecutor';
 import { NodeExecutor, type NodeShadowEnvironmentProvider } from './NodeExecutor';
-import { PythonExecutor, type ShellCommandExecutor as IShellCommandExecutor } from './PythonExecutor';
+import { PythonExecutor, type ShellCommandExecutor as IShellCommandExecutor, type PythonShadowEnvironmentProvider } from './PythonExecutor';
 import { BashExecutor, type VariableProvider } from './BashExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
@@ -12,6 +12,7 @@ export interface ExecutorDependencies {
   workingDirectory: string;
   shadowEnvironment: ShadowEnvironment;
   nodeShadowProvider: NodeShadowEnvironmentProvider;
+  pythonShadowProvider?: PythonShadowEnvironmentProvider;
   variableProvider: VariableProvider;
   getStreamingBus: () => import('@interpreter/eval/pipeline/stream-bus').StreamBus;
 }
@@ -27,13 +28,13 @@ export class CommandExecutorFactory {
   private bashExecutor: BashExecutor;
 
   constructor(dependencies: ExecutorDependencies) {
-    const { errorUtils, workingDirectory, shadowEnvironment, nodeShadowProvider, variableProvider, getStreamingBus } = dependencies;
+    const { errorUtils, workingDirectory, shadowEnvironment, nodeShadowProvider, pythonShadowProvider, variableProvider, getStreamingBus } = dependencies;
 
     // Create all executor instances
     this.shellExecutor = new ShellCommandExecutor(errorUtils, workingDirectory, getStreamingBus);
     this.jsExecutor = new JavaScriptExecutor(errorUtils, workingDirectory, shadowEnvironment);
     this.nodeExecutor = new NodeExecutor(errorUtils, workingDirectory, nodeShadowProvider, getStreamingBus);
-    this.pythonExecutor = new PythonExecutor(errorUtils, workingDirectory, this.shellExecutor);
+    this.pythonExecutor = new PythonExecutor(errorUtils, workingDirectory, this.shellExecutor, pythonShadowProvider, getStreamingBus);
     this.bashExecutor = new BashExecutor(errorUtils, workingDirectory, variableProvider, getStreamingBus);
   }
 

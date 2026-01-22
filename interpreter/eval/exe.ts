@@ -207,7 +207,7 @@ export async function evaluateExe(
       let effectiveWrapper = wrapper;
       if (language === 'js' || language === 'javascript') {
         // Only create sync wrapper for JavaScript code (not commands or other types)
-        if (funcVar.value.type === 'code' && 
+        if (funcVar.value.type === 'code' &&
             (funcVar.value.language === 'javascript' || funcVar.value.language === 'js')) {
           // Get the executable definition from internal
           const execDef = (funcVar.internal as any)?.executableDef;
@@ -219,13 +219,40 @@ export async function evaluateExe(
           }
         }
       }
-      
+
       // Store the wrapper (sync for JS when possible, async otherwise)
       shadowFunctions.set(funcName, effectiveWrapper);
     }
-    
+
     // Store in environment FIRST
     env.setShadowEnv(language, shadowFunctions);
+
+    // For Python, also define functions in the PythonShadowEnvironment
+    if (language === 'python' || language === 'py') {
+      const pythonShadowEnv = env.getOrCreatePythonShadowEnv();
+      for (const ref of envRefs) {
+        const funcName = ref.identifier;
+        const funcVar = env.getVariable(funcName);
+
+        if (funcVar && funcVar.type === 'executable' && funcVar.value.type === 'code') {
+          const execDef = (funcVar.internal as any)?.executableDef;
+          if (execDef && (execDef.language === 'python' || execDef.language === 'py')) {
+            // Extract the code from the template
+            const codeTemplate = execDef.codeTemplate;
+            if (codeTemplate && Array.isArray(codeTemplate)) {
+              const code = codeTemplate.map((node: any) => {
+                if (node.type === 'Text') return node.content;
+                return '';
+              }).join('');
+
+              // Define the function in Python shadow environment
+              const paramNames = execDef.paramNames || [];
+              await pythonShadowEnv.addFunction(funcName, code, paramNames);
+            }
+          }
+        }
+      }
+    }
     
     // NOW retroactively update all the executables in the shadow environment
     // to capture the complete shadow environment (including each other)

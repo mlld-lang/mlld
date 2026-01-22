@@ -117,6 +117,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc81]
 
 ### Added
+- **Python executor hardening**: `py { }` now has feature parity with `node { }` for code execution
+  - Basic execution: `exe @add(a, b) = py { return int(a) + int(b) }`
+  - Multi-line code blocks with proper indentation handling
+  - Standard library support: `import json`, `import math`, etc.
+  - Variable passing with mlld metadata preservation (`__mlld_type__`, `__mlld_metadata__`)
+  - `mlld.is_variable()` helper to check if a value is a wrapped mlld Variable
+  - Array/list indexing and iteration support
+  - Return type support: strings, numbers, lists, dicts all work correctly
+- **Python shadow environments**: Define reusable Python functions accessible across code blocks
+  - Syntax: `exe py = { helper1, helper2 }` exposes functions to all `py { }` blocks
+  - Functions persist across executions within a session
+  - Supports cross-function calls within the same environment
+  - Works with lexical scoping through imports (captured at definition time)
+- **Python streaming output**: `py { }` blocks support streaming via StreamBus
+  - `print()` output streams incrementally during execution
+  - Progress visible in real-time for long-running Python code
+- **Python package imports** (experimental): Import Python packages into mlld scripts
+  - Syntax: `import "@py/numpy"` or `import "@python/pandas"`
+  - PythonPackageResolver introspects packages and generates mlld wrappers
+  - PythonAliasResolver provides `@python/` as an alias for `@py/`
+  - Integrates with mlld-lock.json for package version tracking
 - **Self-documenting help system**: `mlld howto` provides LLM-accessible documentation directly in the CLI
   - `mlld howto` - Show topic tree with intro pinned at top
   - `mlld howto intro` - Introduction with mental model and key concepts
@@ -154,6 +175,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`mlld howto` shows all atom categories**: Fixed howto command to load atoms from all 8 categories (syntax, commands, control-flow, modules, patterns, configuration, security, mistakes) instead of only control-flow
 - **Ternary expressions with template literals**: Fixed parse error when using backtick templates in ternary branches (e.g., `@x > 3 ? \`big: @x\` : "small"`). Templates are now properly parsed in ternary contexts without interfering with other expression parsing.
+- **Python error handling**: Python errors now show helpful context like `node { }` errors
+  - Syntax errors include line numbers and context
+  - Runtime errors (NameError, ZeroDivisionError, etc.) include stack traces
+  - Error messages propagate correctly through the CLI error handler
 
 ## [2.0.0-rc80]
 

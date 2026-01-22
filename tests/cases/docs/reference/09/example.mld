@@ -6,10 +6,23 @@ exe @deploy() = sh {
   ./deploy.sh
 }
 
->> JavaScript functions
+>> JavaScript (in-process, fast)
 exe @add(a, b) = js { return a + b }
 exe @processData(data) = js {
   return data.map(item => item.value * 2)
+}
+
+>> Node.js (VM-isolated, full Node.js API)
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+>> Python (subprocess, print() returns values)
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @calculate(x, y) = py {
+result = x ** 2 + y ** 2
+print(result)
 }
 
 >> Prose execution (requires config, see docs/user/prose.md)

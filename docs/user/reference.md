@@ -94,10 +94,23 @@ exe @deploy() = sh {
   ./deploy.sh
 }
 
->> JavaScript functions
+>> JavaScript (in-process, fast)
 exe @add(a, b) = js { return a + b }
 exe @processData(data) = js {
   return data.map(item => item.value * 2)
+}
+
+>> Node.js (VM-isolated, full Node.js API)
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+>> Python (subprocess, print() returns values)
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @calculate(x, y) = py {
+result = x ** 2 + y ** 2
+print(result)
 }
 
 >> Prose execution (requires config, see docs/user/prose.md)
@@ -562,6 +575,98 @@ var @config = {
 show @config.database.host  >> "localhost"
 show @config.database.ports[0]  >> 5432
 show @config.features[1]  >> "api"
+```
+
+## Code Execution Languages
+
+mlld supports multiple languages for code execution, each with different isolation levels and capabilities.
+
+### Language Comparison
+
+| Language | Syntax | Isolation | Use Case |
+|----------|--------|-----------|----------|
+| `cmd` | `cmd { echo hello }` | Subprocess | Single-line shell commands with pipes |
+| `sh` | `sh { ... }` | Subprocess | Multi-line scripts with control flow |
+| `bash` | `bash { ... }` | Subprocess | Bash-specific features |
+| `js` | `js { return x + 1 }` | None (in-process) | Fast calculations, no require() |
+| `node` | `node { require('fs')... }` | VM context | Full Node.js API, isolated |
+| `py`/`python` | `py { print(x) }` | Subprocess | Python libraries, data science |
+
+### JavaScript vs Node.js
+
+```mlld
+>> JavaScript (in-process, fast, no require())
+exe @double(n) = js { return n * 2 }
+exe @upper(s) = js { return s.toUpperCase() }
+
+>> Node.js (VM-isolated, full API)
+exe @readFile(path) = node {
+  const fs = require('fs');
+  return fs.readFileSync(path, 'utf8');
+}
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+```
+
+### Python Execution
+
+Python code runs in a subprocess via `python3`. Use `print()` to return values.
+
+```mlld
+>> Basic Python
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @square(x) = py {
+result = int(x) ** 2
+print(result)
+}
+
+>> Standard library access
+exe @parseJson(data) = py {
+import json
+obj = json.loads(data)
+print(json.dumps(obj, indent=2))
+}
+
+>> Multi-line with variables
+var @numbers = [1, 2, 3, 4, 5]
+exe @sumList(items) = py {
+import json
+nums = json.loads(items)
+print(sum(nums))
+}
+show @sumList(@numbers)  >> 15
+```
+
+### Shadow Environments
+
+Expose helper functions to all code blocks of a language:
+
+```mlld
+>> Define helpers
+exe @double(n) = js { return n * 2 }
+exe @triple(n) = js { return n * 3 }
+
+>> Expose to all js blocks
+exe js = { double, triple }
+
+>> Now all js blocks can use them
+var @result = js { double(5) + triple(3) }  >> 19
+```
+
+Shadow environments work with `js`, `node`, and `py`/`python`:
+
+```mlld
+>> Python shadow environment
+exe @greet(name) = py { print(f"Hello, {name}!") }
+exe @shout(text) = py { print(text.upper()) }
+exe py = { greet, shout }
+
+run py {
+greet("World")
+shout("mlld rocks")
+}
 ```
 
 ## Module System

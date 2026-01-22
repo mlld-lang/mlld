@@ -1,2 +1,13 @@
-exe @formatDate(date) = run {date -d "@date" "+%Y-%m-%d"}
-exe @validate(data) = js { return data.valid === true }
+>> JavaScript (in-process, fast, no require())
+exe @double(n) = js { return n * 2 }
+exe @upper(s) = js { return s.toUpperCase() }
+
+>> Node.js (VM-isolated, full API)
+exe @readFile(path) = node {
+  const fs = require('fs');
+  return fs.readFileSync(path, 'utf8');
+}
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}

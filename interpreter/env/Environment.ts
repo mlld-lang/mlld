@@ -38,13 +38,14 @@ import { mergePolicyConfigs, type PolicyConfig, normalizePolicyConfig } from '@c
 import { RegistryManager, ModuleCache, LockFile, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
-import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver, DynamicModuleResolver } from '@core/resolvers';
+import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver, DynamicModuleResolver, PythonPackageResolver, PythonAliasResolver } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { builtinTransformers, createTransformerVariable } from '../builtin/transformers';
 import { NodeShadowEnvironment } from './NodeShadowEnvironment';
+import { PythonShadowEnvironment } from './PythonShadowEnvironment';
 import { CacheManager } from './CacheManager';
 import { CommandUtils } from './CommandUtils';
 import { DebugUtils } from './DebugUtils';
@@ -154,6 +155,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
   private nodeShadowEnv?: NodeShadowEnvironment; // VM-based Node.js shadow environment
+  private pythonShadowEnv?: PythonShadowEnvironment; // Subprocess-based Python shadow environment
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -373,7 +375,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // Register module resolvers (priority 10)
         // RegistryResolver should be next to be the primary resolver for @user/module patterns
         this.resolverManager.registerResolver(new RegistryResolver());
-        
+
+        // Register Python package resolvers (priority 50)
+        // PythonPackageResolver handles @py/package imports, PythonAliasResolver handles @python/package
+        const pythonResolverOptions = { projectRoot: this.getProjectRoot() };
+        this.resolverManager.registerResolver(new PythonPackageResolver(pythonResolverOptions));
+        this.resolverManager.registerResolver(new PythonAliasResolver(pythonResolverOptions));
+
         // Register file resolvers (priority 20)
         this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
         this.resolverManager.registerResolver(new GitHubResolver());
@@ -494,6 +502,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         getNodeShadowEnv: () => this.getNodeShadowEnv(),
         getOrCreateNodeShadowEnv: () => this.getOrCreateNodeShadowEnv(),
         getCurrentFilePath: () => this.getCurrentFilePath()
+      },
+      pythonShadowProvider: {
+        getPythonShadowEnv: () => this.getPythonShadowEnv(),
+        getOrCreatePythonShadowEnv: () => this.getOrCreatePythonShadowEnv()
       },
       variableProvider: {
         getVariables: () => this.variableManager.getVariables()
@@ -1912,11 +1924,23 @@ export class Environment implements VariableManagerContext, ImportResolverContex
           this.currentFilePath
         );
       }
-      
+
       // Add functions to Node shadow environment
       for (const [name, func] of functions) {
         this.nodeShadowEnv.addFunction(name, func);
       }
+    } else if (language === 'python' || language === 'py') {
+      // Create or get Python shadow environment
+      if (!this.pythonShadowEnv) {
+        this.pythonShadowEnv = new PythonShadowEnvironment(
+          this.getFileDirectory(),
+          this.currentFilePath
+        );
+      }
+
+      // Store functions for Python shadow environment
+      // Note: Python functions are wrappers that will call back into mlld
+      this.shadowEnvs.set(language, functions);
     } else {
       // Use existing implementation for other languages
       this.shadowEnvs.set(language, functions);
@@ -1992,7 +2016,40 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     return this.nodeShadowEnv;
   }
-  
+
+  /**
+   * Get Python shadow environment instance with parent environment fallback
+   * @returns PythonShadowEnvironment instance or undefined if not available
+   */
+  getPythonShadowEnv(): PythonShadowEnvironment | undefined {
+    return this.pythonShadowEnv || this.parent?.getPythonShadowEnv();
+  }
+
+  /**
+   * Get or create Python shadow environment instance
+   * @returns PythonShadowEnvironment instance (always creates one if needed)
+   */
+  getOrCreatePythonShadowEnv(): PythonShadowEnvironment {
+    // Check if we already have one
+    if (this.pythonShadowEnv) {
+      return this.pythonShadowEnv;
+    }
+
+    // Check parent environments
+    const parentShadowEnv = this.parent?.getPythonShadowEnv();
+    if (parentShadowEnv) {
+      return parentShadowEnv;
+    }
+
+    // Create a new one for this environment
+    this.pythonShadowEnv = new PythonShadowEnvironment(
+      this.getFileDirectory(),
+      this.currentFilePath
+    );
+
+    return this.pythonShadowEnv;
+  }
+
   /**
    * Captures all shadow environments for lexical scoping in executables
    * WHY: When executables are defined, they may reference shadow functions.
@@ -2029,10 +2086,22 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         capture.nodejs = nodeMap; // Both aliases point to same map
       }
     }
-    
+
+    // Capture Python shadow functions
+    const pythonEnv = this.shadowEnvs.get('python');
+    if (pythonEnv && pythonEnv.size > 0) {
+      capture.python = new Map(pythonEnv);
+      capture.py = capture.python; // Alias
+    }
+    const pyEnv = this.shadowEnvs.get('py');
+    if (pyEnv && pyEnv.size > 0 && !capture.python) {
+      capture.py = new Map(pyEnv);
+      capture.python = capture.py; // Alias
+    }
+
     return capture;
   }
-  
+
   /**
    * Check if this environment has any shadow environments defined
    * Used to avoid unnecessary capture operations
@@ -2044,8 +2113,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         if (env.size > 0) return true;
       }
     }
-    // Check Node.js shadow environment
-    return this.nodeShadowEnv !== undefined;
+    // Check Node.js or Python shadow environment
+    return this.nodeShadowEnv !== undefined || this.pythonShadowEnv !== undefined;
   }
 
   /**
@@ -2546,10 +2615,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       // Re-register all resolvers (same as in constructor)
       // Register path resolvers (priority 1)
       this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
-      
+
       // Register module resolvers (priority 10)
       this.resolverManager.registerResolver(new RegistryResolver());
-      
+
+      // Register Python package resolvers (priority 50)
+      const pythonResolverOptions = { projectRoot: this.getProjectRoot() };
+      this.resolverManager.registerResolver(new PythonPackageResolver(pythonResolverOptions));
+      this.resolverManager.registerResolver(new PythonAliasResolver(pythonResolverOptions));
+
       // Register file resolvers (priority 20)
       this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
       this.resolverManager.registerResolver(new GitHubResolver());
@@ -2922,6 +2996,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       logger.debug('Cleaning up NodeShadowEnvironment');
       this.nodeShadowEnv.cleanup();
       this.nodeShadowEnv = undefined;
+    }
+
+    // Clean up PythonShadowEnvironment if it exists
+    if (this.pythonShadowEnv) {
+      logger.debug('Cleaning up PythonShadowEnvironment');
+      this.pythonShadowEnv.cleanup().catch(() => {});
+      this.pythonShadowEnv = undefined;
     }
     
     // Clean up child environments recursively
