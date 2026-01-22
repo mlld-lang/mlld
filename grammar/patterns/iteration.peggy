@@ -106,10 +106,77 @@ ForSingleAction "for action"
   / effect:EffectAction {
       return Array.isArray(effect) ? effect : [effect];
     }
-  // Variable assignment
-  / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
-      // Create the action node; pass ending.tail so pipelines are embedded immutably
-      return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null, ending ? ending.comment : null);
+  // Variable assignment: var @id = value
+  / "var" _ "@" id:BaseIdentifier _ "=" _ content:VarRHSContent ending:StandardDirectiveEnding {
+      // Create var directive node with proper identifier
+      let tail = ending ? ending.tail : null;
+      const comment = ending ? ending.comment : null;
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
+
+      // Process the value based on its structure
+      let processedValue;
+      let metaInfo = {};
+
+      // Handle template content (backtick, [[...]], quotes)
+      if (content && content.content && content.wrapperType) {
+        processedValue = content.content;
+        metaInfo.wrapperType = content.wrapperType;
+        metaInfo.inferredType = 'template';
+        if (content.withClause) {
+          tail = tail ? Object.assign({}, content.withClause, tail) : content.withClause;
+        }
+      }
+      // Handle object literals
+      else if (content && content.type === 'object') {
+        processedValue = [content];
+        metaInfo.inferredType = 'object';
+      }
+      // Handle array literals
+      else if (content && content.type === 'array') {
+        processedValue = [content];
+        metaInfo.inferredType = 'array';
+      }
+      // Handle variable references with tail modifiers
+      else if (content && content.type === 'VariableReferenceWithTail') {
+        processedValue = [content.variable];
+        metaInfo.inferredType = 'reference';
+        if (content.withClause) {
+          tail = tail ? Object.assign({}, content.withClause, tail) : content.withClause;
+        }
+      }
+      // Handle other types
+      else {
+        processedValue = Array.isArray(content) ? content : [content];
+        metaInfo.inferredType = 'unknown';
+      }
+
+      // Add comment to meta if present
+      if (comment) {
+        metaInfo.comment = comment;
+      }
+
+      const nodeInit = {
+        kind: 'var',
+        subtype: 'var',
+        values: {
+          identifier: [idNode],
+          value: processedValue
+        },
+        raw: {
+          identifier: id,
+          value: helpers.reconstructRawString(processedValue)
+        },
+        meta: metaInfo,
+        location: location()
+      };
+
+      // Add withClause if tail exists
+      if (tail) {
+        nodeInit.values.withClause = tail;
+        metaInfo.withClause = tail;
+      }
+
+      return [helpers.createNode(NodeType.Directive, nodeInit)];
     }
   / RunBlockAction
   // Other when-style actions (including directives) directly in for loop bodies

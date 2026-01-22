@@ -895,19 +895,24 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+  / "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       // Support full range of var assignments in when actions
+      let tail = ending.tail;
+      const comment = ending.comment;
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
-      
+
       // Process the value based on its structure (simplified from var.peggy)
       let processedValue;
       let metaInfo = {};
-      
+
       // Handle template content (backtick, [[...]], quotes)
       if (value && value.content && value.wrapperType) {
         processedValue = value.content;
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle object literals
       else if (value && value.type === 'object') {
@@ -933,6 +938,9 @@ WhenActionDirective
       else if (value && value.type === 'VariableReferenceWithTail') {
         processedValue = [value.variable];
         metaInfo.inferredType = 'reference';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
@@ -968,9 +976,9 @@ WhenActionDirective
       }
       // Handle string literals (backward compatibility)
       else if (typeof value === 'string') {
-        processedValue = [helpers.createNode(NodeType.Text, { 
-          content: value, 
-          location: location() 
+        processedValue = [helpers.createNode(NodeType.Text, {
+          content: value,
+          location: location()
         })];
         metaInfo.inferredType = 'text';
       }
@@ -979,11 +987,16 @@ WhenActionDirective
         processedValue = Array.isArray(value) ? value : [value];
         metaInfo.inferredType = 'unknown';
       }
-      
-      return [helpers.createNode(NodeType.Directive, {
+
+      // Add comment to meta if present
+      if (comment) {
+        metaInfo.comment = comment;
+      }
+
+      const nodeInit = {
         kind: 'var',
         subtype: 'var',
-        values: { 
+        values: {
           identifier: [idNode],
           value: processedValue
         },
@@ -993,7 +1006,15 @@ WhenActionDirective
         },
         meta: metaInfo,
         location: location()
-      })];
+      };
+
+      // Add withClause if tail exists
+      if (tail) {
+        nodeInit.values.withClause = tail;
+        metaInfo.withClause = tail;
+      }
+
+      return [helpers.createNode(NodeType.Directive, nodeInit)];
     }
   / "run" _ invocation:UnifiedReferenceWithTail {
       // run with unified reference (exec invocation or variable)
@@ -1220,8 +1241,10 @@ WhenImplicitVarAssignmentError
 
 // Explicit var assignment in when action: var @x = "value" (sets outer-scope variable)
 WhenImplicitExplicitVarAssignment
-  = "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+  = "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       // Create the same structure as explicit /var but with implicit flag
+      let tail = ending.tail;
+      const comment = ending.comment;
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
 
       // Process the value using the same logic as explicit /var directive
@@ -1233,6 +1256,9 @@ WhenImplicitExplicitVarAssignment
         processedValue = value.content;
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle object literals
       else if (value && value.type === 'object') {
@@ -1258,6 +1284,9 @@ WhenImplicitExplicitVarAssignment
       else if (value && value.type === 'VariableReferenceWithTail') {
         processedValue = [value.variable];
         metaInfo.inferredType = 'reference';
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
@@ -1305,7 +1334,12 @@ WhenImplicitExplicitVarAssignment
         metaInfo.inferredType = 'unknown';
       }
 
-      return [helpers.createNode(NodeType.Directive, {
+      // Add comment to meta if present
+      if (comment) {
+        metaInfo.comment = comment;
+      }
+
+      const nodeInit = {
         kind: 'var',
         subtype: 'var',
         values: {
@@ -1318,7 +1352,15 @@ WhenImplicitExplicitVarAssignment
         },
         meta: metaInfo,
         location: location()
-      })];
+      };
+
+      // Add withClause if tail exists
+      if (tail) {
+        nodeInit.values.withClause = tail;
+        metaInfo.withClause = tail;
+      }
+
+      return [helpers.createNode(NodeType.Directive, nodeInit)];
     }
 
 // REMOVED: Implicit exec assignment is no longer supported in when RHS
