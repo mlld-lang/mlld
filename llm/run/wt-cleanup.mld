@@ -140,9 +140,10 @@ show ``
 >> ========== PHASE 3: MERGE APPROVED ==========
 show `=== Phase 3: Merge approved worktrees ===`
 
->> Load all assessments (recursive for nested dirs)
-var @assessmentFiles = <@qaDir/**/assessment.json?>
-var @assessments = for @f in @assessmentFiles => @f
+>> Load all assessments (single depth + nested dirs since **/ doesn't work)
+var @singleDepth = <@qaDir/*/assessment.json>
+var @nestedDepth = <@qaDir/*/*/assessment.json>
+var @assessments = @singleDepth.concat(@nestedDepth)
 
 >> Filter to merge recommendations with high confidence
 var @toMerge = for @a in @assessments when @a.recommendation == "merge" && @a.confidence >= 0.8 && @a.tests_pass == true => @a
@@ -195,12 +196,18 @@ var @finalWtJson = sh { wt list --format=json 2>/dev/null }
 var @finalWorktrees = @finalWtJson | @json
 var @finalActive = for @wt in @finalWorktrees when !@isSkipped(@wt.branch) => @wt
 
->> Load merge results if exists
-var @mergeResultFiles = <@qaDir/merge-results.json?>
-var @mergeResults = @mergeResultFiles.length > 0 ? @mergeResultFiles[0] : { merged: [], failed: [], skipped: [] }
+>> Load merge results if exists (default to empty since ? suffix is broken)
+var @mergeResults = { merged: [], failed: [], skipped: [] }
+var @mergeResultPath = `@qaDir/merge-results.json`
+var @mergeFileCheck = sh { [ -f @mergeResultPath ] && cat @mergeResultPath || echo "{}" }
+when @mergeFileCheck != "{}" [
+  var @mergeResults = @mergeFileCheck | @json
+]
 
->> Load all assessments for summary (recursive to handle nested dirs like polish/*)
-var @finalAssessments = <@qaDir/**/assessment.json?>
+>> Load all assessments for summary (single depth + nested dirs)
+var @finalSingle = <@qaDir/*/assessment.json>
+var @finalNested = <@qaDir/*/*/assessment.json>
+var @finalAssessments = @finalSingle.concat(@finalNested)
 var @mergeRecommended = for @a in @finalAssessments when @a.recommendation == "merge" => @a
 var @closeRecommended = for @a in @finalAssessments when @a.recommendation == "close" => @a
 var @needsWorkRecommended = for @a in @finalAssessments when @a.recommendation == "needs_work" => @a
