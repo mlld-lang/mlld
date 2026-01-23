@@ -1,0 +1,249 @@
+>> Worktree Cleanup Orchestration
+>> Usage: mlld run wt-cleanup [--dryRun] [--skip pattern1,pattern2] [--maxAssess 10] [--targetBranch main] [--maxConflicts 10]
+>>
+>> LLM-orchestrated worktree cleanup:
+>> 1. Auto-close integrated/merged worktrees
+>> 2. Parallel LLM assessment of remaining worktrees (merge target first, bail on too many conflicts)
+>> 3. Sequential merging of approved worktrees
+>> 4. Final report
+
+import { @claude } from @mlld/claude
+
+import "@payload" as @p
+var @dryRun = @p.dryRun ? true : false
+var @skipPatterns = @p.skip ? @p.skip.split(",") : []
+var @maxAssess = @p.maxAssess ? @p.maxAssess * 1 : 10
+var @targetBranch = @p.targetBranch ? @p.targetBranch : "main"
+var @maxConflicts = @p.maxConflicts ? @p.maxConflicts * 1 : 10
+
+>> Default patterns to skip
+var @defaultSkips = ["envsec", "main", "master", "security-stream-a", "security-stream-b", "python-epic"]
+var @allSkips = @defaultSkips.concat(@skipPatterns)
+
+>> Output directory
+var @qaDir = "@base/qa/wt-cleanup"
+var @baseBranch = sh { git branch --show-current }
+var @baseDir = sh { git rev-parse --show-toplevel }
+
+>> Prompt builders
+exe @buildAssessPrompt(branch, path, ahead, hasUncommitted, lastCommit, mainState, experimentDir, targetBranch, maxConflicts) = template "./wt-assess-prompt.att"
+exe @buildMergePrompt(baseBranch, baseDir, qaDir, mergeItems) = template "./wt-merge-prompt.att"
+
+show `=== Worktree Cleanup Orchestration ===`
+show `Base branch: @baseBranch`
+show `Target branch: @targetBranch`
+show `Max conflicts: @maxConflicts`
+show `Dry run: @dryRun`
+show `Skip patterns: @allSkips.join(", ")`
+show ``
+
+>> Get worktree data
+var @wtJson = sh { wt list --format=json 2>/dev/null }
+var @worktrees = @wtJson | @json
+
+>> Helper to check skip patterns
+exe @isSkipped(branch) = [
+  let @matches = for @pat in @allSkips when @branch && @branch.includes(@pat) => true
+  => @matches.length > 0
+]
+
+>> Filter to active worktrees
+var @active = for @wt in @worktrees when !@isSkipped(@wt.branch) => @wt
+
+show `Total worktrees: @worktrees.length`
+show `Active (not skipped): @active.length`
+show ``
+
+>> ========== PHASE 1: AUTO-CLOSE INTEGRATED ==========
+show `=== Phase 1: Auto-close integrated worktrees ===`
+
+var @integrated = for @wt in @active when @wt.main_state == "integrated" || @wt.main_state == "empty" => @wt
+var @integratedClean = for @wt in @integrated when !@wt.working_tree.modified && !@wt.working_tree.staged => @wt
+
+show `Found @integratedClean.length integrated worktrees to close`
+
+var @closedCount = 0
+for @wt in @integratedClean [
+  show `  Closing: @wt.branch (reason: @wt.main_state)`
+  when !@dryRun [
+    let @rmResult = cmd { wt remove @wt.branch }
+    var @closedCount = @closedCount + 1
+  ]
+]
+
+when @dryRun && @integratedClean.length > 0 => show `  (dry-run: would close @integratedClean.length worktrees)`
+show ``
+
+>> ========== PHASE 2: LLM ASSESSMENT ==========
+show `=== Phase 2: LLM Assessment ===`
+
+>> Get worktrees that need assessment (ahead of main, have commits)
+var @aheadWorktrees = for @wt in @active when (@wt.main_state == "ahead" || @wt.main_state == "diverged") && @wt.main && @wt.main.ahead > 0 => @wt
+
+>> Exclude already-closed integrated ones
+var @integratedBranches = for @wt in @integratedClean => @wt.branch
+var @needsAssess = for @wt in @aheadWorktrees when !@integratedBranches.includes(@wt.branch) => @wt
+
+show `Found @needsAssess.length worktrees needing assessment`
+
+>> Limit for this run
+var @assessBatch = @needsAssess.slice(0, @maxAssess)
+show `Assessing @assessBatch.length this run (max: @maxAssess)`
+
+show ``
+
+when @dryRun [
+  show `(dry-run: would assess these worktrees)`
+  for @wt in @assessBatch => show `  - @wt.branch (+@wt.main.ahead commits)`
+]
+
+when !@dryRun && @assessBatch.length > 0 [
+  >> Create output directory
+  show `Creating output directory: @qaDir`
+  let @mkQaDir = cmd { mkdir -p @qaDir }
+
+  show `Starting parallel assessment of @assessBatch.length worktrees...`
+
+  >> Parallel assessment with rate limiting
+  for parallel(5, 10s) @wt in @assessBatch [
+    show `  [START] Assessing: @wt.branch`
+
+    let @experimentDir = `@qaDir/@wt.branch`
+    show `    Creating dir: @experimentDir`
+    let @mkExpDir = cmd { mkdir -p @experimentDir }
+
+    let @hasUncommitted = @wt.working_tree.modified || @wt.working_tree.staged
+
+    >> Write session state before calling Claude (enables resume)
+    let @sessionState = { branch: @wt.branch, path: @wt.path, targetBranch: @targetBranch, started: @now, status: "in_progress" }
+    output @sessionState to "@experimentDir/session.json"
+
+    show `    Building prompt (ahead: @wt.main.ahead, uncommitted: @hasUncommitted)`
+    let @prompt = @buildAssessPrompt(@wt.branch, @wt.path, @wt.main.ahead, @hasUncommitted, @wt.commit.message, @wt.main_state, @experimentDir, @targetBranch, @maxConflicts)
+
+    show `    Calling Claude for @wt.branch...`
+    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
+
+    >> Update session state after completion
+    let @completedState = { branch: @wt.branch, path: @wt.path, targetBranch: @targetBranch, started: @sessionState.started, completed: @now, status: "complete" }
+    output @completedState to "@experimentDir/session.json"
+
+    show `  [DONE] Assessed: @wt.branch`
+    => @wt.branch
+  ]
+
+  show `Parallel assessment complete.`
+]
+
+show ``
+
+>> ========== PHASE 3: MERGE APPROVED ==========
+show `=== Phase 3: Merge approved worktrees ===`
+
+>> Load all assessments (recursive for nested dirs)
+var @assessmentFiles = <@qaDir/**/assessment.json?>
+var @assessments = for @f in @assessmentFiles => @f
+
+>> Filter to merge recommendations with high confidence
+var @toMerge = for @a in @assessments when @a.recommendation == "merge" && @a.confidence >= 0.8 && @a.tests_pass == true => @a
+
+show `Found @toMerge.length worktrees approved for merge`
+
+when @dryRun && @toMerge.length > 0 [
+  show `(dry-run: would merge these)`
+  for @a in @toMerge => show `  - @a.branch (@a.summary)`
+]
+
+when !@dryRun && @toMerge.length > 0 [
+  >> Sequential merge (one at a time)
+  let @mergePrompt = @buildMergePrompt(@baseBranch, @baseDir, @qaDir, `@toMerge`)
+  show `  Running merge phase...`
+  let @mergeResponse = @claude(@mergePrompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
+]
+
+show ``
+
+>> ========== PHASE 3b: CLOSE RECOMMENDED ==========
+show `=== Phase 3b: Close recommended worktrees ===`
+
+>> Filter to close recommendations with high confidence
+var @toClose = for @a in @assessments when @a.recommendation == "close" && @a.confidence >= 0.8 => @a
+
+show `Found @toClose.length worktrees recommended for closure`
+
+when @dryRun && @toClose.length > 0 [
+  show `(dry-run: would close these)`
+  for @a in @toClose => show `  - @a.branch (@a.summary)`
+]
+
+var @closedByRecommendation = 0
+when !@dryRun && @toClose.length > 0 [
+  for @a in @toClose [
+    show `  Closing: @a.branch (@a.summary)`
+    let @rmResult = cmd { wt remove @a.branch }
+    var @closedByRecommendation = @closedByRecommendation + 1
+  ]
+]
+
+show ``
+
+>> ========== PHASE 4: FINAL REPORT ==========
+show `=== Final Report ===`
+
+>> Reload state
+var @finalWtJson = sh { wt list --format=json 2>/dev/null }
+var @finalWorktrees = @finalWtJson | @json
+var @finalActive = for @wt in @finalWorktrees when !@isSkipped(@wt.branch) => @wt
+
+>> Load merge results if exists
+var @mergeResultFiles = <@qaDir/merge-results.json?>
+var @mergeResults = @mergeResultFiles.length > 0 ? @mergeResultFiles[0] : { merged: [], failed: [], skipped: [] }
+
+>> Load all assessments for summary (recursive to handle nested dirs like polish/*)
+var @finalAssessments = <@qaDir/**/assessment.json?>
+var @mergeRecommended = for @a in @finalAssessments when @a.recommendation == "merge" => @a
+var @closeRecommended = for @a in @finalAssessments when @a.recommendation == "close" => @a
+var @needsWorkRecommended = for @a in @finalAssessments when @a.recommendation == "needs_work" => @a
+
+show `Actions taken:`
+show `  Integrated worktrees closed: @closedCount`
+show `  Recommended closures enacted: @closedByRecommendation`
+show `  Worktrees assessed: @assessBatch.length`
+show `  Merges completed: @mergeResults.merged.length`
+show `  Merges failed: @mergeResults.failed.length`
+show ``
+
+show `Remaining work:`
+show `  Active worktrees: @finalActive.length`
+show `  Pending assessment: @needsAssess.length - @assessBatch.length`
+show ``
+
+show `Assessment summary:`
+show `  Recommend merge: @mergeRecommended.length`
+show `  Recommend close: @closeRecommended.length`
+show `  Needs work: @needsWorkRecommended.length`
+
+>> If there are close recommendations, show them
+when @closeRecommended.length > 0 [
+  show ``
+  show `Worktrees recommended for closure:`
+  for @a in @closeRecommended => show `  - @a.branch: @a.summary`
+]
+
+>> If there are needs_work, show them
+when @needsWorkRecommended.length > 0 [
+  show ``
+  show `Worktrees needing more work:`
+  for @a in @needsWorkRecommended [
+    show `  - @a.branch: @a.summary`
+    when @a.issues && @a.issues.length > 0 [
+      for @issue in @a.issues => show `      - @issue`
+    ]
+  ]
+]
+
+>> Write final report
+var @report = { timestamp: @now, baseBranch: @baseBranch, dryRun: @dryRun, closed: @closedCount, closedByRecommendation: @closedByRecommendation, assessed: @assessBatch.length, merged: @mergeResults.merged, failed: @mergeResults.failed, remaining: @finalActive.length, assessments: { merge: @mergeRecommended.length, close: @closeRecommended.length, needsWork: @needsWorkRecommended.length } }
+output @report to "@qaDir/cleanup-report.json"
+show ``
+show `Full report: @qaDir/cleanup-report.json`

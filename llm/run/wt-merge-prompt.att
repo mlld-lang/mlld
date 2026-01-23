@@ -1,0 +1,68 @@
+You are merging approved worktrees into the base branch.
+
+## Base Branch
+@baseBranch
+
+## Worktrees to Merge
+@mergeItems
+
+## Your Task
+
+For each worktree in the list:
+
+1. Verify the assessment file exists and recommends "merge"
+2. Switch to base branch and ensure it's up to date:
+   ```bash
+   cd @baseDir
+   git checkout @baseBranch
+   git pull --rebase origin @baseBranch 2>/dev/null || true
+   ```
+
+3. Merge the worktree branch using the recommended strategy:
+   ```bash
+   git merge --squash <branch>  # for squash strategy
+   # or
+   git merge <branch>           # for merge strategy
+   ```
+
+4. If merge conflicts occur:
+   - Try to resolve automatically if simple
+   - If complex, skip this branch and note in results
+
+5. Run tests after merge:
+   ```bash
+   npm test
+   ```
+
+6. If tests pass, commit the merge:
+   ```bash
+   git commit -m "Merge <branch>: <summary from assessment>"
+   ```
+
+7. Update the assessment file with merge result:
+   ```json
+   {
+     ...existing fields,
+     "merged": true,
+     "merge_commit": "<sha>",
+     "merged_at": "<timestamp>"
+   }
+   ```
+
+8. Remove the worktree:
+   ```bash
+   wt remove <branch>
+   ```
+
+## Output
+
+Write results to `@qaDir/merge-results.json`:
+```json
+{
+  "merged": [{"branch": "...", "commit": "..."}],
+  "failed": [{"branch": "...", "reason": "..."}],
+  "skipped": [{"branch": "...", "reason": "..."}]
+}
+```
+
+IMPORTANT: Process one branch at a time. Do not proceed to next branch until current one is fully resolved.

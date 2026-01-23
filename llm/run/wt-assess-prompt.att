@@ -1,0 +1,100 @@
+You are assessing a git worktree to determine if it should be merged, closed, or needs more work.
+
+## Worktree Info
+- Branch: @branch
+- Path: @path
+- Target branch to merge into: @targetBranch
+- Commits ahead of @targetBranch: @ahead
+- Has uncommitted changes: @hasUncommitted
+- Last commit: @lastCommit
+- State relative to @targetBranch: @mainState
+- Max allowed conflicts: @maxConflicts
+
+## Your Task
+
+### Step 1: Switch to worktree and merge target branch
+
+First, switch to this worktree and attempt to merge the target branch:
+
+```bash
+cd @path
+git fetch origin @targetBranch
+git merge origin/@targetBranch --no-commit --no-ff
+```
+
+Check for conflicts:
+```bash
+git diff --name-only --diff-filter=U | wc -l
+```
+
+**If conflicts exceed @maxConflicts:**
+- Abort the merge: `git merge --abort`
+- Write assessment with `recommendation: "needs_work"` and `conflict_count` in issues
+- Stop here - do not proceed with further assessment
+
+**If conflicts are manageable (≤ @maxConflicts):**
+- Resolve the conflicts
+- Stage the resolutions: `git add .`
+- Commit: `git commit -m "Merge @targetBranch into @branch"`
+- Continue to Step 2
+
+### Step 2: Examine the changes
+
+```bash
+git log origin/@targetBranch..HEAD --oneline
+git diff origin/@targetBranch --stat
+```
+
+### Step 3: Run tests
+
+```bash
+npm test 2>&1 | tail -50
+```
+
+### Step 4: Assess the work
+
+Evaluate whether this work is:
+- **Still relevant**: Has @targetBranch changed in ways that make this work obsolete?
+- **Complete**: Does the fix/feature accomplish what it set out to do?
+- **Safe to merge**: Do tests pass? Any obvious issues?
+
+### Step 5: Write assessment
+
+Write your assessment to `@experimentDir/assessment.json`:
+
+```json
+{
+  "branch": "@branch",
+  "target_branch": "@targetBranch",
+  "recommendation": "merge" | "close" | "needs_work",
+  "confidence": 0.0-1.0,
+  "tests_pass": true | false,
+  "still_relevant": true | false,
+  "conflicts_resolved": true | false,
+  "conflict_count": 0,
+  "summary": "Brief explanation",
+  "issues": ["Any blocking issues"],
+  "merge_strategy": "squash" | "merge" | "rebase"
+}
+```
+
+## Decision Criteria
+
+**MERGE** if:
+- Conflicts resolved (or none existed)
+- Tests pass
+- Work is still relevant (not superseded by other changes)
+- Changes are complete and coherent
+
+**CLOSE** if:
+- Work is obsolete (similar fix already in @targetBranch)
+- Branch is stale and no longer valuable
+- Tests fail and fix isn't obvious
+
+**NEEDS_WORK** if:
+- Too many conflicts (> @maxConflicts)
+- Tests fail but fix seems straightforward
+- Has uncommitted changes that need committing
+- Conflicts resolved but issues remain
+
+Be conservative - when in doubt, recommend "needs_work" rather than "merge".
