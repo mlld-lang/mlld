@@ -55,11 +55,20 @@ export interface UndefinedVariableWarning {
   suggestion?: string;
 }
 
+export interface VariableRedefinitionWarning {
+  variable: string;
+  line?: number;
+  column?: number;
+  originalLine?: number;
+  originalColumn?: number;
+}
+
 export interface AnalyzeResult {
   filepath: string;
   valid: boolean;
   errors?: AnalysisError[];
   warnings?: UndefinedVariableWarning[];
+  redefinitions?: VariableRedefinitionWarning[];
   executables?: ExecutableInfo[];
   exports?: string[];
   imports?: ImportInfo[];
@@ -281,6 +290,127 @@ function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
     }
   });
 
+  return warnings;
+}
+
+/**
+ * Detect variable redefinitions in nested scopes
+ * This catches cases like:
+ *   var @x = 1
+ *   when @cond [
+ *     var @x = 2  // ERROR: redefinition of outer scope variable
+ *   ]
+ */
+function detectVariableRedefinitions(ast: MlldNode[]): VariableRedefinitionWarning[] {
+  const warnings: VariableRedefinitionWarning[] = [];
+
+  // Track declarations with their scope depth and location
+  interface VarDeclaration {
+    name: string;
+    depth: number;
+    line?: number;
+    column?: number;
+  }
+
+  const declarations: VarDeclaration[] = [];
+
+  function findOuterDeclaration(name: string, currentDepth: number): VarDeclaration | undefined {
+    // Find a declaration of this name at a shallower depth
+    for (const decl of declarations) {
+      if (decl.name === name && decl.depth < currentDepth) {
+        return decl;
+      }
+    }
+    return undefined;
+  }
+
+  function walkWithScope(nodes: any, depth: number): void {
+    if (!nodes) return;
+
+    if (Array.isArray(nodes)) {
+      for (const node of nodes) {
+        walkWithScope(node, depth);
+      }
+      return;
+    }
+
+    if (typeof nodes !== 'object') return;
+
+    const node = nodes;
+
+    // Check for var declarations
+    if (node.type === 'Directive' && node.kind === 'var') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        const name = identNode.identifier;
+        const line = node.location?.start?.line;
+        const column = node.location?.start?.column;
+
+        // Check if this shadows an outer scope variable
+        const outer = findOuterDeclaration(name, depth);
+        if (outer) {
+          warnings.push({
+            variable: name,
+            line,
+            column,
+            originalLine: outer.line,
+            originalColumn: outer.column,
+          });
+        }
+
+        // Record this declaration
+        declarations.push({ name, depth, line, column });
+      }
+    }
+
+    // Track let declarations too (they can also cause issues)
+    if (node.type === 'LetAssignment') {
+      const name = node.identifier;
+      if (name) {
+        const line = node.location?.start?.line;
+        const column = node.location?.start?.column;
+
+        const outer = findOuterDeclaration(name, depth);
+        if (outer) {
+          warnings.push({
+            variable: name,
+            line,
+            column,
+            originalLine: outer.line,
+            originalColumn: outer.column,
+          });
+        }
+
+        declarations.push({ name, depth, line, column });
+      }
+    }
+
+    // Increase depth when entering blocks (body, children, or values.action for when blocks)
+    const hasBlock = node.body || node.children || node.values?.action;
+    const newDepth = hasBlock ? depth + 1 : depth;
+
+    // Recurse into structural properties
+    if (node.body) walkWithScope(node.body, newDepth);
+    if (node.children) walkWithScope(node.children, newDepth);
+    if (node.values) {
+      for (const key in node.values) {
+        // Skip identifier to avoid double-counting
+        if (key !== 'identifier') {
+          // action is a block scope (when blocks, for blocks)
+          const scopeDepth = (key === 'action') ? newDepth : depth;
+          walkWithScope(node.values[key], scopeDepth);
+        }
+      }
+    }
+    if (node.entries) {
+      for (const entry of node.entries) {
+        walkWithScope(entry.value, depth);
+        walkWithScope(entry.key, depth);
+      }
+    }
+  }
+
+  walkWithScope(ast, 0);
   return warnings;
 }
 
@@ -524,6 +654,12 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       if (warnings.length > 0) {
         result.warnings = warnings;
       }
+
+      // Check for variable redefinitions in nested scopes
+      const redefinitions = detectVariableRedefinitions(ast);
+      if (redefinitions.length > 0) {
+        result.redefinitions = redefinitions;
+      }
     }
 
   } catch (error: any) {
@@ -610,6 +746,22 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
       }
     }
   }
+
+  // Display errors for variable redefinitions
+  if (result.redefinitions && result.redefinitions.length > 0) {
+    console.log();
+    console.log(chalk.red(`Errors (${result.redefinitions.length}):`));
+    for (const redef of result.redefinitions) {
+      const loc = redef.line ? ` (line ${redef.line}${redef.column ? `:${redef.column}` : ''})` : '';
+      const origLoc = redef.originalLine ? ` (originally at line ${redef.originalLine})` : '';
+      console.log(chalk.red(`  @${redef.variable}${loc} - cannot redefine variable in nested scope${origLoc}`));
+      console.log(chalk.dim(`    mlld variables (var) are immutable once defined.`));
+      console.log(chalk.dim(`    To accumulate values in a loop, use one of these approaches:`));
+      console.log(chalk.dim(`      1. let @${redef.variable} = ... (ephemeral, block-scoped only)`));
+      console.log(chalk.dim(`      2. var @${redef.variable}New = ... (new variable name)`));
+      console.log(chalk.dim(`      3. @${redef.variable} += value (augmented assignment for accumulation)`));
+    }
+  }
 }
 
 export async function analyzeCommand(filepath: string, options: AnalyzeOptions = {}): Promise<void> {
@@ -624,6 +776,11 @@ export async function analyzeCommand(filepath: string, options: AnalyzeOptions =
     displayResult(result, options.format || 'text');
 
     if (!result.valid) {
+      process.exit(1);
+    }
+
+    // Redefinitions are always errors (they cause runtime failures)
+    if (result.redefinitions && result.redefinitions.length > 0) {
       process.exit(1);
     }
 

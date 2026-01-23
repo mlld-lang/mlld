@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tracks declarations from `var`, `let`, imports, for loops, and exe blocks
   - Recognizes builtins: `@now`, `@base`, `@json`, `@local`, `@cache`, `@env`, `@p`, `@mx`
   - `--error-on-warnings` flag exits with code 1 when warnings are found
+- **`mlld validate` variable redefinition detection**: Catches attempts to redefine outer-scope variables
+  - Detects `var @x = ...` inside when/for blocks when `@x` is already defined
+  - Educational error explains mlld's immutability model
+  - Suggests alternatives: `let` for block-scoped values, new names, or augmented assignment
 - **`mlld init`**: Quick non-interactive project initialization
   - Creates `mlld-config.json` and `mlld-lock.json` with sensible defaults
   - Creates `llm/run/` (scripts) and `llm/modules/` (local modules) directories

@@ -177,14 +177,15 @@ when @dryRun && @toClose.length > 0 [
   for @a in @toClose => show `  - @a.branch (@a.summary)`
 ]
 
-var @closedByRecommendation = 0
 when !@dryRun && @toClose.length > 0 [
   for @a in @toClose [
     show `  Closing: @a.branch (@a.summary)`
     let @rmResult = cmd { wt remove @a.branch }
-    var @closedByRecommendation = @closedByRecommendation + 1
   ]
 ]
+
+>> Count closures (0 if dry-run or nothing to close)
+var @closedByRecommendation = !@dryRun ? @toClose.length : 0
 
 show ``
 
@@ -197,12 +198,10 @@ var @finalWorktrees = @finalWtJson | @json
 var @finalActive = for @wt in @finalWorktrees when !@isSkipped(@wt.branch) => @wt
 
 >> Load merge results if exists (default to empty since ? suffix is broken)
-var @mergeResults = { merged: [], failed: [], skipped: [] }
 var @mergeResultPath = `@qaDir/merge-results.json`
 var @mergeFileCheck = sh { [ -f @mergeResultPath ] && cat @mergeResultPath || echo "{}" }
-when @mergeFileCheck != "{}" [
-  var @mergeResults = @mergeFileCheck | @json
-]
+var @mergeFileParsed = @mergeFileCheck | @json
+var @mergeResults = @mergeFileParsed.merged ? @mergeFileParsed : { merged: [], failed: [], skipped: [] }
 
 >> Load all assessments for summary (single depth + nested dirs)
 var @finalSingle = <@qaDir/*/assessment.json>
