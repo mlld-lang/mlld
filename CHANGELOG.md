@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `parseJsonWithContext` and `parseJsonLines` now include required `code` and `severity` in error options
 - **Backslash-escaped characters in XML contexts**: `\@`, `\.`, `\*`, and `@@` now prevent file reference detection inside angle brackets
   - `<input placeholder="user\@example\.com">` now treated as literal XML, not a file reference
+- **HTML/XML tag detection in templates**: Angle bracket content matching HTML tag patterns (e.g., `<tagname attr="value">`) is now recognized as literal HTML instead of file references
+  - `<input placeholder="user@example.com">` is now correctly preserved as literal XML text
 - **Backtick template literals in exec arguments**: `@echo(@name)` where `@name` holds a backtick literal now correctly evaluates instead of producing `[object Object]`
 - **Pipeline retry @input staleness**: Fixed bug where leading effects (like show) in pipelines saw stale @input values during retry instead of fresh values from re-executed source stages
 - **Circular imports**: Local file imports now correctly trigger circular import detection, producing a clear error message instead of infinite recursion

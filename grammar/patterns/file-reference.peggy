@@ -34,6 +34,13 @@ FileReferenceInterpolation "file reference interpolation"
       // This allows \@ \. \* and @@ to escape triggers in XML/HTML contexts
       content = content.replace(/\\[@.*]/g, '').replace(/@@/g, '');
 
+      // Detect HTML/XML tag patterns - these should NOT be treated as file references
+      // HTML tags have: tagname followed by space+attributes (e.g., <input type="...">)
+      // Match pattern: word at start, then space, then attr="value" or attr='value' pattern
+      if (/^[a-zA-Z][a-zA-Z0-9-]*\s+[a-zA-Z][-a-zA-Z0-9]*\s*=\s*["']/.test(content)) {
+        return false;
+      }
+
       // Use same validation as helpers.isFileReferenceContent: must contain . * or @
       return /[.*@]/.test(content);
     } _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:TemplatePipeChain? {
