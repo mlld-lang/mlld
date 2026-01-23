@@ -15,6 +15,8 @@ import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirective
 export interface AnalyzeOptions {
   format?: 'json' | 'text';
   ast?: boolean;
+  checkVariables?: boolean;
+  errorOnWarnings?: boolean;
 }
 
 export interface AnalysisError {
@@ -46,10 +48,18 @@ export interface NeedsInfo {
   py?: string[];
 }
 
+export interface UndefinedVariableWarning {
+  variable: string;
+  line?: number;
+  column?: number;
+  suggestion?: string;
+}
+
 export interface AnalyzeResult {
   filepath: string;
   valid: boolean;
   errors?: AnalysisError[];
+  warnings?: UndefinedVariableWarning[];
   executables?: ExecutableInfo[];
   exports?: string[];
   imports?: ImportInfo[];
@@ -59,27 +69,51 @@ export interface AnalyzeResult {
 }
 
 /**
- * Walk AST recursively
+ * Walk AST recursively, handling all node structures
  */
 function walkAST(nodes: MlldNode[], callback: (node: MlldNode) => void): void {
-  for (const node of nodes) {
-    callback(node);
+  function walkNode(node: any): void {
+    if (!node || typeof node !== 'object') return;
 
-    if ('body' in node && Array.isArray(node.body)) {
-      walkAST(node.body, callback);
+    // Call callback for nodes with a type
+    if (node.type) {
+      callback(node);
     }
-    if ('children' in node && Array.isArray(node.children)) {
-      walkAST(node.children, callback);
+
+    // Traverse arrays
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        walkNode(item);
+      }
+      return;
     }
-    if ('values' in node && node.values) {
-      for (const key in node.values) {
-        const val = (node.values as any)[key];
-        if (Array.isArray(val)) {
-          walkAST(val, callback);
-        }
+
+    // Traverse known structural properties
+    if (node.body) walkNode(node.body);
+    if (node.children) walkNode(node.children);
+    if (node.entries) {
+      for (const entry of node.entries) {
+        walkNode(entry.value);
+        walkNode(entry.key);
       }
     }
+    if (node.values) {
+      for (const key in node.values) {
+        walkNode(node.values[key]);
+      }
+    }
+    // For expression nodes
+    if (node.left) walkNode(node.left);
+    if (node.right) walkNode(node.right);
+    if (node.condition) walkNode(node.condition);
+    if (node.consequent) walkNode(node.consequent);
+    if (node.alternate) walkNode(node.alternate);
+    if (node.expression) walkNode(node.expression);
+    if (node.args) walkNode(node.args);
+    if (node.elements) walkNode(node.elements);
   }
+
+  walkNode(nodes);
 }
 
 /**
@@ -91,6 +125,163 @@ function extractText(nodes: MlldNode[] | undefined): string {
     .filter((n): n is { type: 'Text'; content: string } => n.type === 'Text')
     .map(n => n.content)
     .join('');
+}
+
+/**
+ * Builtin variables that are always available without declaration
+ */
+const BUILTIN_VARIABLES = new Set([
+  // Reserved system variables
+  'now', 'base', 'debug', 'INPUT', 'mx', 'fm',
+  'payload', 'state', 'keychain',
+  // Builtin transformers
+  'json', 'md', 'xml', 'yaml', 'html', 'text', 'csv',
+  'keep', 'keepStructured',
+  // Pipeline context
+  'input', 'ctx',
+]);
+
+/**
+ * Common mistakes: variable.field patterns that are wrong
+ * Maps "identifier.field" to suggestion message
+ */
+const SUSPICIOUS_FIELD_ACCESS: Record<string, string> = {
+  'mx.now': '@now is a reserved variable, not @mx.now',
+  'mx.base': '@base is a reserved variable, not @mx.base',
+  'ctx.now': '@now is a reserved variable, not @ctx.now',
+};
+
+/**
+ * Detect undefined variable references in AST
+ */
+function detectUndefinedVariables(ast: MlldNode[]): UndefinedVariableWarning[] {
+  const warnings: UndefinedVariableWarning[] = [];
+  const declared = new Set<string>();
+
+  // First pass: collect all declarations
+  walkAST(ast, (node: any) => {
+    // var @name = ...
+    if (node.type === 'Directive' && node.kind === 'var') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        declared.add(identNode.identifier);
+      }
+    }
+
+    // exe @name(...) = ...
+    if (node.type === 'Directive' && node.kind === 'exe') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        declared.add(identNode.identifier);
+        // Also add parameter names as declared within exe scope
+        if (node.values?.params) {
+          for (const param of node.values.params) {
+            if (param.name) declared.add(param.name);
+          }
+        }
+      }
+    }
+
+    // import { @name } from ...
+    if (node.type === 'Directive' && node.kind === 'import') {
+      // Handle imports array (import { @a, @b } from ...)
+      if (node.values?.imports) {
+        for (const imp of node.values.imports) {
+          if (imp.identifier) declared.add(imp.identifier);
+          if (imp.alias) declared.add(imp.alias);
+        }
+      }
+      // Legacy: handle names array
+      if (node.values?.names) {
+        for (const name of node.values.names) {
+          if (name.identifier) declared.add(name.identifier);
+          if (name.alias) declared.add(name.alias);
+        }
+      }
+      // import "..." as @namespace (namespace is array with Text node containing the alias)
+      if (node.values?.namespace) {
+        if (Array.isArray(node.values.namespace)) {
+          for (const ns of node.values.namespace) {
+            if (ns.content) declared.add(ns.content);
+            if (ns.identifier) declared.add(ns.identifier);
+          }
+        } else if (node.values.namespace.identifier) {
+          declared.add(node.values.namespace.identifier);
+        }
+      }
+      // import "@payload" as @p (aliased imports)
+      if (node.values?.alias?.identifier) {
+        declared.add(node.values.alias.identifier);
+      }
+    }
+
+    // for @item in ... (directive form)
+    if (node.type === 'Directive' && node.kind === 'for') {
+      const varNode = node.values?.variable?.[0];
+      if (varNode?.identifier) {
+        declared.add(varNode.identifier);
+      }
+    }
+
+    // for @item in ... (expression form, e.g., in var assignments)
+    if (node.type === 'ForExpression') {
+      if (node.variable?.identifier) {
+        declared.add(node.variable.identifier);
+      }
+    }
+
+    // let @name = ... (in blocks)
+    if (node.type === 'LetAssignment') {
+      if (node.identifier) declared.add(node.identifier);
+    }
+  });
+
+  // Second pass: check all variable references
+  const seen = new Set<string>(); // Avoid duplicate warnings for same variable
+  const seenPaths = new Set<string>(); // Avoid duplicate warnings for same path
+
+  walkAST(ast, (node: any) => {
+    if (node.type === 'VariableReference') {
+      const name = node.identifier;
+      if (!name) return;
+
+      // Build full path for suspicious access check (e.g., mx.now)
+      let fullPath = name;
+      if (node.fields && node.fields.length > 0) {
+        const firstField = node.fields[0];
+        if (firstField.type === 'field' && firstField.value) {
+          fullPath = `${name}.${firstField.value}`;
+        }
+      }
+
+      // Check for suspicious field access patterns (even if base variable is valid)
+      if (SUSPICIOUS_FIELD_ACCESS[fullPath] && !seenPaths.has(fullPath)) {
+        seenPaths.add(fullPath);
+        warnings.push({
+          variable: fullPath,
+          line: node.location?.start?.line,
+          column: node.location?.start?.column,
+          suggestion: SUSPICIOUS_FIELD_ACCESS[fullPath],
+        });
+        return; // Don't also warn about the base variable
+      }
+
+      // Skip if already declared, builtin, or already warned
+      if (declared.has(name) || BUILTIN_VARIABLES.has(name) || seen.has(name)) {
+        return;
+      }
+
+      seen.add(name);
+
+      warnings.push({
+        variable: name,
+        line: node.location?.start?.line,
+        column: node.location?.start?.column,
+      });
+    }
+  });
+
+  return warnings;
 }
 
 /**
@@ -327,6 +518,14 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
     if (needs) result.needs = needs;
     if (options.ast) result.ast = ast;
 
+    // Check for undefined variables (enabled by default)
+    if (options.checkVariables !== false) {
+      const warnings = detectUndefinedVariables(ast);
+      if (warnings.length > 0) {
+        result.warnings = warnings;
+      }
+    }
+
   } catch (error: any) {
     result.valid = false;
     result.errors = [{
@@ -398,6 +597,19 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
     if (result.needs.py) needsList.push('py');
     console.log(`${label('needs')} ${needsList.join(', ')}`);
   }
+
+  // Display warnings for undefined variables
+  if (result.warnings && result.warnings.length > 0) {
+    console.log();
+    console.log(chalk.yellow(`Warnings (${result.warnings.length}):`));
+    for (const warn of result.warnings) {
+      const loc = warn.line ? ` (line ${warn.line}${warn.column ? `:${warn.column}` : ''})` : '';
+      console.log(chalk.yellow(`  @${warn.variable}${loc} - undefined variable`));
+      if (warn.suggestion) {
+        console.log(chalk.dim(`    hint: ${warn.suggestion}`));
+      }
+    }
+  }
 }
 
 export async function analyzeCommand(filepath: string, options: AnalyzeOptions = {}): Promise<void> {
@@ -412,6 +624,11 @@ export async function analyzeCommand(filepath: string, options: AnalyzeOptions =
     displayResult(result, options.format || 'text');
 
     if (!result.valid) {
+      process.exit(1);
+    }
+
+    // Exit with error if warnings found and errorOnWarnings is set
+    if (options.errorOnWarnings && result.warnings && result.warnings.length > 0) {
       process.exit(1);
     }
   } catch (error: any) {
@@ -432,16 +649,19 @@ Usage: mlld validate <filepath> [options]
 
 Validate mlld syntax and analyze module structure without executing.
 Returns validation status, exports, imports, guards, executables, and runtime needs.
+Also checks for undefined variable references.
 
 Options:
-  --format <format>  Output format: json or text (default: text)
-  --ast              Include the parsed AST in output (requires --format json)
-  -h, --help         Show this help message
+  --format <format>     Output format: json or text (default: text)
+  --ast                 Include the parsed AST in output (requires --format json)
+  --no-check-variables  Skip undefined variable checking
+  --error-on-warnings   Exit with code 1 if warnings are found
+  -h, --help            Show this help message
 
 Examples:
-  mlld validate module.mld                # Validate with text output
-  mlld validate module.mld --format json  # Validate with JSON output
-  mlld validate module.mld --ast --format json  # Include AST
+  mlld validate module.mld                     # Validate with text output
+  mlld validate module.mld --format json       # Validate with JSON output
+  mlld validate module.mld --error-on-warnings # Fail on undefined variables
         `);
         return;
       }
@@ -449,6 +669,8 @@ Examples:
       const filepath = args[0];
       const format = (flags.format || 'text') as 'json' | 'text';
       const ast = flags.ast === true;
+      const checkVariables = flags['no-check-variables'] !== true && flags.noCheckVariables !== true;
+      const errorOnWarnings = flags['error-on-warnings'] === true || flags.errorOnWarnings === true;
 
       if (!['json', 'text'].includes(format)) {
         console.error(chalk.red('Invalid format. Must be: json or text'));
@@ -460,7 +682,7 @@ Examples:
         process.exit(1);
       }
 
-      await analyzeCommand(filepath, { format, ast });
+      await analyzeCommand(filepath, { format, ast, checkVariables, errorOnWarnings });
     }
   };
 }

@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mlld howto core-modules`**: List official @mlld modules with descriptions
   - Shows ai-cli, array, claude, env, github, prose, string modules
   - `mlld howto @mlld/claude` shows module documentation directly
+- **`mlld validate` undefined variable detection**: Warns about undefined variable references before runtime
+  - Detects common mistakes like `@mx.now` with hint suggesting `@now`
+  - Tracks declarations from `var`, `let`, imports, for loops, and exe blocks
+  - Recognizes builtins: `@now`, `@base`, `@json`, `@local`, `@cache`, `@env`, `@p`, `@mx`
+  - `--error-on-warnings` flag exits with code 1 when warnings are found
 - **`mlld init`**: Quick non-interactive project initialization
   - Creates `mlld-config.json` and `mlld-lock.json` with sensible defaults
   - Creates `llm/run/` (scripts) and `llm/modules/` (local modules) directories
