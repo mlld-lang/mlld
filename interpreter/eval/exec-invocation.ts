@@ -2056,6 +2056,10 @@ async function evaluateExecInvocationInternal(
   }
 
   const mcpSecurityDescriptor = (node as any).meta?.mcpSecurity as SecurityDescriptor | undefined;
+  const mcpToolLabels = (node as any).meta?.mcpToolLabels;
+  const toolLabels = Array.isArray(mcpToolLabels)
+    ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
+    : [];
 
   const guardInputsWithMapping = materializeGuardInputsWithMapping(
     Array.from({ length: guardVariableCandidates.length }, (_unused, index) =>
@@ -2104,12 +2108,35 @@ async function evaluateExecInvocationInternal(
   const guardInputs = guardInputsWithMapping.map(entry => entry.variable);
   let postHookInputs: readonly Variable[] = guardInputs;
   const hookManager = env.getHookManager();
+  const mergeLabelArrays = (base: readonly string[], extra: readonly string[]): string[] => {
+    if (extra.length === 0) {
+      return base.length > 0 ? base.slice() : [];
+    }
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    for (const label of base) {
+      if (typeof label !== 'string' || label.length === 0 || seen.has(label)) {
+        continue;
+      }
+      seen.add(label);
+      merged.push(label);
+    }
+    for (const label of extra) {
+      if (typeof label !== 'string' || label.length === 0 || seen.has(label)) {
+        continue;
+      }
+      seen.add(label);
+      merged.push(label);
+    }
+    return merged;
+  };
   const execDescriptor = getVariableSecurityDescriptor(variable);
   const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+  const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
   const operationContext: OperationContext = {
     type: 'exe',
     name: variable.name ?? commandName,
-    labels: execDescriptor?.labels,
+    labels: operationLabels.length > 0 ? operationLabels : undefined,
     location: node.location ?? null,
     metadata: {
       executableType: definition.type,
@@ -2124,11 +2151,14 @@ async function evaluateExecInvocationInternal(
       InterpolationContext.ShellCommand
     );
     const parsedCommand = parseCommand(commandPreview);
-    const opLabels = getOperationLabels({
-      type: 'cmd',
-      command: parsedCommand.command,
-      subcommand: parsedCommand.subcommand
-    });
+    const opLabels = mergeLabelArrays(
+      getOperationLabels({
+        type: 'cmd',
+        command: parsedCommand.command,
+        subcommand: parsedCommand.subcommand
+      }),
+      toolLabels
+    );
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
       operationContext.command = commandPreview;
@@ -2174,7 +2204,10 @@ async function evaluateExecInvocationInternal(
     }
   } else if (isCodeExecutable(definition)) {
     const opType = resolveOpTypeFromLanguage(definition.language);
-    const opLabels = opType ? getOperationLabels({ type: opType }) : [];
+    const opLabels = mergeLabelArrays(
+      opType ? getOperationLabels({ type: opType }) : [],
+      toolLabels
+    );
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
     }
@@ -2191,7 +2224,7 @@ async function evaluateExecInvocationInternal(
       );
     }
   } else if (isNodeFunctionExecutable(definition)) {
-    const opLabels = getOperationLabels({ type: 'node' });
+    const opLabels = mergeLabelArrays(getOperationLabels({ type: 'node' }), toolLabels);
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
     }

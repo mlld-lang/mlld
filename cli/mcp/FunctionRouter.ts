@@ -48,7 +48,7 @@ export class FunctionRouter {
       }
 
       const execVar = variable as ExecutableVariable;
-      const invocation = this.buildInvocation(execName, execVar, args, toolName);
+      const invocation = this.buildInvocation(execName, execVar, args, toolName, definition.labels);
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
       return this.serializeResult(result.value);
@@ -72,7 +72,8 @@ export class FunctionRouter {
     name: string,
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
-    toolName?: string
+    toolName?: string,
+    toolLabels?: string[]
   ): ExecInvocation {
     const location = this.createLocation();
     const identifierNode = this.createVariableReferenceNode(name, location);
@@ -95,7 +96,8 @@ export class FunctionRouter {
       location,
       commandRef,
       meta: {
-        mcpSecurity: mcpSecurityDescriptor
+        mcpSecurity: mcpSecurityDescriptor,
+        ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {})
       }
     } as ExecInvocation;
   }

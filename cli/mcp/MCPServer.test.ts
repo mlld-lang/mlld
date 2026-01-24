@@ -170,6 +170,52 @@ describe('MCPServer', () => {
     });
   });
 
+  it('surfaces tool labels in guard context', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /guard @blockDestructive before op:exe = when [
+        @mx.op.labels[0] == "destructive" => deny "Destructive tool blocked"
+        * => allow
+      ]
+      /exe @destroy(id: string) = js { return 'deleted ' + id; }
+      /var tools @agentTools = {
+        destroy: { mlld: @destroy, labels: ["destructive"] }
+      }
+      /export { @destroy }
+    `, ['destroy']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const response = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'destroy',
+        arguments: { id: '123' },
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(response.result).toMatchObject({ isError: true });
+    const text = (response.result as any)?.content?.[0]?.text ?? '';
+    expect(text).toContain('Destructive tool blocked');
+  });
+
   it('filters tools when tool collection is provided', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @alpha() = js { return 'a'; }
