@@ -8,6 +8,7 @@ import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
+import type { ToolCollection } from '@core/types/tools';
 import { MCPServer } from '../mcp/MCPServer';
 import { mlldNameToMCPName } from '../mcp/SchemaGenerator';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
@@ -18,6 +19,7 @@ interface ServeOptions {
   configPath?: string;
   envOverrides: Record<string, string>;
   toolsOverride?: string[];
+  toolsCollection?: string;
 }
 
 interface ConfigResult {
@@ -153,9 +155,21 @@ class McpCommand {
     console.error(`Loaded ${exportedFunctions.size} exported function(s)`);
     console.error('Starting MCP server...');
 
+    let toolCollection: ToolCollection | undefined;
+    if (serveOptions.toolsCollection) {
+      const collectionName = normalizeVarName(serveOptions.toolsCollection);
+      const toolsVar = environment.getVariable(collectionName) as Variable | undefined;
+      if (!toolsVar || toolsVar.type !== 'object' || !toolsVar.internal?.toolCollection) {
+        console.error(`Tool collection not found: @${collectionName}`);
+        process.exit(1);
+      }
+      toolCollection = toolsVar.internal.toolCollection;
+    }
+
     const server = new MCPServer({
       environment,
       exportedFunctions,
+      toolCollection,
     });
 
     await server.start();
@@ -174,7 +188,7 @@ class McpCommand {
         modulePath = defaultRelative;
         defaultUsed = true;
       } else {
-        console.error('Usage: mlld mcp [module-path] [--config module.mld.md] [--env KEY=VAL] [--tools tool1,tool2]');
+        console.error('Usage: mlld mcp [module-path] [--config module.mld.md] [--env KEY=VAL] [--tools tool1,tool2] [--tools-collection @var]');
         console.error('No module path provided and llm/mcp/ not found');
         process.exit(1);
       }
@@ -185,6 +199,7 @@ class McpCommand {
       ? parseEnvOverrides(envValue)
       : {};
     const toolsOverride = parseToolsList(getStringFlag(flags, 'tools'));
+    const toolsCollection = getStringFlag(flags, 'tools-collection');
     const configPathRaw = getStringFlag(flags, 'config');
     const configPath = configPathRaw ? path.resolve(configPathRaw) : undefined;
 
@@ -199,6 +214,7 @@ class McpCommand {
       configPath,
       envOverrides,
       toolsOverride,
+      toolsCollection,
     };
   }
 
@@ -599,6 +615,11 @@ function parseToolsList(value?: string): string[] | undefined {
     .filter(Boolean);
 
   return tools.length > 0 ? tools : [];
+}
+
+function normalizeVarName(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
 }
 
 function getStringFlag(flags: Record<string, unknown>, key: string): string | undefined {

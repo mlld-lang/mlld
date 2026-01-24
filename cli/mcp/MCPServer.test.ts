@@ -170,6 +170,75 @@ describe('MCPServer', () => {
     });
   });
 
+  it('filters tools when tool collection is provided', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /exe @beta() = js { return 'b'; }
+      /var tools @agentTools = {
+        alphaTool: { mlld: @alpha }
+      }
+      /export { @alpha, @beta }
+    `, ['alpha', 'beta']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const response = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((response.result as any).tools).toEqual([
+      {
+        name: 'alpha_tool',
+        description: '',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+    ]);
+  });
+
+  it('rejects tool collections that reference unknown executables', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /var tools @agentTools = {
+        alphaTool: { mlld: @alpha }
+      }
+      /export { @alpha }
+    `, ['alpha']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const filteredExports = new Map<string, ExecutableVariable>();
+
+    expect(() => {
+      new MCPServer({ environment, exportedFunctions: filteredExports, toolCollection });
+    }).toThrow(/unknown executable/i);
+  });
+
   it('returns error when not initialized', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @noop() = js { return 'ok'; }
