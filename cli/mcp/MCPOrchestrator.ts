@@ -26,7 +26,6 @@ export interface McpServerConfig {
   npm?: string;
   tools?: string[] | '*';
   env?: Record<string, string>;
-  config?: Record<string, unknown>;
   name?: string;
 }
 
@@ -40,7 +39,6 @@ export interface McpConnectionInfo {
     args?: string[];
     npm?: string;
     tools: string[];
-    config?: Record<string, unknown>;
     pid?: number;
   }>;
 }
@@ -465,7 +463,6 @@ export class MCPOrchestrator {
         npm: server.kind === 'npm' ? server.npm : undefined,
         args: server.kind === 'module' ? undefined : server.args,
         tools: filteredTools.map(tool => tool.name),
-        config: server.config,
         pid: connection.process.pid ?? undefined
       });
     }
@@ -659,7 +656,6 @@ type NormalizedServerConfig = {
   args: string[];
   tools?: string[];
   env: Record<string, string>;
-  config?: Record<string, unknown>;
   npm?: string;
 };
 
@@ -719,9 +715,6 @@ function normalizeServerConfigs(servers: McpServerConfig[]): NormalizedServerCon
         args: buildModuleArgs({ module: moduleName, tools }),
         tools,
         env,
-        config: server.config && typeof server.config === 'object' && !Array.isArray(server.config)
-          ? server.config
-          : undefined
       });
       return;
     }
@@ -738,9 +731,6 @@ function normalizeServerConfigs(servers: McpServerConfig[]): NormalizedServerCon
         args,
         tools,
         env,
-        config: server.config && typeof server.config === 'object' && !Array.isArray(server.config)
-          ? server.config
-          : undefined
       });
       return;
     }
@@ -757,9 +747,6 @@ function normalizeServerConfigs(servers: McpServerConfig[]): NormalizedServerCon
       args: [npmPackage, ...args],
       tools,
       env,
-      config: server.config && typeof server.config === 'object' && !Array.isArray(server.config)
-        ? server.config
-        : undefined
     });
   });
 
