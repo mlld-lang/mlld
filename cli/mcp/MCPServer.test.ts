@@ -216,6 +216,80 @@ describe('MCPServer', () => {
     expect(text).toContain('Destructive tool blocked');
   });
 
+  it('binds and exposes tool parameters', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @createIssue(owner: string, repo: string, title: string, body: string) = js {
+        return owner + "/" + repo + ": " + title + " - " + body;
+      }
+      /var tools @agentTools = {
+        createIssue: {
+          mlld: @createIssue,
+          bind: { owner: "mlld", repo: "infra" },
+          expose: ["title", "body"]
+        }
+      }
+      /export { @createIssue }
+    `, ['createIssue']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const listResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((listResponse.result as any).tools).toEqual([
+      {
+        name: 'create_issue',
+        description: '',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            body: { type: 'string' },
+          },
+          required: ['title', 'body'],
+        },
+      },
+    ]);
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'create_issue',
+        arguments: { title: 'Bug', body: 'Fix it' },
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'mlld/infra: Bug - Fix it',
+        },
+      ],
+    });
+  });
+
   it('filters tools when tool collection is provided', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @alpha() = js { return 'a'; }

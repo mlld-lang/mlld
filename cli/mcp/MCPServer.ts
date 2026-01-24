@@ -131,7 +131,7 @@ export class MCPServer {
     if (this.toolCollection && this.toolMap) {
       for (const [toolName, execVar] of this.toolMap.entries()) {
         const toolDef = this.toolCollection[toolName];
-        const schema = generateToolSchema(toolName, execVar);
+        const schema = generateToolSchema(toolName, execVar, toolDef);
         if (toolDef?.description) {
           schema.description = toolDef.description;
         }

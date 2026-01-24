@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { ExecInvocation, TextNode, VariableReferenceNode, CommandReference, LiteralNode } from '@core/types';
 import type { DataValue, DataObjectEntry } from '@core/types/var';
 import type { ExecutableVariable, Variable } from '@core/types/variable';
-import type { ToolCollection } from '@core/types/tools';
+import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { mcpNameToMlldName } from './SchemaGenerator';
@@ -48,7 +48,8 @@ export class FunctionRouter {
       }
 
       const execVar = variable as ExecutableVariable;
-      const invocation = this.buildInvocation(execName, execVar, args, toolName, definition.labels);
+      const resolvedArgs = this.resolveToolArgs(execVar, args, definition, toolName);
+      const invocation = this.buildInvocation(execName, execVar, resolvedArgs, toolName, definition.labels);
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
       return this.serializeResult(result.value);
@@ -107,6 +108,47 @@ export class FunctionRouter {
       taint: ['src:mcp'],
       sources: [`mcp:${toolName}`]
     });
+  }
+
+  private resolveToolArgs(
+    execVar: ExecutableVariable,
+    args: Record<string, unknown>,
+    definition: ToolDefinition,
+    toolName: string
+  ): Record<string, unknown> {
+    const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
+    const bound =
+      definition.bind && typeof definition.bind === 'object' && !Array.isArray(definition.bind)
+        ? definition.bind
+        : undefined;
+    const boundKeys = bound ? Object.keys(bound) : [];
+    const hasExpose = Array.isArray(definition.expose);
+    const exposed = hasExpose
+      ? definition.expose!
+      : paramNames.filter(param => !boundKeys.includes(param));
+    const exposedSet = new Set(exposed);
+
+    for (const key of Object.keys(args)) {
+      if (!exposedSet.has(key)) {
+        throw new Error(`Parameter '${key}' is not exposed by tool '${toolName}'`);
+      }
+      if (bound && Object.prototype.hasOwnProperty.call(bound, key)) {
+        throw new Error(`Parameter '${key}' is bound by tool '${toolName}'`);
+      }
+    }
+
+    if (exposed.length > 0) {
+      const missing = exposed.filter(key => !Object.prototype.hasOwnProperty.call(args, key));
+      if (missing.length > 0) {
+        throw new Error(`Tool '${toolName}' requires parameters: ${missing.join(', ')}`);
+      }
+    }
+
+    if (!bound || boundKeys.length === 0) {
+      return args;
+    }
+
+    return { ...bound, ...args };
   }
 
   private createArgumentNodes(

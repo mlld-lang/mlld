@@ -66,6 +66,29 @@ describe('SchemaGenerator', () => {
     });
   });
 
+  it('applies tool exposure and bindings to schema', () => {
+    const execVar = createExecutableVariable(
+      'createIssue',
+      'code',
+      'return {};',
+      ['owner', 'repo', 'title', 'body'],
+      'node',
+      source,
+      undefined
+    );
+
+    const schema = generateToolSchema('createIssue', execVar, {
+      bind: { owner: 'mlld', repo: 'infra' },
+      expose: ['title', 'body']
+    });
+
+    expect(schema.inputSchema.properties).toEqual({
+      title: { type: 'string' },
+      body: { type: 'string' }
+    });
+    expect(schema.inputSchema.required).toEqual(['title', 'body']);
+  });
+
   it('converts mlld names to MCP snake_case', () => {
     expect(mlldNameToMCPName('listIssues')).toBe('list_issues');
     expect(mlldNameToMCPName('createIssue')).toBe('create_issue');

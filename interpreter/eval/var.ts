@@ -1902,6 +1902,10 @@ function normalizeToolCollection(raw: unknown, env: Environment): ToolCollection
     const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
     const expose = normalizeStringArray(toolValue.expose, toolName, 'expose');
     const bind = toolValue.bind;
+    const boundKeys =
+      bind && isPlainObject(bind)
+        ? Object.keys(bind)
+        : [];
 
     if (bind !== undefined) {
       if (!isPlainObject(bind)) {
@@ -1921,6 +1925,37 @@ function normalizeToolCollection(raw: unknown, env: Environment): ToolCollection
         throw new Error(
           `Tool '${toolName}' expose values must match parameters of '@${mlldName}': ${invalidExpose.join(', ')}`
         );
+      }
+    }
+
+    if (expose) {
+      const overlap = boundKeys.filter(key => expose.includes(key));
+      if (overlap.length > 0) {
+        throw new Error(
+          `Tool '${toolName}' expose values cannot include bound parameters: ${overlap.join(', ')}`
+        );
+      }
+
+      const covered = new Set([...boundKeys, ...expose]);
+      let lastCoveredIndex = -1;
+      for (let i = 0; i < paramNames.length; i++) {
+        if (covered.has(paramNames[i])) {
+          lastCoveredIndex = i;
+        }
+      }
+      if (lastCoveredIndex >= 0) {
+        const missing: string[] = [];
+        for (let i = 0; i <= lastCoveredIndex; i++) {
+          const paramName = paramNames[i];
+          if (!covered.has(paramName)) {
+            missing.push(paramName);
+          }
+        }
+        if (missing.length > 0) {
+          throw new Error(
+            `Tool '${toolName}' bind and expose must cover required parameters: ${missing.join(', ')}`
+          );
+        }
       }
     }
 

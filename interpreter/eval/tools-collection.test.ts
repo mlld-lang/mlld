@@ -79,4 +79,26 @@ describe('tool collections', () => {
       `)
     ).rejects.toThrow(/expose values/i);
   });
+
+  it('rejects expose values that overlap bind', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
+        /var tools @badTools = {
+          createIssue: { mlld: @createIssue, bind: { owner: "mlld" }, expose: ["owner", "title"] }
+        }
+      `)
+    ).rejects.toThrow(/expose values cannot include bound/i);
+  });
+
+  it('rejects expose values that skip required parameters', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
+        /var tools @badTools = {
+          createIssue: { mlld: @createIssue, expose: ["title"] }
+        }
+      `)
+    ).rejects.toThrow(/cover required parameters/i);
+  });
 });
