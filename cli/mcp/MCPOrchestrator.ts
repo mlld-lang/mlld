@@ -16,6 +16,7 @@ import { mcpNameToMlldName } from './SchemaGenerator';
 
 export interface McpConfig {
   servers?: McpServerConfig[];
+  lifecycle?: McpLifecycleConfigInput;
 }
 
 export interface McpServerConfig {
@@ -48,6 +49,7 @@ type PendingHandler = {
   resolve: (response: JSONRPCResponse) => void;
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
+  onDone?: () => void;
 };
 
 class McpServerConnection {
@@ -56,12 +58,25 @@ class McpServerConnection {
   private nextId = 1;
   private readonly pending = new Map<string | number, PendingHandler>();
   private closed = false;
+  private closedReason?: 'idle' | 'exit' | 'manual';
+  private readonly idleTimeoutMs?: number;
+  private idleTimer?: NodeJS.Timeout;
+  private inflightCount = 0;
 
-  constructor(name: string, child: ChildProcessWithoutNullStreams) {
+  constructor(name: string, child: ChildProcessWithoutNullStreams, idleTimeoutMs?: number) {
     this.name = name;
     this.process = child;
+    this.idleTimeoutMs = idleTimeoutMs;
     this.attachOutput();
     this.attachExitHandlers();
+  }
+
+  isClosed(): boolean {
+    return this.closed;
+  }
+
+  getClosedReason(): 'idle' | 'exit' | 'manual' | undefined {
+    return this.closedReason;
   }
 
   async initialize(): Promise<void> {
@@ -124,21 +139,31 @@ class McpServerConnection {
 
     if (request.id === null || request.id === undefined) {
       this.process.stdin.write(`${JSON.stringify(request)}\n`);
+      this.touch();
       return { jsonrpc: '2.0', id: request.id ?? null, result: null };
     }
 
     return new Promise<JSONRPCResponse>((resolve, reject) => {
+      this.inflightCount += 1;
+      const onDone = () => {
+        this.inflightCount = Math.max(0, this.inflightCount - 1);
+        if (this.inflightCount === 0) {
+          this.touch();
+        }
+      };
       const timeout = setTimeout(() => {
         this.pending.delete(request.id as string | number);
+        onDone();
         reject(new Error(`MCP server '${this.name}' request timed out`));
       }, 30000);
 
-      this.pending.set(request.id as string | number, { resolve, reject, timeout });
+      this.pending.set(request.id as string | number, { resolve, reject, timeout, onDone });
 
       this.process.stdin.write(`${JSON.stringify(request)}\n`, error => {
         if (!error) return;
         clearTimeout(timeout);
         this.pending.delete(request.id as string | number);
+        onDone();
         reject(error);
       });
     });
@@ -172,6 +197,7 @@ class McpServerConnection {
 
       clearTimeout(pending.timeout);
       this.pending.delete(response.id as string | number);
+      pending.onDone?.();
       pending.resolve(response);
     });
   }
@@ -179,6 +205,10 @@ class McpServerConnection {
   private attachExitHandlers(): void {
     this.process.on('exit', (code, signal) => {
       this.closed = true;
+      if (!this.closedReason) {
+        this.closedReason = 'exit';
+      }
+      this.clearIdleTimer();
       const message = signal
         ? `MCP server '${this.name}' exited with signal ${signal}`
         : `MCP server '${this.name}' exited with code ${code ?? 0}`;
@@ -188,6 +218,29 @@ class McpServerConnection {
         this.pending.delete(id);
       }
     });
+  }
+
+  private touch(): void {
+    if (!this.idleTimeoutMs || this.idleTimeoutMs <= 0) {
+      return;
+    }
+    this.clearIdleTimer();
+    this.idleTimer = setTimeout(() => {
+      if (this.closed) {
+        return;
+      }
+      this.closed = true;
+      this.closedReason = 'idle';
+      this.process.kill('SIGTERM');
+    }, this.idleTimeoutMs);
+  }
+
+  private clearIdleTimer(): void {
+    if (!this.idleTimer) {
+      return;
+    }
+    clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
   }
 }
 
@@ -356,6 +409,10 @@ export class MCPOrchestrator {
   private toolEnvironment?: Environment;
   private toolRouter?: FunctionRouter;
   private toolNames: string[] = [];
+  private lifecycle?: McpLifecycleConfig;
+  private pidFiles = new Map<string, string>();
+  private serverConfigs = new Map<string, NormalizedServerConfig>();
+  private serverHandles = new Map<string, { connection: McpServerConnection; restartAttempts: number }>();
 
   constructor(options?: { environment?: Environment }) {
     this.environment = options?.environment;
@@ -370,23 +427,25 @@ export class MCPOrchestrator {
     if (normalized.length === 0) {
       return null;
     }
+    const lifecycle = normalizeLifecycle(config.lifecycle);
+    this.lifecycle = lifecycle;
+    if (normalized.length > lifecycle.maxConcurrent) {
+      throw new Error(`MCP server limit exceeded: ${normalized.length} > ${lifecycle.maxConcurrent}`);
+    }
 
     const toolIndex = new Map<string, McpServerConnection>();
     const tools: MCPToolSchema[] = [];
     const serverInfos: McpConnectionInfo['servers'] = [];
     this.toolNames = [];
     this.toolEnvironment = this.environment ? this.environment.createChild() : undefined;
+    this.serverConfigs.clear();
+    this.serverHandles.clear();
+    this.pidFiles.clear();
 
     for (const server of normalized) {
-      const child = spawn(server.command, server.args, {
-        stdio: ['pipe', 'pipe', 'inherit'],
-        env: { ...process.env, ...server.env }
-      });
-
-      const connection = new McpServerConnection(server.name, child);
-      this.servers.set(server.name, connection);
-
-      await connection.initialize();
+      this.serverConfigs.set(server.name, server);
+      const connection = await this.spawnServer(server, lifecycle);
+      this.serverHandles.set(server.name, { connection, restartAttempts: 0 });
       const listedTools = await connection.listTools();
       const filteredTools = filterTools(listedTools, server.tools, server.name);
 
@@ -396,7 +455,7 @@ export class MCPOrchestrator {
         }
         toolIndex.set(tool.name, connection);
         tools.push(tool);
-        this.registerToolProxy(tool, connection);
+        this.registerToolProxy(tool, server.name);
       }
 
       serverInfos.push({
@@ -407,7 +466,7 @@ export class MCPOrchestrator {
         args: server.kind === 'module' ? undefined : server.args,
         tools: filteredTools.map(tool => tool.name),
         config: server.config,
-        pid: child.pid ?? undefined
+        pid: connection.process.pid ?? undefined
       });
     }
 
@@ -456,12 +515,20 @@ export class MCPOrchestrator {
       this.socketPath = undefined;
     }
 
+    for (const pidFile of this.pidFiles.values()) {
+      await removePidFile(pidFile);
+    }
+    this.pidFiles.clear();
+
     this.toolEnvironment = undefined;
     this.toolRouter = undefined;
     this.toolNames = [];
+    this.serverConfigs.clear();
+    this.serverHandles.clear();
+    this.lifecycle = undefined;
   }
 
-  private registerToolProxy(tool: MCPToolSchema, connection: McpServerConnection): void {
+  private registerToolProxy(tool: MCPToolSchema, serverName: string): void {
     if (!this.toolEnvironment) {
       return;
     }
@@ -477,7 +544,7 @@ export class MCPOrchestrator {
         const args = input && typeof input === 'object' && !Array.isArray(input)
           ? input
           : {};
-        return connection.callTool(tool.name, args);
+        return this.callToolWithRetry(serverName, tool.name, args);
       },
       paramNames: ['input'],
       sourceDirective: 'exec'
@@ -513,6 +580,74 @@ export class MCPOrchestrator {
     this.toolEnvironment.setVariable(mlldName, execVar);
     this.toolNames.push(mlldName);
   }
+
+  private async callToolWithRetry(
+    serverName: string,
+    toolName: string,
+    args: Record<string, unknown>
+  ): Promise<string> {
+    const handle = this.serverHandles.get(serverName);
+    if (!handle) {
+      throw new Error(`MCP server '${serverName}' is not available`);
+    }
+
+    try {
+      return await handle.connection.callTool(toolName, args);
+    } catch (error) {
+      const reason = handle.connection.getClosedReason();
+      if (!handle.connection.isClosed() || reason !== 'exit' || handle.restartAttempts >= 1) {
+        throw error;
+      }
+      handle.restartAttempts += 1;
+      const config = this.serverConfigs.get(serverName);
+      const lifecycle = this.lifecycle ?? DEFAULT_LIFECYCLE;
+      if (!config) {
+        throw error;
+      }
+      const connection = await this.spawnServer(config, lifecycle);
+      handle.connection = connection;
+      return await connection.callTool(toolName, args);
+    }
+  }
+
+  private async spawnServer(
+    server: NormalizedServerConfig,
+    lifecycle: McpLifecycleConfig
+  ): Promise<McpServerConnection> {
+    const child = spawn(server.command, server.args, {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      env: { ...process.env, ...server.env }
+    });
+
+    const connection = new McpServerConnection(server.name, child, lifecycle.idleTimeoutMs);
+    this.servers.set(server.name, connection);
+
+    if (child.pid) {
+      const pidFile = await writePidFile(server.name, child.pid);
+      this.pidFiles.set(server.name, pidFile);
+      child.once('exit', () => {
+        removePidFile(pidFile).catch(() => {});
+        this.pidFiles.delete(server.name);
+      });
+    }
+
+    try {
+      await withTimeout(
+        connection.initialize(),
+        lifecycle.startupTimeoutMs,
+        `MCP server '${server.name}' initialize`
+      );
+      return connection;
+    } catch (error) {
+      await stopProcess(child, server.name);
+      const pidFile = this.pidFiles.get(server.name);
+      if (pidFile) {
+        await removePidFile(pidFile);
+        this.pidFiles.delete(server.name);
+      }
+      throw error;
+    }
+  }
 }
 
 type NormalizedServerConfig = {
@@ -525,6 +660,24 @@ type NormalizedServerConfig = {
   env: Record<string, string>;
   config?: Record<string, unknown>;
   npm?: string;
+};
+
+type McpLifecycleConfigInput = {
+  startupTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  maxConcurrent?: number;
+};
+
+type McpLifecycleConfig = {
+  startupTimeoutMs: number;
+  idleTimeoutMs: number;
+  maxConcurrent: number;
+};
+
+const DEFAULT_LIFECYCLE: McpLifecycleConfig = {
+  startupTimeoutMs: 10_000,
+  idleTimeoutMs: 60_000,
+  maxConcurrent: 5
 };
 
 function normalizeServerConfigs(servers: McpServerConfig[]): NormalizedServerConfig[] {
@@ -665,6 +818,59 @@ function filterTools(
   return filtered;
 }
 
+function normalizeLifecycle(input?: McpLifecycleConfigInput): McpLifecycleConfig {
+  const startupTimeoutMs = normalizePositiveNumber(
+    input?.startupTimeoutMs,
+    DEFAULT_LIFECYCLE.startupTimeoutMs
+  );
+  const idleTimeoutMs = normalizePositiveNumber(
+    input?.idleTimeoutMs,
+    DEFAULT_LIFECYCLE.idleTimeoutMs
+  );
+  const maxConcurrentRaw = normalizePositiveNumber(
+    input?.maxConcurrent,
+    DEFAULT_LIFECYCLE.maxConcurrent
+  );
+  return {
+    startupTimeoutMs,
+    idleTimeoutMs,
+    maxConcurrent: Math.max(1, Math.floor(maxConcurrentRaw))
+  };
+}
+
+function normalizePositiveNumber(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return value;
+}
+
+async function writePidFile(serverName: string, pid: number): Promise<string> {
+  const dir = await ensureRunDir();
+  const filename = `mcp-${sanitizeName(serverName)}.pid`;
+  const filePath = path.join(dir, filename);
+  await fs.writeFile(filePath, String(pid));
+  return filePath;
+}
+
+async function removePidFile(pidFilePath: string): Promise<void> {
+  try {
+    await fs.unlink(pidFilePath);
+  } catch {
+    return;
+  }
+}
+
+async function ensureRunDir(): Promise<string> {
+  const dir = path.join(process.cwd(), '.mlld', 'run');
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+}
+
+function sanitizeName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 function buildModuleArgs(server: { module: string; tools?: string[] }): string[] {
   const args = ['mcp', server.module];
   if (server.tools && server.tools.length > 0) {
@@ -693,6 +899,27 @@ function dedupeName(candidate: string, seen: Set<string>): string {
   }
   seen.add(name);
   return name;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return promise;
+  }
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 function buildSocketPath(): string {

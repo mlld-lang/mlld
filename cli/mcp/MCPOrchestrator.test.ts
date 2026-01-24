@@ -6,9 +6,17 @@ import { PathService } from '@services/fs/PathService';
 import * as net from 'net';
 import * as readline from 'readline';
 import { fileURLToPath } from 'url';
+import * as fs from 'fs/promises';
+import * as os from 'os';
 
 const fakeServerPath = fileURLToPath(
   new URL('../../tests/fixtures/mcp/fake-server.cjs', import.meta.url)
+);
+const hangServerPath = fileURLToPath(
+  new URL('../../tests/fixtures/mcp/hang-server.cjs', import.meta.url)
+);
+const crashServerPath = fileURLToPath(
+  new URL('../../tests/fixtures/mcp/crash-server.cjs', import.meta.url)
 );
 
 class McpTestClient {
@@ -177,6 +185,119 @@ describe('MCPOrchestrator', () => {
     expect(callResponse.result.content[0].text).toBe('hello');
 
     client.close();
+    await orchestrator.cleanup();
+  });
+
+  it('enforces startup timeout', async () => {
+    const { MCPOrchestrator } = await import('./MCPOrchestrator');
+    const environment = await createEnvironment('');
+    const orchestrator = new MCPOrchestrator({ environment });
+
+    await expect(orchestrator.start({
+      lifecycle: { startupTimeoutMs: 50 },
+      servers: [
+        {
+          command: process.execPath,
+          args: [hangServerPath]
+        }
+      ]
+    })).rejects.toThrow(/timed out/);
+
+    await orchestrator.cleanup();
+  });
+
+  it('shuts down idle servers', async () => {
+    const { MCPOrchestrator } = await import('./MCPOrchestrator');
+    const environment = await createEnvironment('');
+    const orchestrator = new MCPOrchestrator({ environment });
+
+    const connection = await orchestrator.start({
+      lifecycle: { idleTimeoutMs: 50 },
+      servers: [
+        {
+          command: process.execPath,
+          args: [fakeServerPath],
+          tools: ['echo']
+        }
+      ]
+    });
+
+    if (!connection) {
+      throw new Error('MCP orchestrator did not return connection info');
+    }
+
+    const client = await McpTestClient.connect(connection.socketPath);
+    await client.request('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 75));
+
+    const callResponse = await client.request('tools/call', {
+      name: 'echo',
+      arguments: { text: 'late' }
+    });
+    expect(callResponse.result.isError).toBe(true);
+    expect(callResponse.result.content[0].text).toContain('tools/call failed');
+
+    client.close();
+    await orchestrator.cleanup();
+  });
+
+  it('restarts once after a crash during call', async () => {
+    const { MCPOrchestrator } = await import('./MCPOrchestrator');
+    const environment = await createEnvironment('');
+    const markerDir = await fs.mkdtemp(`${os.tmpdir()}/mlld-mcp-crash-`);
+    const markerPath = `${markerDir}/marker`;
+
+    const orchestrator = new MCPOrchestrator({ environment });
+    const connection = await orchestrator.start({
+      servers: [
+        {
+          command: process.execPath,
+          args: [crashServerPath],
+          env: { MLLD_MCP_CRASH_MARKER: markerPath },
+          tools: ['echo']
+        }
+      ]
+    });
+
+    if (!connection) {
+      throw new Error('MCP orchestrator did not return connection info');
+    }
+
+    const client = await McpTestClient.connect(connection.socketPath);
+    await client.request('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' }
+    });
+    const callResponse = await client.request('tools/call', {
+      name: 'echo',
+      arguments: { text: 'retry' }
+    });
+    expect(callResponse.result.isError).toBeUndefined();
+    expect(callResponse.result.content[0].text).toBe('retry');
+
+    client.close();
+    await orchestrator.cleanup();
+  });
+
+  it('enforces max concurrent servers', async () => {
+    const { MCPOrchestrator } = await import('./MCPOrchestrator');
+    const environment = await createEnvironment('');
+    const orchestrator = new MCPOrchestrator({ environment });
+
+    await expect(orchestrator.start({
+      lifecycle: { maxConcurrent: 1 },
+      servers: [
+        { command: process.execPath, args: [fakeServerPath] },
+        { command: process.execPath, args: [fakeServerPath] }
+      ]
+    })).rejects.toThrow(/limit exceeded/);
+
     await orchestrator.cleanup();
   });
 });
