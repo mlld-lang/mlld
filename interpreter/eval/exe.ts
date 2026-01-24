@@ -161,6 +161,20 @@ function extractParamNames(params: any[]): string[] {
   }).filter(Boolean);
 }
 
+function extractParamTypes(params: any[]): Record<string, string> {
+  const paramTypes: Record<string, string> = {};
+  for (const param of params) {
+    if (param && typeof param === 'object' && param.type === 'Parameter') {
+      const name = param.name;
+      const type = param.paramType;
+      if (typeof name === 'string' && typeof type === 'string' && type.length > 0) {
+        paramTypes[name] = type;
+      }
+    }
+  }
+  return paramTypes;
+}
+
 // Parameter conflict checking removed - parameters are allowed to shadow outer scope variables
 // This is consistent with standard function parameter behavior and mlld's immutability model
 
@@ -916,6 +930,11 @@ export async function evaluateExe(
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }
+  
+  const paramTypes = extractParamTypes(directive.values?.params || []);
+  if (Object.keys(paramTypes).length > 0) {
+    executableDef.paramTypes = paramTypes;
+  }
 
   const description = await resolveExeDescription(directive.values?.withClause?.description, env);
   if (description !== undefined) {
@@ -1010,6 +1029,9 @@ export async function evaluateExe(
         }
       }
     );
+    if (Object.keys(paramTypes).length > 0) {
+      variable.paramTypes = paramTypes;
+    }
     if (description !== undefined) {
       variable.description = description;
     }

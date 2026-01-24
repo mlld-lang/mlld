@@ -171,6 +171,7 @@ export interface SectionMarkerNode extends BaseMlldNode {
 export interface ParameterNode extends BaseMlldNode {
   type: 'Parameter';
   name: string;
+  paramType?: string;
 }
 
 // Template for-block node used inside template interpolation contexts

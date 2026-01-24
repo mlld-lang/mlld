@@ -1,5 +1,5 @@
 import type { ExecutableVariable } from '@core/types/variable';
-import type { MCPToolSchema } from './types';
+import type { MCPToolSchema, JSONSchemaProperty } from './types';
 
 const UPPERCASE_PATTERN = /([A-Z])/g;
 const NON_ALPHANUMERIC_PATTERN = /[^a-z0-9_]/g;
@@ -19,15 +19,26 @@ export function mcpNameToMlldName(name: string): string {
 
 export function generateToolSchema(name: string, execVar: ExecutableVariable): MCPToolSchema {
   const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
-  const properties: Record<string, { type: 'string' }> = {};
+  const properties: Record<string, JSONSchemaProperty> = {};
   const description =
     execVar.description ??
     execVar.internal?.executableDef?.description ??
     execVar.mx?.description ??
     '';
+  const paramTypes =
+    execVar.paramTypes ??
+    execVar.internal?.executableDef?.paramTypes ??
+    {};
 
   for (const param of paramNames) {
-    properties[param] = { type: 'string' };
+    const rawType = typeof paramTypes[param] === 'string' ? paramTypes[param].toLowerCase() : '';
+    const type = (rawType === 'number' ||
+      rawType === 'boolean' ||
+      rawType === 'array' ||
+      rawType === 'object')
+      ? rawType
+      : 'string';
+    properties[param] = { type };
   }
 
   return {

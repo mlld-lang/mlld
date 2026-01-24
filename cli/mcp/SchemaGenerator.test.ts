@@ -38,6 +38,34 @@ describe('SchemaGenerator', () => {
     });
   });
 
+  it('maps parameter types to JSON schema types', () => {
+    const execVar = createExecutableVariable(
+      'searchIssues',
+      'code',
+      'return [];',
+      ['query', 'limit', 'includeClosed', 'labels', 'filters'],
+      'node',
+      source,
+      undefined
+    );
+    execVar.paramTypes = {
+      limit: 'number',
+      includeClosed: 'boolean',
+      labels: 'array',
+      filters: 'object'
+    };
+
+    const schema = generateToolSchema('searchIssues', execVar);
+
+    expect(schema.inputSchema.properties).toEqual({
+      query: { type: 'string' },
+      limit: { type: 'number' },
+      includeClosed: { type: 'boolean' },
+      labels: { type: 'array' },
+      filters: { type: 'object' }
+    });
+  });
+
   it('converts mlld names to MCP snake_case', () => {
     expect(mlldNameToMCPName('listIssues')).toBe('list_issues');
     expect(mlldNameToMCPName('createIssue')).toBe('create_issue');

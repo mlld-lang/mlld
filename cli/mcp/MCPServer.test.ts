@@ -81,7 +81,7 @@ describe('MCPServer', () => {
 
   it('lists exported tools after initialization', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
-      /exe @greet(name) = js { return 'Hello ' + name; } with { description: "Greet a user by name" }
+      /exe @greet(name: string, times: number) = js { return 'Hello ' + name; } with { description: "Greet a user by name" }
       /exe @getData() = js { return { ok: true }; }
       /export { @greet, @getData }
     `, ['greet', 'getData']);
@@ -115,8 +115,9 @@ describe('MCPServer', () => {
           type: 'object',
           properties: {
             name: { type: 'string' },
+            times: { type: 'number' },
           },
-          required: ['name'],
+          required: ['name', 'times'],
         },
       },
       {
