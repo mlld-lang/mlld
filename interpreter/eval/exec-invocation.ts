@@ -2130,6 +2130,17 @@ async function evaluateExecInvocationInternal(
     }
     return merged;
   };
+  const mergePolicyInputDescriptor = (
+    descriptor?: SecurityDescriptor
+  ): SecurityDescriptor | undefined => {
+    if (!mcpSecurityDescriptor) {
+      return descriptor;
+    }
+    if (!descriptor) {
+      return mcpSecurityDescriptor;
+    }
+    return env.mergeSecurityDescriptors(descriptor, mcpSecurityDescriptor);
+  };
   const execDescriptor = getVariableSecurityDescriptor(variable);
   const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
@@ -2173,7 +2184,7 @@ async function evaluateExecInvocationInternal(
       node.withClause?.using
         ? 'using'
         : 'arg';
-    const inputTaint = descriptorToInputTaint(resultSecurityDescriptor);
+    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
     if (inputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(
         {
@@ -2211,7 +2222,7 @@ async function evaluateExecInvocationInternal(
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
     }
-    const inputTaint = descriptorToInputTaint(resultSecurityDescriptor);
+    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
     if (opType && inputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(
         {
@@ -2228,7 +2239,7 @@ async function evaluateExecInvocationInternal(
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
     }
-    const inputTaint = descriptorToInputTaint(resultSecurityDescriptor);
+    const inputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(resultSecurityDescriptor));
     if (inputTaint.length > 0) {
       policyEnforcer.checkLabelFlow(
         {

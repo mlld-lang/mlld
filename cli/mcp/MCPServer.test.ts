@@ -216,6 +216,126 @@ describe('MCPServer', () => {
     expect(text).toContain('Destructive tool blocked');
   });
 
+  it('enforces tool labels in guards and policy', async () => {
+    const guardSetup = await createEnvironmentWithExports(`
+      /exe @readData() = js { return 'safe'; }
+      /exe @deleteData() = js { return 'deleted'; }
+      /var tools @testTools = {
+        safeRead: { mlld: @readData },
+        dangerousDelete: { mlld: @deleteData, labels: ["destructive"] }
+      }
+      /guard @blockDestructive before op:exe = when [
+        @mx.op.labels && @mx.op.labels.includes("destructive") => deny "Blocked"
+        * => allow
+      ]
+      /export { @readData, @deleteData }
+    `, ['readData', 'deleteData']);
+
+    const guardToolsVar = guardSetup.environment.getVariable('testTools');
+    const guardToolCollection = guardToolsVar?.internal?.toolCollection;
+    if (!guardToolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const guardServer = new MCPServer({
+      environment: guardSetup.environment,
+      exportedFunctions: guardSetup.exports,
+      toolCollection: guardToolCollection
+    });
+    await guardServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const safeResponse = await guardServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'safe_read',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(safeResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'safe',
+        },
+      ],
+    });
+
+    const blockedResponse = await guardServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'dangerous_delete',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(blockedResponse.result).toMatchObject({ isError: true });
+    const blockedText = (blockedResponse.result as any)?.content?.[0]?.text ?? '';
+    expect(blockedText).toContain('Blocked');
+
+    const policySetup = await createEnvironmentWithExports(`
+      /exe @deleteData() = js { return 'deleted'; }
+      /var tools @testTools = {
+        dangerousDelete: { mlld: @deleteData, labels: ["destructive"] }
+      }
+      /policy @policy = {
+        labels: {
+          "src:mcp": { deny: ["destructive"] }
+        }
+      }
+      /export { @deleteData }
+    `, ['deleteData']);
+
+    const policyToolsVar = policySetup.environment.getVariable('testTools');
+    const policyToolCollection = policyToolsVar?.internal?.toolCollection;
+    if (!policyToolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const policyServer = new MCPServer({
+      environment: policySetup.environment,
+      exportedFunctions: policySetup.exports,
+      toolCollection: policyToolCollection
+    });
+    await policyServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const policyResponse = await policyServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: {
+        name: 'dangerous_delete',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(policyResponse.result).toMatchObject({ isError: true });
+    const policyText = (policyResponse.result as any)?.content?.[0]?.text ?? '';
+    expect(policyText).toContain('policy.labels.src:mcp.deny');
+  });
+
   it('binds and exposes tool parameters', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @createIssue(owner: string, repo: string, title: string, body: string) = js {
