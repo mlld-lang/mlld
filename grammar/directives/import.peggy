@@ -22,7 +22,8 @@ ImportKeyword
 
 // Primary /import directive
 SlashImport
-  = SlashImportPolicy
+  = SlashImportMcpTools
+  / SlashImportPolicy
   / SlashImportShorthand
   / SlashImportFull
   
@@ -111,6 +112,136 @@ SlashImport
   // Error: Generic import syntax error (catch-all)
   / DirectiveContext ImportKeyword {
       helpers.mlldError("Invalid import syntax. Expected: import \"path\", import @module, or import { items } from \"path\"", "\"", location());
+    }
+
+// MCP tools import
+SlashImportMcpTools
+  = DirectiveContext ImportKeyword _ "tools" _ "{" _ imports:ImportsList _ "}" _ "from" _ "mcp" _ path:ImportPath tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportMcpTools matched', { imports, path, tail });
+
+      const importsRaw = imports.map(item => {
+        if (typeof item === 'string') {
+          return item;
+        } else if (item.original) {
+          const originalRaw = item.rawOriginal || item.original;
+          return `${originalRaw} as @${item.alias}`;
+        }
+        return item.rawName || item.name;
+      }).join(", " );
+
+      let subtype = 'importMcpSelected';
+      if (imports.length === 1 && typeof imports[0] === 'object' && imports[0].original === '*' && imports[0].alias) {
+        subtype = 'importMcpNamespace';
+      }
+
+      const values = {
+        imports: imports.map(item => {
+          if (typeof item === 'string') {
+            return helpers.createVariableReferenceNode('import', {
+              identifier: item
+            }, location());
+          } else if (item.original) {
+            return helpers.createVariableReferenceNode('import', {
+              identifier: item.original,
+              alias: item.alias
+            }, item.location || location());
+          }
+          return helpers.createVariableReferenceNode('import', {
+            identifier: item.name
+          }, item.location || location());
+        }),
+        path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path)
+      };
+
+      if (subtype === 'importMcpNamespace') {
+        const alias = imports[0] && imports[0].alias;
+        if (alias) {
+          values.namespace = [helpers.createNode(NodeType.Text, { content: alias, location: location() })];
+        }
+      }
+
+      if (tail) {
+        values.withClause = tail;
+      }
+
+      const raw = {
+        imports: importsRaw,
+        path: path.raw?.path || path.raw?.module || path.raw?.url || path
+      };
+
+      const meta = {
+        path: path.meta || {
+          isSpecial: typeof path === 'string',
+          pathSubtype: path.subtype
+        }
+      };
+      if (comment) {
+        meta.comment = comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'import',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        'path'
+      );
+    }
+  / DirectiveContext ImportKeyword _ "tools" _ "from" _ "mcp" _ path:ImportPath _ "as" _ alias:ImportAliasIdentifier tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportMcpTools namespace matched', { alias, path, tail });
+
+      const values = {
+        namespace: [helpers.createNode(NodeType.Text, { content: alias, location: location() })],
+        imports: [
+          helpers.createVariableReferenceNode('import', { identifier: '*', alias }, location())
+        ],
+        path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path)
+      };
+
+      if (tail) {
+        values.withClause = tail;
+      }
+
+      const raw = {
+        imports: `* as @${alias}`,
+        path: path.raw?.path || path.raw?.module || path.raw?.url || path
+      };
+
+      const meta = {
+        path: path.meta || {
+          isSpecial: typeof path === 'string',
+          pathSubtype: path.subtype
+        }
+      };
+      if (comment) {
+        meta.comment = comment;
+      }
+
+      return helpers.createStructuredDirective(
+        'import',
+        'importMcpNamespace',
+        values,
+        raw,
+        meta,
+        location(),
+        'path'
+      );
+    }
+  / DirectiveContext ImportKeyword _ "tools" _ "from" _ "mcp" _ path:ImportPath _ "as" _ invalidAlias:BaseIdentifier {
+      helpers.mlldError(
+        `Import aliases must include '@'. Use 'as @${invalidAlias}'`,
+        '@',
+        location()
+      );
+    }
+  / DirectiveContext ImportKeyword _ "tools" _ "from" _ "mcp" _ path:ImportPath {
+      helpers.mlldError(
+        "MCP tool imports require an alias. Use: /import tools from mcp \"server\" as @name",
+        "as",
+        location()
+      );
     }
 
 // Shorthand import alias must include @ prefix when provided

@@ -167,6 +167,36 @@ describe('Import Directive Syntax Tests', () => {
       expect(isImportSelectedDirective(result)).toBe(true);
     });
   });
+
+  describe('Import MCP tools', () => {
+    it('should parse MCP tool selected imports', async () => {
+      const input = '/import tools { @echo } from mcp "@anthropic/filesystem"';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importMcpSelected');
+      expect(result.values.imports).toHaveLength(1);
+      expect(result.values.imports[0].identifier).toBe('echo');
+    });
+
+    it('should parse MCP tool namespace imports', async () => {
+      const input = '/import tools from mcp "@github/issues" as @github';
+      const result = (await parse(input)).ast[0];
+
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importMcpNamespace');
+      expect(result.values.namespace[0].content).toBe('github');
+    });
+
+    it('should reject MCP namespace imports without alias', async () => {
+      const input = '/import tools from mcp "@github/issues"';
+      const result = await parse(input);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('MCP tool imports require an alias');
+    });
+  });
 });
 
 describe('Import Directive AST Structure', () => {

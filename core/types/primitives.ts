@@ -253,7 +253,7 @@ export type DirectiveKind =
 
 export type DirectiveSubtype =
   // Import subtypes
-  | 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy'
+  | 'importAll' | 'importSelected' | 'importNamespace' | 'importPolicy' | 'importMcpSelected' | 'importMcpNamespace'
   // Export subtype
   | 'exportSelected'
   // Unified var subtype

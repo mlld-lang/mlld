@@ -59,7 +59,7 @@ For full context injection, use `llms-combined.txt` which contains all modules.
 
 **Pipelines** - Chain transforms: `@data | @json | @validate`
 
-**Modules** - Code reuse: `import { @helper } from @corp/utils`
+**Modules** - Code reuse: `import { @helper } from @corp/utils`; MCP tools: `import tools from mcp "@github/issues" as @github`
 </CORE_CONCEPTS>
 
 <ESSENTIAL_PATTERNS>

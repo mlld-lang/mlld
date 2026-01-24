@@ -2055,7 +2055,16 @@ async function evaluateExecInvocationInternal(
     }
   }
 
-  const mcpSecurityDescriptor = (node as any).meta?.mcpSecurity as SecurityDescriptor | undefined;
+  let mcpSecurityDescriptor = (node as any).meta?.mcpSecurity as SecurityDescriptor | undefined;
+  if (!mcpSecurityDescriptor) {
+    const mcpTool = (variable.internal as any)?.mcpTool;
+    if (mcpTool?.name) {
+      mcpSecurityDescriptor = makeSecurityDescriptor({
+        taint: ['src:mcp'],
+        sources: [`mcp:${mcpTool.name}`]
+      });
+    }
+  }
   const mcpToolLabels = (node as any).meta?.mcpToolLabels;
   const toolLabels = Array.isArray(mcpToolLabels)
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)

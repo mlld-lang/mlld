@@ -29,7 +29,13 @@ import type {
 import type { MlldNode } from './index';
 
 // Import existing directive types
-import { ImportDirectiveNode, ImportAllDirectiveNode, ImportSelectedDirectiveNode } from './import';
+import {
+  ImportDirectiveNode,
+  ImportAllDirectiveNode,
+  ImportSelectedDirectiveNode,
+  ImportMcpSelectedDirectiveNode,
+  ImportMcpNamespaceDirectiveNode
+} from './import';
 import {
   DataValue,
   DataObjectValue,
@@ -117,6 +123,14 @@ export function isImportAllDirective(node: DirectiveNode): node is ImportAllDire
 
 export function isImportSelectedDirective(node: DirectiveNode): node is ImportSelectedDirectiveNode {
   return node.kind === 'import' && node.subtype === 'importSelected';
+}
+
+export function isImportMcpSelectedDirective(node: DirectiveNode): node is ImportMcpSelectedDirectiveNode {
+  return node.kind === 'import' && node.subtype === 'importMcpSelected';
+}
+
+export function isImportMcpNamespaceDirective(node: DirectiveNode): node is ImportMcpNamespaceDirectiveNode {
+  return node.kind === 'import' && node.subtype === 'importMcpNamespace';
 }
 
 export function isWildcardImport(node: VariableReferenceNode): node is ImportWildcardNode {

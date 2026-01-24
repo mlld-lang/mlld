@@ -76,6 +76,15 @@ show @alice.format(@data)
 show @bob.format(@data)   >> no collision
 ```
 
+**MCP tool imports:**
+
+```mlld
+import tools { @readFile } from mcp "@anthropic/filesystem"
+import tools from mcp "@github/issues" as @github
+
+show @github.createIssue("title", "body")
+```
+
 **Directory imports:**
 
 ```mlld

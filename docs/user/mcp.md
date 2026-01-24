@@ -57,6 +57,29 @@ Tips:
 - **Name collisions**  
   If two modules export the same function name, the command prints both source paths and exits. Rename one of the exports or split the modules into separate servers.
 
+## Import MCP Tools
+
+Import MCP tools directly into mlld as executable functions.
+
+```mlld
+/import tools { @echo } from mcp "@anthropic/filesystem"
+/show @echo("hello")
+
+/import tools from mcp "@github/issues" as @github
+/show @github.createIssue("title", "body")
+```
+
+Use a command string for external servers:
+
+```mlld
+/import tools { @readFile } from mcp "npx @anthropic/mcp-server-filesystem /workspace"
+```
+
+Rules:
+- `import tools { ... } from mcp "server"` selects specific tools.
+- `import tools from mcp "server" as @name` imports all tools under a namespace (alias required).
+- Name collisions with existing variables raise errors; use `as @alias` or a namespace.
+
 ## Advanced Usage
 
 - **Config modules**  
@@ -90,9 +113,10 @@ Tips:
 MCP tool invocations carry security tracking to enable guards to detect and control operations originating from LLM requests.
 
 Every MCP tool call applies:
-- `labels: ["untrusted"]` - semantic classification for LLM data
 - `taint: ["src:mcp"]` - provenance marker for MCP origin
 - `sources: ["mcp:toolName"]` - the specific tool that was invoked
+
+MCP data does not add trust labels automatically; policy rules target `src:mcp` when you need stricter controls.
 
 Guards can inspect these:
 

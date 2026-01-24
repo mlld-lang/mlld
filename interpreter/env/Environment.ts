@@ -58,6 +58,7 @@ import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
+import { McpImportManager } from '../mcp/McpImportManager';
 import { OutputRenderer } from '@interpreter/output/renderer';
 import type { OutputIntent } from '@interpreter/output/intent';
 import { contentIntent, breakIntent, progressIntent, errorIntent } from '@interpreter/output/intent';
@@ -155,6 +156,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private hookManager: HookManager;
   private guardRegistry: GuardRegistry;
   private pipelineGuardHistory?: GuardHistoryEntry[];
+  private mcpImportManager?: McpImportManager;
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
@@ -1181,6 +1183,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Get from this environment or parent
     if (this.registryManager) return this.registryManager;
     return this.parent?.getRegistryManager();
+  }
+
+  getMcpImportManager(): McpImportManager {
+    if (this.parent) {
+      return this.parent.getMcpImportManager();
+    }
+    if (!this.mcpImportManager) {
+      this.mcpImportManager = new McpImportManager(this);
+    }
+    return this.mcpImportManager;
   }
   
   getResolverManager(): ResolverManager | undefined {
@@ -3074,6 +3086,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     if (!this.parent) {
       this.streamingResult = undefined;
+    }
+
+    if (!this.parent && this.mcpImportManager) {
+      this.mcpImportManager.closeAll();
+      this.mcpImportManager = undefined;
     }
 
     // Clean up NodeShadowEnvironment if it exists

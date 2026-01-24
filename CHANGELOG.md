@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Supports `let`, `var`, nested `when`, `for`, and return via `=>`
   - Consistent with `exe` and `for` block semantics
 - **`env` directive**: Scoped environment blocks with per-block environment config and `with { tools }` tool filtering
+- **MCP tool imports**: `import tools { @tool } from mcp "server"` and `import tools from mcp "server" as @name` proxy MCP servers as mlld executables
+- **External MCP server spawning**: MCP configs accept command/npm servers with startup/idle lifecycle limits and guard routing
 - **Return label modifications**: `=> pii @var`, `=> untrusted @var`, `=> trusted! @var`, `=> !label @var`, `=> clear! @var` apply label changes to returned values with trust asymmetry and privilege checks
 - **Node module imports**: `import { @x } from node @package` auto-wraps exports, supports `new` constructor expressions, and streams async iterables
 - **`mlld howto core-modules`**: List official @mlld modules with descriptions
