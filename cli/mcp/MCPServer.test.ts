@@ -410,6 +410,89 @@ describe('MCPServer', () => {
     });
   });
 
+  it('supports non-camelCase tool collection keys', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'alpha'; }
+      /exe @beta() = js { return 'beta'; }
+      /exe @gamma() = js { return 'gamma'; }
+      /var tools @agentTools = {
+        create_issue: { mlld: @alpha },
+        "delete-item": { mlld: @beta },
+        "123_tool": { mlld: @gamma }
+      }
+      /export { @alpha, @beta, @gamma }
+    `, ['alpha', 'beta', 'gamma']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const listResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((listResponse.result as any).tools.map((tool: any) => tool.name)).toEqual([
+      'create_issue',
+      'delete_item',
+      '123_tool'
+    ]);
+
+    const callCreate = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'create_issue',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+    expect(callCreate.result).toMatchObject({
+      content: [{ type: 'text', text: 'alpha' }],
+    });
+
+    const callDelete = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'tools/call',
+      params: {
+        name: 'delete_item',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+    expect(callDelete.result).toMatchObject({
+      content: [{ type: 'text', text: 'beta' }],
+    });
+
+    const callNumeric = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: {
+        name: '123_tool',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+    expect(callNumeric.result).toMatchObject({
+      content: [{ type: 'text', text: 'gamma' }],
+    });
+  });
+
   it('scopes tools based on environment allowances', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @alpha() = js { return 'a'; }

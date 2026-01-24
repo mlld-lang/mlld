@@ -27,6 +27,7 @@ import type { NodeFunctionExecutable } from '@core/types/executable';
 import { createExecutableVariable, createObjectVariable } from '@core/types/variable/VariableFactories';
 import type { VariableSource, Variable } from '@core/types/variable';
 import type { MCPToolSchema } from '../../mcp/McpImportManager';
+import { mlldNameToMCPName, mcpNameToMlldName } from '@core/mcp/names';
 
 const MODULE_SOURCE_EXTENSIONS = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'] as const;
 const DIRECTORY_INDEX_FILENAME = 'index.mld';
@@ -134,30 +135,6 @@ function buildMcpArgs(paramNames: string[], args: unknown[]): Record<string, unk
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-const UPPERCASE_PATTERN = /([A-Z])/g;
-const NON_ALPHANUMERIC_PATTERN = /[^a-zA-Z0-9_]/g;
-
-function mlldNameToMCPName(name: string): string {
-  return name
-    .replace(UPPERCASE_PATTERN, '_$1')
-    .toLowerCase()
-    .replace(NON_ALPHANUMERIC_PATTERN, '_')
-    .replace(/^_+/, '')
-    .replace(/_+/g, '_');
-}
-
-function mcpNameToMlldName(name: string): string {
-  const normalized = name.replace(NON_ALPHANUMERIC_PATTERN, '_');
-  const camel = normalized.replace(/_([a-zA-Z0-9])/g, (_, letter: string) => letter.toUpperCase());
-  if (!camel) {
-    return '_';
-  }
-  if (!/^[a-zA-Z_]/.test(camel)) {
-    return `_${camel}`;
-  }
-  return camel;
 }
 
 function looksLikePath(value: string): boolean {

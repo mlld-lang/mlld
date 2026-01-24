@@ -5,7 +5,7 @@ import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
-import { mcpNameToMlldName, mlldNameToMCPName } from './SchemaGenerator';
+import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 
@@ -13,6 +13,7 @@ export interface FunctionRouterOptions {
   environment: Environment;
   toolCollection?: ToolCollection;
   toolNames?: string[];
+  toolNamesAreMcp?: boolean;
 }
 
 interface ExecResult {
@@ -29,16 +30,30 @@ export class FunctionRouter {
   private readonly environment: Environment;
   private readonly toolCollection?: ToolCollection;
   private readonly toolNames?: string[];
+  private readonly toolNamesMcp: string[];
+  private readonly toolKeyByMcpName?: Map<string, string>;
+  private readonly toolNamesAreMcp: boolean;
 
   constructor(options: FunctionRouterOptions) {
     this.environment = options.environment;
     this.toolCollection = options.toolCollection;
     this.toolNames = options.toolNames;
+    this.toolNamesAreMcp = options.toolNamesAreMcp ?? false;
+    this.toolKeyByMcpName = this.toolCollection ? this.buildToolKeyMap(this.toolCollection) : undefined;
+    if (this.toolCollection) {
+      this.toolNamesMcp = Object.keys(this.toolCollection).map(name => mlldNameToMCPName(name));
+    } else if (this.toolNames && this.toolNames.length > 0) {
+      this.toolNamesMcp = this.toolNamesAreMcp
+        ? [...this.toolNames]
+        : this.toolNames.map(name => mlldNameToMCPName(name));
+    } else {
+      this.toolNamesMcp = [];
+    }
   }
 
   async executeFunction(toolName: string, args: Record<string, unknown>): Promise<string> {
     this.syncToolsAvailability();
-    const toolKey = mcpNameToMlldName(toolName);
+    const toolKey = this.resolveToolKey(toolName);
     if (!this.environment.isToolAllowed(toolKey, toolName)) {
       throw new Error(`Tool '${toolName}' not available`);
     }
@@ -108,20 +123,39 @@ export class FunctionRouter {
   }
 
   private syncToolsAvailability(): void {
-    if (!this.toolNames || this.toolNames.length === 0) {
+    if (!this.toolNamesMcp || this.toolNamesMcp.length === 0) {
       return;
     }
     const allowed: string[] = [];
     const denied: string[] = [];
-    for (const toolName of this.toolNames) {
-      const mcpName = mlldNameToMCPName(toolName);
-      if (this.environment.isToolAllowed(toolName, mcpName)) {
+    for (const mcpName of this.toolNamesMcp) {
+      const toolKey = this.resolveToolKey(mcpName);
+      if (this.environment.isToolAllowed(toolKey, mcpName)) {
         allowed.push(mcpName);
       } else {
         denied.push(mcpName);
       }
     }
     this.environment.setToolsAvailability(allowed, denied);
+  }
+
+  private resolveToolKey(toolName: string): string {
+    if (this.toolKeyByMcpName) {
+      return this.toolKeyByMcpName.get(toolName)
+        ?? this.toolKeyByMcpName.get(mlldNameToMCPName(toolName))
+        ?? mcpNameToMlldName(toolName);
+    }
+    return mcpNameToMlldName(toolName);
+  }
+
+  private buildToolKeyMap(collection: ToolCollection): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const key of Object.keys(collection)) {
+      const mcpName = mlldNameToMCPName(key);
+      map.set(mcpName, key);
+      map.set(key, key);
+    }
+    return map;
   }
 
   private buildInvocation(

@@ -479,7 +479,8 @@ export class MCPOrchestrator {
     if (this.toolEnvironment) {
       this.toolRouter = new FunctionRouter({
         environment: this.toolEnvironment,
-        toolNames: this.toolNames
+        toolNames: this.toolNames,
+        toolNamesAreMcp: true
       });
     }
     this.proxy = new McpProxyServer(this.socketPath, tools, toolIndex, this.toolRouter);
@@ -578,7 +579,7 @@ export class MCPOrchestrator {
       execVar.description = tool.description;
     }
     this.toolEnvironment.setVariable(mlldName, execVar);
-    this.toolNames.push(mlldName);
+    this.toolNames.push(tool.name);
   }
 
   private async callToolWithRetry(

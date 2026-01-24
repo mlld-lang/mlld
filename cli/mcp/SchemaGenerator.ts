@@ -1,22 +1,9 @@
 import type { ExecutableVariable } from '@core/types/variable';
 import type { ToolDefinition } from '@core/types/tools';
 import type { MCPToolSchema, JSONSchemaProperty } from './types';
+import { mlldNameToMCPName, mcpNameToMlldName } from '@core/mcp/names';
 
-const UPPERCASE_PATTERN = /([A-Z])/g;
-const NON_ALPHANUMERIC_PATTERN = /[^a-z0-9_]/g;
-
-export function mlldNameToMCPName(name: string): string {
-  return name
-    .replace(UPPERCASE_PATTERN, '_$1')
-    .toLowerCase()
-    .replace(NON_ALPHANUMERIC_PATTERN, '_')
-    .replace(/^_+/, '')
-    .replace(/_+/g, '_');
-}
-
-export function mcpNameToMlldName(name: string): string {
-  return name.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase());
-}
+export { mlldNameToMCPName, mcpNameToMlldName };
 
 export function generateToolSchema(
   name: string,

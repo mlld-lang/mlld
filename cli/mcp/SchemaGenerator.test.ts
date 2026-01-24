@@ -98,5 +98,7 @@ describe('SchemaGenerator', () => {
   it('converts MCP names back to mlld camelCase', () => {
     expect(mcpNameToMlldName('list_issues')).toBe('listIssues');
     expect(mcpNameToMlldName('create_issue')).toBe('createIssue');
+    expect(mcpNameToMlldName('delete-item')).toBe('deleteItem');
+    expect(mcpNameToMlldName('123_tool')).toBe('_123Tool');
   });
 });
