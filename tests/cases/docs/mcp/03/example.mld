@@ -1,0 +1,1 @@
+/import tools { @readFile } from mcp "npx @anthropic/mcp-server-filesystem /workspace"

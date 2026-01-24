@@ -144,9 +144,6 @@ parseperf-results.json
 todo
 scripts/mlld
 
-# Beads
-.beads/bd.sock.startlock
-
 tmp
 
 .mm
@@ -158,7 +155,6 @@ __pycache__/
 
 
 .fray
-.beads
 
 # QA testing output
 qa/
