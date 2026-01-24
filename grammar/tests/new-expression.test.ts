@@ -32,4 +32,15 @@ describe('NewExpression', () => {
     expect(valueNode.target.fields[1].type).toBe('field');
     expect(valueNode.target.fields[1].value).toBe('join');
   });
+
+  it('parses new expressions without args', async () => {
+    const content = '/var @child = new @sandbox';
+    const { ast } = await parse(content);
+    const directive = ast[0];
+
+    const valueNode: any = directive.values.value[0];
+    expect(valueNode.type).toBe('NewExpression');
+    expect(valueNode.target.identifier).toBe('sandbox');
+    expect(valueNode.args).toHaveLength(0);
+  });
 });

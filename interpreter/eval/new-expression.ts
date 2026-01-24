@@ -5,6 +5,15 @@ import { MlldInterpreterError } from '@core/errors';
 import { astLocationToSourceLocation } from '@core/types';
 import { isExecutableVariable } from '@core/types/variable';
 import { wrapNodeValue, toJsValue } from '../utils/node-interop';
+import { isVariable } from '../utils/variable-resolution';
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
 
 function createExecutableExport(execDef: ExecutableDefinition): Record<string, unknown> {
   return {
@@ -101,6 +110,17 @@ export async function evaluateNewExpression(
     const jsArgs = boundArgs.map(arg => toJsValue(arg));
     const instance = new (targetValue as new (...args: unknown[]) => unknown)(...jsArgs);
     return wrapNodeValue(instance);
+  }
+
+  if (isVariable(targetValue)) {
+    const rawValue = targetValue.value;
+    if (isPlainObject(rawValue)) {
+      return { ...rawValue };
+    }
+  }
+
+  if (isPlainObject(targetValue)) {
+    return { ...targetValue };
   }
 
   throw new MlldInterpreterError(

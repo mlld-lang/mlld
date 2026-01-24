@@ -859,7 +859,31 @@ export async function prepareVarAssignment(
 
   } else if (valueNode && valueNode.type === 'NewExpression') {
     const { evaluateNewExpression } = await import('./new-expression');
-    resolvedValue = await evaluateNewExpression(valueNode as any, env);
+    const baseValue = await evaluateNewExpression(valueNode as any, env);
+    const withClause = (directive.values?.withClause || directive.meta?.withClause) as any | undefined;
+    if (withClause && Object.prototype.hasOwnProperty.call(withClause, 'tools')) {
+      if (!isPlainObject(baseValue)) {
+        throw new Error('new env derivation requires an object base config');
+      }
+      const resolvedTools = await resolveWithClauseToolsValue(withClause.tools, env, context);
+      const baseScope = normalizeToolScopeValue((baseValue as Record<string, unknown>).tools);
+      const childScope = normalizeToolScopeValue(resolvedTools);
+      if (baseScope.hasTools) {
+        if (childScope.isWildcard) {
+          throw new Error('Tool scope cannot widen beyond parent environment');
+        }
+        if (childScope.hasTools) {
+          enforceToolSubset(baseScope.tools, childScope.tools);
+        }
+      }
+      if (resolvedTools === undefined) {
+        resolvedValue = baseValue;
+      } else {
+        resolvedValue = { ...baseValue, tools: resolvedTools };
+      }
+    } else {
+      resolvedValue = baseValue;
+    }
     
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
@@ -1266,6 +1290,26 @@ export async function prepareVarAssignment(
         const options = applySecurityOptions(undefined, resolvedValueDescriptor);
         variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
       }
+    } else {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
+    }
+
+  } else if (valueNode.type === 'NewExpression') {
+    if (isStructuredValue(resolvedValue)) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createStructuredValueVariable(identifier, resolvedValue, source, options);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createArrayVariable(identifier, resolvedValue, false, source, options);
+      } else {
+        const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+        variable = createObjectVariable(identifier, resolvedValue as Record<string, unknown>, false, source, options);
+      }
+    } else if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+      const options = applySecurityOptions(undefined, resolvedValueDescriptor);
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, options);
     } else {
       const options = applySecurityOptions(undefined, resolvedValueDescriptor);
       variable = createSimpleTextVariable(identifier, valueToString(resolvedValue), source, options);
@@ -1866,6 +1910,81 @@ async function evaluateToolCollectionObject(
   }
 
   return result;
+}
+
+async function resolveWithClauseToolsValue(
+  toolsValue: unknown,
+  env: Environment,
+  context?: EvaluationContext
+): Promise<unknown> {
+  if (!toolsValue || typeof toolsValue !== 'object' || !('type' in (toolsValue as any))) {
+    return toolsValue;
+  }
+  const { evaluate } = await import('../core/interpreter');
+  const result = await evaluate(toolsValue as any, env, { ...(context ?? {}), isExpression: true });
+  let value = result.value;
+  const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+  if (isVariable(value)) {
+    value = await extractVariableValue(value, env);
+  }
+  if (isStructuredValue(value)) {
+    value = asData(value);
+  }
+  return value;
+}
+
+type ToolScopeValue = {
+  tools: string[];
+  hasTools: boolean;
+  isWildcard: boolean;
+};
+
+function normalizeToolScopeValue(value: unknown): ToolScopeValue {
+  if (value === undefined) {
+    return { tools: [], hasTools: false, isWildcard: false };
+  }
+  if (value === null) {
+    throw new Error('tools must be an array or object.');
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return { tools: [], hasTools: true, isWildcard: false };
+    }
+    if (trimmed === '*') {
+      return { tools: [], hasTools: false, isWildcard: true };
+    }
+    const tools = trimmed
+      .split(',')
+      .map(part => part.trim())
+      .filter(Boolean);
+    return { tools, hasTools: true, isWildcard: false };
+  }
+  if (Array.isArray(value)) {
+    const tools: string[] = [];
+    for (const entry of value) {
+      if (typeof entry !== 'string') {
+        throw new Error('tools entries must be strings.');
+      }
+      const trimmed = entry.trim();
+      if (trimmed.length > 0) {
+        tools.push(trimmed);
+      }
+    }
+    return { tools, hasTools: true, isWildcard: false };
+  }
+  if (isPlainObject(value)) {
+    return { tools: Object.keys(value), hasTools: true, isWildcard: false };
+  }
+  throw new Error('tools must be an array or object.');
+}
+
+function enforceToolSubset(baseTools: string[], childTools: string[]): void {
+  const baseSet = new Set(baseTools);
+  const invalid = childTools.filter(tool => !baseSet.has(tool));
+  if (invalid.length > 0) {
+    throw new Error(`Tool scope cannot add tools outside parent: ${invalid.join(', ')}`);
+  }
 }
 
 function normalizeToolCollection(raw: unknown, env: Environment): ToolCollection {

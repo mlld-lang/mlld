@@ -164,12 +164,17 @@ UnifiedAtomicExpression
   / DeniedLiteral  // DeniedLiteral maps to @mx.denied during evaluation
 
 NewExpression "new expression"
-  = "new" _ target:NewExpressionTarget "(" args:CommandArgumentList? _ ")" {
+  = "new" _ target:NewExpressionTarget args:NewExpressionArgs? {
       return helpers.createNode('NewExpression', {
         target,
         args: args || [],
         location: location()
       });
+    }
+
+NewExpressionArgs "new expression args"
+  = "(" args:CommandArgumentList? _ ")" {
+      return args || [];
     }
 
 NewExpressionTarget "new expression target"

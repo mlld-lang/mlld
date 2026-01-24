@@ -75,4 +75,46 @@ describe('env directive', () => {
     const { ast } = await parse(src);
     await expect(evaluate(ast, env)).rejects.toThrow(/Tool scope cannot add tools outside parent/);
   });
+
+  it('derives env configs with tool overrides', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const src = `
+/exe @readData() = js { return "ok" }
+/exe @writeData() = js { return "ok" }
+/var tools @allTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData }
+}
+/var @baseEnv = { provider: '@local', tools: @allTools }
+/var @childEnv = new @baseEnv with { tools: ["read"] }
+/env @childEnv [
+  show "ok"
+]
+`;
+
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const scopedEnv = findEnvWithScopedTools(env);
+    expect(scopedEnv).toBeDefined();
+    const allowedTools = Array.from(((scopedEnv as any).allowedTools as Set<string>) || []).sort();
+    expect(allowedTools).toEqual(['read']);
+  });
+
+  it('rejects derived env tool expansion', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const src = `
+/var @baseEnv = { provider: '@local', tools: ["read"] }
+/var @childEnv = new @baseEnv with { tools: ["read", "write"] }
+`;
+
+    const { ast } = await parse(src);
+    await expect(evaluate(ast, env)).rejects.toThrow(/Tool scope cannot add tools outside parent/);
+  });
 });
