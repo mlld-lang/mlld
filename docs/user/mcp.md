@@ -80,6 +80,39 @@ Rules:
 - `import tools from mcp "server" as @name` imports all tools under a namespace (alias required).
 - Name collisions with existing variables raise errors; use `as @alias` or a namespace.
 
+## Tool Collections
+
+Tool collections define what an agent sees and how tools behave.
+
+```mlld
+/exe @readData() = js { return "ok"; }
+/exe @deleteData() = js { return "deleted"; }
+
+/var tools @agentTools = {
+  safeRead: { mlld: @readData },
+  dangerousDelete: {
+    mlld: @deleteData,
+    labels: ["destructive"],
+    description: "Deletes records"
+  }
+}
+
+/guard @blockDestructive before op:exe = when [
+  @mx.op.labels.includes("destructive") => deny "Blocked"
+  * => allow
+]
+
+/env @agent with { tools: @agentTools } [
+  /run cmd { claude -p @task }
+]
+```
+
+Tool definitions support:
+- `labels`: guard and policy signals for operations
+- `bind`: pre-fill parameters
+- `expose`: limit visible parameters
+- `description`: override tool metadata
+
 ## Advanced Usage
 
 - **Config modules**  
