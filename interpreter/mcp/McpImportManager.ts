@@ -43,14 +43,27 @@ type McpSpawnSpec = {
 };
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
-const STARTUP_TIMEOUT_MS = 10_000;
+
+type McpImportLifecycle = {
+  startupTimeoutMs: number;
+  idleTimeoutMs: number;
+  maxConcurrent: number;
+};
+
+const DEFAULT_LIFECYCLE: McpImportLifecycle = {
+  startupTimeoutMs: 10_000,
+  idleTimeoutMs: 60_000,
+  maxConcurrent: 5
+};
 
 export class McpImportManager {
   private readonly env: Environment;
   private readonly servers = new Map<string, McpImportServer>();
+  private readonly lifecycle: McpImportLifecycle;
 
   constructor(env: Environment) {
     this.env = env;
+    this.lifecycle = readLifecycleFromEnv();
   }
 
   async listTools(spec: string): Promise<MCPToolSchema[]> {
@@ -77,10 +90,19 @@ export class McpImportManager {
       return existing;
     }
 
+    this.pruneClosedServers();
+    if (this.servers.size >= this.lifecycle.maxConcurrent) {
+      throw new Error(`MCP import server limit exceeded: ${this.servers.size + 1} > ${this.lifecycle.maxConcurrent}`);
+    }
+
     const spawnSpec = resolveMcpSpawnSpec(trimmed, this.env);
-    const server = new McpImportServer(spawnSpec);
+    const server = new McpImportServer(spawnSpec, this.lifecycle.idleTimeoutMs);
     try {
-      await withTimeout(server.initialize(), STARTUP_TIMEOUT_MS, `MCP server '${spawnSpec.displayName}' initialize`);
+      await withTimeout(
+        server.initialize(),
+        this.lifecycle.startupTimeoutMs,
+        `MCP server '${spawnSpec.displayName}' initialize`
+      );
     } catch (error) {
       server.close();
       throw error;
@@ -88,18 +110,34 @@ export class McpImportManager {
     this.servers.set(trimmed, server);
     return server;
   }
+
+  private pruneClosedServers(): void {
+    for (const [key, server] of this.servers.entries()) {
+      if (server.isClosed()) {
+        this.servers.delete(key);
+      }
+    }
+  }
 }
 
 class McpImportServer {
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly rl: readline.Interface;
-  private readonly pending = new Map<number, { resolve: (value: JSONRPCResponse) => void; reject: (error: Error) => void }>();
+  private readonly pending = new Map<
+    number,
+    { resolve: (value: JSONRPCResponse) => void; reject: (error: Error) => void; onDone?: () => void }
+  >();
   private readonly stderrChunks: string[] = [];
   private toolsCache?: MCPToolSchema[];
   private nextId = 1;
   private closed = false;
+  private closedReason?: 'idle' | 'exit' | 'manual';
+  private readonly idleTimeoutMs?: number;
+  private idleTimer?: NodeJS.Timeout;
+  private inflightCount = 0;
 
-  constructor(private readonly spec: McpSpawnSpec) {
+  constructor(private readonly spec: McpSpawnSpec, idleTimeoutMs?: number) {
+    this.idleTimeoutMs = idleTimeoutMs;
     this.child = spawn(spec.command, spec.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: spec.cwd,
@@ -115,10 +153,13 @@ class McpImportServer {
     });
     this.child.on('error', error => {
       this.closed = true;
+      this.closedReason = this.closedReason ?? 'exit';
       this.rejectPending(error instanceof Error ? error : new Error(String(error)));
     });
     this.child.on('exit', (code, signal) => {
       this.closed = true;
+      this.closedReason = this.closedReason ?? 'exit';
+      this.clearIdleTimer();
       this.rl.close();
       const reason = `MCP server '${this.spec.displayName}' exited` +
         (typeof code === 'number' ? ` with code ${code}` : '') +
@@ -174,10 +215,16 @@ class McpImportServer {
   }
 
   close(): void {
+    this.closeWithReason('manual');
+  }
+
+  private closeWithReason(reason: 'idle' | 'manual'): void {
     if (this.closed) {
       return;
     }
     this.closed = true;
+    this.closedReason = reason;
+    this.clearIdleTimer();
     this.rl.close();
     this.child.stdin.end();
     this.child.kill('SIGTERM');
@@ -190,11 +237,20 @@ class McpImportServer {
     const id = this.nextId++;
     const payload: JSONRPCRequest = { jsonrpc: '2.0', id, method, params };
     return await new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      this.clearIdleTimer();
+      this.inflightCount += 1;
+      const onDone = () => {
+        this.inflightCount = Math.max(0, this.inflightCount - 1);
+        if (this.inflightCount === 0) {
+          this.touch();
+        }
+      };
+      this.pending.set(id, { resolve, reject, onDone });
       try {
         this.child.stdin.write(`${JSON.stringify(payload)}\n`);
       } catch (error) {
         this.pending.delete(id);
+        onDone();
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
@@ -215,15 +271,38 @@ class McpImportServer {
     const entry = this.pending.get(response.id as number);
     if (entry) {
       this.pending.delete(response.id as number);
+      entry.onDone?.();
       entry.resolve(response);
     }
   }
 
   private rejectPending(error: Error): void {
     for (const entry of this.pending.values()) {
+      entry.onDone?.();
       entry.reject(error);
     }
     this.pending.clear();
+  }
+
+  private touch(): void {
+    if (!this.idleTimeoutMs || this.idleTimeoutMs <= 0) {
+      return;
+    }
+    this.clearIdleTimer();
+    this.idleTimer = setTimeout(() => {
+      if (this.closed || this.inflightCount > 0) {
+        return;
+      }
+      this.closeWithReason('idle');
+    }, this.idleTimeoutMs);
+  }
+
+  private clearIdleTimer(): void {
+    if (!this.idleTimer) {
+      return;
+    }
+    clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
   }
 
   private decorateError(message: string): string {
@@ -289,4 +368,35 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
       clearTimeout(timeoutId);
     }
   }
+}
+
+function readLifecycleFromEnv(): McpImportLifecycle {
+  const startupTimeoutMs = parsePositiveInt(
+    process.env.MLLD_MCP_IMPORT_STARTUP_TIMEOUT_MS,
+    DEFAULT_LIFECYCLE.startupTimeoutMs
+  );
+  const idleTimeoutMs = parsePositiveInt(
+    process.env.MLLD_MCP_IMPORT_IDLE_TIMEOUT_MS,
+    DEFAULT_LIFECYCLE.idleTimeoutMs
+  );
+  const maxConcurrent = parsePositiveInt(
+    process.env.MLLD_MCP_IMPORT_MAX_CONCURRENT,
+    DEFAULT_LIFECYCLE.maxConcurrent
+  );
+  return {
+    startupTimeoutMs,
+    idleTimeoutMs,
+    maxConcurrent: Math.max(1, maxConcurrent)
+  };
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
 }
