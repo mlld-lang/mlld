@@ -6,12 +6,13 @@ VarKeyword
   = "/"? "var"
 
 SlashVar "var directive"
-  = DirectiveContext VarKeyword labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+  = DirectiveContext VarKeyword toolsSegment:(HWS "tools")? labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
       helpers.debug('AtVar matched', { id, value, ending });
       
       // Extract ending components
       let tail = ending.tail;
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
+      const isToolsCollection = !!toolsSegment;
       const comment = ending.comment;
       
       // Create variable reference node for identifier
@@ -158,6 +159,10 @@ SlashVar "var directive"
       if (labelInfo) {
         metaInfo.securityLabels = labelInfo.labels;
         values.securityLabels = labelInfo.labels;
+      }
+
+      if (isToolsCollection) {
+        metaInfo.isToolsCollection = true;
       }
       
       // Add comment to meta if present

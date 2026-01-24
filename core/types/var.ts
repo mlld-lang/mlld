@@ -115,6 +115,7 @@ export interface VarRaw {
 export interface VarMeta {
   inferredType?: 'text' | 'data' | 'path' | 'exec';
   securityLabels?: DataLabel[];
+  isToolsCollection?: boolean;
   [key: string]: unknown;
 }
 

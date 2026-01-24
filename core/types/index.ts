@@ -39,6 +39,7 @@ export * from './load-content'; // Load content types and utilities including UR
 export * from './while'; // While directives and stages
 export * from './control'; // Control literals (done/continue)
 export * from './label-modification';
+export * from './tools';
 
 // Parser modes
 export * from './mode';

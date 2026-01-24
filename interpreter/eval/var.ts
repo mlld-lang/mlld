@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import type { DirectiveNode, SourceLocation, VarValue, VariableNodeArray } from '@core/types';
+import type { ToolCollection } from '@core/types/tools';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
@@ -23,6 +24,7 @@ import {
   createCommandResultVariable,
   createStructuredValueVariable,
   createPrimitiveVariable,
+  isExecutableVariable,
   type VariableMetadata,
   type VariableContext,
   type VariableInternalMetadata,
@@ -292,6 +294,7 @@ export async function prepareVarAssignment(
   
   // For templates with multiple nodes (e.g., ::text {{var}}::), we need the whole array
   const valueNode = valueNodes.length === 1 ? valueNodes[0] : valueNodes;
+  const isToolsCollection = directive.meta?.isToolsCollection === true;
 
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[var.ts] Extracted valueNode:', {
@@ -303,9 +306,14 @@ export async function prepareVarAssignment(
     });
   }
 
+  if (isToolsCollection && (!valueNode || typeof valueNode !== 'object' || valueNode.type !== 'object')) {
+    throw new Error('Tool collections must be object literals');
+  }
+
   try {
   // Type-based routing based on the AST structure
   let resolvedValue: any;
+  let toolCollection: ToolCollection | undefined;
   const templateAst: any = null; // Store AST for templates that need lazy interpolation
   
   if (valueNode && typeof valueNode === 'object' && valueNode.type === 'FileReference') {
@@ -386,126 +394,62 @@ export async function prepareVarAssignment(
     
   } else if (valueNode.type === 'object') {
     // Object literal: { "key": "value" }
-
-    // Check if this object has complex values that need lazy evaluation
-    const isComplex = hasComplexValues(valueNode.entries || valueNode.properties);
-    
-    if (isComplex) {
-      // For complex objects, store the AST node for lazy evaluation
-      resolvedValue = valueNode;
+    if (isToolsCollection) {
+      resolvedValue = await evaluateToolCollectionObject(
+        valueNode,
+        env,
+        mergeResolvedDescriptor,
+        context,
+        sourceLocation
+      );
     } else {
-      // Process simple object properties immediately
-      const processedObject: Record<string, any> = {};
+      // Check if this object has complex values that need lazy evaluation
+      const isComplex = hasComplexValues(valueNode.entries || valueNode.properties);
+      
+      if (isComplex) {
+        // For complex objects, store the AST node for lazy evaluation
+        resolvedValue = valueNode;
+      } else {
+        // Process simple object properties immediately
+        const processedObject: Record<string, any> = {};
 
-      // Handle entries format (new)
-      if (valueNode.entries) {
-        for (const entry of valueNode.entries) {
-          if (entry.type === 'pair') {
-            const key = entry.key;
-            const propValue = entry.value;
-          // Each property value might need interpolation
-          if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
-            // Handle wrapped string content (quotes, backticks, etc.)
-            processedObject[key] = await interpolateWithSecurity(propValue.content as any);
-          } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
-            // Handle array values in objects
-            const processedArray = [];
-            
-            // Debug logging for Phase 2
-            if (identifier === 'complex' && key === 'users') {
-              logger.debug('Processing users array items:', {
-                itemCount: (propValue.items || []).length,
-                firstItem: propValue.items?.[0]
-              });
-            }
-            
-            for (const item of (propValue.items || [])) {
-              const evaluated = await evaluateArrayItem(
-                item,
-                env,
-                mergeResolvedDescriptor,
-                context,
-                sourceLocation
-              );
-              processedArray.push(evaluated);
-            }
-            processedObject[key] = processedArray;
-          } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
-            // Handle nested objects recursively
-            const nestedObj: Record<string, any> = {};
-            // Handle entries format
-            if (propValue.entries) {
-              for (const nestedEntry of propValue.entries) {
-                if (nestedEntry.type === 'pair') {
-                  nestedObj[nestedEntry.key] = await evaluateArrayItem(
-                    nestedEntry.value,
-                    env,
-                    mergeResolvedDescriptor,
-                    context,
-                    sourceLocation
-                  );
-                }
+        // Handle entries format (new)
+        if (valueNode.entries) {
+          for (const entry of valueNode.entries) {
+            if (entry.type === 'pair') {
+              const key = entry.key;
+              const propValue = entry.value;
+            // Each property value might need interpolation
+            if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
+              // Handle wrapped string content (quotes, backticks, etc.)
+              processedObject[key] = await interpolateWithSecurity(propValue.content as any);
+            } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
+              // Handle array values in objects
+              const processedArray = [];
+              
+              // Debug logging for Phase 2
+              if (identifier === 'complex' && key === 'users') {
+                logger.debug('Processing users array items:', {
+                  itemCount: (propValue.items || []).length,
+                  firstItem: propValue.items?.[0]
+                });
               }
-            }
-            // Handle properties format (legacy)
-            else if (propValue.properties) {
-              for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
-                nestedObj[nestedKey] = await evaluateArrayItem(
-                  nestedValue,
+              
+              for (const item of (propValue.items || [])) {
+                const evaluated = await evaluateArrayItem(
+                  item,
                   env,
                   mergeResolvedDescriptor,
                   context,
                   sourceLocation
                 );
+                processedArray.push(evaluated);
               }
-            }
-            processedObject[key] = nestedObj;
-          } else if (propValue && typeof propValue === 'object' && propValue.type) {
-            // Handle other node types (load-content, VariableReference, etc.)
-            processedObject[key] = await evaluateArrayItem(
-              propValue,
-              env,
-              mergeResolvedDescriptor,
-              context,
-              sourceLocation
-            );
-          } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray(propValue.parts)) {
-            // Handle strings with @references that need interpolation
-            processedObject[key] = await interpolateWithSecurity(propValue.parts);
-          } else {
-            // For primitive types (numbers, booleans, null, strings), use as-is
-            processedObject[key] = propValue;
-          }
-          }
-          // Spread entries shouldn't be here (isComplex would be true)
-        }
-      }
-      // Handle properties format (legacy)
-      else if (valueNode.properties) {
-        for (const [key, propValue] of Object.entries(valueNode.properties)) {
-          // Each property value might need interpolation
-          if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
-            // Handle wrapped string content (quotes, backticks, etc.)
-            processedObject[key] = await interpolateWithSecurity(propValue.content as any);
-          } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
-            // Handle array values in objects
-            const processedArray = [];
-            for (const item of (propValue.items || [])) {
-              const evaluated = await evaluateArrayItem(
-                item,
-                env,
-                mergeResolvedDescriptor,
-                context,
-                sourceLocation
-              );
-              processedArray.push(evaluated);
-            }
-            processedObject[key] = processedArray;
-          } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
-            // Handle nested objects recursively
-            const nestedObj: Record<string, any> = {};
-            const nestedData = propValue.entries || propValue.properties;
-            if (nestedData) {
+              processedObject[key] = processedArray;
+            } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
+              // Handle nested objects recursively
+              const nestedObj: Record<string, any> = {};
+              // Handle entries format
               if (propValue.entries) {
                 for (const nestedEntry of propValue.entries) {
                   if (nestedEntry.type === 'pair') {
@@ -518,7 +462,9 @@ export async function prepareVarAssignment(
                     );
                   }
                 }
-              } else if (propValue.properties) {
+              }
+              // Handle properties format (legacy)
+              else if (propValue.properties) {
                 for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
                   nestedObj[nestedKey] = await evaluateArrayItem(
                     nestedValue,
@@ -529,27 +475,98 @@ export async function prepareVarAssignment(
                   );
                 }
               }
+              processedObject[key] = nestedObj;
+            } else if (propValue && typeof propValue === 'object' && propValue.type) {
+              // Handle other node types (load-content, VariableReference, etc.)
+              processedObject[key] = await evaluateArrayItem(
+                propValue,
+                env,
+                mergeResolvedDescriptor,
+                context,
+                sourceLocation
+              );
+            } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray(propValue.parts)) {
+              // Handle strings with @references that need interpolation
+              processedObject[key] = await interpolateWithSecurity(propValue.parts);
+            } else {
+              // For primitive types (numbers, booleans, null, strings), use as-is
+              processedObject[key] = propValue;
             }
-            processedObject[key] = nestedObj;
-          } else if (propValue && typeof propValue === 'object' && propValue.type) {
-            // Handle other node types (load-content, VariableReference, etc.)
-            processedObject[key] = await evaluateArrayItem(
-              propValue,
-              env,
-              mergeResolvedDescriptor,
-              context,
-              sourceLocation
-            );
-          } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray((propValue as any).parts)) {
-            // Handle strings with @references that need interpolation
-            processedObject[key] = await interpolateWithSecurity((propValue as any).parts);
-          } else {
-            // For primitive types (numbers, booleans, null, strings), use as-is
-            processedObject[key] = propValue;
+            }
+            // Spread entries shouldn't be here (isComplex would be true)
           }
         }
+        // Handle properties format (legacy)
+        else if (valueNode.properties) {
+          for (const [key, propValue] of Object.entries(valueNode.properties)) {
+            // Each property value might need interpolation
+            if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
+              // Handle wrapped string content (quotes, backticks, etc.)
+              processedObject[key] = await interpolateWithSecurity(propValue.content as any);
+            } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
+              // Handle array values in objects
+              const processedArray = [];
+              for (const item of (propValue.items || [])) {
+                const evaluated = await evaluateArrayItem(
+                  item,
+                  env,
+                  mergeResolvedDescriptor,
+                  context,
+                  sourceLocation
+                );
+                processedArray.push(evaluated);
+              }
+              processedObject[key] = processedArray;
+            } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
+              // Handle nested objects recursively
+              const nestedObj: Record<string, any> = {};
+              const nestedData = propValue.entries || propValue.properties;
+              if (nestedData) {
+                if (propValue.entries) {
+                  for (const nestedEntry of propValue.entries) {
+                    if (nestedEntry.type === 'pair') {
+                      nestedObj[nestedEntry.key] = await evaluateArrayItem(
+                        nestedEntry.value,
+                        env,
+                        mergeResolvedDescriptor,
+                        context,
+                        sourceLocation
+                      );
+                    }
+                  }
+                } else if (propValue.properties) {
+                  for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
+                    nestedObj[nestedKey] = await evaluateArrayItem(
+                      nestedValue,
+                      env,
+                      mergeResolvedDescriptor,
+                      context,
+                      sourceLocation
+                    );
+                  }
+                }
+              }
+              processedObject[key] = nestedObj;
+            } else if (propValue && typeof propValue === 'object' && propValue.type) {
+              // Handle other node types (load-content, VariableReference, etc.)
+              processedObject[key] = await evaluateArrayItem(
+                propValue,
+                env,
+                mergeResolvedDescriptor,
+                context,
+                sourceLocation
+              );
+            } else if (propValue && typeof propValue === 'object' && 'needsInterpolation' in propValue && Array.isArray((propValue as any).parts)) {
+              // Handle strings with @references that need interpolation
+              processedObject[key] = await interpolateWithSecurity((propValue as any).parts);
+            } else {
+              // For primitive types (numbers, booleans, null, strings), use as-is
+              processedObject[key] = propValue;
+            }
+          }
+        }
+        resolvedValue = processedObject;
       }
-      resolvedValue = processedObject;
     }
     
   } else if (valueNode.type === 'section') {
@@ -937,6 +954,11 @@ export async function prepareVarAssignment(
     resolvedValue = await interpolateWithSecurity([valueNode]);
   }
 
+  if (isToolsCollection) {
+    toolCollection = normalizeToolCollection(resolvedValue, env);
+    resolvedValue = toolCollection;
+  }
+
   const resolvedValueDescriptor = extractSecurityDescriptor(resolvedValue, {
     recursive: true,
     mergeArrayElements: true
@@ -1113,8 +1135,17 @@ export async function prepareVarAssignment(
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, options);
     
   } else if (valueNode.type === 'object') {
-    const isComplex = hasComplexValues(valueNode.entries || valueNode.properties);
-    const options = applySecurityOptions();
+    const isComplex = toolCollection ? false : hasComplexValues(valueNode.entries || valueNode.properties);
+    const options = applySecurityOptions(
+      toolCollection
+        ? {
+            internal: {
+              toolCollection,
+              isToolsCollection: true
+            }
+          }
+        : undefined
+    );
     variable = createObjectVariable(identifier, resolvedValue, isComplex, source, options);
     
   } else if (valueNode.type === 'command') {
@@ -1792,6 +1823,151 @@ async function evaluateArrayItem(
       // Try to interpolate as a node array
       return await interpolateAndCollect([item], env, collectDescriptor);
   }
+}
+
+async function evaluateToolCollectionObject(
+  valueNode: any,
+  env: Environment,
+  collectDescriptor?: DescriptorCollector,
+  context?: EvaluationContext,
+  sourceLocation?: SourceLocation
+): Promise<Record<string, unknown>> {
+  const entries = valueNode.entries ?? null;
+  const properties = valueNode.properties ?? null;
+  const result: Record<string, unknown> = {};
+
+  if (Array.isArray(entries)) {
+    for (const entry of entries) {
+      if (entry.type !== 'pair') {
+        throw new Error('Tool definitions must be plain object entries');
+      }
+      result[entry.key] = await evaluateArrayItem(
+        entry.value,
+        env,
+        collectDescriptor,
+        context,
+        sourceLocation
+      );
+    }
+    return result;
+  }
+
+  if (properties && typeof properties === 'object') {
+    for (const [key, value] of Object.entries(properties)) {
+      result[key] = await evaluateArrayItem(
+        value,
+        env,
+        collectDescriptor,
+        context,
+        sourceLocation
+      );
+    }
+    return result;
+  }
+
+  return result;
+}
+
+function normalizeToolCollection(raw: unknown, env: Environment): ToolCollection {
+  if (!isPlainObject(raw)) {
+    throw new Error('Tool collections must be object literals');
+  }
+
+  const collection: ToolCollection = {};
+
+  for (const [toolName, toolValue] of Object.entries(raw)) {
+    if (!isPlainObject(toolValue)) {
+      throw new Error(`Tool '${toolName}' must be an object`);
+    }
+
+    const mlldRef = (toolValue as Record<string, unknown>).mlld;
+    if (mlldRef === undefined || mlldRef === null) {
+      throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
+    }
+
+    const mlldName = resolveToolMlldName(mlldRef, toolName);
+    const execVar = env.getVariable(mlldName);
+    if (!execVar || !isExecutableVariable(execVar)) {
+      throw new Error(`Tool '${toolName}' references non-executable '@${mlldName}'`);
+    }
+
+    const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
+    const paramSet = new Set(paramNames);
+
+    const description = toolValue.description;
+    if (description !== undefined && typeof description !== 'string') {
+      throw new Error(`Tool '${toolName}' description must be a string`);
+    }
+
+    const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
+    const expose = normalizeStringArray(toolValue.expose, toolName, 'expose');
+    const bind = toolValue.bind;
+
+    if (bind !== undefined) {
+      if (!isPlainObject(bind)) {
+        throw new Error(`Tool '${toolName}' bind must be an object`);
+      }
+      const invalidKeys = Object.keys(bind).filter(key => !paramSet.has(key));
+      if (invalidKeys.length > 0) {
+        throw new Error(
+          `Tool '${toolName}' bind keys must match parameters of '@${mlldName}': ${invalidKeys.join(', ')}`
+        );
+      }
+    }
+
+    if (expose) {
+      const invalidExpose = expose.filter(name => !paramSet.has(name));
+      if (invalidExpose.length > 0) {
+        throw new Error(
+          `Tool '${toolName}' expose values must match parameters of '@${mlldName}': ${invalidExpose.join(', ')}`
+        );
+      }
+    }
+
+    collection[toolName] = {
+      mlld: mlldName,
+      ...(labels ? { labels } : {}),
+      ...(description ? { description } : {}),
+      ...(bind ? { bind } : {}),
+      ...(expose ? { expose } : {})
+    };
+  }
+
+  return collection;
+}
+
+function resolveToolMlldName(value: unknown, toolName: string): string {
+  if (typeof value === 'string') {
+    return value.startsWith('@') ? value.slice(1) : value;
+  }
+  if (value && typeof value === 'object' && isExecutableVariable(value as any)) {
+    return (value as any).name;
+  }
+  if (value && typeof value === 'object' && '__executable' in (value as any)) {
+    const name = (value as any).name;
+    if (typeof name === 'string' && name.length > 0) {
+      return name.startsWith('@') ? name.slice(1) : name;
+    }
+  }
+  throw new Error(`Tool '${toolName}' has invalid 'mlld' reference`);
+}
+
+function normalizeStringArray(
+  value: unknown,
+  toolName: string,
+  field: 'labels' | 'expose'
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+    throw new Error(`Tool '${toolName}' ${field} must be an array of strings`);
+  }
+  return value;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**

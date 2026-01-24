@@ -14,6 +14,7 @@ import type { CapabilityContext, SecurityDescriptor, DataLabel } from '../securi
 import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
 import type { ExecutableDefinition } from '../executable';
+import type { ToolCollection } from '../tools';
 
 // =========================================================================
 // BASE TYPES
@@ -134,6 +135,8 @@ export type VariableContextSnapshot = VariableContext;
 
 export interface VariableInternalMetadata extends Record<string, unknown> {
   executableDef?: ExecutableDefinition;
+  toolCollection?: ToolCollection;
+  isToolsCollection?: boolean;
   transformerImplementation?: (...args: unknown[]) => unknown;
   transformerVariants?: Record<string, unknown>;
   isBuiltinTransformer?: boolean;
