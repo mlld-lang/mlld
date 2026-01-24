@@ -5,15 +5,24 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as readline from 'readline';
 import { version } from '@core/version';
+import type { Environment } from '@interpreter/env/Environment';
+import type { VariableSource } from '@core/types/variable';
+import { createExecutableVariable } from '@core/types/variable/VariableFactories';
+import type { NodeFunctionExecutable } from '@core/types/executable';
 import type { JSONRPCRequest, JSONRPCResponse, MCPToolSchema } from './types';
 import { MCPErrorCode } from './types';
+import { FunctionRouter } from './FunctionRouter';
+import { mcpNameToMlldName } from './SchemaGenerator';
 
 export interface McpConfig {
   servers?: McpServerConfig[];
 }
 
 export interface McpServerConfig {
-  module: string;
+  module?: string;
+  command?: string;
+  args?: string[];
+  npm?: string;
   tools?: string[] | '*';
   env?: Record<string, string>;
   config?: Record<string, unknown>;
@@ -25,7 +34,10 @@ export interface McpConnectionInfo {
   env: Record<string, string>;
   servers: Array<{
     name: string;
-    module: string;
+    module?: string;
+    command?: string;
+    args?: string[];
+    npm?: string;
     tools: string[];
     config?: Record<string, unknown>;
     pid?: number;
@@ -40,15 +52,13 @@ type PendingHandler = {
 
 class McpServerConnection {
   readonly name: string;
-  readonly module: string;
   readonly process: ChildProcessWithoutNullStreams;
   private nextId = 1;
   private readonly pending = new Map<string | number, PendingHandler>();
   private closed = false;
 
-  constructor(name: string, module: string, child: ChildProcessWithoutNullStreams) {
+  constructor(name: string, child: ChildProcessWithoutNullStreams) {
     this.name = name;
-    this.module = module;
     this.process = child;
     this.attachOutput();
     this.attachExitHandlers();
@@ -72,6 +82,23 @@ class McpServerConnection {
     }
     const result = response.result as { tools?: MCPToolSchema[] } | undefined;
     return Array.isArray(result?.tools) ? result!.tools : [];
+  }
+
+  async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const response = await this.request('tools/call', { name, arguments: args });
+    if (response.error) {
+      throw new Error(`MCP server '${this.name}' tools/call failed: ${response.error.message}`);
+    }
+    const result = response.result as { content?: Array<{ type?: string; text?: string }>; isError?: boolean } | undefined;
+    const content = Array.isArray(result?.content) ? result!.content : [];
+    const text = content
+      .filter(entry => entry?.type === 'text')
+      .map(entry => entry?.text ?? '')
+      .join('');
+    if (result?.isError) {
+      throw new Error(text || `MCP tool '${name}' failed`);
+    }
+    return text;
   }
 
   async forward(request: JSONRPCRequest): Promise<JSONRPCResponse> {
@@ -169,15 +196,18 @@ class McpProxyServer {
   private readonly socketPath: string;
   private readonly tools: MCPToolSchema[];
   private readonly toolIndex: Map<string, McpServerConnection>;
+  private readonly router?: FunctionRouter;
 
   constructor(
     socketPath: string,
     tools: MCPToolSchema[],
-    toolIndex: Map<string, McpServerConnection>
+    toolIndex: Map<string, McpServerConnection>,
+    router?: FunctionRouter
   ) {
     this.socketPath = socketPath;
     this.tools = tools;
     this.toolIndex = toolIndex;
+    this.router = router;
   }
 
   async start(): Promise<void> {
@@ -265,6 +295,33 @@ class McpProxyServer {
             }
           };
         }
+        if (this.router) {
+          const args = (request.params as any)?.arguments;
+          try {
+            const text = await this.router.executeFunction(toolName, args ?? {});
+            return {
+              jsonrpc: '2.0',
+              id: request.id ?? null,
+              result: {
+                content: [{ type: 'text', text }]
+              }
+            };
+          } catch (error) {
+            return {
+              jsonrpc: '2.0',
+              id: request.id ?? null,
+              result: {
+                content: [
+                  {
+                    type: 'text',
+                    text: error instanceof Error ? error.message : String(error)
+                  }
+                ],
+                isError: true
+              }
+            };
+          }
+        }
         try {
           return await server.forward(request);
         } catch (error) {
@@ -295,6 +352,14 @@ export class MCPOrchestrator {
   private readonly servers = new Map<string, McpServerConnection>();
   private proxy?: McpProxyServer;
   private socketPath?: string;
+  private readonly environment?: Environment;
+  private toolEnvironment?: Environment;
+  private toolRouter?: FunctionRouter;
+  private toolNames: string[] = [];
+
+  constructor(options?: { environment?: Environment }) {
+    this.environment = options?.environment;
+  }
 
   async start(config: McpConfig | null | undefined): Promise<McpConnectionInfo | null> {
     if (!config || !Array.isArray(config.servers) || config.servers.length === 0) {
@@ -309,31 +374,38 @@ export class MCPOrchestrator {
     const toolIndex = new Map<string, McpServerConnection>();
     const tools: MCPToolSchema[] = [];
     const serverInfos: McpConnectionInfo['servers'] = [];
+    this.toolNames = [];
+    this.toolEnvironment = this.environment ? this.environment.createChild() : undefined;
 
     for (const server of normalized) {
-      const child = spawn('mlld', buildServerArgs(server), {
+      const child = spawn(server.command, server.args, {
         stdio: ['pipe', 'pipe', 'inherit'],
         env: { ...process.env, ...server.env }
       });
 
-      const connection = new McpServerConnection(server.name, server.module, child);
+      const connection = new McpServerConnection(server.name, child);
       this.servers.set(server.name, connection);
 
       await connection.initialize();
       const listedTools = await connection.listTools();
+      const filteredTools = filterTools(listedTools, server.tools, server.name);
 
-      for (const tool of listedTools) {
+      for (const tool of filteredTools) {
         if (toolIndex.has(tool.name)) {
           throw new Error(`MCP tool '${tool.name}' is provided by multiple servers`);
         }
         toolIndex.set(tool.name, connection);
         tools.push(tool);
+        this.registerToolProxy(tool, connection);
       }
 
       serverInfos.push({
         name: server.name,
         module: server.module,
-        tools: listedTools.map(tool => tool.name),
+        command: server.kind === 'command' ? server.command : undefined,
+        npm: server.kind === 'npm' ? server.npm : undefined,
+        args: server.kind === 'module' ? undefined : server.args,
+        tools: filteredTools.map(tool => tool.name),
         config: server.config,
         pid: child.pid ?? undefined
       });
@@ -345,7 +417,13 @@ export class MCPOrchestrator {
     }
 
     this.socketPath = buildSocketPath();
-    this.proxy = new McpProxyServer(this.socketPath, tools, toolIndex);
+    if (this.toolEnvironment) {
+      this.toolRouter = new FunctionRouter({
+        environment: this.toolEnvironment,
+        toolNames: this.toolNames
+      });
+    }
+    this.proxy = new McpProxyServer(this.socketPath, tools, toolIndex, this.toolRouter);
     await this.proxy.start();
 
     const env = {
@@ -377,44 +455,152 @@ export class MCPOrchestrator {
       await removeSocket(this.socketPath);
       this.socketPath = undefined;
     }
+
+    this.toolEnvironment = undefined;
+    this.toolRouter = undefined;
+    this.toolNames = [];
+  }
+
+  private registerToolProxy(tool: MCPToolSchema, connection: McpServerConnection): void {
+    if (!this.toolEnvironment) {
+      return;
+    }
+    const mlldName = mcpNameToMlldName(tool.name);
+    if (this.toolEnvironment.getVariable(mlldName)) {
+      throw new Error(`MCP tool '${tool.name}' conflicts with existing variable '@${mlldName}'`);
+    }
+
+    const execDef: NodeFunctionExecutable = {
+      type: 'nodeFunction',
+      name: mlldName,
+      fn: async (input?: Record<string, unknown>) => {
+        const args = input && typeof input === 'object' && !Array.isArray(input)
+          ? input
+          : {};
+        return connection.callTool(tool.name, args);
+      },
+      paramNames: ['input'],
+      sourceDirective: 'exec'
+    };
+
+    const source: VariableSource = {
+      directive: 'var',
+      syntax: 'reference',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+
+    const execVar = createExecutableVariable(
+      mlldName,
+      'command',
+      '',
+      execDef.paramNames,
+      undefined,
+      source,
+      {
+        internal: {
+          executableDef: execDef,
+          mcpTool: {
+            name: tool.name,
+            argumentMode: 'object'
+          }
+        }
+      }
+    );
+    if (tool.description) {
+      execVar.description = tool.description;
+    }
+    this.toolEnvironment.setVariable(mlldName, execVar);
+    this.toolNames.push(mlldName);
   }
 }
 
-function normalizeServerConfigs(servers: McpServerConfig[]): Array<{
+type NormalizedServerConfig = {
   name: string;
-  module: string;
+  kind: 'module' | 'command' | 'npm';
+  module?: string;
+  command: string;
+  args: string[];
   tools?: string[];
   env: Record<string, string>;
   config?: Record<string, unknown>;
-}> {
-  const result: Array<{
-    name: string;
-    module: string;
-    tools?: string[];
-    env: Record<string, string>;
-    config?: Record<string, unknown>;
-  }> = [];
+  npm?: string;
+};
+
+function normalizeServerConfigs(servers: McpServerConfig[]): NormalizedServerConfig[] {
+  const result: NormalizedServerConfig[] = [];
   const seenNames = new Set<string>();
 
   servers.forEach((server, index) => {
     if (!server || typeof server !== 'object') {
       throw new Error('MCP server config must be an object');
     }
-    if (!server.module || typeof server.module !== 'string') {
-      throw new Error('MCP server config requires a module string');
+    const hasModule = typeof server.module === 'string';
+    const hasCommand = typeof server.command === 'string';
+    const hasNpm = typeof server.npm === 'string';
+    const kindCount = Number(hasModule) + Number(hasCommand) + Number(hasNpm);
+    if (kindCount !== 1) {
+      throw new Error('MCP server config requires exactly one of module, command, or npm');
     }
 
     const nameCandidate = server.name && typeof server.name === 'string'
       ? server.name
-      : deriveServerName(server.module, index);
+      : deriveServerName(server, index);
     const name = dedupeName(nameCandidate, seenNames);
 
     const tools = normalizeTools(server.tools);
     const env = normalizeEnv(server.env);
+    const args = normalizeArgs(server.args);
 
+    if (hasModule) {
+      const moduleName = server.module!.trim();
+      if (!moduleName) {
+        throw new Error('MCP server module must be a non-empty string');
+      }
+      result.push({
+        name,
+        kind: 'module',
+        module: moduleName,
+        command: 'mlld',
+        args: buildModuleArgs({ module: moduleName, tools }),
+        tools,
+        env,
+        config: server.config && typeof server.config === 'object' && !Array.isArray(server.config)
+          ? server.config
+          : undefined
+      });
+      return;
+    }
+
+    if (hasCommand) {
+      const command = server.command!.trim();
+      if (!command) {
+        throw new Error('MCP server command must be a non-empty string');
+      }
+      result.push({
+        name,
+        kind: 'command',
+        command,
+        args,
+        tools,
+        env,
+        config: server.config && typeof server.config === 'object' && !Array.isArray(server.config)
+          ? server.config
+          : undefined
+      });
+      return;
+    }
+
+    const npmPackage = server.npm!.trim();
+    if (!npmPackage) {
+      throw new Error('MCP server npm package must be a non-empty string');
+    }
     result.push({
       name,
-      module: server.module,
+      kind: 'npm',
+      npm: npmPackage,
+      command: 'npx',
+      args: [npmPackage, ...args],
       tools,
       env,
       config: server.config && typeof server.config === 'object' && !Array.isArray(server.config)
@@ -440,6 +626,16 @@ function normalizeTools(tools: McpServerConfig['tools']): string[] | undefined {
   return normalized;
 }
 
+function normalizeArgs(args: McpServerConfig['args']): string[] {
+  if (args === undefined || args === null) {
+    return [];
+  }
+  if (!Array.isArray(args)) {
+    throw new Error('MCP server args must be an array');
+  }
+  return args.map(arg => String(arg));
+}
+
 function normalizeEnv(env: McpServerConfig['env']): Record<string, string> {
   if (!env || typeof env !== 'object' || Array.isArray(env)) {
     return {};
@@ -452,7 +648,24 @@ function normalizeEnv(env: McpServerConfig['env']): Record<string, string> {
   return normalized;
 }
 
-function buildServerArgs(server: { module: string; tools?: string[] }): string[] {
+function filterTools(
+  listedTools: MCPToolSchema[],
+  allowed: string[] | undefined,
+  serverName: string
+): MCPToolSchema[] {
+  if (!allowed || allowed.length === 0) {
+    return listedTools;
+  }
+  const allowedSet = new Set(allowed);
+  const filtered = listedTools.filter(tool => allowedSet.has(tool.name));
+  const missing = allowed.filter(name => !listedTools.some(tool => tool.name === name));
+  if (missing.length > 0) {
+    throw new Error(`MCP server '${serverName}' does not provide tools: ${missing.join(', ')}`);
+  }
+  return filtered;
+}
+
+function buildModuleArgs(server: { module: string; tools?: string[] }): string[] {
   const args = ['mcp', server.module];
   if (server.tools && server.tools.length > 0) {
     args.push('--tools', server.tools.join(','));
@@ -460,8 +673,13 @@ function buildServerArgs(server: { module: string; tools?: string[] }): string[]
   return args;
 }
 
-function deriveServerName(modulePath: string, index: number): string {
-  const base = modulePath.split('/').filter(Boolean).pop() || `server-${index + 1}`;
+function deriveServerName(server: McpServerConfig, index: number): string {
+  const raw =
+    (typeof server.module === 'string' && server.module.trim()) ||
+    (typeof server.npm === 'string' && server.npm.trim()) ||
+    (typeof server.command === 'string' && server.command.trim()) ||
+    `server-${index + 1}`;
+  const base = raw.split('/').filter(Boolean).pop() || `server-${index + 1}`;
   const cleaned = base.replace(/\.(mld|mld\.md)$/i, '').replace(/[^a-zA-Z0-9_-]/g, '-');
   return cleaned || `server-${index + 1}`;
 }

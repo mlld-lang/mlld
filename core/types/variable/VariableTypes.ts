@@ -170,6 +170,10 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
   fromGlobPattern?: boolean;
   globPattern?: string;
   fileCount?: number;
+  mcpTool?: {
+    name: string;
+    argumentMode?: 'object';
+  };
 }
 
 // =========================================================================

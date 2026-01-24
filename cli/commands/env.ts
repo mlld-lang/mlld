@@ -630,7 +630,7 @@ async function spawnEnvCommand(args: string[]): Promise<void> {
   }
 
   const loaded = await loadEnvironmentModule(envLocation);
-  const orchestrator = new MCPOrchestrator();
+  const orchestrator = new MCPOrchestrator({ environment: loaded.environment });
   let restoreEnv = () => {};
   let exitCode = 0;
 
@@ -690,7 +690,7 @@ async function shellEnvCommand(args: string[]): Promise<void> {
   }
 
   const loaded = await loadEnvironmentModule(envLocation);
-  const orchestrator = new MCPOrchestrator();
+  const orchestrator = new MCPOrchestrator({ environment: loaded.environment });
   let restoreEnv = () => {};
   let exitCode = 0;
 

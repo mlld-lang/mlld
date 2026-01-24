@@ -59,12 +59,19 @@ export class FunctionRouter {
 
         if (!variable || variable.type !== 'executable') {
           throw new Error(`Tool '${toolName}' not found`);
-        }
+      }
 
-        const execVar = variable as ExecutableVariable;
-        const resolvedArgs = this.resolveToolArgs(execVar, args, definition, toolName);
-        const invocation = this.buildInvocation(execName, execVar, resolvedArgs, toolKey, definition.labels);
-        const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
+      const execVar = variable as ExecutableVariable;
+      const resolvedArgs = this.resolveToolArgs(execVar, args, definition, toolName);
+      const invocation = this.buildInvocation(
+        execName,
+        execVar,
+        resolvedArgs,
+        toolKey,
+        definition.labels,
+        this.shouldUseObjectArgs(execVar)
+      );
+      const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
         this.environment.recordToolCall({ ...callRecord, ok: true });
         return this.serializeResult(result.value);
@@ -78,7 +85,14 @@ export class FunctionRouter {
       }
 
       const execVar = variable as ExecutableVariable;
-      const invocation = this.buildInvocation(execName, execVar, args, toolKey);
+      const invocation = this.buildInvocation(
+        execName,
+        execVar,
+        args,
+        toolKey,
+        undefined,
+        this.shouldUseObjectArgs(execVar)
+      );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
       this.environment.recordToolCall({ ...callRecord, ok: true });
@@ -115,11 +129,14 @@ export class FunctionRouter {
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
     sourceName?: string,
-    toolLabels?: string[]
+    toolLabels?: string[],
+    argsAsObject?: boolean
   ): ExecInvocation {
     const location = this.createLocation();
     const identifierNode = this.createVariableReferenceNode(name, location);
-    const argNodes = this.createArgumentNodes(execVar, args, location);
+    const argNodes = argsAsObject
+      ? [this.createDataValue(args, location)]
+      : this.createArgumentNodes(execVar, args, location);
 
     const commandRef: SyntheticCommandReference = {
       type: 'CommandReference',
@@ -142,6 +159,10 @@ export class FunctionRouter {
         ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {})
       }
     } as ExecInvocation;
+  }
+
+  private shouldUseObjectArgs(execVar: ExecutableVariable): boolean {
+    return execVar.internal?.mcpTool?.argumentMode === 'object';
   }
 
   private createMcpSecurityDescriptor(toolName: string): SecurityDescriptor {
