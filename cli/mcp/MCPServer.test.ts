@@ -410,6 +410,59 @@ describe('MCPServer', () => {
     });
   });
 
+  it('resolves bound variables to raw values', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /var @org = "mlld"
+      /exe @createIssue(owner: string, config: object) = js {
+        return owner + ":" + config.owner;
+      }
+      /var tools @agentTools = {
+        createIssue: {
+          mlld: @createIssue,
+          bind: { owner: @org, config: { owner: @org } }
+        }
+      }
+      /export { @createIssue }
+    `, ['createIssue']);
+
+    const toolsVar = environment.getVariable('agentTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'create_issue',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'mlld:mlld',
+        },
+      ],
+    });
+  });
+
   it('supports non-camelCase tool collection keys', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @alpha() = js { return 'alpha'; }

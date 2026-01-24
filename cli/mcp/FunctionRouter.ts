@@ -6,7 +6,8 @@ import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 
 export interface FunctionRouterOptions {
@@ -77,7 +78,7 @@ export class FunctionRouter {
       }
 
       const execVar = variable as ExecutableVariable;
-      const resolvedArgs = this.resolveToolArgs(execVar, args, definition, toolName);
+      const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
       const invocation = this.buildInvocation(
         execName,
         execVar,
@@ -206,12 +207,12 @@ export class FunctionRouter {
     });
   }
 
-  private resolveToolArgs(
+  private async resolveToolArgs(
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
     definition: ToolDefinition,
     toolName: string
-  ): Record<string, unknown> {
+  ): Promise<Record<string, unknown>> {
     const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
     const bound =
       definition.bind && typeof definition.bind === 'object' && !Array.isArray(definition.bind)
@@ -244,7 +245,44 @@ export class FunctionRouter {
       return args;
     }
 
-    return { ...bound, ...args };
+    const extractedBound: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(bound)) {
+      extractedBound[key] = await this.resolveBoundValue(value);
+    }
+
+    return { ...extractedBound, ...args };
+  }
+
+  private async resolveBoundValue(value: unknown): Promise<unknown> {
+    if (isVariable(value)) {
+      return await extractVariableValue(value, this.environment);
+    }
+    if (isStructuredValue(value)) {
+      return asData(value);
+    }
+    if (Array.isArray(value)) {
+      const items = [];
+      for (const item of value) {
+        items.push(await this.resolveBoundValue(item));
+      }
+      return items;
+    }
+    if (this.isPlainObject(value)) {
+      const result: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(value)) {
+        result[key] = await this.resolveBoundValue(entry);
+      }
+      return result;
+    }
+    return value;
+  }
+
+  private isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
   }
 
   private createArgumentNodes(
