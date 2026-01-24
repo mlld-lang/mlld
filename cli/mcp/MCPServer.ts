@@ -4,7 +4,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { ExecutableVariable } from '@core/types/variable';
 import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from './FunctionRouter';
-import { generateToolSchema } from './SchemaGenerator';
+import { generateToolSchema, mlldNameToMCPName } from './SchemaGenerator';
 import type {
   JSONRPCRequest,
   JSONRPCResponse,
@@ -130,6 +130,9 @@ export class MCPServer {
     const tools: MCPToolSchema[] = [];
     if (this.toolCollection && this.toolMap) {
       for (const [toolName, execVar] of this.toolMap.entries()) {
+        if (!this.isToolAllowed(toolName)) {
+          continue;
+        }
         const toolDef = this.toolCollection[toolName];
         const schema = generateToolSchema(toolName, execVar, toolDef);
         if (toolDef?.description) {
@@ -139,6 +142,9 @@ export class MCPServer {
       }
     } else {
       for (const [name, variable] of this.exportedFunctions.entries()) {
+        if (!this.isToolAllowed(name)) {
+          continue;
+        }
         tools.push(generateToolSchema(name, variable));
       }
     }
@@ -210,6 +216,10 @@ export class MCPServer {
       code: MCPErrorCode.InternalError,
       message: error instanceof Error ? error.message : String(error),
     };
+  }
+
+  private isToolAllowed(toolName: string): boolean {
+    return this.environment.isToolAllowed(toolName, mlldNameToMCPName(toolName));
   }
 
   private isJSONRPCError(error: unknown): error is JSONRPCError {

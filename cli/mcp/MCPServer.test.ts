@@ -290,6 +290,60 @@ describe('MCPServer', () => {
     });
   });
 
+  it('scopes tools based on environment allowances', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /exe @beta() = js { return 'b'; }
+      /export { @alpha, @beta }
+    `, ['alpha', 'beta']);
+
+    environment.setAllowedTools(['alpha']);
+
+    const server = new MCPServer({ environment, exportedFunctions: exports });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const listResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((listResponse.result as any).tools).toEqual([
+      {
+        name: 'alpha',
+        description: '',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+    ]);
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'beta',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({ isError: true });
+    const text = (callResponse.result as any)?.content?.[0]?.text ?? '';
+    expect(text).toContain('not available');
+  });
+
   it('filters tools when tool collection is provided', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @alpha() = js { return 'a'; }

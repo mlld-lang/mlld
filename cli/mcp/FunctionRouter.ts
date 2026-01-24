@@ -35,6 +35,9 @@ export class FunctionRouter {
 
   async executeFunction(toolName: string, args: Record<string, unknown>): Promise<string> {
     const toolKey = mcpNameToMlldName(toolName);
+    if (!this.environment.isToolAllowed(toolKey, toolName)) {
+      throw new Error(`Tool '${toolName}' not available`);
+    }
     if (this.toolCollection) {
       const definition = this.toolCollection[toolKey];
       if (!definition?.mlld) {

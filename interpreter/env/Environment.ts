@@ -128,6 +128,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private moduleProfiles?: ProfilesDeclaration;
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private policySummary?: PolicyConfig;
+  private allowedTools?: Set<string>;
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
@@ -882,6 +883,56 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   getPolicySummary(): PolicyConfig | undefined {
     if (this.policySummary) return this.policySummary;
     return this.parent?.getPolicySummary();
+  }
+
+  getAllowedTools(): Set<string> | undefined {
+    if (this.allowedTools) return this.allowedTools;
+    return this.parent?.getAllowedTools();
+  }
+
+  setAllowedTools(tools?: Iterable<string> | null): void {
+    if (!tools) {
+      if (this.parent?.getAllowedTools()) {
+        throw new Error('Tool scope cannot widen beyond parent environment');
+      }
+      this.allowedTools = undefined;
+      return;
+    }
+    const normalized = new Set<string>();
+    for (const tool of tools) {
+      if (typeof tool !== 'string') {
+        continue;
+      }
+      const trimmed = tool.trim();
+      if (trimmed.length > 0) {
+        normalized.add(trimmed);
+      }
+    }
+    const parentAllowed = this.parent?.getAllowedTools();
+    if (parentAllowed) {
+      const invalid = Array.from(normalized).filter(tool => !parentAllowed.has(tool));
+      if (invalid.length > 0) {
+        throw new Error(`Tool scope cannot add tools outside parent: ${invalid.join(', ')}`);
+      }
+    }
+    this.allowedTools = normalized;
+  }
+
+  isToolAllowed(toolName: string, mcpName?: string): boolean {
+    const allowed = this.getAllowedTools();
+    if (!allowed) {
+      return true;
+    }
+    if (allowed.size === 0) {
+      return false;
+    }
+    if (allowed.has(toolName)) {
+      return true;
+    }
+    if (mcpName && allowed.has(mcpName)) {
+      return true;
+    }
+    return false;
   }
 
   setPolicyContext(policy?: Record<string, unknown> | null): void {
@@ -2349,6 +2400,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     child.provenanceEnabled = this.provenanceEnabled;
     // Inherit module isolation flag - children of isolated environments are also isolated
     child.moduleIsolated = this.moduleIsolated;
+    if (this.allowedTools) {
+      child.allowedTools = new Set(this.allowedTools);
+    }
 
     // Create child import resolver
     child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);
@@ -2832,6 +2886,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Inherit trace settings
     child.traceEnabled = this.traceEnabled;
     child.directiveTrace = this.directiveTrace; // Share trace with parent
+    if (this.allowedTools) {
+      child.allowedTools = new Set(this.allowedTools);
+    }
     return child;
   }
   

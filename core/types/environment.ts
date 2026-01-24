@@ -1,4 +1,5 @@
 import type { DataLabel } from './security';
+import type { ToolCollection } from './tools';
 
 export type EnvironmentConfig = {
   provider?: string;
@@ -6,6 +7,7 @@ export type EnvironmentConfig = {
   taint?: DataLabel[];
   name?: string;
   from?: string;
+  tools?: ToolCollection | string[];
   [key: string]: unknown;
 };
 
