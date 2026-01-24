@@ -109,6 +109,16 @@ async function interpolateAndRecord(
   return text;
 }
 
+async function resolveExeDescription(raw: unknown, env: Environment): Promise<string | undefined> {
+  if (typeof raw === 'string') {
+    return raw;
+  }
+  if (raw && typeof raw === 'object' && 'needsInterpolation' in raw && Array.isArray((raw as any).parts)) {
+    return interpolate((raw as any).parts, env, InterpolationContext.Default);
+  }
+  return undefined;
+}
+
 function buildTemplateAstFromContent(content: string): any[] {
   const ast: any[] = [];
   const regex = /@([A-Za-z_][\w\.]*)/g;
@@ -906,6 +916,11 @@ export async function evaluateExe(
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }
+
+  const description = await resolveExeDescription(directive.values?.withClause?.description, env);
+  if (description !== undefined) {
+    executableDef.description = description;
+  }
   
   // Create variable source metadata
   const source: VariableSource = {
@@ -948,6 +963,9 @@ export async function evaluateExe(
     definedAt: location,
     executableDef
   };
+  if (description !== undefined) {
+    metadata.description = description;
+  }
 
   if (env.hasShadowEnvs()) {
     metadata.capturedShadowEnvs = env.captureAllShadowEnvs();
@@ -992,6 +1010,9 @@ export async function evaluateExe(
         }
       }
     );
+    if (description !== undefined) {
+      variable.description = description;
+    }
 
     // Set the actual template/command content
     if (executableDef.type === 'command') {

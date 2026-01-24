@@ -20,6 +20,11 @@ export function mcpNameToMlldName(name: string): string {
 export function generateToolSchema(name: string, execVar: ExecutableVariable): MCPToolSchema {
   const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
   const properties: Record<string, { type: 'string' }> = {};
+  const description =
+    execVar.description ??
+    execVar.internal?.executableDef?.description ??
+    execVar.mx?.description ??
+    '';
 
   for (const param of paramNames) {
     properties[param] = { type: 'string' };
@@ -27,7 +32,7 @@ export function generateToolSchema(name: string, execVar: ExecutableVariable): M
 
   return {
     name: mlldNameToMCPName(name),
-    description: '',
+    description,
     inputSchema: {
       type: 'object',
       properties,

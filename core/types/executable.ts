@@ -19,6 +19,8 @@ export interface BaseExecutable {
   type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver' | 'pipeline' | 'data' | 'prose' | 'nodeFunction' | 'nodeClass' | 'partial';
   /** Parameter names expected by this executable */
   paramNames: string[];
+  /** Human-readable summary for tool metadata */
+  description?: string;
   /** Original directive type this came from (exec or text) */
   sourceDirective: 'exec' | 'text';
 }
@@ -183,6 +185,7 @@ export interface ExecutableVariable {
   type: 'executable';
   name: string;
   value: ExecutableDefinition;
+  description?: string;
   mx: VariableContext;
   internal?: VariableInternal;
 }

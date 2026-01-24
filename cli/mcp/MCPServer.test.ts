@@ -81,7 +81,7 @@ describe('MCPServer', () => {
 
   it('lists exported tools after initialization', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
-      /exe @greet(name) = js { return 'Hello ' + name; }
+      /exe @greet(name) = js { return 'Hello ' + name; } with { description: "Greet a user by name" }
       /exe @getData() = js { return { ok: true }; }
       /export { @greet, @getData }
     `, ['greet', 'getData']);
@@ -110,7 +110,7 @@ describe('MCPServer', () => {
     expect(tools).toEqual([
       {
         name: 'greet',
-        description: '',
+        description: 'Greet a user by name',
         inputSchema: {
           type: 'object',
           properties: {

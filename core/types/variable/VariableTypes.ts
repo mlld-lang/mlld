@@ -359,6 +359,7 @@ export interface ExecutableVariable extends BaseVariable {
     language?: 'js' | 'node' | 'python' | 'sh' | 'bash';
   };
   paramNames: string[];
+  description?: string;
   metadata?: VariableMetadata;
 }
 

@@ -47,6 +47,9 @@ WithProperty
   / "format" _ ":" _ format:DataString {
       return ["format", format];
     }
+  / "description" _ ":" _ description:DataString {
+      return ["description", description];
+    }
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
     }

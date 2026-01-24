@@ -20,12 +20,13 @@ describe('SchemaGenerator', () => {
       source,
       undefined
     );
+    execVar.description = 'List issues for a repository';
 
     const schema = generateToolSchema('listIssues', execVar);
 
     expect(schema).toEqual({
       name: 'list_issues',
-      description: '',
+      description: 'List issues for a repository',
       inputSchema: {
         type: 'object',
         properties: {
