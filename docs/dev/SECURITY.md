@@ -301,4 +301,4 @@ show @data.mx.sources  // ["mcp:fetchData", "transform:json"]
 
 - Complete spec: `todo/spec-security-2026-v3.md`
 - Implementation plan: `todo/plan-security-2026-v3.md`
-- Epic: `bd show mlld-wmzl`
+- Epic: `tk show mlld-wmzl`

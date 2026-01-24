@@ -110,6 +110,7 @@ d.ts.map
 .env
 **/.claude/settings.local.json
 .claude
+.tickets
 
 # Peggy debug output
 debug-combined-grammar.peggy

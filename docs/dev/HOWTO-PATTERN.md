@@ -281,7 +281,7 @@ Now LLMs can run `mytool howto <feature>` to learn about your tool!
 
 ## Metadata Automation
 
-The mlld project includes a git pre-commit hook that automatically updates the `updated` field in atom frontmatter when atoms are modified and staged. The hook is integrated with the beads pre-commit hook at `.git/hooks/pre-commit`.
+The mlld project includes a git pre-commit hook that automatically updates the `updated` field in atom frontmatter when atoms are modified and staged. The hook is integrated with the pre-commit hook at `.git/hooks/pre-commit`.
 
 Key features:
 - Detects staged markdown files in `docs/src/atoms/`

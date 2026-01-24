@@ -267,11 +267,11 @@ npm run ast -- '/import { get } from @keychain'
 4. **MacOSKeychainProvider** - import from `@core/resolvers/builtin/keychain-macos`
 5. **Test manually** - these commands interact with real keychain and filesystem
 
-## Beads to Close
+## Tickets to Close
 
-When implementing, close beads with:
+When implementing, close tickets with:
 ```bash
-bd close mlld-l6n4 --reason "mlld env capture implemented: <commit>"
-bd close mlld-hmw5 --reason "mlld env spawn implemented: <commit>"
-bd close mlld-9rot --reason "mlld env shell implemented: <commit>"
+tk close mlld-l6n4 --reason "mlld env capture implemented: <commit>"
+tk close mlld-hmw5 --reason "mlld env spawn implemented: <commit>"
+tk close mlld-9rot --reason "mlld env shell implemented: <commit>"
 ```
