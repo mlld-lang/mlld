@@ -519,6 +519,62 @@ describe('MCPServer', () => {
     });
   });
 
+  it('tracks tool calls in @mx.tools.calls for guard checks', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /guard @limitCalls before op:exe = when [
+        @mx.tools.calls.includes("alpha") => deny "Tool already called"
+        * => allow
+      ]
+      /exe @alpha() = js { return 'a'; }
+      /export { @alpha }
+    `, ['alpha']);
+
+    const server = new MCPServer({ environment, exportedFunctions: exports });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const firstCall = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'alpha',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(firstCall.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'a',
+        },
+      ],
+    });
+
+    const secondCall = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'alpha',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(secondCall.result).toMatchObject({ isError: true });
+    const text = (secondCall.result as any)?.content?.[0]?.text ?? '';
+    expect(text).toContain('Tool already called');
+  });
+
   it('filters tools when tool collection is provided', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @alpha() = js { return 'a'; }
