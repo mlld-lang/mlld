@@ -73,6 +73,18 @@ export function extractEnvironmentConfig(
   return raw as EnvironmentConfig;
 }
 
+export function resolveEnvironmentConfig(
+  env: Environment,
+  metadata?: Record<string, unknown>
+): EnvironmentConfig | undefined {
+  const guardConfig = extractEnvironmentConfig(metadata);
+  const scopedConfig = env.getScopedEnvironmentConfig();
+  if (guardConfig && scopedConfig) {
+    return { ...scopedConfig, ...guardConfig };
+  }
+  return guardConfig ?? scopedConfig;
+}
+
 export function applyEnvironmentDefaults(
   config: EnvironmentConfig | undefined,
   policy: PolicyConfig | undefined
@@ -201,7 +213,7 @@ function buildProviderExecutionError(options: {
 }
 
 function prepareProviderOptions(config: EnvironmentConfig): EnvironmentCreateOptions {
-  const { provider: _provider, auth: _auth, taint: _taint, keep: _keep, ...rest } = config as any;
+  const { provider: _provider, auth: _auth, taint: _taint, keep: _keep, tools: _tools, ...rest } = config as any;
   return { ...rest };
 }
 

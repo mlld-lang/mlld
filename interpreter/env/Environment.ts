@@ -15,6 +15,7 @@ import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
+import type { EnvironmentConfig } from '@core/types/environment';
 import { execSync } from 'child_process';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
@@ -129,6 +130,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private policySummary?: PolicyConfig;
   private allowedTools?: Set<string>;
+  private scopedEnvironmentConfig?: EnvironmentConfig;
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
@@ -883,6 +885,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   getPolicySummary(): PolicyConfig | undefined {
     if (this.policySummary) return this.policySummary;
     return this.parent?.getPolicySummary();
+  }
+
+  getScopedEnvironmentConfig(): EnvironmentConfig | undefined {
+    if (this.scopedEnvironmentConfig) return this.scopedEnvironmentConfig;
+    return this.parent?.getScopedEnvironmentConfig();
+  }
+
+  setScopedEnvironmentConfig(config?: EnvironmentConfig | null): void {
+    if (config === null || config === undefined) {
+      this.scopedEnvironmentConfig = undefined;
+      return;
+    }
+    this.scopedEnvironmentConfig = config;
   }
 
   getAllowedTools(): Set<string> | undefined {

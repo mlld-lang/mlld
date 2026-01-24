@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Execute multiple statements when condition is true: `when @ready [let @x = 1  show @x]`
   - Supports `let`, `var`, nested `when`, `for`, and return via `=>`
   - Consistent with `exe` and `for` block semantics
+- **`env` directive**: Scoped environment blocks with per-block environment config and `with { tools }` tool filtering
 - **Return label modifications**: `=> pii @var`, `=> untrusted @var`, `=> trusted! @var`, `=> !label @var`, `=> clear! @var` apply label changes to returned values with trust asymmetry and privilege checks
 - **Node module imports**: `import { @x } from node @package` auto-wraps exports, supports `new` constructor expressions, and streams async iterables
 - **`mlld howto core-modules`**: List official @mlld modules with descriptions

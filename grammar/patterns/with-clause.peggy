@@ -50,6 +50,9 @@ WithProperty
   / "description" _ ":" _ description:DataString {
       return ["description", description];
     }
+  / "tools" _ ":" _ tools:Expression {
+      return ["tools", tools];
+    }
   / "asSection" _ ":" _ title:AsSectionRenameString {
       return ["asSection", title];
     }

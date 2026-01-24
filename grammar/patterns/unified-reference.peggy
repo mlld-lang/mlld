@@ -22,6 +22,14 @@ UnifiedReferenceNoTail "unified reference without tail support"
   / SimpleExecNoTail         // @func(args) - no tail
   / VariableNoTail           // @var.field - no tail
 
+// Unified reference without tail capture, but allows following tail modifiers
+// for directive-level parsing (e.g., env @config with {...})
+UnifiedReferenceNoTailLoose "unified reference without tail capture (loose)"
+  = ExecResultMethodCallNoTail
+  / FieldAccessExecForPipeline
+  / SimpleExecForPipeline
+  / VariableForPipeline
+
 // Special pattern for use inside pipeline contexts
 // This allows function arguments but prevents capturing tail modifiers
 UnifiedReferenceForPipeline "unified reference for pipeline commands"

@@ -235,6 +235,7 @@ export type DirectiveKind =
   | 'var'
   | 'show'
   | 'exe'
+  | 'env'
   | 'path'
   | 'output'
   | 'append'
@@ -287,7 +288,9 @@ export type DirectiveSubtype =
   | 'policy'
   // Signing subtypes
   | 'sign'
-  | 'verify';
+  | 'verify'
+  // Env subtype
+  | 'env';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

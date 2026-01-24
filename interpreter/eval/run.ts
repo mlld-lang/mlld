@@ -40,7 +40,7 @@ import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
   executeProviderCommand,
-  extractEnvironmentConfig,
+  resolveEnvironmentConfig,
   resolveEnvironmentAuthSecrets
 } from '@interpreter/env/environment-provider';
 
@@ -419,8 +419,8 @@ export async function evaluateRun(
     );
     const effectiveWorkingDirectory = workingDirectory || env.getExecutionDirectory();
     const commandTaint = deriveCommandTaint({ command });
-    const guardEnvConfig = extractEnvironmentConfig(context?.guardMetadata);
-    const resolvedEnvConfig = applyEnvironmentDefaults(guardEnvConfig, env.getPolicySummary());
+    const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
+    const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
     mergePendingDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
 
     // Friendly pre-check for oversized simple /run command payloads
@@ -959,8 +959,8 @@ export async function evaluateRun(
       }
 
       const commandTaint = deriveCommandTaint({ command });
-      const guardEnvConfig = extractEnvironmentConfig(context?.guardMetadata);
-      const resolvedEnvConfig = applyEnvironmentDefaults(guardEnvConfig, env.getPolicySummary());
+      const scopedEnvConfig = resolveEnvironmentConfig(env, context?.guardMetadata);
+      const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, env.getPolicySummary());
       mergePendingDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
       
       // NEW: Security check for exec commands

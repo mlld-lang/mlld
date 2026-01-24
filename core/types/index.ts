@@ -35,6 +35,7 @@ export * from './for'; // For loop directive and expression
 export * from './loop'; // Loop directive and expression
 export * from './guard'; // Guard directives
 export * from './policy'; // Policy directives
+export * from './env'; // Env directives
 export * from './load-content'; // Load content types and utilities including URL metadata
 export * from './while'; // While directives and stages
 export * from './control'; // Control literals (done/continue)

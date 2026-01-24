@@ -68,7 +68,7 @@ import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
   executeProviderCommand,
-  extractEnvironmentConfig,
+  resolveEnvironmentConfig,
   resolveEnvironmentAuthSecrets
 } from '@interpreter/env/environment-provider';
 import type { OperationContext } from '../env/ContextManager';
@@ -2673,8 +2673,8 @@ async function evaluateExecInvocationInternal(
       });
     }
 
-    const guardEnvConfig = extractEnvironmentConfig(preDecision?.metadata);
-    const resolvedEnvConfig = applyEnvironmentDefaults(guardEnvConfig, execEnv.getPolicySummary());
+    const scopedEnvConfig = resolveEnvironmentConfig(execEnv, preDecision?.metadata);
+    const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, execEnv.getPolicySummary());
     mergeResultDescriptor(buildEnvironmentOutputDescriptor(command, resolvedEnvConfig));
     
     // Build environment variables from parameters for shell execution

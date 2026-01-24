@@ -213,6 +213,32 @@ ExecResultMethodCall
       return finalTail ? helpers.applyTail(execWithPost, finalTail) : execWithPost;
     }
 
+// Method call on the result of an exec invocation without tail modifiers.
+// Used when a following "with" clause belongs to a directive, not the expression.
+ExecResultMethodCallNoTail
+  = _ "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:PostFieldAccess* {
+      const baseRef = {
+        name: func,
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: func
+        }, location())],
+        args: args || [],
+        isCommandReference: true
+      };
+      const baseInvocation = helpers.createExecInvocation(baseRef, null, location());
+
+      const methodRef = {
+        name: method,
+        identifier: [helpers.createNode(NodeType.Text, { content: method, location: location() })],
+        args: margs || [],
+        isCommandReference: true,
+        objectSource: baseInvocation
+      };
+
+      const exec = helpers.createExecInvocation(methodRef, null, location());
+      return helpers.attachPostFields(exec, post);
+    }
+
 // Array operations for advanced filtering and manipulation
 UnifiedArrayOperation
   = arrayRef:UnifiedReferenceNoTail "[?" filter:UnifiedExpression "]" {

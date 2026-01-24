@@ -39,7 +39,7 @@ import {
   applyEnvironmentDefaults,
   buildEnvironmentOutputDescriptor,
   executeProviderCommand,
-  extractEnvironmentConfig,
+  resolveEnvironmentConfig,
   resolveEnvironmentAuthSecrets
 } from '@interpreter/env/environment-provider';
 
@@ -1079,8 +1079,8 @@ export async function executeCommandVariable(
     const { interpolate } = await import('../../core/interpreter');
     const { InterpolationContext } = await import('../../core/interpolation-context');
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
-    const guardEnvConfig = extractEnvironmentConfig(preDecision?.metadata);
-    const resolvedEnvConfig = applyEnvironmentDefaults(guardEnvConfig, execEnv.getPolicySummary());
+    const scopedEnvConfig = resolveEnvironmentConfig(execEnv, preDecision?.metadata);
+    const resolvedEnvConfig = applyEnvironmentDefaults(scopedEnvConfig, execEnv.getPolicySummary());
     const outputDescriptor = buildEnvironmentOutputDescriptor(command, resolvedEnvConfig);
 
     const applyOutputDescriptor = (value: CommandExecutionResult): CommandExecutionResult => {

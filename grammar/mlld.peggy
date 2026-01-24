@@ -232,6 +232,7 @@ Directive
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
     / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)
     / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
+    / SlashEnv      // Env directives (scoped environments)
     / SlashFor      // For directives (iteration)
     / SlashWhile    // While directives (bounded iteration)
     / SlashLoop     // Loop directives (block iteration)
