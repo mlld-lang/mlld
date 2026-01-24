@@ -219,4 +219,23 @@ describe('FunctionRouter', () => {
     const router = new FunctionRouter({ environment });
     await expect(router.executeFunction('get_time', {})).rejects.toThrow('MCP blocked');
   });
+
+  it('tracks tool calls in @mx.tools.calls', async () => {
+    const environment = await createEnvironment(`
+      /guard @limitCalls before op:exe = when [
+        @mx.tools.calls.length >= 1 => deny "Too many calls"
+        * => allow
+      ]
+
+      /exe @greet(name) = js {
+        return 'Hello ' + name;
+      }
+
+      /export { @greet }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await expect(router.executeFunction('greet', { name: 'Ada' })).resolves.toBe('Hello Ada');
+    await expect(router.executeFunction('greet', { name: 'Grace' })).rejects.toThrow('Too many calls');
+  });
 });

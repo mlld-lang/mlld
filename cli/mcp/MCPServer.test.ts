@@ -344,6 +344,61 @@ describe('MCPServer', () => {
     expect(text).toContain('not available');
   });
 
+  it('exposes tool availability in @mx.tools', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /exe @alpha() = js { return 'a'; }
+      /exe @beta() = js { return 'b'; }
+      /export { @alpha, @beta }
+    `, ['alpha', 'beta']);
+
+    environment.setAllowedTools(['alpha']);
+
+    const server = new MCPServer({ environment, exportedFunctions: exports });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1.5,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    const toolsSnapshot = environment.getContextManager().getToolsSnapshot();
+    expect(toolsSnapshot.allowed).toEqual(['alpha']);
+    expect(toolsSnapshot.denied).toEqual(['beta']);
+
+    const mxVar = environment.getVariable('mx') as any;
+    expect(mxVar?.value?.tools?.allowed).toEqual(['alpha']);
+
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'alpha',
+        arguments: {},
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: 'a',
+        },
+      ],
+    });
+  });
+
   it('filters tools when tool collection is provided', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /exe @alpha() = js { return 'a'; }

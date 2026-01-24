@@ -5,13 +5,14 @@ import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
-import { mcpNameToMlldName } from './SchemaGenerator';
+import { mcpNameToMlldName, mlldNameToMCPName } from './SchemaGenerator';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 
 export interface FunctionRouterOptions {
   environment: Environment;
   toolCollection?: ToolCollection;
+  toolNames?: string[];
 }
 
 interface ExecResult {
@@ -27,23 +28,49 @@ type SyntheticCommandReference = Omit<CommandReference, 'identifier' | 'args'> &
 export class FunctionRouter {
   private readonly environment: Environment;
   private readonly toolCollection?: ToolCollection;
+  private readonly toolNames?: string[];
 
   constructor(options: FunctionRouterOptions) {
     this.environment = options.environment;
     this.toolCollection = options.toolCollection;
+    this.toolNames = options.toolNames;
   }
 
   async executeFunction(toolName: string, args: Record<string, unknown>): Promise<string> {
+    this.syncToolsAvailability();
     const toolKey = mcpNameToMlldName(toolName);
     if (!this.environment.isToolAllowed(toolKey, toolName)) {
       throw new Error(`Tool '${toolName}' not available`);
     }
-    if (this.toolCollection) {
-      const definition = this.toolCollection[toolKey];
-      if (!definition?.mlld) {
-        throw new Error(`Tool '${toolName}' not found`);
+    const callRecord = {
+      name: toolName,
+      arguments: { ...args },
+      timestamp: Date.now()
+    };
+
+    try {
+      if (this.toolCollection) {
+        const definition = this.toolCollection[toolKey];
+        if (!definition?.mlld) {
+          throw new Error(`Tool '${toolName}' not found`);
+        }
+        const execName = definition.mlld;
+        const variable = this.environment.getVariable(execName) as Variable | undefined;
+
+        if (!variable || variable.type !== 'executable') {
+          throw new Error(`Tool '${toolName}' not found`);
+        }
+
+        const execVar = variable as ExecutableVariable;
+        const resolvedArgs = this.resolveToolArgs(execVar, args, definition, toolName);
+        const invocation = this.buildInvocation(execName, execVar, resolvedArgs, toolKey, definition.labels);
+        const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
+
+        this.environment.recordToolCall({ ...callRecord, ok: true });
+        return this.serializeResult(result.value);
       }
-      const execName = definition.mlld;
+
+      const execName = toolKey;
       const variable = this.environment.getVariable(execName) as Variable | undefined;
 
       if (!variable || variable.type !== 'executable') {
@@ -51,32 +78,43 @@ export class FunctionRouter {
       }
 
       const execVar = variable as ExecutableVariable;
-      const resolvedArgs = this.resolveToolArgs(execVar, args, definition, toolName);
-      const invocation = this.buildInvocation(execName, execVar, resolvedArgs, toolName, definition.labels);
+      const invocation = this.buildInvocation(execName, execVar, args, toolKey);
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
 
+      this.environment.recordToolCall({ ...callRecord, ok: true });
       return this.serializeResult(result.value);
+    } catch (error) {
+      this.environment.recordToolCall({
+        ...callRecord,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
     }
+  }
 
-    const execName = toolKey;
-    const variable = this.environment.getVariable(execName) as Variable | undefined;
-
-    if (!variable || variable.type !== 'executable') {
-      throw new Error(`Tool '${toolName}' not found`);
+  private syncToolsAvailability(): void {
+    if (!this.toolNames || this.toolNames.length === 0) {
+      return;
     }
-
-    const execVar = variable as ExecutableVariable;
-    const invocation = this.buildInvocation(execName, execVar, args, toolName);
-    const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
-
-    return this.serializeResult(result.value);
+    const allowed: string[] = [];
+    const denied: string[] = [];
+    for (const toolName of this.toolNames) {
+      const mcpName = mlldNameToMCPName(toolName);
+      if (this.environment.isToolAllowed(toolName, mcpName)) {
+        allowed.push(mcpName);
+      } else {
+        denied.push(mcpName);
+      }
+    }
+    this.environment.setToolsAvailability(allowed, denied);
   }
 
   private buildInvocation(
     name: string,
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
-    toolName?: string,
+    sourceName?: string,
     toolLabels?: string[]
   ): ExecInvocation {
     const location = this.createLocation();
@@ -92,7 +130,7 @@ export class FunctionRouter {
       args: argNodes,
     };
 
-    const mcpSecurityDescriptor = this.createMcpSecurityDescriptor(toolName ?? name);
+    const mcpSecurityDescriptor = this.createMcpSecurityDescriptor(sourceName ?? name);
 
     return {
       type: 'ExecInvocation',

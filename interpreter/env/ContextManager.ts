@@ -89,6 +89,20 @@ export interface GuardHistoryEntry {
   reasons: ReadonlyArray<string>;
 }
 
+export interface ToolCallRecord {
+  name: string;
+  arguments?: Record<string, unknown>;
+  timestamp: number;
+  ok: boolean;
+  error?: string | null;
+}
+
+export interface ToolsContextSnapshot {
+  calls: ReadonlyArray<string>;
+  allowed: ReadonlyArray<string>;
+  denied: ReadonlyArray<string>;
+}
+
 interface BuildContextOptions {
   pipelineContext?: PipelineContextSnapshot;
   securitySnapshot?: SecuritySnapshotLike;
@@ -107,6 +121,9 @@ export class ContextManager {
   private readonly genericContexts: Map<string, unknown[]> = new Map();
   private latestErrors: unknown[] = [];
   private profile: string | null = null;
+  private toolCalls: ToolCallRecord[] = [];
+  private toolAllowed: string[] = [];
+  private toolDenied: string[] = [];
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -231,6 +248,27 @@ export class ContextManager {
     return this.profile;
   }
 
+  setToolAvailability(allowed?: readonly string[] | null, denied?: readonly string[] | null): void {
+    this.toolAllowed = this.normalizeToolList(allowed);
+    this.toolDenied = this.normalizeToolList(denied);
+  }
+
+  recordToolCall(call: ToolCallRecord): void {
+    this.toolCalls.push(Object.freeze({ ...call }));
+  }
+
+  resetToolCalls(): void {
+    this.toolCalls = [];
+  }
+
+  getToolsSnapshot(): ToolsContextSnapshot {
+    return {
+      calls: this.toolCalls.map(call => call.name),
+      allowed: [...this.toolAllowed],
+      denied: [...this.toolDenied]
+    };
+  }
+
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
     if (options.testOverride !== undefined) {
       return options.testOverride as Record<string, unknown>;
@@ -285,7 +323,8 @@ export class ContextManager {
       guard: guardContext ?? (deniedContext ? {} : null),
       ...(whileContext ? { while: whileContext } : {}),
       ...(loopContext ? { loop: loopContext } : {}),
-      errors: Array.isArray(resolvedErrors) ? resolvedErrors : []
+      errors: Array.isArray(resolvedErrors) ? resolvedErrors : [],
+      tools: this.getToolsSnapshot()
     };
 
     if (deniedContext) {
@@ -312,6 +351,26 @@ export class ContextManager {
     }
 
     return mxValue;
+  }
+
+  private normalizeToolList(list?: readonly string[] | null): string[] {
+    if (!list || list.length === 0) {
+      return [];
+    }
+    const normalized: string[] = [];
+    const seen = new Set<string>();
+    for (const entry of list) {
+      if (typeof entry !== 'string') {
+        continue;
+      }
+      const trimmed = entry.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+    return normalized;
   }
 
   pushGenericContext(type: string, context: unknown): void {

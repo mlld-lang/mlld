@@ -70,7 +70,8 @@ import {
   type GuardContextSnapshot,
   type OperationContext,
   type DeniedContextSnapshot,
-  type GuardHistoryEntry
+  type GuardHistoryEntry,
+  type ToolCallRecord
 } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { guardPreHook } from '../hooks/guard-pre-hook';
@@ -1797,6 +1798,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   updateOpContext(update: Partial<OperationContext>): void {
     this.contextManager.updateOperation(update);
+  }
+
+  setToolsAvailability(allowed: readonly string[], denied: readonly string[]): void {
+    this.contextManager.setToolAvailability(allowed, denied);
+  }
+
+  recordToolCall(call: ToolCallRecord): void {
+    this.contextManager.recordToolCall(call);
+  }
+
+  resetToolCalls(): void {
+    this.contextManager.resetToolCalls();
   }
 
   async withPipeContext<T>(
