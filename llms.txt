@@ -119,6 +119,18 @@ import "@agents" as @registry
 exe @myFunc(x) = @helper(@x) | @transform
 export { @myFunc }
 ```
+
+**Tool collections:**
+```mlld
+var tools @agentTools = {
+  summarize: { mlld: @summarize, description: "Summarize text" },
+  deleteRepo: { mlld: @deleteRepo, labels: [destructive] }
+}
+
+env @agent with { tools: @agentTools } [
+  run cmd { claude -p @task }
+]
+```
 </ESSENTIAL_PATTERNS>
 
 <SEE_ALSO>

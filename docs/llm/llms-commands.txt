@@ -67,6 +67,11 @@ exe @welcome(name, role) = template "./prompts/welcome.att"
 
 >> Prose (requires config)
 exe @analyze(data) = prose:@config { session "Analyze @data" }
+
+>> Types + description
+exe @createIssue(owner: string, repo: string, title: string) = js {
+  return `${owner}/${repo}: ${title}`
+} with { description: "Create an issue" }
 ```
 
 **Prose execution** (LLM skill invocation):
@@ -150,6 +155,32 @@ exe js = { double, cap }  >> expose to all js blocks
 var @out = js { cap("hello") + ": " + double(5) }  >> "Hello: 10"
 ```
 </EXE_EXECUTABLES>
+
+<TOOLS_GATEWAY>
+Define tool collections and scope tools for agent execution.
+
+```mlld
+var tools @agentTools = {
+  summarize: { mlld: @summarize, description: "Summarize text" },
+  deleteRepo: {
+    mlld: @deleteRepo,
+    labels: [destructive],
+    bind: { owner: "mlld" },
+    expose: ["repo"]
+  }
+}
+
+env @agent with { tools: @agentTools } [
+  run cmd { claude -p @task }
+]
+```
+
+Tool fields:
+- `labels` feed `@mx.op.labels` for guards and policy
+- `bind` pre-fills parameters
+- `expose` limits visible parameters
+- `description` overrides tool metadata
+</TOOLS_GATEWAY>
 
 <OUTPUT_DIRECTIVE>
 Write data to files or streams.

@@ -45,6 +45,7 @@ Guards have access to three complementary dimensions:
 - `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
 - `@mx.taint` - provenance (where it came from): `src:mcp`, `src:exec`, `src:file`
 - `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
+- `@mx.op.labels` - operation labels, including tool labels like `destructive` or `net:w`
 
 Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
 
@@ -52,6 +53,15 @@ Use labels to classify data types, taint to track untrusted origins, and sources
 guard before op:run = when [
   @mx.taint.includes("src:mcp") => deny "Cannot execute MCP data"
   @mx.labels.includes("secret") => deny "Secrets blocked from shell"
+  * => allow
+]
+```
+
+Tool labels flow into guard context for executable operations:
+
+```mlld
+guard @blockDestructive before op:exe = when [
+  @mx.op.labels.includes("destructive") => deny "Blocked"
   * => allow
 ]
 ```
