@@ -77,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTML/XML tag detection in templates**: Angle bracket content matching HTML tag patterns (e.g., `<tagname attr="value">`) is now recognized as literal HTML instead of file references
   - `<input placeholder="user@example.com">` is now correctly preserved as literal XML text
 - **Backtick template literals in exec arguments**: `@echo(@name)` where `@name` holds a backtick literal now correctly evaluates instead of producing `[object Object]`
+- **Pipeline on `let` with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were incorrectly stripped from backtick-wrapped templates in `let` and `var` assignments, causing `| log` and other pipeline operations to silently fail.
 - **Pipeline retry @input staleness**: Fixed bug where leading effects (like show) in pipelines saw stale @input values during retry instead of fresh values from re-executed source stages
 - **Circular imports**: Local file imports now correctly trigger circular import detection, producing a clear error message instead of infinite recursion
 - **Nested array normalization**: Nested arrays now properly normalize their contents when displayed

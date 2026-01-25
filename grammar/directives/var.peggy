@@ -35,22 +35,12 @@ SlashVar "var directive"
         metaInfo.inferredType = 'template';
         metaInfo.rawTemplate = value.raw || helpers.reconstructRawString(processedValue);
         
-        // Check if template has a pipeline attached (only condensed pipes immediately after template)
+        // Check if template has a pipeline attached
         if (value.withClause) {
           tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
         }
-
-        // Condensed-only inside backtick/double-colon/triple-colon templates.
-        // Allow tail pipelines for simple quotes; ignore only for template wrappers.
-        if (!value.withClause && tail && tail.pipeline) {
-          const wrapper = value.wrapperType;
-          const isTemplateWrapper = wrapper === 'backtick' || wrapper === 'doubleColon' || wrapper === 'tripleColon';
-          if (isTemplateWrapper) {
-            const filteredTail = { ...tail };
-            delete filteredTail.pipeline;
-            tail = filteredTail;
-          }
-        }
+        // Note: Pipeline is preserved for all wrapper types (backtick, doubleColon, tripleColon)
+        // to allow `var @x = \`template\` | log` syntax to work consistently
       }
       // Handle object literals (already typed by DataObjectLiteral)
       else if (value && value.type === 'object') {

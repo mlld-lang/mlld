@@ -28,16 +28,8 @@ LetAssignment "let assignment"
         if (value.withClause) {
           tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
         }
-
-        if (!value.withClause && tail && tail.pipeline) {
-          const wrapper = value.wrapperType;
-          const isTemplateWrapper = wrapper === 'backtick' || wrapper === 'doubleColon' || wrapper === 'tripleColon';
-          if (isTemplateWrapper) {
-            const filteredTail = { ...tail };
-            delete filteredTail.pipeline;
-            tail = filteredTail;
-          }
-        }
+        // Note: Pipeline is preserved for all wrapper types (backtick, doubleColon, tripleColon)
+        // to allow `let @x = \`template\` | log` syntax to work consistently
       }
       else if (value && value.type === 'object') {
         processedValue = [value];
@@ -164,16 +156,8 @@ AugmentedAssignment "augmented assignment"
         if (value.withClause) {
           tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
         }
-
-        if (!value.withClause && tail && tail.pipeline) {
-          const wrapper = value.wrapperType;
-          const isTemplateWrapper = wrapper === 'backtick' || wrapper === 'doubleColon' || wrapper === 'tripleColon';
-          if (isTemplateWrapper) {
-            const filteredTail = { ...tail };
-            delete filteredTail.pipeline;
-            tail = filteredTail;
-          }
-        }
+        // Note: Pipeline is preserved for all wrapper types (backtick, doubleColon, tripleColon)
+        // to allow `let @x = \`template\` | log` syntax to work consistently
       }
       else if (value && value.type === 'object') {
         processedValue = [value];
