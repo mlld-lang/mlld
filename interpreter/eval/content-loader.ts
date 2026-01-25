@@ -106,13 +106,13 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // Reconstruct the path/URL string from the source
   let pathOrUrl: string;
-  
+
   // The source could be the path object directly (from file reference interpolation)
   // or it could be wrapped in a node with source.type
-  const actualSource = source.type === 'path' || source.type === 'url' ? source : 
+  const actualSource = source.type === 'path' || source.type === 'url' ? source :
                        (source.segments && source.raw !== undefined) ? { ...source, type: 'path' } :
                        source;
-  
+
   if (actualSource.type === 'path') {
     pathOrUrl = await reconstructPath(actualSource, env);
   } else if (actualSource.type === 'url') {
@@ -124,7 +124,16 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
   }
 
-  // Detect glob pattern from the path
+  // Check for nullable suffix (trailing ?) - makes glob return empty array instead of erroring
+  // The ? suffix means "optional" - if no files match, return empty array rather than error
+  // Must strip this before glob processing since ? is also a glob wildcard character
+  let isNullable = false;
+  if (pathOrUrl.endsWith('?')) {
+    isNullable = true;
+    pathOrUrl = pathOrUrl.slice(0, -1);
+  }
+
+  // Detect glob pattern from the path (after stripping nullable suffix)
   const isGlob = isGlobPattern(pathOrUrl);
 
   // AST extraction takes precedence for local files
