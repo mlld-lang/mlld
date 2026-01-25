@@ -207,6 +207,8 @@ export interface EvaluationContext {
   isCondition?: boolean;
   /** Whether we're evaluating an expression (affects variable resolution) */
   isExpression?: boolean;
+  /** Allow side effects even in expression context (for for-expression blocks) */
+  allowEffects?: boolean;
   /** Whether label modification operations are privileged */
   privileged?: boolean;
   /** Pre-evaluated directive inputs supplied by hook extraction */

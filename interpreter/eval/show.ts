@@ -1308,8 +1308,9 @@ export async function evaluateShow(
   );
   
   // Only emit the effect if we're not in an expression context
-  // In expression contexts (like when expressions), we only return the value
-  if (!context?.isExpression) {
+  // In expression contexts (like templates), we only return the value.
+  // For-expression blocks pass allowEffects: true to override this.
+  if (!context?.isExpression || context?.allowEffects) {
     // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
     if (!isStreamingShow) {
       env.emitEffect('both', content, { source: directive.location });

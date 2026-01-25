@@ -641,7 +641,8 @@ export async function evaluateForExpression(
               continue;
             }
 
-            lastResult = await evaluate(node as any, currentEnv, { isExpression: true });
+            // Allow side effects (show, output) in for-expressions for progress logging
+            lastResult = await evaluate(node as any, currentEnv, { isExpression: true, allowEffects: true });
             currentEnv = lastResult.env || currentEnv;
           }
 
