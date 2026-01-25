@@ -3,7 +3,7 @@
 This is the complete mlld reference guide, combining all documentation modules.
 For modular access, see individual files in docs/llm/.
 
-Generated: 2026-01-20T18:19:55.953Z
+Generated: 2026-01-25T06:16:27.894Z
 
 <MLLD_OVERVIEW version="2.0.0-rc78">
 
@@ -702,7 +702,8 @@ Execute shell commands or code. Language specifier determines execution context.
 **Decision tree:**
 - Single line + pipes only → `cmd { ... }` (safe, recommended)
 - Needs `&&`, `||`, control flow → `sh { ... }` (full shell)
-- JavaScript/Python code → `js { ... }` / `python { ... }`
+- JavaScript code → `js { ... }` (in-process) or `node { ... }` (VM-isolated)
+- Python code → `py { ... }` or `python { ... }` (subprocess)
 
 ```mlld
 >> cmd (pipes only, safe)
@@ -714,10 +715,30 @@ run sh {
   npm test && npm run build || echo "Build failed"
 }
 
->> js/python (code execution)
+>> JavaScript (in-process, fast)
 run js {console.log("hello")}
 var @result = js {return 42}
+
+>> Node.js (VM-isolated, full API)
+var @hash = node {
+  const crypto = require('crypto');
+  return crypto.createHash('md5').update('hello').digest('hex');
+}
+
+>> Python (subprocess)
+run py {print("hello from python")}
+var @sum = py {
+result = 2 + 2
+print(result)
+}
 ```
+
+**Language comparison:**
+| Language | Isolation | Use case |
+|----------|-----------|----------|
+| `js` | None (in-process) | Fast calculations, simple transforms |
+| `node` | VM context | Full Node.js API, require() |
+| `py`/`python` | Subprocess | Python libraries, data science |
 
 **Working directory override:**
 
@@ -740,11 +761,36 @@ run @data | { cat | jq '.[]' }
 **Parameter syntax by language:**
 - `cmd`: interpolate with `@param`
 - `sh`: use shell variables as `$param`
-- `js/python`: parameters passed as variables
+- `js`/`node`: parameters as JavaScript variables
+- `py`/`python`: parameters as Python variables (strings by default)
+
+```mlld
+>> JavaScript - parameters are typed values
+exe @process(items) = js { return items.map(x => x * 2) }
+var @result = @process([1, 2, 3])  >> [2, 4, 6]
+
+>> Python - parameters arrive as strings
+exe @add(a, b) = py { print(int(a) + int(b)) }
+var @sum = @add(5, 3)  >> 8
+
+>> Python with complex types (wrapped with metadata)
+exe @analyze(data) = py {
+import json
+parsed = json.loads(data) if isinstance(data, str) else data
+print(json.dumps(parsed))
+}
+```
+
+**Python variable helpers:**
+- `mlld.is_variable(x)` - check if value is a wrapped mlld Variable
+- Variables have `__mlld_type__` and `__mlld_metadata__` attributes
+- Arrays/lists and dicts pass through with metadata preserved
 </RUN_COMMAND>
 
 <EXE_EXECUTABLES>
 Define reusable commands, code, templates, or multi-statement blocks.
+
+**exe vs var:** `exe` defines functions (takes parameters). `var` creates values (no parameters). Use `exe` when you need to pass arguments; use `var` for computed values.
 
 **Simple forms:**
 
@@ -752,8 +798,21 @@ Define reusable commands, code, templates, or multi-statement blocks.
 >> Command
 exe @list(dir) = cmd {ls -la @dir | head -5}
 
->> JavaScript
+>> JavaScript (in-process)
 exe @add(a, b) = js { return a + b }
+
+>> Node.js (VM-isolated)
+exe @hash(text) = node {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+>> Python
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @calculate(x, y) = py {
+result = x ** 2 + y ** 2
+print(result)
+}
 
 >> Template
 exe @greet(name) = `Hello @name!`
@@ -765,21 +824,72 @@ exe @welcome(name, role) = template "./prompts/welcome.att"
 exe @analyze(data) = prose:@config { session "Analyze @data" }
 ```
 
-**Prose execution** (LLM skill invocation):
+**Python notes:**
+- Use `print()` to return values (captured as string output)
+- Parameters arrive as strings; use `int()`, `float()` for math
+- Standard library available: `import json`, `import math`, etc.
 
-Prose requires a config reference specifying the model and skill:
+Executables can include metadata for tooling and type safety.
+
+**Typed parameters:**
 
 ```mlld
-var @config = { model: "claude-3", skillName: "prose" }
+exe @greet(name: string, times: number) = js { return "Hello " + name; }
+exe @process(data: object, format: string) = js { return data; }
+exe @count(items: array) = js { return items.length; }
+```
+
+Type annotations use `: type` syntax after the parameter name. Supported types: `string`, `number`, `boolean`, `object`, `array`.
+
+**Description metadata:**
+
+```mlld
+exe @greet(name: string) = js { return "Hello " + name; } with { description: "Greet a user by name" }
+```
+
+The `with { description: "..." }` clause adds a description that appears in MCP tool listings.
+
+**Combined example:**
+
+```mlld
+exe @searchIssues(repo: string, query: string, limit: number) = cmd {
+  gh issue list -R @repo --search "@query" -L @limit --json number,title
+} with { description: "Search GitHub issues by query" }
+```
+
+**MCP integration:**
+
+When exported as tools, metadata generates proper JSON schemas:
+
+```mlld
+exe @listFiles(dir: string) = cmd { ls @dir } with { description: "List files in directory" }
+export { @listFiles }
+```
+
+This produces an MCP tool with:
+- Input schema with `dir` as required string parameter
+- Description in tool listing
+
+**Parameter types vs runtime:**
+
+Type annotations are metadata for tooling. At runtime, parameters arrive as their actual types from the caller. Use type annotations to:
+- Generate accurate MCP tool schemas
+- Document expected parameter types
+- Enable IDE/editor support
+
+**Prose execution** invokes LLM-interpreted DSL skills (OpenProse or custom):
+
+```mlld
+import { @opus } from @mlld/prose
 
 >> Inline (interpolates like templates)
-exe @summarize(text) = prose:@config { summarize @text }
+exe @summarize(text) = prose:@opus { summarize @text }
 
 >> File reference (.prose files do NOT interpolate)
-exe @review(code) = prose:@config "./review.prose"
+exe @review(code) = prose:@opus "./review.prose"
 
 >> Template files (.prose.att or .prose.mtt interpolate)
-exe @greet(name) = prose:@config "./greet.prose.att"
+exe @greet(name) = prose:@opus "./greet.prose.att"
 ```
 
 Interpolation rules:
@@ -788,7 +898,7 @@ Interpolation rules:
 - `"file.prose.att"` - ATT interpolation (`@var`)
 - `"file.prose.mtt"` - MTT interpolation (`{{var}}`)
 
-Default skill is `"prose"` (OpenProse). Custom interpreters via `skillName`.
+See `mlld howto prose` for setup, OpenProse syntax, and custom interpreters.
 
 **Block syntax** (multi-statement bodies):
 
@@ -836,16 +946,294 @@ exe @handler(input) = when first [
 ]
 ```
 
-**Shadow environments** (expose JS helpers):
+**Shadow environments** expose helpers to all code blocks of that language:
 
 ```mlld
+>> JavaScript shadow environment
 exe @double(n) = js { return n * 2 }
 exe @cap(s) = js { return s[0].toUpperCase() + s.slice(1) }
 exe js = { double, cap }  >> expose to all js blocks
 
 var @out = js { cap("hello") + ": " + double(5) }  >> "Hello: 10"
 ```
+
+```mlld
+>> Python shadow environment
+exe @square(x) = py {
+result = int(x) ** 2
+print(result)
+}
+exe @greet(name) = py {
+print(f"Hello, {name}!")
+}
+exe py = { square, greet }  >> expose to all py blocks
+
+run py {
+square(4)      >> prints 16
+greet("World") >> prints Hello, World!
+}
+```
+
+**Cross-function calls:** Shadow functions can call each other:
+
+```mlld
+exe @add(a, b) = py { print(int(a) + int(b)) }
+exe @multiply(x, y) = py { print(int(x) * int(y)) }
+exe py = { add, multiply }
+
+exe @calculate(n) = py {
+sum_result = add(n, 10)   >> calls shadow function
+product = multiply(n, 2)  >> calls shadow function
+print(f"Sum: {sum_result}, Product: {product}")
+}
+exe py = { add, multiply, calculate }  >> update to include calculate
+```
+
+**Supported languages:** `js`, `node`, `py`/`python`
 </EXE_EXECUTABLES>
+
+<TOOLS_AND_ENVIRONMENTS>
+Define tool collections, scope tools, and manage execution environments.
+
+Tool collections define what an agent sees and how tools behave.
+
+```mlld
+/exe @readData() = js { return "ok"; }
+/exe @deleteData() = js { return "deleted"; }
+
+/var tools @agentTools = {
+  safeRead: { mlld: @readData },
+  dangerousDelete: {
+    mlld: @deleteData,
+    labels: ["destructive"],
+    description: "Deletes records"
+  }
+}
+```
+
+**Tool definition fields:**
+- `mlld` - executable reference
+- `labels` - guard/policy labels (`destructive`, `net:w`)
+- `bind` - pre-filled parameters
+- `expose` - visible parameter subset
+- `description` - override tool metadata
+
+**Environment scoping:**
+
+```mlld
+/env @agent with { tools: @agentTools } [
+  /run cmd { claude -p @task }
+]
+```
+
+**Import MCP tools:**
+
+```mlld
+/import tools { @echo } from mcp "@anthropic/filesystem"
+/import tools from mcp "@github/issues" as @github
+/show @github.createIssue("title", "body")
+```
+
+Reshape tool interfaces using `bind` and `expose` to control what parameters agents see.
+
+**bind - Pre-fill parameters:**
+
+```mlld
+exe @createIssue(owner: string, repo: string, title: string, body: string) = cmd {
+  gh issue create -R @owner/@repo -t "@title" -b "@body"
+}
+
+var tools @agentTools = {
+  createIssue: {
+    mlld: @createIssue,
+    bind: { owner: "mlld", repo: "infra" }
+  }
+}
+```
+
+The agent sees only `title` and `body`. The bound parameters `owner` and `repo` are fixed.
+
+**expose - Limit visible parameters:**
+
+```mlld
+var tools @agentTools = {
+  createIssue: {
+    mlld: @createIssue,
+    bind: { owner: "mlld", repo: "infra" },
+    expose: ["title", "body"]
+  }
+}
+```
+
+Explicitly list which parameters appear in the tool schema. Parameters not in `expose` are hidden from the agent.
+
+**Default behavior:**
+
+Without `expose`, all parameters except those in `bind` are visible. Adding `expose` overrides this - only listed parameters appear.
+
+**Variable binding:**
+
+Bound values can reference variables:
+
+```mlld
+var @org = "mlld"
+var @defaultRepo = "main"
+
+var tools @agentTools = {
+  createIssue: {
+    mlld: @createIssue,
+    bind: { owner: @org, repo: @defaultRepo }
+  }
+}
+```
+
+Variables are resolved when the tool collection is defined, not when called.
+
+**Nested objects in bind:**
+
+```mlld
+var tools @agentTools = {
+  configure: {
+    mlld: @configure,
+    bind: { config: { timeout: 30, retries: 3 } }
+  }
+}
+```
+
+**Complete example:**
+
+```mlld
+exe @searchDocs(index: string, query: string, limit: number, format: string) = cmd {
+  search-tool --index @index -q "@query" -n @limit --format @format
+}
+
+var tools @agentTools = {
+  searchDocs: {
+    mlld: @searchDocs,
+    bind: { index: "production", format: "json" },
+    expose: ["query", "limit"],
+    description: "Search documentation"
+  }
+}
+```
+
+The agent sees:
+- `query` (string, required)
+- `limit` (number, required)
+
+Hidden from agent:
+- `index` (always "production")
+- `format` (always "json")
+
+The `env` directive creates scoped execution contexts with controlled tool access.
+
+**Basic usage:**
+
+```mlld
+var @config = { tools: @agentTools }
+
+env @config [
+  run cmd { claude -p @task }
+]
+```
+
+Commands inside the block see only the tools specified in the config.
+
+**Tool scoping with { tools }:**
+
+```mlld
+exe @readData() = js { return "ok"; }
+exe @writeData(x) = js { return x; }
+
+var tools @allTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData }
+}
+
+env @allTools with { tools: ["read"] } [
+  >> Only 'read' tool is available here
+  run cmd { claude -p @task }
+]
+```
+
+The `with { tools: [...] }` clause restricts which tools from the config are visible.
+
+**Tool scope formats:**
+
+```mlld
+>> Array of tool names
+env @config with { tools: ["read", "write"] } [...]
+
+>> Comma-separated string
+env @config with { tools: "read, write" } [...]
+
+>> Wildcard for all tools
+env @config with { tools: "*" } [...]
+
+>> Object keys as tool names
+var @subset = { read: @readTool, write: @writeTool }
+env @config with { tools: @subset } [...]
+```
+
+**Environment config object:**
+
+```mlld
+var @agentConfig = {
+  provider: "@local",
+  tools: @agentTools,
+  auth: "claude"
+}
+
+env @agentConfig [
+  run cmd { claude -p @task }
+]
+```
+
+Common config fields:
+- `tools` - Tool collection or list
+- `provider` - Environment provider (e.g., "@local", "@mlld/env-docker")
+- `auth` - Authentication reference
+
+**Inline tool scoping:**
+
+```mlld
+var tools @agentTools = {
+  read: { mlld: @readData },
+  write: { mlld: @writeData },
+  delete: { mlld: @deleteData, labels: ["destructive"] }
+}
+
+env @agentTools with { tools: ["read", "write"] } [
+  >> Agent cannot access 'delete' tool
+  run cmd { claude -p @task }
+]
+```
+
+**Return values:**
+
+Blocks can return values like exe blocks:
+
+```mlld
+var @result = env @config [
+  let @data = run cmd { fetch-data }
+  => @data
+]
+```
+
+**Scoped environment:**
+
+The env block creates a child environment. Variables defined inside don't leak out, but the block can access parent scope variables.
+
+```mlld
+var @input = "test"
+
+env @config [
+  >> Can read @input from parent
+  let @processed = @input | @transform
+  => @processed
+]
+```
+</TOOLS_AND_ENVIRONMENTS>
 
 <OUTPUT_DIRECTIVE>
 Write data to files or streams.
@@ -1313,6 +1701,15 @@ import @bob/utils as @bob
 
 show @alice.format(@data)
 show @bob.format(@data)   >> no collision
+```
+
+**MCP tool imports:**
+
+```mlld
+import tools { @readFile } from mcp "@anthropic/filesystem"
+import tools from mcp "@github/issues" as @github
+
+show @github.createIssue("title", "body")
 ```
 
 **Directory imports:**
@@ -2400,6 +2797,7 @@ Guards have access to three complementary dimensions:
 - `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
 - `@mx.taint` - provenance (where it came from): `src:mcp`, `src:exec`, `src:file`
 - `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
+- `@mx.op.labels` - operation labels, including tool labels like `destructive` or `net:w`
 
 Use labels to classify data types, taint to track untrusted origins, and sources for audit trails:
 
@@ -2407,6 +2805,15 @@ Use labels to classify data types, taint to track untrusted origins, and sources
 guard before op:run = when [
   @mx.taint.includes("src:mcp") => deny "Cannot execute MCP data"
   @mx.labels.includes("secret") => deny "Secrets blocked from shell"
+  * => allow
+]
+```
+
+Tool labels flow into guard context for executable operations:
+
+```mlld
+guard @blockDestructive before op:exe = when [
+  @mx.op.labels.includes("destructive") => deny "Blocked"
   * => allow
 ]
 ```
@@ -2503,6 +2910,198 @@ Labels flow through operations:
 - Iterators: each item inherits collection labels
 - Pipelines: labels flow through stages
 </LABEL_TRACKING>
+
+<LABEL_MODIFICATION>
+Modify security labels on return values:
+
+Label modification syntax applies security labels to return values.
+
+**Add labels:**
+
+```mlld
+exe @classify(data) = [
+  let @processed = @data | @transform
+  => pii @processed
+]
+
+exe @markMultiple(data) = [
+  => pii,internal @data
+]
+```
+
+Multiple labels separated by commas.
+
+**Trust modification:**
+
+```mlld
+>> Downgrade trust (always allowed)
+exe @taint(data) = [
+  => untrusted @data
+]
+
+>> Add trusted (warning if already untrusted)
+exe @suggest(data) = [
+  => trusted @data
+]
+```
+
+Adding `untrusted` replaces any existing `trusted` label. Adding `trusted` to already untrusted data triggers a warning (configurable via `policy.defaults.trustconflict`).
+
+**Privileged operations:**
+
+```mlld
+>> Blessing - remove untrusted, add trusted (privileged)
+guard privileged @validate after src:mcp = when [
+  @schema.valid(@output) => trusted! @output
+  * => deny "Invalid schema"
+]
+
+>> Remove specific label (privileged)
+guard privileged @strip after pii = when [
+  @sanitized(@output) => !pii @output
+  * => allow @output
+]
+
+>> Clear all non-factual labels (privileged)
+guard privileged @reset after processed = when [
+  * => clear! @output
+]
+```
+
+Privileged operations require the guard to be declared as privileged.
+
+**Trust label asymmetry:**
+
+| Syntax | Privilege? | Effect |
+|--------|------------|--------|
+| `=> untrusted @var` | No | Replaces trusted (taint flows down) |
+| `=> trusted @var` | No | Adds trusted; warning if conflict |
+| `=> trusted! @var` | Yes | Blessing: removes untrusted |
+| `=> !label @var` | Yes | Removes specific label |
+| `=> clear! @var` | Yes | Removes all non-factual labels |
+
+**Protected labels:**
+
+These labels require privilege to remove:
+- `secret` - Prevents self-blessing of sensitive data
+- `untrusted` - Tracks trust state
+- `src:mcp`, `src:exec`, `src:file`, `src:network` - Provenance tracking
+
+Attempting to remove protected labels without privilege throws `PROTECTED_LABEL_REMOVAL` error.
+
+**Factual labels:**
+
+Labels starting with `src:` are factual - they record provenance facts. `clear!` does not remove factual labels.
+
+**Guard context:**
+
+```mlld
+guard privileged @validateMcp after src:mcp = when [
+  @output.data?.valid => trusted! @output
+  * => deny "Invalid MCP response"
+]
+```
+
+The guard uses `after` timing to process output and applies blessing if validation passes.
+
+**Trust conflict behavior:**
+
+Controlled by `policy.defaults.trustconflict`:
+- `warn` (default) - Log warning, keep both labels, treat as untrusted
+- `error` - Throw error
+- `silent` - No warning, keep both labels
+</LABEL_MODIFICATION>
+
+<TOOL_CALL_TRACKING>
+Track tool usage with {"calls":[],"allowed":[],"denied":[]}:
+
+The `@mx.tools` namespace tracks tool call history and availability during execution.
+
+**@mx.tools.calls - Call history:**
+
+```mlld
+guard @limitCalls before op:exe = when [
+  @mx.tools.calls.length >= 3 => deny "Too many tool calls"
+  * => allow
+]
+```
+
+Array of tool names that have been called this session.
+
+**Check if specific tool was called:**
+
+```mlld
+guard @preventDuplicate before op:exe = when [
+  @mx.tools.calls.includes("deleteData") => deny "Delete already executed"
+  * => allow
+]
+```
+
+**@mx.tools.allowed - Available tools:**
+
+```mlld
+guard @checkAccess before op:exe = when [
+  @mx.tools.allowed.includes(@mx.op.name) => allow
+  * => deny "Tool not in allowed list"
+]
+```
+
+Array of tool names the current context is permitted to use.
+
+**@mx.tools.denied - Blocked tools:**
+
+```mlld
+guard @logDenied before op:exe = when [
+  @mx.tools.denied.includes(@mx.op.name) => [
+    log `Attempted blocked tool: @mx.op.name`
+    deny "Tool is blocked"
+  ]
+  * => allow
+]
+```
+
+Array of tool names explicitly denied in current context.
+
+**Rate limiting example:**
+
+```mlld
+guard @rateLimitExpensive before op:exe = when [
+  @mx.op.labels.includes("expensive") && @mx.tools.calls.length >= 5 => [
+    deny "Rate limit exceeded for expensive operations"
+  ]
+  * => allow
+]
+```
+
+**Prevent repeated tool calls:**
+
+```mlld
+guard @noRepeat before op:exe = when [
+  @mx.tools.calls.includes(@mx.op.name) => deny "Each tool can only be called once"
+  * => allow
+]
+```
+
+**Conditional behavior based on history:**
+
+```mlld
+exe @smartFetch(url) = when [
+  @mx.tools.calls.includes("cache_check") => @fetchCached(@url)
+  * => @fetchFresh(@url)
+]
+```
+
+**Tool call tracking scope:**
+
+Tool calls are tracked within the current execution context. When using `env` blocks, each block can have its own tracking scope based on the environment configuration.
+
+```mlld
+env @agent with { tools: @agentTools } [
+  >> @mx.tools.calls tracks calls within this env block
+  run cmd { claude -p @task }
+]
+```
+</TOOL_CALL_TRACKING>
 
 <GUARD_COMPOSITION>
 Multiple guards can apply. Resolution order:

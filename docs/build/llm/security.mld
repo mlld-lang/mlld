@@ -15,6 +15,8 @@ var @transform = <@base/docs/src/atoms/security/transform-with-allow.md>
 var @denied = <@base/docs/src/atoms/security/denied-handlers.md>
 var @autoLabels = <@base/docs/src/atoms/security/automatic-labels.md>
 var @labelTracking = <@base/docs/src/atoms/security/label-tracking.md>
+var @labelModification = <@base/docs/src/atoms/security/label-modification.md>
+var @toolCallTracking = <@base/docs/src/atoms/security/tool-call-tracking.md>
 var @guardComp = <@base/docs/src/atoms/security/guard-composition.md>
 var @needs = <@base/docs/src/atoms/security/needs-declaration.md>
 
@@ -35,6 +37,8 @@ var @transformSection = @wrapSection("TRANSFORM_WITH_ALLOW", "Transform data dur
 var @deniedSection = @wrapSection("DENIED_HANDLERS", "Handle denied operations gracefully.", @strip(@denied))
 var @autoLabelsSection = @wrapSection("AUTOMATIC_LABELS", "System-assigned labels for tracking:", @strip(@autoLabels))
 var @labelTrackingSection = @wrapSection("LABEL_TRACKING", "Labels flow through operations:", @strip(@labelTracking))
+var @labelModSection = @wrapSection("LABEL_MODIFICATION", "Modify security labels on return values:", @strip(@labelModification))
+var @toolCallSection = @wrapSection("TOOL_CALL_TRACKING", "Track tool usage with @mx.tools:", @strip(@toolCallTracking))
 var @guardCompSection = @wrapSection("GUARD_COMPOSITION", "Multiple guards can apply. Resolution order:", @strip(@guardComp))
 var @needsSection = @wrapSection("NEEDS_DECLARATION", "Declare required capabilities in modules.", @strip(@needs))
 
@@ -47,6 +51,8 @@ var @allSections = [
   @deniedSection,
   @autoLabelsSection,
   @labelTrackingSection,
+  @labelModSection,
+  @toolCallSection,
   @guardCompSection,
   @needsSection
 ]
