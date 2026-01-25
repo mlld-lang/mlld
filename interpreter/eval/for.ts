@@ -601,6 +601,16 @@ export async function evaluateForExpression(
       const keyVar = ensureVariable(`${varName}_key`, key, env);
       childEnv.setVariable(`${varName}_key`, keyVar);
     }
+
+    // Set up for context for @mx.for access (matching directive path)
+    const forCtx: ForContextSnapshot = {
+      index: idx,
+      total: iterableArray.length,
+      key: key ?? null,
+      parallel: !!effective?.parallel
+    };
+    childEnv.pushExecutionContext('for', forCtx);
+
     try {
       let exprResult: unknown = null;
       if (Array.isArray(expr.expression) && expr.expression.length > 0) {
@@ -684,8 +694,10 @@ export async function evaluateForExpression(
           }
         }
       }
+      childEnv.popExecutionContext('for');
       return exprResult as any;
     } catch (error) {
+      childEnv.popExecutionContext('for');
       const message = formatIterationError(error);
       const marker: ForIterationError = {
         index: idx,
