@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc82]
 
 ### Added
+- **`@mx.for` iteration context**: Access loop state inside `for` blocks
+  - `@mx.for.index` - Current 0-based index
+  - `@mx.for.total` - Total items in collection
+  - `@mx.for.key` - Key for objects, index string for arrays
+  - `@mx.for.parallel` - Whether loop is parallel
+  - Works in both sequential and `parallel()` for loops
 - **`when @condition [block]`**: Conditional blocks with full statement support
   - Execute multiple statements when condition is true: `when @ready [let @x = 1  show @x]`
   - Supports `let`, `var`, nested `when`, `for`, and return via `=>`
@@ -56,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`let` pipelines with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were stripped from backtick-wrapped templates in `let` and `var` assignments.
 - **`run stream @exec()` parsing**: Run directives accept stream modifiers and tail options on exec invocations
 - **After-guard retry output**: Retryable after-guard flows emit output once after a successful retry
 - **Ternary expressions with arrays/objects**: Ternary expressions returning arrays or objects (e.g., `@tier ? @tier.split(",") : []`) now preserve the actual value instead of stringifying to JSON. Previously, `[].length` would return 2 (string length of `"[]"`) instead of 0.

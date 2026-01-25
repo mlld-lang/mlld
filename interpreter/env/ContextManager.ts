@@ -323,6 +323,7 @@ export class ContextManager {
       guard: guardContext ?? (deniedContext ? {} : null),
       ...(whileContext ? { while: whileContext } : {}),
       ...(loopContext ? { loop: loopContext } : {}),
+      ...(forContext ? { for: forContext } : {}),
       errors: Array.isArray(resolvedErrors) ? resolvedErrors : [],
       tools: this.getToolsSnapshot()
     };

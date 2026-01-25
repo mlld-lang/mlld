@@ -32,6 +32,13 @@ interface ForIterationError {
   value?: unknown;
 }
 
+interface ForContextSnapshot {
+  index: number;
+  total: number;
+  key: string | number | null;
+  parallel: boolean;
+}
+
 // Check if an object looks like file content data (e.g., from glob iteration)
 function looksLikeFileData(value: unknown): value is Record<string, unknown> & { content: string; filename?: string; relative?: string; absolute?: string } {
   if (!value || typeof value !== 'object') return false;
@@ -395,6 +402,15 @@ export async function evaluateForDirective(
         childEnv.setVariable(`${varName}_key`, keyVar);
       }
 
+      // Set up for context for @mx.for access
+      const forCtx: ForContextSnapshot = {
+        index: idx,
+        total: iterableArray.length,
+        key: key ?? null,
+        parallel: !!effective?.parallel
+      };
+      childEnv.pushExecutionContext('for', forCtx);
+
       const actionNodes = directive.values.action;
       const retry = new RateLimitRetry();
       while (true) {
@@ -471,6 +487,7 @@ export async function evaluateForDirective(
             const again = await retry.wait();
             if (again) continue;
           }
+          childEnv.popExecutionContext('for');
           if (forErrors) {
             forErrors.push({
               index: idx,
@@ -484,6 +501,7 @@ export async function evaluateForDirective(
           throw err;
         }
       }
+      childEnv.popExecutionContext('for');
       return;
     };
 
