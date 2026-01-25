@@ -8,6 +8,7 @@ tags: [security, labels, tracking, flow]
 related: [security-guards-basics, security-automatic-labels]
 related-code: [core/security/LabelTracker.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 - Method calls: `@secret.trim()` preserves labels

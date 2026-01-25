@@ -6,6 +6,7 @@ category: commands
 tags: [mcp, tools, env, guards]
 related-code: [interpreter/eval/var.ts, cli/mcp/FunctionRouter.ts, cli/mcp/MCPOrchestrator.ts, interpreter/eval/import/ImportDirectiveEvaluator.ts]
 updated: 2026-01-24
+qa_tier: 2
 ---
 
 Tool collections define what an agent sees and how tools behave.

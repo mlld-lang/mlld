@@ -8,6 +8,7 @@ tags: [security, guards, input, validation]
 related: [security-guards-basics, security-after-guards]
 related-code: [interpreter/eval/guard.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 ```mlld

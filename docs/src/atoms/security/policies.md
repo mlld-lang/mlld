@@ -8,6 +8,7 @@ tags: [security, policies, guards]
 related: [security-guards-basics, security-needs-declaration]
 related-code: [interpreter/eval/policy.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 ```mlld

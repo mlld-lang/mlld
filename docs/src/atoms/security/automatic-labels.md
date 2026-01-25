@@ -8,6 +8,7 @@ tags: [security, labels, automatic, tracking]
 related: [security-guards-basics, security-label-tracking]
 related-code: [core/security/LabelTracker.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 | Label | Applied To |

@@ -8,6 +8,7 @@ tags: [security, guards, composition, resolution]
 related: [security-guards-basics, security-before-guards]
 related-code: [interpreter/eval/guard.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 1. All applicable guards run (file top-to-bottom)

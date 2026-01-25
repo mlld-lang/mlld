@@ -8,6 +8,7 @@ tags: [security, needs, capabilities, modules]
 related: [modules-creating, security-guards-basics]
 related-code: [core/module/NeedsParser.ts]
 updated: 2026-01-05
+qa_tier: 2
 ---
 
 ```mlld
