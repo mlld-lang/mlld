@@ -638,6 +638,10 @@ export async function evaluateForExpression(
               };
               lastResult = await evaluateWhenExpression(nodeWithFirst as any, currentEnv);
               currentEnv = lastResult.env || currentEnv;
+              // Early return: if when matched and returned a value, exit the sequence
+              if (lastResult.value !== null && lastResult.value !== undefined) {
+                break;
+              }
               continue;
             }
 
