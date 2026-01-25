@@ -361,10 +361,11 @@ function runBuildStep(name, command) {
 
   try {
     // Silence tsup output to avoid noisy SWC warnings
+    // Use ['ignore', 'inherit', 'inherit'] to prevent TTY suspension
     if (command.includes('tsup')) {
       execSync(command, { stdio: 'ignore' });
     } else {
-      execSync(command, { stdio: 'inherit' });
+      execSync(command, { stdio: ['ignore', 'inherit', 'inherit'] });
     }
     console.log(`${green}✓${reset} ${name} complete\n`);
   } catch (error) {

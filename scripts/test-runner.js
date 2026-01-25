@@ -84,7 +84,9 @@ if (testFast) {
 }
 
 try {
-  execSync(command, { stdio: 'inherit', env: { ...process.env, MLLD_STRICT: process.env.MLLD_STRICT ?? '0' } });
+  // Use ['ignore', 'inherit', 'inherit'] to prevent TTY suspension (zsh: suspended (tty input))
+  // when tests or vitest try to read from stdin
+  execSync(command, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, MLLD_STRICT: process.env.MLLD_STRICT ?? '0' } });
 } catch (error) {
   process.exit(error.status || 1);
 }
