@@ -1147,6 +1147,15 @@ WhenOutputTarget
         raw: varname ? `env:${varname}` : 'env'
       };
     }
+  / "@" resolver:BaseIdentifier path:ResolverPath? {
+      // Variable or resolver target (e.g., @path or @resolver/subpath)
+      return {
+        type: 'resolver',
+        resolver: resolver,
+        path: path || [],
+        raw: `@${resolver}${path ? '/' + path.map(p => p.content || '').join('/') : ''}`
+      };
+    }
   / str:DataString {
       // File path as quoted string
       return {

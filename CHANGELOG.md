@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **`output ... to @variable` in when blocks**: Variable targets now work in output directives inside when blocks (e.g., `output @content to @path`). Previously, `WhenOutputTarget` only supported streams, env, and quoted strings.
 - **`let` pipelines with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were stripped from backtick-wrapped templates in `let` and `var` assignments.
 - **`run stream @exec()` parsing**: Run directives accept stream modifiers and tail options on exec invocations
 - **After-guard retry output**: Retryable after-guard flows emit output once after a successful retry
@@ -87,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pipeline on `let` with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were incorrectly stripped from backtick-wrapped templates in `let` and `var` assignments, causing `| log` and other pipeline operations to silently fail.
 - **Pipeline retry @input staleness**: Fixed bug where leading effects (like show) in pipelines saw stale @input values during retry instead of fresh values from re-executed source stages
 - **Circular imports**: Local file imports now correctly trigger circular import detection, producing a clear error message instead of infinite recursion
+- **`@mx.for` in for-expressions**: Fixed `@mx.for.index` and `@mx.for.total` not being available when a for loop is assigned to a variable (e.g., `var @results = for @i in @items [...@mx.for.index...]`). The for execution context was only pushed in the directive path, not the expression path.
 - **Nested array normalization**: Nested arrays now properly normalize their contents when displayed
   - `[[StructuredValue, StructuredValue]]` now correctly formats to `[["clean","values"]]`
   - `normalizeArrayEntry` now recursively processes nested arrays
