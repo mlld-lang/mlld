@@ -1,0 +1,63 @@
+## Staleness Assessment: @issueId
+
+You are assessing whether an issue/ticket may be stale based on recent project activity.
+
+## Context
+
+**Issue ID**: @issueId
+**Created**: @createdDate
+
+### Issue Content
+
+```markdown
+@issueContent
+```
+
+### Recent CHANGELOG entries
+
+```markdown
+@changelog
+```
+
+### Git commits since issue was created
+
+```
+@commits
+```
+
+## Your Task
+
+Assess whether this issue may be stale. Consider:
+
+1. **Design changes**: Has the project's design evolved in ways that conflict with or supersede this issue?
+2. **Already implemented**: Was the requested feature/fix already implemented (check CHANGELOG and commits)?
+3. **Obsolete context**: Does the issue reference code, patterns, or approaches that no longer exist?
+4. **Conflicting decisions**: Have architectural decisions been made that make this issue irrelevant?
+
+## Important Notes
+
+- Issues can be stale even if they were filed recently, if rapid development has changed the landscape
+- An issue is NOT stale just because it's old - only if the context has materially changed
+- Bug reports are less likely to be stale unless the buggy code was refactored
+- Feature requests are more likely to be stale if similar features were implemented differently
+
+## Output Format
+
+Respond with ONLY a JSON object (no markdown code fences):
+
+{
+  "staleness_score": 0.0-1.0,
+  "reasoning": "Brief explanation of why this score",
+  "evidence": ["specific changelog entry or commit that affects this issue"],
+  "recommendation": "keep|review|close"
+}
+
+### Scoring Guide
+
+- **0.0-0.2**: Definitely still relevant, no conflicting changes
+- **0.3-0.4**: Minor concerns, might need updating but core request is valid
+- **0.5-0.6**: Significant context shift, needs review before implementation
+- **0.7-0.8**: Likely obsolete, strong evidence of conflicting changes
+- **0.9-1.0**: Definitely stale, already implemented or design explicitly rejected
+
+Be conservative - when in doubt, score lower. False positives (marking fresh issues as stale) are worse than false negatives.

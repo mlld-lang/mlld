@@ -79,6 +79,13 @@ var @phase1Results = for parallel(20) @t in @phase1Topics [
 
   >> Check for existing session (preserves session ID for resumption)
   let @existingSession = <@topicDir/session.json?>
+
+  >> Skip if phase 1 already complete - early return preserves existing session
+  when @existingSession.phase1_complete [
+    show `Skipping (already complete): @t`
+    => @t
+  ]
+
   let @sessionId = @existingSession.session_id ? @existingSession.session_id : cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
 
   >> Store session info before starting (preserves existing start time if resuming)

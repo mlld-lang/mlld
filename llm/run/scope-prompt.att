@@ -1,0 +1,69 @@
+## Scope Estimation: @issueId
+
+You are estimating the scope of an issue/ticket for planning purposes.
+
+## Issue Content
+
+```markdown
+@issueContent
+```
+
+## Your Task
+
+Provide informal scope estimates for this issue across three dimensions:
+
+### 1. Size (effort)
+How much work is this likely to require?
+- **xs**: Trivial, < 1 hour. One-liner fix, typo, config change.
+- **s**: Small, 1-4 hours. Single file change, straightforward implementation.
+- **m**: Medium, 4-16 hours (0.5-2 days). Multiple files, some complexity.
+- **l**: Large, 2-5 days. Significant feature, touches many parts of codebase.
+- **xl**: Extra large, 1+ weeks. Major feature, architectural changes, new subsystem.
+
+### 2. Complexity (technical difficulty)
+How technically challenging is this?
+- **xs**: Trivial. Copy existing pattern, no new concepts.
+- **s**: Simple. Well-understood problem, clear solution path.
+- **m**: Moderate. Some design decisions, a few edge cases.
+- **l**: Complex. Multiple interacting systems, tricky edge cases, requires deep understanding.
+- **xl**: Very complex. Novel problem, research required, architectural implications.
+
+### 3. Risk (uncertainty/potential for issues)
+How likely is this to have unexpected problems?
+- **xs**: Minimal risk. Isolated change, well-tested area, easy to verify.
+- **s**: Low risk. Mostly isolated, good test coverage exists.
+- **m**: Moderate risk. Some dependencies, could affect other features.
+- **l**: High risk. Many dependencies, could break things, hard to test fully.
+- **xl**: Very high risk. Core system changes, potential data loss, security implications.
+
+## Important Notes
+
+- These are rough estimates for planning, not commitments
+- When uncertain, lean toward larger estimates (it's better to over-estimate than under)
+- Consider hidden complexity: error handling, edge cases, testing, docs
+- Bug fixes are often smaller in size but can be high in complexity/risk
+- Features that seem simple often have hidden scope (UI, validation, error states)
+
+## Output Format
+
+Respond with ONLY a JSON object (no markdown code fences):
+
+{
+  "size": "xs|s|m|l|xl",
+  "complexity": "xs|s|m|l|xl",
+  "risk": "xs|s|m|l|xl",
+  "reasoning": "Brief explanation of the estimates",
+  "key_factors": ["factor1", "factor2"],
+  "potential_blockers": ["blocker1"]
+}
+
+### Example Response
+
+{
+  "size": "m",
+  "complexity": "s",
+  "risk": "m",
+  "reasoning": "Adding a new CLI flag is straightforward but requires updating docs and tests",
+  "key_factors": ["well-defined scope", "existing patterns to follow", "needs test coverage"],
+  "potential_blockers": ["may need to coordinate with other pending CLI changes"]
+}

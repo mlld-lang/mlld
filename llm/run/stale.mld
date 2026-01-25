@@ -1,0 +1,120 @@
+>> Staleness Assessment
+>> Usage: mlld run stale [--limit 20]
+>>
+>> Checks open issues for staleness by comparing against CHANGELOG.md and commits
+>> since the issue was created. Adds stale-check-{n} tags for issues scoring > 0.3.
+
+import { @claude } from @mlld/claude
+
+>> Payload options
+import "@payload" as @p
+var @limit = @p.limit ? @p.limit * 1 : 20
+
+>> Configuration
+var @ticketsDir = "@base/.tickets"
+
+>> Tool permissions (read-only for assessment)
+var @assessTools = "Read,Glob,Grep,Bash(git log *),Bash(tk *),Bash(cat *)"
+
+>> Helper to floor a number
+exe @floor(n) = js { return Math.floor(n); }
+
+>> Build staleness assessment prompt
+exe @buildStalePrompt(issueId, issueContent, changelog, commits, createdDate) = template "./stale-prompt.att"
+
+>> Get all open issues as JSON
+var @issuesJson = sh {tk query '.status == "open"' | jq -s '.'}
+var @allIssues = @issuesJson | @json
+
+>> Filter to issues without stale-check-* tags
+exe @hasStaleTag(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @staleTags = for @t in @tags when @t.startsWith("stale-check-") => @t
+  => @staleTags.length > 0
+]
+
+var @needsCheck = for @i in @allIssues when !@hasStaleTag(@i) => @i
+
+show `=== Staleness Assessment ===`
+show `Found @needsCheck.length open issues without stale-check tags`
+show ``
+
+>> Limit to configured batch size
+var @batch = @needsCheck.slice(0, @limit)
+
+when @batch.length == 0 => show `No issues to check. All open issues already have stale-check tags.`
+
+>> Load CHANGELOG.md once
+var @changelog = <@base/CHANGELOG.md>
+
+>> Process issues in parallel
+var @results = for parallel(10) @issue in @batch [
+  let @issueId = @issue.id
+  let @createdDate = @issue.created
+
+  >> Read full issue content
+  let @ext = ".md"
+  let @issuePath = `@ticketsDir/@issueId@ext`
+  let @issueFile = <@issuePath>
+  let @issueContent = @issueFile ? @issueFile : "Issue content not found"
+
+  >> Get commits since issue was created
+  let @commits = sh {git log --oneline --since="@createdDate" --no-decorate 2>/dev/null | head -100}
+
+  >> Build and send prompt
+  let @prompt = @buildStalePrompt(@issueId, @issueContent, @changelog, @commits, @createdDate)
+  show `Assessing staleness: @issueId`
+
+  let @assessment = @claude(@prompt, "sonnet", @base, @assessTools) | @json.llm | log | log `\nStaleness: @issueId`
+
+  >> Extract score (default to 0 if parsing failed)
+  let @score = @assessment.staleness_score ? @assessment.staleness_score * 1 : 0
+
+  >> Add stale-check tag if score > 0.3
+  >> Note: compute @score * 10 separately since exe args don't support binary expressions
+  let @scaled = @score * 10
+  let @tagLevel = @floor(@scaled)
+  let @isStale = @score > 0.3
+
+  when @isStale [
+    >> Read current ticket file
+    let @ticketPath = `@ticketsDir/@issueId@ext`
+    let @ticketContent = <@ticketPath>
+
+    >> Parse frontmatter to get existing tags
+    let @existingTags = @issue.tags ? @issue.tags : []
+    let @newTags = @existingTags.concat([`stale-check-@tagLevel`])
+    let @tagsYaml = `[@newTags.join(", ")]`
+
+    >> Update the tags line in frontmatter
+    let @updatedContent = @ticketContent.replace(/^tags:.*$/m, `tags: @tagsYaml`)
+
+    >> If no tags line exists, add it after priority line
+    let @finalContent = @updatedContent.includes("tags:") ? @updatedContent : @updatedContent.replace(/^(priority:.*)$/m, `$1\ntags: @tagsYaml`)
+
+    output @finalContent to "@ticketPath"
+  ]
+
+  >> Use log instead of show to avoid capturing return value
+  let @status = @isStale ? "stale - tagged" : "fresh"
+  log `  @issueId: score @score (@status)`
+
+  => { id: @issueId, score: @score, reasoning: @assessment.reasoning, isStale: @isStale }
+]
+
+>> Summary
+show ``
+show `=== Staleness Assessment Complete ===`
+
+var @staleItems = for @r in @results when @r.score > 0.3 => @r
+var @freshItems = for @r in @results when @r.score <= 0.3 => @r
+
+show `Assessed: @results.length issues`
+show `  Potentially stale (above 0.3): @staleItems.length`
+show `  Fresh (0.3 or below): @freshItems.length`
+
+when @staleItems.length > 0 [
+  show ``
+  show `Stale items:`
+  for @item in @staleItems => show `  - @item.id: @item.score - @item.reasoning`
+]

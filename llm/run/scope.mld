@@ -1,0 +1,134 @@
+>> Scope Estimation
+>> Usage: mlld run scope [--limit 20]
+>>
+>> Estimates size, complexity, and risk for open issues that haven't been scoped.
+>> Skips issues flagged as potentially stale (stale-check-4 or higher).
+>> Adds size-*, complexity-*, and risk-* tags (xs|s|m|l|xl).
+
+import { @claude } from @mlld/claude
+
+>> Payload options
+import "@payload" as @p
+var @limit = @p.limit ? @p.limit * 1 : 20
+
+>> Configuration
+var @ticketsDir = "@base/.tickets"
+
+>> Tool permissions (read-only for assessment)
+var @scopeTools = "Read,Glob,Grep,Bash(git *),Bash(tk *),Bash(cat *)"
+
+>> Build scope estimation prompt
+exe @buildScopePrompt(issueId, issueContent) = template "./scope-prompt.att"
+
+>> Get all open issues as JSON
+var @issuesJson = sh {tk query '.status == "open"' | jq -s '.'}
+var @allIssues = @issuesJson | @json
+
+>> Check if issue has size tag (already scoped)
+exe @hasSizeTag(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @sizeTags = for @t in @tags when @t.startsWith("size-") => @t
+  => @sizeTags.length > 0
+]
+
+>> Check if issue is flagged as potentially stale (score > 0.3)
+exe @isStale(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @staleTags = for @t in @tags when @t.startsWith("stale-check-") => @t
+  when @staleTags.length == 0 => false
+  >> Extract the number from stale-check-{n}
+  let @staleTag = @staleTags[0]
+  let @level = @staleTag.replace("stale-check-", "") * 1
+  => @level > 3
+]
+
+>> Filter to issues that need scoping
+var @needsScope = for @i in @allIssues when !@hasSizeTag(@i) && !@isStale(@i) => @i
+
+show `=== Scope Estimation ===`
+show `Found @needsScope.length open issues needing scope estimation`
+
+>> Show skipped stale items
+var @skippedStale = for @i in @allIssues when !@hasSizeTag(@i) && @isStale(@i) => @i
+when @skippedStale.length > 0 => show `Skipping @skippedStale.length potentially stale issues`
+
+show ``
+
+>> Limit to configured batch size
+var @batch = @needsScope.slice(0, @limit)
+
+when @batch.length == 0 => show `No issues to scope. All open issues are either scoped or flagged as stale.`
+
+>> Process issues in parallel
+var @results = for parallel(10) @issue in @batch [
+  let @issueId = @issue.id
+
+  >> Read full issue content
+  let @ext = ".md"
+  let @issuePath = `@ticketsDir/@issueId@ext`
+  let @issueFile = <@issuePath>
+  let @issueContent = @issueFile ? @issueFile : "Issue content not found"
+
+  >> Build and send prompt
+  let @prompt = @buildScopePrompt(@issueId, @issueContent)
+  show `Estimating scope: @issueId`
+
+  let @estimate = @claude(@prompt, "sonnet", @base, @scopeTools) | @json.llm | log | log `\nScope: @issueId`
+
+  >> Validate and normalize values (default to "m" if missing or invalid)
+  let @validSizes = ["xs", "s", "m", "l", "xl"]
+  let @rawSize = @estimate.size ? @estimate.size : "m"
+  let @rawComplexity = @estimate.complexity ? @estimate.complexity : "m"
+  let @rawRisk = @estimate.risk ? @estimate.risk : "m"
+  let @size = @validSizes.includes(@rawSize) ? @rawSize : "m"
+  let @complexity = @validSizes.includes(@rawComplexity) ? @rawComplexity : "m"
+  let @risk = @validSizes.includes(@rawRisk) ? @rawRisk : "m"
+
+  >> Read current ticket file and update tags
+  let @ticketPath = `@ticketsDir/@issueId@ext`
+  let @ticketContent = <@ticketPath>
+
+  >> Build new tags list
+  let @existingTags = @issue.tags ? @issue.tags : []
+  let @newTags = @existingTags.concat([`size-@size`, `complexity-@complexity`, `risk-@risk`])
+  let @tagsYaml = `[@newTags.join(", ")]`
+
+  >> Update the tags line in frontmatter
+  let @updatedContent = @ticketContent.replace(/^tags:.*$/m, `tags: @tagsYaml`)
+
+  >> If no tags line exists, add it after priority line
+  let @finalContent = @updatedContent.includes("tags:") ? @updatedContent : @updatedContent.replace(/^(priority:.*)$/m, `$1\ntags: @tagsYaml`)
+
+  output @finalContent to "@ticketPath"
+  log `  Tagged @issueId: size-@size, complexity-@complexity, risk-@risk`
+
+  => { id: @issueId, size: @size, complexity: @complexity, risk: @risk, reasoning: @estimate.reasoning }
+]
+
+>> Summary
+show ``
+show `=== Scope Estimation Complete ===`
+show `Scoped: @results.length issues`
+show ``
+
+>> Group by size for summary
+var @sizeXs = for @r in @results when @r.size == "xs" => @r
+var @sizeS = for @r in @results when @r.size == "s" => @r
+var @sizeM = for @r in @results when @r.size == "m" => @r
+var @sizeL = for @r in @results when @r.size == "l" => @r
+var @sizeXl = for @r in @results when @r.size == "xl" => @r
+
+show `By size:`
+show `  XS: @sizeXs.length`
+show `  S:  @sizeS.length`
+show `  M:  @sizeM.length`
+show `  L:  @sizeL.length`
+show `  XL: @sizeXl.length`
+
+>> Show high-risk items
+var @highRisk = for @r in @results when @r.risk == "l" || @r.risk == "xl" => @r
+when @highRisk.length > 0 [
+  show ``
+  show `High-risk items:`
+  for @item in @highRisk => show `  - @item.id: risk-@item.risk - @item.reasoning`
+]
