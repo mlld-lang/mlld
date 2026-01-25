@@ -1,0 +1,385 @@
+>> QA Report: Non-Implementation Items
+>> Usage: mlld run qa-report [--format json|markdown] [--category <filter>]
+>>
+>> Harvests items from QA that were NOT implemented (doc fixes, deferred features,
+>> rejected features, qa errors) and provides a comprehensive report with original
+>> commentary for review.
+>>
+>> Categories:
+>>   doc-hallucination  - Docs described something that never existed
+>>   missing-feature    - Feature doesn't exist (may be deferred/rejected)
+>>   qa-error           - QA test itself was flawed
+>>   doc-fix            - Items where action was fix-docs
+>>
+>> Examples:
+>>   mlld run qa-report                           # Full report, markdown format
+>>   mlld run qa-report --format json             # JSON output
+>>   mlld run qa-report --category doc-hallucination  # Filter to one category
+
+import "@payload" as @p
+var @format = @p.format ? @p.format : "markdown"
+var @categoryFilter = @p.category ? @p.category : ""
+
+>> Configuration
+var @qaDir = "@base/qa"
+
+>> Load all reconciliation files (from polish.mld reconciliation phase)
+var @allReconciliations = <@qaDir/**/reconciliation.json?>
+
+>> Load all self-reviews (from qa.mld phase 2)
+var @allSelfReviews = <@qaDir/**/self_review.json?>
+
+>> Load all results for original issue context
+var @allResults = <@qaDir/**/results.json?>
+
+>> Build lookup from results by experiment dir
+exe @getResultsForDir(dir, results) = [
+  let @matches = for @r in @results when @r.mx.absoluteDir == @dir => @r
+  => @matches.length > 0 ? @matches[0] : null
+]
+
+>> ========== HARVEST FROM RECONCILIATIONS ==========
+
+>> Doc hallucinations - docs claimed something that never existed
+var @docHallucinations = for @r in @allReconciliations
+  when @r.verdict == "doc-hallucination"
+    && (@categoryFilter == "" || @categoryFilter == "doc-hallucination")
+  => {
+    topic: @r.topic,
+    experiment: @r.experiment,
+    category: "doc-hallucination",
+    doc_claim: @r.doc_claim,
+    actual_behavior: @r.actual_behavior,
+    tested_with: @r.tested_with,
+    verdict_reasoning: @r.verdict_reasoning,
+    doc_fix: @r.doc_fix,
+    doc_clarity: @r.doc_clarity,
+    notes: @r.notes,
+    original_issues: @getResultsForDir(@r.mx.absoluteDir, @allResults)?.issues,
+    source_file: @r.mx.absolute
+  }
+
+>> Missing features - deferred or rejected
+var @missingFeaturesDeferred = for @r in @allReconciliations
+  when @r.verdict == "missing-feature"
+    && @r.assessment?.recommendation == "defer"
+    && (@categoryFilter == "" || @categoryFilter == "missing-feature" || @categoryFilter == "deferred")
+  => {
+    topic: @r.topic,
+    experiment: @r.experiment,
+    category: "missing-feature-deferred",
+    doc_claim: @r.doc_claim,
+    actual_behavior: @r.actual_behavior,
+    tested_with: @r.tested_with,
+    verdict_reasoning: @r.verdict_reasoning,
+    assessment: @r.assessment,
+    doc_clarity: @r.doc_clarity,
+    notes: @r.notes,
+    original_issues: @getResultsForDir(@r.mx.absoluteDir, @allResults)?.issues,
+    source_file: @r.mx.absolute
+  }
+
+var @missingFeaturesRejected = for @r in @allReconciliations
+  when @r.verdict == "missing-feature"
+    && @r.assessment?.recommendation == "reject"
+    && (@categoryFilter == "" || @categoryFilter == "missing-feature" || @categoryFilter == "rejected")
+  => {
+    topic: @r.topic,
+    experiment: @r.experiment,
+    category: "missing-feature-rejected",
+    doc_claim: @r.doc_claim,
+    actual_behavior: @r.actual_behavior,
+    tested_with: @r.tested_with,
+    verdict_reasoning: @r.verdict_reasoning,
+    assessment: @r.assessment,
+    doc_clarity: @r.doc_clarity,
+    notes: @r.notes,
+    original_issues: @getResultsForDir(@r.mx.absoluteDir, @allResults)?.issues,
+    source_file: @r.mx.absolute
+  }
+
+>> QA errors - the test itself was wrong
+var @qaErrors = for @r in @allReconciliations
+  when @r.verdict == "qa-error"
+    && (@categoryFilter == "" || @categoryFilter == "qa-error")
+  => {
+    topic: @r.topic,
+    experiment: @r.experiment,
+    category: "qa-error",
+    doc_claim: @r.doc_claim,
+    actual_behavior: @r.actual_behavior,
+    tested_with: @r.tested_with,
+    verdict_reasoning: @r.verdict_reasoning,
+    doc_clarity: @r.doc_clarity,
+    notes: @r.notes,
+    original_issues: @getResultsForDir(@r.mx.absoluteDir, @allResults)?.issues,
+    source_file: @r.mx.absolute
+  }
+
+>> Doc fixes needed (any verdict with action == fix-docs)
+var @docFixes = for @r in @allReconciliations
+  when @r.action == "fix-docs"
+    && (@categoryFilter == "" || @categoryFilter == "doc-fix")
+  => {
+    topic: @r.topic,
+    experiment: @r.experiment,
+    category: "doc-fix",
+    verdict: @r.verdict,
+    doc_claim: @r.doc_claim,
+    actual_behavior: @r.actual_behavior,
+    doc_fix: @r.doc_fix,
+    doc_clarity: @r.doc_clarity,
+    notes: @r.notes,
+    original_issues: @getResultsForDir(@r.mx.absoluteDir, @allResults)?.issues,
+    source_file: @r.mx.absolute
+  }
+
+>> ========== HARVEST FROM SELF-REVIEWS ==========
+>> Self-reviews may also have non-genuine-bug verdicts
+
+var @selfReviewNonBugs = for @sr in @allSelfReviews
+  when @sr.issues_reviewed => for @issue in @sr.issues_reviewed
+    when @issue.revised_verdict && @issue.revised_verdict != "genuine-bug"
+      && (@categoryFilter == "" || @categoryFilter == @issue.revised_verdict)
+    => {
+      topic: @sr.topic,
+      experiment: @sr.experiment,
+      category: `self-review-@issue.revised_verdict`,
+      original_title: @issue.original_title,
+      revised_verdict: @issue.revised_verdict,
+      verdict_reasoning: @issue.verdict_reasoning,
+      doc_clarity: @issue.doc_clarity,
+      source_file: @sr.mx.absolute
+    }
+
+>> ========== BUILD REPORT ==========
+
+var @report = {
+  generated_at: @mx.now,
+  summary: {
+    doc_hallucinations: @docHallucinations.length,
+    missing_features_deferred: @missingFeaturesDeferred.length,
+    missing_features_rejected: @missingFeaturesRejected.length,
+    qa_errors: @qaErrors.length,
+    doc_fixes_needed: @docFixes.length,
+    self_review_non_bugs: @selfReviewNonBugs.length
+  },
+  filter_applied: @categoryFilter ? @categoryFilter : "none",
+
+  doc_hallucinations: @docHallucinations,
+  missing_features_deferred: @missingFeaturesDeferred,
+  missing_features_rejected: @missingFeaturesRejected,
+  qa_errors: @qaErrors,
+  doc_fixes_needed: @docFixes,
+  self_review_non_bugs: @selfReviewNonBugs
+}
+
+>> ========== OUTPUT ==========
+
+when @format == "json" [
+  output @report to "@qaDir/non-implementation-report.json"
+  show `Report written to @qaDir/non-implementation-report.json`
+]
+
+when @format == "markdown" [
+  show `# QA Non-Implementation Report`
+  show `Generated: @mx.now`
+  show ``
+  show `## Summary`
+  show ``
+  show `| Category | Count |`
+  show `|----------|-------|`
+  show `| Doc Hallucinations | @docHallucinations.length |`
+  show `| Missing Features (Deferred) | @missingFeaturesDeferred.length |`
+  show `| Missing Features (Rejected) | @missingFeaturesRejected.length |`
+  show `| QA Errors | @qaErrors.length |`
+  show `| Doc Fixes Needed | @docFixes.length |`
+  show `| Self-Review Non-Bugs | @selfReviewNonBugs.length |`
+  show ``
+
+  >> Doc Hallucinations
+  when @docHallucinations.length > 0 [
+    show `## Doc Hallucinations`
+    show ``
+    show `These docs described features that never existed. **Action: Fix docs to remove false claims.**`
+    show ``
+    for @item in @docHallucinations [
+      show `### @item.topic / @item.experiment`
+      show ``
+      show `**Doc claimed:** @item.doc_claim`
+      show ``
+      show `**Actual behavior:** @item.actual_behavior`
+      show ``
+      when @item.tested_with [
+        show `**Tested with:**`
+        show `\`\`\`mlld`
+        show `@item.tested_with`
+        show `\`\`\``
+        show ``
+      ]
+      show `**Reasoning:** @item.verdict_reasoning`
+      show ``
+      when @item.doc_fix [
+        show `**Recommended doc fix:** @item.doc_fix`
+        show ``
+      ]
+      when @item.original_issues && @item.original_issues.length > 0 [
+        show `**Original QA issues:**`
+        for @oi in @item.original_issues [
+          show `- [@oi.severity] @oi.title: @oi.actual`
+        ]
+        show ``
+      ]
+      show `---`
+      show ``
+    ]
+  ]
+
+  >> Missing Features - Deferred
+  when @missingFeaturesDeferred.length > 0 [
+    show `## Missing Features (Deferred)`
+    show ``
+    show `These features don't exist but might be worth adding later. **Action: Track for future consideration.**`
+    show ``
+    for @item in @missingFeaturesDeferred [
+      show `### @item.topic / @item.experiment`
+      show ``
+      show `**Doc claimed:** @item.doc_claim`
+      show ``
+      show `**Actual behavior:** @item.actual_behavior`
+      show ``
+      when @item.assessment [
+        show `**Assessment:**`
+        show `- Usefulness: @item.assessment.usefulness/5 - @item.assessment.usefulness_reasoning`
+        show `- Design fit: @item.assessment.consistency_with_mlld`
+        show `- Workaround: @item.assessment.workaround`
+        show `- Complexity: @item.assessment.implementation_complexity`
+        show `- Recommendation reasoning: @item.assessment.recommendation_reasoning`
+        show ``
+      ]
+      show `**Reasoning:** @item.verdict_reasoning`
+      show ``
+      when @item.original_issues && @item.original_issues.length > 0 [
+        show `**Original QA issues:**`
+        for @oi in @item.original_issues [
+          show `- [@oi.severity] @oi.title: @oi.actual`
+        ]
+        show ``
+      ]
+      show `---`
+      show ``
+    ]
+  ]
+
+  >> Missing Features - Rejected
+  when @missingFeaturesRejected.length > 0 [
+    show `## Missing Features (Rejected)`
+    show ``
+    show `These features were evaluated and rejected. **Action: Fix docs if they implied the feature existed.**`
+    show ``
+    for @item in @missingFeaturesRejected [
+      show `### @item.topic / @item.experiment`
+      show ``
+      show `**Doc claimed:** @item.doc_claim`
+      show ``
+      show `**Actual behavior:** @item.actual_behavior`
+      show ``
+      when @item.assessment [
+        show `**Assessment:**`
+        show `- Usefulness: @item.assessment.usefulness/5 - @item.assessment.usefulness_reasoning`
+        show `- Design fit: @item.assessment.consistency_with_mlld`
+        show `- Workaround: @item.assessment.workaround`
+        show `- Complexity: @item.assessment.implementation_complexity`
+        show `- Recommendation reasoning: @item.assessment.recommendation_reasoning`
+        show ``
+      ]
+      show `**Reasoning:** @item.verdict_reasoning`
+      show ``
+      when @item.original_issues && @item.original_issues.length > 0 [
+        show `**Original QA issues:**`
+        for @oi in @item.original_issues [
+          show `- [@oi.severity] @oi.title: @oi.actual`
+        ]
+        show ``
+      ]
+      show `---`
+      show ``
+    ]
+  ]
+
+  >> QA Errors
+  when @qaErrors.length > 0 [
+    show `## QA Errors`
+    show ``
+    show `These QA tests were flawed (wrong syntax, misunderstanding). **Action: Improve QA prompts or delete bad tests.**`
+    show ``
+    for @item in @qaErrors [
+      show `### @item.topic / @item.experiment`
+      show ``
+      show `**What QA thought:** @item.doc_claim`
+      show ``
+      show `**What actually happened:** @item.actual_behavior`
+      show ``
+      show `**Why this was a QA error:** @item.verdict_reasoning`
+      show ``
+      when @item.doc_clarity && @item.doc_clarity.suggestion [
+        show `**Suggestion:** @item.doc_clarity.suggestion`
+        show ``
+      ]
+      show `---`
+      show ``
+    ]
+  ]
+
+  >> Doc Fixes Needed
+  when @docFixes.length > 0 [
+    show `## Doc Fixes Needed`
+    show ``
+    show `These items (regardless of verdict) require documentation changes. **Action: Update docs.**`
+    show ``
+    for @item in @docFixes [
+      show `### @item.topic / @item.experiment`
+      show ``
+      show `**Verdict:** @item.verdict`
+      show ``
+      show `**Doc claimed:** @item.doc_claim`
+      show ``
+      show `**Actual behavior:** @item.actual_behavior`
+      show ``
+      show `**Recommended fix:** @item.doc_fix`
+      show ``
+      show `---`
+      show ``
+    ]
+  ]
+
+  >> Self-Review Non-Bugs
+  when @selfReviewNonBugs.length > 0 [
+    show `## Self-Review Non-Bugs`
+    show ``
+    show `Issues from self-review that were determined not to be genuine bugs.`
+    show ``
+    for @item in @selfReviewNonBugs [
+      show `### @item.topic / @item.experiment`
+      show ``
+      show `**Original issue:** @item.original_title`
+      show ``
+      show `**Revised verdict:** @item.revised_verdict`
+      show ``
+      show `**Reasoning:** @item.verdict_reasoning`
+      show ``
+      when @item.doc_clarity && @item.doc_clarity.suggestion [
+        show `**Doc clarity suggestion:** @item.doc_clarity.suggestion`
+        show ``
+      ]
+      show `---`
+      show ``
+    ]
+  ]
+
+  >> Also write JSON for programmatic access
+  output @report to "@qaDir/non-implementation-report.json"
+  show ``
+  show `---`
+  show `Full report also written to @qaDir/non-implementation-report.json`
+]

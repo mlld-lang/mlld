@@ -30,6 +30,9 @@ var @allTopics = for @f in @atomFiles when @f.mx.fm.qa_tier && @f.mx.fm.id && !@
 var @outputDir = "@base/qa"
 var @parallelLimit = 20
 
+>> Tool permissions for QA agents
+var @qaTools = "Read,Write,Glob,Grep,Bash(mkdir *),Bash(ls *),Bash(cat *),Bash(uuidgen),Bash(tr *),Bash(mlld *)"
+
 >> Filter topics based on --topic (prefix) or --topics (comma list)
 exe @filterTopics(all, filter, list) = when first [
   >> --topics (comma list) takes precedence
@@ -74,11 +77,12 @@ var @phase1Results = for parallel(20) @t in @phase1Topics [
   let @topicDir = `@outputDir/@t`
   run cmd {mkdir -p @topicDir}
 
-  >> Generate session ID for this topic
-  let @sessionId = cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
+  >> Check for existing session (preserves session ID for resumption)
+  let @existingSession = <@topicDir/session.json?>
+  let @sessionId = @existingSession.session_id ? @existingSession.session_id : cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
 
-  >> Store session info before starting
-  let @sessionInfo = { topic: @t, session_id: @sessionId, phase1_started: @now, phase1_complete: false }
+  >> Store session info before starting (preserves existing start time if resuming)
+  let @sessionInfo = { topic: @t, session_id: @sessionId, phase1_started: @existingSession.phase1_started ? @existingSession.phase1_started : @now, phase1_complete: false }
   output @sessionInfo to "@topicDir/session.json"
 
   >> Build prompt and run with session ID
@@ -86,7 +90,9 @@ var @phase1Results = for parallel(20) @t in @phase1Topics [
   show `Starting flail: @t (session: @sessionId)`
 
   >> Run claude with specific session ID
-  let @response = @prompt | cmd:@base { claude -p --model sonnet --session-id @sessionId --allowedTools "Read,Write,Bash,Glob,Grep" } | log
+  let @idx = @mx.for.index + 1
+  let @response = @prompt | cmd:@base { claude -p --model sonnet --session-id @sessionId --allowedTools "@qaTools" } | log | log `\nPhase 1/2 - Flail: @idx of @mx.for.total (@t)`
+  output @response to "@topicDir/phase1-transcript.md"
 
   >> Mark phase 1 complete
   let @updatedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: true, phase1_finished: @now }
@@ -135,7 +141,9 @@ var @phase2Results = for parallel(10) @s in @needsReview [
   show `Starting self-review: @s.topic (resuming session: @s.session_id)`
 
   >> Resume the session with expanded access
-  let @response = @prompt | cmd:@base { claude -p --model sonnet --resume @s.session_id --allowedTools "Read,Write,Bash,Glob,Grep" } | log
+  let @idx = @mx.for.index + 1
+  let @response = @prompt | cmd:@base { claude -p --model sonnet --resume @s.session_id --allowedTools "@qaTools" } | log | log `\nPhase 2/2 - Self-Review: @idx of @mx.for.total (@s.topic)`
+  output @response to "@topicDir/phase2-transcript.md"
 
   >> Update session info
   let @updatedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: true, phase2_finished: @now }

@@ -104,6 +104,7 @@ Each experiment MUST produce a `results.json`:
   "topic": "@topic",
   "status": "pass|fail|partial",
   "summary": "One-line description of outcome",
+  "what_works": ["List of things that worked correctly (even in failed experiments)"],
   "issues": [
     {
       "category": "broken-promise|unclear-error|unclear-docs|friction",
@@ -112,11 +113,24 @@ Each experiment MUST produce a `results.json`:
       "input": "What you tried (code or command)",
       "expected": "What should have happened",
       "actual": "What actually happened",
-      "recommendation": "Suggested fix (optional)"
+      "workaround": "How to work around this issue (if known)",
+      "recommendation": "Suggested fix",
+      "related_experiments": ["Other experiment names with same/related issue"]
     }
-  ]
+  ],
+  "context": {
+    "purpose": "Why this experiment was created",
+    "builds_on": "Previous experiment this extends (if any)",
+    "blocks": "What this issue prevents testing (if blocker)"
+  }
 }
 ```
+
+**Field notes:**
+- `what_works`: Capture positive findings even when status is fail/partial
+- `workaround`: Help users work around issues until fixed
+- `related_experiments`: Link issues that share root causes
+- `context.blocks`: For blockers, explain what M/H tests this prevents
 
 ## Complexity Levels
 
@@ -136,12 +150,18 @@ var @@response = @@haiku("Test prompt")
 ## Success Criteria
 
 Your results.json is valid if:
-1. All required fields are present
+1. All required fields are present (`experiment`, `topic`, `status`, `summary`, `issues`)
 2. `status` is one of: pass, fail, partial
 3. `issues` array exists (can be empty for pass)
 4. Each issue has valid category and severity enums
 
-Even passing experiments should note friction or enhancement ideas.
+**Encouraged fields:**
+- `what_works`: Always note positive findings, even in failed experiments
+- `workaround`: If you found a way around an issue, document it
+- `related_experiments`: Link issues that share root causes across experiments
+- `context`: Explain why this experiment exists and what it blocks
+
+These fields make results more actionable for fixing issues and help future agents understand the testing state.
 
 ## Exit Conditions
 

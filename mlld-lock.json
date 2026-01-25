@@ -44,20 +44,18 @@
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/2d13775192a13e8ad01313d6635cb9cdd67563cc/llm/modules/stream-claude-agent-sdk.mld.md"
     },
     "@mlld/array": {
-      "version": "2.0.0",
+      "version": "latest",
       "resolved": "c3d201686a36d9eb3b53837839be082115292893ee4ec3d08d81d1aa7f7d14a8",
       "source": "registry://@mlld/array@2.0.0",
       "integrity": "sha256:c3d201686a36d9eb3b53837839be082115292893ee4ec3d08d81d1aa7f7d14a8",
-      "fetchedAt": "2026-01-04T23:13:39.879Z",
-      "registryVersion": "2.0.0",
-      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/2d13775192a13e8ad01313d6635cb9cdd67563cc/llm/modules/array.mld.md"
+      "fetchedAt": "2026-01-25T10:54:00.147Z"
     },
     "@mlld/string": {
       "version": "latest",
       "resolved": "ba1d614c9a8eac90d24479412462ac7dec685804d8f000e811ff0250f6a6aefc",
       "source": "registry://@mlld/string@1.0.0",
       "integrity": "sha256:ba1d614c9a8eac90d24479412462ac7dec685804d8f000e811ff0250f6a6aefc",
-      "fetchedAt": "2026-01-04T23:16:05.744Z"
+      "fetchedAt": "2026-01-25T10:53:07.510Z"
     },
     "@mlld/claude": {
       "version": "latest",
@@ -83,6 +81,6 @@
   },
   "metadata": {
     "createdAt": "2025-09-27T19:54:02.369Z",
-    "updatedAt": "2026-01-18T01:32:51.827Z"
+    "updatedAt": "2026-01-25T10:54:00.147Z"
   }
 }

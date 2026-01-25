@@ -18,6 +18,11 @@ var @qaDir = "@base/qa"
 >> Get current branch for worktree base
 var @baseBranch = sh {git branch --show-current}
 
+>> Tool permissions for polish agents
+var @reconcileTools = "Read,Write,Glob,Grep,Bash(mlld *),Bash(cat *)"
+var @applyTools = "Read,Write,Edit,Glob,Grep,Bash(git *),Bash(wt *),Bash(npm run *),Bash(npm test *),Bash(cat *),Bash(pwd),Bash(head *)"
+var @verifyTools = "Read,Write,Glob,Grep,Bash(git *),Bash(wt *),Bash(npm run *),Bash(npm test *),Bash(cat *),Bash(tee *),Bash(head *)"
+
 >> === BUILD PROMPT FUNCTIONS (using template auto-interpolation) ===
 
 exe @buildReconcilePrompt(topic, experiment, status, summary, issues, outputDir) = template "./qa-reconcile-prompt.att"
@@ -114,7 +119,9 @@ var @loopResult = loop(@maxIterations) [
     let @issuesJson = @item.issues ? `@item.issues` : "[]"
     let @prompt = @buildReconcilePrompt(@item.topic, @item.experiment, @item.status, @item.summary, @issuesJson, @qaDir)
     show `  Reconciling: @item.topic/@item.experiment`
-    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
+    let @idx = @mx.for.index + 1
+    let @response = @claude(@prompt, "opus", @base, @reconcileTools) | log | log `\nPhase 1/6 - Reconcile: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    output @response to "@item.experimentDir/reconcile-transcript.md"
     => @item.topic
   ]
 
@@ -165,7 +172,9 @@ var @loopResult = loop(@maxIterations) [
     let @prompt = @buildAnalyzePrompt(@item.topic, @item.experiment, @item.resultsPath, @item.reconciliationPath, @item.experimentDir)
     show `  DEBUG: prompt built, length=@prompt.length`
     show `  Analyzing: @item.topic/@item.experiment`
-    let @response = @claude(@prompt, "opus", @base, "Read,Write,Bash,Glob,Grep") | log
+    let @idx = @mx.for.index + 1
+    let @response = @claude(@prompt, "opus", @base, @reconcileTools) | log | log `\nPhase 2/6 - Analyze: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    output @response to "@item.experimentDir/analyze-transcript.md"
     show `  DEBUG: @claude returned`
     => @item.topic
   ]
@@ -208,7 +217,9 @@ var @loopResult = loop(@maxIterations) [
     show `  DEBUG: prompt built, length=@prompt.length`
     show `  Applying: @item.topic/@item.experiment`
     show `  DEBUG: calling @claude...`
-    let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
+    let @idx = @mx.for.index + 1
+    let @response = @claude(@prompt, "opus", @base, @applyTools) | log | log `\nPhase 3/6 - Apply: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    output @response to "@item.experimentDir/apply-transcript.md"
     show `  DEBUG: apply @claude returned: @response`
     => @item.topic
   ]
@@ -245,7 +256,9 @@ var @loopResult = loop(@maxIterations) [
       @errorsJson
     )
     show `  Triaging: @item.topic/@item.experiment`
-    let @response = @claude(@prompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
+    let @idx = @mx.for.index + 1
+    let @response = @claude(@prompt, "opus", @base, @applyTools) | log | log `\nPhase 4/6 - Triage: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    output @response to "@item.experimentDir/triage-transcript.md"
   ]
 
   >> ========== PHASE 3b: MERGE (Sequential) ==========
@@ -269,7 +282,8 @@ var @loopResult = loop(@maxIterations) [
   when @needsMerge.length > 0 [
     let @mergePrompt = @buildMergePrompt(@baseBranch, @qaDir, `@needsMerge`)
     show `  Running merge phase...`
-    let @mergeResponse = @claude(@mergePrompt, "opus", @base, "Read,Write,Edit,Bash,Glob,Grep") | log
+    let @mergeResponse = @claude(@mergePrompt, "opus", @base, @applyTools) | log | log `\nPhase 5/6 - Merge: @needsMerge.length items`
+    output @mergeResponse to "@qaDir/merge-transcript-@iteration.md"
   ]
 
   >> ========== PHASE 3c: VERIFY ==========
@@ -287,7 +301,8 @@ var @loopResult = loop(@maxIterations) [
   when @justMerged.length > 0 [
     show `Phase 3c: Verifying @justMerged.length merged fixes...`
     let @verifyPrompt = @buildVerifyPrompt(@baseBranch, @qaDir, `@justMerged.length`, @iteration, `@justMerged`)
-    let @verifyResponse = @claude(@verifyPrompt, "opus", @base, "Read,Bash,Glob,Grep,Write") | log
+    let @verifyResponse = @claude(@verifyPrompt, "opus", @base, @verifyTools) | log | log `\nPhase 6/6 - Verify: @justMerged.length items`
+    output @verifyResponse to "@qaDir/verify-transcript-@iteration.md"
   ]
 
   >> Check if stable (no work done this iteration)

@@ -70,7 +70,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           break;
       }
     }
-    
+
     getDocument(): string {
       return this.documentBuffer.join('').replace(/\n{3,}/g, '\n\n');
     }
@@ -82,7 +82,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     getStderr(): string {
       return this.stderrBuffer.join('');
     }
-    
+
     private mapPath(p: string): string {
       // Absolute paths get rooted under outRoot; relative paths join outRoot
       if (p.startsWith('/')) return `${this.outRoot}${p}`;
