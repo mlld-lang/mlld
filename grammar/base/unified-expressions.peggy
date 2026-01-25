@@ -16,10 +16,11 @@ UnifiedExpression
     }
   / UnifiedNullish
 
-// Ternary branch can be a template or a regular expression
-// Templates must be tried first to avoid expression parsing issues
+// Ternary branch can be a template, code execution, or a regular expression
+// Templates and code execution must be tried first to avoid expression parsing issues
 TernaryBranch
   = TernaryBacktick
+  / CodeExecution
   / UnifiedExpression
 
 // Backtick template in ternary branch context - isolated from main expression parsing

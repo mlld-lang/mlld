@@ -827,9 +827,15 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: loadResult, env };
   }
 
-  // Handle command nodes (from run {command} in expressions)
+  // Handle code nodes (from js {...}, sh {...}, python {...}, etc. in expressions)
+  if (node.type === 'code') {
+    const { evaluateCodeExecution } = await import('../eval/code-execution');
+    const result = await evaluateCodeExecution(node, env);
+    return { value: result.value, env };
+  }
+
+  // Handle command nodes (from cmd {...} or run {...} in expressions)
   if (node.type === 'command') {
-    // Reuse the same logic as in lazy-eval.ts
     let commandStr: string;
     if (typeof node.command === 'string') {
       commandStr = node.command || '';
@@ -840,15 +846,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     } else {
       commandStr = '';
     }
-    
-    // Execute command if it has the run keyword
-    if (node.hasRunKeyword) {
-      const result = await env.executeCommand(commandStr);
-      return { value: result, env };
-    }
-    
-    // Command without run keyword - return as-is (shouldn't happen in practice)
-    return { value: commandStr, env };
+
+    // Always execute commands - hasRunKeyword is not relevant for execution
+    // (it only indicates whether the 'run' keyword was used in syntax)
+    const result = await env.executeCommand(commandStr);
+    return { value: result, env };
   }
   
   // If we get here, it's an unknown node type

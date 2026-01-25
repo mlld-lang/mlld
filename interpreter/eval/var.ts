@@ -1746,6 +1746,15 @@ async function evaluateArrayItem(
         const res = await evaluateWhenExpression(item as any, env, context);
         return res.value as any;
       }
+    case 'TernaryExpression':
+    case 'BinaryExpression':
+    case 'UnaryExpression':
+      // Evaluate expression nodes inside arrays/objects
+      {
+        const { evaluateExpression } = await import('./expression');
+        const res = await evaluateExpression(item as any, env, context);
+        return res.value as any;
+      }
     case 'array':
       // Nested array
       const nestedItems = [];

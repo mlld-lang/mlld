@@ -71,10 +71,11 @@ DataPropertyValue "data context property value"
   / ExecResultMethodCall         // @func(args).method(args) - chained method calls
   / FieldAccessExecPattern       // @obj.method(args) - method calls on variables
   / ExecInvocationPattern        // @func() - preserve as-is
-  / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks (not quotes)
-  / DataStringValue              // Plain strings (unwrapped)
+  / DataStringValue              // Plain strings (unwrapped) - before expressions to avoid ! matching
+  / ExpressionWithOperator       // Expressions with operators (ternary, comparison, etc.)
+  / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / PrimitiveValue               // Numbers, booleans, null - AST Literal nodes
 
 // DATA TEMPLATE VALUE - Only real templates (brackets and backticks)
