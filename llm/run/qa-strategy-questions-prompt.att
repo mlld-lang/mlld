@@ -1,0 +1,114 @@
+## Generate Strategy Questions
+
+You are analyzing a QA trend report to generate strategy questions for human review before the polish pipeline runs.
+
+## Context
+
+The QA pipeline tested mlld features and produced a trend report with cross-cutting patterns, feature health assessments, and prioritized actionable items. Some items are clear-cut (obvious code bugs, obvious doc typos) and can be auto-classified. Others are ambiguous -- typically where documentation describes a feature that doesn't exist in the grammar or interpreter. For those, we need a human decision: implement the feature, or update the docs?
+
+## Data
+
+Read `@outputDir/trend-report.json`. It contains:
+
+- **`trends`**: Cross-cutting patterns with evidence, category, and priority
+- **`feature_health`**: Per-topic status (solid, minor-issues, needs-work, blocked) with genuine_bug and doc_issue counts
+- **`actionable_items`**: Prioritized recommendations with category (code, docs, qa-prompt) and affected topics
+
+## Your Task
+
+For each `actionable_item`, decide whether it can be auto-classified or needs a human question.
+
+### Auto-classify when the answer is obvious
+
+**code-fix**: The feature exists and works in some contexts but has a clear defect. The fix is to change code, not docs.
+- Example: "YAML output produces JSON" -- the serializer is broken
+- Example: "@ symbol truncation in template interpolation" -- values get corrupted
+- Example: "OOM crash in @mlld/string" -- memory leak
+
+**doc-fix**: The documentation is factually wrong about a working feature. The code is correct; only docs need updating.
+- Example: "template examples missing slash prefixes" -- syntax works fine with /for, /end
+- Example: "howto doesn't mention MCP requirement" -- feature works, docs just don't say when
+- Example: "missing cross-references between related topics" -- information exists, just not linked
+
+**skip**: QA process improvements that don't touch the product code or docs.
+- Example: "improve Phase 1 prompt to encourage deeper exploration"
+- Example: "add severity calibration examples to QA prompt"
+
+### Generate a question when the answer requires judgment
+
+The key signal: **a documented feature that doesn't exist in the code**. It's genuinely unclear whether the feature should be implemented (because the docs reflect real design intent) or whether the docs should be updated (because they hallucinated or got ahead of the roadmap).
+
+Other question-worthy situations:
+- Grammar doesn't support syntax that the interpreter could handle -- is it a deliberate limitation?
+- A security behavior that could be a bug or a design choice
+- Features that partially work but key aspects are missing -- implement the rest, or scope the docs down?
+
+**Err on the side of asking.** A 5-second human answer is cheaper than an automated pipeline implementing the wrong thing.
+
+## Output
+
+Write `@outputDir/strategy-questions.md` with the following format:
+
+```markdown
+# Strategy Questions -- <run-name>
+
+Generated: <timestamp>
+Based on: trend-report.json
+
+Items below need human input before the polish pipeline runs.
+Answer inline after the `>` marker. Informal answers are fine --
+an LLM will interpret your intent.
+
+---
+
+## Questions
+
+### 1. <Feature/syntax name> (<affected topics>)
+
+<2-3 sentences of context: what the docs say, what the code does, why it's ambiguous>
+Trend: <trend-id> (<trend title>)
+Affected topics: <list>
+
+**<Clear binary question>**
+
+>
+
+---
+
+### 2. ...
+
+---
+
+## Auto-Classified (no input needed)
+
+These items will be handled automatically by the polish pipeline.
+
+### Code Fixes
+- **<title>** (<topics>): <one-line description>. Action: code-fix
+- ...
+
+### Doc Fixes
+- **<title>** (<topics>): <one-line description>. Action: doc-fix
+- ...
+
+### Skipped
+- **<title>**: <one-line reason>. Action: skip
+- ...
+```
+
+## Question Guidelines
+
+- Each question should present a clear choice, not an open-ended discussion
+- Good: "Implement grammar support for env return values, or document that env blocks are statement-only?"
+- Bad: "What should we do about the env directive?"
+- Include enough context that the human can answer without re-reading the trend report
+- Reference the specific trend ID and affected topics
+- A typical QA run should produce 3-8 questions and 8-15 auto-classified items
+
+## Begin
+
+1. Read `@outputDir/trend-report.json`
+2. For each `actionable_item`, classify or generate a question
+3. Cross-reference `feature_health` for additional context on affected topics
+4. Write `@outputDir/strategy-questions.md`
+5. Write "done" to `@outputDir/phase4-done.marker`

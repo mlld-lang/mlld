@@ -1,10 +1,11 @@
->> QA Testing Orchestrator (Three-Phase)
->> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 1|2|3|both|all] [--run <YYYY-MM-DD>]
+>> QA Testing Orchestrator (Four-Phase)
+>> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 1|2|3|4|both|all] [--run <YYYY-MM-DD>]
 >> Runs parallel QA testing across mlld howto topics
 >>
 >> Phase 1 (Flail): Agents test with limited access (mlld howto only)
 >> Phase 2 (Self-Review): Agents resume and check their work against tests/cookbook
 >> Phase 3 (Trends): Single agent analyzes all results for cross-cutting patterns
+>> Phase 4 (Strategy): Generates strategy-questions.md from trend report for human review
 >>
 >> Each run is stored in a dated directory: qa/YYYY-MM-DD (with -N suffix for same-day reruns)
 >> Use --run to resume a specific run, or omit to auto-detect
@@ -14,7 +15,8 @@
 >>   mlld run qa --tier 1 --phase 1                 # Flail phase only, new dated run
 >>   mlld run qa --tier 1 --phase 2                 # Self-review only (resumes latest run)
 >>   mlld run qa --tier 1 --phase 3                 # Trend analysis only (resumes latest run)
->>   mlld run qa --tier 1 --phase all               # All three phases, new dated run
+>>   mlld run qa --tier 1 --phase 4                 # Strategy questions only (resumes latest run)
+>>   mlld run qa --tier 1 --phase all               # All four phases, new dated run
 >>   mlld run qa --topic variables                  # Test variables-* topics
 >>   mlld run qa --topics when-simple,for-arrow     # Test specific list
 >>   mlld run qa --tier 2 --run 2026-01-25          # Resume a specific prior run
@@ -33,6 +35,7 @@ var @run = @p.run ? @p.run : ""
 var @runPhase1 = @phase == "1" || @phase == "both" || @phase == "all"
 var @runPhase2 = @phase == "2" || @phase == "both" || @phase == "all"
 var @runPhase3Explicit = @phase == "3" || @phase == "all"
+var @runPhase4Explicit = @phase == "4" || @phase == "all"
 
 >> Load all atoms dynamically from docs/src/atoms
 var @atomFiles = <@base/docs/src/atoms/**/*.md>
@@ -83,6 +86,7 @@ var @activeTopics = @filterTopics(@allTopics, @topic, @topics)
 exe @buildFlailPrompt(topic, outputDir) = template "./qa-prompt.att"
 exe @buildSelfReviewPrompt(topic, outputDir) = template "./qa-self-review-prompt.att"
 exe @buildTrendAnalysisPrompt(topicCount, outputDir) = template "./qa-trend-analysis-prompt.att"
+exe @buildStrategyQuestionsPrompt(outputDir) = template "./qa-strategy-questions-prompt.att"
 
 >> Claude poll variants with session support (work around claude -p hang)
 exe @claudePollSession(prompt, model, tools, markerFile, sessionId) = sh {
@@ -401,6 +405,42 @@ when @runPhase3 [
   show `Phase 3 complete.`
   show `  Trend report: @outputDir/trend-report.json`
   show `  Narrative: @outputDir/trend-report.md`
+]
+
+>> ========== PHASE 4: STRATEGY QUESTIONS ==========
+>> Generate strategy-questions.md from trend report for human review before polish
+
+var @autoPhase4 = @runPhase3 && !@runPhase4Explicit
+var @runPhase4 = @runPhase4Explicit || @autoPhase4
+
+when @runPhase4 [
+  show ``
+  show `=== PHASE 4: STRATEGY QUESTIONS ===`
+  show `Generating strategy questions from trend report...`
+  show ``
+
+  >> Check if trend report exists
+  let @trendReportFiles = <@outputDir/trend-report.json>
+
+  when @trendReportFiles.length == 0 [
+    show `Error: No trend-report.json found. Run phase 3 first.`
+  ]
+
+  when @trendReportFiles.length > 0 [
+    let @strategyPrompt = @buildStrategyQuestionsPrompt(@outputDir)
+    let @strategyTools = "Read,Write,Glob,Grep"
+    let @markerFile = `@outputDir/phase4-done.marker`
+
+    show `Starting strategy question generation agent...`
+    show `  Polling for: @markerFile`
+    let @response = @claudePoll(@strategyPrompt, "opus", @base, @strategyTools, @markerFile) | log
+
+    show ``
+    show `Phase 4 complete.`
+    show `  Strategy questions: @outputDir/strategy-questions.md`
+    show ``
+    show `Next step: Review and answer questions in strategy-questions.md, then run 'mlld run polish'.`
+  ]
 ]
 
 >> ========== RUN SUMMARY ==========

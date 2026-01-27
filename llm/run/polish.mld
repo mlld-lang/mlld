@@ -5,6 +5,12 @@
 >> Auto-approves fixes where Opus confidence >= 0.9 and design_fit is high/medium.
 >> Uses git worktrees for isolated parallel fix application.
 >> Operates on a specific QA run directory (defaults to latest).
+>>
+>> Strategy-aware: if the QA run has a trend-report.json (and optionally
+>> strategy-questions.md with human answers), Phase 0 generates strategy.json
+>> which routes topics to code-fix, doc-fix, defer, or skip actions.
+>> Doc fixes are handled separately without worktrees.
+>> Without a trend report, runs in legacy mode (all items as potential code fixes).
 
 import { @claude } from @mlld/claude
 import { @claudePoll } from @mlld/claude-poll
@@ -31,6 +37,8 @@ var @baseBranch = sh {git branch --show-current}
 var @reconcileTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(cat:*)"
 var @applyTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(npm run:*),Bash(npm test:*),Bash(cat:*),Bash(pwd),Bash(head:*)"
 var @verifyTools = "Read,Write,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(npm run:*),Bash(npm test:*),Bash(cat:*),Bash(tee:*),Bash(head:*)"
+var @docFixTools = "Read,Write,Edit,Glob,Grep,Bash(mlld:*),Bash(cat:*),Bash(git diff:*),Bash(git status)"
+var @strategyTools = "Read,Write,Glob,Grep"
 
 >> === BUILD PROMPT FUNCTIONS (using template auto-interpolation) ===
 
@@ -45,6 +53,9 @@ exe @buildMergePrompt(baseBranch, qaDir, mergeItems) = template "./qa-merge-prom
 exe @buildVerifyPrompt(baseBranch, qaDir, mergeCount, iteration, mergedItems) = template "./qa-verify-prompt.att"
 
 exe @buildTriagePrompt(topic, experiment, baseBranch, worktreeBranch, experimentDir, errors) = template "./qa-triage-prompt.att"
+
+exe @buildStrategyInterpretPrompt(qaDir, hasStrategyQuestions) = template "./qa-strategy-interpret-prompt.att"
+exe @buildDocFixPrompt(topics, stratId, description, qaDir) = template "./qa-doc-fix-prompt.att"
 
 >> === MAIN LOOP ===
 
@@ -69,6 +80,87 @@ when @halted [
   show `  1. Review the failures in verification-result.json`
   show `  2. Either revert the problematic merge or fix manually`
   show `  3. Delete verification-result.json to resume`
+]
+
+>> ========== PHASE 0: STRATEGY INTERPRETATION ==========
+>> Read trend report + strategy questions to produce strategy.json
+
+var @trendReportFiles = <@qaDir/trend-report.json>
+var @hasTrendReport = @trendReportFiles.length > 0
+var @strategyFileCheck = <@qaDir/strategy.json>
+var @hasStrategy = @strategyFileCheck.length > 0
+var @strategyQuestionsFiles = <@qaDir/strategy-questions.md>
+var @hasStrategyQuestions = @strategyQuestionsFiles.length > 0
+
+>> Generate strategy.json if we have a trend report but no strategy yet
+when @hasTrendReport && !@hasStrategy && !@halted [
+  show `=== PHASE 0: STRATEGY INTERPRETATION ===`
+  show `Interpreting trend report + strategy questions...`
+  show ``
+
+  let @phase0Prompt = @buildStrategyInterpretPrompt(@qaDir, @hasStrategyQuestions)
+  let @phase0Marker = `@qaDir/strategy.json`
+
+  show `Starting strategy interpretation agent...`
+  show `  Trend report: found`
+  show `  Strategy questions: @hasStrategyQuestions`
+  show `  Polling for: @phase0Marker`
+  let @response = @claudePoll(@phase0Prompt, "opus", @base, @strategyTools, @phase0Marker)
+
+  show `Phase 0 complete.`
+  show `  Strategy: @qaDir/strategy.json`
+  show ``
+]
+
+>> Load strategy (may be null if no trend report -- backwards compatible)
+var @strategyFiles = <@qaDir/strategy.json>
+var @strategy = @strategyFiles.length > 0 ? @strategyFiles[0] : null
+var @useStrategy = @strategy != null
+
+when @useStrategy [
+  let @codeFixes = for @c in @strategy.classifications when @c.action == "code-fix" => @c
+  let @docFixes = for @c in @strategy.classifications when @c.action == "doc-fix" => @c
+  let @deferred = for @c in @strategy.classifications when @c.action == "defer" => @c
+  let @skipped = for @c in @strategy.classifications when @c.action == "skip" => @c
+  show `Strategy loaded: @strategy.classifications.length classifications`
+  show `  Code fixes: @codeFixes.length`
+  show `  Doc fixes: @docFixes.length`
+  show `  Deferred: @deferred.length`
+  show `  Skipped: @skipped.length`
+  show ``
+]
+
+when !@useStrategy && !@halted [
+  show `No strategy.json found. Running in legacy mode (all items treated as potential code fixes).`
+  show ``
+]
+
+>> Helper to check if a topic's strategy action is skip or defer
+exe @topicIsSkipped(topic) = [
+  when !@useStrategy => false
+  let @actionIds = @strategy.topic_actions && @strategy.topic_actions[@topic]
+    ? @strategy.topic_actions[@topic]
+    : []
+  when @actionIds.length == 0 => false
+  let @actions = for @id in @actionIds
+    => for @c in @strategy.classifications when @c.id == @id => @c.action
+  let @flatActions = for @a in @actions => @a
+  let @nonSkipped = for @a in @flatActions when @a != "skip" && @a != "defer" => @a
+  => @nonSkipped.length == 0
+]
+
+>> Helper to check if a topic has code-fix classification
+exe @topicIsCodeFix(topic) = [
+  when !@useStrategy => true
+  let @actionIds = @strategy.topic_actions && @strategy.topic_actions[@topic]
+    ? @strategy.topic_actions[@topic]
+    : []
+  when @actionIds.length == 0 => true
+  let @actions = for @id in @actionIds
+    => for @c in @strategy.classifications when @c.id == @id => @c.action
+  let @flatActions = for @a in @actions => @a
+  let @codeActions = for @a in @flatActions when @a == "code-fix" => @a
+  => @codeActions.length > 0
 ]
 
 >> Helper to check if a self-review has genuine bugs
@@ -109,10 +201,12 @@ var @loopResult = loop(@maxIterations) [
 
   >> ========== PHASE 1: RECONCILE ==========
   >> Skip experiments that have self_review.json (qa.mld Phase 2 already did reconciliation)
+  >> Skip experiments whose topic is fully classified as defer/skip in strategy.json
   let @needsReconcile = for @r in @allResults
     when (@r.status == "fail" || @r.status == "partial")
       && !@reconciledDirs.includes(@r.mx.absoluteDir)
       && !@selfReviewedDirs.includes(@r.mx.absoluteDir)
+      && !@topicIsSkipped(@r.topic)
     => {
       topic: @r.topic,
       experiment: @r.experiment,
@@ -170,8 +264,9 @@ var @loopResult = loop(@maxIterations) [
       source: "self-review"
     }
 
-  >> Combine both sources
-  let @needsAnalyze = @bugsFromReconcile.concat(@bugsFromSelfReview)
+  >> Combine both sources, filtering to code-fix topics when strategy exists
+  let @needsAnalyzeRaw = @bugsFromReconcile.concat(@bugsFromSelfReview)
+  let @needsAnalyze = for @item in @needsAnalyzeRaw when @topicIsCodeFix(@item.topic) => @item
 
   show `Phase 2: Analyzing @needsAnalyze.length genuine bugs (@bugsFromReconcile.length from reconcile, @bugsFromSelfReview.length from self-review)...`
 
@@ -195,10 +290,45 @@ var @loopResult = loop(@maxIterations) [
   >> Reload proposed fixes after phase 2
   let @freshProposedFixes = <@qaDir/**/proposed-fix.json>
 
+  >> ========== PHASE 2b: DOC FIXES ==========
+  >> Handle doc-fix classifications from strategy -- no worktree needed
+  let @docFixCount = 0
+
+  when @useStrategy [
+    let @docFixClassifications = for @c in @strategy.classifications
+      when @c.action == "doc-fix" => @c
+
+    >> Check which doc fixes have already been done
+    let @existingDocFixes = <@qaDir/doc-fix-*.json>
+    let @docFixedIds = for @df in @existingDocFixes when @df.strat_id => @df.strat_id
+
+    let @needsDocFix = for @c in @docFixClassifications
+      when !@docFixedIds.includes(@c.id) => @c
+
+    show `Phase 2b: @needsDocFix.length doc fixes to apply...`
+    var @docFixCount = @needsDocFix.length
+
+    for parallel(5, 10s) @item in @needsDocFix [
+      let @topicsStr = @item.topics.join(",")
+      let @prompt = @buildDocFixPrompt(
+        @topicsStr,
+        @item.id,
+        @item.description,
+        @qaDir
+      )
+      let @idx = @mx.for.index + 1
+      let @markerFile = `@qaDir/doc-fix-@item.id.json`
+      show `  Phase 2b - Doc Fix: @idx of @mx.for.total (@item.description)`
+      let @response = @claudePoll(@prompt, "sonnet", @base, @docFixTools, @markerFile)
+      => @item.id
+    ]
+  ]
+
   >> ========== PHASE 3a: APPLY (Parallel in Worktrees) ==========
   let @needsApply = for @f in @freshProposedFixes
     when @f.recommendation.auto_approve == true
       && !@fixedDirs.includes(@f.mx.absoluteDir)
+      && @topicIsCodeFix(@f.topic)
     => {
       topic: @f.topic,
       experiment: @f.experiment,
@@ -322,11 +452,11 @@ var @loopResult = loop(@maxIterations) [
   ]
 
   >> Check if stable (no work done this iteration)
-  let @workDone = @reconcileLimit.length + @analyzeLimit.length + @needsApply.length + @needsTriage.length
+  let @workDone = @reconcileLimit.length + @analyzeLimit.length + @docFixCount + @needsApply.length + @needsTriage.length
   let @isStable = @workDone == 0
   show `DEBUG: workDone=@workDone, stable=@isStable`
 
-  show `Work done: @workDone items (reconcile: @reconcileLimit.length, analyze: @analyzeLimit.length, apply: @needsApply.length, triage: @needsTriage.length)`
+  show `Work done: @workDone items (reconcile: @reconcileLimit.length, analyze: @analyzeLimit.length, doc-fix: @docFixCount, apply: @needsApply.length, triage: @needsTriage.length)`
   show `--- End iteration @iteration ---`
   show ``
 

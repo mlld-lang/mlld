@@ -1,95 +1,25 @@
 {
   "lockfileVersion": 1,
   "modules": {
-    "@mlld/env": {
-      "version": "1.0.0",
-      "resolved": "2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
-      "source": "registry://@mlld/env@1.0.0",
-      "integrity": "sha256:2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
-      "fetchedAt": "2025-12-08T05:41:55.602Z",
-      "registryVersion": "1.0.0",
-      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/8a6d6b5d40fc25d7a7a309e100bdd6580e76d0b4/llm/modules/env.mld.md"
-    },
-    "@mlld/github": {
-      "version": "latest",
-      "resolved": "f4faa6b25effdb9a9b75022c973a3a0bfa13842bb19a09c2c6480c0797ee2902",
-      "source": "registry://@mlld/github",
-      "integrity": "sha256:f4faa6b25effdb9a9b75022c973a3a0bfa13842bb19a09c2c6480c0797ee2902",
-      "fetchedAt": "2025-09-27T19:54:02.384Z",
-      "sourceUrl": "registry://@mlld/github"
-    },
-    "@mlld/ai-cli": {
-      "version": "1.0.0",
-      "resolved": "1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
-      "source": "registry://@mlld/ai-cli@1.0.0",
-      "integrity": "sha256:1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
-      "fetchedAt": "2025-12-08T05:41:55.743Z",
-      "registryVersion": "1.0.0",
-      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/8a6d6b5d40fc25d7a7a309e100bdd6580e76d0b4/llm/modules/ai-cli.mld.md"
-    },
-    "@base/llm/modules/array.mld.md": {
-      "version": "latest",
-      "resolved": "63e154500c74693ecffcecfdbd40d7863a489ab5a7c34ec171680e09ea209f1c",
-      "source": "/Users/adam/dev/mlld/llm/modules/array.mld.md",
-      "integrity": "sha256:63e154500c74693ecffcecfdbd40d7863a489ab5a7c34ec171680e09ea209f1c",
-      "fetchedAt": "2025-11-28T07:53:30.184Z"
-    },
-    "@mlld/stream-claude-agent-sdk": {
-      "version": "1.0.1",
-      "resolved": "ce6fb59647818f59e69d72a0864769006491a5a57ca06926101aaa0a4a7dd27b",
-      "source": "registry://@mlld/stream-claude-agent-sdk@1.0.1",
-      "integrity": "sha256:ce6fb59647818f59e69d72a0864769006491a5a57ca06926101aaa0a4a7dd27b",
-      "fetchedAt": "2025-12-08T10:51:00.681Z",
-      "registryVersion": "1.0.1",
-      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/2d13775192a13e8ad01313d6635cb9cdd67563cc/llm/modules/stream-claude-agent-sdk.mld.md"
-    },
     "@mlld/array": {
-      "version": "latest",
-      "resolved": "c3d201686a36d9eb3b53837839be082115292893ee4ec3d08d81d1aa7f7d14a8",
-      "source": "registry://@mlld/array@2.0.0",
-      "integrity": "sha256:c3d201686a36d9eb3b53837839be082115292893ee4ec3d08d81d1aa7f7d14a8",
-      "fetchedAt": "2026-01-25T10:54:00.147Z"
-    },
-    "@mlld/string": {
-      "version": "latest",
-      "resolved": "ba1d614c9a8eac90d24479412462ac7dec685804d8f000e811ff0250f6a6aefc",
-      "source": "registry://@mlld/string@1.0.0",
-      "integrity": "sha256:ba1d614c9a8eac90d24479412462ac7dec685804d8f000e811ff0250f6a6aefc",
-      "fetchedAt": "2026-01-25T10:53:07.510Z"
-    },
-    "@mlld/claude": {
-      "version": "latest",
-      "resolved": "d7799fef01e57fbef8fe36c7a4a3d3c51c79c2454522699cd53fc9be1acc4a40",
-      "source": "registry://@mlld/claude@2.0.0",
-      "integrity": "sha256:d7799fef01e57fbef8fe36c7a4a3d3c51c79c2454522699cd53fc9be1acc4a40",
-      "fetchedAt": "2026-01-05T07:21:42.661Z"
-    },
-    "@mlld/prose": {
-      "version": "latest",
-      "resolved": "be87dccc163788ebf1d08bda93a4d3fcec958c6d255230421e136f8fa4a222f2",
-      "source": "registry://@mlld/prose@2.2.0",
-      "integrity": "sha256:be87dccc163788ebf1d08bda93a4d3fcec958c6d255230421e136f8fa4a222f2",
-      "fetchedAt": "2026-01-25T21:39:33.753Z"
-    },
-    "@input": {
-      "version": "latest",
-      "resolved": "16fc5d8c3d1ff319210850f760ecc5338e13df0b6828cdf5a786514f8bf9593c",
-      "source": "input",
-      "integrity": "sha256:16fc5d8c3d1ff319210850f760ecc5338e13df0b6828cdf5a786514f8bf9593c",
-      "fetchedAt": "2026-01-18T01:32:51.827Z"
+      "version": "2.1.0",
+      "resolved": "87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
+      "source": "registry://@mlld/array@2.1.0",
+      "integrity": "sha256:87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
+      "fetchedAt": "2026-01-27T05:40:46.257Z",
+      "registryVersion": "2.1.0",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/ba28284be46dbf50999539bdb275ef077f65bbb1/llm/modules/array.mld.md"
     },
     "@mlld/claude-poll": {
-      "version": "1.0.0",
+      "version": "latest",
       "resolved": "fae91f9413e7fccc25057eff2550bd6565b7b67a5bc43f539d2a04e76b2ed618",
       "source": "registry://@mlld/claude-poll@1.0.0",
       "integrity": "sha256:fae91f9413e7fccc25057eff2550bd6565b7b67a5bc43f539d2a04e76b2ed618",
-      "fetchedAt": "2026-01-26T11:04:22.285Z",
-      "registryVersion": "1.0.0",
-      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/286d56a213ec231e6ca91b0efe312b690d65012a/llm/modules/claude-poll.mld.md"
+      "fetchedAt": "2026-01-27T05:41:13.269Z"
     }
   },
   "metadata": {
-    "createdAt": "2025-09-27T19:54:02.369Z",
-    "updatedAt": "2026-01-26T11:04:22.285Z"
+    "createdAt": "2026-01-27T05:40:45.987Z",
+    "updatedAt": "2026-01-27T05:41:13.269Z"
   }
 }

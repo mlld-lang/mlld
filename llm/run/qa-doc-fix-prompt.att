@@ -1,0 +1,139 @@
+## Doc Fix: @topics
+
+You are fixing documentation for mlld howto topics based on QA findings.
+
+## Context
+
+**Topics**: @topics
+**Description**: @description
+**QA directory**: @qaDir
+
+## FIRST: Check for Existing Fix
+
+Before doing any work, check if this doc fix has already been completed:
+
+```bash
+cat @qaDir/doc-fix-@stratId.json 2>/dev/null
+```
+
+**If the file exists and contains a complete result** (has `atoms_modified` and `verified` fields), then your work is done. Simply confirm the fix looks valid and exit.
+
+**If the file is missing, empty, or incomplete**, proceed with the full fix below.
+
+---
+
+## Your Task
+
+1. Understand what's wrong by reading QA evidence
+2. Read the current howto atom(s)
+3. Make the documentation fix
+4. Verify the fix makes sense
+
+## Investigation
+
+1. Read the trend report for context on this fix:
+   ```
+   Read @qaDir/trend-report.json
+   ```
+   Look for entries in `actionable_items` and `feature_health` related to your topics.
+
+2. Read the strategy classification for additional context:
+   ```
+   Read @qaDir/strategy.json
+   ```
+   Find the classification whose topics include yours. The `rationale` field explains why this is a doc fix.
+
+3. Check experiment results for specific evidence. For each topic:
+   ```
+   Glob @qaDir/<topic>/**/results.json
+   Glob @qaDir/<topic>/**/self_review.json
+   ```
+   Read a few failing experiments to understand exactly what confused the QA agent.
+
+4. Read the current atom content. Atoms live in `docs/src/atoms/`. Search for the right file:
+   ```
+   Glob docs/src/atoms/**/<topic>*.md
+   ```
+
+5. Check current behavior:
+   ```bash
+   mlld howto <topic>
+   ```
+
+## Fix Guidelines
+
+- **Only edit atoms** in `docs/src/atoms/` -- never edit `docs/llm/*.txt` directly (those are generated)
+- **Be precise**: Fix the specific issue identified, don't rewrite the whole doc
+- **Preserve style**: Match the existing documentation tone and formatting
+- **Verify examples**: If fixing code examples, test them with `mlld` to confirm they work
+- **Add See Also**: If the fix involves missing cross-references, add a `## See Also` section at the end of the atom
+
+## Common Fix Types
+
+### Wrong syntax in examples
+Find the incorrect example and replace with tested, working syntax. If the correct syntax is meaningfully different, add a brief note explaining why.
+
+### Missing prerequisite banner
+Add a prominent note near the top of the relevant section:
+```markdown
+> **Requires**: MCP server context. This feature only works when mlld runs as an MCP server.
+```
+
+### Missing cross-references
+Add a `## See Also` section at the end with links to related topics:
+```markdown
+## See Also
+
+- [reserved-variables](/docs/howto/reserved-variables) -- built-in variables like `@base`, `@now`
+- [methods-builtin](/docs/howto/methods-builtin) -- string and array methods like `.includes()`, `.split()`
+```
+
+### Documented-but-unimplemented feature
+Add a note marking it as planned. Do NOT remove the description if it provides useful context about the design intent -- just make it clear the feature isn't available yet:
+```markdown
+> **Planned**: This syntax is not yet implemented. See [roadmap] for status.
+```
+
+### Security warnings
+Add a clear, prominent warning where users would encounter the behavior:
+```markdown
+> **Security Note**: Guards only intercept direct `@variable` references, not template-interpolated values. Use direct variable references in guarded operations.
+```
+
+## Output
+
+Write a result file to `@qaDir/doc-fix-@stratId.json`:
+
+```json
+{
+  "strat_id": "@stratId",
+  "topics": ["<topic1>", "<topic2>"],
+  "atoms_modified": [
+    "docs/src/atoms/<category>/<atom>.md"
+  ],
+  "changes_made": [
+    {
+      "atom": "docs/src/atoms/<category>/<atom>.md",
+      "change": "Brief description of what was changed"
+    }
+  ],
+  "verified": true,
+  "timestamp": "<ISO timestamp>"
+}
+```
+
+## Important
+
+- Do NOT make code changes. This is documentation only.
+- Do NOT use git worktrees. Edit files directly on the current branch.
+- Do NOT create test fixtures. Doc fixes don't need test coverage.
+- Do NOT edit CHANGELOG.md for doc fixes.
+- Do NOT edit files in `docs/llm/` -- those are generated from atoms.
+
+## Begin
+
+1. Read trend report and strategy for context
+2. Read experiment data to understand the specific failure
+3. Read current atom content
+4. Make the fix
+5. Write the result file
