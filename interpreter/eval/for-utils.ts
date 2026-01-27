@@ -11,58 +11,42 @@ function attachProvenance(target: unknown, source: unknown): void {
 }
 
 export function normalizeIterableValue(value: unknown): unknown {
+  // Shallow unwrapping: extract the iterable from Variables and StructuredValues
+  // without recursively deep-copying children. Inner for-expressions handle
+  // their own source normalization when they iterate.
+  // See: .tickets/m-3b4c.md for why recursive normalization caused OOM.
+
   if (isVariable(value)) {
     if ((value as Variable).type === 'executable') {
       return value;
     }
-    const normalized = normalizeIterableValue(value.value);
-    attachProvenance(normalized, value);
-    return normalized;
+    const unwrapped = normalizeIterableValue(value.value);
+    attachProvenance(unwrapped, value);
+    return unwrapped;
   }
 
   if (isStructuredValue(value)) {
     const data = asData(value);
 
-    // For arrays inside StructuredValues, extract and normalize the array
-    // This handles JSON files where the root is an array - we need to iterate
-    // over the array elements, not the StructuredValue properties
+    // For arrays inside StructuredValues, extract the array as-is
+    // This handles JSON files where the root is an array
     if (Array.isArray(data)) {
-      const normalizedArray = data.map(item => normalizeIterableValue(item));
-      attachProvenance(normalizedArray, value);
-      return normalizedArray;
+      attachProvenance(data, value);
+      return data;
     }
 
     // Preserve StructuredValue for file-loaded items to keep .mx metadata accessible
     // This ensures @f.mx.relative etc. works when iterating over glob results
-    // (individual file entries, not arrays)
     if (value.mx?.filename || value.mx?.relative || value.mx?.absolute) {
       return value;
     }
 
-    const normalized = normalizeIterableValue(data);
-    attachProvenance(normalized, value);
-    return normalized;
+    attachProvenance(data, value);
+    return data;
   }
 
-  if (Array.isArray(value)) {
-    const normalizedArray = value.map(item => normalizeIterableValue(item));
-    attachProvenance(normalizedArray, value);
-    return normalizedArray;
-  }
-
-  // Preserve LoadContentResult objects to keep lazy getters (.json, .fm) functional
-  if (isLoadContentResult(value)) {
-    return value;
-  }
-
-  if (value && typeof value === 'object') {
-    const normalizedObject: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      normalizedObject[key] = normalizeIterableValue(entry);
-    }
-    attachProvenance(normalizedObject, value);
-    return normalizedObject;
-  }
+  // Arrays, objects, and primitives pass through as-is
+  // LoadContentResult objects are preserved to keep lazy getters (.json, .fm) functional
 
   return value;
 }
