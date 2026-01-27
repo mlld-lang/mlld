@@ -28,15 +28,14 @@ ls -la @outputDir/@topic/
 
 1. **Review existing results.json files** in each experiment directory
 2. **Assess the state:**
-   - If L-level experiments are failing with blockers → STOP. Document why in a `blocked.md` file and exit.
+   - If L-level experiments are failing with `major` issues → Run through the "Before Declaring Anything Blocked" checklist, then STOP. Document what you tried in a `blocked.md` file and exit.
    - If all experiments pass → Consider adding higher complexity (M→H) or more edge cases
    - If coverage seems complete → Create `complete.md` explaining why no more tests needed, then exit.
 3. **Add new experiments** with the next available number (e.g., if 01-03 exist, start at 04)
 
 ### If directory doesn't exist:
 
-1. Run `mlld init` in `@outputDir/@topic/`
-2. Start with L-level experiments
+1. Start with L-level experiments (write files directly — directories are auto-created)
 
 ## Your Task
 
@@ -62,7 +61,9 @@ ls -la @outputDir/@topic/
 └── complete.md              # If no more tests add value
 ```
 
-## IMPORTANT: Preserve Your Test Scripts
+## IMPORTANT: Creating Directories and Files
+
+**Do NOT use `mkdir` to create experiment directories.** Instead, use the Write tool to create files directly — it automatically creates parent directories. For example, to create `01-L-basic-usage/experiment.mld`, just write the file directly to that path. The directory will be created for you.
 
 **Always save `experiment.mld`** in the experiment directory BEFORE running it. This file:
 - Contains the exact mlld code you tested
@@ -71,10 +72,9 @@ ls -la @outputDir/@topic/
 - Lets future agents refine rather than redo work
 
 Example workflow:
-1. Create `@outputDir/@topic/04-M-edge-case/experiment.mld`
-2. Write your test code to that file
-3. Run `mlld @outputDir/@topic/04-M-edge-case/experiment.mld`
-4. Record results in `results.json`
+1. Write your test code to `@outputDir/@topic/04-M-edge-case/experiment.mld` (directory auto-created)
+2. Run `mlld @outputDir/@topic/04-M-edge-case/experiment.mld`
+3. Record results in `results.json`
 
 ## Issue Categories
 
@@ -89,10 +89,11 @@ Example workflow:
 
 | Severity | Description |
 |----------|-------------|
-| `blocker` | Cannot complete the task at all |
-| `major` | Significant workaround required |
+| `major` | Significant workaround required, or no workaround found after 3+ attempts |
 | `minor` | Slight friction, easy workaround |
 | `enhancement` | Not a bug, improvement idea |
+
+**Note:** There is no `blocker` severity in Phase 1. Use `major` for the most severe issues. Phase 2 (self-review) may upgrade confirmed issues to `blocker` after verifying them against test cases and source code. In Phase 1, you don't have enough information to confidently distinguish "genuinely impossible" from "I haven't found the right approach yet."
 
 ## Results Schema
 
@@ -108,7 +109,7 @@ Each experiment MUST produce a `results.json`:
   "issues": [
     {
       "category": "broken-promise|unclear-error|unclear-docs|friction",
-      "severity": "blocker|major|minor|enhancement",
+      "severity": "major|minor|enhancement",
       "title": "Brief issue description",
       "input": "What you tried (code or command)",
       "expected": "What should have happened",
@@ -130,7 +131,7 @@ Each experiment MUST produce a `results.json`:
 - `what_works`: Capture positive findings even when status is fail/partial
 - `workaround`: Help users work around issues until fixed
 - `related_experiments`: Link issues that share root causes
-- `context.blocks`: For blockers, explain what M/H tests this prevents
+- `context.blocks`: For major issues, explain what M/H tests this prevents
 
 ## Complexity Levels
 
@@ -153,7 +154,7 @@ Your results.json is valid if:
 1. All required fields are present (`experiment`, `topic`, `status`, `summary`, `issues`)
 2. `status` is one of: pass, fail, partial
 3. `issues` array exists (can be empty for pass)
-4. Each issue has valid category and severity enums
+4. Each issue has valid category and severity enums (severity: major, minor, or enhancement)
 
 **Encouraged fields:**
 - `what_works`: Always note positive findings, even in failed experiments
@@ -163,18 +164,49 @@ Your results.json is valid if:
 
 These fields make results more actionable for fixing issues and help future agents understand the testing state.
 
+## Before Declaring Anything Blocked
+
+Before writing `blocked.md` or classifying any issue as `major`, you MUST:
+
+1. **Check the intro docs**: Run `mlld howto intro` to understand fundamentals (file formats, `show` directive, basic syntax)
+2. **Search broadly**: Run `mlld howto grep <keyword>` for relevant terms - the answer may be in a related topic
+3. **Try at least 3 different approaches**: If your first attempt fails, try alternative syntax, different file formats (.mld vs .mld.md), or different directives before concluding something is broken
+4. **Check related topics**: Run `mlld howto` to see the full topic list, then check any topics that sound related
+
+If you skip these steps and jump to "this is broken," you will almost certainly be wrong. Most features work - the challenge is finding the right syntax and the right docs.
+
 ## Exit Conditions
 
 You should EXIT EARLY (without creating new experiments) if:
 
-1. **Blocked**: L-level experiments have blockers. Create `blocked.md` and stop.
+1. **Stuck**: L-level experiments have `major` issues AND you have exhausted the "Before Declaring Anything Blocked" checklist above. Create `blocked.md` explaining what you tried (including the 3+ approaches) and stop.
 2. **Complete**: Sufficient coverage exists (L, M, H with good variety). Create `complete.md` and stop.
 3. **Diminishing returns**: Adding more tests won't reveal new information.
 
 When exiting early, briefly explain your reasoning.
 
+## If You Get Blocked by Permissions
+
+If you attempt a tool and it is denied (permission error, not in allowedTools), do NOT retry repeatedly or wait. Instead:
+
+1. **Write a `blocked.json` file** in the topic directory:
+   ```json
+   // Write to: @outputDir/@topic/blocked.json
+   {
+     "blocked": "Brief description of what you cannot do",
+     "attempted_tools": ["Bash(example command)"],
+     "partial_work": "Description of what you accomplished before getting blocked"
+   }
+   ```
+
+2. **Continue with any remaining work you CAN do** (e.g., finish other experiments that don't need the blocked tool).
+
+3. **Exit normally** after writing blocked.json and completing whatever work is possible.
+
+This lets the orchestrator detect the block and continue with other topics.
+
 ## Begin
 
 1. Check if `@outputDir/@topic/` exists
 2. If exists: review prior results, decide whether to add more or exit
-3. If not: run `mlld howto @topic` and create initial experiments
+3. If not: run `mlld howto @topic` and `mlld howto intro`, then create initial experiments

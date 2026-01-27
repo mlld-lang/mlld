@@ -4,7 +4,7 @@
 >> Checks open issues for staleness by comparing against CHANGELOG.md and commits
 >> since the issue was created. Adds stale-check-{n} tags for issues scoring > 0.3.
 
-import { @claude } from @mlld/claude
+import { @claudePoll } from @mlld/claude-poll
 
 >> Payload options
 import "@payload" as @p
@@ -13,8 +13,8 @@ var @limit = @p.limit ? @p.limit * 1 : 20
 >> Configuration
 var @ticketsDir = "@base/.tickets"
 
->> Tool permissions (read-only for assessment)
-var @assessTools = "Read,Glob,Grep,Bash(git log *),Bash(tk *),Bash(cat *)"
+>> Tool permissions for assessment (Write needed for claudePoll marker file)
+var @assessTools = "Read,Write,Glob,Grep,Bash(git log:*),Bash(tk:*),Bash(cat:*)"
 
 >> Helper to floor a number
 exe @floor(n) = js { return Math.floor(n); }
@@ -63,9 +63,13 @@ var @results = for parallel(10) @issue in @batch [
 
   >> Build and send prompt
   let @prompt = @buildStalePrompt(@issueId, @issueContent, @changelog, @commits, @createdDate)
+  let @markerFile = `@ticketsDir/@issueId-stale.json`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to the file @markerFile (do NOT print it to stdout). Use the Write tool to create this file with ONLY the JSON object as its contents.`
   show `Assessing staleness: @issueId`
 
-  let @assessment = @claude(@prompt, "sonnet", @base, @assessTools) | @json.llm | log | log `\nStaleness: @issueId`
+  let @assessmentRaw = @claudePoll(@fullPrompt, "sonnet", @base, @assessTools, @markerFile)
+  let @assessment = @assessmentRaw | @json
+  show `Staleness assessed: @issueId`
 
   >> Extract score (default to 0 if parsing failed)
   let @score = @assessment.staleness_score ? @assessment.staleness_score * 1 : 0

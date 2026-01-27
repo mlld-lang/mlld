@@ -120,6 +120,20 @@ Use if ANY are true:
 2. Return to base: `wt switch @baseBranch`
 3. Do NOT delete the worktree - human will want to inspect it
 
+## Completion Marker
+
+After updating `fixed.json` with your results, write a completion marker:
+
+```json
+// Write to @experimentDir/triage-complete.json
+{
+  "topic": "@topic",
+  "experiment": "@experiment",
+  "action": "retry|escalate",
+  "completed_at": "<timestamp>"
+}
+```
+
 ## Important Notes
 
 - Be honest about your confidence - don't retry if you're unsure

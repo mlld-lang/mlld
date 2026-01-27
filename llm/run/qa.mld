@@ -1,23 +1,37 @@
->> QA Testing Orchestrator (Two-Phase)
->> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 1|2|both]
+>> QA Testing Orchestrator (Three-Phase)
+>> Usage: mlld run qa [--tier 1] [--topic <filter>] [--topics <list>] [--phase 1|2|3|both|all] [--run <YYYY-MM-DD>]
 >> Runs parallel QA testing across mlld howto topics
 >>
 >> Phase 1 (Flail): Agents test with limited access (mlld howto only)
 >> Phase 2 (Self-Review): Agents resume and check their work against tests/cookbook
+>> Phase 3 (Trends): Single agent analyzes all results for cross-cutting patterns
+>>
+>> Each run is stored in a dated directory: qa/YYYY-MM-DD (with -N suffix for same-day reruns)
+>> Use --run to resume a specific run, or omit to auto-detect
 >>
 >> Examples:
->>   mlld run qa --tier 1                           # Both phases, tier 1 only
->>   mlld run qa --tier 1 --phase 1                 # Flail phase only
->>   mlld run qa --tier 1 --phase 2                 # Self-review only (requires prior phase 1)
+>>   mlld run qa --tier 1                           # Phases 1+2, new dated run
+>>   mlld run qa --tier 1 --phase 1                 # Flail phase only, new dated run
+>>   mlld run qa --tier 1 --phase 2                 # Self-review only (resumes latest run)
+>>   mlld run qa --tier 1 --phase 3                 # Trend analysis only (resumes latest run)
+>>   mlld run qa --tier 1 --phase all               # All three phases, new dated run
 >>   mlld run qa --topic variables                  # Test variables-* topics
->>   mlld run qa --topics when-simple,for-arrow    # Test specific list
+>>   mlld run qa --topics when-simple,for-arrow     # Test specific list
+>>   mlld run qa --tier 2 --run 2026-01-25          # Resume a specific prior run
 
 >> Get filters from payload (namespace import for optional fields)
+import { @claudePoll } from @mlld/claude-poll
 import "@payload" as @p
 var @topic = @p.topic ? @p.topic : ""
 var @topics = @p.topics ? @p.topics : ""
 var @tier = @p.tier ? @p.tier : ""
 var @phase = @p.phase ? @p.phase : "both"
+var @run = @p.run ? @p.run : ""
+
+>> Determine which phases to run (needed early for run directory resolution)
+var @runPhase1 = @phase == "1" || @phase == "both" || @phase == "all"
+var @runPhase2 = @phase == "2" || @phase == "both" || @phase == "all"
+var @runPhase3Explicit = @phase == "3" || @phase == "all"
 
 >> Load all atoms dynamically from docs/src/atoms
 var @atomFiles = <@base/docs/src/atoms/**/*.md>
@@ -27,11 +41,30 @@ var @tiers = @tier ? @tier.split(",") : []
 var @allTopics = for @f in @atomFiles when @f.mx.fm.qa_tier && @f.mx.fm.id && !@f.mx.fm.id.startsWith("_") && (@tiers.length == 0 || @tiers.includes(`@f.mx.fm.qa_tier`)) => @f.mx.fm.id
 
 >> Configuration
-var @outputDir = "@base/qa"
+var @qaRoot = "@base/qa"
+var @today = @now.slice(0, 10)
 var @parallelLimit = 20
 
+>> Run directory: each QA run gets a dated directory (YYYY-MM-DD-N)
+exe @nextRunName(qaRoot, today) = [
+  let @count = cmd {ls "@qaRoot" | grep "^@today" | wc -l | tr -d ' '}
+  => `@today-@count`
+]
+
+exe @latestRunName(qaRoot) = cmd {ls "@qaRoot" | grep '^20' | sort -r | head -1}
+
+exe @resolveRunName(qaRoot, today, run, needsNewRun) = when first [
+  @run => @run
+  @needsNewRun => @nextRunName(@qaRoot, @today)
+  * => @latestRunName(@qaRoot)
+]
+
+var @runName = @resolveRunName(@qaRoot, @today, @run, @runPhase1)
+var @outputDir = `@qaRoot/@runName`
+when !@runName => show `Warning: No existing QA run found. Use --tier to start a new run.`
+
 >> Tool permissions for QA agents
-var @qaTools = "Read,Write,Glob,Grep,Bash(mkdir *),Bash(ls *),Bash(cat *),Bash(uuidgen),Bash(tr *),Bash(mlld *)"
+var @qaTools = "Read,Write,Glob,Grep,Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(find:*),Bash(grep:*),Bash(uuidgen),Bash(tr:*),Bash(mlld:*)"
 
 >> Filter topics based on --topic (prefix) or --topics (comma list)
 exe @filterTopics(all, filter, list) = when first [
@@ -48,16 +81,56 @@ var @activeTopics = @filterTopics(@allTopics, @topic, @topics)
 >> Build prompts using template auto-interpolation
 exe @buildFlailPrompt(topic, outputDir) = template "./qa-prompt.att"
 exe @buildSelfReviewPrompt(topic, outputDir) = template "./qa-self-review-prompt.att"
+exe @buildTrendAnalysisPrompt(topicCount, outputDir) = template "./qa-trend-analysis-prompt.att"
+
+>> Claude poll variants with session support (work around claude -p hang)
+exe @claudePollSession(prompt, model, tools, markerFile, sessionId) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  claude -p --model "$model" --session-id "$sessionId" --allowedTools "$tools" < "$PROMPT_FILE" > /dev/null 2>&1 &
+  CLAUDE_PID=$!
+
+  while ! test -f "$markerFile"; do
+    sleep 5
+    if ! kill -0 $CLAUDE_PID 2>/dev/null; then break; fi
+  done
+
+  sleep 15
+  kill $CLAUDE_PID 2>/dev/null
+  wait $CLAUDE_PID 2>/dev/null
+  rm -f "$PROMPT_FILE"
+  cat "$markerFile" 2>/dev/null
+}
+
+exe @claudePollResume(prompt, model, tools, markerFile, sessionId) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  claude -p --model "$model" --resume "$sessionId" --allowedTools "$tools" < "$PROMPT_FILE" > /dev/null 2>&1 &
+  CLAUDE_PID=$!
+
+  while ! test -f "$markerFile"; do
+    sleep 5
+    if ! kill -0 $CLAUDE_PID 2>/dev/null; then break; fi
+  done
+
+  sleep 15
+  kill $CLAUDE_PID 2>/dev/null
+  wait $CLAUDE_PID 2>/dev/null
+  rm -f "$PROMPT_FILE"
+  cat "$markerFile" 2>/dev/null
+}
 
 >> Create output directory
 run cmd {mkdir -p @outputDir}
 
+show `=== QA Run: @runName ===`
+show `Output: @outputDir`
+show ``
+
 >> Check if we have topics to test
 when @activeTopics.length == 0 => show `No topics match filter: @topic\nAvailable: @allTopics.join(", ")`
-
->> Determine which phases to run
-var @runPhase1 = @phase == "1" || @phase == "both"
-var @runPhase2 = @phase == "2" || @phase == "both"
 
 >> Topics to process in each phase
 var @phase1Topics = @runPhase1 ? @activeTopics : []
@@ -69,7 +142,6 @@ var @phase2Candidates = @runPhase2 ? @activeTopics : []
 when @runPhase1 [
   show `=== PHASE 1: FLAIL ===`
   show `Testing @phase1Topics.length topics with limited access...`
-  show `Output directory: @outputDir`
   show ``
 ]
 
@@ -78,28 +150,39 @@ var @phase1Results = for parallel(20) @t in @phase1Topics [
   run cmd {mkdir -p @topicDir}
 
   >> Check for existing session (preserves session ID for resumption)
-  let @existingSession = <@topicDir/session.json?>
+  let @sessionFiles = <@topicDir/**/session.json>
+  let @existingSession = @sessionFiles.length > 0 ? @sessionFiles[0] : null
 
   >> Skip if phase 1 already complete - early return preserves existing session
-  when @existingSession.phase1_complete [
+  when @existingSession && @existingSession.phase1_complete [
     show `Skipping (already complete): @t`
     => @t
   ]
 
-  let @sessionId = @existingSession.session_id ? @existingSession.session_id : cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
+  let @sessionId = @existingSession && @existingSession.session_id ? @existingSession.session_id : cmd {uuidgen | tr '[:upper:]' '[:lower:]'}
 
   >> Store session info before starting (preserves existing start time if resuming)
-  let @sessionInfo = { topic: @t, session_id: @sessionId, phase1_started: @existingSession.phase1_started ? @existingSession.phase1_started : @now, phase1_complete: false }
+  let @sessionInfo = { topic: @t, session_id: @sessionId, phase1_started: @existingSession && @existingSession.phase1_started ? @existingSession.phase1_started : @now, phase1_complete: false }
   output @sessionInfo to "@topicDir/session.json"
 
   >> Build prompt and run with session ID
   let @prompt = @buildFlailPrompt(@t, @outputDir)
-  show `Starting flail: @t (session: @sessionId)`
-
-  >> Run claude with specific session ID
+  let @markerFile = `@topicDir/phase1-done.marker`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
   let @idx = @mx.for.index + 1
-  let @response = @prompt | cmd:@base { claude -p --model sonnet --session-id @sessionId --allowedTools "@qaTools" } | log | log `\nPhase 1/2 - Flail: @idx of @mx.for.total (@t)`
-  output @response to "@topicDir/phase1-transcript.md"
+  show `Starting flail: @idx of @mx.for.total - @t (session: @sessionId)`
+  let @response = @claudePollSession(@fullPrompt, "sonnet", @qaTools, @markerFile, @sessionId)
+  show `Phase 1 complete: @t`
+
+  >> Check if agent reported being blocked by permissions
+  let @blockedFiles = <@topicDir/**/blocked.json>
+  let @blocked = @blockedFiles.length > 0 ? @blockedFiles[0] : null
+  when @blocked && @blocked.blocked [
+    show `BLOCKED: @t - @blocked.blocked`
+    let @blockedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: false, phase1_blocked: true, phase1_blocked_reason: @blocked.blocked, phase1_finished: @now }
+    output @blockedSession to "@topicDir/session.json"
+    => @t
+  ]
 
   >> Mark phase 1 complete
   let @updatedSession = { topic: @t, session_id: @sessionId, phase1_started: @sessionInfo.phase1_started, phase1_complete: true, phase1_finished: @now }
@@ -122,14 +205,14 @@ when @runPhase2 [
 ]
 
 >> Find all topics with sessions that have failing experiments
-var @sessionFiles = <@outputDir/**/session.json?>
+var @sessionFiles = <@outputDir/**/session.json>
 
 >> Filter to active topics with completed phase 1
 var @sessionsForReview = for @s in @sessionFiles when @s.phase1_complete && @phase2Candidates.includes(@s.topic) => @s
 
 >> Check each topic for failing experiments
 exe @hasFailingExperiments(topicDir) = [
-  let @results = <@topicDir/**/results.json?>
+  let @results = <@topicDir/**/results.json>
   let @failing = for @r in @results when @r.status == "fail" || @r.status == "partial" => @r
   => @failing.length > 0
 ]
@@ -145,12 +228,22 @@ var @phase2Results = for parallel(10) @s in @needsReview [
   let @topicDir = `@outputDir/@s.topic`
   let @prompt = @buildSelfReviewPrompt(@s.topic, @outputDir)
 
-  show `Starting self-review: @s.topic (resuming session: @s.session_id)`
-
-  >> Resume the session with expanded access
+  let @markerFile = `@topicDir/phase2-done.marker`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
   let @idx = @mx.for.index + 1
-  let @response = @prompt | cmd:@base { claude -p --model sonnet --resume @s.session_id --allowedTools "@qaTools" } | log | log `\nPhase 2/2 - Self-Review: @idx of @mx.for.total (@s.topic)`
-  output @response to "@topicDir/phase2-transcript.md"
+  show `Starting self-review: @idx of @mx.for.total - @s.topic (resuming session: @s.session_id)`
+  let @response = @claudePollResume(@fullPrompt, "sonnet", @qaTools, @markerFile, @s.session_id)
+  show `Phase 2 complete: @s.topic`
+
+  >> Check if agent reported being blocked by permissions
+  let @blockedFiles = <@topicDir/**/blocked.json>
+  let @blocked = @blockedFiles.length > 0 ? @blockedFiles[0] : null
+  when @blocked && @blocked.blocked [
+    show `BLOCKED (review): @s.topic - @blocked.blocked`
+    let @blockedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: false, phase2_blocked: true, phase2_blocked_reason: @blocked.blocked, phase2_finished: @now }
+    output @blockedSession to "@topicDir/session.json"
+    => @s.topic
+  ]
 
   >> Update session info
   let @updatedSession = { topic: @s.topic, session_id: @s.session_id, phase1_started: @s.phase1_started, phase1_complete: @s.phase1_complete, phase1_finished: @s.phase1_finished, phase2_complete: true, phase2_finished: @now }
@@ -178,8 +271,11 @@ show `Results in: @outputDir`
 show ``
 
 >> Aggregate final state
-var @allResults = <@outputDir/**/results.json?>
-var @allSelfReviews = <@outputDir/**/self_review.json?>
+var @allResults = <@outputDir/**/results.json>
+var @allSelfReviews = <@outputDir/**/self_review.json>
+var @allSessions = <@outputDir/**/session.json>
+var @blockedPhase1 = for @s in @allSessions when @s.phase1_blocked => @s
+var @blockedPhase2 = for @s in @allSessions when @s.phase2_blocked => @s
 
 var @passing = for @r in @allResults when @r.status == "pass" => @r
 var @failing = for @r in @allResults when @r.status == "fail" => @r
@@ -190,6 +286,14 @@ show `  Passing: @passing.length`
 show `  Failing: @failing.length`
 show `  Partial: @partial.length`
 show `Self-reviews: @allSelfReviews.length`
+when @blockedPhase1.length > 0 [
+  show `  Blocked (phase 1): @blockedPhase1.length`
+  for @b in @blockedPhase1 => show `    - @b.topic: @b.phase1_blocked_reason`
+]
+when @blockedPhase2.length > 0 [
+  show `  Blocked (phase 2): @blockedPhase2.length`
+  for @b in @blockedPhase2 => show `    - @b.topic: @b.phase2_blocked_reason`
+]
 show ``
 
 >> Aggregate doc clarity insights from self-reviews
@@ -210,3 +314,141 @@ when @docClarityItems.length > 0 [
   output @clarityReport to "@outputDir/doc-clarity-report.json"
   show `Report written to: @outputDir/doc-clarity-report.json`
 ]
+
+>> ========== PHASE 3: TREND ANALYSIS ==========
+>> Single agent reviews all Phase 1+2 results and extracts cross-cutting patterns
+
+>> Auto-trigger: when using default "both" and all active topics finished phases 1+2
+>> A topic is "done" if phase2_complete OR (phase1_complete and no failing experiments to review)
+var @phase2Done = for @s in @allSessions when @activeTopics.includes(@s.topic) && @s.phase2_complete => @s.topic
+var @phase1OnlyDone = for @s in @allSessions when @activeTopics.includes(@s.topic) && @s.phase1_complete && !@s.phase2_complete && !@hasFailingExperiments(`@outputDir/@s.topic`) => @s.topic
+var @totalDone = @phase2Done.length + @phase1OnlyDone.length
+var @autoPhase3 = @phase == "both" && @totalDone >= @activeTopics.length && @activeTopics.length > 0
+var @runPhase3 = @runPhase3Explicit || @autoPhase3
+
+when @autoPhase3 && !@runPhase3Explicit [
+  show ``
+  show `All @activeTopics.length topics completed phases 1+2. Auto-triggering trend analysis.`
+]
+
+when @runPhase3 [
+  show ``
+  show `=== PHASE 3: TREND ANALYSIS ===`
+  show `Analyzing trends across @activeTopics.length topics...`
+  show ``
+
+  >> Pre-aggregate data for the trend analysis agent
+  let @activeResults = for @r in @allResults when @activeTopics.includes(@r.topic) => @r
+  let @activeReviews = for @sr in @allSelfReviews when @activeTopics.includes(@sr.topic) => @sr
+
+  let @phase1Issues = for @r in @activeResults when @r.issues => for @i in @r.issues => {
+    topic: @r.topic,
+    experiment: @r.experiment,
+    status: @r.status,
+    category: @i.category,
+    severity: @i.severity,
+    title: @i.title
+  }
+
+  let @phase2Reviews = for @sr in @activeReviews when @sr.issues_reviewed => for @i in @sr.issues_reviewed => {
+    topic: @sr.topic,
+    experiment: @sr.experiment,
+    revised_verdict: @i.revised_verdict,
+    revised_severity: @i.revised_severity,
+    doc_clarity_issue: @i.doc_clarity ? @i.doc_clarity.issue : null,
+    doc_clarity_suggestion: @i.doc_clarity ? @i.doc_clarity.suggestion : null,
+    what_i_thought: @i.what_i_thought,
+    what_i_found: @i.what_i_found
+  }
+
+  let @activePassing = for @r in @activeResults when @r.status == "pass" => @r
+  let @activeFailing = for @r in @activeResults when @r.status == "fail" => @r
+  let @activePartial = for @r in @activeResults when @r.status == "partial" => @r
+
+  let @phase3Input = {
+    generated_at: @now,
+    topics: @activeTopics,
+    topic_count: @activeTopics.length,
+    experiment_count: @activeResults.length,
+    passing: @activePassing.length,
+    failing: @activeFailing.length,
+    partial: @activePartial.length,
+    self_reviews: @activeReviews.length,
+    phase1_issues: @phase1Issues,
+    phase2_reviews: @phase2Reviews
+  }
+
+  output @phase3Input to "@outputDir/phase3-input.json"
+
+  >> Single agent call for holistic trend analysis
+  >> Uses claudePoll to work around claude -p not exiting after session completes
+  let @trendPrompt = @buildTrendAnalysisPrompt(@activeTopics.length, @outputDir)
+  let @trendTools = "Read,Write,Glob,Grep,Bash(ls *)"
+  let @markerFile = `@outputDir/trend-report.json`
+
+  show `Starting trend analysis agent...`
+  show `  Polling for: @markerFile`
+  let @response = @claudePoll(@trendPrompt, "opus", @base, @trendTools, @markerFile)
+
+  show ``
+  show `Phase 3 complete.`
+  show `  Trend report: @outputDir/trend-report.json`
+  show `  Narrative: @outputDir/trend-report.md`
+]
+
+>> ========== RUN SUMMARY ==========
+>> Per-run summary for cross-run progress tracking
+
+var @topicSummaries = for @t in @activeTopics [
+  let @topicResults = for @r in @allResults when @r.topic == @t => @r
+  let @tPass = for @r in @topicResults when @r.status == "pass" => @r
+  let @tFail = for @r in @topicResults when @r.status == "fail" => @r
+  let @tPartial = for @r in @topicResults when @r.status == "partial" => @r
+
+  let @topicIssues = for @r in @topicResults when @r.issues => for @i in @r.issues => @i
+  let @tMajor = for @i in @topicIssues when @i.severity == "major" || @i.severity == "blocker" => @i
+  let @tMinor = for @i in @topicIssues when @i.severity == "minor" => @i
+
+  let @topicReviews = for @sr in @allSelfReviews when @sr.topic == @t && @sr.issues_reviewed => for @i in @sr.issues_reviewed => @i
+  let @tBugs = for @i in @topicReviews when @i.revised_verdict == "genuine-bug" => @i
+  let @tDocNeeded = for @i in @topicReviews when @i.revised_verdict == "doc-improvement-needed" => @i
+  let @tNotBug = for @i in @topicReviews when @i.revised_verdict == "not-a-bug" => @i
+
+  => {
+    topic: @t,
+    experiments: @topicResults.length,
+    pass: @tPass.length,
+    fail: @tFail.length,
+    partial: @tPartial.length,
+    phase1_major: @tMajor.length,
+    phase1_minor: @tMinor.length,
+    phase2_genuine_bug: @tBugs.length,
+    phase2_doc_improvement: @tDocNeeded.length,
+    phase2_not_a_bug: @tNotBug.length
+  }
+]
+
+var @runSummary = {
+  run: @runName,
+  date: @now,
+  tier: @tier,
+  topic_count: @activeTopics.length,
+  experiment_count: @allResults.length,
+  passing: @passing.length,
+  failing: @failing.length,
+  partial: @partial.length,
+  topics: @topicSummaries
+}
+
+output @runSummary to "@outputDir/run-summary.json"
+show `Run summary: @outputDir/run-summary.json`
+
+>> Cross-run progress tracking
+var @allRunSummaries = <@qaRoot/*/run-summary.json>
+var @progress = {
+  generated_at: @now,
+  total_runs: @allRunSummaries.length,
+  runs: @allRunSummaries
+}
+output @progress to "@qaRoot/progress.json"
+show `Progress tracker: @qaRoot/progress.json (@allRunSummaries.length runs)`

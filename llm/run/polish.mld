@@ -1,27 +1,36 @@
 >> QA Polish Flywheel
->> Usage: mlld run polish [--tier 1] [--max-iterations 10]
+>> Usage: mlld run polish [--tier 1] [--max-iterations 10] [--run <YYYY-MM-DD>]
 >>
 >> Runs the full QA → reconcile → analyze → fix loop until stable.
 >> Auto-approves fixes where Opus confidence >= 0.9 and design_fit is high/medium.
 >> Uses git worktrees for isolated parallel fix application.
+>> Operates on a specific QA run directory (defaults to latest).
 
 import { @claude } from @mlld/claude
+import { @claudePoll } from @mlld/claude-poll
 
 >> Payload options
 import "@payload" as @p
 var @tier = @p.tier ? @p.tier : "1"
 var @maxIterations = @p.maxIterations ? @p.maxIterations * 1 : 10
+var @run = @p.run ? @p.run : ""
 
 >> Configuration
-var @qaDir = "@base/qa"
+var @qaRoot = "@base/qa"
+
+>> Resolve which QA run to polish (explicit --run or latest dated directory)
+exe @latestRunName(qaRoot) = cmd {ls "@qaRoot" | grep '^20' | sort -r | head -1}
+var @runName = @run ? @run : @latestRunName(@qaRoot)
+var @qaDir = `@qaRoot/@runName`
+when !@runName => show `Error: No QA run found. Run 'mlld run qa' first.`
 
 >> Get current branch for worktree base
 var @baseBranch = sh {git branch --show-current}
 
 >> Tool permissions for polish agents
-var @reconcileTools = "Read,Write,Glob,Grep,Bash(mlld *),Bash(cat *)"
-var @applyTools = "Read,Write,Edit,Glob,Grep,Bash(git *),Bash(wt *),Bash(npm run *),Bash(npm test *),Bash(cat *),Bash(pwd),Bash(head *)"
-var @verifyTools = "Read,Write,Glob,Grep,Bash(git *),Bash(wt *),Bash(npm run *),Bash(npm test *),Bash(cat *),Bash(tee *),Bash(head *)"
+var @reconcileTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(cat:*)"
+var @applyTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(npm run:*),Bash(npm test:*),Bash(cat:*),Bash(pwd),Bash(head:*)"
+var @verifyTools = "Read,Write,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(npm run:*),Bash(npm test:*),Bash(cat:*),Bash(tee:*),Bash(head:*)"
 
 >> === BUILD PROMPT FUNCTIONS (using template auto-interpolation) ===
 
@@ -40,13 +49,15 @@ exe @buildTriagePrompt(topic, experiment, baseBranch, worktreeBranch, experiment
 >> === MAIN LOOP ===
 
 show `=== QA Polish Flywheel ===`
+show `Run: @runName`
+show `Dir: @qaDir`
 show `Tier: @tier`
 show `Max iterations: @maxIterations`
 show `Base branch: @baseBranch`
 show ``
 
 >> Check for failed verification before starting - HALT if previous run broke things
-var @prevVerificationFiles = <@qaDir/verification-result.json?>
+var @prevVerificationFiles = <@qaDir/**/verification-result.json>
 var @prevVerification = @prevVerificationFiles.length > 0 ? @prevVerificationFiles[0] : null
 var @halted = @prevVerification && @prevVerification.status == "fail"
 
@@ -120,8 +131,9 @@ var @loopResult = loop(@maxIterations) [
     let @prompt = @buildReconcilePrompt(@item.topic, @item.experiment, @item.status, @item.summary, @issuesJson, @qaDir)
     show `  Reconciling: @item.topic/@item.experiment`
     let @idx = @mx.for.index + 1
-    let @response = @claude(@prompt, "opus", @base, @reconcileTools) | log | log `\nPhase 1/6 - Reconcile: @idx of @mx.for.total (@item.topic/@item.experiment)`
-    output @response to "@item.experimentDir/reconcile-transcript.md"
+    let @markerFile = `@item.experimentDir/reconciliation.json`
+    show `  Phase 1/6 - Reconcile: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    let @response = @claudePoll(@prompt, "opus", @base, @reconcileTools, @markerFile)
     => @item.topic
   ]
 
@@ -173,9 +185,9 @@ var @loopResult = loop(@maxIterations) [
     show `  DEBUG: prompt built, length=@prompt.length`
     show `  Analyzing: @item.topic/@item.experiment`
     let @idx = @mx.for.index + 1
-    let @response = @claude(@prompt, "opus", @base, @reconcileTools) | log | log `\nPhase 2/6 - Analyze: @idx of @mx.for.total (@item.topic/@item.experiment)`
-    output @response to "@item.experimentDir/analyze-transcript.md"
-    show `  DEBUG: @claude returned`
+    let @markerFile = `@item.experimentDir/proposed-fix.json`
+    show `  Phase 2/6 - Analyze: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    let @response = @claudePoll(@prompt, "opus", @base, @reconcileTools, @markerFile)
     => @item.topic
   ]
   show `  DEBUG: exited analyze loop`
@@ -216,11 +228,10 @@ var @loopResult = loop(@maxIterations) [
     )
     show `  DEBUG: prompt built, length=@prompt.length`
     show `  Applying: @item.topic/@item.experiment`
-    show `  DEBUG: calling @claude...`
     let @idx = @mx.for.index + 1
-    let @response = @claude(@prompt, "opus", @base, @applyTools) | log | log `\nPhase 3/6 - Apply: @idx of @mx.for.total (@item.topic/@item.experiment)`
-    output @response to "@item.experimentDir/apply-transcript.md"
-    show `  DEBUG: apply @claude returned: @response`
+    let @markerFile = `@item.experimentDir/fixed.json`
+    show `  Phase 3/6 - Apply: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    let @response = @claudePoll(@prompt, "opus", @base, @applyTools, @markerFile)
     => @item.topic
   ]
   show `  DEBUG: exited apply loop`
@@ -257,8 +268,10 @@ var @loopResult = loop(@maxIterations) [
     )
     show `  Triaging: @item.topic/@item.experiment`
     let @idx = @mx.for.index + 1
-    let @response = @claude(@prompt, "opus", @base, @applyTools) | log | log `\nPhase 4/6 - Triage: @idx of @mx.for.total (@item.topic/@item.experiment)`
-    output @response to "@item.experimentDir/triage-transcript.md"
+    >> Can't use fixed.json as marker - it already exists from the apply phase
+    let @markerFile = `@item.experimentDir/triage-complete.json`
+    show `  Phase 4/6 - Triage: @idx of @mx.for.total (@item.topic/@item.experiment)`
+    let @response = @claudePoll(@prompt, "opus", @base, @applyTools, @markerFile)
   ]
 
   >> ========== PHASE 3b: MERGE (Sequential) ==========
@@ -281,9 +294,11 @@ var @loopResult = loop(@maxIterations) [
 
   when @needsMerge.length > 0 [
     let @mergePrompt = @buildMergePrompt(@baseBranch, @qaDir, `@needsMerge`)
+    >> Can't use fixed.json as marker - it already exists from the apply phase
+    let @mergeMarker = `@qaDir/merge-complete.json`
     show `  Running merge phase...`
-    let @mergeResponse = @claude(@mergePrompt, "opus", @base, @applyTools) | log | log `\nPhase 5/6 - Merge: @needsMerge.length items`
-    output @mergeResponse to "@qaDir/merge-transcript-@iteration.md"
+    show `  Phase 5/6 - Merge: @needsMerge.length items`
+    let @mergeResponse = @claudePoll(@mergePrompt, "opus", @base, @applyTools, @mergeMarker)
   ]
 
   >> ========== PHASE 3c: VERIFY ==========
@@ -301,8 +316,9 @@ var @loopResult = loop(@maxIterations) [
   when @justMerged.length > 0 [
     show `Phase 3c: Verifying @justMerged.length merged fixes...`
     let @verifyPrompt = @buildVerifyPrompt(@baseBranch, @qaDir, `@justMerged.length`, @iteration, `@justMerged`)
-    let @verifyResponse = @claude(@verifyPrompt, "opus", @base, @verifyTools) | log | log `\nPhase 6/6 - Verify: @justMerged.length items`
-    output @verifyResponse to "@qaDir/verify-transcript-@iteration.md"
+    let @verifyMarker = `@qaDir/verification-result.json`
+    show `  Phase 6/6 - Verify: @justMerged.length items`
+    let @verifyResponse = @claudePoll(@verifyPrompt, "opus", @base, @verifyTools, @verifyMarker)
   ]
 
   >> Check if stable (no work done this iteration)
@@ -395,7 +411,7 @@ show `  Docs genuinely misleading: @docsGenuinelyMisleading.length (fix docs)`
 
 >> Write aggregated doc improvement report
 var @docImprovementReport = {
-  generated_at: @mx.now,
+  generated_at: @now,
   summary: {
     qa_insufficient_exploration: @qaInsufficientExploration.length,
     docs_could_be_clearer: @docsCouldBeClearer.length,

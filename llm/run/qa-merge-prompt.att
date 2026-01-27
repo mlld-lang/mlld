@@ -99,6 +99,20 @@ Merge in the order listed. Earlier merges may affect later ones. If you encounte
 - Conflicting CHANGELOG entries: combine them chronologically
 - Conflicting code changes: this indicates overlapping fixes - merge carefully
 
+## Completion Marker
+
+After processing all items, write a completion marker:
+
+```json
+// Write to @qaDir/merge-complete.json
+{
+  "merged_count": <number successfully merged>,
+  "skipped_count": <number skipped>,
+  "failed_count": <number failed>,
+  "completed_at": "<timestamp>"
+}
+```
+
 ## Output Summary
 
 After processing all items, report:

@@ -5,7 +5,7 @@
 >> Skips issues flagged as potentially stale (stale-check-4 or higher).
 >> Adds size-*, complexity-*, and risk-* tags (xs|s|m|l|xl).
 
-import { @claude } from @mlld/claude
+import { @claudePoll } from @mlld/claude-poll
 
 >> Payload options
 import "@payload" as @p
@@ -14,8 +14,8 @@ var @limit = @p.limit ? @p.limit * 1 : 20
 >> Configuration
 var @ticketsDir = "@base/.tickets"
 
->> Tool permissions (read-only for assessment)
-var @scopeTools = "Read,Glob,Grep,Bash(git *),Bash(tk *),Bash(cat *)"
+>> Tool permissions (read + write for assessment and marker file)
+var @scopeTools = "Read,Write,Glob,Grep,Bash(git:*),Bash(tk:*),Bash(cat:*)"
 
 >> Build scope estimation prompt
 exe @buildScopePrompt(issueId, issueContent) = template "./scope-prompt.att"
@@ -71,9 +71,13 @@ var @results = for parallel(10) @issue in @batch [
 
   >> Build and send prompt
   let @prompt = @buildScopePrompt(@issueId, @issueContent)
+  let @markerFile = `@ticketsDir/@issueId-scope-estimate.json`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to @markerFile using the Write tool. Do not just print it to stdout.`
   show `Estimating scope: @issueId`
+  show `  Polling for: @markerFile`
 
-  let @estimate = @claude(@prompt, "sonnet", @base, @scopeTools) | @json.llm | log | log `\nScope: @issueId`
+  let @estimateRaw = @claudePoll(@fullPrompt, "sonnet", @base, @scopeTools, @markerFile)
+  let @estimate = @estimateRaw | @json
 
   >> Validate and normalize values (default to "m" if missing or invalid)
   let @validSizes = ["xs", "s", "m", "l", "xl"]

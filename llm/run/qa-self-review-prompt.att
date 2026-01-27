@@ -22,13 +22,16 @@ You now have access to additional resources:
 
 2. **Test cases** - `tests/cases/`
    Working examples that define expected behavior
-   ```bash
-   ls tests/cases/ | head -20
-   find tests/cases -name "*.mld" | head -30
-   ```
 
 3. **Test fixtures** - `tests/fixtures/`
    Input/output examples for various scenarios
+
+**Preferred tools** - Use built-in tools first (faster and more reliable):
+- **Glob** for finding files by pattern (instead of `find`)
+- **Grep** for searching file contents (instead of `grep`)
+- **Read** for reading file contents (instead of `cat`)
+
+Fall back to bash equivalents (`find`, `grep`, `head`) only if the built-in tools don't support what you need.
 
 ## For Each Experiment with Issues
 
@@ -37,15 +40,11 @@ Review each experiment in `@outputDir/@topic/` that has `status: "fail"` or `sta
 1. **Re-examine your assumption**: What did you think should happen?
 
 2. **Check the test cases**: Search for relevant patterns
-   ```bash
-   find tests/cases -name "*@topic*" -o -name "*<related>*"
-   grep -r "<pattern>" tests/cases/ --include="*.mld" | head -20
-   ```
+   - Use **Glob** to find test files: `tests/cases/**/*@topic*` or `tests/cases/**/*.mld`
+   - Use **Grep** to search content: pattern `<keyword>` in path `tests/cases/`
 
 3. **Check the cookbook**: Does it show how this feature actually works?
-   ```bash
-   grep -A5 -B5 "<keyword>" docs/llm/llms-cookbook.txt
-   ```
+   - Use **Grep** to search: pattern `<keyword>` in path `docs/llm/llms-cookbook.txt`
 
 4. **Classify the issue**:
    - `qa-insufficient-exploration`: You could have found the answer with more searching
@@ -99,6 +98,24 @@ For each experiment directory with issues, create or update `self_review.json`:
 - `docs-could-be-clearer`: A reasonable person following the docs could make this mistake
 - `docs-genuinely-misleading`: The docs say X but the behavior is Y
 - `genuine-bug`: Test cases confirm the behavior is wrong
+
+## If You Get Blocked by Permissions
+
+If you attempt a tool and it is denied (permission error, not in allowedTools), do NOT retry repeatedly or wait. Instead:
+
+1. **Write a `blocked.json` file** in the topic directory:
+   ```json
+   // Write to: @outputDir/@topic/blocked.json
+   {
+     "blocked": "Brief description of what you cannot do",
+     "attempted_tools": ["Bash(example command)"],
+     "partial_work": "Description of what you accomplished before getting blocked"
+   }
+   ```
+
+2. **Continue with any remaining work you CAN do**, then exit normally.
+
+This lets the orchestrator detect the block and continue with other topics.
 
 ## Begin
 

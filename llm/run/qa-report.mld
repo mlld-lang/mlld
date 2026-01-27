@@ -1,9 +1,10 @@
 >> QA Report: Non-Implementation Items
->> Usage: mlld run qa-report [--format json|markdown] [--category <filter>]
+>> Usage: mlld run qa-report [--format json|markdown] [--category <filter>] [--run <YYYY-MM-DD>]
 >>
 >> Harvests items from QA that were NOT implemented (doc fixes, deferred features,
 >> rejected features, qa errors) and provides a comprehensive report with original
 >> commentary for review.
+>> Operates on a specific QA run directory (defaults to latest).
 >>
 >> Categories:
 >>   doc-hallucination  - Docs described something that never existed
@@ -15,13 +16,21 @@
 >>   mlld run qa-report                           # Full report, markdown format
 >>   mlld run qa-report --format json             # JSON output
 >>   mlld run qa-report --category doc-hallucination  # Filter to one category
+>>   mlld run qa-report --run 2026-01-25          # Report on a specific run
 
 import "@payload" as @p
 var @format = @p.format ? @p.format : "markdown"
 var @categoryFilter = @p.category ? @p.category : ""
+var @run = @p.run ? @p.run : ""
 
 >> Configuration
-var @qaDir = "@base/qa"
+var @qaRoot = "@base/qa"
+exe @latestRunName(qaRoot) = cmd {ls "@qaRoot" | grep '^20' | sort -r | head -1}
+var @runName = @run ? @run : @latestRunName(@qaRoot)
+var @qaDir = `@qaRoot/@runName`
+when !@runName => show `Error: No QA run found. Run 'mlld run qa' first.`
+show `Reporting on QA run: @runName`
+show ``
 
 >> Load all reconciliation files (from polish.mld reconciliation phase)
 var @allReconciliations = <@qaDir/**/reconciliation.json?>
