@@ -21,6 +21,7 @@
 
 >> Get filters from payload (namespace import for optional fields)
 import { @claudePoll } from @mlld/claude-poll
+import { @flat } from @mlld/array
 import "@payload" as @p
 var @topic = @p.topic ? @p.topic : ""
 var @topics = @p.topics ? @p.topics : ""
@@ -171,7 +172,7 @@ var @phase1Results = for parallel(20) @t in @phase1Topics [
   let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
   let @idx = @mx.for.index + 1
   show `Starting flail: @idx of @mx.for.total - @t (session: @sessionId)`
-  let @response = @claudePollSession(@fullPrompt, "sonnet", @qaTools, @markerFile, @sessionId)
+  let @response = @claudePollSession(@fullPrompt, "sonnet", @qaTools, @markerFile, @sessionId) | log
   show `Phase 1 complete: @t`
 
   >> Check if agent reported being blocked by permissions
@@ -232,7 +233,7 @@ var @phase2Results = for parallel(10) @s in @needsReview [
   let @fullPrompt = `@prompt\n\nIMPORTANT: When you have completed ALL your work, as your very last action, write the text "done" to @markerFile using the Write tool.`
   let @idx = @mx.for.index + 1
   show `Starting self-review: @idx of @mx.for.total - @s.topic (resuming session: @s.session_id)`
-  let @response = @claudePollResume(@fullPrompt, "sonnet", @qaTools, @markerFile, @s.session_id)
+  let @response = @claudePollResume(@fullPrompt, "sonnet", @qaTools, @markerFile, @s.session_id) | log
   show `Phase 2 complete: @s.topic`
 
   >> Check if agent reported being blocked by permissions
@@ -297,7 +298,8 @@ when @blockedPhase2.length > 0 [
 show ``
 
 >> Aggregate doc clarity insights from self-reviews
-var @docClarityItems = for @sr in @allSelfReviews when @sr.issues_reviewed => for @issue in @sr.issues_reviewed when @issue.doc_clarity && @issue.doc_clarity.issue && @issue.doc_clarity.issue != "genuine-bug" => { topic: @sr.topic, experiment: @sr.experiment, issue: @issue.doc_clarity.issue, suggestion: @issue.doc_clarity.suggestion, affected_doc: @issue.doc_clarity.affected_doc }
+var @docClarityNested = for @sr in @allSelfReviews when @sr.issues_reviewed => for @issue in @sr.issues_reviewed when @issue.doc_clarity && @issue.doc_clarity.issue && @issue.doc_clarity.issue != "genuine-bug" => { topic: @sr.topic, experiment: @sr.experiment, issue: @issue.doc_clarity.issue, suggestion: @issue.doc_clarity.suggestion, affected_doc: @issue.doc_clarity.affected_doc }
+var @docClarityItems = @flat(@docClarityNested)
 
 var @qaInsufficient = for @item in @docClarityItems when @item.issue == "qa-insufficient-exploration" => @item
 var @docsClearer = for @item in @docClarityItems when @item.issue == "docs-could-be-clearer" => @item
@@ -318,10 +320,13 @@ when @docClarityItems.length > 0 [
 >> ========== PHASE 3: TREND ANALYSIS ==========
 >> Single agent reviews all Phase 1+2 results and extracts cross-cutting patterns
 
+>> Re-read sessions to capture Phase 2 updates before auto-trigger check
+var @freshSessions = <@outputDir/**/session.json>
+
 >> Auto-trigger: when using default "both" and all active topics finished phases 1+2
 >> A topic is "done" if phase2_complete OR (phase1_complete and no failing experiments to review)
-var @phase2Done = for @s in @allSessions when @activeTopics.includes(@s.topic) && @s.phase2_complete => @s.topic
-var @phase1OnlyDone = for @s in @allSessions when @activeTopics.includes(@s.topic) && @s.phase1_complete && !@s.phase2_complete && !@hasFailingExperiments(`@outputDir/@s.topic`) => @s.topic
+var @phase2Done = for @s in @freshSessions when @activeTopics.includes(@s.topic) && @s.phase2_complete => @s.topic
+var @phase1OnlyDone = for @s in @freshSessions when @activeTopics.includes(@s.topic) && @s.phase1_complete && !@s.phase2_complete && !@hasFailingExperiments(`@outputDir/@s.topic`) => @s.topic
 var @totalDone = @phase2Done.length + @phase1OnlyDone.length
 var @autoPhase3 = @phase == "both" && @totalDone >= @activeTopics.length && @activeTopics.length > 0
 var @runPhase3 = @runPhase3Explicit || @autoPhase3
@@ -341,7 +346,7 @@ when @runPhase3 [
   let @activeResults = for @r in @allResults when @activeTopics.includes(@r.topic) => @r
   let @activeReviews = for @sr in @allSelfReviews when @activeTopics.includes(@sr.topic) => @sr
 
-  let @phase1Issues = for @r in @activeResults when @r.issues => for @i in @r.issues => {
+  let @phase1IssuesNested = for @r in @activeResults when @r.issues => for @i in @r.issues => {
     topic: @r.topic,
     experiment: @r.experiment,
     status: @r.status,
@@ -349,8 +354,9 @@ when @runPhase3 [
     severity: @i.severity,
     title: @i.title
   }
+  let @phase1Issues = @flat(@phase1IssuesNested)
 
-  let @phase2Reviews = for @sr in @activeReviews when @sr.issues_reviewed => for @i in @sr.issues_reviewed => {
+  let @phase2ReviewsNested = for @sr in @activeReviews when @sr.issues_reviewed => for @i in @sr.issues_reviewed => {
     topic: @sr.topic,
     experiment: @sr.experiment,
     revised_verdict: @i.revised_verdict,
@@ -360,6 +366,7 @@ when @runPhase3 [
     what_i_thought: @i.what_i_thought,
     what_i_found: @i.what_i_found
   }
+  let @phase2Reviews = @flat(@phase2ReviewsNested)
 
   let @activePassing = for @r in @activeResults when @r.status == "pass" => @r
   let @activeFailing = for @r in @activeResults when @r.status == "fail" => @r
@@ -384,11 +391,11 @@ when @runPhase3 [
   >> Uses claudePoll to work around claude -p not exiting after session completes
   let @trendPrompt = @buildTrendAnalysisPrompt(@activeTopics.length, @outputDir)
   let @trendTools = "Read,Write,Glob,Grep,Bash(ls *)"
-  let @markerFile = `@outputDir/trend-report.json`
+  let @markerFile = `@outputDir/phase3-done.marker`
 
   show `Starting trend analysis agent...`
   show `  Polling for: @markerFile`
-  let @response = @claudePoll(@trendPrompt, "opus", @base, @trendTools, @markerFile)
+  let @response = @claudePoll(@trendPrompt, "opus", @base, @trendTools, @markerFile) | log
 
   show ``
   show `Phase 3 complete.`
@@ -405,11 +412,13 @@ var @topicSummaries = for @t in @activeTopics [
   let @tFail = for @r in @topicResults when @r.status == "fail" => @r
   let @tPartial = for @r in @topicResults when @r.status == "partial" => @r
 
-  let @topicIssues = for @r in @topicResults when @r.issues => for @i in @r.issues => @i
+  let @topicIssuesNested = for @r in @topicResults when @r.issues => for @i in @r.issues => @i
+  let @topicIssues = @flat(@topicIssuesNested)
   let @tMajor = for @i in @topicIssues when @i.severity == "major" || @i.severity == "blocker" => @i
   let @tMinor = for @i in @topicIssues when @i.severity == "minor" => @i
 
-  let @topicReviews = for @sr in @allSelfReviews when @sr.topic == @t && @sr.issues_reviewed => for @i in @sr.issues_reviewed => @i
+  let @topicReviewsNested = for @sr in @allSelfReviews when @sr.topic == @t && @sr.issues_reviewed => for @i in @sr.issues_reviewed => @i
+  let @topicReviews = @flat(@topicReviewsNested)
   let @tBugs = for @i in @topicReviews when @i.revised_verdict == "genuine-bug" => @i
   let @tDocNeeded = for @i in @topicReviews when @i.revised_verdict == "doc-improvement-needed" => @i
   let @tNotBug = for @i in @topicReviews when @i.revised_verdict == "not-a-bug" => @i
