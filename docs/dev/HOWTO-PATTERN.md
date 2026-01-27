@@ -263,7 +263,7 @@ This ensures the howto system ships with your package.
 ## Related Patterns
 
 - **Fray notes**: Session-specific context curation
-- **Beads**: Issue tracking with dependencies
+- **tk**: Task management CLI
 - **PPP/QTTD**: Planning document formats
 
 The howto pattern complements these by providing **static, canonical documentation** that persists across sessions.
