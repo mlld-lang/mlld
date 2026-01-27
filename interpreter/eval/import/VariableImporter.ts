@@ -150,11 +150,20 @@ export class VariableImporter {
    * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
    * IMPORTANT: Use the exact same serialization as processModuleExports to ensure compatibility
    */
-  private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
+  private serializeModuleEnv(moduleEnv: Map<string, Variable>, seen?: WeakSet<object>): any {
+    // Track Maps currently being serialized to detect circular references.
+    // captureModuleEnvironment() creates new Map instances each time, so identity
+    // checks (===) miss circularity between Maps holding the same module's variables.
+    const seenSet = seen ?? new WeakSet<object>();
+    if (seenSet.has(moduleEnv)) {
+      // Already serializing this (or an equivalent) Map — skip to prevent infinite recursion
+      return undefined;
+    }
+    seenSet.add(moduleEnv);
     // Create a temporary childVars map and reuse processModuleExports logic
     // Skip module env serialization to prevent infinite recursion, but pass the
     // current target so we can detect circular references within the env.
-    const tempResult = this.processModuleExports(moduleEnv, {}, true, null, undefined, undefined, moduleEnv);
+    const tempResult = this.processModuleExports(moduleEnv, {}, true, null, undefined, undefined, moduleEnv, seenSet);
     return tempResult.moduleObject;
   }
 
@@ -214,7 +223,8 @@ export class VariableImporter {
     manifest?: ExportManifest | null,
     childEnv?: Environment,
     options?: { resolveStrings?: boolean },
-    currentSerializationTarget?: Map<string, Variable>
+    currentSerializationTarget?: Map<string, Variable>,
+    _serializingEnvs?: WeakSet<object>
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
@@ -332,7 +342,7 @@ export class VariableImporter {
               : getModuleEnvSnapshot();
           serializedInternal = {
             ...serializedInternal,
-            capturedModuleEnv: this.serializeModuleEnv(capturedEnv)
+            capturedModuleEnv: this.serializeModuleEnv(capturedEnv, _serializingEnvs)
           };
         } else {
           // When not adding fresh module env captures (to avoid recursion),
@@ -342,20 +352,24 @@ export class VariableImporter {
           // only if it points to the same env we're currently serializing.
           // If it's from a different module (e.g., imported exe), preserve it.
           //
-          // We use currentSerializationTarget (passed from serializeModuleEnv) to detect
-          // circular references, since after deserialization all exes in a module env
-          // point to that same Map.
+          // We use both currentSerializationTarget (identity check) and _serializingEnvs
+          // (WeakSet of all Maps currently being serialized) to detect circular references.
+          // The WeakSet catches cases where captureModuleEnvironment() creates new Map
+          // instances that hold the same module's variables but differ by identity.
           const existingCapture = serializedInternal.capturedModuleEnv;
           if (existingCapture instanceof Map) {
-            // Check if this is a circular reference
-            if (currentSerializationTarget && existingCapture === currentSerializationTarget) {
+            // Check if this is a circular reference (identity or tracked in WeakSet)
+            if (
+              (currentSerializationTarget && existingCapture === currentSerializationTarget) ||
+              (_serializingEnvs && _serializingEnvs.has(existingCapture))
+            ) {
               // Circular - delete to prevent infinite recursion
               delete serializedInternal.capturedModuleEnv;
             } else {
               // Different module's env - serialize and preserve
               serializedInternal = {
                 ...serializedInternal,
-                capturedModuleEnv: this.serializeModuleEnv(existingCapture)
+                capturedModuleEnv: this.serializeModuleEnv(existingCapture, _serializingEnvs)
               };
             }
           }
