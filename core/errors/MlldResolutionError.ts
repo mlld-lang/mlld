@@ -45,15 +45,15 @@ export class MlldResolutionError extends MlldError {
   constructor(
     message: string,
     options: {
-      code: string; // e.g., E_RESOLVE_FAIL, E_INVALID_CONTEXT, E_TYPE_NOT_ALLOWED
+      code?: string; // e.g., E_RESOLVE_FAIL, E_INVALID_CONTEXT, E_TYPE_NOT_ALLOWED
       details?: MlldResolutionErrorDetails;
       severity?: ErrorSeverity;
       sourceLocation?: ErrorSourceLocation;
       cause?: unknown;
-    }
+    } = {}
   ) {
     super(message, {
-      code: options.code,
+      code: options.code ?? 'E_RESOLVE_FAIL',
       severity: options.severity || ErrorSeverity.Fatal,
       details: options.details,
       sourceLocation: options.sourceLocation,

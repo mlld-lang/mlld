@@ -145,7 +145,8 @@ export class RegistryResolver implements Resolver {
     const match = ref.match(/^@([^/]+)\/([^@]+)(?:@(.+))?$/);
     if (!match) {
       throw new MlldResolutionError(
-        `Invalid module reference format. Expected @user/module or @user/module@version, got: ${ref}`
+        `Invalid module reference format. Expected @user/module or @user/module@version, got: ${ref}`,
+        { code: 'E_INVALID_REFERENCE' }
       );
     }
     
@@ -220,7 +221,8 @@ export class RegistryResolver implements Resolver {
     
     if (!response.ok) {
       throw new MlldResolutionError(
-        `Failed to fetch version data for @${author}/${module}@${version}: ${response.status}`
+        `Failed to fetch version data for @${author}/${module}@${version}: ${response.status}`,
+        { code: 'E_FETCH_FAILED' }
       );
     }
     
@@ -257,7 +259,8 @@ export class RegistryResolver implements Resolver {
       
       if (!moduleEntry) {
         throw new MlldResolutionError(
-          `Module '${module}' not found in ${author}'s registry`
+          `Module '${module}' not found in ${author}'s registry`,
+          { code: 'E_MODULE_NOT_FOUND' }
         );
       }
       
@@ -278,14 +281,16 @@ export class RegistryResolver implements Resolver {
           );
           if (!resolved) {
             throw new MlldResolutionError(
-              `No version matching '${version}' for ${moduleKey}\nAvailable versions: ${moduleEntry.availableVersions.join(', ')}`
+              `No version matching '${version}' for ${moduleKey}\nAvailable versions: ${moduleEntry.availableVersions.join(', ')}`,
+              { code: 'E_VERSION_NOT_FOUND' }
             );
           }
           resolvedVersion = resolved;
         } else if (version !== moduleEntry.version) {
           // Backward compat: only one version available
           throw new MlldResolutionError(
-            `Version ${version} not found for ${moduleKey}. Only version ${moduleEntry.version} is available.`
+            `Version ${version} not found for ${moduleKey}. Only version ${moduleEntry.version} is available.`,
+            { code: 'E_VERSION_NOT_FOUND' }
           );
         }
       }
@@ -324,11 +329,13 @@ export class RegistryResolver implements Resolver {
         // Check for 404 specifically
         if (response.status === 404) {
           throw new MlldResolutionError(
-            `Module content not found at ${sourceUrl}. The module may have been moved or deleted.`
+            `Module content not found at ${sourceUrl}. The module may have been moved or deleted.`,
+            { code: 'E_MODULE_NOT_FOUND' }
           );
         }
         throw new MlldResolutionError(
-          `Failed to fetch module content from ${sourceUrl}: ${response.status} ${response.statusText}`
+          `Failed to fetch module content from ${sourceUrl}: ${response.status} ${response.statusText}`,
+          { code: 'E_FETCH_FAILED' }
         );
       }
 
@@ -337,7 +344,8 @@ export class RegistryResolver implements Resolver {
       // Validate we got actual content, not an error page
       if (!content || content.length === 0) {
         throw new MlldResolutionError(
-          `Module content is empty at ${sourceUrl}`
+          `Module content is empty at ${sourceUrl}`,
+          { code: 'E_EMPTY_CONTENT' }
         );
       }
 
@@ -368,7 +376,8 @@ export class RegistryResolver implements Resolver {
       }
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new MlldResolutionError(
-        `Failed to resolve ${ref} from registry: ${errorMessage}`
+        `Failed to resolve ${ref} from registry: ${errorMessage}`,
+        { code: 'E_RESOLVE_FAIL' }
       );
     }
   }
@@ -436,11 +445,13 @@ export class RegistryResolver implements Resolver {
       if (!response.ok) {
         if (response.status === 404) {
           throw new MlldResolutionError(
-            `Directory module file not found: ${filePath} at ${fileUrl}`
+            `Directory module file not found: ${filePath} at ${fileUrl}`,
+            { code: 'E_MODULE_NOT_FOUND' }
           );
         }
         throw new MlldResolutionError(
-          `Failed to fetch directory module file ${filePath}: ${response.status} ${response.statusText}`
+          `Failed to fetch directory module file ${filePath}: ${response.status} ${response.statusText}`,
+          { code: 'E_FETCH_FAILED' }
         );
       }
 
@@ -457,7 +468,8 @@ export class RegistryResolver implements Resolver {
     const entryContent = fileContents[entryPoint];
     if (!entryContent) {
       throw new MlldResolutionError(
-        `Entry point '${entryPoint}' not found in directory module files: ${files.join(', ')}`
+        `Entry point '${entryPoint}' not found in directory module files: ${files.join(', ')}`,
+        { code: 'E_MODULE_NOT_FOUND' }
       );
     }
 
@@ -527,7 +539,7 @@ export class RegistryResolver implements Resolver {
       if (response.status === 404) {
         throw new MlldResolutionError(
           `Registry not found at ${registryUrl}. The registry may be unavailable.`,
-          { registryUrl }
+          { code: 'E_REGISTRY_UNAVAILABLE' }
         );
       }
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);

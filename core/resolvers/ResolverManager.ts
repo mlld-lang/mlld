@@ -356,7 +356,7 @@ export class ResolverManager {
     if (!resolver) {
       throw new MlldResolutionError(
         `No resolver found for reference: ${ref}`,
-        { reference: ref, context: options?.context }
+        { code: 'E_NO_RESOLVER' }
       );
     }
 
@@ -364,7 +364,7 @@ export class ResolverManager {
     if (options?.context && !this.canResolveInContext(resolver, options.context)) {
       throw new MlldResolutionError(
         `Resolver '${resolver.name}' does not support ${options.context} operations`,
-        { reference: ref, resolverName: resolver.name, context: options.context }
+        { code: 'E_INVALID_CONTEXT' }
       );
     }
 
@@ -372,7 +372,7 @@ export class ResolverManager {
     if (resolver.type === 'output') {
       throw new MlldResolutionError(
         `Resolver '${resolver.name}' does not support input operations`,
-        { reference: ref, resolverName: resolver.name }
+        { code: 'E_INVALID_CONTEXT' }
       );
     }
 
@@ -435,7 +435,7 @@ export class ResolverManager {
             // In offline mode, fail if not in cache
             throw new MlldResolutionError(
               `Module '${ref}' not available in offline mode`,
-              { reference: ref, hash }
+              { code: 'E_OFFLINE_UNAVAILABLE' }
             );
           }
         }
@@ -443,14 +443,14 @@ export class ResolverManager {
         // In offline mode with no lock entry, fail immediately
         throw new MlldResolutionError(
           `Module '${ref}' not available in offline mode`,
-          { reference: ref }
+          { code: 'E_OFFLINE_UNAVAILABLE' }
         );
       }
     } else if (this.offlineMode && shouldRequireCache && (!this.lockFile || !this.moduleCache)) {
       // Offline mode requires both lock file and cache
       throw new MlldResolutionError(
         'Offline mode requires lock file and cache to be configured',
-        { reference: ref }
+        { code: 'E_OFFLINE_UNAVAILABLE' }
       );
     }
 
@@ -466,7 +466,7 @@ export class ResolverManager {
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Access denied for reference: ${ref}`,
-          { reference: ref, resolverName: resolver.name }
+          { code: 'E_ACCESS_DENIED' }
         );
       }
     }
@@ -529,7 +529,7 @@ export class ResolverManager {
           logger.debug(`Cached ${ref} with hash ${cacheEntry.hash}`);
         } catch (cacheError) {
           // Log but don't fail resolution if caching fails
-          logger.warn(`Failed to cache ${ref}: ${cacheError.message}`);
+          logger.warn(`Failed to cache ${ref}: ${cacheError instanceof Error ? cacheError.message : String(cacheError)}`);
         }
       }
 
@@ -591,12 +591,8 @@ export class ResolverManager {
         throw error;
       }
       throw new MlldResolutionError(
-        `Failed to resolve '${ref}' using ${resolver.name}: ${error.message}`,
-        { 
-          reference: ref, 
-          resolverName: resolver.name,
-          originalError: error
-        }
+        `Failed to resolve '${ref}' using ${resolver.name}: ${error instanceof Error ? error.message : String(error)}`,
+        { code: 'E_RESOLVE_FAIL' }
       );
     }
   }
@@ -608,7 +604,7 @@ export class ResolverManager {
     if (!this.securityPolicy.allowOutputs) {
       throw new MlldResolutionError(
         'Output operations are not allowed by security policy',
-        { reference: ref }
+        { code: 'E_OUTPUT_DENIED' }
       );
     }
 
@@ -617,7 +613,7 @@ export class ResolverManager {
     if (!resolver) {
       throw new MlldResolutionError(
         `No resolver found for reference: ${ref}`,
-        { reference: ref }
+        { code: 'E_NO_RESOLVER' }
       );
     }
 
@@ -625,7 +621,7 @@ export class ResolverManager {
     if (resolver.type === 'input' || !resolver.write) {
       throw new MlldResolutionError(
         `Resolver '${resolver.name}' does not support output operations`,
-        { reference: ref, resolverName: resolver.name }
+        { code: 'E_INVALID_CONTEXT' }
       );
     }
 
@@ -641,7 +637,7 @@ export class ResolverManager {
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Write access denied for reference: ${ref}`,
-          { reference: ref, resolverName: resolver.name }
+          { code: 'E_ACCESS_DENIED' }
         );
       }
     }
@@ -650,12 +646,8 @@ export class ResolverManager {
       await resolver.write(resolverRef, content, prefixConfig?.config);
     } catch (error) {
       throw new MlldResolutionError(
-        `Failed to write '${ref}' using ${resolver.name}: ${error.message}`,
-        { 
-          reference: ref, 
-          resolverName: resolver.name,
-          originalError: error
-        }
+        `Failed to write '${ref}' using ${resolver.name}: ${error instanceof Error ? error.message : String(error)}`,
+        { code: 'E_WRITE_FAILED' }
       );
     }
   }
@@ -792,11 +784,7 @@ export class ResolverManager {
             `Resolver '${prefixConfig.resolver}' not found. ` +
             `Prefix '${prefixConfig.prefix}' is configured to use '${prefixConfig.resolver}' resolver, ` +
             `but only these resolvers are registered: ${availableResolvers.join(', ')}`,
-            { 
-              prefix: prefixConfig.prefix,
-              expectedResolver: prefixConfig.resolver,
-              availableResolvers 
-            }
+            { code: 'E_RESOLVER_NOT_FOUND' }
           );
         }
         // Strip prefix from reference before checking canResolve

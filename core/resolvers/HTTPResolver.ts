@@ -98,7 +98,7 @@ export class HTTPResolver implements Resolver {
     if (!config?.baseUrl) {
       throw new MlldResolutionError(
         'HTTPResolver requires baseUrl in configuration',
-        { reference: ref }
+        { code: 'E_CONFIG_INVALID' }
       );
     }
 
@@ -157,16 +157,12 @@ export class HTTPResolver implements Resolver {
       if (error.status === 404) {
         throw new MlldResolutionError(
           `Resource not found: ${url}`,
-          { reference: ref, url: url.toString() }
+          { code: 'E_NOT_FOUND' }
         );
       }
       throw new MlldResolutionError(
         `Failed to fetch from HTTP: ${error.message}`,
-        { 
-          reference: ref, 
-          url: url.toString(),
-          originalError: error
-        }
+        { code: 'E_FETCH_FAILED' }
       );
     }
   }
@@ -259,7 +255,7 @@ export class HTTPResolver implements Resolver {
     } catch (error) {
       throw new MlldResolutionError(
         `Invalid URL: ${baseUrl}${cleanRef}`,
-        { reference: ref, baseUrl: config.baseUrl }
+        { code: 'E_INVALID_URL' }
       );
     }
   }
@@ -274,7 +270,7 @@ export class HTTPResolver implements Resolver {
     if (!allowedDomains.includes(url.hostname)) {
       throw new MlldResolutionError(
         `Domain not allowed: ${url.hostname}. Allowed domains: ${allowedDomains.join(', ')}`,
-        { url: url.toString(), allowedDomains }
+        { code: 'E_DOMAIN_BLOCKED' }
       );
     }
 
@@ -282,7 +278,7 @@ export class HTTPResolver implements Resolver {
     if (url.protocol !== 'https:' && config.validateSSL !== false) {
       throw new MlldResolutionError(
         'Only HTTPS URLs are allowed for security reasons',
-        { url: url.toString() }
+        { code: 'E_INSECURE_PROTOCOL' }
       );
     }
   }

@@ -73,7 +73,7 @@ export class ProjectPathResolver implements Resolver {
         'ProjectPathResolver: Unable to determine project root. ' +
         'This usually means the resolver registry was not properly configured. ' +
         'Check that @base prefix is mapped to base resolver with basePath.',
-        { reference: ref, availableConfig: Object.keys(config || {}) }
+        { code: 'E_NO_PROJECT_ROOT' }
       );
     }
 
@@ -139,7 +139,7 @@ export class ProjectPathResolver implements Resolver {
       if (!normalizedFullPath.startsWith(normalizedBasePath)) {
         throw new MlldResolutionError(
           `Path outside project directory: ${relativePath}`,
-          {}
+          { code: 'E_PATH_TRAVERSAL' }
         );
       }
 
@@ -205,7 +205,7 @@ export class ProjectPathResolver implements Resolver {
       if (result.contentType !== 'module') {
         throw new MlldResolutionError(
           `Import target is not a module: ${ref}`,
-          {}
+          { code: 'E_NOT_MODULE' }
         );
       }
       
@@ -214,7 +214,7 @@ export class ProjectPathResolver implements Resolver {
 
     throw new MlldResolutionError(
       `base resolver does not support context: ${config.context}`,
-      {}
+      { code: 'E_INVALID_CONTEXT' }
     );
   }
 
