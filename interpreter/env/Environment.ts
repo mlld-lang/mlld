@@ -149,7 +149,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Utility managers
   private cacheManager: CacheManager;
   private errorUtils: ErrorUtils;
-  private commandExecutorFactory: CommandExecutorFactory;
+  private commandExecutorFactory?: CommandExecutorFactory;
   private variableManager: IVariableManager;
   private importResolver: IImportResolver;
   private contextManager: ContextManager;
@@ -428,8 +428,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     
     // Initialize utility managers
-    this.cacheManager = new CacheManager(this.immutableCache, this.urlConfig);
-    this.errorUtils = new ErrorUtils();
+    // Child environments share stateless/global managers with parent
+    if (parent) {
+      this.cacheManager = parent.cacheManager;
+      this.errorUtils = parent.errorUtils;
+    } else {
+      this.cacheManager = new CacheManager(this.immutableCache, this.urlConfig);
+      this.errorUtils = new ErrorUtils();
+    }
     
     // Initialize variable manager with dependencies
     const variableManagerDependencies: VariableManagerDependencies = {
@@ -470,55 +476,47 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.reserveModulePrefixes();
     }
     
-    // Initialize import resolver with dependencies
-    const importResolverDependencies: ImportResolverDependencies = {
-      fileSystem: this.fileSystem,
-      pathService: this.pathService,
-      pathContext: this.pathContext || {
-        projectRoot: this.basePath,
-        fileDirectory: this.basePath,
-        executionDirectory: this.basePath,
-        invocationDirectory: process.cwd()
-      },
-      cacheManager: this.cacheManager,
-      getSecurityManager: () => this.getSecurityManager(),
-      getRegistryManager: () => this.getRegistryManager(),
-      getResolverManager: () => this.getResolverManager(),
-      getParent: () => this.parent,
-      getCurrentFilePath: () => this.getCurrentFilePath(),
-      getApproveAllImports: () => this.approveAllImports,
-      getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
-      getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions,
-      getAllowAbsolutePaths: () => this.allowAbsolutePaths
-    };
-    this.importResolver = new ImportResolver(importResolverDependencies);
+    // Initialize import resolver
+    // Child environments get parent's resolver temporarily; createChild/createChildEnvironment
+    // replaces it with a proper child resolver. This avoids creating a full ImportResolver
+    // (with 13 closure dependencies) that is immediately discarded.
+    if (parent) {
+      this.importResolver = parent.importResolver;
+    } else {
+      const importResolverDependencies: ImportResolverDependencies = {
+        fileSystem: this.fileSystem,
+        pathService: this.pathService,
+        pathContext: this.pathContext || {
+          projectRoot: this.basePath,
+          fileDirectory: this.basePath,
+          executionDirectory: this.basePath,
+          invocationDirectory: process.cwd()
+        },
+        cacheManager: this.cacheManager,
+        getSecurityManager: () => this.getSecurityManager(),
+        getRegistryManager: () => this.getRegistryManager(),
+        getResolverManager: () => this.getResolverManager(),
+        getParent: () => this.parent,
+        getCurrentFilePath: () => this.getCurrentFilePath(),
+        getApproveAllImports: () => this.approveAllImports,
+        getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
+        getURLConfig: () => this.urlConfig,
+        getDefaultUrlOptions: () => this.defaultUrlOptions,
+        getAllowAbsolutePaths: () => this.allowAbsolutePaths
+      };
+      this.importResolver = new ImportResolver(importResolverDependencies);
+    }
 
     // Ensure keep/keepStructured helpers are available even from child environments
     this.getRootEnvironment().registerKeepBuiltins();
-    
-    // Initialize command executor factory with dependencies
-    const executorDependencies: ExecutorDependencies = {
-      errorUtils: this.errorUtils,
-      workingDirectory: this.getExecutionDirectory(),
-      shadowEnvironment: {
-        getShadowEnv: (language: string) => this.getShadowEnv(language)
-      },
-      nodeShadowProvider: {
-        getNodeShadowEnv: () => this.getNodeShadowEnv(),
-        getOrCreateNodeShadowEnv: () => this.getOrCreateNodeShadowEnv(),
-        getCurrentFilePath: () => this.getCurrentFilePath()
-      },
-      pythonShadowProvider: {
-        getPythonShadowEnv: () => this.getPythonShadowEnv(),
-        getOrCreatePythonShadowEnv: () => this.getOrCreatePythonShadowEnv()
-      },
-      variableProvider: {
-        getVariables: () => this.variableManager.getVariables()
-      },
-      getStreamingBus: () => this.getStreamingBus()
-    };
-    this.commandExecutorFactory = new CommandExecutorFactory(executorDependencies);
+
+    // Command executor factory: eagerly create for root environments, lazy-init for children.
+    // Most child environments (e.g., for-loop iterations doing field access) never execute
+    // commands, so this avoids creating a CommandExecutorFactory + 7 closure dependencies
+    // for each of the potentially tens of thousands of iteration environments.
+    if (!parent) {
+      this.commandExecutorFactory = this.getCommandExecutorFactory();
+    }
   }
   
   /**
@@ -2320,8 +2318,35 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
 
+  private getCommandExecutorFactory(): CommandExecutorFactory {
+    if (!this.commandExecutorFactory) {
+      const executorDependencies: ExecutorDependencies = {
+        errorUtils: this.errorUtils,
+        workingDirectory: this.getExecutionDirectory(),
+        shadowEnvironment: {
+          getShadowEnv: (language: string) => this.getShadowEnv(language)
+        },
+        nodeShadowProvider: {
+          getNodeShadowEnv: () => this.getNodeShadowEnv(),
+          getOrCreateNodeShadowEnv: () => this.getOrCreateNodeShadowEnv(),
+          getCurrentFilePath: () => this.getCurrentFilePath()
+        },
+        pythonShadowProvider: {
+          getPythonShadowEnv: () => this.getPythonShadowEnv(),
+          getOrCreatePythonShadowEnv: () => this.getOrCreatePythonShadowEnv()
+        },
+        variableProvider: {
+          getVariables: () => this.variableManager.getVariables()
+        },
+        getStreamingBus: () => this.getStreamingBus()
+      };
+      this.commandExecutorFactory = new CommandExecutorFactory(executorDependencies);
+    }
+    return this.commandExecutorFactory;
+  }
+
   async executeCommand(
-    command: string, 
+    command: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
@@ -2329,7 +2354,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const finalOptions = { ...this.outputOptions, ...options };
     const bus = this.getStreamingBus();
     const mxWithBus = { ...context, bus };
-    return this.commandExecutorFactory.executeCommand(command, finalOptions, mxWithBus);
+    return this.getCommandExecutorFactory().executeCommand(command, finalOptions, mxWithBus);
   }
   
   async executeCode(
@@ -2377,7 +2402,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const bus = this.getStreamingBus();
     const mxWithBus = { ...context, bus };
     const mergedOptions = { ...this.outputOptions, ...options };
-    return this.commandExecutorFactory.executeCode(
+    return this.getCommandExecutorFactory().executeCode(
       code,
       language,
       finalParams,
