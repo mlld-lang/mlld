@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Timeout error messages display formatted durations (e.g., "timed out after 5m")
 
 ### Fixed
+- **Shell alias resolution in `sh {}` blocks**: Commands available only as shell aliases (e.g., `claude`) now resolve correctly in `sh {}` blocks. Previously, only `cmd {}` blocks resolved aliases — `sh {}` blocks ran non-interactive bash where aliases aren't loaded, causing alias-only commands to silently fail with "command not found".
 - **`output ... to @variable` in when blocks**: Variable targets now work in output directives inside when blocks (e.g., `output @content to @path`). Previously, `WhenOutputTarget` only supported streams, env, and quoted strings.
 - **`let` pipelines with backtick templates**: `let @x = \`template\` | log` now correctly executes the pipeline. Previously, pipelines were stripped from backtick-wrapped templates in `let` and `var` assignments.
 - **`run stream @exec()` parsing**: Run directives accept stream modifiers and tail options on exec invocations

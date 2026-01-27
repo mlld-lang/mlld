@@ -8,6 +8,7 @@ import { isTextLike, type Variable } from '@core/types/variable';
 import { adaptVariablesForBash } from '../bash-variable-adapter';
 import { StringDecoder } from 'string_decoder';
 import { randomUUID } from 'crypto';
+import { buildAliasPreamble } from '@interpreter/utils/alias-resolver';
 
 export interface VariableProvider {
   /**
@@ -204,12 +205,15 @@ export class BashExecutor extends BaseCommandExecutor {
         if (lines.length > 0) prelude = lines.join('\n') + '\n';
       }
 
+      // Resolve shell aliases so sh {} blocks can find alias-only commands
+      const aliasPreamble = buildAliasPreamble(code);
+
       // Don't inject helpers for bash - we just pass string values
       // IMPORTANT: When using heredoc prelude, do NOT enhance user code to avoid
       // altering variable expansion/command substitution semantics around large vars.
       const enhancedCode = prelude
-        ? (prelude + code)
-        : CommandUtils.enhanceShellCodeForCommandSubstitution(code);
+        ? (aliasPreamble + prelude + code)
+        : (aliasPreamble + CommandUtils.enhanceShellCodeForCommandSubstitution(code));
       
       // Optional debug: dump the constructed bash script (prelude + user code)
       if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
