@@ -265,9 +265,22 @@ export class RegistryResolver implements Resolver {
       }
       
       // Resolve version
-      let resolvedVersion = moduleEntry.version; // Default to latest
+      let resolvedVersion = moduleEntry.version; // Default to top-level version field
       let versionData = moduleEntry; // Use registry data by default
-      
+
+      // When no version specified, prefer tags.latest or highest availableVersion
+      // as a safety net against stale top-level version field
+      if (!version) {
+        if (moduleEntry.tags?.latest) {
+          resolvedVersion = moduleEntry.tags.latest;
+        } else if (moduleEntry.availableVersions?.length) {
+          const latest = this.resolveVersion(moduleEntry.availableVersions, '*');
+          if (latest) {
+            resolvedVersion = latest;
+          }
+        }
+      }
+
       if (version) {
         if (isTag && moduleEntry.tags?.[version]) {
           // Resolve tag to version
@@ -519,14 +532,16 @@ export class RegistryResolver implements Resolver {
     }
 
     // Construct GitHub raw URL - use centralized modules.json
-    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules.json`;
+    // Append cache-busting query param to bypass GitHub CDN staleness
+    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules.json?v=${Date.now()}`;
     
     logger.debug(`Fetching registry from: ${registryUrl}`);
 
-    // Fetch from GitHub
+    // Fetch from GitHub with cache-busting to avoid stale CDN responses
     const headers: HeadersInit = {
       'Accept': 'application/json',
-      'User-Agent': 'mlld-registry-resolver'
+      'User-Agent': 'mlld-registry-resolver',
+      'Cache-Control': 'no-cache'
     };
 
     if (config?.token) {

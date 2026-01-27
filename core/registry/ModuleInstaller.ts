@@ -493,7 +493,18 @@ export class ModuleInstaller {
         continue;
       }
 
-      const installResult = await this.installSingle({ name: moduleName, version: spec.version }, {
+      // Skip non-registry entries (local files, @base/, @input, etc.)
+      if (!this.isRegistryEntry(previousEntry)) {
+        results.push({
+          module: moduleName,
+          previousVersion: previousEntry.registryVersion || previousEntry.version,
+          status: 'unchanged'
+        });
+        continue;
+      }
+
+      // Don't pass version — let the resolver fetch the latest from the registry
+      const installResult = await this.installSingle({ name: moduleName }, {
         ...options,
         force: true
       });

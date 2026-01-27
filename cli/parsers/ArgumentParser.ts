@@ -14,7 +14,8 @@ export class ArgumentParser {
     'publish', 'init', 'module', 'mod', 'add-needs', 'needs', 'deps',
     'setup', 'alias', 'keychain', 'vars', 'env', 'dev', 'test', 'run', 'error-test', 'clean',
     'mcp', 'serve', 'language-server', 'lsp', 'nvim-setup', 'nvim', 'nvim-doctor', 'verify',
-    'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze'
+    'howto', 'ht', 'qs', 'quickstart', 'validate', 'analyze',
+    'update', 'outdated'
   ];
 
   parseArgs(args: string[]): CLIOptions {
