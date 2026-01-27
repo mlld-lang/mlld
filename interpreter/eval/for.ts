@@ -130,8 +130,8 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
   // Check if this looks like file data (from normalizeIterableValue stripping StructuredValue wrapper)
   // If so, copy file metadata properties to .mx so @f.mx.relative etc. works
   if (looksLikeFileData(value)) {
-    const importer = new VariableImporter();
-    const variable = importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
+    const forSource = { directive: 'var' as const, syntax: 'object' as const, hasInterpolation: false, isMultiLine: false };
+    const variable = createObjectVariable(name, value, false, forSource, { source: 'for-loop' });
     // Copy file metadata to .mx
     const absLastSlash = value.absolute?.lastIndexOf('/') ?? -1;
     const absoluteDir = absLastSlash === 0 ? '/' : absLastSlash > 0 ? value.absolute!.substring(0, absLastSlash) : value.absolute;
@@ -159,28 +159,26 @@ function ensureVariable(name: string, value: unknown, env: Environment): Variabl
     return variable;
   }
 
-  // Otherwise, create a Variable from the value
-  const importer = new VariableImporter();
-  const variable = importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
-
-  // DEBUG: Check what was stored
-  if (process.env.MLLD_DEBUG_SYMBOL === 'true') {
-    console.error(`[ensureVariable] CREATED variable name=${name}:`, {
-      variableType: variable.type,
-      variableValueKeys: variable.value && typeof variable.value === 'object' ? Object.keys(variable.value).slice(0, 6) : null
-    });
-    // Check nested properties in stored value
-    if (variable.value && typeof variable.value === 'object') {
-      for (const [k, v] of Object.entries(variable.value as Record<string, unknown>).slice(0, 3)) {
-        console.error(`[ensureVariable]   stored ${k}:`, {
-          isStructuredValue: isStructuredValue(v),
-          hasSymbol: v && typeof v === 'object' && (v as any)[STRUCTURED_VALUE_SYMBOL]
-        });
-      }
-    }
+  // Create variables directly without VariableImporter to avoid deep-copy
+  // in unwrapArraySnapshots. For-loop iteration values are already evaluated
+  // data and don't contain __arraySnapshot/__executable markers.
+  const forSource = { directive: 'var' as const, syntax: 'object' as const, hasInterpolation: false, isMultiLine: false };
+  if (Array.isArray(value)) {
+    return createArrayVariable(name, value, false, { ...forSource, syntax: 'array' as const }, { source: 'for-loop' });
+  }
+  if (value && typeof value === 'object') {
+    return createObjectVariable(name, value as Record<string, unknown>, false, forSource, { source: 'for-loop' });
+  }
+  if (typeof value === 'string') {
+    return createSimpleTextVariable(name, value, forSource, { source: 'for-loop' });
+  }
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+    return createPrimitiveVariable(name, value, forSource, { source: 'for-loop' });
   }
 
-  return variable;
+  // Fallback: use VariableImporter for unknown types
+  const importer = new VariableImporter();
+  return importer.createVariableFromValue(name, value, 'for-loop', undefined, { env });
 }
 
 function formatFieldPath(fields?: FieldAccessNode[]): string | null {
