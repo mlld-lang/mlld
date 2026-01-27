@@ -88,49 +88,6 @@ export class BashExecutor extends BaseCommandExecutor {
     return unique;
   }
 
-  /**
-   * Execute bash code synchronously with graceful fallbacks if a binary is missing.
-   */
-  private runBashSync(
-    enhancedCode: string,
-    envVars: Record<string, string>,
-    workingDirectory: string
-  ): { execResult: any; usedPath: string } {
-    const candidates = this.getCandidateBashPaths();
-    let lastError: unknown;
-
-    for (const candidate of candidates) {
-      try {
-        const execResult = child_process.spawnSync(candidate, [], {
-          input: enhancedCode,
-          encoding: 'utf8',
-          env: { ...process.env, ...envVars },
-          cwd: workingDirectory,
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
-
-        if (execResult.error && (execResult.error as any).code === 'ENOENT') {
-          lastError = execResult.error;
-          continue;
-        }
-
-        // Update the preferred path to the one that succeeded
-        this.bashPath = candidate;
-        return { execResult, usedPath: candidate };
-      } catch (err: any) {
-        if (err?.code === 'ENOENT') {
-          lastError = err;
-          continue;
-        }
-        throw err;
-      }
-    }
-
-    if (lastError) {
-      throw lastError;
-    }
-    throw new Error('No bash-compatible shell available');
-  }
 
   private async executeBashCode(
     code: string,
@@ -265,54 +222,8 @@ export class BashExecutor extends BaseCommandExecutor {
         } catch {}
       }
 
-      // Non-streaming path: preserve legacy sync behavior for fixtures/tests
-      if (!context?.streamingEnabled) {
-        const { execResult, usedPath } = this.runBashSync(enhancedCode, envVars, workingDirectory);
-
-        if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
-          try {
-            process.stdout.write(
-              JSON.stringify({
-                tag: 'BashExecutor[non-stream]',
-                status: execResult.status,
-                error: execResult.error ? String(execResult.error) : null,
-                stdout: execResult.stdout,
-                stderr: execResult.stderr,
-                envKeys: Object.keys(envVars).slice(0, 20),
-                enhancedCode,
-                usedPath
-              }) + '\n'
-            );
-          } catch {
-            // ignore logging errors
-          }
-        }
-
-        if (execResult.error) {
-          throw execResult.error;
-        }
-
-        if (execResult.status !== 0) {
-          const error: any = new Error(`Command failed with exit code ${execResult.status}`);
-          error.status = execResult.status;
-          error.stderr = execResult.stderr;
-          error.stdout = execResult.stdout;
-          throw error;
-        }
-
-        const stdout = execResult.stdout || '';
-        const stderr = execResult.stderr || '';
-        const hasTTYCheck = enhancedCode.includes('[ -t ') || enhancedCode.includes('>&2');
-        const resultText = hasTTYCheck && stderr && !stdout ? stderr : stdout;
-        const duration = Date.now() - startTime;
-
-        return {
-          output: resultText.toString().replace(/\n+$/, ''),
-          duration,
-          exitCode: 0
-        };
-      }
-
+      // Always use async spawn() — enables parallelism in for-parallel loops.
+      // spawnSync() blocked the event loop, preventing concurrent sh {} execution.
       const bus = context?.bus ?? this.getBus();
       const pipelineId = context?.pipelineId || 'pipeline';
       const stageIndex = context?.stageIndex ?? 0;

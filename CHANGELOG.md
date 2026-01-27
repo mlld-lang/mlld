@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **foreach with separator**: `foreach @array with {separator: " | "}` now correctly applies the separator option
   - Property path mismatch: show.ts was accessing `foreachExpression.with` which was undefined
   - AST stores withClause at `foreachExpression.execInvocation.withClause` as array of inlineValue objects
+- **`sh {}` blocks in `for parallel()`**: `sh {}` blocks now execute concurrently in parallel for loops. Previously, `sh {}` used `spawnSync()` which blocked the Node.js event loop, causing `for parallel(N)` to serialize all iterations.
 - **Empty comments consuming next line**: Comments with no content (`>>` alone) no longer consume the following line as comment content
 - **Array literals in expressions**: Empty arrays `[]` and array literals now work in ternary expressions and when-first result positions
 - **Ternary with method calls**: `@tier ? @tier.split(",") : []` now parses correctly
