@@ -6,7 +6,7 @@
       "resolved": "87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
       "source": "registry://@mlld/array@2.1.0",
       "integrity": "sha256:87afe1bcd8fe7bf426253ae7edfa71476819b1d8b90e95a86544c711f5ce5c57",
-      "fetchedAt": "2026-01-27T05:40:46.257Z",
+      "fetchedAt": "2026-01-27T23:06:32.851Z",
       "registryVersion": "2.1.0",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/ba28284be46dbf50999539bdb275ef077f65bbb1/llm/modules/array.mld.md"
     },
@@ -15,11 +15,11 @@
       "resolved": "fae91f9413e7fccc25057eff2550bd6565b7b67a5bc43f539d2a04e76b2ed618",
       "source": "registry://@mlld/claude-poll@1.0.0",
       "integrity": "sha256:fae91f9413e7fccc25057eff2550bd6565b7b67a5bc43f539d2a04e76b2ed618",
-      "fetchedAt": "2026-01-27T05:41:13.269Z"
+      "fetchedAt": "2026-01-27T22:52:11.346Z"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-01-27T05:41:13.269Z"
+    "updatedAt": "2026-01-27T23:06:32.851Z"
   }
 }

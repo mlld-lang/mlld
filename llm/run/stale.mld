@@ -1,14 +1,10 @@
 >> Staleness Assessment
->> Usage: mlld run stale [--limit 20]
 >>
 >> Checks open issues for staleness by comparing against CHANGELOG.md and commits
 >> since the issue was created. Adds stale-check-{n} tags for issues scoring > 0.3.
+>> Skips issues that already have stale-check tags.
 
 import { @claudePoll } from @mlld/claude-poll
-
->> Payload options
-import "@payload" as @p
-var @limit = @p.limit ? @p.limit * 1 : 20
 
 >> Configuration
 var @ticketsDir = "@base/.tickets"
@@ -39,16 +35,13 @@ show `=== Staleness Assessment ===`
 show `Found @needsCheck.length open issues without stale-check tags`
 show ``
 
->> Limit to configured batch size
-var @batch = @needsCheck.slice(0, @limit)
+when @needsCheck.length == 0 => show `No issues to check. All open issues already have stale-check tags.`
 
-when @batch.length == 0 => show `No issues to check. All open issues already have stale-check tags.`
-
->> Load CHANGELOG.md once
-var @changelog = <@base/CHANGELOG.md>
+>> Load recent CHANGELOG entries (older entries aren't useful for staleness)
+var @changelog = cmd {head -300 @base/CHANGELOG.md}
 
 >> Process issues in parallel
-var @results = for parallel(10) @issue in @batch [
+var @results = for parallel(10) @issue in @needsCheck [
   let @issueId = @issue.id
   let @createdDate = @issue.created
 
