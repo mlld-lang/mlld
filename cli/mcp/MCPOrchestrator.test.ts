@@ -10,13 +10,13 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 
 const fakeServerPath = fileURLToPath(
-  new URL('../../tests/fixtures/mcp/fake-server.cjs', import.meta.url)
+  new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
 );
 const hangServerPath = fileURLToPath(
-  new URL('../../tests/fixtures/mcp/hang-server.cjs', import.meta.url)
+  new URL('../../tests/support/mcp/hang-server.cjs', import.meta.url)
 );
 const crashServerPath = fileURLToPath(
-  new URL('../../tests/fixtures/mcp/crash-server.cjs', import.meta.url)
+  new URL('../../tests/support/mcp/crash-server.cjs', import.meta.url)
 );
 
 class McpTestClient {

@@ -6,7 +6,7 @@ import { PathService } from '@services/fs/PathService';
 import { fileURLToPath } from 'url';
 
 const fakeServerPath = fileURLToPath(
-  new URL('../../tests/fixtures/mcp/fake-server.cjs', import.meta.url)
+  new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
 );
 
 function createEnvironment(): Environment {
