@@ -326,6 +326,7 @@ export class VariableImporter {
       // For executable variables, we need to preserve the full structure
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
+        const isImported = Boolean(execVar.mx?.isImported);
 
         // Serialize internal fields (shadow envs, module envs) since Maps do not JSON-serialize
         let serializedInternal: Record<string, unknown> = { ...(execVar.internal ?? {}) };
@@ -336,8 +337,9 @@ export class VariableImporter {
           };
         }
         if (shouldSerializeModuleEnv) {
-          const capturedEnv =
-            serializedInternal.capturedModuleEnv instanceof Map
+          const capturedEnv = !isImported
+            ? getModuleEnvSnapshot()
+            : serializedInternal.capturedModuleEnv instanceof Map
               ? serializedInternal.capturedModuleEnv
               : getModuleEnvSnapshot();
           serializedInternal = {
@@ -357,7 +359,10 @@ export class VariableImporter {
           // The WeakSet catches cases where captureModuleEnvironment() creates new Map
           // instances that hold the same module's variables but differ by identity.
           const existingCapture = serializedInternal.capturedModuleEnv;
-          if (existingCapture instanceof Map) {
+          if (!isImported) {
+            // Local executables reattach the full module env on import.
+            delete serializedInternal.capturedModuleEnv;
+          } else if (existingCapture instanceof Map) {
             // Check if this is a circular reference (identity or tracked in WeakSet)
             if (
               (currentSerializationTarget && existingCapture === currentSerializationTarget) ||

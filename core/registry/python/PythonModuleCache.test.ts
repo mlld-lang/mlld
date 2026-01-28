@@ -22,7 +22,7 @@ describe('PythonModuleCache', () => {
 
   beforeEach(async () => {
     // Use a fresh cache directory for each test
-    const cacheDir = path.join(testDir, `cache-${Date.now()}`);
+    const cacheDir = await fs.promises.mkdtemp(path.join(testDir, 'cache-'));
     cache = new PythonModuleCache({ cacheDir });
     await cache.initialize();
   });
