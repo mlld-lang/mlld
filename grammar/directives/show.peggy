@@ -27,11 +27,11 @@ ShowKeyword
 SlashShow
   // Error: Multiple arguments - must come FIRST to catch before successful parse
   = DirectiveContext ShowKeyword (HWS DataLabelList)? _ "@" id:BaseIdentifier fields:("." BaseIdentifier)* _ "@" {
-      helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
+      helpers.mlldError("show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`", "single argument", location());
     }
   // Error: Multiple quoted strings
   / DirectiveContext ShowKeyword (HWS DataLabelList)? _ (UnifiedDoubleQuote / UnifiedSingleQuote) _ ("\"" / "'" / "@") {
-      helpers.mlldError("/show accepts only a single argument. To display multiple values, use a template: /show `@var1 @var2`", "single argument", location());
+      helpers.mlldError("show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`", "single argument", location());
     }
   // Command execution syntax: /show {echo "test"}
   / DirectiveContext ShowKeyword labelsSegment:(HWS DataLabelList)? _ content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
