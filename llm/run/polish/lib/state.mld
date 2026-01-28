@@ -1,0 +1,159 @@
+>> State Management Library
+>> Handles run state creation, loading, and phase status tracking
+
+/needs { sh }
+
+>> Pipeline root directory
+var @pipelineRoot = "@base/pipeline"
+
+>> Get today's date in YYYY-MM-DD format
+exe @today() = [
+  let @d = sh {date +%Y-%m-%d}
+  => @d.trim()
+]
+
+>> Shell helpers for directory operations
+exe @countRunsForDate(pipelineRoot, date) = sh {ls -1 "$pipelineRoot" 2>/dev/null | grep "^$date" | wc -l | tr -d ' '}
+exe @getLatestRun(pipelineRoot) = sh {ls -1 "$pipelineRoot" 2>/dev/null | grep '^20' | sort -r | head -1}
+exe @updateCurrentSymlink(pipelineRoot, runId) = sh {rm -f "$pipelineRoot/current" && ln -s "$runId" "$pipelineRoot/current"}
+
+>> Generate next run ID (YYYY-MM-DD-N format)
+exe @nextRunId() = [
+  let @date = @today()
+  let @existing = @countRunsForDate(@pipelineRoot, @date)
+  let @count = @existing * 1
+  => `@date-@count`
+]
+
+>> Get latest run ID
+exe @latestRunId() = @getLatestRun(@pipelineRoot)
+
+>> Resolve run directory from ID or find latest
+exe @resolveRunDir(runId) = [
+  let @id = @runId ? @runId : @latestRunId()
+  => @id ? `@pipelineRoot/@id` : null
+]
+
+>> Check if a run exists
+exe @runExists(runId) = [
+  let @runDir = `@pipelineRoot/@runId`
+  let @runFile = <@runDir/run.json>
+  => @runFile ? true : false
+]
+
+>> Helper to create run directories
+exe @mkRunDirs(runDir) = sh {mkdir -p "$runDir/sources" "$runDir/interpret" "$runDir/reconcile" "$runDir/enrich" "$runDir/rank" "$runDir/execute" "$runDir/docs"}
+
+>> Create a new run
+>> Parameters: pipelineRoot (string), runId (string), config (object)
+>> Returns: runDir path (string)
+exe @createRun(pipelineRoot, runId, config) = [
+  let @runDir = `@pipelineRoot/@runId`
+
+  let @_ = @mkRunDirs(@runDir)
+
+  let @resolvedConfig = @config ? @config : { batch_size: 5 }
+
+  let @run = {
+    id: @runId,
+    created: @now,
+    status: "in-progress",
+    config: @resolvedConfig,
+    phases: {
+      interpret: { status: "pending" },
+      reconcile: { status: "pending" },
+      enrich: { status: "pending" },
+      rank: { status: "pending" },
+      execute: { status: "pending" },
+      docs: { status: "pending" }
+    }
+  }
+
+  output @run to "@runDir/run.json"
+
+  >> Update current symlink
+  let @_ = @updateCurrentSymlink(@pipelineRoot, @runId)
+
+  => @runDir
+]
+
+>> Load run state
+exe @loadRun(runDir) = [
+  let @runFile = <@runDir/run.json>
+  => @runFile
+]
+
+>> Save run state
+exe @saveRun(runDir, run) = [
+  output @run to "@runDir/run.json"
+  => @run
+]
+
+>> Update phase status
+exe @updatePhaseStatus(runDir, phase, status) = [
+  let @run = @loadRun(@runDir)
+  let @phaseData = @run.phases[@phase]
+  let @updated = {
+    ...@phaseData,
+    status: @status,
+    updated_at: @now
+  }
+  when @status == "complete" => let @updated = { ...@updated, completed_at: @now }
+
+  >> Build updated phases object
+  let @phases = {
+    interpret: @phase == "interpret" ? @updated : @run.phases.interpret,
+    reconcile: @phase == "reconcile" ? @updated : @run.phases.reconcile,
+    enrich: @phase == "enrich" ? @updated : @run.phases.enrich,
+    rank: @phase == "rank" ? @updated : @run.phases.rank,
+    execute: @phase == "execute" ? @updated : @run.phases.execute,
+    docs: @phase == "docs" ? @updated : @run.phases.docs
+  }
+
+  let @newRun = { ...@run, phases: @phases }
+  => @saveRun(@runDir, @newRun)
+]
+
+>> Get next incomplete phase
+exe @nextPhase(run) = when first [
+  @run.phases.interpret.status != "complete" => "interpret"
+  @run.phases.reconcile.status != "complete" => "reconcile"
+  @run.phases.enrich.status != "complete" => "enrich"
+  @run.phases.rank.status != "complete" => "rank"
+  @run.phases.execute.status != "complete" => "execute"
+  @run.phases.docs.status != "complete" => "docs"
+  * => "done"
+]
+
+>> Check if phase should run based on --phase, --from, --to flags
+exe @shouldRunPhase(phase, phaseFlag, fromFlag, toFlag) = [
+  let @phases = ["interpret", "reconcile", "enrich", "rank", "execute", "docs"]
+  let @phaseIdx = @phases.indexOf(@phase)
+
+  >> If specific phase requested
+  when @phaseFlag && @phaseFlag != "all" => @phase == @phaseFlag
+
+  >> If --from specified, skip phases before it
+  let @fromIdx = @fromFlag ? @phases.indexOf(@fromFlag) : 0
+  when @phaseIdx < @fromIdx => false
+
+  >> If --to specified, skip phases after it
+  let @toIdx = @toFlag ? @phases.indexOf(@toFlag) : 5
+  when @phaseIdx > @toIdx => false
+
+  => true
+]
+
+/export {
+  @pipelineRoot,
+  @nextRunId,
+  @latestRunId,
+  @resolveRunDir,
+  @runExists,
+  @createRun,
+  @loadRun,
+  @saveRun,
+  @updatePhaseStatus,
+  @nextPhase,
+  @shouldRunPhase
+}

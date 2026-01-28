@@ -1,0 +1,123 @@
+## Enrich Ticket: @issueId
+
+You are enriching a ticket with staleness assessment, implementation status, and scope estimation.
+
+## Issue Details
+
+**Issue ID**: @issueId
+**Type**: @issueType
+**Priority**: @issuePriority
+**Created**: @createdDate
+
+### Issue Content
+
+```markdown
+@issueContent
+```
+
+## Context
+
+### Recent CHANGELOG entries
+
+```markdown
+@changelog
+```
+
+### Git commits since issue was created
+
+```
+@commits
+```
+
+## Your Task
+
+Provide three assessments for this ticket:
+
+### 1. Staleness Assessment
+
+Is this issue still relevant given recent project activity?
+
+Consider:
+- Has the project's design evolved in ways that conflict with or supersede this issue?
+- Was the requested feature/fix already implemented (check CHANGELOG and commits)?
+- Does the issue reference code, patterns, or approaches that no longer exist?
+
+**Scoring**: 0.0-1.0
+- 0.0-0.2: Definitely still relevant
+- 0.3-0.4: Minor concerns, might need updating
+- 0.5-0.6: Significant context shift, needs review
+- 0.7-0.8: Likely obsolete
+- 0.9-1.0: Definitely stale
+
+### 2. Implementation Status
+
+Search the codebase to determine if this has been implemented.
+
+Use your tools (Read, Glob, Grep) to check:
+- Source code for matching implementations
+- Test cases in tests/cases/ or tests/
+- Grammar files if grammar-related
+- Documentation references
+
+**Scoring**: 0.0-1.0
+- 0.0-0.2: No implementation exists
+- 0.3-0.5: Partial implementation
+- 0.6-0.8: Mostly implemented
+- 0.9-1.0: Fully implemented
+
+### 3. Scope Estimation
+
+Estimate the scope across three dimensions:
+
+**Size** (effort):
+- xs: < 1 hour, trivial
+- s: 1-4 hours, single file
+- m: 4-16 hours, multiple files
+- l: 2-5 days, significant feature
+- xl: 1+ weeks, major feature
+
+**Complexity** (technical difficulty):
+- xs: Trivial, copy existing pattern
+- s: Simple, clear solution
+- m: Moderate, some design decisions
+- l: Complex, multiple systems
+- xl: Very complex, research required
+
+**Risk** (uncertainty):
+- xs: Minimal, isolated change
+- s: Low, mostly isolated
+- m: Moderate, some dependencies
+- l: High, many dependencies
+- xl: Very high, core changes
+
+## Output Format
+
+Write ONLY a JSON object (no markdown code fences):
+
+{
+  "staleness": {
+    "score": 0.2,
+    "reasoning": "Issue still relevant, no conflicting changes in CHANGELOG",
+    "evidence": []
+  },
+  "implementation": {
+    "score": 0.0,
+    "status": "none",
+    "reasoning": "No evidence of implementation found",
+    "evidence": []
+  },
+  "scope": {
+    "size": "m",
+    "complexity": "s",
+    "risk": "m",
+    "reasoning": "Moderate effort, straightforward implementation"
+  },
+  "tags_to_add": ["size-m", "complexity-s", "risk-m", "stale-check-2", "impl-none"]
+}
+
+The `tags_to_add` array should include:
+- `stale-check-N` where N = floor(staleness_score * 10)
+- `size-X` where X is the size estimate
+- `complexity-X` where X is the complexity estimate
+- `risk-X` where X is the risk estimate
+- `impl-none`, `impl-partial`, or `impl-done` based on implementation status

@@ -1,0 +1,130 @@
+>> Tickets Library
+>> Handles ticket operations via tk CLI
+
+/needs { sh }
+
+>> Tickets directory
+var @ticketsDir = "@base/.tickets"
+
+>> Query open tickets
+exe @getOpenTickets() = [
+  let @json = sh {tk query '.status == "open"' | jq -s '.'}
+  => @json.data
+]
+
+>> Get ticket by ID
+exe @getTicket(id) = [
+  let @ext = ".md"
+  let @path = `@ticketsDir/@id@ext`
+  => <@path>
+]
+
+>> Create a ticket
+exe @createTicket(title, type, priority, tags, description) = [
+  let @tagsArg = @tags ? `--tags "@tags"` : ""
+  let @descArg = @description ? `-d "@description"` : ""
+  let @result = sh {tk create "@title" -t @type -p @priority @tagsArg @descArg}
+  => @result.trim()
+]
+
+>> Add tags to a ticket (simple approach using tk CLI)
+exe @addTags(id, tags) = [
+  >> Use tk tag command if available, otherwise update file directly
+  let @result = sh {tk tag @id @tags 2>/dev/null || echo "FALLBACK"}
+  when @result.trim() != "FALLBACK" => @id
+
+  >> Fallback: update file directly
+  let @ext = ".md"
+  let @path = `@ticketsDir/@id@ext`
+  let @ticket = <@path>
+  when !@ticket => null
+
+  >> Parse existing tags line
+  let @match = @ticket.match(/^tags:\s*\[(.*)\]/m)
+  let @existingStr = @match ? @match[1] : ""
+
+  >> Build new tags string (simple concat - may have dupes but that's ok)
+  let @newTagsStr = @existingStr ? `@existingStr, @tags` : @tags
+  let @tagsYaml = `[@newTagsStr]`
+
+  >> Update file
+  let @hasTags = @ticket.includes("tags:")
+  let @updated = when first [
+    @hasTags => @ticket.replace(/^tags:.*$/m, `tags: @tagsYaml`)
+    * => @ticket.replace(/^(priority:.*)$/m, `$1\ntags: @tagsYaml`)
+  ]
+
+  output @updated to "@path"
+  => @id
+]
+
+>> Check if ticket has a specific tag prefix
+exe @hasTagPrefix(ticket, prefix) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @matching = for @t in @tags when @t.startsWith(@prefix) => @t
+  => @matching.length > 0
+]
+
+>> Get tag value by prefix
+exe @getTagValue(ticket, prefix) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @matching = for @t in @tags when @t.startsWith(@prefix) => @t
+  when @matching.length == 0 => null
+  => @matching[0].replace(@prefix, "")
+]
+
+>> Check if ticket is stale (stale-check > 3)
+exe @isStale(ticket) = [
+  let @value = @getTagValue(@ticket, "stale-check-")
+  when !@value => false
+  => @value * 1 > 3
+]
+
+>> Check if ticket has impl-done tag
+exe @isImplDone(ticket) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @done = for @t in @tags when @t == "impl-done" => @t
+  => @done.length > 0
+]
+
+>> Get size estimate
+exe @getSize(ticket) = [
+  let @val = @getTagValue(@ticket, "size-")
+  => @val ? @val : "unscoped"
+]
+
+>> Get complexity estimate
+exe @getComplexity(ticket) = [
+  let @val = @getTagValue(@ticket, "complexity-")
+  => @val ? @val : "unscoped"
+]
+
+>> Get risk estimate
+exe @getRisk(ticket) = [
+  let @val = @getTagValue(@ticket, "risk-")
+  => @val ? @val : "unscoped"
+]
+
+>> Get impl status
+exe @getImplStatus(ticket) = [
+  let @tags = @ticket.tags ? @ticket.tags : []
+  let @implTags = for @t in @tags when @t.startsWith("impl-") => @t
+  when @implTags.length == 0 => "unchecked"
+  => @implTags[0]
+]
+
+/export {
+  @ticketsDir,
+  @getOpenTickets,
+  @getTicket,
+  @createTicket,
+  @addTags,
+  @hasTagPrefix,
+  @getTagValue,
+  @isStale,
+  @isImplDone,
+  @getSize,
+  @getComplexity,
+  @getRisk,
+  @getImplStatus
+}

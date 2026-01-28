@@ -1,0 +1,79 @@
+## Verify Merged Fixes
+
+You are verifying that merged fixes don't break the main branch.
+
+## Context
+
+**Base branch**: @baseBranch
+**Merged count**: @mergedCount
+**Run directory**: @runDir
+
+## Merged Items
+
+```json
+@mergedItemsJson
+```
+
+## Instructions
+
+### 1. Ensure on Base Branch
+
+```bash
+git branch --show-current
+```
+
+Must be `@baseBranch`. If not, switch to it.
+
+### 2. Run Full Test Suite
+
+```bash
+npm run build
+npm test
+```
+
+### 3. Record Results
+
+**If tests pass:**
+All merged fixes are verified. The main branch is healthy.
+
+**If tests fail:**
+Identify which merged fix likely caused the failure by:
+1. Looking at the test output
+2. Checking which files were changed in recent merges
+3. Cross-referencing with the merged items above
+
+## Output
+
+Write to `@outputPath`:
+
+**Success:**
+```json
+{
+  "status": "pass",
+  "base_branch": "@baseBranch",
+  "verified_count": @mergedCount,
+  "test_summary": "All tests pass",
+  "verified_at": "<timestamp>"
+}
+```
+
+**Failure:**
+```json
+{
+  "status": "fail",
+  "base_branch": "@baseBranch",
+  "test_output": "<relevant test failure output>",
+  "likely_cause": {
+    "ticket_id": "mlld-xxx",
+    "reason": "Why this fix likely caused the failure"
+  },
+  "recommendation": "revert|investigate|manual",
+  "verified_at": "<timestamp>"
+}
+```
+
+## Important
+
+- Do NOT attempt to fix failures - just report them
+- Do NOT revert automatically - report for human review
+- If tests fail, this blocks further polish runs until resolved

@@ -1,0 +1,5 @@
+name: polish
+type: app
+version: 2.0.0
+about: QA polish pipeline - transforms QA signals and tickets into fixes
+entry: index.mld

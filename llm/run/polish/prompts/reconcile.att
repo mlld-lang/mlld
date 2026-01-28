@@ -1,0 +1,106 @@
+## Reconcile QA Signals with Existing Tickets
+
+You are merging QA-identified issues with existing tickets to create a unified work list.
+
+## Strategy Classifications (from QA)
+
+```json
+@strategyJson
+```
+
+## Existing Open Tickets
+
+```json
+@existingTicketsJson
+```
+
+## Your Task
+
+For each classification with `action` of `code-fix` or `doc-fix`:
+
+1. **Check for duplicates**: Does an existing ticket already cover this issue?
+   - Look for similar titles, descriptions, or matching topics
+   - If match found: link them (don't create duplicate)
+   - If no match: create a new ticket
+
+2. **Create tickets** for unmatched items using `tk create`:
+   ```bash
+   tk create "Title" -t bug -p 2 -d "Description" --tags "tag1,tag2"
+   ```
+   - `-t bug` for code-fix bugs
+   - `-t feature` for code-fix features
+   - `-t task` with `doc-fix` tag for documentation fixes
+   - `-p` matching priority: P0→0, P1→1, P2→2, P3→3
+   - Include area tags: grammar, interpreter, docs, cli, security, etc.
+
+3. **Skip** items with action `defer` or `skip` (don't create tickets for these)
+
+## Output Format
+
+Write a JSON object to `@outputPath` with:
+
+```json
+{
+  "generated_at": "<ISO timestamp>",
+  "items": [
+    {
+      "ticket_id": "mlld-abc",
+      "source": "qa",
+      "strategy_id": "strat-1",
+      "topics": ["escaping-basics", "output"],
+      "action": "code-fix",
+      "matched_existing": false
+    },
+    {
+      "ticket_id": "mlld-xyz",
+      "source": "existing",
+      "topics": [],
+      "action": "code-fix",
+      "matched_existing": true
+    },
+    {
+      "ticket_id": "mlld-doc-001",
+      "source": "qa",
+      "strategy_id": "strat-2",
+      "topics": ["templates-loops"],
+      "action": "doc-fix",
+      "matched_existing": false
+    }
+  ],
+  "deferred": [
+    {
+      "strategy_id": "strat-3",
+      "topics": ["label-modification"],
+      "reason": "Awaiting human decision"
+    }
+  ],
+  "ticket_sources": {
+    "mlld-abc": {
+      "strategy_id": "strat-1",
+      "topics": ["escaping-basics", "output"]
+    }
+  },
+  "summary": {
+    "total_items": 15,
+    "from_qa_new": 5,
+    "from_qa_matched": 3,
+    "from_existing": 7,
+    "deferred": 2
+  }
+}
+```
+
+## Field Notes
+
+- `items[].source`: "qa" if from strategy classification, "existing" if pre-existing ticket
+- `items[].matched_existing`: true if a QA item matched an existing ticket
+- `ticket_sources`: Maps ticket IDs to their QA source data (for later phases)
+- Include ALL existing open tickets in items (they're valid work even without QA data)
+
+## Begin
+
+1. Read the strategy classifications
+2. For each code-fix/doc-fix item, check existing tickets for duplicates
+3. Create new tickets for unmatched items
+4. Build the merged items list including all existing tickets
+5. Write JSON to `@outputPath`

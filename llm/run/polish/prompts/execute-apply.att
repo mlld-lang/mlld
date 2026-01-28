@@ -1,0 +1,101 @@
+## Apply Fix: @ticketId
+
+You are implementing a fix in an isolated git worktree.
+
+## Context
+
+**Ticket ID**: @ticketId
+**Base branch**: @baseBranch
+**Worktree branch**: polish/@ticketId
+
+## Analysis
+
+```json
+@analysisJson
+```
+
+## Instructions
+
+### 1. Create Worktree
+
+**CRITICAL: Work in a worktree, NOT the main repo.**
+
+```bash
+# Remove existing worktree if present
+wt remove polish/@ticketId -y 2>/dev/null || true
+
+# Create fresh worktree
+wt switch --create polish/@ticketId --base @baseBranch -y
+```
+
+### 2. Verify Worktree
+
+```bash
+git branch --show-current
+pwd
+```
+
+Branch MUST be `polish/@ticketId`. If not, STOP.
+
+### 3. Implement the Fix
+
+Based on the analysis:
+- Root cause: @rootCause
+- Location: @rootCauseLocation
+- Approach: @approach
+
+Make the necessary code changes.
+
+### 4. Run Tests
+
+```bash
+npm run build
+npm test
+```
+
+### 5. Commit Changes
+
+If tests pass:
+```bash
+git add -p  # Review each change
+git commit -m "Fix: @ticketId - brief description"
+```
+
+### 6. Write Result
+
+Write to `@outputPath`:
+
+**If successful (tests pass):**
+```json
+{
+  "ticket_id": "@ticketId",
+  "applied": true,
+  "verified": true,
+  "worktree_branch": "polish/@ticketId",
+  "commit_sha": "<sha>",
+  "files_changed": ["path/to/file.ts"],
+  "test_output": "summary of test results"
+}
+```
+
+**If tests fail:**
+```json
+{
+  "ticket_id": "@ticketId",
+  "applied": true,
+  "verified": false,
+  "worktree_branch": "polish/@ticketId",
+  "errors": ["error messages"],
+  "escalated": false
+}
+```
+
+**If worktree creation fails:**
+```json
+{
+  "ticket_id": "@ticketId",
+  "applied": false,
+  "error": "worktree creation failed",
+  "details": "<error message>"
+}
+```

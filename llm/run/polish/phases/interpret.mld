@@ -1,0 +1,104 @@
+>> Phase 0: Interpret
+>> Reads QA trend report + human answers → strategy.json
+>>
+>> Input: qa/<run>/trend-report.json, qa/<run>/strategy-questions.md
+>> Output: pipeline/<run>/interpret/strategy.json
+
+import { @claudePoll } from @mlld/claude-poll
+import { @updatePhaseStatus } from "../lib/state.mld"
+import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
+
+/needs { sh }
+
+>> Tool permissions for interpret agent
+var @interpretTools = "Read,Write,Glob,Grep"
+
+>> Build prompt from template
+exe @buildInterpretPrompt(qaDir, hasStrategyQuestions, outputPath) = template "../prompts/interpret.att"
+
+>> Main interpret function
+>> Returns strategy object or null if skipped
+exe @runInterpret(runDir, qaDir) = when first [
+  >> Early return if no QA data
+  !@qaDir [
+    show `  No QA run directory specified`
+    show `  Skipping interpret phase (no QA data)`
+    => null
+  ]
+
+  >> Normal path - process QA data
+  * => @doInterpret(@runDir, @qaDir)
+]
+
+>> Inner interpret logic (called when qaDir is valid)
+exe @doInterpret(runDir, qaDir) = [
+  let @trendReportPath = `@qaDir/trend-report.json`
+  let @trendReport = <@trendReportPath>
+
+  >> Early return if no trend report
+  => when first [
+    !@trendReport [
+      show `  No trend report found at @trendReportPath`
+      show `  Skipping interpret phase (no QA data)`
+      => null
+    ]
+    * => @doInterpretWithData(@runDir, @qaDir, @trendReportPath)
+  ]
+]
+
+>> Core interpret logic (called when we have valid data)
+exe @doInterpretWithData(runDir, qaDir, trendReportPath) = [
+  >> Check for existing strategy (skip if already done)
+  let @outputPath = `@runDir/interpret/strategy.json`
+  let @existingStrategy = <@outputPath>
+
+  => when first [
+    @existingStrategy [
+      show `  Strategy already exists at @outputPath`
+      show `  Skipping interpret phase`
+      => @existingStrategy
+    ]
+    * => @executeInterpret(@runDir, @qaDir, @trendReportPath, @outputPath)
+  ]
+]
+
+>> Execute the interpret agent
+exe @executeInterpret(runDir, qaDir, trendReportPath, outputPath) = [
+  >> Check for strategy questions
+  let @strategyQuestionsPath = `@qaDir/strategy-questions.md`
+  let @strategyQuestions = <@strategyQuestionsPath>
+  let @hasStrategyQuestions = @strategyQuestions ? true : false
+
+  >> Log phase start
+  let @_ = @logPhaseStart(@runDir, "interpret")
+
+  show `  Trend report: @trendReportPath`
+  show `  Strategy questions: @hasStrategyQuestions`
+  show `  Output: @outputPath`
+
+  >> Build and run prompt
+  let @prompt = @buildInterpretPrompt(@qaDir, @hasStrategyQuestions, @outputPath)
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to @outputPath using the Write tool. Write ONLY the JSON object as its contents.`
+
+  show `  Starting interpret agent...`
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @interpretTools, @outputPath)
+
+  >> Load and return the strategy
+  let @strategy = <@outputPath>
+
+  => when first [
+    !@strategy [
+      show `  ERROR: Failed to generate strategy.json`
+      => null
+    ]
+    * [
+      >> Log completion
+      let @classCount = @strategy.classifications ? @strategy.classifications.length : 0
+      let @_ = @logPhaseComplete(@runDir, "interpret", { classifications: @classCount })
+      show `  Generated @classCount classifications`
+      => @strategy
+    ]
+  ]
+]
+
+/export { @runInterpret }

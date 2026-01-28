@@ -1,0 +1,73 @@
+>> Events Library
+>> Handles JSONL event logging for parallel-safe progress tracking
+
+>> Append an event to the events log
+exe @logEvent(runDir, event) = [
+  let @eventLog = `@runDir/events.jsonl`
+  let @eventWithTs = { ts: @now, ...@event }
+  let @_ = @eventWithTs | append "@eventLog"
+  => @eventWithTs
+]
+
+>> Log phase start
+exe @logPhaseStart(runDir, phase) = [
+  => @logEvent(@runDir, { event: "phase_start", phase: @phase })
+]
+
+>> Log phase complete (with optional extra data)
+exe @logPhaseComplete(runDir, phase, extra) = [
+  let @baseEvent = { event: "phase_complete", phase: @phase }
+  let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
+  => @logEvent(@runDir, @fullEvent)
+]
+
+>> Log batch start
+exe @logBatchStart(runDir, count) = [
+  => @logEvent(@runDir, { event: "batch_start", count: @count })
+]
+
+>> Log batch complete
+exe @logBatchDone(runDir, count) = [
+  => @logEvent(@runDir, { event: "batch_done", count: @count })
+]
+
+>> Log item start
+exe @logItemStart(runDir, id, itemType) = [
+  => @logEvent(@runDir, { event: "item_start", id: @id, type: @itemType })
+]
+
+>> Log item complete (with optional extra data)
+exe @logItemDone(runDir, id, result, extra) = [
+  let @baseEvent = { event: "item_done", id: @id, result: @result }
+  let @fullEvent = @extra ? { ...@baseEvent, ...@extra } : @baseEvent
+  => @logEvent(@runDir, @fullEvent)
+]
+
+>> Load all events from log
+exe @loadEvents(runDir) = [
+  let @eventLog = `@runDir/events.jsonl`
+  let @content = <@eventLog>
+  when !@content => []
+  >> Split by newlines and parse each line
+  let @lines = @content.split("\n")
+  let @events = for @line in @lines when @line.trim().length > 0 => @line.data
+  => @events
+]
+
+>> Get completed items from events
+exe @getCompletedItems(events) = [
+  let @doneEvents = for @e in @events when @e.event == "item_done" => @e
+  => for @e in @doneEvents => @e.id
+]
+
+/export {
+  @logEvent,
+  @logPhaseStart,
+  @logPhaseComplete,
+  @logBatchStart,
+  @logBatchDone,
+  @logItemStart,
+  @logItemDone,
+  @loadEvents,
+  @getCompletedItems
+}

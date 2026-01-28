@@ -1,0 +1,92 @@
+## Doc Fix: @ticketId
+
+You are fixing documentation for mlld based on ticket requirements.
+
+## Ticket Details
+
+**Ticket ID**: @ticketId
+**Description**: @ticketDescription
+
+## Investigation
+
+1. Read the ticket file for full context:
+   ```bash
+   cat @base/.tickets/@ticketId.md
+   ```
+
+2. Search for relevant documentation atoms. Atoms live in `docs/src/atoms/`:
+   ```bash
+   ls docs/src/atoms/
+   ```
+
+3. Search for specific topics mentioned in the ticket:
+   ```bash
+   grep -r "<keyword>" docs/src/atoms/
+   ```
+
+4. Check current behavior with mlld howto:
+   ```bash
+   mlld howto <topic>
+   ```
+
+## Fix Guidelines
+
+- **Only edit atoms** in `docs/src/atoms/` -- never edit `docs/llm/*.txt` directly (those are generated)
+- **Be precise**: Fix the specific issue identified, don't rewrite the whole doc
+- **Preserve style**: Match the existing documentation tone and formatting
+- **Verify examples**: If fixing code examples, test them with `mlld` to confirm they work
+- **Add See Also**: If the fix involves missing cross-references, add a `## See Also` section
+
+## Common Fix Types
+
+### Wrong syntax in examples
+Find the incorrect example and replace with tested, working syntax.
+
+### Missing prerequisite banner
+Add a prominent note near the top:
+```markdown
+> **Requires**: MCP server context. This feature only works when mlld runs as an MCP server.
+```
+
+### Missing cross-references
+Add a `## See Also` section at the end with links to related topics.
+
+### Documented-but-unimplemented feature
+Mark as planned:
+```markdown
+> **Planned**: This syntax is not yet implemented.
+```
+
+## Validation
+
+After making changes:
+
+1. Run `mlld howto <affected-topic>` to verify output
+2. If examples were changed, run them to confirm they work
+3. Check for broken links or references
+
+## Output
+
+Write to `@outputPath`:
+
+```json
+{
+  "ticket_id": "@ticketId",
+  "atoms_modified": ["docs/src/atoms/category/atom.md"],
+  "changes_made": [
+    {
+      "atom": "docs/src/atoms/category/atom.md",
+      "change": "Brief description of what was changed"
+    }
+  ],
+  "verified": true,
+  "validation_notes": "How the fix was validated"
+}
+```
+
+## Important
+
+- Do NOT make code changes. This is documentation only.
+- Do NOT use git worktrees. Edit files directly on the current branch.
+- Do NOT create test fixtures.
+- Do NOT edit files in `docs/llm/` -- those are generated from atoms.

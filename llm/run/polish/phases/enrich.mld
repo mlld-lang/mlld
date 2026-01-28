@@ -1,0 +1,179 @@
+>> Phase 2: Enrich
+>> Adds staleness, implementation status, and scope estimates to tickets
+>>
+>> Input: pipeline/<run>/reconcile/merged-items.json
+>> Output: pipeline/<run>/enrich/enriched-items.json + tags on tickets
+
+import { @claudePoll } from @mlld/claude-poll
+import { @updatePhaseStatus } from "../lib/state.mld"
+import { @logPhaseStart, @logPhaseComplete, @logItemStart, @logItemDone } from "../lib/events.mld"
+import { @getTicket, @addTags, @hasTagPrefix, @isStale, @isImplDone } from "../lib/tickets.mld"
+
+/needs { sh }
+
+>> Tool permissions for enrich agent
+var @enrichTools = "Read,Write,Glob,Grep,Bash(git log:*),Bash(cat:*)"
+
+>> Helper to floor a number
+exe @floor(n) = js { return Math.floor(n); }
+
+>> Build prompt from template
+exe @buildEnrichPrompt(issueId, issueType, issuePriority, createdDate, issueContent, changelog, commits) = template "../prompts/enrich.att"
+
+>> Enrich a single ticket
+exe @enrichTicket(runDir, ticket, changelog) = [
+  let @issueId = @ticket.id
+  let @issueType = @ticket.type ? @ticket.type : "task"
+  let @issuePriority = @ticket.priority ? @ticket.priority : "3"
+  let @createdDate = @ticket.created ? @ticket.created : @now
+
+  >> Check if already enriched (has size tag)
+  when @hasTagPrefix(@ticket, "size-") [
+    show `    Skipping @issueId (already enriched)`
+    => { ticket_id: @issueId, skipped: true, reason: "already-enriched" }
+  ]
+
+  >> Read full ticket content
+  let @ext = ".md"
+  let @ticketPath = `@base/.tickets/@issueId@ext`
+  let @issueContent = <@ticketPath>
+  when !@issueContent => let @issueContent = "Issue content not found"
+
+  >> Get commits since ticket was created
+  let @commits = sh {git log --oneline --since="@createdDate" --no-decorate 2>/dev/null | head -100}
+
+  >> Build and run prompt
+  let @prompt = @buildEnrichPrompt(@issueId, @issueType, @issuePriority, @createdDate, @issueContent, @changelog, @commits)
+  let @markerFile = `@runDir/enrich/@issueId-enrich.json`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to @markerFile using the Write tool. Write ONLY the JSON object as its contents.`
+
+  @logItemStart(@runDir, @issueId, 0)
+  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @enrichTools, @markerFile)
+
+  >> Parse result
+  let @result = <@markerFile>
+  when !@result [
+    show `    ERROR: Failed to enrich @issueId`
+    @logItemDone(@runDir, @issueId, "error", {})
+    => { ticket_id: @issueId, error: true }
+  ]
+
+  >> Add tags to ticket
+  when @result.tags_to_add [
+    let @tagsStr = @result.tags_to_add.join(",")
+    @addTags(@issueId, @tagsStr)
+  ]
+
+  @logItemDone(@runDir, @issueId, "enriched", {})
+
+  => {
+    ticket_id: @issueId,
+    staleness: @result.staleness,
+    implementation: @result.implementation,
+    scope: @result.scope,
+    tags_added: @result.tags_to_add
+  }
+]
+
+>> Main enrich function
+exe @runEnrich(runDir) = [
+  >> Check for existing output (skip if already done)
+  let @outputPath = `@runDir/enrich/enriched-items.json`
+  let @existingOutput = <@outputPath>
+
+  when @existingOutput [
+    show `  Enriched items already exist at @outputPath`
+    show `  Skipping enrich phase`
+    => @existingOutput
+  ]
+
+  >> Load merged items from reconcile phase
+  let @mergedPath = `@runDir/reconcile/merged-items.json`
+  let @merged = <@mergedPath>
+
+  when !@merged [
+    show `  No merged-items.json found`
+    show `  Run reconcile phase first`
+    => null
+  ]
+
+  let @items = @merged.items ? @merged.items : []
+
+  >> Log phase start
+  @logPhaseStart(@runDir, "enrich")
+
+  show `  Enriching @items.length items...`
+
+  >> Load changelog once (shared across all tickets)
+  let @changelog = sh {head -300 @base/CHANGELOG.md 2>/dev/null}
+
+  >> Get ticket details for each item
+  let @ticketsToEnrich = for @item in @items [
+    let @ticket = @getTicket(@item.ticket_id)
+    when @ticket => {
+      id: @item.ticket_id,
+      type: @ticket.mx.fm.type,
+      priority: @ticket.mx.fm.priority,
+      created: @ticket.mx.fm.created,
+      tags: @ticket.mx.fm.tags
+    }
+    => null
+  ]
+
+  >> Filter out nulls and already-enriched
+  let @needsEnrich = for @t in @ticketsToEnrich when @t && !@hasTagPrefix(@t, "size-") => @t
+
+  show `  @needsEnrich.length tickets need enrichment`
+
+  >> Enrich in parallel (limited to 5 to avoid rate limits)
+  let @results = for parallel(5, 10s) @ticket in @needsEnrich [
+    show `    Enriching: @ticket.id`
+    => @enrichTicket(@runDir, @ticket, @changelog)
+  ]
+
+  >> Separate successful and filtered
+  let @enriched = for @r in @results when !@r.skipped && !@r.error => @r
+  let @skipped = for @r in @results when @r.skipped => @r
+  let @errors = for @r in @results when @r.error => @r
+
+  >> Filter out stale and impl-done items
+  let @staleItems = for @r in @enriched when @r.staleness && @r.staleness.score > 0.3 => @r
+  let @implDoneItems = for @r in @enriched when @r.implementation && @r.implementation.status == "done" => @r
+  let @activeItems = for @r in @enriched
+    when (!@r.staleness || @r.staleness.score <= 0.3) && (!@r.implementation || @r.implementation.status != "done")
+    => @r
+
+  >> Build output
+  let @output = {
+    generated_at: @now,
+    items: @activeItems,
+    filtered: {
+      stale: @staleItems,
+      impl_done: @implDoneItems
+    },
+    summary: {
+      total: @items.length,
+      enriched: @enriched.length,
+      skipped: @skipped.length,
+      errors: @errors.length,
+      active: @activeItems.length,
+      filtered_stale: @staleItems.length,
+      filtered_impl_done: @implDoneItems.length
+    }
+  }
+
+  output @output to "@outputPath"
+
+  >> Log completion
+  @logPhaseComplete(@runDir, "enrich", { items: @activeItems.length })
+
+  show `  Enriched @enriched.length items`
+  show `    Active: @activeItems.length`
+  show `    Filtered (stale): @staleItems.length`
+  show `    Filtered (impl-done): @implDoneItems.length`
+  show `    Errors: @errors.length`
+
+  => @output
+]
+
+/export { @runEnrich }

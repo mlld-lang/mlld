@@ -1,0 +1,336 @@
+>> Phase 4: Execute
+>> Processes ranked work items by analyzing and applying fixes
+>>
+>> Stages:
+>>   4a. Analyze + Apply (in worktrees)
+>>   4b. Merge (worktrees → main)
+>>   4c. Verify (test main after merge)
+>>
+>> Input: pipeline/<run>/rank/work-plan.json
+>> Output: pipeline/<run>/execute/results.json
+
+import { @claudePoll } from @mlld/claude-poll
+import { @logPhaseStart, @logPhaseComplete, @logBatchStart, @logBatchDone, @logItemStart, @logItemDone, @logEvent, @loadEvents, @getCompletedItems } from "../lib/events.mld"
+import { @getTicket, @addTags } from "../lib/tickets.mld"
+
+/needs { sh }
+
+>> Tool permissions for execute agents
+var @analyzeTools = "Read,Write,Glob,Grep,Bash(mlld:*),Bash(cat:*)"
+var @applyTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(npm run:*),Bash(npm test:*),Bash(cat:*),Bash(pwd),Bash(head:*)"
+var @mergeTools = "Read,Write,Glob,Grep,Bash(git:*),Bash(wt:*),Bash(cat:*),Bash(pwd)"
+var @verifyTools = "Read,Write,Glob,Grep,Bash(npm run:*),Bash(npm test:*),Bash(git:*),Bash(cat:*)"
+
+>> Build prompts from templates
+exe @buildAnalyzePrompt(ticketId, ticketType, ticketPriority, ticketContent, topics, strategyContext, outputPath) = template "../prompts/execute-analyze.att"
+exe @buildApplyPrompt(ticketId, baseBranch, analysisJson, outputPath, rootCause, rootCauseLocation, approach) = template "../prompts/execute-apply.att"
+exe @buildMergePrompt(baseBranch, runDir, batchNum, mergeItemsJson, outputPath) = template "../prompts/execute-merge.att"
+exe @buildVerifyPrompt(baseBranch, runDir, mergedCount, mergedItemsJson, outputPath) = template "../prompts/execute-verify.att"
+
+>> Analyze a ticket and return analysis result
+exe @analyzeTicket(runDir, ticketId, dryRun) = [
+  let @analysisPath = `@runDir/execute/@ticketId-analysis.json`
+  let @existingAnalysis = <@analysisPath>
+  when @existingAnalysis [
+    show `        Using existing analysis`
+    => @existingAnalysis
+  ]
+
+  >> Get ticket metadata
+  let @ticketPath = `@base/.tickets/@ticketId.md`
+  let @ticketContent = <@ticketPath>
+  when !@ticketContent => { ticket_id: @ticketId, error: "ticket file not found" }
+
+  >> Extract frontmatter metadata
+  let @typeMatch = @ticketContent.match(/^type:\s*(.+)$/m)
+  let @priorityMatch = @ticketContent.match(/^priority:\s*(\d+)$/m)
+  let @ticketType = @typeMatch ? @typeMatch[1] : "task"
+  let @ticketPriority = @priorityMatch ? `p@priorityMatch[1]` : "p2"
+
+  >> Load strategy context if available
+  let @strategyPath = `@runDir/interpret/strategy.json`
+  let @strategy = <@strategyPath>
+  let @strategyContext = @strategy ? `@strategy` : "No strategy context available"
+  let @topics = "N/A"
+
+  let @analyzeModel = @dryRun ? "haiku" : "opus"
+  let @analyzePrompt = @buildAnalyzePrompt(@ticketId, @ticketType, @ticketPriority, @ticketContent, @topics, @strategyContext, @analysisPath)
+  let @analyzeFullPrompt = `@analyzePrompt\n\nIMPORTANT: Write your JSON response to @analysisPath using the Write tool. Write ONLY valid JSON.`
+  let @response = @claudePoll(@analyzeFullPrompt, @analyzeModel, @base, @analyzeTools, @analysisPath)
+
+  let @result = <@analysisPath>
+  when !@result => { ticket_id: @ticketId, error: "analysis failed" }
+  => @result
+]
+
+>> Process a single ticket (analyze + apply + verify in worktree)
+exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
+  let @ticket = @getTicket(@ticketId)
+  when !@ticket => { ticket_id: @ticketId, error: "ticket not found" }
+
+  >> Check if already completed
+  let @events = @loadEvents(@runDir)
+  let @completedIds = @getCompletedItems(@events)
+  when @completedIds.includes(@ticketId) [
+    show `      Skipping @ticketId (already completed)`
+    => { ticket_id: @ticketId, skipped: true, reason: "already completed" }
+  ]
+
+  >> Log item start
+  let @_ = @logItemStart(@runDir, @ticketId, "single")
+
+  show `      Analyzing @ticketId...`
+  when @dryRun => show `        [DRY RUN] Using haiku model`
+
+  >> Step 1: Analyze the ticket
+  let @analysis = @analyzeTicket(@runDir, @ticketId, @dryRun)
+  when @analysis.error => @analysis
+
+  >> Check if auto-approve
+  let @canApprove = @analysis.recommendation && @analysis.recommendation.auto_approve
+  when !@canApprove [
+    show `        Not auto-approved`
+    let @_ = @logItemDone(@runDir, @ticketId, "needs-review", { analysis: @analysis })
+    => { ticket_id: @ticketId, status: "needs-review", analysis: @analysis }
+  ]
+
+  >> Step 2: Apply the fix (skip in dry-run mode)
+  when @dryRun [
+    show `      [DRY RUN] Skipping apply for @ticketId`
+    let @dryResult = { ticket_id: @ticketId, applied: false, verified: false, dry_run: true, analysis: @analysis }
+    let @_ = @logItemDone(@runDir, @ticketId, "dry-run", @dryResult)
+    => @dryResult
+  ]
+
+  show `      Applying fix for @ticketId...`
+
+  let @resultPath = `@runDir/execute/@ticketId-result.json`
+  let @rootCause = @analysis.investigation.root_cause
+  let @rootCauseLocation = @analysis.investigation.root_cause_location
+  let @approach = @analysis.proposed_fix.approach
+  let @analysisJson = @analysis.text
+
+  let @applyPrompt = @buildApplyPrompt(@ticketId, @baseBranch, @analysisJson, @resultPath, @rootCause, @rootCauseLocation, @approach)
+  let @applyFullPrompt = `@applyPrompt\n\nIMPORTANT: Write your JSON result to @resultPath using the Write tool.`
+  let @applyResponse = @claudePoll(@applyFullPrompt, "opus", @base, @applyTools, @resultPath)
+
+  let @result = <@resultPath>
+  when !@result [
+    let @_ = @logItemDone(@runDir, @ticketId, "apply-failed", { error: "no result file" })
+    => { ticket_id: @ticketId, error: "apply failed - no result" }
+  ]
+
+  >> Log completion
+  let @status = @result.verified ? "completed" : "fix-failed"
+  let @_ = @logItemDone(@runDir, @ticketId, @status, @result)
+
+  >> Tag ticket based on result
+  when @result.verified [
+    let @_ = @addTags(@ticketId, "impl-done")
+    show `        Fix verified in worktree`
+  ]
+  when @result.applied && !@result.verified [
+    let @_ = @addTags(@ticketId, "impl-blocked")
+    show `        Fix applied but verification failed`
+  ]
+
+  => @result
+]
+
+>> Process a cluster (epic + children in sequence)
+exe @processCluster(runDir, cluster, baseBranch, dryRun) = [
+  let @epicId = @cluster.epic_id
+  let @childIds = @cluster.tickets
+
+  show `    Processing cluster @epicId (@childIds.length children)`
+
+  >> Process children first (in sequence to avoid conflicts)
+  let @childResults = for @childId in @childIds => @processTicket(@runDir, @childId, @baseBranch, @dryRun)
+
+  >> Count results
+  let @completed = for @r in @childResults when @r.verified => @r
+  let @failed = for @r in @childResults when @r.error => @r
+
+  show `    Cluster @epicId: @completed.length/@childIds.length completed`
+
+  => { epic_id: @epicId, children: @childIds, child_results: @childResults, completed_count: @completed.length, failed_count: @failed.length }
+]
+
+>> Merge verified worktrees into main branch
+exe @mergeVerified(runDir, results, baseBranch, batchNum, dryRun) = [
+  >> Collect items that are verified (tests passed in worktree)
+  let @verifiedItems = for @r in @results when @r.verified && @r.worktree_branch => { ticket_id: @r.ticket_id, worktree_branch: @r.worktree_branch, commit_sha: @r.commit_sha }
+
+  when @verifiedItems.length == 0 [
+    show `    No verified items to merge`
+    => { merged_count: 0, skipped_count: 0, failed_count: 0 }
+  ]
+
+  show `    Merging @verifiedItems.length verified worktrees...`
+
+  >> In dry-run mode, skip actual merge
+  when @dryRun [
+    show `    [DRY RUN] Would merge @verifiedItems.length worktrees`
+    => { merged_count: 0, skipped_count: @verifiedItems.length, failed_count: 0, dry_run: true }
+  ]
+
+  >> Build and run merge prompt
+  let @mergeItemsJson = @verifiedItems.text
+  let @outputPath = `@runDir/execute/merge-batch-@batchNum.json`
+  let @prompt = @buildMergePrompt(@baseBranch, @runDir, @batchNum, @mergeItemsJson, @outputPath)
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
+
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @mergeTools, @outputPath)
+
+  let @mergeResult = <@outputPath>
+  when !@mergeResult => { merged_count: 0, error: "merge failed - no result" }
+
+  let @_ = @logEvent(@runDir, { event: "merge_complete", batch: @batchNum, merged: @mergeResult.merged_count })
+
+  => @mergeResult
+]
+
+>> Verify main branch after merge
+exe @verifyMain(runDir, mergeResult, baseBranch, dryRun) = [
+  let @mergedCount = @mergeResult.merged_count ? @mergeResult.merged_count : 0
+  when @mergedCount == 0 [
+    show `    No merges to verify`
+    => { status: "skipped", reason: "no merges" }
+  ]
+
+  show `    Verifying main branch after @mergedCount merges...`
+
+  >> In dry-run mode, skip verification
+  when @dryRun [
+    show `    [DRY RUN] Would verify main branch`
+    => { status: "skipped", dry_run: true }
+  ]
+
+  >> Build merged items list for context
+  let @mergeResults = @mergeResult.results ? @mergeResult.results : []
+  let @mergedItems = for @r in @mergeResults when @r.merged => @r
+  let @mergedItemsJson = @mergedItems.text
+
+  let @outputPath = `@runDir/execute/verification-result.json`
+  let @prompt = @buildVerifyPrompt(@baseBranch, @runDir, @mergedCount, @mergedItemsJson, @outputPath)
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
+
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @verifyTools, @outputPath)
+
+  let @verifyResult = <@outputPath>
+  when !@verifyResult => { status: "error", error: "verification failed - no result" }
+
+  let @_ = @logEvent(@runDir, { event: "verify_complete", status: @verifyResult.status })
+
+  => @verifyResult
+]
+
+>> Main execute function
+exe @runExecute(runDir, batchSize, dryRun) = [
+  let @outputPath = `@runDir/execute/results.json`
+
+  >> Load work plan
+  let @workPlanPath = `@runDir/rank/work-plan.json`
+  let @workPlan = <@workPlanPath>
+
+  when !@workPlan [
+    show `  No work-plan.json found`
+    show `  Run rank phase first`
+    => null
+  ]
+
+  let @items = @workPlan.ranked_items ? @workPlan.ranked_items : []
+
+  when @items.length == 0 [
+    show `  No items to execute`
+    let @emptyResults = { created: @now, results: [] }
+    output @emptyResults to "@outputPath"
+    => @emptyResults
+  ]
+
+  >> Log phase start
+  let @_ = @logPhaseStart(@runDir, "execute")
+
+  >> Get base branch
+  let @baseBranch = sh {git branch --show-current}
+  let @baseBranchTrimmed = @baseBranch.trim()
+
+  show `  Executing @items.length ranked items...`
+  show `  Base branch: @baseBranchTrimmed`
+  when @dryRun => show `  [DRY RUN MODE] Using haiku, skipping actual changes`
+
+  >> Apply batch limit (dry-run forces batch of 2)
+  let @effectiveBatchSize = @dryRun ? 2 : (@batchSize ? @batchSize * 1 : @items.length)
+  let @batch = @items.slice(0, @effectiveBatchSize)
+
+  show `  Processing batch of @batch.length items`
+  let @_ = @logBatchStart(@runDir, @batch.length)
+
+  >> === STAGE 4a: ANALYZE + APPLY (in worktrees) ===
+  show ``
+  show `  --- Stage 4a: Analyze + Apply ---`
+
+  >> Process items in sequence
+  let @results = []
+  for @item in @batch [
+    let @idx = @mx.for.index + 1
+    let @itemId = @item.ticket_id ? @item.ticket_id : @item.epic_id
+    show `  [@idx/@batch.length] Processing @item.type: @itemId`
+
+    let @result = when first [
+      @item.type == "cluster" => @processCluster(@runDir, @item, @baseBranchTrimmed, @dryRun)
+      * => @processTicket(@runDir, @item.ticket_id, @baseBranchTrimmed, @dryRun)
+    ]
+
+    let @results += [@result]
+  ]
+
+  let @_ = @logBatchDone(@runDir, @results.length)
+
+  >> === STAGE 4b: MERGE (worktrees → main) ===
+  show ``
+  show `  --- Stage 4b: Merge ---`
+
+  let @batchNum = 1
+  let @mergeResult = @mergeVerified(@runDir, @results, @baseBranchTrimmed, @batchNum, @dryRun)
+
+  >> === STAGE 4c: VERIFY (test main after merge) ===
+  show ``
+  show `  --- Stage 4c: Verify ---`
+
+  let @verifyResult = @verifyMain(@runDir, @mergeResult, @baseBranchTrimmed, @dryRun)
+
+  >> Check verification status
+  when @verifyResult.status == "fail" [
+    show `  WARNING: Verification failed after merge!`
+  ]
+
+  >> Build final results
+  let @mergedCount = @mergeResult.merged_count ? @mergeResult.merged_count : 0
+  let @executeResults = { created: @now, base_branch: @baseBranchTrimmed, batch_size: @batch.length, total_items: @items.length, dry_run: @dryRun ? true : false, results: @results, merge: @mergeResult, verification: @verifyResult }
+
+  output @executeResults to "@outputPath"
+
+  >> Log completion
+  let @completed = for @r in @results when @r.verified => @r
+  let @_ = @logPhaseComplete(@runDir, "execute", { processed: @results.length, completed: @completed.length, merged: @mergedCount, verified: @verifyResult.status })
+
+  >> Summary
+  let @singles = for @r in @results when @r.ticket_id && !@r.epic_id => @r
+  let @clusters = for @r in @results when @r.epic_id => @r
+  let @verified = for @r in @singles when @r.verified => @r
+  let @needsReview = for @r in @singles when @r.status == "needs-review" => @r
+  let @failed = for @r in @singles when @r.error => @r
+  let @skipped = for @r in @singles when @r.skipped => @r
+
+  show ``
+  show `  Execute complete:`
+  show `    Apply:  @singles.length singles (@verified.length verified, @needsReview.length needs-review, @failed.length failed, @skipped.length skipped)`
+  show `            @clusters.length clusters processed`
+  show `    Merge:  @mergedCount merged`
+  show `    Verify: @verifyResult.status`
+
+  => @executeResults
+]
+
+/export { @runExecute, @processTicket, @processCluster, @mergeVerified, @verifyMain }

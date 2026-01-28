@@ -1,0 +1,116 @@
+## Interpret Strategy for Polish Pipeline
+
+You are reading a QA trend report and (optionally) human-answered strategy questions to produce a structured `strategy.json` that drives the polish pipeline.
+
+## Inputs
+
+### Required
+- `@qaDir/trend-report.json` -- trend analysis with actionable items, feature health, and trends
+
+### Optional
+- `@qaDir/strategy-questions.md` -- strategy questions with human answers (exists: @hasStrategyQuestions)
+
+## Your Task
+
+1. Read the trend report
+2. If `strategy-questions.md` exists, read it and understand the human's answers
+3. Produce strategy.json that classifies every actionable item into an action type
+
+## Reading Human Answers
+
+In `strategy-questions.md`, each question has a blockquote where the human added their answer:
+
+```markdown
+### 1. `guard privileged` (label-modification)
+...
+> implement -- the runtime already supports it, just needs grammar keyword
+```
+
+Read each answer and understand what the human wants. They may be brief ("yes", "remove from docs") or nuanced ("implement the basic form but not the advanced syntax described in the docs"). Capture the full intent in your classification rationale.
+
+If a question has an empty answer line (just `> ` with nothing after it), classify the item as `defer` -- the human hasn't decided yet.
+
+If `strategy-questions.md` doesn't exist, classify items from the trend report alone. Items that would normally need a human question should be classified as `defer`.
+
+## Action Types
+
+- **`code-fix`**: Fix a bug in existing code. The feature exists but is broken.
+- **`doc-fix`**: Fix documentation. The code is correct but docs are wrong, incomplete, or misleading.
+- **`defer`**: Awaiting human decision, or explicitly deferred for later.
+- **`skip`**: QA process improvements or items that don't require action in this pipeline.
+
+## Output Schema
+
+Write the strategy.json file to: `@outputPath`
+
+```json
+{
+  "generated_at": "<ISO timestamp>",
+  "qa_run": "<path to qa run directory>",
+  "source": {
+    "trend_report": "<path to trend-report.json>",
+    "strategy_questions": "<path to strategy-questions.md or null>",
+    "questions_answered": 3,
+    "questions_total": 5,
+    "questions_unanswered": 2
+  },
+  "classifications": [
+    {
+      "id": "strat-1",
+      "action": "code-fix",
+      "topics": ["escaping-basics", "output", "escaping-defaults"],
+      "description": "Fix @ symbol re-interpolation in template values",
+      "supporting_trends": ["trend-5"],
+      "rationale": "Clear parser bug. Variable values containing @ are re-interpolated during template expansion.",
+      "source": "auto",
+      "question_number": null,
+      "priority": "P0",
+      "effort": "medium"
+    },
+    {
+      "id": "strat-2",
+      "action": "doc-fix",
+      "topics": ["templates-loops", "templates-external"],
+      "description": "Fix slash-prefix examples in template howtos",
+      "supporting_trends": ["trend-2"],
+      "rationale": "Examples show bare for/when/end instead of /for, /when, /end.",
+      "source": "auto",
+      "question_number": null,
+      "priority": "P0",
+      "effort": "small"
+    }
+  ],
+  "topic_actions": {
+    "escaping-basics": ["strat-1"],
+    "templates-loops": ["strat-2"]
+  }
+}
+```
+
+## Field Notes
+
+### `classifications[].id`
+Sequential: `strat-1`, `strat-2`, etc.
+
+### `classifications[].source`
+- `auto`: Clear-cut item, no human input needed
+- `human-answer`: Classified based on human's answer to a strategy question
+- `unanswered-question`: Would need human input but no answer was provided
+
+### `topic_actions`
+Reverse index mapping each topic to its classification IDs.
+
+## Guidelines
+
+- Every `actionable_item` in the trend report should map to exactly one classification
+- Multiple actionable items can be grouped into a single classification if they address the same underlying issue
+- Preserve the priority and effort from the trend report's actionable items
+- When a human answer is nuanced, capture the nuance in the rationale
+
+## Begin
+
+1. Read `@qaDir/trend-report.json`
+2. If it exists, read `@qaDir/strategy-questions.md`
+3. Build classifications for every actionable item
+4. Build the `topic_actions` reverse index
+5. Write the JSON to `@outputPath`

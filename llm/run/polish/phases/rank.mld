@@ -1,0 +1,149 @@
+>> Phase 3: Rank
+>> Groups related items into clusters and ranks by priority
+>>
+>> Input: pipeline/<run>/enrich/enriched-items.json
+>> Output: pipeline/<run>/rank/work-plan.json
+
+import { @claudePoll } from @mlld/claude-poll
+import { @updatePhaseStatus } from "../lib/state.mld"
+import { @logPhaseStart, @logPhaseComplete } from "../lib/events.mld"
+import { @createTicket } from "../lib/tickets.mld"
+
+/needs { sh }
+
+>> Tool permissions for rank agent
+var @rankTools = "Read,Write,Glob,Grep"
+var @ticketTools = "Read,Write,Glob,Grep,Bash(tk:*),Bash(cat:*)"
+
+>> Build prompts from templates
+exe @buildGroupPrompt(itemsJson) = template "../prompts/rank-group.att"
+exe @buildRankPrompt(assignmentsJson, itemDetailsJson) = template "../prompts/rank-order.att"
+
+>> Main rank function
+exe @runRank(runDir) = [
+  >> Check for existing output (skip if already done)
+  let @outputPath = `@runDir/rank/work-plan.json`
+  let @existingOutput = <@outputPath>
+
+  when @existingOutput [
+    show `  Work plan already exists at @outputPath`
+    show `  Skipping rank phase`
+    => @existingOutput
+  ]
+
+  >> Load enriched items
+  let @enrichedPath = `@runDir/enrich/enriched-items.json`
+  let @enriched = <@enrichedPath>
+
+  when !@enriched [
+    show `  No enriched-items.json found`
+    show `  Run enrich phase first`
+    => null
+  ]
+
+  let @items = @enriched.items ? @enriched.items : []
+
+  when @items.length == 0 [
+    show `  No items to rank`
+    let @emptyPlan = { created: @now, ranked_items: [] }
+    output @emptyPlan to "@outputPath"
+    => @emptyPlan
+  ]
+
+  >> Log phase start
+  @logPhaseStart(@runDir, "rank")
+
+  show `  Ranking @items.length items...`
+
+  >> Step 1: Group items
+  let @itemsJson = @items | @json
+  let @groupPrompt = @buildGroupPrompt(@itemsJson)
+  let @groupMarker = `@runDir/rank/groups.json`
+  let @groupFullPrompt = `@groupPrompt\n\nIMPORTANT: Write your JSON response to @groupMarker using the Write tool. Write ONLY the JSON array as its contents.`
+
+  show `    Step 1: Grouping items...`
+  let @groupResponse = @claudePoll(@groupFullPrompt, "opus", @base, @rankTools, @groupMarker)
+
+  let @groups = <@groupMarker>
+  when !@groups [
+    show `  ERROR: Failed to generate groups`
+    => null
+  ]
+
+  >> Count groups
+  let @singles = for @g in @groups when @g.type == "single" => @g
+  let @clusters = for @g in @groups when @g.type == "cluster" => @g
+  show `    Generated @singles.length singles, @clusters.length clusters`
+
+  >> Step 2: Create epic tickets for clusters
+  when @clusters.length > 0 [
+    show `    Creating epic tickets for clusters...`
+    for @cluster in @clusters [
+      let @epicTitle = `[@cluster.area] Grouped work`
+      let @ticketList = @cluster.tickets.join(", ")
+      let @epicId = sh {tk create "@epicTitle" -t epic -p 2 --tags "triage-cluster" -d "Grouped work items: @ticketList. Rationale: @cluster.rationale"}
+      let @epicIdTrimmed = @epicId.trim()
+
+      >> Update cluster with epic ID
+      let @cluster = { ...@cluster, epic_id: @epicIdTrimmed }
+
+      >> Reparent children under the epic
+      for @childId in @cluster.tickets [
+        let @ext = ".md"
+        let @childPath = `@base/.tickets/@childId@ext`
+        let @childContent = <@childPath>
+        when @childContent [
+          let @hasParent = @childContent.includes("parent:")
+          let @updated = when first [
+            @hasParent => @childContent.replace(/^parent:.*$/m, `parent: @epicIdTrimmed`)
+            * => @childContent.replace(/^(priority:.*)$/m, `$1\nparent: @epicIdTrimmed`)
+          ]
+          output @updated to "@childPath"
+        ]
+      ]
+
+      show `      Created epic @epicIdTrimmed for @cluster.area (@cluster.tickets.length items)`
+    ]
+  ]
+
+  >> Reload groups with epic IDs
+  let @updatedGroups = <@groupMarker>
+
+  >> Step 3: Rank groups
+  let @assignmentsJson = @updatedGroups | @json
+  let @itemDetailsJson = @items | @json
+  let @rankPromptText = @buildRankPrompt(@assignmentsJson, @itemDetailsJson)
+  let @rankMarker = `@runDir/rank/ranked.json`
+  let @rankFullPrompt = `@rankPromptText\n\nIMPORTANT: Write your JSON response to @rankMarker using the Write tool. Write ONLY the JSON array as its contents.`
+
+  show `    Step 2: Ranking assignments...`
+  let @rankResponse = @claudePoll(@rankFullPrompt, "sonnet", @base, @rankTools, @rankMarker)
+
+  let @ranked = <@rankMarker>
+  when !@ranked [
+    show `  ERROR: Failed to generate ranking`
+    => null
+  ]
+
+  >> Build final work plan
+  let @workPlan = {
+    created: @now,
+    ranked_items: @ranked
+  }
+
+  output @workPlan to "@outputPath"
+
+  >> Log completion
+  @logPhaseComplete(@runDir, "rank", { items: @ranked.length })
+
+  show `  Ranked @ranked.length items`
+
+  >> Show top 5
+  let @top5 = @ranked.slice(0, 5)
+  show `  Top 5:`
+  for @item in @top5 => show `    @item.rank. [@item.type] @item.ticket_id ? @item.ticket_id : @item.epic_id (@item.points pts) - @item.rationale`
+
+  => @workPlan
+]
+
+/export { @runRank }
