@@ -1,7 +1,9 @@
 >> Staleness Assessment
 >>
->> Checks open issues for staleness by comparing against CHANGELOG.md and commits
->> since the issue was created. Adds stale-check-{n} tags for issues scoring > 0.3.
+>> Phase 1: Checks open issues for staleness by comparing against CHANGELOG.md and commits.
+>>          Adds stale-check-{n} tags for issues scoring > 0.3.
+>> Phase 2: For non-stale issues, checks implementation status in the codebase.
+>>          Adds impl-none, impl-partial, or impl-done tags.
 >> Skips issues that already have stale-check tags.
 
 import { @claudePoll } from @mlld/claude-poll
@@ -9,14 +11,20 @@ import { @claudePoll } from @mlld/claude-poll
 >> Configuration
 var @ticketsDir = "@base/.tickets"
 
->> Tool permissions for assessment (Write needed for claudePoll marker file)
+>> Tool permissions for staleness assessment (Write needed for claudePoll marker file)
 var @assessTools = "Read,Write,Glob,Grep,Bash(git log:*),Bash(tk:*),Bash(cat:*)"
+
+>> Tool permissions for implementation check (needs codebase access)
+var @implTools = "Read,Write,Glob,Grep"
 
 >> Helper to floor a number
 exe @floor(n) = js { return Math.floor(n); }
 
 >> Build staleness assessment prompt
 exe @buildStalePrompt(issueId, issueContent, changelog, commits, createdDate) = template "./stale-prompt.att"
+
+>> Build implementation status prompt
+exe @buildImplPrompt(issueId, issueContent, issueType, issuePriority) = template "./stale-impl-prompt.att"
 
 >> Get all open issues as JSON
 var @issuesJson = sh {tk query '.status == "open"' | jq -s '.'}
@@ -114,4 +122,95 @@ when @staleItems.length > 0 [
   show ``
   show `Stale items:`
   for @item in @staleItems => show `  - @item.id: @item.score - @item.reasoning`
+]
+
+>> ========================================
+>> Phase 2: Implementation Status Check
+>> ========================================
+
+>> Helper to check if issue already has an impl tag
+exe @hasImplTag(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @implTags = for @t in @tags when @t.startsWith("impl-") => @t
+  => @implTags.length > 0
+]
+
+>> Reload issues to pick up phase 1 tags
+var @issuesJson2 = sh {tk query '.status == "open"' | jq -s '.'}
+var @allIssues2 = @issuesJson2 | @json
+
+>> Filter to non-stale issues without impl tags
+exe @isNonStale(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @staleTags = for @t in @tags when @t.startsWith("stale-check-") => @t
+  => @staleTags.length > 0 ? @staleTags[0].replace("stale-check-", "") * 1 <= 3 : true
+]
+
+var @needsImplCheck = for @i in @allIssues2 when @isNonStale(@i) && !@hasImplTag(@i) => @i
+
+show ``
+show `=== Implementation Status Check ===`
+show `Found @needsImplCheck.length non-stale issues without impl-status tags`
+show ``
+
+when @needsImplCheck.length == 0 => show `No issues to check. All non-stale issues already have impl-status tags.`
+
+>> Check implementation status in parallel
+var @implResults = for parallel(5) @issue in @needsImplCheck [
+  let @issueId = @issue.id
+  let @issueType = @issue.type ? @issue.type : "unknown"
+  let @issuePriority = @issue.priority ? @issue.priority : "3"
+
+  >> Read full issue content
+  let @ext = ".md"
+  let @issuePath = `@ticketsDir/@issueId@ext`
+  let @issueFile = <@issuePath>
+  let @issueContent = @issueFile ? @issueFile : "Issue content not found"
+
+  >> Build and send prompt
+  let @prompt = @buildImplPrompt(@issueId, @issueContent, @issueType, @issuePriority)
+  let @markerFile = `@ticketsDir/@issueId-impl.json`
+  let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to the file @markerFile using the Write tool. Write ONLY the JSON object as its contents.`
+  show `Checking implementation: @issueId`
+
+  let @implRaw = @claudePoll(@fullPrompt, "sonnet", @base, @implTools, @markerFile)
+  let @impl = @implRaw | @json
+  show `Implementation checked: @issueId`
+
+  >> Determine status tag
+  let @implScore = @impl.implementation_score ? @impl.implementation_score * 1 : 0
+  let @implStatus = @implScore >= 0.7 ? "impl-done" : @implScore >= 0.3 ? "impl-partial" : "impl-none"
+
+  >> Tag the ticket
+  let @ticketPath = `@ticketsDir/@issueId@ext`
+  let @ticketContent = <@ticketPath>
+  let @existingTags = @issue.tags ? @issue.tags : []
+  let @newTags = @existingTags.concat([@implStatus])
+  let @tagsYaml = `[@newTags.join(", ")]`
+  let @updatedContent = @ticketContent.replace(/^tags:.*$/m, `tags: @tagsYaml`)
+  let @finalContent = @updatedContent.includes("tags:") ? @updatedContent : @updatedContent.replace(/^(priority:.*)$/m, `$1\ntags: @tagsYaml`)
+  output @finalContent to "@ticketPath"
+
+  log `  @issueId: @implStatus (score @implScore)`
+
+  => { id: @issueId, score: @implScore, status: @implStatus, reasoning: @impl.reasoning }
+]
+
+>> Phase 2 Summary
+show ``
+show `=== Implementation Status Complete ===`
+
+var @implDone = for @r in @implResults when @r.status == "impl-done" => @r
+var @implPartial = for @r in @implResults when @r.status == "impl-partial" => @r
+var @implNone = for @r in @implResults when @r.status == "impl-none" => @r
+
+show `Checked: @implResults.length issues`
+show `  Implemented: @implDone.length`
+show `  Partial: @implPartial.length`
+show `  Not implemented: @implNone.length`
+
+when @implDone.length > 0 [
+  show ``
+  show `Fully implemented (candidates for close):`
+  for @item in @implDone => show `  - @item.id: @item.reasoning`
 ]

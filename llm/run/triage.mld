@@ -1,0 +1,235 @@
+>> Triage Pipeline
+>>
+>> Phase A: Create tickets from QA results (if qa data exists)
+>> Phase B: Aggregate and enrich all open issues
+>> Phase C: Group work items by area with weighted bounds (opus)
+>> Phase D: Rank grouped items for execution order
+>>
+>> Produces triage/work-plan.json consumed by polish.mld
+
+import { @claudePoll } from @mlld/claude-poll
+
+>> Configuration
+var @ticketsDir = "@base/.tickets"
+var @triageDir = "@base/triage"
+var @qaDir = "@base/qa"
+
+>> Tool permissions
+var @ticketTools = "Read,Write,Glob,Grep,Bash(tk:*),Bash(cat:*)"
+var @readTools = "Read,Write,Glob,Grep"
+
+>> Ensure triage output directory exists
+sh {mkdir -p "@triageDir"}
+
+>> Helper to floor a number
+exe @floor(n) = js { return Math.floor(n); }
+
+>> Prompt builders
+exe @buildTicketsPrompt(trendReportJson, existingIssuesJson) = template "./triage-tickets-prompt.att"
+exe @buildGroupPrompt(issuesJson) = template "./triage-group-prompt.att"
+exe @buildRankPrompt(assignmentsJson, issueDetailsJson) = template "./triage-rank-prompt.att"
+
+>> Find latest QA run directory
+var @qaRuns = sh {ls -1d @qaDir/2* 2>/dev/null | sort -r | head -1}
+var @latestQaRun = @qaRuns.trim()
+
+>> ========================================
+>> Phase A: Create Tickets from QA Results
+>> ========================================
+
+show `=== Phase A: Ticket Creation from QA ===`
+
+when @latestQaRun.length == 0 => show `No QA runs found. Skipping Phase A.`
+
+when @latestQaRun.length > 0 [
+  >> Check for trend report
+  let @trendPath = `@latestQaRun/trend-report.json`
+  let @trendReport = <@trendPath>
+
+  when !@trendReport => show `No trend report in @latestQaRun. Skipping Phase A.`
+
+  when @trendReport [
+    >> Load existing issues for duplicate checking
+    let @existingJson = sh {tk query '.status == "open"' | jq -s '.'}
+
+    let @prompt = @buildTicketsPrompt(@trendReport, @existingJson)
+    let @markerFile = `@triageDir/phase-a-results.json`
+    let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON response to @markerFile using the Write tool. Write ONLY the JSON array as its contents.`
+
+    show `Analyzing QA trends and creating tickets...`
+    let @resultRaw = @claudePoll(@fullPrompt, "sonnet", @base, @ticketTools, @markerFile)
+    let @results = @resultRaw | @json
+
+    let @created = for @r in @results when @r.action == "created" => @r
+    let @skipped = for @r in @results when @r.action == "skipped" => @r
+
+    show `  Created: @created.length tickets`
+    show `  Skipped: @skipped.length (already tracked)`
+    show ``
+  ]
+]
+
+>> ========================================
+>> Phase B: Aggregate and Enrich Issues
+>> ========================================
+
+show `=== Phase B: Issue Aggregation ===`
+
+>> Reload all issues (includes any just created in Phase A)
+var @issuesJson = sh {tk query '.status == "open"' | jq -s '.'}
+var @allIssues = @issuesJson | @json
+
+>> Filter out stale issues (stale-check > 3)
+exe @isStale(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @staleTags = for @t in @tags when @t.startsWith("stale-check-") => @t
+  => @staleTags.length > 0 ? @staleTags[0].replace("stale-check-", "") * 1 > 3 : false
+]
+
+>> Filter out impl-done issues (candidates for close, not for work)
+exe @isImplDone(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @implDone = for @t in @tags when @t == "impl-done" => @t
+  => @implDone.length > 0
+]
+
+>> Extract size from tags (default "unscoped")
+exe @getSize(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @sizeTags = for @t in @tags when @t.startsWith("size-") => @t
+  => @sizeTags.length > 0 ? @sizeTags[0].replace("size-", "") : "unscoped"
+]
+
+>> Extract complexity from tags
+exe @getComplexity(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @cTags = for @t in @tags when @t.startsWith("complexity-") => @t
+  => @cTags.length > 0 ? @cTags[0].replace("complexity-", "") : "unscoped"
+]
+
+>> Extract risk from tags
+exe @getRisk(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @rTags = for @t in @tags when @t.startsWith("risk-") => @t
+  => @rTags.length > 0 ? @rTags[0].replace("risk-", "") : "unscoped"
+]
+
+>> Extract impl status from tags
+exe @getImplStatus(issue) = [
+  let @tags = @issue.tags ? @issue.tags : []
+  let @implTags = for @t in @tags when @t.startsWith("impl-") => @t
+  => @implTags.length > 0 ? @implTags[0] : "unchecked"
+]
+
+>> Build enriched issue list
+var @workableIssues = for @i in @allIssues when !@isStale(@i) && !@isImplDone(@i) => @i
+
+var @enriched = for @i in @workableIssues => {
+  id: @i.id,
+  type: @i.type ? @i.type : "task",
+  priority: @i.priority ? @i.priority : "3",
+  tags: @i.tags ? @i.tags : [],
+  deps: @i.deps ? @i.deps : [],
+  parent: @i.parent ? @i.parent : null,
+  size: @getSize(@i),
+  complexity: @getComplexity(@i),
+  risk: @getRisk(@i),
+  impl_status: @getImplStatus(@i)
+}
+
+>> Save enriched data
+var @enrichedJson = @enriched | @json
+output @enrichedJson to "@triageDir/review-input.json"
+
+var @staleCount = for @i in @allIssues when @isStale(@i) => @i
+var @doneCount = for @i in @allIssues when @isImplDone(@i) => @i
+
+show `Total open: @allIssues.length`
+show `  Filtered out stale: @staleCount.length`
+show `  Filtered out impl-done: @doneCount.length`
+show `  Workable: @enriched.length`
+show ``
+
+>> ========================================
+>> Phase C: Grouping (Opus)
+>> ========================================
+
+show `=== Phase C: Work Grouping ===`
+
+when @enriched.length == 0 => show `No workable issues to group.`
+
+when @enriched.length > 0 [
+  let @groupPrompt = @buildGroupPrompt(@enrichedJson)
+  let @groupMarker = `@triageDir/phase-c-groups.json`
+  let @groupFullPrompt = `@groupPrompt\n\nIMPORTANT: Write your JSON response to @groupMarker using the Write tool. Write ONLY the JSON array as its contents.`
+
+  show `Grouping @enriched.length issues by area (opus)...`
+  let @groupRaw = @claudePoll(@groupFullPrompt, "opus", @base, @readTools, @groupMarker)
+  let @assignments = @groupRaw | @json
+
+  let @clusters = for @a in @assignments when @a.type == "cluster" => @a
+  let @singles = for @a in @assignments when @a.type == "single" => @a
+
+  show `  Clusters: @clusters.length`
+  show `  Singles: @singles.length`
+
+  >> Create epic tickets for clusters
+  when @clusters.length > 0 [
+    show `  Creating epic tickets for clusters...`
+    for @cluster in @clusters [
+      let @epicTitle = `[@cluster.area] Grouped work`
+      let @issueList = @cluster.issues.join(", ")
+      let @epicId = sh {tk create "@epicTitle" -t epic -p 2 --tags "triage-cluster" -d "Grouped work items: @issueList. Rationale: @cluster.rationale"}
+      let @epicIdTrimmed = @epicId.trim()
+
+      >> Reparent children under the epic
+      for @childId in @cluster.issues [
+        >> Read ticket file and add parent field
+        let @ext = ".md"
+        let @childPath = `@ticketsDir/@childId@ext`
+        let @childContent = <@childPath>
+        when @childContent [
+          let @updated = @childContent.includes("parent:") ? @childContent.replace(/^parent:.*$/m, `parent: @epicIdTrimmed`) : @childContent.replace(/^(priority:.*)$/m, `$1\nparent: @epicIdTrimmed`)
+          output @updated to "@childPath"
+        ]
+      ]
+
+      show `    Created epic @epicIdTrimmed for @cluster.area (@cluster.issues.length items)`
+    ]
+  ]
+
+  show ``
+
+  >> ========================================
+  >> Phase D: Ranking
+  >> ========================================
+
+  show `=== Phase D: Work Ranking ===`
+
+  let @assignmentsJson = @assignments | @json
+  let @rankPrompt = @buildRankPrompt(@assignmentsJson, @enrichedJson)
+  let @rankMarker = `@triageDir/phase-d-ranking.json`
+  let @rankFullPrompt = `@rankPrompt\n\nIMPORTANT: Write your JSON response to @rankMarker using the Write tool. Write ONLY the JSON array as its contents.`
+
+  show `Ranking @assignments.length work items...`
+  let @rankRaw = @claudePoll(@rankFullPrompt, "sonnet", @base, @readTools, @rankMarker)
+  let @ranked = @rankRaw | @json
+
+  >> Build final work plan
+  let @now = sh {date -u +"%Y-%m-%dT%H:%M:%SZ"}
+  let @workPlan = { created: @now.trim(), ranked_items: @ranked }
+  let @workPlanJson = @workPlan | @json
+
+  output @workPlanJson to "@triageDir/work-plan.json"
+
+  show ``
+  show `=== Triage Complete ===`
+  show `Work plan: triage/work-plan.json`
+  show `Ranked items: @ranked.length`
+  show ``
+
+  >> Show top 5
+  let @top5 = @ranked.slice(0, 5)
+  show `Top 5 items:`
+  for @item in @top5 => show `  @item.rank. [@item.type] @item.id (@item.points pts) - @item.rationale`
+]
