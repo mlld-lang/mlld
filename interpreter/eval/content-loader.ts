@@ -89,9 +89,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
   }
 
-  const { source, options, pipes, ast } = node;
+  const { source, options, pipes, ast, optional } = node;
   const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
   const sourceLocation = node.location ?? undefined;
+  const isOptional = optional === true;
 
   if (!source) {
     throw new MlldError('Content loader expression missing source', {
@@ -524,7 +525,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
       console.log(`ERROR in processContentLoader: ${error.message}`);
       console.log(`Error stack:`, error.stack);
     }
-    
+
     // If this is a pipeline/transform error, re-throw it directly to preserve the original error
     if (error.message && error.message.includes('Unknown transform:')) {
       throw error;
@@ -536,6 +537,14 @@ export async function processContentLoader(node: any, env: Environment): Promise
         path: pathOrUrl,
         error: error.message
       });
+    }
+
+    // If optional loading (<path>?), return null for single files, [] for globs
+    if (isOptional) {
+      if (isGlob) {
+        return finalizeLoaderResult([], { type: 'array' });
+      }
+      return null as any;
     }
 
     // Otherwise, treat it as a file loading error

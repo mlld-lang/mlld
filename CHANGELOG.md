@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`using` auth injection**: `using auth:name` and `using @var as "ENV"` (plus `with { auth, using }`) pass credentials into exec/run from policy auth sources
 - **Policy defaults `autosign`**: Sign template content or variables selected by name patterns
 - **Policy defaults `autoverify`**: Prepend verify instructions for signed variables passed to llm-labeled executables and set `MLLD_VERIFY_VARS`
+- **Optional load syntax:** `<file.md>?` and `<**/*.md>?` returns null or empty array if file or glob results don't exist
 
 ### Changed
 - **`mlld init` renamed to `mlld module`**: Module creation is now `mlld module` (alias: `mlld mod`)
