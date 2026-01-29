@@ -124,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Angle brackets like `<this>` no longer incorrectly parse as file references
 - **When expression null actions**: when-expressions now correctly return null when a matched action evaluates to null, instead of incorrectly falling through to the next condition
 - **Policy capability allow lists**: command and filesystem allow lists enforce wildcard and `@base`-relative patterns
+- **Variable shadowing in nested scopes**: `let` bindings in nested function scopes no longer clobber outer loop variables. Previously, if a function used `let @t = ...` and the caller had a `for @t in ...` loop, the function's `@t` would overwrite the loop variable on return. Let bindings now never merge back to parent scope.
 
 ### Removed
 - **`.content` accessor on StructuredValue**: Use `.text` instead

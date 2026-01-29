@@ -2487,10 +2487,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Merge child variables into this environment without immutability checks
     // This is used for internal operations like nested data assignments
     for (const [name, variable] of child.variableManager.getVariables()) {
-      // Skip let bindings that shadow parent variables - they are block-scoped
-      // and should not propagate back to the parent environment
+      // Skip let bindings - they are block-scoped and should never propagate
+      // back to the parent environment, regardless of shadowing
       const isLetBinding = variable.mx?.importPath === 'let';
-      if (isLetBinding && this.variableManager.hasVariable(name)) {
+      if (isLetBinding) {
         continue;
       }
       // Use direct assignment to bypass immutability checks
