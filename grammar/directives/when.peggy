@@ -32,7 +32,7 @@ WhenKeyword
 SlashWhen
   = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
-  / WhenSimpleBlockForm  // when @condition [block] - no arrow needed
+  / WhenSimpleBlockForm  // Error recovery for deprecated 'when @cond [block]' form
   // Error recovery: deprecated 'any' modifier
   / DirectiveContext WhenKeyword _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":"? _ "[" {
       helpers.mlldError(
@@ -155,8 +155,19 @@ WhenSimpleForm
   = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction comment:InlineComment? {
       helpers.debug('WhenSimpleForm matched', { condition, action, comment });
 
+      // Detect if action is a block (array of statements)
+      const isBlockForm = Array.isArray(action) && action.length > 0;
+
+      // Check for return statement in block (last element with type containing return pattern)
+      const hasReturn = isBlockForm && action.some(item =>
+        item && item.type === 'ReturnStatement' ||
+        (Array.isArray(item) && item[0]?.type === 'ReturnStatement')
+      );
+
       const meta = {
-        hasVariables: condition.some(n => n.type === NodeType.VariableReference)
+        hasVariables: condition.some(n => n.type === NodeType.VariableReference),
+        isBlockForm: isBlockForm,
+        hasReturn: hasReturn
       };
 
       if (comment) {
@@ -180,87 +191,33 @@ WhenSimpleForm
     }
 
 // -------------------------------------------------------------
-// SIMPLE BLOCK FORM: /when <condition> [block] (no arrow needed)
-// Example: when @needsMerge.length > 0 [let @x = ... show ...]
+// DEPRECATED FORM: /when <condition> [block] - now requires =>
+// Error recovery for old syntax that used space instead of arrow
 // -------------------------------------------------------------
 
 WhenSimpleBlockForm
-  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ block:WhenSimpleBlockAction comment:InlineComment? {
-      helpers.debug('WhenSimpleBlockForm matched', { condition, block, comment });
-
-      const meta = {
-        hasVariables: condition.some(n => n.type === NodeType.VariableReference),
-        isBlockForm: true,
-        hasReturn: block.hasReturn
-      };
-
-      if (comment) {
-        meta.comment = comment;
-      }
-
-      return helpers.createStructuredDirective(
-        'when',
-        'whenSimple',
-        {
-          condition: condition,
-          action: block.statements
-        },
-        {
-          condition: helpers.reconstructRawString(condition),
-          action: helpers.reconstructRawString(block.statements)
-        },
-        meta,
-        location()
-      );
-    }
-
-// Block action for WhenSimpleBlockForm - uses WhenActionBlockBody for full statement support
-WhenSimpleBlockAction "when simple block action"
-  = "[" _ body:WhenActionBlockBody _ "]" {
-      const statements = body.statements || [];
-      const returnStmt = body.returnStmt;
-      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
-      const mergedStatements = hasReturn ? [...statements, ...returnStmt] : statements;
-      return {
-        statements: mergedStatements,
-        hasReturn
-      };
-    }
-  / "[" _ {
-      const blockStart = peg$currPos;
-      const captured = helpers.captureBracketContent(input, blockStart);
-      if (!captured) return peg$FAILED;
-      helpers.reparseBlock({
-        parse: peg$parse,
-        SyntaxErrorClass: peg$SyntaxError,
-        text: captured.content,
-        startRule: 'WhenActionBlockBody',
-        baseLocation: peg$computeLocation(blockStart, blockStart),
-        grammarSource: options.grammarSource,
-        mode: options.mode
-      });
-    }
-  / "[" _ &{
-      let depth = 1;
-      let i = peg$currPos;
-      let inString = false;
-      let quote = null;
-      while (i < input.length && depth > 0) {
-        const ch = input[i];
-        if (inString) {
-          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
-        } else {
-          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
-          else if (ch === '[') depth++;
-          else if (ch === ']') depth--;
-        }
-        i++;
-      }
-      return depth > 0;
-    } {
+  = DirectiveContext WhenKeyword _ condition:WhenSimpleCondition _ "[" {
+      // Extract condition text for error message
+      const conditionText = helpers.reconstructRawString(condition);
       helpers.mlldError(
-        `Unterminated block in when directive. Expected ']' to close the block.`,
-        "]",
+        `Invalid when syntax: missing '=>' before block.\n\n` +
+        `Change:  when ${conditionText} [...]  =>  when ${conditionText} => [...]\n\n` +
+        `The 'when' directive has three forms:\n\n` +
+        `1. Single-line (condition => action):\n` +
+        `   when @ready => show "go!"\n` +
+        `   when @error => [log @error; => null]\n\n` +
+        `2. Multi-match (all true conditions fire):\n` +
+        `   when [\n` +
+        `     @verbose => log "details..."\n` +
+        `     @debug => log "state: @state"\n` +
+        `   ]\n\n` +
+        `3. First-match (like switch, stops at first true):\n` +
+        `   when first [\n` +
+        `     @x > 100 => "large"\n` +
+        `     @x > 10 => "medium"\n` +
+        `     * => "small"\n` +
+        `   ]`,
+        "=>",
         location()
       );
     }

@@ -28,30 +28,37 @@ exe @runRank(runDir) = [
   let @outputPath = `@runDir/rank/work-plan.json`
   let @existingOutput = <@outputPath>?
 
-  when @existingOutput [
-    show `  Work plan already exists at @outputPath`
-    show `  Skipping rank phase`
-    => @existingOutput
-  ]
-
   >> Load enriched items
   let @enrichedPath = `@runDir/enrich/enriched-items.json`
   let @enriched = <@enrichedPath>?
-
-  when !@enriched [
-    show `  No enriched-items.json found`
-    show `  Run enrich phase first`
-    => null
-  ]
-
   let @items = @enriched.items ? @enriched.items : []
 
-  when @items.length == 0 [
+  >> Handle skip/error conditions
+  when @existingOutput => [
+    show `  Work plan already exists at @outputPath`
+    show `  Skipping rank phase`
+  ]
+  when !@enriched && !@existingOutput => [
+    show `  No enriched-items.json found`
+    show `  Run enrich phase first`
+  ]
+  when @items.length == 0 && @enriched && !@existingOutput => [
     show `  No items to rank`
     let @emptyPlan = { created: @now, ranked_items: [] }
     output @emptyPlan to "@outputPath"
-    => @emptyPlan
   ]
+
+  >> Use when first for the entire function return
+  => when first [
+    @existingOutput => @existingOutput
+    !@enriched => null
+    @items.length == 0 => { created: @now, ranked_items: [] }
+    * => @_doRank(@runDir, @outputPath, @items)
+  ]
+]
+
+>> Internal function to do the actual ranking work
+exe @_doRank(runDir, outputPath, items) = [
 
   >> Log phase start
   @logPhaseStart(@runDir, "rank")
@@ -67,19 +74,27 @@ exe @runRank(runDir) = [
   show `    Step 1: Grouping items...`
   let @groupResponse = @claudePoll(@groupFullPrompt, "opus", @base, @rankTools, @groupMarker)
 
-  let @groups = <@groupMarker>
-  when !@groups [
-    show `  ERROR: Failed to generate groups`
-    => null
-  ]
+  let @groups = <@groupMarker>?
 
+  >> Handle group failure - show error message if failed
+  when !@groups => show `  ERROR: Failed to generate groups`
+
+  >> Use when first for conditional return
+  => when first [
+    @groups => @_continueWithGroups(@runDir, @outputPath, @items, @groups, @groupMarker)
+    * => null
+  ]
+]
+
+>> Continue ranking after successful grouping
+exe @_continueWithGroups(runDir, outputPath, items, groups, groupMarker) = [
   >> Count groups
-  let @singles = for @g in @groups when @g.type == "single" => @g
-  let @clusters = for @g in @groups when @g.type == "cluster" => @g
+  let @singles = for @grp in @groups when @grp.type == "single" => @grp
+  let @clusters = for @grp in @groups when @grp.type == "cluster" => @grp
   show `    Generated @singles.length singles, @clusters.length clusters`
 
   >> Step 2: Create epic tickets for clusters
-  when @clusters.length > 0 [
+  when @clusters.length > 0 => [
     show `    Creating epic tickets for clusters...`
     for @cluster in @clusters [
       let @epicTitle = `[@cluster.area] Grouped work`
@@ -94,8 +109,8 @@ exe @runRank(runDir) = [
       for @childId in @cluster.tickets [
         let @ext = ".md"
         let @childPath = `@base/.tickets/@childId@ext`
-        let @childContent = <@childPath>
-        when @childContent [
+        let @childContent = <@childPath>?
+        when @childContent => [
           let @hasParent = @childContent.includes("parent:")
           let @updated = when first [
             @hasParent => @childContent.replace(/^parent:.*$/m, `parent: @epicIdTrimmed`)
@@ -110,10 +125,11 @@ exe @runRank(runDir) = [
   ]
 
   >> Reload groups with epic IDs
-  let @updatedGroups = <@groupMarker>
+  let @updatedGroups = <@groupMarker>?
 
   >> Step 3: Rank groups
-  let @assignmentsJson = @updatedGroups | @json
+  let @groupsToUse = @updatedGroups ? @updatedGroups : @groups
+  let @assignmentsJson = @groupsToUse | @json
   let @itemDetailsJson = @items | @json
   let @rankPromptText = @buildRankPrompt(@assignmentsJson, @itemDetailsJson)
   let @rankMarker = `@runDir/rank/ranked.json`
@@ -122,12 +138,20 @@ exe @runRank(runDir) = [
   show `    Step 2: Ranking assignments...`
   let @rankResponse = @claudePoll(@rankFullPrompt, "sonnet", @base, @rankTools, @rankMarker)
 
-  let @ranked = <@rankMarker>
-  when !@ranked [
-    show `  ERROR: Failed to generate ranking`
-    => null
-  ]
+  let @ranked = <@rankMarker>?
 
+  >> Handle rank failure - show error message if failed
+  when !@ranked => show `  ERROR: Failed to generate ranking`
+
+  >> Use when first for conditional return
+  => when first [
+    @ranked => @_finishRanking(@runDir, @outputPath, @ranked)
+    * => null
+  ]
+]
+
+>> Finish ranking after successful ranking call
+exe @_finishRanking(runDir, outputPath, ranked) = [
   >> Build final work plan
   let @workPlan = {
     created: @now,
@@ -144,7 +168,7 @@ exe @runRank(runDir) = [
   >> Show top 5
   let @top5 = @ranked.slice(0, 5)
   show `  Top 5:`
-  for @item in @top5 => show `    @item.rank. [@item.type] @item.ticket_id ? @item.ticket_id : @item.epic_id (@item.points pts) - @item.rationale`
+  for @rankedItem in @top5 => show `    @rankedItem.rank. [@rankedItem.type] @rankedItem.ticket_id ? @rankedItem.ticket_id : @rankedItem.epic_id (@rankedItem.points pts) - @rankedItem.rationale`
 
   => @workPlan
 ]

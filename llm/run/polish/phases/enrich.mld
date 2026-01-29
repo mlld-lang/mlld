@@ -30,18 +30,25 @@ exe @enrichTicket(runDir, ticket, changelog) = [
   let @issueType = @ticket.type ? @ticket.type : "task"
   let @issuePriority = @ticket.priority ? @ticket.priority : "3"
   let @createdDate = @ticket.created ? @ticket.created : @now
+  let @alreadyEnriched = @hasTagPrefix(@ticket, "size-")
 
   >> Check if already enriched (has size tag)
-  when @hasTagPrefix(@ticket, "size-") [
-    show `    Skipping @issueId (already enriched)`
-    => { ticket_id: @issueId, skipped: true, reason: "already-enriched" }
-  ]
+  when @alreadyEnriched => show `    Skipping @issueId (already enriched)`
 
+  >> Use when first for proper early return
+  => when first [
+    @alreadyEnriched => { ticket_id: @issueId, skipped: true, reason: "already-enriched" }
+    * => @_doEnrichTicket(@runDir, @issueId, @issueType, @issuePriority, @createdDate, @changelog)
+  ]
+]
+
+>> Internal function to do the actual ticket enrichment
+exe @_doEnrichTicket(runDir, issueId, issueType, issuePriority, createdDate, changelog) = [
   >> Read full ticket content
   let @ext = ".md"
   let @ticketPath = `@base/.tickets/@issueId@ext`
-  let @issueContent = <@ticketPath>
-  when !@issueContent => let @issueContent = "Issue content not found"
+  let @issueContentRaw = <@ticketPath>?
+  let @issueContent = @issueContentRaw ? @issueContentRaw : "Issue content not found"
 
   >> Get commits since ticket was created
   let @commits = @gitLogSince(@createdDate)
@@ -55,15 +62,25 @@ exe @enrichTicket(runDir, ticket, changelog) = [
   let @response = @claudePoll(@fullPrompt, "sonnet", @base, @enrichTools, @markerFile)
 
   >> Parse result
-  let @result = <@markerFile>
-  when !@result [
+  let @result = <@markerFile>?
+
+  >> Handle failure
+  when !@result => [
     show `    ERROR: Failed to enrich @issueId`
     @logItemDone(@runDir, @issueId, "error", {})
-    => { ticket_id: @issueId, error: true }
   ]
 
+  >> Use when first for proper conditional return
+  => when first [
+    !@result => { ticket_id: @issueId, error: true }
+    * => @_finishEnrichTicket(@runDir, @issueId, @result)
+  ]
+]
+
+>> Finish enriching after successful result
+exe @_finishEnrichTicket(runDir, issueId, result) = [
   >> Add tags to ticket
-  when @result.tags_to_add [
+  when @result.tags_to_add => [
     let @tagsStr = @result.tags_to_add.join(",")
     @addTags(@issueId, @tagsStr)
   ]
@@ -85,23 +102,31 @@ exe @runEnrich(runDir) = [
   let @outputPath = `@runDir/enrich/enriched-items.json`
   let @existingOutput = <@outputPath>?
 
-  when @existingOutput [
-    show `  Enriched items already exist at @outputPath`
-    show `  Skipping enrich phase`
-    => @existingOutput
-  ]
-
   >> Load merged items from reconcile phase
   let @mergedPath = `@runDir/reconcile/merged-items.json`
   let @merged = <@mergedPath>?
+  let @items = @merged && @merged.items ? @merged.items : []
 
-  when !@merged [
+  >> Show status messages
+  when @existingOutput => [
+    show `  Enriched items already exist at @outputPath`
+    show `  Skipping enrich phase`
+  ]
+  when !@merged && !@existingOutput => [
     show `  No merged-items.json found`
     show `  Run reconcile phase first`
-    => null
   ]
 
-  let @items = @merged.items ? @merged.items : []
+  >> Use when first for proper early returns
+  => when first [
+    @existingOutput => @existingOutput
+    !@merged => null
+    * => @_doEnrich(@runDir, @outputPath, @items)
+  ]
+]
+
+>> Internal function to do the actual enrich work
+exe @_doEnrich(runDir, outputPath, items) = [
 
   >> Log phase start
   @logPhaseStart(@runDir, "enrich")
@@ -113,20 +138,21 @@ exe @runEnrich(runDir) = [
   let @changelog = @headFile(@changelogPath)
 
   >> Get ticket details for each item
+  >> Note: Using ternary instead of when first due to mlld bug with loaded file objects
   let @ticketsToEnrich = for @item in @items [
     let @ticket = @getTicket(@item.ticket_id)
-    when @ticket => {
+    let @hasFm = @ticket && @ticket.mx && @ticket.mx.fm
+    => @hasFm ? {
       id: @item.ticket_id,
       type: @ticket.mx.fm.type,
       priority: @ticket.mx.fm.priority,
       created: @ticket.mx.fm.created,
       tags: @ticket.mx.fm.tags
-    }
-    => null
+    } : null
   ]
 
-  >> Filter out nulls and already-enriched
-  let @needsEnrich = for @t in @ticketsToEnrich when @t && !@hasTagPrefix(@t, "size-") => @t
+  >> Filter out nulls and already-enriched (use @tkt to avoid collision with @hasTagPrefix internals)
+  let @needsEnrich = for @tkt in @ticketsToEnrich when @tkt && !@hasTagPrefix(@tkt, "size-") => @tkt
 
   show `  @needsEnrich.length tickets need enrichment`
 
@@ -137,7 +163,9 @@ exe @runEnrich(runDir) = [
   ]
 
   >> Separate successful and filtered
-  let @enriched = for @r in @results when !@r.skipped && !@r.error => @r
+  >> Note: Can't use !@r.skipped because mlld filter fails on missing fields (see bug-filter-missing-fields.md)
+  >> Instead check for staleness field which exists on all successful enrichments
+  let @enriched = for @r in @results when @r.staleness => @r
   let @skipped = for @r in @results when @r.skipped => @r
   let @errors = for @r in @results when @r.error => @r
 

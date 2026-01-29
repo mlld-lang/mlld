@@ -1,5 +1,5 @@
 /exe @test(value) = [
-  when @value == 2 [
+  when @value == 2 => [
     show "value is two!"
   ]
   => "done"

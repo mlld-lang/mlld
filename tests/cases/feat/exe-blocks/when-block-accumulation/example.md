@@ -1,7 +1,7 @@
 /exe @collectEvens(numbers) = [
   let @evens = []
   for @num in @numbers [
-    when (@num % 2 == 0) [
+    when (@num % 2 == 0) => [
       let @evens += [@num]
     ]
   ]

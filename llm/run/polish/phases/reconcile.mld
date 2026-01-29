@@ -23,22 +23,71 @@ exe @runReconcile(runDir, noQa) = [
   let @outputPath = `@runDir/reconcile/merged-items.json`
   let @existingOutput = <@outputPath>?
 
-  when @existingOutput [
-    show `  Merged items already exist at @outputPath`
-    show `  Skipping reconcile phase`
-    => @existingOutput
-  ]
-
   >> Load strategy if available (may be null in --no-qa mode)
   let @strategyPath = `@runDir/interpret/strategy.json`
   let @strategy = <@strategyPath>?
 
-  when !@strategy && !@noQa [
+  >> Show status messages
+  when @existingOutput => [
+    show `  Merged items already exist at @outputPath`
+    show `  Skipping reconcile phase`
+  ]
+  when !@strategy && !@noQa && !@existingOutput => [
     show `  No strategy.json found and --no-qa not specified`
     show `  Run interpret phase first or use --no-qa`
-    => null
   ]
 
+  >> Use when first for proper early returns
+  => when first [
+    @existingOutput => @existingOutput
+    !@strategy && !@noQa => null
+    @noQa || !@strategy => @_doReconcileTicketOnly(@runDir, @outputPath)
+    * => @_doReconcileWithQa(@runDir, @outputPath, @strategy)
+  ]
+]
+
+>> Reconcile using existing tickets only (no QA data)
+exe @_doReconcileTicketOnly(runDir, outputPath) = [
+  >> Load existing tickets
+  let @existingTickets = @getOpenTickets()
+
+  >> Log phase start
+  let @_ = @logPhaseStart(@runDir, "reconcile")
+
+  show `  Existing tickets: @existingTickets.length`
+  show `  Running in ticket-only mode (no QA reconciliation)`
+
+  >> Build items from existing tickets only
+  let @items = for @tkt in @existingTickets => {
+    ticket_id: @tkt.id,
+    source: "existing",
+    topics: [],
+    action: @tkt.type == "bug" ? "code-fix" : @tkt.type == "task" ? "doc-fix" : "code-fix",
+    matched_existing: false
+  }
+
+  let @result = {
+    generated_at: @now,
+    items: @items,
+    deferred: [],
+    ticket_sources: {},
+    summary: {
+      total_items: @items.length,
+      from_qa_new: 0,
+      from_qa_matched: 0,
+      from_existing: @items.length,
+      deferred: 0
+    }
+  }
+
+  output @result to "@outputPath"
+  let @_ = @logPhaseComplete(@runDir, "reconcile", { items: @items.length })
+  show `  Generated @items.length items (ticket-only mode)`
+  => @result
+]
+
+>> Full reconciliation with QA data
+exe @_doReconcileWithQa(runDir, outputPath, strategy) = [
   >> Load existing tickets
   let @existingTickets = @getOpenTickets()
   let @existingJson = @existingTickets | @json
@@ -47,42 +96,8 @@ exe @runReconcile(runDir, noQa) = [
   let @_ = @logPhaseStart(@runDir, "reconcile")
 
   show `  Existing tickets: @existingTickets.length`
-  when @strategy => show `  Strategy classifications: @strategy.classifications.length`
+  show `  Strategy classifications: @strategy.classifications.length`
 
-  >> If no QA data, just use existing tickets
-  when @noQa || !@strategy [
-    show `  Running in ticket-only mode (no QA reconciliation)`
-
-    >> Build items from existing tickets only
-    let @items = for @t in @existingTickets => {
-      ticket_id: @t.id,
-      source: "existing",
-      topics: [],
-      action: @t.type == "bug" ? "code-fix" : @t.type == "task" ? "doc-fix" : "code-fix",
-      matched_existing: false
-    }
-
-    let @result = {
-      generated_at: @now,
-      items: @items,
-      deferred: [],
-      ticket_sources: {},
-      summary: {
-        total_items: @items.length,
-        from_qa_new: 0,
-        from_qa_matched: 0,
-        from_existing: @items.length,
-        deferred: 0
-      }
-    }
-
-    output @result to "@outputPath"
-    let @_ = @logPhaseComplete(@runDir, "reconcile", { items: @items.length })
-    show `  Generated @items.length items (ticket-only mode)`
-    => @result
-  ]
-
-  >> Full reconciliation with QA data
   let @strategyJson = @strategy | @json
 
   let @prompt = @buildReconcilePrompt(@strategyJson, @existingJson, @outputPath)
@@ -92,15 +107,21 @@ exe @runReconcile(runDir, noQa) = [
   let @response = @claudePoll(@fullPrompt, "sonnet", @base, @reconcileTools, @outputPath)
 
   >> Load and return result
-  let @result = <@outputPath>
+  let @result = <@outputPath>?
 
-  when !@result [
-    show `  ERROR: Failed to generate merged-items.json`
-    => null
+  >> Handle failure
+  when !@result => show `  ERROR: Failed to generate merged-items.json`
+
+  => when first [
+    !@result => null
+    * => @_finishReconcile(@runDir, @outputPath, @result)
   ]
+]
 
+>> Finish reconcile after successful agent call
+exe @_finishReconcile(runDir, outputPath, result) = [
   >> Also save ticket_sources separately for easy lookup
-  when @result.ticket_sources [
+  when @result.ticket_sources => [
     let @sourcesPath = `@runDir/reconcile/ticket-sources.json`
     output @result.ticket_sources to "@sourcesPath"
   ]
@@ -110,7 +131,7 @@ exe @runReconcile(runDir, noQa) = [
   let @_ = @logPhaseComplete(@runDir, "reconcile", { items: @itemCount })
 
   show `  Merged @itemCount items`
-  when @result.summary [
+  when @result.summary => [
     show `    From QA (new): @result.summary.from_qa_new`
     show `    From QA (matched): @result.summary.from_qa_matched`
     show `    From existing: @result.summary.from_existing`

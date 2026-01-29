@@ -22,22 +22,36 @@ exe @processDocFix(runDir, ticketId) = [
   >> Check if already completed
   let @events = @loadEvents(@runDir)
   let @completedIds = @getCompletedItems(@events)
-  when @completedIds.includes(@ticketId) [
-    show `      Skipping @ticketId (already completed)`
-    => { ticket_id: @ticketId, skipped: true }
-  ]
+  let @alreadyCompleted = @completedIds.includes(@ticketId)
 
+  when @alreadyCompleted => show `      Skipping @ticketId (already completed)`
+
+  => when first [
+    @alreadyCompleted => { ticket_id: @ticketId, skipped: true }
+    * => @_doProcessDocFix(@runDir, @ticketId)
+  ]
+]
+
+>> Internal function to process doc fix
+exe @_doProcessDocFix(runDir, ticketId) = [
   >> Log item start
   @logItemStart(@runDir, @ticketId, "doc-fix")
 
   >> Get ticket details
   let @ticketPath = `@base/.tickets/@ticketId.md`
-  let @ticketContent = <@ticketPath>
-  when !@ticketContent [
-    @logItemDone(@runDir, @ticketId, "error", { error: "ticket not found" })
-    => { ticket_id: @ticketId, error: "ticket not found" }
-  ]
+  let @ticketContent = <@ticketPath>?
 
+  => when first [
+    !@ticketContent => [
+      @logItemDone(@runDir, @ticketId, "error", { error: "ticket not found" })
+      => { ticket_id: @ticketId, error: "ticket not found" }
+    ]
+    * => @_executeDocFix(@runDir, @ticketId, @ticketContent)
+  ]
+]
+
+>> Execute the doc fix after validation
+exe @_executeDocFix(runDir, ticketId, ticketContent) = [
   >> Extract title/description from ticket
   let @titleMatch = @ticketContent.match(/^#\s+(.+)$/m)
   let @ticketDescription = @titleMatch ? @titleMatch[1] : @ticketId
@@ -51,17 +65,24 @@ exe @processDocFix(runDir, ticketId) = [
 
   let @response = @claudePoll(@fullPrompt, "sonnet", @base, @docTools, @outputPath)
 
-  let @result = <@outputPath>
-  when !@result [
-    @logItemDone(@runDir, @ticketId, "failed", { error: "no result file" })
-    => { ticket_id: @ticketId, error: "doc fix failed" }
-  ]
+  let @result = <@outputPath>?
 
+  => when first [
+    !@result => [
+      @logItemDone(@runDir, @ticketId, "failed", { error: "no result file" })
+      => { ticket_id: @ticketId, error: "doc fix failed" }
+    ]
+    * => @_finishDocFix(@runDir, @ticketId, @result)
+  ]
+]
+
+>> Finish doc fix and tag ticket
+exe @_finishDocFix(runDir, ticketId, result) = [
   >> Log completion and tag ticket
   let @status = @result.verified ? "completed" : "needs-review"
   @logItemDone(@runDir, @ticketId, @status, @result)
 
-  when @result.verified [
+  when @result.verified => [
     @addTags(@ticketId, "impl-done")
     show `        Doc fix verified`
   ]
@@ -77,7 +98,7 @@ exe @runDocs(runDir) = [
   >> Find doc-fix tickets
   >> Look for tickets tagged with "doc" or "docs" or type "docs"
   let @allTickets = @getOpenTickets()
-  let @docTickets = for @t in @allTickets when @t.type == "docs" => @t
+  let @docTickets = for @tkt in @allTickets when @tkt.type == "docs" => @tkt
 
   >> Also check work plan for doc-related items
   let @workPlanPath = `@runDir/rank/work-plan.json`
@@ -88,17 +109,24 @@ exe @runDocs(runDir) = [
   let @docFromWorkPlan = for @item in @workPlanItems when @item.area && @item.area.includes("doc") => @item
 
   >> Combine sources (simple concat - may have dupes but ok for now)
-  let @docTicketIds = for @t in @docTickets => @t.id
+  let @docTicketIds = for @tkt in @docTickets => @tkt.id
   let @workPlanDocIds = for @item in @docFromWorkPlan => @item.ticket_id
   let @uniqueDocIds = @docTicketIds.concat(@workPlanDocIds)
 
-  when @uniqueDocIds.length == 0 [
-    show `  No doc fix tickets found`
-    let @emptyResults = { created: @now, results: [] }
-    output @emptyResults to "@outputPath"
-    => @emptyResults
-  ]
+  when @uniqueDocIds.length == 0 => show `  No doc fix tickets found`
 
+  => when first [
+    @uniqueDocIds.length == 0 => [
+      let @emptyResults = { created: @now, results: [] }
+      output @emptyResults to "@outputPath"
+      => @emptyResults
+    ]
+    * => @_doDocs(@runDir, @outputPath, @uniqueDocIds)
+  ]
+]
+
+>> Internal function to do the actual docs work
+exe @_doDocs(runDir, outputPath, uniqueDocIds) = [
   >> Log phase start
   @logPhaseStart(@runDir, "docs")
 
@@ -136,4 +164,4 @@ exe @runDocs(runDir) = [
   => @docsResults
 ]
 
-/export { @runDocs, @processDocFix }
+/export { @runDocs, @processDocFix, @_doDocs, @_doProcessDocFix, @_executeDocFix, @_finishDocFix }

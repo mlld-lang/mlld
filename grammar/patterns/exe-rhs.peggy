@@ -970,14 +970,32 @@ WhenExpressionAny
   / WhenExpression
   / WhenExpressionInline
 
-// Block form for when expressions: when @condition [statements with let, show, etc.]
-// This is separate from WhenExpressionInline to have higher precedence than WhenExpression
-// The lookahead ensures we only match when block starts with statement keywords
+// Deprecated block form error recovery: when @condition [block]
+// The old form without arrow is no longer supported
 WhenExpressionInlineBlock
-  = "when" _ condition:WhenConditionExpression _ &("[" _ ("let" / "show" / "for" / "when" / "log" / "output" / "run" / "var" / "=>" )) block:WhenSimpleBlockAction {
-      const act = block.statements;
-      const conditions = [{ condition: [condition], action: act }];
-      return helpers.createWhenExpression(conditions, null, location(), null, null, { isBlockForm: true, hasReturn: block.hasReturn });
+  = "when" _ condition:WhenConditionExpression _ &("[" _ ("let" / "show" / "for" / "when" / "log" / "output" / "run" / "var" / "=>" )) "[" {
+      const conditionText = helpers.reconstructRawString(condition);
+      helpers.mlldError(
+        `Invalid when syntax: missing '=>' before block.\n\n` +
+        `Change:  when ${conditionText} [...]  =>  when ${conditionText} => [...]\n\n` +
+        `The 'when' directive has three forms:\n\n` +
+        `1. Single-line (condition => action):\n` +
+        `   when @ready => show "go!"\n` +
+        `   when @error => [log @error; => null]\n\n` +
+        `2. Multi-match (all true conditions fire):\n` +
+        `   when [\n` +
+        `     @verbose => log "details..."\n` +
+        `     @debug => log "state: @state"\n` +
+        `   ]\n\n` +
+        `3. First-match (like switch, stops at first true):\n` +
+        `   when first [\n` +
+        `     @x > 100 => "large"\n` +
+        `     @x > 10 => "medium"\n` +
+        `     * => "small"\n` +
+        `   ]`,
+        "=>",
+        location()
+      );
     }
 
 // -------------------------------------------------------------

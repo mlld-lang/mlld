@@ -20,7 +20,7 @@
 >>   4. execute     - Implement fixes in worktrees
 >>   5. docs        - Process documentation fixes
 
-import { @createRun, @loadRun, @updatePhaseStatus, @nextPhase, @shouldRunPhase } from "./lib/state.mld"
+import { @createRun, @loadRun, @updatePhaseStatus, @updateRunStatus, @nextPhase, @shouldRunPhase } from "./lib/state.mld"
 import { @logEvent } from "./lib/events.mld"
 import { @runInterpret } from "./phases/interpret.mld"
 import { @runReconcile } from "./phases/reconcile.mld"
@@ -59,10 +59,10 @@ var @phases = ["interpret", "reconcile", "enrich", "rank", "execute", "docs"]
 >> Find or create run directory
 exe @resolveRunDir() = [
   >> If specific run requested, use it
-  when @runId [
+  when @runId => [
     let @runDir = `@pipelineRoot/@runId`
     let @exists = <@runDir/run.json>
-    when !@exists [
+    when !@exists => [
       show `ERROR: Run @runId not found`
       => null
     ]
@@ -72,10 +72,10 @@ exe @resolveRunDir() = [
   >> Check for current symlink
   let @currentLink = @readCurrentLink(@pipelineRoot)
   let @currentLinkTrimmed = @currentLink.trim()
-  when @currentLinkTrimmed [
+  when @currentLinkTrimmed => [
     let @runDir = `@pipelineRoot/@currentLinkTrimmed`
     let @run = @loadRun(@runDir)
-    when @run && @run.status != "complete" [
+    when @run && @run.status != "complete" => [
       show `Resuming run: @currentLinkTrimmed`
       => @runDir
     ]
@@ -129,7 +129,7 @@ show ``
 
 >> Resolve run directory
 var @runDir = @resolveRunDir()
-when !@runDir [
+when !@runDir => [
   show `ERROR: Could not resolve or create run directory`
   => null
 ]
@@ -147,59 +147,59 @@ var @_1 = @logEvent(@runDir, { event: "run_start", run_id: @run.id })
 var @phaseResults = {}
 
 >> Phase 0: Interpret
-when @shouldRunPhase("interpret", @phaseOnly, @fromPhase, @toPhase) && !@noQa && !@docsOnly [
+when @shouldRunPhase("interpret", @phaseOnly, @fromPhase, @toPhase) && !@noQa && !@docsOnly => [
   show `=== Phase 0: Interpret ===`
   let @result = @runInterpret(@runDir, @run.config.qa_run)
-  let @phaseResults = { ...@phaseResults, interpret: @result }
+  @phaseResults += { interpret: @result }
   show ``
 ]
 
 >> Phase 1: Reconcile
-when @shouldRunPhase("reconcile", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly [
+when @shouldRunPhase("reconcile", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
   show `=== Phase 1: Reconcile ===`
   let @effectiveNoQa = @noQa || !@run.config.qa_run
   let @result = @runReconcile(@runDir, @effectiveNoQa)
-  let @phaseResults = { ...@phaseResults, reconcile: @result }
+  @phaseResults += { reconcile: @result }
   show ``
 ]
 
 >> Phase 2: Enrich
-when @shouldRunPhase("enrich", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly [
+when @shouldRunPhase("enrich", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
   show `=== Phase 2: Enrich ===`
   let @result = @runEnrich(@runDir)
-  let @phaseResults = { ...@phaseResults, enrich: @result }
+  @phaseResults += { enrich: @result }
   show ``
 ]
 
 >> Phase 3: Rank
-when @shouldRunPhase("rank", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly [
+when @shouldRunPhase("rank", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
   show `=== Phase 3: Rank ===`
   let @result = @runRank(@runDir)
-  let @phaseResults = { ...@phaseResults, rank: @result }
+  @phaseResults += { rank: @result }
   show ``
 ]
 
 >> Phase 4: Execute
-when @shouldRunPhase("execute", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly [
+when @shouldRunPhase("execute", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
   show `=== Phase 4: Execute ===`
   let @result = @runExecute(@runDir, @batchSize, @dryRun)
-  let @phaseResults = { ...@phaseResults, execute: @result }
+  @phaseResults += { execute: @result }
   show ``
 ]
 
 >> Phase 5: Docs
-when @shouldRunPhase("docs", @phaseOnly, @fromPhase, @toPhase) [
+when @shouldRunPhase("docs", @phaseOnly, @fromPhase, @toPhase) => [
   show `=== Phase 5: Docs ===`
   let @result = @runDocs(@runDir)
-  let @phaseResults = { ...@phaseResults, docs: @result }
+  @phaseResults += { docs: @result }
   show ``
 ]
 
 >> Log run completion
 var @_2 = @logEvent(@runDir, { event: "run_complete", phases: @phaseResults })
 
->> Update run status
-var @_3 = @updatePhaseStatus(@runDir, "complete", "complete")
+>> Update run status to complete
+var @_3 = @updateRunStatus(@runDir, "complete")
 
 >> Summary
 show `=== Polish Complete ===`
@@ -207,23 +207,23 @@ show `Run: @run.id`
 show `Output: @runDir`
 
 >> Show phase summaries
-when @phaseResults.reconcile [
+when @phaseResults.reconcile => [
   let @items = @phaseResults.reconcile.items ? @phaseResults.reconcile.items : []
   show `  Reconciled: @items.length items`
 ]
-when @phaseResults.enrich [
+when @phaseResults.enrich => [
   let @items = @phaseResults.enrich.items ? @phaseResults.enrich.items : []
   show `  Enriched: @items.length items`
 ]
-when @phaseResults.rank [
+when @phaseResults.rank => [
   let @items = @phaseResults.rank.ranked_items ? @phaseResults.rank.ranked_items : []
   show `  Ranked: @items.length items`
 ]
-when @phaseResults.execute [
+when @phaseResults.execute => [
   let @results = @phaseResults.execute.results ? @phaseResults.execute.results : []
   show `  Executed: @results.length items`
 ]
-when @phaseResults.docs [
+when @phaseResults.docs => [
   let @results = @phaseResults.docs.results ? @phaseResults.docs.results : []
   show `  Docs: @results.length fixes`
 ]

@@ -1,5 +1,5 @@
 /var @active = true
-/var @result = when @active [
+/var @result = when @active => [
   let @x = "computed"
   let @y = " value"
   => `@x@y`

@@ -19,10 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `@mx.for.key` - Key for objects, index string for arrays
   - `@mx.for.parallel` - Whether loop is parallel
   - Works in both sequential and `parallel()` for loops
-- **`when @condition [block]`**: Conditional blocks with full statement support
-  - Execute multiple statements when condition is true: `when @ready [let @x = 1  show @x]`
+- **`when @condition => [block]`**: Conditional blocks with full statement support
+  - Execute multiple statements when condition is true: `when @ready => [let @x = 1; show @x]`
   - Supports `let`, `var`, nested `when`, `for`, and return via `=>`
   - Consistent with `exe` and `for` block semantics
+  - **Breaking**: Arrow `=>` now required before block (was optional)
 - **`env` directive**: Scoped environment blocks with per-block environment config and `with { tools }` tool filtering
 - **MCP tool imports**: `import tools { @tool } from mcp "server"` and `import tools from mcp "server" as @name` proxy MCP servers as mlld executables
 - **External MCP server spawning**: MCP configs accept command/npm servers with startup/idle lifecycle limits and guard routing

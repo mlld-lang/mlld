@@ -1,5 +1,5 @@
 /var @active = true
-/when @active [
+/when @active => [
   let @msg = "hello from block"
   show @msg
 ]

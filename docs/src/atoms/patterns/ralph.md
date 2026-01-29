@@ -66,7 +66,7 @@ var @context = @buildContext(@task, @specs)
 var @result = @executeTask(@task, @context)
 var @check = @validate()
 
-when @check.pass [
+when @check.pass => [
   run cmd { git add -A && git commit -m "@task.task" && git push }
   show "committed"
 ]
