@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc82]
 
 ### Added
+- **`mlld mcp-dev`**: MCP server for language introspection tools
+  - `mlld_validate` - Syntax validation with errors/warnings
+  - `mlld_analyze` - Module analysis (exports, executables, imports, guards)
+  - `mlld_ast` - Raw AST output
+  - Separate from `mlld mcp` which serves user-defined tools
 - **`@mx.for` iteration context**: Access loop state inside `for` blocks
   - `@mx.for.index` - Current 0-based index
   - `@mx.for.total` - Total items in collection

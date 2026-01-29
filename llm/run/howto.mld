@@ -66,6 +66,9 @@ exe @buildTree(allAtoms, introAtom) = js {
   lines.push('  mlld howto <topic>             Show specific topic (e.g., howto for-parallel)');
   lines.push('  mlld howto <topic> --section   Find topic then show its entire section');
   lines.push('  mlld howto grep <pattern>      Search all docs for pattern');
+  lines.push('');
+  lines.push('Tip: Use `mlld mcp-dev` to start an MCP server with language introspection tools');
+  lines.push('     (mlld_validate, mlld_analyze, mlld_ast) for editor/agent integration.');
   return lines.join('\n');
 }
 

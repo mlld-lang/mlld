@@ -82,6 +82,11 @@ export class HelpSystem {
       return;
     }
 
+    if (command === 'mcp-dev') {
+      this.displayMcpDevHelp();
+      return;
+    }
+
     if (command === 'docs') {
       this.displayDocsHelp();
       return;
@@ -182,6 +187,37 @@ Behavior:
   - Applies config module filtering and CLI allow-lists
   - Accepts environment overrides (MLLD_* only) before executing tools
   - Streams JSON-RPC responses to stdout for MCP clients
+    `);
+  }
+
+  private displayMcpDevHelp(): void {
+    console.log(`
+Usage: mlld mcp-dev
+
+Start an MCP server with language introspection tools for development.
+
+Tools provided:
+  mlld_validate   Validate syntax, return errors/warnings
+  mlld_analyze    Full module analysis (exports, executables, imports, guards)
+  mlld_ast        Get parsed AST for debugging
+
+Tool arguments:
+  file            Path to .mld file
+  code            Inline mlld code (alternative to file)
+  mode            Parsing mode: "strict" or "markdown"
+  includeAst      Include AST in analyze response (boolean)
+
+Configuration (claude_desktop_config.json):
+  {
+    "mcpServers": {
+      "mlld-dev": {
+        "command": "mlld",
+        "args": ["mcp-dev"]
+      }
+    }
+  }
+
+Note: This is separate from 'mlld mcp' which serves user-defined tools.
     `);
   }
 
@@ -525,6 +561,7 @@ Commands:
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
   serve                   Expose mlld functions as MCP tools over stdio
+  mcp-dev                 Start MCP server with language introspection tools
   language-server, lsp    Start the mlld language server for editor integration
   nvim-setup, nvim        Set up mlld Language Server for Neovim
   nvim-doctor             Diagnose and fix mlld Neovim LSP configuration

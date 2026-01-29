@@ -24,6 +24,7 @@ import { createNvimDoctorCommand } from '../commands/nvim-doctor';
 import { createUpdateCommand } from '../commands/update';
 import { createOutdatedCommand } from '../commands/outdated';
 import { createMcpCommand } from '../commands/mcp';
+import { mcpDevCommand } from '../commands/mcp-dev';
 import { createHowtoCommand, createQuickstartCommand } from '../commands/howto';
 import { createValidateCommand } from '../commands/analyze';
 import { createVerifyCommand } from '../commands/verify';
@@ -71,6 +72,7 @@ export class CommandDispatcher {
     const mcpCommand = createMcpCommand();
     this.commandMap.set('mcp', mcpCommand);
     this.commandMap.set('serve', mcpCommand); // Alias for backward compatibility
+    this.commandMap.set('mcp-dev', mcpDevCommand);
     this.commandMap.set('nvim-setup', createNvimSetupCommand());
     this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
     this.commandMap.set('nvim-doctor', createNvimDoctorCommand());
@@ -97,7 +99,7 @@ export class CommandDispatcher {
     // Handle different command types
     if (typeof handler === 'function') {
       // Direct function (like registryCommand, envCommand, etc.)
-      if (handler.name === 'registryCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand') {
+      if (handler.name === 'registryCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand' || handler.name === 'mcpDevCommand') {
         await handler(subcommands);
       } else if (handler.name === 'varsCommand' || handler.name === 'envCommand') {
         // varsCommand and envCommand expect an options object with _ property
