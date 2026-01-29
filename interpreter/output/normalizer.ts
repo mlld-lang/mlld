@@ -31,7 +31,25 @@ export function normalizeOutput(output: string): string {
   const frontmatter = frontmatterMatch ? frontmatterMatch[0] : '';
   const content = frontmatterMatch ? withoutLeadingNewlines.slice(frontmatter.length) : withoutLeadingNewlines;
 
-  const normalized = content
+  // Protect code blocks and tables from paragraph formatting
+  // Extract them, apply formatting to other content, then reassemble
+  const protectedBlocks: string[] = [];
+  const placeholder = '\x00PROTECTED_BLOCK\x00';
+
+  // First protect code blocks
+  let contentWithPlaceholders = content.replace(/```[\s\S]*?```/g, (match) => {
+    protectedBlocks.push(match);
+    return placeholder;
+  });
+
+  // Then protect markdown tables (consecutive lines starting with |)
+  // Match tables including the last row which may not end with newline
+  contentWithPlaceholders = contentWithPlaceholders.replace(/(?:^\|[^\n]*(?:\n|$))+/gm, (match) => {
+    protectedBlocks.push(match.trimEnd());
+    return placeholder + '\n';
+  });
+
+  const normalized = contentWithPlaceholders
     .replace(/^\n+/, '')                    // Strip leading newlines from content
     .replace(/[ \t]+$/gm, '')               // Strip trailing whitespace per line
     .replace(/\n(#{1,6}\s)/g, '\n\n$1')     // Blank line before headers
@@ -40,9 +58,15 @@ export function normalizeOutput(output: string): string {
     .replace(/\n{3,}/g, '\n\n')             // Max one blank line (collapse extras from rules)
     .replace(/\n*$/, '\n');                 // Single trailing newline
 
+  // Restore protected blocks (code blocks and tables)
+  let blockIndex = 0;
+  const restored = normalized.replace(new RegExp(placeholder.replace(/\x00/g, '\\x00'), 'g'), () => {
+    return protectedBlocks[blockIndex++] || '';
+  });
+
   // Add blank line after frontmatter if present and content follows
-  const separator = (frontmatter && normalized && !normalized.startsWith('\n')) ? '\n' : '';
-  return frontmatter + separator + normalized;
+  const separator = (frontmatter && restored && !restored.startsWith('\n')) ? '\n' : '';
+  return frontmatter + separator + restored;
 }
 
 /**
