@@ -15,6 +15,9 @@ import { @createTicket } from "../lib/tickets.mld"
 var @rankTools = "Read,Write,Glob,Grep"
 var @ticketTools = "Read,Write,Glob,Grep,Bash(tk:*),Bash(cat:*)"
 
+>> Shell helper (sh blocks need $var via exe params)
+exe @tkCreateEpic(title, tickets, rationale) = sh {tk create "$title" -t epic -p 2 --tags "triage-cluster" -d "Grouped work items: $tickets. Rationale: $rationale"}
+
 >> Build prompts from templates
 exe @buildGroupPrompt(itemsJson) = template "../prompts/rank-group.att"
 exe @buildRankPrompt(assignmentsJson, itemDetailsJson) = template "../prompts/rank-order.att"
@@ -23,7 +26,7 @@ exe @buildRankPrompt(assignmentsJson, itemDetailsJson) = template "../prompts/ra
 exe @runRank(runDir) = [
   >> Check for existing output (skip if already done)
   let @outputPath = `@runDir/rank/work-plan.json`
-  let @existingOutput = <@outputPath>
+  let @existingOutput = <@outputPath>?
 
   when @existingOutput [
     show `  Work plan already exists at @outputPath`
@@ -33,7 +36,7 @@ exe @runRank(runDir) = [
 
   >> Load enriched items
   let @enrichedPath = `@runDir/enrich/enriched-items.json`
-  let @enriched = <@enrichedPath>
+  let @enriched = <@enrichedPath>?
 
   when !@enriched [
     show `  No enriched-items.json found`
@@ -81,7 +84,7 @@ exe @runRank(runDir) = [
     for @cluster in @clusters [
       let @epicTitle = `[@cluster.area] Grouped work`
       let @ticketList = @cluster.tickets.join(", ")
-      let @epicId = sh {tk create "@epicTitle" -t epic -p 2 --tags "triage-cluster" -d "Grouped work items: @ticketList. Rationale: @cluster.rationale"}
+      let @epicId = @tkCreateEpic(@epicTitle, @ticketList, @cluster.rationale)
       let @epicIdTrimmed = @epicId.trim()
 
       >> Update cluster with epic ID

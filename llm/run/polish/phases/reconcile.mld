@@ -21,7 +21,7 @@ exe @buildReconcilePrompt(strategyJson, existingTicketsJson, outputPath) = templ
 exe @runReconcile(runDir, noQa) = [
   >> Check for existing output (skip if already done)
   let @outputPath = `@runDir/reconcile/merged-items.json`
-  let @existingOutput = <@outputPath>
+  let @existingOutput = <@outputPath>?
 
   when @existingOutput [
     show `  Merged items already exist at @outputPath`
@@ -31,7 +31,7 @@ exe @runReconcile(runDir, noQa) = [
 
   >> Load strategy if available (may be null in --no-qa mode)
   let @strategyPath = `@runDir/interpret/strategy.json`
-  let @strategy = <@strategyPath>
+  let @strategy = <@strategyPath>?
 
   when !@strategy && !@noQa [
     show `  No strategy.json found and --no-qa not specified`

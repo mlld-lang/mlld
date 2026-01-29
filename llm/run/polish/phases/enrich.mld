@@ -17,6 +17,10 @@ var @enrichTools = "Read,Write,Glob,Grep,Bash(git log:*),Bash(cat:*)"
 >> Helper to floor a number
 exe @floor(n) = js { return Math.floor(n); }
 
+>> Shell helpers (sh blocks need $var via exe params)
+exe @gitLogSince(since) = sh {git log --oneline --since="$since" --no-decorate 2>/dev/null | head -100}
+exe @headFile(path) = sh {head -300 "$path" 2>/dev/null}
+
 >> Build prompt from template
 exe @buildEnrichPrompt(issueId, issueType, issuePriority, createdDate, issueContent, changelog, commits) = template "../prompts/enrich.att"
 
@@ -40,7 +44,7 @@ exe @enrichTicket(runDir, ticket, changelog) = [
   when !@issueContent => let @issueContent = "Issue content not found"
 
   >> Get commits since ticket was created
-  let @commits = sh {git log --oneline --since="@createdDate" --no-decorate 2>/dev/null | head -100}
+  let @commits = @gitLogSince(@createdDate)
 
   >> Build and run prompt
   let @prompt = @buildEnrichPrompt(@issueId, @issueType, @issuePriority, @createdDate, @issueContent, @changelog, @commits)
@@ -79,7 +83,7 @@ exe @enrichTicket(runDir, ticket, changelog) = [
 exe @runEnrich(runDir) = [
   >> Check for existing output (skip if already done)
   let @outputPath = `@runDir/enrich/enriched-items.json`
-  let @existingOutput = <@outputPath>
+  let @existingOutput = <@outputPath>?
 
   when @existingOutput [
     show `  Enriched items already exist at @outputPath`
@@ -89,7 +93,7 @@ exe @runEnrich(runDir) = [
 
   >> Load merged items from reconcile phase
   let @mergedPath = `@runDir/reconcile/merged-items.json`
-  let @merged = <@mergedPath>
+  let @merged = <@mergedPath>?
 
   when !@merged [
     show `  No merged-items.json found`
@@ -105,7 +109,8 @@ exe @runEnrich(runDir) = [
   show `  Enriching @items.length items...`
 
   >> Load changelog once (shared across all tickets)
-  let @changelog = sh {head -300 @base/CHANGELOG.md 2>/dev/null}
+  let @changelogPath = `@base/CHANGELOG.md`
+  let @changelog = @headFile(@changelogPath)
 
   >> Get ticket details for each item
   let @ticketsToEnrich = for @item in @items [

@@ -37,7 +37,7 @@ exe @resolveRunDir(runId) = [
 >> Check if a run exists
 exe @runExists(runId) = [
   let @runDir = `@pipelineRoot/@runId`
-  let @runFile = <@runDir/run.json>
+  let @runFile = <@runDir/run.json>?
   => @runFile ? true : false
 ]
 
@@ -79,7 +79,7 @@ exe @createRun(pipelineRoot, runId, config) = [
 
 >> Load run state
 exe @loadRun(runDir) = [
-  let @runFile = <@runDir/run.json>
+  let @runFile = <@runDir/run.json>?
   => @runFile
 ]
 

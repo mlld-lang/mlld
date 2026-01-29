@@ -108,7 +108,7 @@ exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
   let @rootCause = @analysis.investigation.root_cause
   let @rootCauseLocation = @analysis.investigation.root_cause_location
   let @approach = @analysis.proposed_fix.approach
-  let @analysisJson = @analysis.text
+  let @analysisJson = @analysis | @json.llm
 
   let @applyPrompt = @buildApplyPrompt(@ticketId, @baseBranch, @analysisJson, @resultPath, @rootCause, @rootCauseLocation, @approach)
   let @applyFullPrompt = `@applyPrompt\n\nIMPORTANT: Write your JSON result to @resultPath using the Write tool.`
@@ -175,7 +175,7 @@ exe @mergeVerified(runDir, results, baseBranch, batchNum, dryRun) = [
   ]
 
   >> Build and run merge prompt
-  let @mergeItemsJson = @verifiedItems.text
+  let @mergeItemsJson = @verifiedItems | @json.llm
   let @outputPath = `@runDir/execute/merge-batch-@batchNum.json`
   let @prompt = @buildMergePrompt(@baseBranch, @runDir, @batchNum, @mergeItemsJson, @outputPath)
   let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
@@ -209,7 +209,7 @@ exe @verifyMain(runDir, mergeResult, baseBranch, dryRun) = [
   >> Build merged items list for context
   let @mergeResults = @mergeResult.results ? @mergeResult.results : []
   let @mergedItems = for @r in @mergeResults when @r.merged => @r
-  let @mergedItemsJson = @mergedItems.text
+  let @mergedItemsJson = @mergedItems | @json.llm
 
   let @outputPath = `@runDir/execute/verification-result.json`
   let @prompt = @buildVerifyPrompt(@baseBranch, @runDir, @mergedCount, @mergedItemsJson, @outputPath)
@@ -231,7 +231,7 @@ exe @runExecute(runDir, batchSize, dryRun) = [
 
   >> Load work plan
   let @workPlanPath = `@runDir/rank/work-plan.json`
-  let @workPlan = <@workPlanPath>
+  let @workPlan = <@workPlanPath>?
 
   when !@workPlan [
     show `  No work-plan.json found`

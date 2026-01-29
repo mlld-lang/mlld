@@ -6,10 +6,14 @@
 >> Tickets directory
 var @ticketsDir = "@base/.tickets"
 
+>> Shell helpers (sh blocks need $var via exe params)
+exe @shTkCreate(title, type, priority, tagsArg, descArg) = sh {tk create "$title" -t "$type" -p "$priority" $tagsArg $descArg}
+exe @shTkTag(id, tags) = sh {tk tag "$id" $tags 2>/dev/null || echo "FALLBACK"}
+
 >> Query open tickets
 exe @getOpenTickets() = [
-  let @json = sh {tk query '.status == "open"' | jq -s '.'}
-  => @json.data
+  let @ticketData = sh {tk query '.status == "open"' | jq -s '.'}
+  => @ticketData
 ]
 
 >> Get ticket by ID
@@ -23,14 +27,14 @@ exe @getTicket(id) = [
 exe @createTicket(title, type, priority, tags, description) = [
   let @tagsArg = @tags ? `--tags "@tags"` : ""
   let @descArg = @description ? `-d "@description"` : ""
-  let @result = sh {tk create "@title" -t @type -p @priority @tagsArg @descArg}
+  let @result = @shTkCreate(@title, @type, @priority, @tagsArg, @descArg)
   => @result.trim()
 ]
 
 >> Add tags to a ticket (simple approach using tk CLI)
 exe @addTags(id, tags) = [
   >> Use tk tag command if available, otherwise update file directly
-  let @result = sh {tk tag @id @tags 2>/dev/null || echo "FALLBACK"}
+  let @result = @shTkTag(@id, @tags)
   when @result.trim() != "FALLBACK" => @id
 
   >> Fallback: update file directly

@@ -81,7 +81,7 @@ exe @runDocs(runDir) = [
 
   >> Also check work plan for doc-related items
   let @workPlanPath = `@runDir/rank/work-plan.json`
-  let @workPlan = <@workPlanPath>
+  let @workPlan = <@workPlanPath>?
   let @workPlanItems = @workPlan && @workPlan.ranked_items ? @workPlan.ranked_items : []
 
   >> Filter work plan for doc tickets

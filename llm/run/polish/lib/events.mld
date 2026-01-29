@@ -46,7 +46,7 @@ exe @logItemDone(runDir, id, result, extra) = [
 >> Load all events from log
 exe @loadEvents(runDir) = [
   let @eventLog = `@runDir/events.jsonl`
-  let @content = <@eventLog>
+  let @content = <@eventLog>?
   when !@content => []
   >> Split by newlines and parse each line
   let @lines = @content.split("\n")

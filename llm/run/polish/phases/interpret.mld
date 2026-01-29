@@ -20,7 +20,7 @@ exe @buildInterpretPrompt(qaDir, hasStrategyQuestions, outputPath) = template ".
 >> Returns strategy object or null if skipped
 exe @runInterpret(runDir, qaDir) = when first [
   >> Early return if no QA data
-  !@qaDir [
+  !@qaDir => [
     show `  No QA run directory specified`
     show `  Skipping interpret phase (no QA data)`
     => null
@@ -33,11 +33,11 @@ exe @runInterpret(runDir, qaDir) = when first [
 >> Inner interpret logic (called when qaDir is valid)
 exe @doInterpret(runDir, qaDir) = [
   let @trendReportPath = `@qaDir/trend-report.json`
-  let @trendReport = <@trendReportPath>
+  let @trendReport = <@trendReportPath>?
 
   >> Early return if no trend report
   => when first [
-    !@trendReport [
+    !@trendReport => [
       show `  No trend report found at @trendReportPath`
       show `  Skipping interpret phase (no QA data)`
       => null
@@ -50,10 +50,10 @@ exe @doInterpret(runDir, qaDir) = [
 exe @doInterpretWithData(runDir, qaDir, trendReportPath) = [
   >> Check for existing strategy (skip if already done)
   let @outputPath = `@runDir/interpret/strategy.json`
-  let @existingStrategy = <@outputPath>
+  let @existingStrategy = <@outputPath>?
 
   => when first [
-    @existingStrategy [
+    @existingStrategy => [
       show `  Strategy already exists at @outputPath`
       show `  Skipping interpret phase`
       => @existingStrategy
@@ -66,7 +66,7 @@ exe @doInterpretWithData(runDir, qaDir, trendReportPath) = [
 exe @executeInterpret(runDir, qaDir, trendReportPath, outputPath) = [
   >> Check for strategy questions
   let @strategyQuestionsPath = `@qaDir/strategy-questions.md`
-  let @strategyQuestions = <@strategyQuestionsPath>
+  let @strategyQuestions = <@strategyQuestionsPath>?
   let @hasStrategyQuestions = @strategyQuestions ? true : false
 
   >> Log phase start
@@ -87,11 +87,11 @@ exe @executeInterpret(runDir, qaDir, trendReportPath, outputPath) = [
   let @strategy = <@outputPath>
 
   => when first [
-    !@strategy [
+    !@strategy => [
       show `  ERROR: Failed to generate strategy.json`
       => null
     ]
-    * [
+    * => [
       >> Log completion
       let @classCount = @strategy.classifications ? @strategy.classifications.length : 0
       let @_ = @logPhaseComplete(@runDir, "interpret", { classifications: @classCount })
