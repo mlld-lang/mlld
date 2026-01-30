@@ -61,6 +61,7 @@ import {
   NewlineNode,
   SectionMarkerNode,
   SourceLocation,
+  CommandReference,
   ExecInvocation,
   NegationNode,
   FileReferenceNode,
@@ -174,6 +175,7 @@ export interface CommandRefDefinition extends BaseCommandDefinition {
   type: 'commandRef';
   commandRef: string;
   commandArgs?: MlldNode[];
+  commandRefAst?: CommandReference | ExecInvocation;
 }
 
 export interface CodeDefinition extends BaseCommandDefinition {

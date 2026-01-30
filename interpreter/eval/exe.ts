@@ -371,6 +371,15 @@ export async function evaluateExe(
          */
         let refName: string | undefined;
         const commandRefNodes = Array.isArray(commandRef) ? commandRef : [commandRef];
+        const execInvocation = (directive.values as any)?.execInvocation;
+        const hasExecInvocation =
+          execInvocation && typeof execInvocation === 'object' && (execInvocation as any).type === 'ExecInvocation';
+        const invocationHasObject =
+          hasExecInvocation &&
+          (((execInvocation as any).commandRef?.objectSource) || ((execInvocation as any).commandRef?.objectReference));
+        const invocationHasFields =
+          hasExecInvocation && Array.isArray((execInvocation as any).fields) && (execInvocation as any).fields.length > 0;
+        const shouldUseInvocationAst = invocationHasObject || invocationHasFields;
         try {
           const refCandidate = commandRefNodes[0];
           if (refCandidate && typeof refCandidate === 'object') {
@@ -410,7 +419,17 @@ export async function evaluateExe(
           refName.length > 0 &&
           refName === paramNames[0];
 
-        if (isIdentity || shouldTemplateFromRef) {
+        if (shouldUseInvocationAst && hasExecInvocation) {
+          executableDef = {
+            type: 'commandRef',
+            commandRef: refName || '',
+            commandArgs: args,
+            withClause,
+            paramNames,
+            sourceDirective: 'exec',
+            commandRefAst: execInvocation
+          } satisfies CommandRefExecutable;
+        } else if (isIdentity || shouldTemplateFromRef) {
           executableDef = {
             type: 'template',
             template: isIdentity

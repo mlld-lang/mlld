@@ -1035,41 +1035,64 @@ export async function evaluateRun(
       }
       
     } else if (definition.type === 'commandRef') {
-      // This command references another command
-      const refExecVar = env.getVariable(definition.commandRef);
-      if (!refExecVar || !isExecutableVariable(refExecVar)) {
-        throw new Error(`Referenced executable not found: ${definition.commandRef}`);
-      }
-      
-      // Check for circular references
-      if (callStack.includes(definition.commandRef)) {
-        const cycle = [...callStack, definition.commandRef].join(' -> ');
-        throw new Error(`Circular command reference detected: ${cycle}`);
-      }
-      
-      // Create a new run directive for the referenced command
-      const refDirective = {
-        ...directive,
-        values: {
-          ...directive.values,
-          identifier: [{ type: 'Text', content: definition.commandRef }],
-          args: definition.commandArgs
+      const refAst = (definition as any).commandRefAst;
+      if (refAst) {
+        const { evaluateExecInvocation } = await import('./exec-invocation');
+        const execEnv = env.createChild();
+        for (const [key, value] of Object.entries(argValues)) {
+          execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
         }
-      };
-      const mergedAuthUsing = mergeAuthUsing(definition.withClause as WithClause | undefined, withClause);
-      const refWithClause = mergedAuthUsing
-        ? { ...(withClause || {}), ...mergedAuthUsing }
-        : withClause;
-      if (refWithClause) {
-        (refDirective.values as any).withClause = refWithClause;
-        refDirective.meta = { ...directive.meta, withClause: refWithClause };
+        const mergedAuthUsing = mergeAuthUsing(definition.withClause as WithClause | undefined, withClause);
+        const refWithClause = mergedAuthUsing
+          ? { ...(withClause || {}), ...mergedAuthUsing }
+          : withClause;
+        const baseInvocation =
+          (refAst as any).type === 'ExecInvocation'
+            ? refAst
+            : {
+                type: 'ExecInvocation',
+                commandRef: refAst
+              };
+        const refInvocation = refWithClause ? { ...baseInvocation, withClause: refWithClause } : baseInvocation;
+        const result = await evaluateExecInvocation(refInvocation as any, execEnv);
+        setOutput(result.value);
+      } else {
+        // This command references another command
+        const refExecVar = env.getVariable(definition.commandRef);
+        if (!refExecVar || !isExecutableVariable(refExecVar)) {
+          throw new Error(`Referenced executable not found: ${definition.commandRef}`);
+        }
+        
+        // Check for circular references
+        if (callStack.includes(definition.commandRef)) {
+          const cycle = [...callStack, definition.commandRef].join(' -> ');
+          throw new Error(`Circular command reference detected: ${cycle}`);
+        }
+        
+        // Create a new run directive for the referenced command
+        const refDirective = {
+          ...directive,
+          values: {
+            ...directive.values,
+            identifier: [{ type: 'Text', content: definition.commandRef }],
+            args: definition.commandArgs
+          }
+        };
+        const mergedAuthUsing = mergeAuthUsing(definition.withClause as WithClause | undefined, withClause);
+        const refWithClause = mergedAuthUsing
+          ? { ...(withClause || {}), ...mergedAuthUsing }
+          : withClause;
+        if (refWithClause) {
+          (refDirective.values as any).withClause = refWithClause;
+          refDirective.meta = { ...directive.meta, withClause: refWithClause };
+        }
+        
+        // Recursively evaluate the referenced command with updated call stack
+        // Note: We don't add definition.commandRef here because it will be added 
+        // at the beginning of the runExec case when processing refDirective
+        const result = await evaluateRun(refDirective, env, callStack, context);
+        setOutput(result.value);
       }
-      
-      // Recursively evaluate the referenced command with updated call stack
-      // Note: We don't add definition.commandRef here because it will be added 
-      // at the beginning of the runExec case when processing refDirective
-      const result = await evaluateRun(refDirective, env, callStack, context);
-      setOutput(result.value);
       
     } else if (execVar.internal?.isBuiltinTransformer && execVar.internal?.transformerImplementation) {
       // Special handling for built-in transformers (e.g., imported @keychain functions)

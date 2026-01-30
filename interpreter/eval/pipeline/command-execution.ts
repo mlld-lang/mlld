@@ -1386,6 +1386,20 @@ export async function executeCommandVariable(
      * WHY: The reference might be an executable or a parameter/value in the execution scope.
      * CONTEXT: Prefer the execution parameter scope so pipeline parameters (e.g., input) are visible.
      */
+    const refAst = execDef.commandRefAst;
+    if (refAst) {
+      const { evaluateExecInvocation } = await import('../exec-invocation');
+      const baseInvocation =
+        (refAst as any).type === 'ExecInvocation'
+          ? refAst
+          : {
+              type: 'ExecInvocation',
+              commandRef: refAst
+            };
+      const refInvocation = execDef.withClause ? { ...baseInvocation, withClause: execDef.withClause } : baseInvocation;
+      const result = await evaluateExecInvocation(refInvocation as any, execEnv);
+      return finalizeResult(result.value);
+    }
     const refRaw = execDef.commandRef || '';
     // Use the provided identifier as-is; evaluateExe should have normalized it from AST
     const refName = String(refRaw);

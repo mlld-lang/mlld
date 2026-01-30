@@ -3308,120 +3308,139 @@ async function evaluateExecInvocationInternal(
   }
   // Handle command reference executables
   else if (isCommandRefExecutable(definition)) {
-    const refName = definition.commandRef;
-    if (!refName) {
-      throw new MlldInterpreterError(`Command reference ${commandName} has no target command`);
-    }
-
-    const refWithClause = mergeAuthUsingIntoWithClause(definition.withClause, node.withClause);
-    
-    // Look up the referenced command
-    // First check in the captured module environment (for imported executables)
-    let refCommand = null;
-    if (variable?.internal?.capturedModuleEnv) {
-      const capturedEnv =
-        (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
-      if (capturedEnv instanceof Map) {
-        // If it's a Map, we have proper Variables
-        refCommand = capturedEnv.get(refName);
-      } else if (capturedEnv && typeof capturedEnv === 'object') {
-        // This shouldn't happen with proper deserialization, but handle it for safety
-        refCommand = capturedEnv[refName];
-      }
-    }
-
-    // Fall back to current environment if not found in captured environment
-    if (!refCommand) {
-      refCommand = env.getVariable(refName);
-    }
-
-    if (!refCommand) {
-      throw new MlldInterpreterError(`Referenced command not found: ${refName}`);
-    }
-
-    // The commandArgs contains the original AST nodes for how to call the referenced command
-    // We need to evaluate these nodes with the current invocation's parameters bound
-    if (definition.commandArgs && definition.commandArgs.length > 0) {
-      if (process.env.MLLD_DEBUG === 'true') {
-        try {
-          console.error('[EXEC INVOC] commandRef args shape:', (definition.commandArgs as any[]).map((a: any) => Array.isArray(a) ? 'array' : (a && typeof a === 'object' && a.type) || typeof a));
-        } catch {}
-      }
-      // Evaluate each arg; handle interpolated string args that are arrays of parts
-      let refArgs: any[] = [];
-      const { evaluate } = await import('../core/interpreter');
-      
-      for (const argNode of definition.commandArgs) {
-        let value: any;
-        // If this arg is an array of parts (from DataString with interpolation),
-        // interpolate the whole array into a single string argument
-        if (Array.isArray(argNode)) {
-          value = await interpolateWithResultDescriptor(argNode as any[], execEnv, InterpolationContext.Default);
-        } else {
-          // Evaluate the individual argument node
-          const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
-          value = argResult?.value;
-        }
-        if (typeof value === 'string') {
-          const paramVar = execEnv.getVariable(value);
-          if (paramVar?.internal?.isParameter) {
-            value = isStructuredValue(paramVar.value) ? paramVar.value : paramVar.value;
-          }
-        }
-        if (value !== undefined) {
-          refArgs.push(value);
-        }
-      }
-      
-      // Create a child environment that can access the referenced command
+    const refAst = (definition as any).commandRefAst;
+    if (refAst) {
+      const refWithClause = mergeAuthUsingIntoWithClause(definition.withClause, node.withClause);
       const refEnv = env.createChild();
-      // Set the captured module env so getVariable can find the command
-      if (
-        variable?.internal?.capturedModuleEnv instanceof Map
-      ) {
-        const captured =
-          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
-        if (captured instanceof Map) {
-          refEnv.setCapturedModuleEnv(captured);
-        }
-      }
-
-      // Create a new invocation node for the referenced command with the evaluated args
-      const refInvocation: ExecInvocation = {
-        type: 'ExecInvocation',
-        commandRef: {
-          identifier: refName,
-          args: refArgs  // Pass values directly like foreach does
-        },
-        // Pass along the pipeline if present
-        ...(refWithClause ? { withClause: refWithClause } : {})
-      };
-
-      // Recursively evaluate the referenced command in the environment that has it
-      const refResult = await evaluateExecInvocation(refInvocation, refEnv);
-      result = refResult.value as string;
-    } else {
-      // Create a child environment that can access the referenced command
-      const refEnv = env.createChild();
-      // Set the captured module env so getVariable can find the command
       if (variable?.internal?.capturedModuleEnv instanceof Map) {
         refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
       }
-
-      // No commandArgs means just pass through the current invocation's args
-      const refInvocation: ExecInvocation = {
-        type: 'ExecInvocation',
-        commandRef: {
-          identifier: refName,
-          args: evaluatedArgs  // Pass values directly like foreach does
-        },
-        // Pass along the pipeline if present
-        ...(refWithClause ? { withClause: refWithClause } : {})
-      };
-
-      // Recursively evaluate the referenced command in the environment that has it
+      const baseInvocation =
+        (refAst as any).type === 'ExecInvocation'
+          ? (refAst as ExecInvocation)
+          : ({
+              type: 'ExecInvocation',
+              commandRef: refAst
+            } as ExecInvocation);
+      const refInvocation = refWithClause ? { ...baseInvocation, withClause: refWithClause } : baseInvocation;
       const refResult = await evaluateExecInvocation(refInvocation, refEnv);
       result = refResult.value as string;
+    } else {
+      const refName = definition.commandRef;
+      if (!refName) {
+        throw new MlldInterpreterError(`Command reference ${commandName} has no target command`);
+      }
+
+      const refWithClause = mergeAuthUsingIntoWithClause(definition.withClause, node.withClause);
+      
+      // Look up the referenced command
+      // First check in the captured module environment (for imported executables)
+      let refCommand = null;
+      if (variable?.internal?.capturedModuleEnv) {
+        const capturedEnv =
+          (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
+        if (capturedEnv instanceof Map) {
+          // If it's a Map, we have proper Variables
+          refCommand = capturedEnv.get(refName);
+        } else if (capturedEnv && typeof capturedEnv === 'object') {
+          // This shouldn't happen with proper deserialization, but handle it for safety
+          refCommand = capturedEnv[refName];
+        }
+      }
+
+      // Fall back to current environment if not found in captured environment
+      if (!refCommand) {
+        refCommand = env.getVariable(refName);
+      }
+
+      if (!refCommand) {
+        throw new MlldInterpreterError(`Referenced command not found: ${refName}`);
+      }
+
+      // The commandArgs contains the original AST nodes for how to call the referenced command
+      // We need to evaluate these nodes with the current invocation's parameters bound
+      if (definition.commandArgs && definition.commandArgs.length > 0) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          try {
+            console.error('[EXEC INVOC] commandRef args shape:', (definition.commandArgs as any[]).map((a: any) => Array.isArray(a) ? 'array' : (a && typeof a === 'object' && a.type) || typeof a));
+          } catch {}
+        }
+        // Evaluate each arg; handle interpolated string args that are arrays of parts
+        let refArgs: any[] = [];
+        const { evaluate } = await import('../core/interpreter');
+        
+        for (const argNode of definition.commandArgs) {
+          let value: any;
+          // If this arg is an array of parts (from DataString with interpolation),
+          // interpolate the whole array into a single string argument
+          if (Array.isArray(argNode)) {
+            value = await interpolateWithResultDescriptor(argNode as any[], execEnv, InterpolationContext.Default);
+          } else {
+            // Evaluate the individual argument node
+            const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
+            value = argResult?.value;
+          }
+          if (typeof value === 'string') {
+            const paramVar = execEnv.getVariable(value);
+            if (paramVar?.internal?.isParameter) {
+              value = isStructuredValue(paramVar.value) ? paramVar.value : paramVar.value;
+            }
+          }
+          if (value !== undefined) {
+            refArgs.push(value);
+          }
+        }
+        
+        // Create a child environment that can access the referenced command
+        const refEnv = env.createChild();
+        // Set the captured module env so getVariable can find the command
+        if (
+          variable?.internal?.capturedModuleEnv instanceof Map
+        ) {
+          const captured =
+            (variable.internal?.capturedModuleEnv as Map<string, Variable> | undefined);
+          if (captured instanceof Map) {
+            refEnv.setCapturedModuleEnv(captured);
+          }
+        }
+
+        // Create a new invocation node for the referenced command with the evaluated args
+        const refInvocation: ExecInvocation = {
+          type: 'ExecInvocation',
+          commandRef: {
+            identifier: refName,
+            args: refArgs  // Pass values directly like foreach does
+          },
+          // Pass along the pipeline if present
+          ...(refWithClause ? { withClause: refWithClause } : {})
+        };
+
+        // Recursively evaluate the referenced command in the environment that has it
+        const refResult = await evaluateExecInvocation(refInvocation, refEnv);
+        result = refResult.value as string;
+      } else {
+        // Create a child environment that can access the referenced command
+        const refEnv = env.createChild();
+        // Set the captured module env so getVariable can find the command
+        if (variable?.internal?.capturedModuleEnv instanceof Map) {
+          refEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
+        }
+
+        // No commandArgs means just pass through the current invocation's args
+        const refInvocation: ExecInvocation = {
+          type: 'ExecInvocation',
+          commandRef: {
+            identifier: refName,
+            args: evaluatedArgs  // Pass values directly like foreach does
+          },
+          // Pass along the pipeline if present
+          ...(refWithClause ? { withClause: refWithClause } : {})
+        };
+
+        // Recursively evaluate the referenced command in the environment that has it
+        const refResult = await evaluateExecInvocation(refInvocation, refEnv);
+        result = refResult.value as string;
+      }
     }
   }
   // Handle section executables

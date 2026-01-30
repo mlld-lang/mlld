@@ -45,5 +45,10 @@ describe('String .split() + indexing + pipelines', () => {
     const out = await run(src);
     expect(out).toBe('bar');
   });
-});
 
+  it('method call on exec result in simple /exe definition', async () => {
+    const src = `/exe @getStr() = "hello world"\n/exe @checkHello() = @getStr().includes("hello")\n/var @result = @checkHello()\n/show @result`;
+    const out = await run(src);
+    expect(out).toBe('true');
+  });
+});

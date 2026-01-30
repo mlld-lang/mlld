@@ -10,6 +10,7 @@ import { VariableContext, VariableInternal } from './index';
 import type { PipelineStage } from './run';
 import type { DataValue } from './var';
 import type { PathMeta } from './meta';
+import type { CommandReference, ExecInvocation } from './primitives';
 
 /**
  * Base executable definition that can be invoked with parameters
@@ -46,6 +47,7 @@ export interface CommandRefExecutable extends BaseExecutable {
   type: 'commandRef';
   commandRef: string;
   commandArgs?: MlldNode[];
+  commandRefAst?: CommandReference | ExecInvocation;
   withClause?: any; // Pipeline information from the original directive
   sourceDirective: 'exec';
 }

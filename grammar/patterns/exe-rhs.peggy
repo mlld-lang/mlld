@@ -80,6 +80,7 @@ ExeUnifiedReference "exe unified reference"
         return {
           type: 'exeExecInvocation',
           values: {
+            execInvocation: invocation,
             commandRef: invocation.commandRef,
             args: invocation.commandRef.args || [],
             ...(invocation.withClause ? { withClause: invocation.withClause } : {})
