@@ -7,11 +7,11 @@
 The when directive provides conditional execution based on truthiness.
 It can be used in several forms:
 1. /when <condition> => <action>                    - Simple conditional
-2. /when <expression>: [conditions]                 - Match form (executes all matching conditions)
+2. /when <expression>: [conditions]                 - Match form (first match wins)
 3. /when <var> <modifier>: [conditions] => <action> - Block conditional with modifiers
 
 Modifiers:
-- first: Execute only the first truthy condition's action (switch behavior)
+- first: Alias for default first-match behavior
 
 For AND/OR logic, use && and || operators in conditions instead of deprecated any/all modifiers:
 - Use: /when (@cond1 && @cond2) => action  (instead of: /when all [@cond1 @cond2] => action)
@@ -134,7 +134,7 @@ SlashWhen
       helpers.mlldError("Invalid when modifier: '" + modifier + "'. The only valid modifier is 'first'.\n" +
             "For AND/OR logic, use && and || operators instead.\n\n" +
             "Examples:\n" +
-            "  when @var first [...] => action\n" +
+            "  when @var [...] => action\n" +
             "  when (@cond1 && @cond2) => action  (instead of 'all')\n" +
             "  when (@cond1 || @cond2) => action  (instead of 'any')", "modifier", location());
     }
@@ -143,7 +143,7 @@ SlashWhen
       helpers.mlldError("Invalid when syntax. Valid forms:\\n" +
             "  when @condition => action          (simple form)\\n" +
             "  when @variable [...]              (switch form)\\n" +
-            "  when @var first [...] => action   (block form with modifier)\\n" +
+            "  when @var [...] => action          (block form)\\n" +
             "  when [...] => action               (bare block form)", "@", location());
     }
 
@@ -202,20 +202,20 @@ WhenSimpleBlockForm
       helpers.mlldError(
         `Invalid when syntax: missing '=>' before block.\n\n` +
         `Change:  when ${conditionText} [...]  =>  when ${conditionText} => [...]\n\n` +
-        `The 'when' directive has three forms:\n\n` +
+        `The 'when' directive has these forms:\n\n` +
         `1. Single-line (condition => action):\n` +
         `   when @ready => show "go!"\n` +
         `   when @error => [log @error; => null]\n\n` +
-        `2. Multi-match (all true conditions fire):\n` +
+        `2. First-match list:\n` +
         `   when [\n` +
-        `     @verbose => log "details..."\n` +
-        `     @debug => log "state: @state"\n` +
-        `   ]\n\n` +
-        `3. First-match (like switch, stops at first true):\n` +
-        `   when first [\n` +
         `     @x > 100 => "large"\n` +
         `     @x > 10 => "medium"\n` +
         `     * => "small"\n` +
+        `   ]\n\n` +
+        `3. Match form:\n` +
+        `   when @status: [\n` +
+        `     "ok" => "ready"\n` +
+        `     * => "unknown"\n` +
         `   ]`,
         "=>",
         location()
@@ -315,7 +315,7 @@ WhenBlockForm
     }
 
 // -------------------------------------------------------------
-// BARE BLOCK FORM: /when [...] - executes all matching conditions
+// BARE BLOCK FORM: /when [...] - executes first matching condition
 // -------------------------------------------------------------
 
 WhenBareBlockForm
@@ -341,7 +341,7 @@ WhenBareBlockForm
         values,
         raw,
         {
-          modifier: 'default',  // Bare when has default behavior (execute all matching)
+          modifier: 'default',  // Bare when uses default first-match behavior
           conditionCount: conditions.length,
           hasVariable: false
         },

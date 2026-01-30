@@ -151,6 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld env` starts MCP servers from `@mcpConfig()` output and injects MCP connection env for spawned sessions
 - SDK analyze metadata includes module profiles
 - Optional field access suffix `?` for explicit missing-field access
+- `/if` directive for conditional execution with optional `else` blocks and exe-level returns
+
+### Changed
+- `when` defaults to first-match behavior for directive and expression forms; `when first` warns and behaves the same
 
 ### Fixed
 - Guard override lists accept unquoted `@guard` names

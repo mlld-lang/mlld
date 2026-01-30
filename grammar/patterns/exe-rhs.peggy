@@ -797,7 +797,7 @@ WhenExpression "when expression"
         mode: options.mode
       });
     }
-  // Standard: when [ ... ] or when first [ ... ]
+  // Standard: when [ ... ] (first-match; `when first` warns)
   / "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
@@ -990,20 +990,20 @@ WhenExpressionInlineBlock
       helpers.mlldError(
         `Invalid when syntax: missing '=>' before block.\n\n` +
         `Change:  when ${conditionText} [...]  =>  when ${conditionText} => [...]\n\n` +
-        `The 'when' directive has three forms:\n\n` +
+        `The 'when' directive has these forms:\n\n` +
         `1. Single-line (condition => action):\n` +
         `   when @ready => show "go!"\n` +
         `   when @error => [log @error; => null]\n\n` +
-        `2. Multi-match (all true conditions fire):\n` +
+        `2. First-match list:\n` +
         `   when [\n` +
-        `     @verbose => log "details..."\n` +
-        `     @debug => log "state: @state"\n` +
-        `   ]\n\n` +
-        `3. First-match (like switch, stops at first true):\n` +
-        `   when first [\n` +
         `     @x > 100 => "large"\n` +
         `     @x > 10 => "medium"\n` +
         `     * => "small"\n` +
+        `   ]\n\n` +
+        `3. Match form:\n` +
+        `   when @status: [\n` +
+        `     "ok" => "ready"\n` +
+        `     * => "unknown"\n` +
         `   ]`,
         "=>",
         location()
