@@ -89,25 +89,45 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.isDataValue = true;
       }
+      // Handle structured directive nodes (e.g., env expressions)
+      else if (value && value.type === 'Directive') {
+        processedValue = [value];
+        metaInfo.inferredType = 'computed';
+        metaInfo.directiveKind = value.kind;
+      }
       // Handle code execution (both 'run' keyword and shorthand)
       else if (value && value.type === 'code') {
-        processedValue = [{
+        const codeNode = {
           type: 'code',
           language: value.language,
           code: value.code
-        }];
+        };
+        if (value.workingDir) {
+          codeNode.workingDir = value.workingDir;
+        }
+        processedValue = [codeNode];
         metaInfo.inferredType = 'computed';
         metaInfo.language = value.language;
         metaInfo.hasRunKeyword = value.hasRunKeyword;
+        if (value.meta?.hasWorkingDir) {
+          metaInfo.hasWorkingDir = true;
+        }
       }
       // Handle command execution (run {command})
       else if (value && value.type === 'command') {
-        processedValue = [{
+        const commandNode = {
           type: 'command',
           command: value.command
-        }];
+        };
+        if (value.workingDir) {
+          commandNode.workingDir = value.workingDir;
+        }
+        processedValue = [commandNode];
         metaInfo.inferredType = 'computed';
         metaInfo.hasRunKeyword = value.hasRunKeyword;
+        if (value.workingDir) {
+          metaInfo.hasWorkingDir = true;
+        }
       }
       // Handle foreach expressions
       else if (value && value.type === 'foreach-command') {
