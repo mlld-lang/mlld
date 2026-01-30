@@ -33,6 +33,33 @@ describe('ArgumentParser --payload alias', () => {
   });
 });
 
+describe('ArgumentParser custom payload flags', () => {
+  it('collects unknown flags as @payload for file input', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--topic', 'vars', '--count', '5']);
+
+    expect(options.inject).toEqual(['@payload={"topic":"vars","count":"5"}']);
+  });
+
+  it('treats custom flag without value as boolean true', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--dry-run']);
+
+    expect(options.inject).toEqual(['@payload={"dry-run":true}']);
+  });
+
+  it('merges --inject with custom payload flags', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs([
+      'script.mld',
+      '--inject', '@config={"a":1}',
+      '--topic', 'mlld'
+    ]);
+
+    expect(options.inject).toEqual(['@config={"a":1}', '@payload={"topic":"mlld"}']);
+  });
+});
+
 describe('ArgumentParser streaming flag', () => {
   it('parses --no-stream', () => {
     const parser = new ArgumentParser();

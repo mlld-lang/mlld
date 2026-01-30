@@ -33,6 +33,7 @@ export class ArgumentParser {
 
     // Store remaining args after command
     options._ = [];
+    const payloadFlags: Record<string, unknown> = {};
     
     // Flag to stop parsing when we hit a command with subcommands
     let stopParsing = false;
@@ -272,12 +273,22 @@ export class ArgumentParser {
             options._ = args.slice(i);
             stopParsing = true;
             break;
+          } else if (arg.startsWith('-') && options.input && !this.commandsWithSubcommands.includes(options.input)) {
+            const parsed = this.parseCustomFlag(arg, args[i + 1]);
+            if (!parsed) {
+              throw new Error(`Unknown option: ${arg}`);
+            }
+            payloadFlags[parsed.key] = parsed.value;
+            if (parsed.consumed) {
+              i++;
+            }
           } else {
             throw new Error(`Unknown option: ${arg}`);
           }
       }
     }
 
+    this.attachPayloadInject(options, payloadFlags);
     this.validateOptions(options);
     return options;
   }
@@ -394,6 +405,28 @@ export class ArgumentParser {
 
   supportsSubcommands(command: string): boolean {
     return this.commandsWithSubcommands.includes(command);
+  }
+
+  private parseCustomFlag(
+    arg: string,
+    nextArg?: string
+  ): { key: string; value: unknown; consumed: boolean } | null {
+    if (!arg.startsWith('-')) return null;
+    const key = arg.startsWith('--') ? arg.slice(2) : arg.slice(1);
+    if (!key) return null;
+    if (nextArg !== undefined && !nextArg.startsWith('-')) {
+      return { key, value: nextArg, consumed: true };
+    }
+    return { key, value: true, consumed: false };
+  }
+
+  private attachPayloadInject(options: CLIOptions, payloadFlags: Record<string, unknown>): void {
+    if (!options.input) return;
+    if (this.commandsWithSubcommands.includes(options.input)) return;
+    if (Object.keys(payloadFlags).length === 0) return;
+
+    if (!options.inject) options.inject = [];
+    options.inject.push(`@payload=${JSON.stringify(payloadFlags)}`);
   }
 
 }
