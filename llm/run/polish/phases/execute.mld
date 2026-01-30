@@ -11,7 +11,7 @@
 
 import { @claudePoll } from @mlld/claude-poll
 import { @logPhaseStart, @logPhaseComplete, @logBatchStart, @logBatchDone, @logItemStart, @logItemDone, @logEvent, @loadEvents, @getExecuteCompletedItems } from "../lib/events.mld"
-import { @getTicket, @addTags } from "../lib/tickets.mld"
+import { @getTicket, @addTags, @isImplDone } from "../lib/tickets.mld"
 import { @debuglog, @dbg } from "../lib/debug.mld"
 
 /needs { sh }
@@ -83,17 +83,19 @@ exe @_doAnalyzeTicket(runDir, ticketId, ticketContent, analysisPath, dryRun) = [
 >> Process a single ticket (analyze + apply + verify in worktree)
 exe @processTicket(runDir, ticketId, baseBranch, dryRun) = [
   let @ticket = @getTicket(@ticketId)
-  let @events = @loadEvents(@runDir)
-  let @completedIds = @getExecuteCompletedItems(@events)
-  let @alreadyCompleted = @completedIds.includes(@ticketId)
 
-  when @alreadyCompleted => show `      Skipping @ticketId (already completed)`
+  >> Check if already done via ticket tags (impl-done) - not just run-local events
+  let @ticketTags = @ticket && @ticket.mx && @ticket.mx.fm && @ticket.mx.fm.tags ? @ticket.mx.fm.tags : []
+  let @ticketObj = { tags: @ticketTags }
+  let @alreadyDone = @ticket && @isImplDone(@ticketObj)
+
+  when @alreadyDone => show `      Skipping @ticketId (impl-done)`
   when !@ticket => show `      ERROR: @ticketId not found`
 
   >> Use when first for proper early returns
   => when first [
     !@ticket => { ticket_id: @ticketId, error: "ticket not found" }
-    @alreadyCompleted => { ticket_id: @ticketId, skipped: true, reason: "already completed" }
+    @alreadyDone => { ticket_id: @ticketId, skipped: true, reason: "impl-done" }
     * => @_doProcessTicket(@runDir, @ticketId, @baseBranch, @dryRun)
   ]
 ]

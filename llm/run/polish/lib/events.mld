@@ -59,9 +59,9 @@ exe @getCompletedItems(events) = [
 ]
 
 >> Get items completed by execute phase (not enriched)
->> These statuses indicate execute phase completion: completed, needs-review, dry-run, apply-failed, fix-failed
+>> These statuses indicate real execute phase completion (dry-run doesn't count)
 exe @getExecuteCompletedItems(events) = [
-  let @executeStatuses = ["completed", "needs-review", "dry-run", "apply-failed", "fix-failed"]
+  let @executeStatuses = ["completed", "needs-review", "apply-failed", "fix-failed"]
   let @doneEvents = for @e in @events when @e.event == "item_done" && @executeStatuses.includes(@e.result) => @e
   => for @e in @doneEvents => @e.id
 ]
