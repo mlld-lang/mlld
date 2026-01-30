@@ -17,6 +17,20 @@ describe('Grammar - /for parallel options', () => {
     expect(opts.rateMs).toBe(1000);
   });
 
+  it('parses /for parallel(@cap, @pace) with variables', async () => {
+    const input = '/for parallel(@cap, @pace) @x in @arr => show @x';
+    const { ast, warnings } = await parse(input);
+    expect(warnings).toHaveLength(0);
+    const node = ast[0] as DirectiveNode;
+    expect(node.kind).toBe('for');
+    const opts = (node.values as any).forOptions;
+    expect(opts.parallel).toBe(true);
+    expect(opts.cap.type).toBe('VariableReference');
+    expect(opts.cap.identifier).toBe('cap');
+    expect(opts.rateMs.type).toBe('VariableReference');
+    expect(opts.rateMs.identifier).toBe('pace');
+  });
+
   it('parses for parallel(cap) in expressions with time units and spaces', async () => {
     const input = '/var @r = for parallel( 5 , 1s ) @x in @arr => @x';
     const { ast, warnings } = await parse(input);
@@ -31,6 +45,20 @@ describe('Grammar - /for parallel options', () => {
     expect(forExpr.meta.forOptions.parallel).toBe(true);
     expect(forExpr.meta.forOptions.cap).toBe(5);
     expect(forExpr.meta.forOptions.rateMs).toBe(1000);
+  });
+
+  it('parses for parallel(@cap) in expressions', async () => {
+    const input = '/var @r = for parallel(@cap) @x in @arr => @x';
+    const { ast, warnings } = await parse(input);
+    expect(warnings).toHaveLength(0);
+    const varDir = ast[0] as DirectiveNode;
+    expect(varDir.kind).toBe('var');
+    const valueNodes = (varDir.values as any).value as any[];
+    const forExpr = valueNodes.find(n => n && n.type === 'ForExpression');
+    expect(forExpr).toBeDefined();
+    expect(forExpr.meta?.forOptions?.parallel).toBe(true);
+    expect(forExpr.meta.forOptions.cap.type).toBe('VariableReference');
+    expect(forExpr.meta.forOptions.cap.identifier).toBe('cap');
   });
 
   it('parses parallel() with default cap', async () => {

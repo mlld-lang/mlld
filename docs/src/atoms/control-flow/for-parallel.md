@@ -7,7 +7,7 @@ parent: for
 tags: [iteration, loops, parallel, concurrency]
 related: [for-arrow, for-block]
 related-code: [interpreter/eval/for.ts, interpreter/eval/parallel.ts]
-updated: 2026-01-05
+updated: 2026-01-30
 qa_tier: 2
 ---
 
@@ -22,6 +22,11 @@ for parallel(3) @task in @tasks => @runTask(@task)
 
 >> With pacing (delay between starts)
 for parallel(2, 1s) @x in @items => @process(@x)
+
+>> Variable cap and pacing
+var @cap = 2
+var @pace = "1s"
+for parallel(@cap, @pace) @x in @items => @process(@x)
 ```
 
 **Parallel blocks:**

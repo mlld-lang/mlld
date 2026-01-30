@@ -10,16 +10,26 @@ ForIterationPattern "for iteration pattern"
       };
     }
 
+ParallelCapValue "parallel cap"
+  = cap:NumberLiteral { return cap; }
+  / variable:UnifiedVariableNoTail { return variable; }
+
+ParallelPaceValue "parallel pacing"
+  = wait:TimeDurationLiteral { return wait; }
+  / variable:UnifiedVariableNoTail { return variable; }
+
 // Optional parallel spec for /for and for-expressions
 ForParallelSpec
   // New syntax: parallel(cap, pacing)
-  = _ "parallel" _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" {
-      const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
-      return { parallel: true, cap: Number(cap), rateMs };
+  = _ "parallel" _ "(" _ cap:ParallelCapValue _ "," _ wait:ParallelPaceValue _ ")" {
+      const rateMs = wait && wait.type === 'TimeDuration'
+        ? helpers.ttlToSeconds(wait.value, wait.unit) * 1000
+        : wait;
+      return { parallel: true, cap, rateMs };
     }
   // New syntax: parallel(cap)
-  / _ "parallel" _ "(" _ cap:NumberLiteral _ ")" {
-      return { parallel: true, cap: Number(cap) };
+  / _ "parallel" _ "(" _ cap:ParallelCapValue _ ")" {
+      return { parallel: true, cap };
     }
   // New syntax: parallel()
   / _ "parallel" _ "(" _ ")" {
@@ -30,25 +40,27 @@ ForParallelSpec
       return { parallel: true };
     }
   // Legacy syntax: (cap, pacing) parallel
-  / _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" _ "parallel" {
+  / _ "(" _ cap:ParallelCapValue _ "," _ wait:ParallelPaceValue _ ")" _ "parallel" {
       helpers.warn(
         'Use parallel(cap, pacing) instead of (cap, pacing) parallel',
         'parallel(cap, pacing)',
         location(),
         'for-parallel-deprecated'
       );
-      const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
-      return { parallel: true, cap: Number(cap), rateMs };
+      const rateMs = wait && wait.type === 'TimeDuration'
+        ? helpers.ttlToSeconds(wait.value, wait.unit) * 1000
+        : wait;
+      return { parallel: true, cap, rateMs };
     }
   // Legacy syntax: cap parallel
-  / _ cap:NumberLiteral _ "parallel" {
+  / _ cap:ParallelCapValue _ "parallel" {
       helpers.warn(
         'Use parallel(cap) instead of cap parallel',
         'parallel(cap)',
         location(),
         'for-parallel-deprecated'
       );
-      return { parallel: true, cap: Number(cap) };
+      return { parallel: true, cap };
     }
 
 LoopLimit "loop limit"

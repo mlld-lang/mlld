@@ -1,4 +1,4 @@
-import type { DirectiveNode, BaseMlldNode, VariableReferenceNode } from './primitives';
+import type { DirectiveNode, BaseMlldNode, VariableReferenceNode, TimeDurationNode } from './primitives';
 import type { PipelineStage } from './run';
 
 export interface ForBatchPipelineMeta {
@@ -6,6 +6,9 @@ export interface ForBatchPipelineMeta {
   isBatchPipeline?: boolean;
   [key: string]: unknown;
 }
+
+export type ForParallelCap = number | VariableReferenceNode;
+export type ForParallelRate = number | VariableReferenceNode | TimeDurationNode;
 
 /**
  * Directive node for /for loops
@@ -24,8 +27,8 @@ export interface ForDirective extends DirectiveNode {
     /** Optional parallel options for this loop */
     forOptions?: {
       parallel?: boolean;
-      cap?: number;
-      rateMs?: number;
+      cap?: ForParallelCap;
+      rateMs?: ForParallelRate;
     };
   };
   meta: {
@@ -52,8 +55,8 @@ export interface ForExpression extends BaseMlldNode {
     isForExpression: true;
     forOptions?: {
       parallel?: boolean;
-      cap?: number;
-      rateMs?: number;
+      cap?: ForParallelCap;
+      rateMs?: ForParallelRate;
     };
     batchPipeline?: ForBatchPipelineMeta | null;
   };

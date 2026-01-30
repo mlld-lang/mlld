@@ -183,6 +183,11 @@ Syntax options:
 # Cap with pacing between task starts (time units: s, m, h, d, w)
 /for parallel(3, 1s) @x in @items => show @x
 
+# Cap and pacing from variables
+/var @cap = 3
+/var @pace = "1s"
+/for parallel(@cap, @pace) @x in @items => show @x
+
 # Collection form with parallel
 /var @out = for parallel(2) @x in ["a","b","c"] => @upper(@x)
 ```
