@@ -918,15 +918,24 @@ export const helpers = {
     // --------------------------------
     /**
      * Checks if an array is unclosed by scanning ahead
-     * Returns true if we hit a newline before finding the closing bracket
+     * Returns true if unclosed, stores reason in parserState.lastUnclosedReason
      */
     isUnclosedArray(input, pos) {
         let depth = 1;
         let i = pos;
         let hasHash = false;
+        let hasCommentMarker = false;
+        let firstNewlinePos = -1;
         this.debug('isUnclosedArray starting at pos', pos, 'first 50 chars:', input.substring(pos, pos + 50));
+        // First pass: scan until end of line or closing bracket to determine if this is
+        // a multi-line section syntax (has #) or a single-line array
         while (i < input.length && depth > 0) {
             const char = input[i];
+            // Check for >> comment marker
+            if (char === '>' && i + 1 < input.length && input[i + 1] === '>') {
+                hasCommentMarker = true;
+                this.debug('Found >> comment at', i, 'inside array');
+            }
             if (char === '[') {
                 depth++;
                 this.debug('Found [ at', i, 'depth now', depth);
@@ -940,29 +949,39 @@ export const helpers = {
                 this.debug('Found # at', i, 'in brackets - this is section syntax');
             }
             else if (char === '\n' && depth > 0) {
-                // Only return true if genuinely unclosed
-                // Section syntax can span lines, so check if we have # 
-                if (!hasHash) {
-                    this.debug('Found newline at', i, 'without # - unclosed array');
-                    return true; // Unclosed array on newline
+                // Record first newline position but continue scanning to find any >> markers
+                if (firstNewlinePos === -1) {
+                    firstNewlinePos = i;
                 }
-                this.debug('Found newline at', i, 'but has # - continuing scan');
+                // If section syntax (has #), continue scanning
+                if (!hasHash) {
+                    // For non-section arrays, scan ahead to look for >> before giving up
+                    // Continue until we hit another newline or end of content
+                    this.debug('Found newline at', i, 'without # - checking for comment markers ahead');
+                }
             }
             i++;
         }
-        const result = depth > 0;
-        this.debug('isUnclosedArray finished: result=', result, 'hasHash=', hasHash, 'depth=', depth, 'scanned to pos', i);
-        return result;
+        // Determine if unclosed: if we exited with depth > 0, it's unclosed
+        // Or if we hit a newline in a non-section array
+        const isUnclosed = depth > 0 || (firstNewlinePos !== -1 && !hasHash);
+        this.debug('isUnclosedArray finished: result=', isUnclosed, 'hasHash=', hasHash, 'hasCommentMarker=', hasCommentMarker, 'depth=', depth);
+        if (isUnclosed) {
+            this.parserState.lastUnclosedReason = hasCommentMarker ? 'commentInside' : 'generic';
+        }
+        return isUnclosed;
     },
     /**
      * Checks if an object is unclosed by scanning ahead
-     * Returns true if we hit a newline before finding the closing brace
+     * Returns true if unclosed, stores reason in parserState.lastUnclosedReason
      */
     isUnclosedObject(input, pos) {
         let depth = 1;
         let i = pos;
         let inString = false;
         let stringChar = null;
+        let hasCommentMarker = false;
+        let firstNewlinePos = -1;
         while (i < input.length && depth > 0) {
             const char = input[i];
             // Handle string context to avoid counting braces inside strings
@@ -976,18 +995,31 @@ export const helpers = {
                     stringChar = null;
                 }
             }
-            // Only count braces outside of strings
+            // Only count braces and comments outside of strings
             if (!inString) {
+                // Check for >> comment marker
+                if (char === '>' && i + 1 < input.length && input[i + 1] === '>') {
+                    hasCommentMarker = true;
+                }
                 if (char === '{')
                     depth++;
                 else if (char === '}')
                     depth--;
-                else if (char === '\n' && depth > 0)
-                    return true; // Unclosed on newline
+                else if (char === '\n' && depth > 0) {
+                    // Record first newline but continue scanning to find any >> markers
+                    if (firstNewlinePos === -1) {
+                        firstNewlinePos = i;
+                    }
+                }
             }
             i++;
         }
-        return depth > 0; // Still unclosed at end of input
+        // Unclosed if: we hit a newline with depth > 0, or reached end with depth > 0
+        const isUnclosed = depth > 0 || firstNewlinePos !== -1;
+        if (isUnclosed) {
+            this.parserState.lastUnclosedReason = hasCommentMarker ? 'commentInside' : 'generic';
+        }
+        return isUnclosed;
     },
     /**
      * Checks if a string quote is unclosed
@@ -1172,7 +1204,8 @@ export const helpers = {
         stringChar: null,
         lastDirectiveEndPos: -1,
         functionCount: 0,
-        maxNestingDepth: 20
+        maxNestingDepth: 20,
+        lastUnclosedReason: null
     },
     /**
      * Reset parser state between functions
