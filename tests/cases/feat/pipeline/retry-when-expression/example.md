@@ -1,6 +1,6 @@
 # Retry in When Expression Test
 
-/exe @validateScore(input) = when first [
+/exe @validateScore(input) = when [
   @input > 0.8 => "high-quality"
   @input > 0.5 => "medium-quality"
   @input > 0.2 => "low-quality"
@@ -14,7 +14,7 @@
   return 0.9; // High quality
 }
 
-/exe @qualityControl(input) = when first [
+/exe @qualityControl(input) = when [
   @input.includes("high-quality") => @input
   @input.includes("medium-quality") => @input
   @pipeline.try < 3 => retry

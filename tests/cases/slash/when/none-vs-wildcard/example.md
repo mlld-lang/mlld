@@ -29,13 +29,13 @@
 ]
 
 >> In exe context with first modifier
-/exe @classify(val) = when first [
+/exe @classify(val) = when [
   @val < 0 => "negative"
   @val == 0 => "zero"
   * => "wildcard catches all"
 ]
 
-/exe @classify2(val) = when first [
+/exe @classify2(val) = when [
   @val < 0 => "negative"
   @val == 0 => "zero"
   none => "none: no match"

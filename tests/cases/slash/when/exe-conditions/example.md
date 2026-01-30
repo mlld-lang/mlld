@@ -5,15 +5,13 @@
 /when @is_true() => show "This should appear"
 /when @is_false() => show "This should NOT appear"
 
-## Test 2: Block with first modifier
-/var @env = "development"
-/exe @is_dev() = cmd {echo "true"}
-/exe @is_prod() = cmd {echo ""}
+## Test 2: Block switch
+/var @mode = "development"
 
-/when @mode first: [
-  @is_prod() => show "Production mode"
-  @is_dev() => show "Development mode"
-  "true" => show "Unknown mode"
+/when @mode : [
+  "production" => show "Production mode"
+  "development" => show "Development mode"
+  true => show "Unknown mode"
 ]
 
 ## Test 3: || operator (replacing any modifier)

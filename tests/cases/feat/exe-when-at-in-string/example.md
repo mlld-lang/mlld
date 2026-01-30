@@ -1,4 +1,4 @@
-/exe @startsWithAt(s) = when first [
+/exe @startsWithAt(s) = when [
   @s.startsWith("@") => "yes"
   * => "no"
 ]

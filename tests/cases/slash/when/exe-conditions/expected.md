@@ -2,7 +2,7 @@
 
 This should appear
 
-## Test 2: Block with first modifier
+## Test 2: Block switch
 
 Development mode
 

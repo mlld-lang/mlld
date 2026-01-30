@@ -1,6 +1,6 @@
 /exe @gen(input) = `gen-@mx.try:@input`
 
- /exe @retryPrev(input) = when first [
+ /exe @retryPrev(input) = when [
   @mx.try < 3 => retry
   * => `done try=@mx.try`
 ]

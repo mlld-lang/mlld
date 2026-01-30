@@ -2,7 +2,7 @@
 
 Testing effects in deeply nested contexts (for-in-exe-in-when)
 
-/exe @processItem(item) = when first [
+/exe @processItem(item) = when [
   @item == "apple" => "First: @item"
   @item == "cherry" => "Last: @item"
   * => "Middle: @item"

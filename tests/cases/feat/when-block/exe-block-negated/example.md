@@ -2,7 +2,7 @@
 /var @evaluations = ["a", "b"]
 /var @fallback = ["fallback"]
 
-/var @refinedEvaluations = when first [
+/var @refinedEvaluations = when [
   !@shouldUseHaiku => [
     let @temp = @evaluations
     => @temp

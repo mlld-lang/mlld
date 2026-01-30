@@ -46,7 +46,7 @@ Has at least one artifact
 
 All checks passed
 
-## 9. @when first: with Truthiness
+## 9. @when: with Truthiness
 
 Default: {{firstDefault}}
 

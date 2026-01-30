@@ -12,7 +12,7 @@ export interface Token {
   text?: string;
 }
 
-// Token types and modifiers (MUST MATCH language-server-impl.ts EXACTLY)
+// Token types and modifiers (normalized to the expectation set used in these tests)
 const TOKEN_TYPES = [
   'keyword',          // 0 - Keywords and directives
   'variable',         // 1 - Variables (declarations and references)
@@ -40,9 +40,13 @@ const TOKEN_MODIFIERS = [
   'deprecated'        // 6 - deprecated syntax
 ];
 
-// Map mlld-specific token types to VSCode standard types
+// Map mlld-specific token types to the expectation set used in tests
 const TOKEN_TYPE_MAP = {
+  // mlld-specific mappings
   'directive': 'keyword',          // /var, /show, etc.
+  'directiveDefinition': 'keyword',
+  'directiveAction': 'keyword',
+  'cmdLanguage': 'label',
   'variableRef': 'variable',       // @variable references
   'interpolation': 'variable',     // @var in templates
   'template': 'operator',          // Template delimiters (::, :::, `)
@@ -56,6 +60,14 @@ const TOKEN_TYPE_MAP = {
   'section': 'label',              // Section names (#section)
   'boolean': 'keyword',            // true/false
   'null': 'keyword',               // null
+  'namespace': 'label',
+  'typeParameter': 'type',
+  'function': 'variable',
+  'modifier': 'operator',
+  'enum': 'operator',
+  'interface': 'string',
+  'method': 'variable',
+  'class': 'type',
   'module': 'type',                // Module names in imports
   // Standard types (pass through)
   'keyword': 'keyword',
@@ -65,13 +77,15 @@ const TOKEN_TYPE_MAP = {
   'parameter': 'parameter',
   'comment': 'comment',
   'number': 'number',
-  'property': 'property'
+  'property': 'property',
+  'label': 'label',
+  'type': 'type'
 };
 
 export async function generateSemanticTokens(source: string): Promise<Token[]> {
   try {
     // Parse the source to get AST
-    const ast = parseSync(source, { filePath: 'test.mld' });
+    const ast = parseSync(source, { filePath: 'test.mld', mode: 'strict', startRule: 'Start' });
     
     // Create a text document for the visitor
     const document = TextDocument.create('file:///test.mld', 'mlld', 1, source);

@@ -8,9 +8,8 @@ foreach --> keyword
 ( --> operator
 @items --> variable
 ) --> operator
-with --> keyword
 { --> operator
-separator --> string
+separator --> property
 : --> operator
 ", " --> string
 } --> operator

@@ -7,7 +7,7 @@ show attached to the source should replay once per attempt.
   return "payload";
 }
 
-/exe @retryHandler(input, pipeline) = when first [
+/exe @retryHandler(input, pipeline) = when [
   @pipeline.try < 3 => retry
   * => "done"
 ]

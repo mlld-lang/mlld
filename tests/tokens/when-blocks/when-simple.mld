@@ -1,35 +1,35 @@
-/when @isProduction => /show `⚠️ Production Environment`
+/when @isProduction => show `⚠️ Production Environment`
 
-/when @score > 90 => /show `Excellent!`
+/when @score > 90 => show `Excellent!`
 
-/when @isAdmin && @isActive => /show `Admin panel`
+/when @isAdmin && @isActive => show `Admin panel`
 
-/when !@isLocked => /show `Resource available`
+/when !@isLocked => show `Resource available`
 
 === START TOKENS ===
 @isProduction --> variable
 => --> operator
+show --> keyword
 ` --> operator
-⚠️ Production Environment --> string
-` --> operator
+`⚠️ Production Environment` --> string
 @score --> variable
 > --> operator
 90 --> number
 => --> operator
+show --> keyword
 ` --> operator
-Excellent! --> string
-` --> operator
+`Excellent!` --> string
 @isAdmin --> variable
 && --> operator
 @isActive --> variable
 => --> operator
+show --> keyword
 ` --> operator
-Admin panel --> string
-` --> operator
+`Admin panel` --> string
 ! --> operator
 @isLocked --> variable
 => --> operator
+show --> keyword
 ` --> operator
-Resource available --> string
-` --> operator
+`Resource available` --> string
 === END TOKENS ===

@@ -1,6 +1,6 @@
 >> Test that .includes() works correctly on parameters in when conditions
->> Using 'when first' for switch semantics (stop at first match)
-/exe @check(input) = when first [
+>> Using 'when' for switch semantics (stop at first match)
+/exe @check(input) = when [
   @input.includes("illegal") => "YES"
   * => "NO"
 ]

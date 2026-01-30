@@ -145,14 +145,14 @@ Test comprehensive truthiness behavior in @when directives.
 
 /when (@check1 && @check2 && @check3) => show "FAIL: Not all truthy but triggered"
 
-## 9. @when first: with Truthiness
+## 9. @when: with Truthiness
 
 /var @firstStatus = ""
 /var @firstFallback = ""
 /var @firstDefault = "active"
 
 >> Should find first truthy
-/when first: [
+/when [
   @firstStatus => show "Status: {{firstStatus}}"
   @firstFallback => show "Fallback: {{firstFallback}}"
   @firstDefault => show "Default: {{firstDefault}}"

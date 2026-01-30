@@ -1,6 +1,6 @@
 /when @features: [
-  @hasAuth => @authModule = "enabled"
-  @hasChat => @chatModule = "enabled"
+  @hasAuth => var @authModule = "enabled"
+  @hasChat => var @chatModule = "enabled"
   @hasAnalytics => @setupAnalytics()
 ]
 
@@ -10,11 +10,13 @@
 [ --> operator
 @hasAuth --> variable
 => --> operator
+var --> keyword
 @authModule --> variable
 = --> operator
 "enabled" --> string
 @hasChat --> variable
 => --> operator
+var --> keyword
 @chatModule --> variable
 = --> operator
 "enabled" --> string

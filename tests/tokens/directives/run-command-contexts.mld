@@ -9,13 +9,13 @@
 = --> operator
 "World" --> string
 { --> operator
-echo "Hello @name" --> string
 } --> operator
-"echo 'hello name'" --> string
+echo --> string
+@name --> variable
 @step1 --> variable[declaration]
 ( --> operator
-var --> parameter
+var) --> parameter
 ) --> operator
 = --> operator
-"echo 'hello @var'" --> string
+@var --> variable
 === END TOKENS ===

@@ -8,7 +8,7 @@
 ]
 
 >> Define exe function to process items with none fallback
-/exe @processItem(item) = when first [
+/exe @processItem(item) = when [
   @item.type == "file" => `📄 @item.name`
   @item.type == "dir" => `📁 @item.name`
   none => `❓ @item.name (unknown type)`
@@ -19,7 +19,7 @@
 
 >> Collection form with none - using exe function
 /var @scores = [85, 45, 92, 30, 75]
-/exe @gradeScore(score) = when first [
+/exe @gradeScore(score) = when [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"

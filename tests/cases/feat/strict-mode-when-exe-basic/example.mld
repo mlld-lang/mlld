@@ -1,4 +1,4 @@
-exe @greet(name) = when first [
+exe @greet(name) = when [
   @name == "World" => "Hello, World!"
   @name == "Friend" => "Hey there, Friend!"
   * => "Welcome!"
@@ -8,7 +8,7 @@ show @greet("World")
 show @greet("Friend")
 show @greet("Alice")
 
-exe @statusHandler(code) = when first [
+exe @statusHandler(code) = when [
   @code == 200 => "Success"
   @code == 404 => "Not Found"
   @code == 500 => "Server Error"

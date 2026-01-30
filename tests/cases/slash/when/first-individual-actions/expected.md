@@ -1,4 +1,4 @@
-## Test when first - executes only the first matching condition
+## Test when - executes only the first matching condition
 
 Env has value
 

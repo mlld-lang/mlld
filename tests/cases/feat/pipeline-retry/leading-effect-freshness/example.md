@@ -3,7 +3,7 @@
   return { iteration: globalThis.__counter };
 }
 
-/exe @validator(input, pipeline) = when first [
+/exe @validator(input, pipeline) = when [
   @input.iteration == 999 => @input
   @pipeline.try < 3 => retry
   * => @input

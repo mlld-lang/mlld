@@ -22,7 +22,7 @@
 /show @result
 
 # Block form with function call
-/when @hasData first: [
+/when @hasData : [
   @needsFallback => var @validated = @validate(@inputData)
   @inputData => var @validated = "data exists"
 ]

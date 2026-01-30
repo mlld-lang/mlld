@@ -14,7 +14,7 @@
   return attempts[mx.try - 1] || '{"fallback": "json"}';
 }
 
-/exe @retryUntilValidJSON(input, pipeline) = when first [
+/exe @retryUntilValidJSON(input, pipeline) = when [
   @isValidJSON(@input) => @input
   @pipeline.try < 4 => retry
   * => "fallback: using default JSON structure"

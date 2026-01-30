@@ -1,5 +1,5 @@
 /var @score = 0.8
-/var @tier = when @score first [
+/var @tier = when @score [
   >= 0.7 => "REQUIRED"
   * => "SKIP"
 ]
@@ -7,9 +7,6 @@
 === START PARTIAL TOKENS ===
 when --> keyword
 @score --> variable
-first --> keyword
 >= --> operator
-* --> keyword
-=> --> modifier
+=> --> operator
 === END PARTIAL TOKENS ===
-

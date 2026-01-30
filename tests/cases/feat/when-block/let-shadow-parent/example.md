@@ -1,5 +1,5 @@
 /var @x = 10
-/var @result = when first [
+/var @result = when [
   true => [
     let @x = 20
     => "done"

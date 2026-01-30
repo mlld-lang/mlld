@@ -4,7 +4,7 @@
 /exe @right(input) = `R:@input`
 /exe @id(input) = js { return input }
 
-/exe @validate() = when first [
+/exe @validate() = when [
   @mx.try < 3 => retry
   * => `ok @input try=@mx.try`
 ]

@@ -601,158 +601,128 @@ export class FileReferenceVisitor extends BaseVisitor {
       const hasPipeLocations = node.pipes[0]?.location?.start?.offset !== undefined;
       
       if (!hasPipeLocations) {
-        // Fallback to text-based parsing
         let currentPos = nodeText.indexOf('|');
         for (const pipe of node.pipes) {
-          if (currentPos !== -1) {
-            // Token for '|' or '||' (parallel group)
-            const isParallel = nodeText[currentPos + 1] === '|';
+          if (currentPos === -1) break;
+
+          const isParallel = nodeText[currentPos + 1] === '|';
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + currentPos,
+            length: isParallel ? 2 : 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+
+          const afterPipe = currentPos + (isParallel ? 2 : 1);
+          let contentStart = afterPipe;
+          while (contentStart < nodeText.length && /\s/.test(nodeText[contentStart])) contentStart++;
+
+          const pipeTransform = pipe.transform || pipe.name;
+          const effectName = (pipeTransform || '').toString();
+          const isEffect = nodeText[contentStart] !== '@' && /^(show|log|output)\b/.test(effectName);
+
+          if (isEffect) {
             this.tokenBuilder.addToken({
               line: node.location.start.line - 1,
-              char: nodeStartChar + currentPos,
-              length: isParallel ? 2 : 1,
-              tokenType: 'operator',
+              char: nodeStartChar + contentStart,
+              length: effectName.length,
+              tokenType: 'keyword',
               modifiers: []
             });
-            
-            // Token for pipe content: either @transform or inline effects (show, log, output)
-            const afterPipe = currentPos + (isParallel ? 2 : 1);
-            // Skip whitespace
-            let contentStart = afterPipe;
-            while (contentStart < nodeText.length && /\s/.test(nodeText[contentStart])) contentStart++;
 
-            const effectName = (pipe.transform || pipe.name || '').toString();
-            const isEffect = !/^@/.test(nodeText[contentStart]) && /^(show|log|output)\b/.test(effectName);
+            const segmentEnd = nodeText.indexOf('|', contentStart) === -1 ? nodeText.length : nodeText.indexOf('|', contentStart);
+            const rest = nodeText.slice(contentStart + effectName.length, segmentEnd);
 
-            if (isEffect) {
-              // Add keyword for effect name
-              this.tokenBuilder.addToken({
-                line: node.location.start.line - 1,
-                char: nodeStartChar + contentStart,
-                length: effectName.length,
-                tokenType: 'keyword',
-                modifiers: []
-              });
-
-              // Heuristic tokenization for common effect arguments
-              const segmentEnd = nodeText.indexOf('|', contentStart) === -1 ? nodeText.length : nodeText.indexOf('|', contentStart);
-              const rest = nodeText.slice(contentStart + effectName.length, segmentEnd);
-
-              if (effectName === 'output') {
-                // Optional source var after 'output'
-                const varMatch = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*)/);
-                if (varMatch && varMatch.index !== undefined) {
-                  const varChar = nodeStartChar + contentStart + effectName.length + varMatch.index + varMatch[0].indexOf('@');
+            if (effectName === 'output') {
+              const varMatch = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*)/);
+              if (varMatch && varMatch.index !== undefined) {
+                const varChar = nodeStartChar + contentStart + effectName.length + varMatch.index + varMatch[0].indexOf('@');
+                this.tokenBuilder.addToken({
+                  line: node.location.start.line - 1,
+                  char: varChar,
+                  length: varMatch[1].length,
+                  tokenType: 'variable',
+                  modifiers: []
+                });
+              }
+              const toMatch = rest.match(/\s+to\s+/);
+              if (toMatch && toMatch.index !== undefined) {
+                const toChar = nodeStartChar + contentStart + effectName.length + toMatch.index + toMatch[0].indexOf('to');
+                this.tokenBuilder.addToken({
+                  line: node.location.start.line - 1,
+                  char: toChar,
+                  length: 2,
+                  tokenType: 'keyword',
+                  modifiers: []
+                });
+                const targetStart = toMatch.index + toMatch[0].length;
+                const targetRest = rest.slice(targetStart);
+                const streamMatch = targetRest.match(/^(stdout|stderr)\b/);
+                if (streamMatch) {
+                  const sChar = nodeStartChar + contentStart + effectName.length + targetStart;
                   this.tokenBuilder.addToken({
                     line: node.location.start.line - 1,
-                    char: varChar,
-                    length: varMatch[1].length,
-                    tokenType: 'variable',
-                    modifiers: []
-                  });
-                }
-                const toMatch = rest.match(/\s+to\s+/);
-                if (toMatch && toMatch.index !== undefined) {
-                  const toChar = nodeStartChar + contentStart + effectName.length + toMatch.index + toMatch[0].indexOf('to');
-                  this.tokenBuilder.addToken({
-                    line: node.location.start.line - 1,
-                    char: toChar,
-                    length: 2,
+                    char: sChar,
+                    length: streamMatch[1].length,
                     tokenType: 'keyword',
                     modifiers: []
                   });
-                  const targetStart = toMatch.index + toMatch[0].length;
-                  const targetRest = rest.slice(targetStart);
-                  const streamMatch = targetRest.match(/^(stdout|stderr)\b/);
-                  if (streamMatch) {
-                    const sChar = nodeStartChar + contentStart + effectName.length + targetStart;
+                } else {
+                  const tVar = targetRest.match(/^(@[A-Za-z_][A-Za-z0-9_]*)/);
+                  if (tVar) {
+                    const tChar = nodeStartChar + contentStart + effectName.length + targetStart;
                     this.tokenBuilder.addToken({
                       line: node.location.start.line - 1,
-                      char: sChar,
-                      length: streamMatch[1].length,
-                      tokenType: 'keyword',
+                      char: tChar,
+                      length: tVar[1].length,
+                      tokenType: 'variable',
                       modifiers: []
                     });
-                  } else {
-                    const tVar = targetRest.match(/^(@[A-Za-z_][A-Za-z0-9_]*)/);
-                    if (tVar) {
-                      const tChar = nodeStartChar + contentStart + effectName.length + targetStart;
+                  } else if (/^"/.test(targetRest)) {
+                    const m = targetRest.match(/^"([^"\\]|\\.)*"/);
+                    if (m) {
+                      const qChar = nodeStartChar + contentStart + effectName.length + targetStart;
                       this.tokenBuilder.addToken({
                         line: node.location.start.line - 1,
-                        char: tChar,
-                        length: tVar[1].length,
-                        tokenType: 'variable',
+                        char: qChar,
+                        length: m[0].length,
+                        tokenType: 'string',
                         modifiers: []
                       });
-                    } else if (/^"/.test(targetRest)) {
-                      const m = targetRest.match(/^"([^"\\]|\\.)*"/);
-                      if (m) {
-                        const qChar = nodeStartChar + contentStart + effectName.length + targetStart;
-                        this.tokenBuilder.addToken({
-                          line: node.location.start.line - 1,
-                          char: qChar,
-                          length: m[0].length,
-                          tokenType: 'string',
-                          modifiers: []
-                        });
-                      }
                     }
                   }
                 }
-              } else {
-                // show/log: optional @var or quoted/backtick string
-                const simpleArg = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*|`[^`]*`|"([^"\\]|\\.)*"|\'([^'\\]|\\.)*\')/);
-                if (simpleArg && simpleArg.index !== undefined) {
-                  const argText = simpleArg[1] || simpleArg[0].trim();
-                  const argChar = nodeStartChar + contentStart + effectName.length + simpleArg.index + simpleArg[0].indexOf(argText);
-                  this.tokenBuilder.addToken({
-                    line: node.location.start.line - 1,
-                    char: argChar,
-                    length: argText.length,
-                    tokenType: argText.startsWith('@') ? 'variable' : 'string',
-                    modifiers: []
-                  });
-                }
               }
-
-              currentPos = nodeText.indexOf('|', contentStart);
             } else {
-              // Standard @transform flow - use function token type (pipeline transforms)
-              const atSymbolPos = nodeText.indexOf('@', afterPipe);
-              if (atSymbolPos !== -1) {
-                const pipeTransform = pipe.transform || pipe.name;
-                if (pipeTransform) {
-                  const pipeName = '@' + pipeTransform;
-                  this.tokenBuilder.addToken({
-                    line: node.location.start.line - 1,
-                    char: nodeStartChar + atSymbolPos,
-                    length: pipeName.length,
-                    tokenType: 'function',
-                    modifiers: []
-                  });
-                  currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
-                } else {
-                  currentPos = nodeText.indexOf('|', currentPos + 1);
-                }
-            // Token for "@pipeName" - use function token type (pipeline transforms)
-            const atSymbolPos = nodeText.indexOf('@', currentPos + (isParallel ? 2 : 1));
-            if (atSymbolPos !== -1) {
-              const pipeTransform = pipe.transform || pipe.name;
-              if (pipeTransform) {
-                const pipeName = '@' + pipeTransform;
+              const simpleArg = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*|`[^`]*`|"([^"\\]|\\.)*"|\'([^'\\]|\\.)*\')/);
+              if (simpleArg && simpleArg.index !== undefined) {
+                const argText = simpleArg[1] || simpleArg[0].trim();
+                const argChar = nodeStartChar + contentStart + effectName.length + simpleArg.index + simpleArg[0].indexOf(argText);
                 this.tokenBuilder.addToken({
                   line: node.location.start.line - 1,
-                  char: nodeStartChar + atSymbolPos,
-                  length: pipeName.length,
-                  tokenType: 'function',
+                  char: argChar,
+                  length: argText.length,
+                  tokenType: argText.startsWith('@') ? 'variable' : 'string',
                   modifiers: []
                 });
-                currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
-              } else {
-                currentPos = nodeText.indexOf('|', currentPos + 1);
               }
             }
+          } else {
+            const atSymbolPos = nodeText.indexOf('@', contentStart);
+            if (atSymbolPos !== -1 && pipeTransform) {
+              const pipeName = '@' + pipeTransform;
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: nodeStartChar + atSymbolPos,
+                length: pipeName.length,
+                tokenType: 'function',
+                modifiers: []
+              });
+            }
           }
+
+          currentPos = nodeText.indexOf('|', contentStart + 1);
         }
         return;
       }
@@ -870,10 +840,6 @@ export class FileReferenceVisitor extends BaseVisitor {
         }
       }
     }
-  }
-
-  }
-
   }
 
   private visitComment(node: any): void {

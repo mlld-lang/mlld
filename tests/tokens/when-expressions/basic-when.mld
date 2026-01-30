@@ -1,4 +1,4 @@
-/exe @calculate(op, a, b) = when: [
+/exe @calculate(op, a, b) = when [
   @op == "add" => @add(@a, @b)
   @op == "multiply" => @multiply(@a, @b)
   @op == "divide" && @b != 0 => @divide(@a, @b)
@@ -9,16 +9,14 @@
 === START TOKENS ===
 @calculate --> variable[declaration]
 ( --> operator
-op --> parameter
+op, --> parameter
 , --> operator
-a --> parameter
+a, --> parameter
 , --> operator
-b --> parameter
+b) --> parameter
 ) --> operator
 = --> operator
 when --> keyword
-: --> operator
-[ --> operator
 @op --> variable
 == --> operator
 "add" --> string

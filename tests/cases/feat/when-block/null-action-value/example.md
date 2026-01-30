@@ -1,6 +1,6 @@
 /var @condition = true
 
-/var @result = when first [
+/var @result = when [
   @condition => null
   * => "fallback"
 ]

@@ -35,7 +35,7 @@ describe('Guard directive', () => {
   });
 
   test('parses named operation guard', async () => {
-    const content = `/guard @shellRestrictions for op:run = when first [
+    const content = `/guard @shellRestrictions for op:run = when [
       @input.any.mx.labels.includes("secret") => deny "No secrets in run directives"
       * => allow
     ]`;
@@ -54,7 +54,7 @@ describe('Guard directive', () => {
     expect(guard.values.filter[0].filterKind).toBe('operation');
     expect(guard.values.filter[0].value).toBe('run');
     expect(guard.meta.scope).toBe('perOperation');
-    expect(guard.meta.modifier).toBe('first');
+    expect(guard.meta.modifier).toBe('default');
     expect(guard.meta.ruleCount).toBe(2);
     expect(guard.meta.timing).toBe('before');
   });

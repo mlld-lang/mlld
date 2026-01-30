@@ -1,5 +1,5 @@
 /var @items = ["apple", "banana", "cherry"]
-/for @item in @items => /show `Item: @item`
+/for @item in @items => show `Item: @item`
 
 === START TOKENS ===
 @items --> variable[declaration]

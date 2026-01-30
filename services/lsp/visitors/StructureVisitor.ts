@@ -69,6 +69,12 @@ export class StructureVisitor extends BaseVisitor {
         this.tokenizePlainObject(node, objectText);
         return; // Don't add braces manually
       } else {
+        const findColonIndex = (startIndex: number): number => {
+          let idx = startIndex;
+          while (idx < objectText.length && objectText[idx] !== ':') idx++;
+          return idx < objectText.length ? idx : -1;
+        };
+
         // Add opening brace for objects with mlld constructs
         this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
         // Object with mlld constructs - process AST nodes
@@ -89,6 +95,15 @@ export class StructureVisitor extends BaseVisitor {
 
           const keyMatch = quotedMatch || unquotedMatch; // For use in subsequent code
           const keyMatchIndex = quotedMatch?.index ?? unquotedMatch?.index;
+          const colonIndex = (() => {
+            if (quotedMatch && quotedMatch.index !== undefined) {
+              return findColonIndex(quotedMatch.index + quotedMatch[0].length);
+            }
+            if (unquotedMatch && unquotedMatch.index !== undefined) {
+              return findColonIndex(unquotedMatch.index + key.length);
+            }
+            return -1;
+          })();
 
           if (quotedMatch && quotedMatch.index !== undefined) {
             // Quoted key
@@ -135,7 +150,6 @@ export class StructureVisitor extends BaseVisitor {
             if (value.type) {
               // Special-case: inline run inside object (e.g., "dynamic": run "echo test")
               if (value.type === 'command' && (value.hasRunKeyword || value.hasRun)) {
-                const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
                 if (colonIndex !== -1) {
                   const absAfterColon = node.location.start.offset + colonIndex + 1;
                   const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
@@ -164,7 +178,6 @@ export class StructureVisitor extends BaseVisitor {
               }
             } else {
               // Non-AST object value (unlikely). Fall back to textual scan below
-              const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
               if (colonIndex !== -1) {
                 const absAfterColon = node.location.start.offset + colonIndex + 1;
                 const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
@@ -175,7 +188,6 @@ export class StructureVisitor extends BaseVisitor {
             }
           } else {
             // Primitive value (string/number/boolean/null) – scan text to tokenize
-            const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
             if (colonIndex !== -1) {
               const absAfterColon = node.location.start.offset + colonIndex + 1;
               const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
@@ -339,10 +351,11 @@ export class StructureVisitor extends BaseVisitor {
             }
           } else {
             // Primitive value - scan and tokenize
-            const itemStart = lastItemEndOffset;
-            const scannedLen = this.scanAndTokenizePrimitive(arrayText, itemStart - node.location.start.offset, node.location.start.offset);
+            let relStart = lastItemEndOffset - node.location.start.offset;
+            while (relStart < arrayText.length && /[\s,]/.test(arrayText[relStart])) relStart++;
+            const scannedLen = this.scanAndTokenizePrimitive(arrayText, relStart, node.location.start.offset);
             if (scannedLen > 0) {
-              lastItemEndOffset = itemStart + scannedLen;
+              lastItemEndOffset = node.location.start.offset + relStart + scannedLen;
             }
           }
 

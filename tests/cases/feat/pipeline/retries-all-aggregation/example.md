@@ -2,14 +2,14 @@
 
 /exe @gen(input, pipeline) = `v-@pipeline.try: @input`
 
-/exe @retry2(input, pipeline) = when first [
+/exe @retry2(input, pipeline) = when [
   @pipeline.try < 3 => retry
   * => @input
 ]
 
 /exe @id(input) = `@input`
 
-/exe @retry3(input, pipeline) = when first [
+/exe @retry3(input, pipeline) = when [
   @pipeline.try < 2 => retry
   * => @input
 ]
