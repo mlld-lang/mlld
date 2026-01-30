@@ -31,11 +31,13 @@ exe @runExecute(runDir, config) = [
   >> Filter out already-completed items
   let @events = @loadEvents(@runDir)
   let @completedIds = @getExecuteCompletedItems(@events)
-  let @items = for @item in @allItems [
+  let @itemsWithNulls = for @item in @allItems [
     let @itemId = @item.ticket_id ? @item.ticket_id : @item.epic_id
     let @isCompleted = @completedIds.includes(@itemId)
     when !@isCompleted => @item
   ]
+  >> Remove nulls (completed items return null from when block)
+  let @items = for @i in @itemsWithNulls when @i => @i
 
   >> Show status messages
   when !@workPlan => [

@@ -4,12 +4,13 @@
 >> Options:
 >>   --batch N           Process N items per run (default: 5)
 >>   --parallel N        Concurrent Claude calls in apply stage (default: 10)
->>   --timeout Ns        Timeout per parallel item, e.g. 60s (default: 10s)
+>>   --timeout Ns        Timeout per parallel item, e.g. 60s (default: 1s)
 >>   --phase <name>      Run only a specific phase
 >>   --from <name>       Start from a specific phase
 >>   --to <name>         Stop after a specific phase
 >>   --run <id>          Resume a specific run
 >>   --loop              Keep processing until all items complete
+>>   --skipEnrich        Skip enrich phase (use existing enriched-items.json)
 >>   --docs-only         Only process doc fixes
 >>   --qa                Include QA signals (requires prior mlld run qa + answered strategy-questions.md)
 >>   --retry-failed      Re-attempt escalated items
@@ -45,12 +46,13 @@ import "@payload" as @p
 
 var @batchSize = @p.batch ? @p.batch * 1 : 5
 var @pl = @p.parallel ? @p.parallel * 1 : 10
-var @pt = @p.timeout ? @p.timeout : "10s"
+var @pt = @p.timeout ? @p.timeout : "1s"
 var @phaseOnly = @p.phase ? @p.phase : null
 var @fromPhase = @p.from ? @p.from : null
 var @toPhase = @p.to ? @p.to : null
 var @runId = @p.run ? @p.run : null
 var @loopMode = @p.loop ? true : false
+var @skipEnrich = @p.skipEnrich ? true : false
 var @docsOnly = @p.docsOnly ? true : false
 var @useQa = @p.qa ? true : false
 var @retryFailed = @p.retryFailed ? true : false
@@ -142,6 +144,7 @@ show `Config:`
 show `  Batch size: @batchSize`
 show `  Parallel: @pl concurrent, @pt timeout`
 when @loopMode => show `  Loop mode: run until all items complete`
+when @skipEnrich => show `  Skip enrich: requires existing enriched-items.json`
 when @phaseOnly => show `  Phase only: @phaseOnly`
 when @fromPhase => show `  From phase: @fromPhase`
 when @toPhase => show `  To phase: @toPhase`
@@ -187,9 +190,9 @@ when @shouldRunPhase("reconcile", @phaseOnly, @fromPhase, @toPhase) && !@docsOnl
 ]
 
 >> Phase 2: Enrich
-when @shouldRunPhase("enrich", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly => [
+when @shouldRunPhase("enrich", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly && !@skipEnrich => [
   show `=== Phase 2: Enrich ===`
-  let @result = @runEnrich(@runDir)
+  let @result = @runEnrich(@runDir, @pl, @pt)
   @phaseResults += { enrich: @result }
   show ``
 ]
@@ -239,7 +242,7 @@ when @shouldRunPhase("execute", @phaseOnly, @fromPhase, @toPhase) && !@docsOnly 
 >> Phase 5: Docs
 when @shouldRunPhase("docs", @phaseOnly, @fromPhase, @toPhase) => [
   show `=== Phase 5: Docs ===`
-  let @result = @runDocs(@runDir)
+  let @result = @runDocs(@runDir, @pl, @pt)
   @phaseResults += { docs: @result }
   show ``
 ]

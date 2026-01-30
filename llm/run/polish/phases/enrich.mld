@@ -121,7 +121,7 @@ exe @_finishEnrichTicket(runDir, issueId, result) = [
 ]
 
 >> Main enrich function
-exe @runEnrich(runDir) = [
+exe @runEnrich(runDir, pl, pt) = [
   >> Check for existing output (skip if already done)
   let @outputPath = `@runDir/enrich/enriched-items.json`
   let @existingOutput = <@outputPath>?
@@ -145,12 +145,12 @@ exe @runEnrich(runDir) = [
   => when first [
     @existingOutput => @existingOutput
     !@merged => null
-    * => @_doEnrich(@runDir, @outputPath, @items)
+    * => @_doEnrich(@runDir, @outputPath, @items, @pl, @pt)
   ]
 ]
 
 >> Internal function to do the actual enrich work
-exe @_doEnrich(runDir, outputPath, items) = [
+exe @_doEnrich(runDir, outputPath, items, pl, pt) = [
 
   >> Log phase start
   @logPhaseStart(@runDir, "enrich")
@@ -178,10 +178,10 @@ exe @_doEnrich(runDir, outputPath, items) = [
   >> Filter out nulls and already-enriched (use @tkt to avoid collision with @hasTagPrefix internals)
   let @needsEnrich = for @tkt in @ticketsToEnrich when @tkt && !@hasTagPrefix(@tkt, "size-") => @tkt
 
-  show `  @needsEnrich.length tickets need enrichment`
+  show `  @needsEnrich.length tickets need enrichment (parallel: @pl, pacing: @pt)`
 
-  >> Enrich in parallel (limited to 5 to avoid rate limits)
-  let @results = for parallel(5, 10s) @ticket in @needsEnrich [
+  >> Enrich in parallel
+  let @results = for parallel(@pl, @pt) @ticket in @needsEnrich [
     show `    Enriching: @ticket.id`
     => @enrichTicket(@runDir, @ticket, @changelog)
   ]

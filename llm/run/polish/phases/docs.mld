@@ -64,7 +64,7 @@ exe @_executeDocFix(runDir, ticketId, ticketContent) = [
   let @prompt = @buildDocFixPrompt(@ticketId, @ticketDescription, @outputPath)
   let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
 
-  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @docTools, @outputPath) | @debuglog("Doc fix @ticketId")
+  let @response = @claudePoll(@fullPrompt, "sonnet", @base, @docTools, @outputPath)
 
   let @result = <@outputPath>?
   when @result => show `      [doc fix] success for @ticketId`
@@ -94,7 +94,7 @@ exe @_finishDocFix(runDir, ticketId, result) = [
 ]
 
 >> Main docs function
-exe @runDocs(runDir) = [
+exe @runDocs(runDir, pl, pt) = [
   >> Check for existing output (don't skip - may have partial progress)
   let @outputPath = `@runDir/docs/results.json`
 
@@ -127,19 +127,19 @@ exe @runDocs(runDir) = [
       output @emptyResults to "@outputPath"
       => @emptyResults
     ]
-    * => @_doDocs(@runDir, @outputPath, @uniqueDocIds)
+    * => @_doDocs(@runDir, @outputPath, @uniqueDocIds, @pl, @pt)
   ]
 ]
 
 >> Internal function to do the actual docs work
-exe @_doDocs(runDir, outputPath, uniqueDocIds) = [
+exe @_doDocs(runDir, outputPath, uniqueDocIds, pl, pt) = [
   >> Log phase start
   @logPhaseStart(@runDir, "docs")
 
-  show `  Processing @uniqueDocIds.length doc fix tickets...`
+  show `  Processing @uniqueDocIds.length doc fix tickets (parallel: @pl, pacing: @pt)...`
 
   >> Process doc fixes (can run in parallel - no worktrees)
-  let @results = for parallel(5, 5s) @ticketId in @uniqueDocIds [
+  let @results = for parallel(@pl, @pt) @ticketId in @uniqueDocIds [
     let @idx = @mx.for.index + 1
     show `  [@idx/@uniqueDocIds.length] Doc fix: @ticketId`
     => @processDocFix(@runDir, @ticketId)

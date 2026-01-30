@@ -29,21 +29,34 @@ exe @runRank(runDir) = [
   let @outputPath = `@runDir/rank/work-plan.json`
   let @existingOutput = <@outputPath>?
 
-  >> Load enriched items
+  >> Load enriched items, fall back to merged items if not enriched
   let @enrichedPath = `@runDir/enrich/enriched-items.json`
+  let @mergedPath = `@runDir/reconcile/merged-items.json`
   let @enriched = <@enrichedPath>?
-  let @items = @enriched.items ? @enriched.items : []
+  let @merged = <@mergedPath>?
+
+  >> Use enriched if available, otherwise fall back to merged
+  let @source = @enriched ? "enriched" : "merged"
+  let @items = when first [
+    @enriched && @enriched.items => @enriched.items
+    @merged && @merged.items => @merged.items
+    * => []
+  ]
 
   >> Handle skip/error conditions
   when @existingOutput => [
     show `  Work plan already exists at @outputPath`
     show `  Skipping rank phase`
   ]
-  when !@enriched && !@existingOutput => [
-    show `  No enriched-items.json found`
-    show `  Run enrich phase first`
+  when !@enriched && !@merged && !@existingOutput => [
+    show `  No enriched-items.json or merged-items.json found`
+    show `  Run reconcile phase first`
   ]
-  when @items.length == 0 && @enriched && !@existingOutput => [
+  when !@enriched && @merged && !@existingOutput => [
+    show `  Using merged-items.json (enrich skipped)`
+  ]
+  let @itemCount = for @i in @items => 1
+  when @itemCount.length == 0 && !@existingOutput => [
     show `  No items to rank`
     let @emptyPlan = { created: @now, ranked_items: [] }
     output @emptyPlan to "@outputPath"
@@ -52,8 +65,8 @@ exe @runRank(runDir) = [
   >> Use when first for the entire function return
   => when first [
     @existingOutput => @existingOutput
-    !@enriched => null
-    @items.length == 0 => { created: @now, ranked_items: [] }
+    !@enriched && !@merged => null
+    @itemCount.length == 0 => { created: @now, ranked_items: [] }
     * => @_doRank(@runDir, @outputPath, @items)
   ]
 ]
@@ -73,10 +86,12 @@ exe @_doRank(runDir, outputPath, items) = [
   let @groupFullPrompt = `@groupPrompt\n\nIMPORTANT: Write your JSON response to @groupMarker using the Write tool. Write ONLY the JSON array as its contents.`
 
   show `    Step 1: Grouping items...`
-  let @groupResponse = @claudePoll(@groupFullPrompt, "opus", @base, @rankTools, @groupMarker) | @debuglog("Grouping response")
+  let @groupResponse = @claudePoll(@groupFullPrompt, "opus", @base, @rankTools, @groupMarker)
 
   let @groups = <@groupMarker>?
-  show `    [rank] groups.length = @groups.length`
+  >> Count via for since .length is buggy on loaded JSON arrays
+  let @groupCount = for @g in @groups => 1
+  show `    [rank] group count = @groupCount.length`
 
   >> Handle group failure - show error message if failed
   when !@groups => show `  ERROR: Failed to generate groups`
@@ -138,7 +153,7 @@ exe @_continueWithGroups(runDir, outputPath, items, groups, groupMarker) = [
   let @rankFullPrompt = `@rankPromptText\n\nIMPORTANT: Write your JSON response to @rankMarker using the Write tool. Write ONLY the JSON array as its contents.`
 
   show `    Step 2: Ranking assignments...`
-  let @rankResponse = @claudePoll(@rankFullPrompt, "sonnet", @base, @rankTools, @rankMarker) | @debuglog("Ranking response")
+  let @rankResponse = @claudePoll(@rankFullPrompt, "sonnet", @base, @rankTools, @rankMarker)
 
   let @ranked = <@rankMarker>?
   show `    [rank] ranked.length = @ranked.length`
@@ -172,7 +187,10 @@ exe @_finishRanking(runDir, outputPath, ranked) = [
   >> Show top 5
   let @top5 = @ranked.slice(0, 5)
   show `  Top 5:`
-  for @rankedItem in @top5 => show `    @rankedItem.rank. [@rankedItem.type] @rankedItem.ticket_id ? @rankedItem.ticket_id : @rankedItem.epic_id (@rankedItem.points pts) - @rankedItem.rationale`
+  for @rankedItem in @top5 [
+    let @itemId = @rankedItem.ticket_id ? @rankedItem.ticket_id : @rankedItem.epic_id
+    show `    @rankedItem.rank. [@rankedItem.type] @itemId (@rankedItem.points pts) - @rankedItem.rationale`
+  ]
 
   => @workPlan
 ]

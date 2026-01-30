@@ -115,7 +115,10 @@ exe @_processAfterAnalysis(runDir, ticketId, baseBranch, dryRun, analysis) = [
   >> Check if auto-approve
   let @canApprove = @analysis.recommendation && @analysis.recommendation.auto_approve
 
-  when !@canApprove => show `        Needs manual review`
+  when !@canApprove => [
+    let @notes = @analysis.recommendation && @analysis.recommendation.notes ? @analysis.recommendation.notes : "no notes"
+    show `        Needs manual review: @notes`
+  ]
 
   => when first [
     !@canApprove => [
@@ -144,7 +147,7 @@ exe @_applyFix(runDir, ticketId, baseBranch, analysis) = [
 
   let @applyPrompt = @buildApplyPrompt(@ticketId, @baseBranch, @analysisJson, @resultPath, @rootCause, @rootCauseLocation, @approach)
   let @applyFullPrompt = `@applyPrompt\n\nIMPORTANT: Write your JSON result to @resultPath using the Write tool.`
-  let @applyResponse = @claudePoll(@applyFullPrompt, "opus", @base, @applyTools, @resultPath) | @debuglog("Apply fix @ticketId")
+  let @applyResponse = @claudePoll(@applyFullPrompt, "opus", @base, @applyTools, @resultPath)
 
   let @result = <@resultPath>?
   when @result => show `        [apply] success for @ticketId`

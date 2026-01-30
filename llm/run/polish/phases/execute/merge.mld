@@ -44,11 +44,11 @@ exe @_doMerge(runDir, verifiedItems, baseBranch, batchNum) = [
 
   >> Build and run merge prompt
   let @mergeItemsJson = @verifiedItems | @json.llm
-  let @outputPath = `@runDir/execute/merge-batch-@batchNum.json`
+  let @outputPath = `@runDir/execute/merge-batch-@batchNum\.json`
   let @prompt = @buildMergePrompt(@baseBranch, @runDir, @batchNum, @mergeItemsJson, @outputPath)
   let @fullPrompt = `@prompt\n\nIMPORTANT: Write your JSON result to @outputPath using the Write tool.`
 
-  let @response = @claudePoll(@fullPrompt, "opus", @base, @mergeTools, @outputPath) | @debuglog("Merge batch @batchNum")
+  let @response = @claudePoll(@fullPrompt, "opus", @base, @mergeTools, @outputPath)
 
   let @mergeResult = <@outputPath>?
   when @mergeResult => show `    [merge] success for batch @batchNum`
