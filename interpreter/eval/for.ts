@@ -786,7 +786,11 @@ export async function evaluateForExpression(
               lastResult = await evaluateWhenExpression(nodeWithFirst as any, currentEnv);
               currentEnv = lastResult.env || currentEnv;
               // Early return: if when matched and returned a value, exit the sequence
+              // BUT don't break for side-effect tags (show, output) - those aren't real return values
               if (lastResult.value !== null && lastResult.value !== undefined) {
+                if (typeof lastResult.value === 'object' && (lastResult.value as any).__whenEffect) {
+                  continue;
+                }
                 break;
               }
               continue;
